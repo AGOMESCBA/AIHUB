@@ -296,6 +296,57 @@ async function resolverConceitoPorFalhaSql(mensagem, empresaId) {
   return { termo, definicaoTecnica };
 }
 
+// Testa se algum termo JA GRAVADO no glossario aparece como PALAVRA na pergunta (limite de
+// palavra, nao substring solta) — consulta SQL simples, sem chamada de IA. Usado como camada
+// gratuita antes de decidir se vale a pena gastar a extracao por IA no caminho preventivo.
+function _termoGlossarioNaPergunta(mensagem) {
+  const texto = _normalizarTexto(String(mensagem || '')).toLowerCase();
+  if (!texto) return null;
+  const termos = glossaryStore.listar({ limit: 500 });
+  for (const row of termos) {
+    const termoNorm = String(row.termo || '').trim();
+    if (!termoNorm) continue;
+    if (new RegExp(`\\b${termoNorm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(texto)) {
+      return row;
+    }
+  }
+  return null;
+}
+
+// Caminho PREVENTIVO (roda ANTES de qualquer tentativa de gerar SQL, junto de resolverConceito
+// em intent-service.js) — diferente de resolverConceitoPorFalhaSql (que so age DEPOIS que a IA
+// principal ja falhou/gerou SQL vazio), este cobre o caso mais perigoso: a IA principal NAO
+// falha, ela "adivinha" uma interpretacao errada para um termo tecnico que nao conhece (ex:
+// "markup" tratado silenciosamente como "preco medio") e gera SQL valido mas semanticamente
+// errado, sem nenhum sinal de erro visivel ao usuario.
+//
+// Ordem de custo (banco primeiro, IA so se necessario, decisao explicita do usuario nesta
+// sessao — "consulta a lista, caso nao tenha consulte a IA gerando custo, depois grava na
+// lista"):
+// 1) Termo ja gravado no glossario (qualquer dominio) aparece na pergunta -> usa direto, ZERO
+//    custo de IA. Cobre reincidencia apos a primeira vez que qualquer termo foi aprendido, seja
+//    por este caminho ou pelo caminho de pos-falha (resolverConceitoPorFalhaSql).
+// 2) Termo nao gravado: se a pergunta passa no filtro sintatico _pareceMensagemDeConsulta,
+//    gasta a extracao por IA (mesmo prompt/funcao de resolverConceitoPorFalhaSql) — aqui SIM ha
+//    custo, mas so nas perguntas plausveis de conter consulta, nao em toda mensagem.
+// Fail-open em profundidade, igual aos demais caminhos: qualquer falha retorna null e o
+// classificador principal segue normalmente, sem bloquear nem piorar o comportamento atual.
+async function resolverConceitoPreventivo(mensagem, empresaId) {
+  // Tenta primeiro o caminho estruturado (regex PADROES_CONCEITO — ex: "analise horizontal"):
+  // mais preciso quando bate, porque detecta o termo com a acentuacao/forma original do texto
+  // da pergunta, nao a forma normalizada gravada no banco. So cai para a checagem generica de
+  // "termo ja gravado" (que usa o texto do BANCO, normalizado) quando o regex nao reconhece
+  // nada — evita retornar o termo sem acentuacao quando o regex estruturado ja teria acertado.
+  const porRegexEstruturado = await resolverConceito(mensagem, empresaId);
+  if (porRegexEstruturado) return porRegexEstruturado;
+
+  const jaGravado = _termoGlossarioNaPergunta(mensagem);
+  if (jaGravado) {
+    return { termo: jaGravado.termo, definicaoTecnica: jaGravado.definicao_tecnica };
+  }
+  return resolverConceitoPorFalhaSql(mensagem, empresaId);
+}
+
 // ── Periodo-base para "analise horizontal" sem periodo de comparacao explicito ──────────────
 // A definicao textual sozinha nao bastou, em teste real, para fazer a IA geradora de SQL
 // comparar dois periodos distintos: sem uma data concreta de "periodo base" no prompt, ela
@@ -351,6 +402,7 @@ module.exports = {
   extrairDominioExplicito,
   resolverConceito,
   resolverConceitoPorFalhaSql,
+  resolverConceitoPreventivo,
   calcularPeriodoBaseAnterior,
   resolverPeriodoBaseSeHorizontal,
 };

@@ -415,6 +415,83 @@ async function okAsync(desc, fn) {
     }
   });
 
+  // ── resolverConceitoPreventivo: roda ANTES de gerar SQL (nao so depois de falhar) ──────────
+  // Caso real que motivou: "Qual o markup deste item?" nao falhava tecnicamente — a IA
+  // principal gerava SQL "valido" mas semanticamente errado (markup interpretado como preco
+  // medio), entao resolverConceitoPorFalhaSql (so chamado apos falha) nunca disparava.
+  await okAsync('resolverConceitoPreventivo: termo novo (nao gravado) chama a IA extratora e grava para a proxima vez', async () => {
+    getDB().prepare("DELETE FROM analytic_glossary WHERE termo = 'markup'").run();
+    const original = aiProviderClient.chamarIA;
+    let chamadas = 0;
+    aiProviderClient.chamarIA = async () => {
+      chamadas++;
+      return JSON.stringify({ termo_encontrado: 'markup', definicao_tecnica: 'Markup e o percentual sobre o custo.' });
+    };
+    try {
+      const resultado = await resolver.resolverConceitoPreventivo('Qual o markup das vendas deste mes?', -9992);
+      assert.ok(resultado);
+      assert.strictEqual(resultado.termo, 'markup');
+      assert.strictEqual(resultado.definicaoTecnica, 'Markup e o percentual sobre o custo.');
+      assert.strictEqual(chamadas, 1, 'termo novo deveria gastar exatamente 1 chamada de IA');
+      const gravado = store.buscarPorTermo('markup', 'faturamento');
+      assert.ok(gravado, 'deveria gravar no glossario para a proxima pergunta ser gratuita');
+    } finally {
+      aiProviderClient.chamarIA = original;
+      getDB().prepare("DELETE FROM analytic_glossary WHERE termo = 'markup'").run();
+    }
+  });
+
+  await okAsync('resolverConceitoPreventivo: termo ja gravado no glossario NAO chama IA (caso central: reincidencia e gratuita)', async () => {
+    getDB().prepare("DELETE FROM analytic_glossary WHERE termo = 'markup'").run();
+    store.criar({
+      termo: 'markup',
+      dominio: 'faturamento',
+      definicaoTecnica: 'Markup e o percentual aplicado sobre o custo do item.',
+    });
+    const original = aiProviderClient.chamarIA;
+    aiProviderClient.chamarIA = async () => { throw new Error('NAO deveria ter chamado a IA — termo ja esta no glossario.'); };
+    try {
+      const resultado = await resolver.resolverConceitoPreventivo('Qual o markup deste item?', -9992);
+      assert.ok(resultado);
+      assert.strictEqual(resultado.termo, 'markup');
+      assert.strictEqual(resultado.definicaoTecnica, 'Markup e o percentual aplicado sobre o custo do item.');
+    } finally {
+      aiProviderClient.chamarIA = original;
+      getDB().prepare("DELETE FROM analytic_glossary WHERE termo = 'markup'").run();
+    }
+  });
+
+  await okAsync('resolverConceitoPreventivo: pergunta comum sem termo tecnico continua null (zero custo)', async () => {
+    const original = aiProviderClient.chamarIA;
+    let chamou = false;
+    aiProviderClient.chamarIA = async () => { chamou = true; return JSON.stringify({ termo_encontrado: null, definicao_tecnica: null }); };
+    try {
+      const resultado = await resolver.resolverConceitoPreventivo('faturamento de hoje por favor mostra pra mim', -9992);
+      assert.strictEqual(resultado, null);
+    } finally {
+      aiProviderClient.chamarIA = original;
+    }
+  });
+
+  await okAsync('resolverConceitoPreventivo: reaproveita resolverConceito (regex) primeiro, sem duplicar logica de "analise horizontal"', async () => {
+    getDB().prepare("DELETE FROM analytic_glossary WHERE termo = 'analise horizontal'").run();
+    store.criar({
+      termo: 'analise horizontal',
+      dominio: 'compras_x_faturamento',
+      definicaoTecnica: 'Compara o mesmo indicador entre periodos.',
+    });
+    const original = aiProviderClient.chamarIA;
+    aiProviderClient.chamarIA = async () => { throw new Error('NAO deveria ter chamado a IA — resolverConceito (regex) ja resolve isso.'); };
+    try {
+      const resultado = await resolver.resolverConceitoPreventivo('Análise horizontal da venda desta semana x compras', -9992);
+      assert.ok(resultado);
+      assert.strictEqual(resultado.termo, 'Análise horizontal');
+    } finally {
+      aiProviderClient.chamarIA = original;
+      getDB().prepare("DELETE FROM analytic_glossary WHERE termo = 'analise horizontal'").run();
+    }
+  });
+
   limpar();
 
   console.log(`\nanalytic-glossary.test.js: ${passou} passaram, ${falhou} falharam`);

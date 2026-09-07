@@ -1159,7 +1159,13 @@ async function _classificarBase(mensagem, empresaId, opts = {}) {
 async function classificar(mensagem, empresaId, opts = {}) {
   try {
     const analyticGlossaryResolver = require('./analytic-glossary-resolver');
-    const resolucaoGlossario = await analyticGlossaryResolver.resolverConceito(mensagem, empresaId);
+    // resolverConceitoPreventivo ja tenta primeiro o regex estruturado (PADROES_CONCEITO, ex:
+    // "analise X") e so cai para extracao livre por IA se nao achar nada — caso real que
+    // motivou cobrir tambem termos soltos como "markup": a IA principal gerava SQL "valido"
+    // mas semanticamente errado (markup interpretado como preco medio), sem nenhum sinal de
+    // falha visivel, entao o caminho de pos-falha (resolverConceitoPorFalhaSql, usado em
+    // intent-router.js/runner.js) nunca disparava.
+    const resolucaoGlossario = await analyticGlossaryResolver.resolverConceitoPreventivo(mensagem, empresaId);
     if (resolucaoGlossario?.precisaConfirmacao) {
       return {
         intencao:            'desconhecido',
