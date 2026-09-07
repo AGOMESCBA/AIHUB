@@ -625,6 +625,101 @@ function ordemDimensoesPedidas(opts = {}) {
     .filter((canon, idx, arr) => arr.indexOf(canon) === idx);
 }
 
+// Substantivos plurais de dimensao de negocio usados para reconhecer ESTRUTURA de ranking
+// (nao para varrer o texto inteiro atras da palavra "maiores"/"melhores", que tambem pode
+// aparecer dentro de um nome proprio de cliente/produto, ex: "cliente Maiores Materiais").
+const _ENTIDADES_PLURAL_RANKING = '(produtos?|clientes?|fornecedores?|vendedores?|itens?|servicos?|notas?|pedidos?|titulos?)';
+
+// Reconhece a pergunta pedindo APENAS o topo de um ranking ("o item mais vendido", "qual o
+// maior fornecedor") por padrao GRAMATICAL de superlativo no singular — nao por vocabulario de
+// negocio, que se multiplicaria por metrica/dominio sem fim. Exclui explicitamente pedidos de
+// lista/ranking com mais de 1 item, reconhecidos por ESTRUTURA (posicao relativa das palavras),
+// nao por varredura cega da palavra "maiores"/"melhores" em qualquer lugar do texto — isso
+// evitaria falso negativo quando essas palavras aparecem dentro de um nome proprio:
+// - "maior E menor" simultaneos (regra "Extremo Duplo" do prompt-builder.js);
+// - numero explicito de posicoes: "top 10", "3 maiores", "os 5 melhores";
+// - "maiores/melhores" IMEDIATAMENTE seguido de substantivo plural de negocio: "maiores
+//   clientes", "melhores produtos" (nao captura "cliente Maiores Materiais", onde "Maiores"
+//   nao e seguido de uma dessas palavras-chave de entidade);
+// - a frase INICIA com "quais" (marca de pergunta plural em portugues: "quais os produtos...");
+// - particípio plural junto do superlativo: "produtos mais vendidos".
+function pedeExtremoUnico(opts = {}) {
+  const texto = norm(opts.contextoConsulta || opts.mensagem || '');
+  if (!texto) return false;
+  if (/\bmenor\b/.test(texto)) return false; // "maior e menor" / "melhor e pior" -> Extremo Duplo
+  if (/^\s*quais\b/.test(texto)) return false; // "quais os produtos..." -> pergunta plural
+  if (/\btop\s*\d+\b|\b\d+\s+(maiores|melhores)\b|\bos?\s+\d+\s+(maiores|melhores)\b/.test(texto)) return false; // "top 10", "3 maiores", "os 5 melhores"
+  if (new RegExp(`\\b(maiores|melhores)\\s+${_ENTIDADES_PLURAL_RANKING}\\b`).test(texto)) return false; // "maiores clientes", "melhores produtos"
+  if (new RegExp(`\\b${_ENTIDADES_PLURAL_RANKING}\\s+(mais|maior)\\s+\\w*(ad|id)os\\b`).test(texto)) return false; // "produtos mais vendidos"
+  if (/\b(mais|maior)\s+\w*(ad|id)os\b/.test(texto)) return false; // particípio plural generico ("mais vendidos")
+  return /\b(mais|maior)\s+\w+(ad[oa]|id[oa])\b/.test(texto) // "mais vendido", "maior faturado"
+    || /\bmaior\s+\w+/.test(texto) // "maior margem", "maior fornecedor", "com maior faturamento"
+    || /\bqual\s+(?:foi|e|eh|era)?\s*(?:o|a)\s+.*\bmais\b/.test(texto);
+}
+
+// Quando o shape tem mais de uma metrica (ex: total_faturamento E margem_percentual) e a
+// pergunta de extremo unico cita uma delas explicitamente ("maior margem"), o campeao deve ser
+// escolhido por ESSA metrica, nao pela primeira do shape (que reflete a ordem do SELECT, nao a
+// intencao do usuario). Retorna null quando so ha 1 metrica, nenhuma bate, OU nao ha uma
+// preferencia unica. A ambiguidade real e checada separadamente por metricaAmbiguaPorTexto():
+// "nenhuma metrica citada" ainda pode usar primary, mas "2+ metricas citadas de forma
+// indistinguivel" deve cair para a lista completa.
+// Duas fases: (1) tenta match pelo LABEL INTEIRO normalizado (mais especifico, ex: "margem
+// percentual" citado por completo) — se exatamente 1 metrica bater assim, usa direto, sem
+// ambiguidade possivel. (2) so se nenhuma bateu no label inteiro, tenta por PALAVRA do label
+// (ex: so "margem") — aqui SIM verifica ambiguidade: se 2+ metricas compartilham a palavra,
+// retorna null em vez de escolher a primeira.
+function _escapeRegexTexto(s) {
+  return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function _resolverMetricaPorTexto(metricas, opts = {}) {
+  const vazio = { preferida: null, ambigua: false };
+  if (!Array.isArray(metricas) || metricas.length < 2) return vazio;
+  const texto = norm(opts.contextoConsulta || opts.mensagem || '');
+  if (!texto) return vazio;
+
+  // Casamento por LIMITE DE PALAVRA (\b), nunca substring solta: "media" nao pode bater dentro
+  // de "imediato". Quando um label inteiro tambem e prefixo lexical de outro ("valor" /
+  // "valor medio"), o desempate por maior especificidade logo abaixo escolhe o label mais longo.
+  const porLabelInteiro = metricas.filter(col => {
+    const label = norm(labelMetrica(col));
+    return label && new RegExp(`\\b${_escapeRegexTexto(label)}\\b`).test(texto);
+  });
+  if (porLabelInteiro.length === 1) return { preferida: porLabelInteiro[0], ambigua: false };
+  if (porLabelInteiro.length > 1) {
+    // Mais de um label inteiro bateu (ex: "valor" e "valor medio" ambos aparecem no texto
+    // "maior valor medio") — nao e ambiguidade real, e especificidade: o label mais LONGO
+    // (mais palavras) e estritamente mais especifico e deve vencer. So fica ambiguo de fato
+    // se o MAIOR comprimento aparecer empatado entre 2+ metricas.
+    const porTamanho = porLabelInteiro
+      .map(col => ({ col, tamanho: norm(labelMetrica(col)).split(/\s+/).length }))
+      .sort((a, b) => b.tamanho - a.tamanho);
+    const maiorTamanho = porTamanho[0].tamanho;
+    const maisEspecificos = porTamanho.filter(x => x.tamanho === maiorTamanho);
+    if (maisEspecificos.length === 1) return { preferida: maisEspecificos[0].col, ambigua: false };
+    return { preferida: null, ambigua: true }; // empate real entre labels do mesmo tamanho
+  }
+
+  const porPalavra = metricas.filter(col => {
+    const label = norm(labelMetrica(col));
+    if (!label) return false;
+    const palavras = label.split(/\s+/).filter(p => p.length >= 4);
+    return palavras.some(p => new RegExp(`\\b${_escapeRegexTexto(p)}\\b`).test(texto));
+  });
+  if (porPalavra.length === 1) return { preferida: porPalavra[0], ambigua: false };
+  if (porPalavra.length > 1) return { preferida: null, ambigua: true };
+  return vazio;
+}
+
+function metricaPreferidaPorTexto(metricas, opts = {}) {
+  return _resolverMetricaPorTexto(metricas, opts).preferida;
+}
+
+function metricaAmbiguaPorTexto(metricas, opts = {}) {
+  return _resolverMetricaPorTexto(metricas, opts).ambigua;
+}
+
 function dimensaoAtendeCanon(dim, canon) {
   const k = keyNorm(dim);
   if (canon === 'dia') return k === 'dia' || k === 'data' || /_(data|emissao|vencimento|vencto|vencrea)$/.test(k);
@@ -1836,6 +1931,25 @@ function renderSingle(rows, opts = {}) {
   if (dimTemporal) entradas = recalcularCrescimentoTemporal(entradas, shape.metricas);
   entradas = ajustarSaldoBaseDiario(entradas, dim, shape.metricas);
 
+  // Auditoria (Codex, rodada 3/4): quando ha 2+ metricas e a pergunta cita algo que bate em
+  // MAIS DE UMA delas (ex: "maior valor" com valor_total E valor_medio no shape), nao ha como
+  // saber qual o usuario quis sem adivinhar — e adivinhar errado destaca um "campeao" que
+  // contradiz a pergunta. Nesse caso especifico, desiste do atalho de extremo unico e cai para
+  // a lista completa (com todas as metricas visiveis), deixando o usuario decidir. Quando ha
+  // so 1 metrica no shape ou quando nenhuma metrica foi citada ("maior fornecedor"), usar
+  // "primary" continua sendo a escolha esperada, nao uma adivinhacao entre metricas citadas.
+  const _ambiguidadeReal = metricaAmbiguaPorTexto(shape.metricas, opts);
+  if (!dimTemporal && entradas.length > 1 && pedeExtremoUnico(opts) && !_ambiguidadeReal) {
+    const metricaExtremo = metricaPreferidaPorTexto(shape.metricas, opts) || primary;
+    const [label, totais] = metricaExtremo === primary
+      ? entradas[0]
+      : [...entradas].sort(([, a], [, b]) => (b[metricaExtremo] || 0) - (a[metricaExtremo] || 0))[0];
+    const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
+    linhas.push(`\u{1F3C6} *${labelDimensao(dim)} com maior destaque*: ${labelValorDimensao(dim, label)}`);
+    linhas.push(`  ${vals}`);
+    return linhas.join('\n');
+  }
+
   const metricasTotal = metricasTotalizaveis(shape.metricas);
   const agrupouAnoMes = renderMensalPorAno(linhas, dim, entradas, shape.metricas, metricasTotal);
   if (!agrupouAnoMes) {
@@ -2150,5 +2264,5 @@ module.exports = {
   setLabelsSx3,
   labelMetrica,
   formulaResultado,
-  _test: { keyNorm, somarMetricas, formulaResultado, toNumber },
+  _test: { keyNorm, somarMetricas, formulaResultado, toNumber, pedeExtremoUnico, metricaPreferidaPorTexto, metricaAmbiguaPorTexto },
 };

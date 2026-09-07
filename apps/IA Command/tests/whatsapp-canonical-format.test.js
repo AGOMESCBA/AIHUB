@@ -1138,6 +1138,234 @@ ok('total_pedidos e formatado como quantidade, nao como valor monetario', () => 
   assert.ok(!/Total Pedidos: \*R\$/.test(texto), texto);
 });
 
+ok('pedeExtremoUnico: reconhece "qual foi o item mais vendido" (caso real reportado)', () => {
+  assert.strictEqual(canonical._test.pedeExtremoUnico({ mensagem: 'Qual foi o item mais vendido?' }), true);
+});
+
+ok('pedeExtremoUnico: reconhece "qual o maior fornecedor"', () => {
+  assert.strictEqual(canonical._test.pedeExtremoUnico({ mensagem: 'Qual o maior fornecedor do mes?' }), true);
+});
+
+ok('pedeExtremoUnico: nao reconhece pergunta de listagem comum (sem superlativo)', () => {
+  assert.strictEqual(canonical._test.pedeExtremoUnico({ mensagem: 'Quais itens foram vendidos neste periodo?' }), false);
+});
+
+ok('pedeExtremoUnico: nao reconhece "maior e menor" (regra Extremo Duplo continua com lista completa)', () => {
+  assert.strictEqual(canonical._test.pedeExtremoUnico({ mensagem: 'Qual o mes com maior e menor faturamento?' }), false);
+});
+
+ok('item mais vendido: mostra apenas o campeao do ranking, nao a lista completa (bug real reportado)', () => {
+  const rows = [
+    { produto: 'BRITA (01 FINA)', total_vendido: 52000 },
+    { produto: 'AREIA MEDIA', total_vendido: 31000 },
+    { produto: 'PEDRISCO', total_vendido: 12000 },
+  ];
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Faturamento',
+    contextoConsulta: 'Qual foi o item mais vendido?',
+  });
+
+  assert.ok(texto.includes('BRITA (01 FINA)'), texto);
+  assert.ok(!texto.includes('AREIA MEDIA'), texto);
+  assert.ok(!texto.includes('PEDRISCO'), texto);
+  assert.ok(!texto.includes('*Por Produto*'), texto);
+  assert.ok(!/^\s*2\.\s/m.test(texto), texto);
+});
+
+ok('quais itens foram vendidos: pergunta de listagem continua mostrando todos os produtos (regressao)', () => {
+  const rows = [
+    { produto: 'BRITA (01 FINA)', total_vendido: 52000 },
+    { produto: 'AREIA MEDIA', total_vendido: 31000 },
+    { produto: 'PEDRISCO', total_vendido: 12000 },
+  ];
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Faturamento',
+    contextoConsulta: 'Quais itens foram vendidos neste periodo?',
+  });
+
+  assert.ok(texto.includes('BRITA (01 FINA)'), texto);
+  assert.ok(texto.includes('AREIA MEDIA'), texto);
+  assert.ok(texto.includes('PEDRISCO'), texto);
+  assert.ok(texto.includes('*Por Produto*'), texto);
+});
+
+ok('vendedor com maior e menor faturamento: continua listando todos (guarda do Extremo Duplo)', () => {
+  const rows = [
+    { vendedor: 'Ana', total_faturamento: 1000 },
+    { vendedor: 'Bruno', total_faturamento: 5000 },
+    { vendedor: 'Carla', total_faturamento: 200 },
+  ];
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Faturamento',
+    contextoConsulta: 'Qual o vendedor com maior e menor faturamento?',
+  });
+
+  assert.ok(texto.includes('Ana'), texto);
+  assert.ok(texto.includes('Bruno'), texto);
+  assert.ok(texto.includes('Carla'), texto);
+  assert.ok(texto.includes('*Por Vendedor*'), texto);
+});
+
+// ── Achados de auditoria (Codex): falsos positivos/negativos e metrica errada ──────────────
+
+ok('pedeExtremoUnico: NAO reconhece plural "produtos mais vendidos" (pede lista, nao 1 item)', () => {
+  assert.strictEqual(canonical._test.pedeExtremoUnico({ mensagem: 'Quais produtos mais vendidos neste mes?' }), false);
+});
+
+ok('pedeExtremoUnico: NAO reconhece "top 10 produtos mais vendidos"', () => {
+  assert.strictEqual(canonical._test.pedeExtremoUnico({ mensagem: 'Top 10 produtos mais vendidos' }), false);
+});
+
+ok('pedeExtremoUnico: NAO reconhece "3 maiores clientes"', () => {
+  assert.strictEqual(canonical._test.pedeExtremoUnico({ mensagem: 'Quais os 3 maiores clientes do mes?' }), false);
+});
+
+ok('produtos mais vendidos (plural): continua listando todos os produtos (regressao do falso positivo)', () => {
+  const rows = [
+    { produto: 'BRITA (01 FINA)', total_vendido: 52000 },
+    { produto: 'AREIA MEDIA', total_vendido: 31000 },
+  ];
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Faturamento',
+    contextoConsulta: 'Quais produtos mais vendidos neste mes?',
+  });
+  assert.ok(texto.includes('*Por Produto*'), texto);
+  assert.ok(texto.includes('BRITA (01 FINA)'), texto);
+  assert.ok(texto.includes('AREIA MEDIA'), texto);
+});
+
+ok('metricaPreferidaPorTexto: identifica a metrica citada quando ha mais de uma', () => {
+  const metrica = canonical._test.metricaPreferidaPorTexto(
+    ['total_faturamento', 'margem_percentual'],
+    { mensagem: 'Qual produto com maior margem?' }
+  );
+  assert.strictEqual(metrica, 'margem_percentual');
+});
+
+ok('metricaPreferidaPorTexto: retorna null quando ha so 1 metrica (nao ha o que escolher)', () => {
+  assert.strictEqual(canonical._test.metricaPreferidaPorTexto(['total_faturamento'], { mensagem: 'qualquer coisa' }), null);
+});
+
+ok('extremo unico com 2 metricas: usa a metrica citada no texto (margem), nao a primeira do shape', () => {
+  const rows = [
+    { produto: 'PRODUTO A', total_faturamento: 100000, margem_percentual: 8 },
+    { produto: 'PRODUTO B', total_faturamento: 50000, margem_percentual: 40 },
+  ];
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Faturamento',
+    contextoConsulta: 'Qual produto com maior margem?',
+  });
+  assert.ok(texto.includes('PRODUTO B'), texto);
+  assert.ok(!texto.includes('PRODUTO A'), texto);
+});
+
+ok('extremo unico sem metrica citada no texto: mantem comportamento anterior (primeira metrica do shape)', () => {
+  const rows = [
+    { produto: 'PRODUTO A', total_faturamento: 100000, margem_percentual: 8 },
+    { produto: 'PRODUTO B', total_faturamento: 50000, margem_percentual: 40 },
+  ];
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Faturamento',
+    contextoConsulta: 'Qual o produto com maior faturamento?',
+  });
+  assert.ok(texto.includes('PRODUTO A'), texto);
+  assert.ok(!texto.includes('PRODUTO B'), texto);
+});
+
+// ── Achados de auditoria (Codex, rodada 2): metricaPreferidaPorTexto conservadora ──────────
+
+ok('metricaPreferidaPorTexto: retorna null quando 2+ metricas compartilham a mesma palavra do label (ambiguo)', () => {
+  const metrica = canonical._test.metricaPreferidaPorTexto(
+    ['valor_total', 'valor_medio'],
+    { mensagem: 'Qual o maior valor?' }
+  );
+  assert.strictEqual(metrica, null, '"valor" bate em valor_total E valor_medio — deve ficar ambiguo, nao escolher a primeira');
+  assert.strictEqual(canonical._test.metricaAmbiguaPorTexto(
+    ['valor_total', 'valor_medio'],
+    { mensagem: 'Qual o maior valor?' }
+  ), true);
+});
+
+ok('metricaPreferidaPorTexto: resolve por LABEL INTEIRO quando o texto cita o label completo (mesmo com metricas parecidas)', () => {
+  const metrica = canonical._test.metricaPreferidaPorTexto(
+    ['valor_total', 'valor_medio'],
+    { mensagem: 'Qual o maior valor medio?' }
+  );
+  assert.strictEqual(metrica, 'valor_medio', '"valor medio" e o label inteiro de valor_medio — nao ambiguo mesmo com valor_total tambem contendo "valor"');
+});
+
+ok('extremo unico com metricas ambiguas (valor_total/valor_medio): desiste do atalho e mostra a lista completa (Codex rodada 3: nao adivinhar via primary)', () => {
+  const rows = [
+    { produto: 'PRODUTO A', valor_total: 100000, valor_medio: 500 },
+    { produto: 'PRODUTO B', valor_total: 50000, valor_medio: 800 },
+  ];
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Faturamento',
+    contextoConsulta: 'Qual o produto com maior valor?',
+  });
+  // "valor" e ambiguo entre valor_total e valor_medio -> em vez de arriscar mostrar o campeao
+  // errado via "primary" (ordem do SELECT), cai para a lista completa com as duas metricas
+  // visiveis, deixando o usuario decidir.
+  assert.ok(texto.includes('PRODUTO A'), texto);
+  assert.ok(texto.includes('PRODUTO B'), texto);
+  assert.ok(texto.includes('*Por Produto*'), texto);
+});
+
+ok('extremo unico sem metrica citada mas com 2 metricas: continua mostrando campeao unico por primary', () => {
+  const rows = [
+    { fornecedor: 'FORNECEDOR A', valor_total: 100000, quantidade: 5 },
+    { fornecedor: 'FORNECEDOR B', valor_total: 150000, quantidade: 2 },
+  ];
+  assert.strictEqual(canonical._test.metricaAmbiguaPorTexto(
+    ['valor_total', 'quantidade'],
+    { mensagem: 'Qual o maior fornecedor do mes?' }
+  ), false);
+
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Compras',
+    contextoConsulta: 'Qual o maior fornecedor do mes?',
+  });
+
+  assert.ok(texto.includes('FORNECEDOR B'), texto);
+  assert.ok(!texto.includes('FORNECEDOR A'), texto);
+  assert.ok(!texto.includes('*Por Fornecedor*'), texto);
+});
+
+ok('metricaPreferidaPorTexto: label mais especifico vence quando um label e prefixo de outro (valor / valor medio)', () => {
+  const metrica = canonical._test.metricaPreferidaPorTexto(
+    ['valor', 'valor_medio'],
+    { mensagem: 'qual produto com maior valor medio?' }
+  );
+  assert.strictEqual(metrica, 'valor_medio', '"valor medio" (2 palavras) e mais especifico que "valor" (1 palavra) — nao deveria ficar ambiguo so por "valor" ser prefixo');
+});
+
+ok('extremo unico: label prefixo nao gera falso "campeao errado" (valor vs valor_medio)', () => {
+  const rows = [
+    { produto: 'PRODUTO A', valor: 100000, valor_medio: 500 },
+    { produto: 'PRODUTO B', valor: 50000, valor_medio: 800 },
+  ];
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Faturamento',
+    contextoConsulta: 'Qual produto com maior valor medio?',
+  });
+  assert.ok(texto.includes('PRODUTO B'), texto);
+  assert.ok(!texto.includes('PRODUTO A'), texto);
+});
+
+// ── Achados de auditoria (Codex, rodada 2): bloqueio estrutural de plural, nao varredura cega ─
+
+ok('pedeExtremoUnico: reconhece extremo unico mesmo quando "maiores" aparece dentro de nome proprio', () => {
+  assert.strictEqual(canonical._test.pedeExtremoUnico({ mensagem: 'Qual o maior faturamento do cliente Maiores Materiais?' }), true);
+});
+
+ok('pedeExtremoUnico: reconhece "qual o item de maior valor" (falso negativo da rodada 2)', () => {
+  assert.strictEqual(canonical._test.pedeExtremoUnico({ mensagem: 'Qual o item de maior valor?' }), true);
+});
+
+ok('pedeExtremoUnico: NAO reconhece frase iniciada por "quais" (marca de plural em portugues)', () => {
+  assert.strictEqual(canonical._test.pedeExtremoUnico({ mensagem: 'Quais os produtos mais vendidos?' }), false);
+});
+
 console.log(`\nwhatsapp-canonical-format.test.js: ${passou} passaram, ${falhou} falharam`);
 if (falhou) process.exit(1);
 

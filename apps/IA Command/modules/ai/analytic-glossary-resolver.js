@@ -98,6 +98,29 @@ function buildUserPrompt(termo, dominioLabels, mensagemOriginal) {
   ].join('\n');
 }
 
+// System prompt para o caminho de FALHA (a IA principal ja tentou gerar SQL e nao conseguiu).
+// Diferente de PADROES_CONCEITO (regex fixo, so cobre frases estruturadas tipo "analise X"),
+// aqui quem decide se ha um termo tecnico desconhecido e a propria IA, lendo a pergunta livre —
+// evita manter uma lista de vocabulario financeiro (markup, ticket medio, margem...) que cresceria
+// sem fim. Pode responder que NAO ha termo reconhecivel (fail-safe: no caso mais comum de SQL
+// invalido, que e um erro tecnico qualquer, nao um conceito desconhecido).
+function buildSystemPromptExtracao() {
+  return [
+    'Voce e um especialista tecnico em analise financeira e contabil para um sistema de consultas a ERP.',
+    'Uma IA tentou traduzir a pergunta do usuario em SQL e falhou. Sua tarefa: julgar se a causa provavel e a pergunta citar um TERMO/CONCEITO TECNICO DE NEGOCIO que essa IA nao conhece (ex: markup, ticket medio, margem de contribuicao, giro de estoque) — nao erros de sintaxe, ambiguidade de periodo ou falta de dado.',
+    'Se identificar um termo assim, extraia-o exatamente como aparece na pergunta (preserve acentuacao) e defina-o tecnicamente, do mesmo jeito operacional: quais valores compor, de qual(is) periodo(s), e a formula exata — o suficiente para outra IA (que ja gera SQL Protheus, mas nao conhece esse conceito) aplicar sem reinterpretar.',
+    'Se NAO houver termo tecnico de negocio identificavel (a pergunta e comum, ou a falha e por outro motivo), retorne termo_encontrado como null — nao invente um conceito.',
+    'Voce NAO gera SQL, NAO menciona tabelas de banco de dados.',
+    '',
+    'Retorne SOMENTE JSON valido, sem markdown, no formato:',
+    '{ "termo_encontrado": string|null, "definicao_tecnica": string|null }',
+  ].join('\n');
+}
+
+function buildUserPromptExtracao(mensagemOriginal) {
+  return `Pergunta que a IA geradora de SQL nao conseguiu traduzir: "${mensagemOriginal}"`;
+}
+
 async function _consultarIA(termo, dominioLabels, mensagemOriginal, empresaId) {
   const { keys, cfg } = await aiProviderClient.resolverKeysEOrdem(empresaId);
   const systemPrompt = buildSystemPrompt();
@@ -149,6 +172,106 @@ async function resolverConceito(mensagem, empresaId) {
     console.warn('[AnalyticGlossary] Falha ao consultar definicao do conceito:', e.message);
     return null; // fail-open: segue o fluxo normal (roteamento lexico existente)
   }
+
+  glossaryStore.criar({
+    termo,
+    dominio: dominio.chave,
+    definicaoTecnica,
+    origem: 'ia_aprendido',
+    perguntaOrigem: mensagem,
+  });
+
+  return { termo, definicaoTecnica };
+}
+
+async function _extrairConceitoPorIA(mensagem, empresaId) {
+  const { keys, cfg } = await aiProviderClient.resolverKeysEOrdem(empresaId);
+  const systemPrompt = buildSystemPromptExtracao();
+  const userPrompt = buildUserPromptExtracao(mensagem);
+  const raw = await aiProviderClient.chamarIA(keys, cfg, systemPrompt, userPrompt, {
+    json: true,
+    maxTokens: 500,
+    temperature: 0.1,
+    logPrefix: 'AnalyticGlossaryExtracao',
+  });
+  const match = String(raw || '').match(/\{[\s\S]*\}/);
+  const obj = JSON.parse(match ? match[0] : raw);
+  return obj;
+}
+
+// Segundo caminho de deteccao, usado SO quando a IA principal ja tentou gerar SQL e falhou
+// (sql_nao_extraido em runner.js). Ao contrario de resolverConceito() acima — que depende de
+// PADROES_CONCEITO (regex fixo, frases estruturadas tipo "analise X") — aqui nao ha lista de
+// vocabulario tecnico para manter: a propria IA auxiliar le a pergunta e decide se ha um termo
+// de negocio desconhecido (markup, ticket medio, margem...) ou se a falha e de outra natureza.
+// Fail-safe em profundidade: erro de rede/parse, ausencia de termo, ou dominio indefinido sem
+// palavra de dominio na pergunta — todos retornam null e o chamador mantem a mensagem de erro
+// generica atual (nunca bloqueia nem piora a experiencia existente).
+// Filtro barato (sem chamada de IA) para nao gastar a extracao em ruido obvio — saudacoes,
+// agradecimentos, replies curtos ("oi", "teste", "kkkk", "bom dia", "ok", "valeu", "obrigado"),
+// e mensagens comuns de conversa (chat pessoal/status) sem relacao com consulta ao ERP.
+// Auditoria (Codex, 3 rodadas) refinou este filtro progressivamente:
+// 1) exigir SO estrutura interrogativa formal ("?" ou palavra interrogativa no inicio)
+//    descartava perguntas legitimas sem pontuacao/formalidade (ex: "queria saber o markup
+//    desse produto");
+// 2) aceitar qualquer frase com 3+ palavras e uma palavra de 5+ letras (rodada 1) reabriu a
+//    porta para formulas sociais mais longas ("bom dia pessoal", "obrigado pela ajuda");
+// 3) apos excluir formulas sociais (rodada 2), sobrou "top" capturando frases legitimas tipo
+//    "top produtos por markup" (a palavra "top" tambem e giria de aprovacao — "ta top!" —
+//    entao entrava na lista de formula social por engano); e o criterio generico de "3+
+//    palavras com uma de 5+ letras" ainda deixava passar frases de conversa comum sem relacao
+//    com consulta ("minha internet caiu", "reuniao terminou tarde").
+// Solucao final — heuristica PERMISSIVA para "e uma consulta" (aceita qualquer uma das 3):
+// (a) estrutura interrogativa formal ("?" ou comeca com qual/quais/quanto/como/...);
+// (b) verbo consultivo comum no INICIO da frase (queria saber, me mostra, mostra, preciso
+//     saber, quero saber, me diz, calcula, traz, consulta, top seguido de complemento) — cobre
+//     o jeito informal mais comum de pedir algo no WhatsApp sem pontuacao de pergunta;
+// (c) estrutura de COMPLEMENTO NOMINAL ("o/a/os/as <termo> de/do/da <algo>", "<termo> deste/
+//     desse/daquele <algo>") — a forma gramatical tipica de NOMEAR um conceito e liga-lo a um
+//     objeto/periodo (ex: "markup DESTE item", "margem DE contribuicao DAS vendas", "giro DE
+//     estoque"), sem exigir pontuacao. Isso substitui o criterio antigo (c) de "3+ palavras
+//     com substancia", que era estrutural demais e pegava qualquer frase do dia a dia.
+// Excecao que roda ANTES de (b)/(c): um vocabulario FECHADO de saudacoes/despedidas/
+// agradecimentos do portugues quando a mensagem e SO isso (com ou sem complemento social como
+// "pessoal"/"equipe") — finito e estavel, nao e "vocabulario de termos tecnicos de negocio"
+// que cresceria a cada conceito novo, e sim o pequeno conjunto de formulas sociais do idioma.
+const RE_FORMULA_SOCIAL = /^\s*(oi+|ola|opa|eae|e\s*ai|bom\s*dia|boa\s*tarde|boa\s*noite|obrigad[oa]|obg|valeu|vlw|blz|beleza|ok|okay|certo|entendi|show|legal|otimo|perfeito|de\s*nada|por\s*nada|tchau|ate\s*mais|ate\s*logo|flw|falou|teste|test|kk+|rs+|haha+)\b/i;
+const RE_PARECE_PERGUNTA = /\?\s*$|^\s*(qual|quais|quanto|quantos|quantas|como|o\s+que|que|onde|quando|porque|por\s+que)\b/i;
+const RE_VERBO_CONSULTIVO = /^\s*(queria|gostaria|quero|preciso|precisava|pode(?:ria)?|me\s+(?:mostra|mostre|diz|diga|passa|passe|manda|mande|traz|traga)|mostra|mostre|traz|traga|calcula|calcule|consulta|consulte|verifica|verifique|informa|informe|top(?=\s+\S))\b/i;
+const RE_COMPLEMENTO_NOMINAL = /\b(?:o|a|os|as)\s+\S+\s+(?:de|do|da|dos|das|deste|desse|daquele|desta|dessa|daquela)\b/i;
+
+function _pareceMensagemDeConsulta(mensagem) {
+  const texto = String(mensagem || '').trim();
+  if (texto.length < 6) return false;
+  if (RE_PARECE_PERGUNTA.test(texto) || RE_VERBO_CONSULTIVO.test(texto)) return true;
+  // Formula social no INICIO da frase ("obrigado pela ajuda", "bom dia pessoal") continua sendo
+  // ruido mesmo com complemento — so deixa de ser filtrada se ja capturada por (a)/(b) acima.
+  if (RE_FORMULA_SOCIAL.test(texto)) return false;
+  return RE_COMPLEMENTO_NOMINAL.test(texto);
+}
+
+async function resolverConceitoPorFalhaSql(mensagem, empresaId) {
+  if (!_pareceMensagemDeConsulta(mensagem)) return null;
+  let extracao;
+  try {
+    extracao = await _extrairConceitoPorIA(mensagem, empresaId);
+  } catch (e) {
+    console.warn('[AnalyticGlossary] Falha ao extrair conceito via IA (fluxo de erro original mantido):', e.message);
+    return null;
+  }
+  const termo = typeof extracao?.termo_encontrado === 'string' ? extracao.termo_encontrado.trim() : '';
+  if (!termo) return null;
+
+  const dominio = extrairDominioExplicito(mensagem);
+  if (!dominio) {
+    return { precisaConfirmacao: true, perguntaEsclarecimento: _perguntaEsclarecimentoDominio(termo) };
+  }
+
+  const existente = glossaryStore.buscarPorTermo(termo, dominio.chave);
+  if (existente) return { termo, definicaoTecnica: existente.definicao_tecnica };
+
+  const definicaoTecnica = typeof extracao?.definicao_tecnica === 'string' ? extracao.definicao_tecnica.trim() : '';
+  if (!definicaoTecnica) return null;
 
   glossaryStore.criar({
     termo,
@@ -215,6 +338,7 @@ module.exports = {
   detectarConceitoDesconhecido,
   extrairDominioExplicito,
   resolverConceito,
+  resolverConceitoPorFalhaSql,
   calcularPeriodoBaseAnterior,
   resolverPeriodoBaseSeHorizontal,
 };

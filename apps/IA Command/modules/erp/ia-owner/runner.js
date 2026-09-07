@@ -4021,6 +4021,28 @@ async function prepararSql({ spec, sql, sx2, sx2Empresa = null, sx3, protheus, m
 // literal da pergunta do usuario sobre o guia quando os dois parecem divergir) — a mesma
 // causa raiz ja resolvida antes para a instrucao de escopo de filial Lobo Guara, com o mesmo
 // padrao de destaque no TOPO do prompt (fora do guia tecnico).
+// Quando a IA principal falha em extrair SQL (sql_nao_extraido), antes de devolver a mensagem
+// generica de erro, tenta uma segunda leitura via glossario: talvez a causa seja um termo
+// tecnico de negocio que a IA principal nao conhece (ex: "markup"). Retorna { resposta } quando
+// so ha uma orientacao a devolver (pede o dominio, ou falhou), ou { glossario } quando a
+// definicao foi resolvida — nesse caso o chamador deve REEXECUTAR a geracao de SQL com
+// intent._glossario preenchido, em vez de so avisar o usuario que aprendeu o termo (a definicao
+// ja esta pronta para uso imediato, nao ha motivo para exigir que o usuario pergunte de novo).
+// Fail-open: qualquer falha retorna null, mantendo a mensagem de erro original.
+async function _tentarGlossarioAposFalhaSql(mensagem, empresaId) {
+  try {
+    const analyticGlossaryResolver = require('../../ai/analytic-glossary-resolver');
+    const resolucao = await analyticGlossaryResolver.resolverConceitoPorFalhaSql(mensagem, empresaId);
+    if (!resolucao) return null;
+    if (resolucao.precisaConfirmacao) return { resposta: resolucao.perguntaEsclarecimento };
+    if (resolucao.definicaoTecnica) return { glossario: resolucao };
+    return null;
+  } catch (e) {
+    console.warn('[IAOwner] Falha ao tentar glossario apos SQL invalido (mantendo erro original):', e.message);
+    return null;
+  }
+}
+
 function _comDefinicaoGlossario(queryPlanTexto, intent) {
   const glossario = intent?._glossario;
   if (!glossario?.definicaoTecnica) return queryPlanTexto;
@@ -4752,7 +4774,33 @@ async function executar(spec, intent, empresaId) {
   }
 
   if (!plano.sql || String(plano.sql).trim() === 'null') {
-    return { tipo: 'erro', subtipo: 'sql_nao_extraido', resposta_direta: mensagemErro(spec, 'sql_invalido'), sql_gerado: JSON.stringify(plano.obj, null, 2), _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0, _ia_owner_plano: plano.obj };
+    // Evita recursao infinita: so tenta o glossario uma vez por execucao (intent._glossarioTentado).
+    if (!intentEfetivo._glossarioTentado) {
+      const tentativaGlossario = await _tentarGlossarioAposFalhaSql(mensagem, empresaId);
+      if (tentativaGlossario?.glossario) {
+        return executar(spec, { ...intent, _glossario: tentativaGlossario.glossario, _glossarioTentado: true }, empresaId);
+      }
+      if (tentativaGlossario?.resposta) {
+        return {
+          tipo: 'erro',
+          subtipo: 'sql_nao_extraido',
+          resposta_direta: tentativaGlossario.resposta,
+          sql_gerado: JSON.stringify(plano.obj, null, 2),
+          _sql_auditoria: auditoriaBase,
+          duracao_ms: Date.now() - t0,
+          _ia_owner_plano: plano.obj,
+        };
+      }
+    }
+    return {
+      tipo: 'erro',
+      subtipo: 'sql_nao_extraido',
+      resposta_direta: mensagemErro(spec, 'sql_invalido'),
+      sql_gerado: JSON.stringify(plano.obj, null, 2),
+      _sql_auditoria: auditoriaBase,
+      duracao_ms: Date.now() - t0,
+      _ia_owner_plano: plano.obj,
+    };
   }
 
   let preparado;

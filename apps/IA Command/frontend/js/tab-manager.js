@@ -179,7 +179,6 @@
     setTimeout(_updateScrollBtns, 350);
     _syncSidebarActive(url);
     _setTopbarTitle(t);
-    _syncTopbarHelp(t);
     _saveState();
   }
 
@@ -438,16 +437,7 @@
         }
         #_mdi-emp-btn ._mdi-emp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         #_mdi-emp-btn ._mdi-emp-caret { font-size: 10px; opacity: .7; flex-shrink: 0; }
-        #_mdi-help-btn {
-          margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
-          height: 26px; padding: 0 9px; border: 1px solid transparent; border-radius: 7px;
-          background: transparent; color: var(--text-lo, #64748b);
-          font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
-        }
-        #_mdi-help-btn:hover {
-          color: #7c3aed; background: var(--bg-hover, #f1f5f9);
-          border-color: var(--border, #e2e8f0);
-        }
+        .btn[data-mdi-help-button="1"] svg { flex-shrink: 0; }
         .table-wrap,
         .card,
         .form-section,
@@ -571,33 +561,71 @@
           _abrirSeletorEmpresa(frame.dataset.url, btn, frame);
         });
         bar.appendChild(btn);
-        if (doc.getElementById('help-drawer')) {
-          const helpBtn = doc.createElement('button');
-          helpBtn.type = 'button';
-          helpBtn.id = '_mdi-help-btn';
-          helpBtn.title = 'Ajuda da pagina';
-          helpBtn.innerHTML = `
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-              <line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-            <span>Ajuda</span>`;
-          helpBtn.addEventListener('click', (e) => {
-            e.preventDefault(); e.stopPropagation();
-            try {
-              if (typeof frame.contentWindow.abrirAjuda === 'function') frame.contentWindow.abrirAjuda();
-              else frame.contentWindow.postMessage({ type: 'page:open-ajuda' }, location.origin);
-            } catch(_) {}
-          });
-          bar.appendChild(helpBtn);
-        }
         const main = doc.querySelector('.main') || doc.body;
         main.insertBefore(bar, main.firstChild);
       }
+      _normalizeLocalHelpButtons(doc, frame);
       _enhanceHelpDrawer(doc, tab);
-      if (tab && frame.classList.contains('active')) _syncTopbarHelp(tab);
     } catch (_) {}
+  }
+
+  function _helpIconSvg(size = 15) {
+    return `
+      <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>`;
+  }
+
+  function _openFrameHelp(frame) {
+    try {
+      if (typeof frame.contentWindow.abrirAjuda === 'function') frame.contentWindow.abrirAjuda();
+      else frame.contentWindow.postMessage({ type: 'page:open-ajuda' }, location.origin);
+    } catch (_) {}
+  }
+
+  function _normalizeLocalHelpButtons(doc, frame) {
+    if (!doc.getElementById('help-drawer')) return;
+    let buttons = Array.from(doc.querySelectorAll('button')).filter(btn => {
+      const text = (btn.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      return text === 'ajuda' && (
+        btn.id === 'help-btn' ||
+        /abrirAjuda\(\)/.test(btn.getAttribute('onclick') || '') ||
+        /ajuda/i.test(btn.title || '')
+      );
+    });
+    if (!buttons.length) {
+      const target = doc.querySelector('.head-actions, .page-actions, .toolbar-actions, .mon-toolbar, .actions, [class*="actions"]');
+      if (target) {
+        const btn = doc.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-ghost';
+        btn.title = 'Ajuda';
+        btn.innerHTML = `${_helpIconSvg(15)} <span>Ajuda</span>`;
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          _openFrameHelp(frame);
+        });
+        target.insertBefore(btn, target.firstElementChild);
+        buttons = [btn];
+      }
+    }
+    buttons.forEach(btn => {
+      if (!btn.querySelector('svg')) btn.innerHTML = `${_helpIconSvg(15)} <span>Ajuda</span>`;
+      btn.dataset.mdiHelpButton = '1';
+      if (!/display\s*:\s*(inline-)?flex/i.test(btn.getAttribute('style') || '')) {
+        btn.style.display = 'inline-flex';
+      }
+      btn.style.alignItems = 'center';
+      btn.style.gap = '6px';
+      btn.title = btn.title || 'Ajuda';
+      const parent = btn.parentElement;
+      if (parent && parent.firstElementChild !== btn && /(actions|toolbar)/i.test(parent.className || '')) {
+        parent.insertBefore(btn, parent.firstElementChild);
+      }
+    });
   }
 
   function _enhanceHelpDrawer(doc, tab) {
@@ -836,15 +864,6 @@
     const el = document.getElementById('shell-title');
     if (!el) return;
     el.textContent = tab ? `${tab.icon}  ${tab.label}` : 'IA Command';
-    _syncTopbarHelp(tab);
-  }
-
-  function _syncTopbarHelp(tab) {
-    const btn = document.getElementById('_ajuda-btn');
-    if (!btn) return;
-    let hasHelp = false;
-    try { hasHelp = !!tab?.frame?.contentDocument?.getElementById('help-drawer'); } catch (_) {}
-    btn.style.display = hasHelp ? '' : 'none';
   }
 
   function _updateScrollBtns() {

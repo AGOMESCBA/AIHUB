@@ -19,6 +19,8 @@ const channelStore        = require('./channel-store');
 const messageTemplates    = require('./message-templates');
 const dialogResolver      = require('../ai/dialog-resolver');
 const conversationService = require('../ai/conversation-service');
+const conversationalTurnRouter = require('../ai/conversational-turn-router');
+const externalInfoService = require('../ai/external-info-service');
 const crud                = require('../database/crud');
 const { getDB }           = require('../database');
 const { alertarOperacionalTelegram } = require('./operational-alerts');
@@ -32,6 +34,7 @@ const comissaoEntityCatalog    = require('../erp/totvs_protheus/comissao/entity-
 const comissaoIAOwnerSpec      = require('../erp/totvs_protheus/comissao/comissao-ia-owner-spec');
 const whatsappQueryCache      = require('./whatsapp-query-cache');
 const whatsappResponseConfig  = require('./whatsapp-response-config');
+const accessSummary          = require('./access-summary');
 const attachmentBuilder       = require('./whatsapp-attachment-builder');
 const excelBuilder            = require('./whatsapp-excel-builder');
 const pdfBuilder               = require('./whatsapp-pdf-builder');
@@ -3208,6 +3211,95 @@ class IACWhatsAppService extends EventEmitter {
     });
   }
 
+  _limparContextoTecnicoConversacional(sender) {
+    this._clearLastIntent(sender);
+    this._setSenderContext(sender, {
+      pendingText: null,
+      _chatHistory: [],
+      _perguntaFilialPendente: false,
+      _perguntaEntidadePendente: false,
+      _opcoesEntidade: null,
+      _intentPendente: null,
+      _intentPendenteEmpresaId: null,
+      _intentPendenteEmpresasAll: null,
+    });
+  }
+
+  async _tentarResponderTurnoConversacionalDinamico({ texto, sender, empresaId, t0, timingCtx = null, recebidoEm = null } = {}) {
+    const rota = conversationalTurnRouter.rotear(texto);
+    if (!rota || rota.tipo === 'nenhum') return null;
+
+    this._limparContextoTecnicoConversacional(sender);
+
+    let resposta;
+    let intent;
+    let resultado;
+
+    if (rota.tipo === 'acessos') {
+      const resumo = accessSummary.responder(sender, { channelId: this._channelId });
+      resposta = resumo.resposta;
+      intent = {
+        intencao: 'consulta_acessos_whatsapp',
+        periodo: { tipo: 'nenhum' },
+        filtros: {},
+        confianca: 1,
+        _provedor: 'roteador_conversacional',
+        _resolvidoLocalmente: true,
+        _mensagemOriginal: texto,
+      };
+      resultado = {
+        tipo: 'dialogo',
+        subtipo: 'acessos_whatsapp',
+        mensagem: resposta,
+        acessos_count: resumo.acessos.length,
+      };
+    } else if (rota.tipo === 'externo') {
+      const consulta = await externalInfoService.consultar(rota);
+      resposta = consulta.resposta;
+      intent = {
+        intencao: `consulta_externa_${rota.categoria}`,
+        periodo: { tipo: 'nenhum' },
+        filtros: rota.local ? { local: rota.local } : {},
+        confianca: 1,
+        _provedor: consulta.resultado?.fonteId || 'fonte_online',
+        _resolvidoLocalmente: true,
+        _mensagemOriginal: texto,
+        _rotaConversacional: rota,
+      };
+      resultado = {
+        tipo: consulta.ok ? 'dialogo' : 'erro',
+        subtipo: `consulta_externa_${rota.categoria}`,
+        mensagem: resposta,
+        fonte_usada: consulta.resultado?.fonte || null,
+        fonte_solicitada: rota.fontePreferida || null,
+        data_informacao: consulta.resultado?.dataInformacao || null,
+        erros_fontes: consulta.erros || [],
+      };
+    } else {
+      return null;
+    }
+
+    const agora = Date.now();
+    const pipelineMs = recebidoEm ? (agora - new Date(recebidoEm).getTime()) : (agora - t0);
+    const logId = this._registrarInterpretacao({
+      empresaId,
+      sender,
+      texto,
+      intent,
+      resultado,
+      resposta,
+      duracaoMs: agora - t0,
+      recebidoEm,
+      pipelineMs,
+    });
+    if (timingCtx) {
+      timingCtx.logId = logId;
+      timingCtx.recebidoEm = recebidoEm;
+    }
+    this.log(`💬 Turno conversacional dinamico: ${rota.tipo}${rota.categoria ? `/${rota.categoria}` : ''}`, 'info');
+    return resposta;
+  }
+
   async _responderDialogoComIA({ empresaId, sender, texto, dialogo, t0 }) {
     let resposta = dialogo.resposta;
     let provedor = 'dialogo';
@@ -4122,6 +4214,16 @@ class IACWhatsAppService extends EventEmitter {
       const iniciado = await this._iniciarDialogoFeedback(sender, textoExecucao);
       if (iniciado) return iniciado;
     }
+
+    const respostaConversacionalDinamica = await this._tentarResponderTurnoConversacionalDinamico({
+      texto: textoExecucao,
+      sender,
+      empresaId,
+      t0: _t0,
+      timingCtx: _timingCtx,
+      recebidoEm: _recebidoEm,
+    });
+    if (respostaConversacionalDinamica) return respostaConversacionalDinamica;
 
     const respostaEntidadePendente = await this._responderEntidadePendente(sender, textoExecucao, empresaId, _t0);
     if (respostaEntidadePendente) return respostaEntidadePendente;

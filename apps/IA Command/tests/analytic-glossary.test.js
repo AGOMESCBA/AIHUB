@@ -202,6 +202,214 @@ async function okAsync(desc, fn) {
     }
   });
 
+  // ── Achados de auditoria (Codex): guarda de ruido antes de gastar chamada de IA ───────────
+  await okAsync('resolverConceitoPorFalhaSql NAO chama IA para saudacoes/ruido obvio (oi, teste, kkkk)', async () => {
+    const original = aiProviderClient.chamarIA;
+    aiProviderClient.chamarIA = async () => { throw new Error('NAO deveria ter chamado a IA para mensagem sem estrutura de pergunta.'); };
+    try {
+      for (const msg of ['oi', 'teste', 'kkkk', 'bom dia', 'ok', 'valeu']) {
+        const resultado = await resolver.resolverConceitoPorFalhaSql(msg, -9992);
+        assert.strictEqual(resultado, null, `"${msg}" deveria ser filtrado sem chamar IA`);
+      }
+    } finally {
+      aiProviderClient.chamarIA = original;
+    }
+  });
+
+  await okAsync('resolverConceitoPorFalhaSql chama IA normalmente para pergunta real (com "?")', async () => {
+    const original = aiProviderClient.chamarIA;
+    let chamou = false;
+    aiProviderClient.chamarIA = async () => { chamou = true; return JSON.stringify({ termo_encontrado: null, definicao_tecnica: null }); };
+    try {
+      await resolver.resolverConceitoPorFalhaSql('Qual o markup deste item?', -9992);
+      assert.strictEqual(chamou, true, 'pergunta real com "?" deveria acionar a IA extratora');
+    } finally {
+      aiProviderClient.chamarIA = original;
+    }
+  });
+
+  // ── resolverConceitoPorFalhaSql: segundo gatilho, sem lista de vocabulario fixa ───────────
+  // Usado quando a IA principal ja tentou gerar SQL e falhou (sql_nao_extraido em runner.js).
+  // Nao depende de PADROES_CONCEITO — quem decide se ha um termo tecnico e a propria IA
+  // auxiliar, lendo a pergunta livre. Caso real que motivou: "Qual o markup deste item?".
+  await okAsync('resolverConceitoPorFalhaSql identifica termo de negocio nao coberto por PADROES_CONCEITO (caso real: markup)', async () => {
+    getDB().prepare("DELETE FROM analytic_glossary WHERE termo = 'markup'").run();
+    const original = aiProviderClient.chamarIA;
+    aiProviderClient.chamarIA = async () => JSON.stringify({
+      termo_encontrado: 'markup',
+      definicao_tecnica: 'Markup e o percentual aplicado sobre o custo do item para formar o preco de venda: (preco_venda - custo) / custo * 100.',
+    });
+    try {
+      const resultado = await resolver.resolverConceitoPorFalhaSql('Qual o markup deste item?', -9992);
+      assert.ok(resultado);
+      assert.strictEqual(resultado.precisaConfirmacao, true, 'markup nao especifica dominio de dado na pergunta, deve pedir esclarecimento antes de gerar SQL');
+      assert.ok(resultado.perguntaEsclarecimento.includes('markup'));
+    } finally {
+      aiProviderClient.chamarIA = original;
+      getDB().prepare("DELETE FROM analytic_glossary WHERE termo = 'markup'").run();
+    }
+  });
+
+  await okAsync('resolverConceitoPorFalhaSql resolve direto quando pergunta ja traz dominio explicito', async () => {
+    getDB().prepare("DELETE FROM analytic_glossary WHERE termo = 'ticket medio'").run();
+    const original = aiProviderClient.chamarIA;
+    aiProviderClient.chamarIA = async () => JSON.stringify({
+      termo_encontrado: 'ticket medio',
+      definicao_tecnica: 'Ticket medio e o valor total faturado dividido pela quantidade de vendas/notas do periodo.',
+    });
+    try {
+      const resultado = await resolver.resolverConceitoPorFalhaSql('Qual o ticket medio de vendas deste mes?', -9992);
+      assert.ok(resultado);
+      assert.strictEqual(resultado.precisaConfirmacao, undefined);
+      assert.strictEqual(resultado.termo, 'ticket medio');
+      assert.ok(resultado.definicaoTecnica.includes('faturado'));
+      const gravado = store.buscarPorTermo('ticket medio', 'faturamento');
+      assert.ok(gravado, 'deveria gravar no glossario para a proxima pergunta reaproveitar sem chamar IA de novo');
+    } finally {
+      aiProviderClient.chamarIA = original;
+      getDB().prepare("DELETE FROM analytic_glossary WHERE termo = 'ticket medio'").run();
+    }
+  });
+
+  await okAsync('resolverConceitoPorFalhaSql retorna null quando a IA nao encontra termo tecnico (falha e de outra natureza)', async () => {
+    const original = aiProviderClient.chamarIA;
+    aiProviderClient.chamarIA = async () => JSON.stringify({ termo_encontrado: null, definicao_tecnica: null });
+    try {
+      const resultado = await resolver.resolverConceitoPorFalhaSql('faturamento de ontem por favor', -9992);
+      assert.strictEqual(resultado, null, 'sem termo tecnico identificado, deve manter o erro generico original (fail-open)');
+    } finally {
+      aiProviderClient.chamarIA = original;
+    }
+  });
+
+  await okAsync('resolverConceitoPorFalhaSql e fail-open quando a IA auxiliar falha', async () => {
+    const original = aiProviderClient.chamarIA;
+    aiProviderClient.chamarIA = async () => { throw new Error('Simulado: nenhum provider disponivel.'); };
+    try {
+      const resultado = await resolver.resolverConceitoPorFalhaSql('Qual a margem de contribuicao deste produto?', -9992);
+      assert.strictEqual(resultado, null, 'deve ser fail-open (null), nunca lancar excecao nem piorar a mensagem de erro original');
+    } finally {
+      aiProviderClient.chamarIA = original;
+    }
+  });
+
+  await okAsync('resolverConceitoPorFalhaSql reaproveita termo ja gravado sem chamar IA de novo', async () => {
+    getDB().prepare("DELETE FROM analytic_glossary WHERE termo = 'giro de estoque'").run();
+    store.criar({
+      termo: 'giro de estoque',
+      dominio: 'estoque',
+      definicaoTecnica: 'Giro de estoque = custo das mercadorias vendidas no periodo / estoque medio do periodo.',
+    });
+    const original = aiProviderClient.chamarIA;
+    let chamouParaDefinicao = false;
+    aiProviderClient.chamarIA = async (keys, cfg, systemPrompt) => {
+      if (systemPrompt.includes('julgar se a causa provavel')) {
+        return JSON.stringify({ termo_encontrado: 'giro de estoque', definicao_tecnica: null });
+      }
+      chamouParaDefinicao = true;
+      throw new Error('NAO deveria ter chamado a IA de definicao — termo ja esta no glossario.');
+    };
+    try {
+      const resultado = await resolver.resolverConceitoPorFalhaSql('Qual o giro de estoque deste produto?', -9992);
+      assert.ok(resultado);
+      assert.strictEqual(resultado.definicaoTecnica, 'Giro de estoque = custo das mercadorias vendidas no periodo / estoque medio do periodo.');
+      assert.strictEqual(chamouParaDefinicao, false);
+    } finally {
+      aiProviderClient.chamarIA = original;
+      getDB().prepare("DELETE FROM analytic_glossary WHERE termo = 'giro de estoque'").run();
+    }
+  });
+
+  // ── Achados de auditoria (Codex, rodada 2): filtro de ruido nao pode barrar pergunta informal ─
+  await okAsync('resolverConceitoPorFalhaSql chama IA para perguntas informais SEM "?" (falso negativo da rodada 2)', async () => {
+    const original = aiProviderClient.chamarIA;
+    let chamadas = 0;
+    aiProviderClient.chamarIA = async () => { chamadas++; return JSON.stringify({ termo_encontrado: null, definicao_tecnica: null }); };
+    try {
+      const frasesInformais = [
+        'queria saber o markup desse produto nas vendas',
+        'me mostra o ticket medio de vendas desse mes',
+        'preciso saber a margem de contribuicao das vendas',
+        'mostra o giro de estoque desse item',
+      ];
+      for (const frase of frasesInformais) {
+        await resolver.resolverConceitoPorFalhaSql(frase, -9992);
+      }
+      assert.strictEqual(chamadas, frasesInformais.length, 'todas as frases informais deveriam acionar a IA extratora, mesmo sem "?"');
+    } finally {
+      aiProviderClient.chamarIA = original;
+    }
+  });
+
+  await okAsync('resolverConceitoPorFalhaSql NAO chama IA para formulas sociais mais longas (bom dia pessoal, obrigado pela ajuda)', async () => {
+    const original = aiProviderClient.chamarIA;
+    let chamadas = 0;
+    aiProviderClient.chamarIA = async () => { chamadas++; return JSON.stringify({ termo_encontrado: null, definicao_tecnica: null }); };
+    try {
+      const formulasSociais = [
+        'bom dia pessoal',
+        'obrigado pela ajuda',
+        'muito obrigado',
+        'boa tarde equipe',
+        'valeu demais',
+        'de nada',
+      ];
+      for (const frase of formulasSociais) {
+        await resolver.resolverConceitoPorFalhaSql(frase, -9992);
+      }
+      assert.strictEqual(chamadas, 0, 'formulas sociais mais longas nao deveriam acionar a IA — regressao apontada na rodada 2 da auditoria');
+    } finally {
+      aiProviderClient.chamarIA = original;
+    }
+  });
+
+  // ── Achados de auditoria (Codex, rodada 3) ──────────────────────────────────────────────
+  await okAsync('resolverConceitoPorFalhaSql NAO chama IA para conversa comum sem relacao com consulta (achado 3)', async () => {
+    const original = aiProviderClient.chamarIA;
+    let chamadas = 0;
+    aiProviderClient.chamarIA = async () => { chamadas++; return JSON.stringify({ termo_encontrado: null, definicao_tecnica: null }); };
+    try {
+      const conversaComum = [
+        'minha internet caiu',
+        'estou chegando agora',
+        'reuniao terminou tarde',
+        'ta td show por aqui',
+      ];
+      for (const frase of conversaComum) {
+        await resolver.resolverConceitoPorFalhaSql(frase, -9992);
+      }
+      assert.strictEqual(chamadas, 0, 'frases de conversa comum (3+ palavras, substancia) nao deveriam acionar a IA so por terem "tamanho" — precisam de estrutura de pedido/complemento nominal');
+    } finally {
+      aiProviderClient.chamarIA = original;
+    }
+  });
+
+  await okAsync('resolverConceitoPorFalhaSql chama IA para "top X por Y" mesmo sem "?" (achado 4: "top" nao e so giria social)', async () => {
+    const original = aiProviderClient.chamarIA;
+    let chamadas = 0;
+    aiProviderClient.chamarIA = async () => { chamadas++; return JSON.stringify({ termo_encontrado: null, definicao_tecnica: null }); };
+    try {
+      await resolver.resolverConceitoPorFalhaSql('top produtos por markup', -9992);
+      await resolver.resolverConceitoPorFalhaSql('top clientes por ticket medio', -9992);
+      assert.strictEqual(chamadas, 2, '"top X por Y" e uma consulta de ranking legitima, nao deveria ser barrada como formula social de aprovacao ("ta top!")');
+    } finally {
+      aiProviderClient.chamarIA = original;
+    }
+  });
+
+  await okAsync('resolverConceitoPorFalhaSql chama IA para complemento nominal sem verbo/interrogativo ("o giro de estoque desse produto")', async () => {
+    const original = aiProviderClient.chamarIA;
+    let chamadas = 0;
+    aiProviderClient.chamarIA = async () => { chamadas++; return JSON.stringify({ termo_encontrado: null, definicao_tecnica: null }); };
+    try {
+      await resolver.resolverConceitoPorFalhaSql('o giro de estoque desse produto', -9992);
+      await resolver.resolverConceitoPorFalhaSql('a margem deste item', -9992);
+      assert.strictEqual(chamadas, 2);
+    } finally {
+      aiProviderClient.chamarIA = original;
+    }
+  });
+
   limpar();
 
   console.log(`\nanalytic-glossary.test.js: ${passou} passaram, ${falhou} falharam`);

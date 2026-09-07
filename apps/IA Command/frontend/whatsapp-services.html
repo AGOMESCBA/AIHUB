@@ -1846,9 +1846,7 @@ function abrirAjuda() { document.getElementById('help-overlay').classList.add('o
 function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { fecharAjuda(); fecharModal(); } });
 
-// Avisa o shell para mostrar o botão Ajuda na topbar
-window.parent.postMessage({ type: 'shell:show-ajuda' }, location.origin);
-// Escuta o comando vindo do shell quando o usuário clica no botão Ajuda da topbar
+// Permite que o shell ou normalizadores centrais abram a ajuda desta tela.
 window.addEventListener('message', (e) => {
   if (e.origin !== location.origin) return;
   if (e.data?.type === 'page:open-ajuda') abrirAjuda();

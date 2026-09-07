@@ -404,6 +404,39 @@ async function rotear(intent, empresaId) {
       ];
       return { dataset_id: null, dataset_nome: 'erp_generico', ...(resultado || {}), trace: traceResultado };
     }
+    // Pergunta nao reconhecida como ERP por palavra-chave (ex: "markup", sem "faturamento"/
+    // "compras"/etc no texto): antes de desistir, tenta o glossario de conceitos analiticos —
+    // o termo pode ser um conceito de negocio que a IA principal simplesmente nao conhece, nao
+    // uma pergunta fora de escopo. Fail-open: qualquer falha mantem a mensagem "desconhecido"
+    // original, sem piorar o comportamento atual.
+    try {
+      const analyticGlossaryResolver = require('../../ai/analytic-glossary-resolver');
+      const resolucao = await analyticGlossaryResolver.resolverConceitoPorFalhaSql(mensagem, empresaId);
+      if (resolucao?.precisaConfirmacao) {
+        return { tipo: 'desconhecido', subtipo: 'confirmacao_necessaria', mensagem: resolucao.perguntaEsclarecimento };
+      }
+      if (resolucao?.definicaoTecnica) {
+        const _todosModulos = Object.keys(SPEC_LOADERS);
+        const erroAutorizacao = _verificarAlgumModuloAutorizado(intent, empresaId, _todosModulos);
+        if (erroAutorizacao) return erroAutorizacao;
+        const _intentComGlossario = {
+          _mensagemOriginal: mensagem,
+          _remetente: intent._remetente || null,
+          _channelId: intent._channelId || null,
+          intencao: 'erp_generico',
+          periodo: { tipo: 'nenhum' },
+          filtros: {},
+          _dynamicAiScope: true,
+          _glossario: resolucao,
+          _glossarioTentado: true, // ja resolvido aqui — runner.js nao deve tentar de novo se o SQL falhar
+        };
+        console.log(`[AnalyticGlossary] Termo "${resolucao.termo}" reconhecido apos falha de classificacao — roteando para spec generico | empresa=${empresaId}`);
+        const resultado = await iaOwnerRunner.executar(genericoSpec, _intentComGlossario, empresaId);
+        return { dataset_id: null, dataset_nome: 'erp_generico', ...(resultado || {}) };
+      }
+    } catch (e) {
+      console.warn('[IntentRouter] Falha ao tentar glossario para pergunta desconhecida (mantendo mensagem original):', e.message);
+    }
     return { tipo: 'desconhecido', mensagem: intent._erro || 'Fiquei em duvida sobre qual indicador, periodo ou detalhe voce quer consultar.' };
   }
 
