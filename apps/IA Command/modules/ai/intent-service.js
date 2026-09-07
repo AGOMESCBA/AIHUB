@@ -1003,13 +1003,31 @@ async function _classificarBase(mensagem, empresaId, opts = {}) {
       // rede de seguranca residual para estoque caso a classificacao falhe em reconhece-lo)
       // ou retornar "desconhecido" pedindo reformulacao. Bloquear aqui impediria o fallback
       // erp_generico de ser alcancado.
-      if (intent.confianca < confiancaMinima && intent.intencao !== 'desconhecido') {
+      // A nota de confianca e uma auto-avaliacao subjetiva da IA e varia entre chamadas
+      // identicas (mesma pergunta, mesmo contexto, nota diferente cada vez) — nao e um
+      // sinal 100% estavel. Quando ja existe uma conversa em andamento (contextoAnterior)
+      // E a propria IA reconheceu que esta e uma continuacao dela (herdou_contexto), esse
+      // sinal e mais forte e mais estavel que a nota de confianca isolada: a pergunta atual,
+      // por si so, e que precisa "parecer" continuacao — nao basta a resposta anterior ter
+      // sido confiavel. So relaxa a exigencia NESTE caso especifico; pergunta nova, sem
+      // contexto herdado, continua exigindo a confianca minima integral.
+      // Decisao explicita (sem piso minimo de confianca original): confia no sinal de
+      // herdou_contexto sozinho, mesmo quando a confianca numerica vier bem baixa — o
+      // reconhecimento de continuidade pela propria IA e tratado como evidencia suficiente.
+      const _herdouContextoConhecido = !!contextoAnterior && !!orq.contrato?.herdou_contexto;
+      if (intent.confianca < confiancaMinima && intent.intencao !== 'desconhecido' && !_herdouContextoConhecido) {
         return _appendTrace({
           ...intent,
           precisa_confirmacao: true,
           _baixaConfianca: true,
           _erro: `Orquestracao com confianca baixa (${Math.round(intent.confianca * 100)}%).`,
         }, { acao: 'bloqueio_baixa_confianca', motor: 'sistema', detalhe: `minima=${confiancaMinima}` });
+      }
+      if (_herdouContextoConhecido && intent.confianca < confiancaMinima) {
+        intent = _appendTrace(
+          { ...intent, _confiancaOriginalAntesContexto: intent.confianca, confianca: confiancaMinima },
+          { acao: 'confianca_elevada_por_contexto', motor: 'sistema', detalhe: `original=${intent.confianca}; minima=${confiancaMinima}` }
+        );
       }
       if (cacheKey) _cacheClassification(cacheKey, intent);
       return intent;
