@@ -4008,6 +4008,41 @@ async function prepararSql({ spec, sql, sx2, sx2Empresa = null, sx3, protheus, m
   };
 }
 
+// Quando intent-service.js resolveu um conceito analitico nomeado na pergunta (ex: "analise
+// horizontal"), anexa a definicao tecnica ao texto do query_plan que ja e injetado no prompt
+// do gerador de SQL — mesmo padrao usado para as demais instrucoes de query_plan_texto.
+// A traducao definicao->SQL continua inteiramente a cargo da IA que gera o SQL; esta funcao
+// nao prescreve tabela, join nem estrutura.
+// A definicao do conceito (contexto explicativo) entra no query_plan_texto, mesma "gaveta"
+// de outras regras tecnicas do modulo. NAO inclui a instrucao de periodo-base aqui — ver
+// _instrucaoPeriodoHorizontal: prompt-builder.js documenta (e testes confirmaram) que
+// instrucoes enterradas dentro do JSON generico de contextoTecnico/query_plan_texto sao
+// tratadas como "guia consultivo, nao autoritativo" pela IA geradora (ela prioriza a leitura
+// literal da pergunta do usuario sobre o guia quando os dois parecem divergir) — a mesma
+// causa raiz ja resolvida antes para a instrucao de escopo de filial Lobo Guara, com o mesmo
+// padrao de destaque no TOPO do prompt (fora do guia tecnico).
+function _comDefinicaoGlossario(queryPlanTexto, intent) {
+  const glossario = intent?._glossario;
+  if (!glossario?.definicaoTecnica) return queryPlanTexto;
+  const bloco = `\n\n## Conceito Analitico Solicitado: "${glossario.termo}"\n${glossario.definicaoTecnica}`;
+  return `${queryPlanTexto}${bloco}`;
+}
+
+// Instrucao CRITICA (nao "guia consultivo") de periodo-base para "analise horizontal" sem
+// periodo de comparacao explicito na pergunta — precisa ir no destaque de topo do prompt
+// (contextoTecnico.instrucao_periodo_horizontal, consumido em prompt-builder.js), nao dentro
+// do query_plan_texto, que a IA trata como sugerivel/substituivel pela leitura da pergunta.
+function _instrucaoPeriodoHorizontal(intent) {
+  const glossario = intent?._glossario;
+  if (!glossario?.periodoBase) return null;
+  return [
+    `A pergunta pede "${glossario.termo}" comparando DOIS periodos, mesmo que o texto mencione apenas um periodo explicitamente.`,
+    `PERIODO ATUAL: ${intent.periodo?.dataInicio || '?'} a ${intent.periodo?.dataFim || '?'}.`,
+    `PERIODO BASE DE COMPARACAO (calculado — imediatamente anterior, mesma duracao, pois a pergunta nao especificou outra base): ${glossario.periodoBase.dataInicio} a ${glossario.periodoBase.dataFim}.`,
+    'OBRIGATORIO: busque valores para os DOIS periodos acima separadamente (ex: uma CTE/subquery por periodo, ou UNION ALL rotulado por periodo) e calcule variacao absoluta (atual - base) e percentual ((atual - base) / base * 100). NAO gere detalhamento por dia/mes dentro do periodo atual — a pergunta e sobre comparar os dois periodos acima, nao sobre listar o periodo atual.',
+  ].join('\n');
+}
+
 async function executar(spec, intent, empresaId) {
   const t0 = Date.now();
   const mensagem = intent._mensagemOriginal || intent.intencao || spec.defaultMessage || 'consulta';
@@ -4610,7 +4645,8 @@ async function executar(spec, intent, empresaId) {
   planoConsulta.modelo_baixas_receber = contextoTecnico.modelo_baixas_receber;
   planoConsulta.modelo_baixas_pagar = contextoTecnico.modelo_baixas_pagar;
   contextoTecnico.query_plan = planoConsulta;
-  contextoTecnico.query_plan_texto = queryPlan.formatQueryPlanForPrompt(planoConsulta);
+  contextoTecnico.query_plan_texto = _comDefinicaoGlossario(queryPlan.formatQueryPlanForPrompt(planoConsulta), intentEfetivo);
+  contextoTecnico.instrucao_periodo_horizontal = _instrucaoPeriodoHorizontal(intentEfetivo);
   auditoriaBase.query_plan = planoConsulta;
 
   if (confirmacaoPodeEncerrarPlano(plano.obj)) {
@@ -4739,7 +4775,8 @@ async function executar(spec, intent, empresaId) {
       planoConsulta.modelo_baixas_receber = contextoTecnico.modelo_baixas_receber;
       planoConsulta.modelo_baixas_pagar = contextoTecnico.modelo_baixas_pagar;
       contextoTecnico.query_plan = planoConsulta;
-      contextoTecnico.query_plan_texto = queryPlan.formatQueryPlanForPrompt(planoConsulta);
+      contextoTecnico.query_plan_texto = _comDefinicaoGlossario(queryPlan.formatQueryPlanForPrompt(planoConsulta), intentEfetivo);
+      contextoTecnico.instrucao_periodo_horizontal = _instrucaoPeriodoHorizontal(intentEfetivo);
       auditoriaBase.query_plan = planoConsulta;
       if (typeof spec.validarCorrigirSqlGerado === 'function') {
         const guard = await spec.validarCorrigirSqlGerado({
@@ -4966,7 +5003,8 @@ async function executar(spec, intent, empresaId) {
       planoConsulta.modelo_baixas_receber = contextoTecnico.modelo_baixas_receber;
       planoConsulta.modelo_baixas_pagar = contextoTecnico.modelo_baixas_pagar;
       contextoTecnico.query_plan = planoConsulta;
-      contextoTecnico.query_plan_texto = queryPlan.formatQueryPlanForPrompt(planoConsulta);
+      contextoTecnico.query_plan_texto = _comDefinicaoGlossario(queryPlan.formatQueryPlanForPrompt(planoConsulta), intentEfetivo);
+      contextoTecnico.instrucao_periodo_horizontal = _instrucaoPeriodoHorizontal(intentEfetivo);
       auditoriaBase.query_plan = planoConsulta;
       if (plano.sql) sqlOriginalIa = plano.sql;
     }

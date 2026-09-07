@@ -432,7 +432,7 @@ function _dataAtualServidor() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function buildUserPrompt({ mensagem, historicoResumido, contextoAnterior, intencoes, tenantAliases } = {}) {
+function buildUserPrompt({ mensagem, historicoResumido, contextoAnterior, intencoes, tenantAliases, conceitoAnalitico } = {}) {
   const historico = Array.isArray(historicoResumido) ? historicoResumido : [];
   const modulos = (intencoes || [])
     .filter(i => String(i.acao || '').toLowerCase() === 'ai_text_to_sql' || String(i.nome || '').toLowerCase().endsWith('_dinamico'))
@@ -452,7 +452,19 @@ function buildUserPrompt({ mensagem, historicoResumido, contextoAnterior, intenc
   };
   if (Array.isArray(tenantAliases) && tenantAliases.length) {
     payload.empresas_canal_iahub = tenantAliases;
-    payload.instrucao_tenant = 'Os nomes em "empresas_canal_iahub" sao escopos de tenant IAHub (empresas do sistema). NUNCA os coloque em filtros.cliente, filtros.fornecedor ou qualquer filtro cadastral. Se o usuario mencionar um desses nomes sem a palavra "empresa", ele esta definindo o escopo de execucao — nao e um filtro de entidade.';
+    payload.instrucao_tenant = 'Os nomes em "empresas_canal_iahub" sao escopos de tenant IAHub (empresas do sistema). NUNCA os coloque em filtros.cliente, filtros.fornecedor ou qualquer filtro cadastral. Se o usuario mencionar um nome sem a palavra "empresa", ele esta definindo o escopo de execucao — nao e um filtro de entidade.';
+  }
+  // Conceito analitico ja resolvido pelo glossario ANTES desta chamada (ex: "analise
+  // horizontal" ja tem definicao tecnica conhecida). Isso remove a ambiguidade de OPERACAO
+  // que normalmente derruba a confianca — a IA nao precisa mais adivinhar o que o termo
+  // significa, so escolher o modulo principal da pergunta; o cruzamento entre modulos (quando
+  // aplicavel) e resolvido depois, no roteamento cross-module, nao aqui.
+  if (conceitoAnalitico?.definicaoTecnica) {
+    payload.conceito_analitico_resolvido = {
+      termo: conceitoAnalitico.termo,
+      definicao_tecnica: conceitoAnalitico.definicaoTecnica,
+    };
+    payload.instrucao_conceito_analitico = `O termo "${conceitoAnalitico.termo}" ja foi definido tecnicamente (ver campo conceito_analitico_resolvido) — isso NAO e mais uma incerteza. Escolha o modulo principal da pergunta normalmente; se a pergunta cruzar dois modulos (ex: vendas e compras), escolha o modulo que e o sujeito principal da analise e NAO reduza a confianca por causa disso — o cruzamento entre modulos e resolvido em uma etapa posterior do sistema, fora do seu escopo aqui.`;
   }
   return JSON.stringify(payload);
 }
@@ -548,7 +560,7 @@ function contratoParaIntent(contrato, mensagem) {
   };
 }
 
-async function orquestrar({ mensagem, empresaId, keys, cfg, ordem = [], intencoes = [], historicoResumido = [], contextoAnterior = null, tenantAliases = [] } = {}) {
+async function orquestrar({ mensagem, empresaId, keys, cfg, ordem = [], intencoes = [], historicoResumido = [], contextoAnterior = null, tenantAliases = [], conceitoAnalitico = null } = {}) {
   const erros = [];
   for (const provedor of ordem) {
     if (!keys?.[provedor]) continue;
@@ -557,7 +569,7 @@ async function orquestrar({ mensagem, empresaId, keys, cfg, ordem = [], intencoe
         provedor,
         keys[provedor],
         buildSystemPrompt(),
-        buildUserPrompt({ mensagem, historicoResumido, contextoAnterior, intencoes, tenantAliases }),
+        buildUserPrompt({ mensagem, historicoResumido, contextoAnterior, intencoes, tenantAliases, conceitoAnalitico }),
         { json: true, maxTokens: 900, timeoutMs: 25000, logPrefix: 'IAOrquestradora' }
       );
       const normalizado = normalizarContrato(raw, { intencoes, mensagem, historicoResumido, contextoAnterior });

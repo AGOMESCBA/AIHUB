@@ -26,6 +26,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   const canDatasets  = requireRotina('iac-admin-datasets');
   const canExecucoes = requireRotina('iac-admin-execucoes');
   const canAuditoria = requireRotina('iac-admin-auditoria');
+  const canGlossario = requireRotina('iac-admin-glossario');
   const canSpecFeedback = requireRotina('iac-admin-spec-feedback');
   const canLogsConsultas = requireRotina('iac-admin-logs-consultas');
   const canChatFavoritos = requireRotina('iac-admin-chat-favoritos');
@@ -2235,6 +2236,47 @@ Responda SOMENTE com JSON válido, sem markdown:
     const row = interpretationLog.obterPorId(req.params.id, empresaId);
     if (!row) return res.status(404).json({ error: `Interpretacao nao encontrada (empresa_id=${empresaId}).` });
     res.json(row);
+  });
+
+  // Glossario de conceitos analiticos (ex: "analise horizontal", "indice de liquidez") —
+  // tabela GLOBAL, sem empresa_id: o conceito e sua definicao tecnica nao mudam entre
+  // empresas, so o dominio de dado ao qual ele foi aplicado na primeira vez que apareceu.
+  app.get('/api/ia-command/admin/glossario', requireAuth, requireIaCommand, canGlossario, (req, res) => {
+    const glossaryStore = require('./ai/analytic-glossary-store');
+    res.json(glossaryStore.listar({ somenteAtivos: req.query.somenteAtivos !== 'false', limit: req.query.limit }));
+  });
+
+  app.get('/api/ia-command/admin/glossario/:id', requireAuth, requireIaCommand, canGlossario, (req, res) => {
+    const glossaryStore = require('./ai/analytic-glossary-store');
+    const row = glossaryStore.obterPorId(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Termo do glossario nao encontrado.' });
+    res.json(row);
+  });
+
+  app.post('/api/ia-command/admin/glossario/:id', requireAuth, requireIaCommand, canGlossario, (req, res) => {
+    const glossaryStore = require('./ai/analytic-glossary-store');
+    const definicaoTecnica = String(req.body?.definicaoTecnica || '').trim();
+    if (!definicaoTecnica) return res.status(400).json({ error: 'definicaoTecnica obrigatoria.' });
+    const ok = glossaryStore.atualizar(req.params.id, { definicaoTecnica });
+    if (!ok) return res.status(404).json({ error: 'Termo do glossario nao encontrado.' });
+    _audit(req, 'glossario_atualizado', { id: req.params.id });
+    res.json({ ok: true });
+  });
+
+  app.post('/api/ia-command/admin/glossario/:id/desativar', requireAuth, requireIaCommand, canGlossario, (req, res) => {
+    const glossaryStore = require('./ai/analytic-glossary-store');
+    const ok = glossaryStore.desativar(req.params.id);
+    if (!ok) return res.status(404).json({ error: 'Termo do glossario nao encontrado.' });
+    _audit(req, 'glossario_desativado', { id: req.params.id });
+    res.json({ ok: true });
+  });
+
+  app.post('/api/ia-command/admin/glossario/:id/reativar', requireAuth, requireIaCommand, canGlossario, (req, res) => {
+    const glossaryStore = require('./ai/analytic-glossary-store');
+    const ok = glossaryStore.reativar(req.params.id);
+    if (!ok) return res.status(404).json({ error: 'Termo do glossario nao encontrado.' });
+    _audit(req, 'glossario_reativado', { id: req.params.id });
+    res.json({ ok: true });
   });
 
   app.get('/api/ia-command/admin/protheus-chat-encaminhamentos', requireAuth, requireIaCommand, canAuditoria, (req, res) => {

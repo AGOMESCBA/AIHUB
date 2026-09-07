@@ -1763,6 +1763,26 @@ const MIGRATIONS = [
         ON spec_feedback_daily_notifications (empresa_id, data_ref);
     `,
   },
+  {
+    version: 94,
+    descricao: 'IA Command - glossario global de conceitos analiticos (analise horizontal, vertical, etc.)',
+    sql: `
+      CREATE TABLE IF NOT EXISTS analytic_glossary (
+        id                 TEXT PRIMARY KEY,
+        termo              TEXT NOT NULL,
+        dominio            TEXT NOT NULL DEFAULT '',
+        definicao_tecnica  TEXT NOT NULL,
+        origem             TEXT NOT NULL DEFAULT 'ia_aprendido',
+        pergunta_origem    TEXT,
+        ativo              INTEGER NOT NULL DEFAULT 1,
+        criado_em          TEXT NOT NULL,
+        atualizado_em      TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_analytic_glossary_termo_dominio
+        ON analytic_glossary (termo, dominio);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

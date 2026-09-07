@@ -831,7 +831,7 @@ function _simplificarErro(msg) {
   return { tipo: 'indisponivel', pt: 'indisponível' };
 }
 
-async function classificar(mensagem, empresaId, opts = {}) {
+async function _classificarBase(mensagem, empresaId, opts = {}) {
   const { contextoAnterior = null } = opts;
   const usarCacheClassificacao = !contextoAnterior && !(Array.isArray(opts.historicoResumido) && opts.historicoResumido.length);
   const cacheKey = usarCacheClassificacao ? _classificationKey(empresaId, mensagem) : null;
@@ -885,6 +885,22 @@ async function classificar(mensagem, empresaId, opts = {}) {
     );
     if (candidatoPorModulo) {
       sistemaAlvo = { sistema: candidatoPorModulo.sistema, ambiguo: false, candidatos: [] };
+    }
+  }
+
+  // Mesma logica do desempate por agendamento acima, generalizada para conversa comum:
+  // um refinamento curto ("e por cliente", "detalha isso") pode bater sinal ambiguo entre
+  // dois sistemas cadastrados (ex: "cliente" existe em SoftExpert e em Comissao/Protheus),
+  // mas se ja existe uma consulta em andamento (contextoAnterior) num sistema conhecido,
+  // esse contexto desempata — o usuario esta continuando o MESMO assunto, nao trocando de
+  // sistema no meio da frase. So desempata quando o sistema do contexto anterior E um dos
+  // candidatos retornados (nunca inventa um sistema fora do que o roteador ja considerou).
+  if (sistemaAlvo.ambiguo && contextoAnterior?.intencao) {
+    const intencaoContexto = intencoes.find(i => i.nome === contextoAnterior.intencao);
+    const sistemaContexto = intencaoContexto ? systemRouter._erpDaIntencao(intencaoContexto) : null;
+    const candidatoPorContexto = sistemaContexto && sistemaAlvo.candidatos.find(c => c.sistema === sistemaContexto);
+    if (candidatoPorContexto) {
+      sistemaAlvo = { sistema: candidatoPorContexto.sistema, ambiguo: false, candidatos: [] };
     }
   }
 
@@ -966,6 +982,7 @@ async function classificar(mensagem, empresaId, opts = {}) {
       historicoResumido: opts.historicoResumido || [],
       contextoAnterior,
       tenantAliases: opts.tenantAliases || [],
+      conceitoAnalitico: opts.conceitoAnalitico || null,
     });
     if (orq.ok) {
       let intent = _appendTrace(
@@ -1114,6 +1131,69 @@ async function classificar(mensagem, empresaId, opts = {}) {
     _erroTipo,
     _erros,
   };
+}
+
+// Glossario de conceitos analiticos (ex: "analise horizontal", "indice de liquidez"): so
+// dispara quando a pergunta nomeia um conceito assim explicitamente — fail-open garantido
+// dentro do proprio resolver, nunca lanca excecao nem bloqueia o fluxo em caso de falha.
+// Envolve _classificarBase (em vez de tocar seus multiplos "return" internos) para nao mexer
+// na logica de classificacao existente.
+async function classificar(mensagem, empresaId, opts = {}) {
+  try {
+    const analyticGlossaryResolver = require('./analytic-glossary-resolver');
+    const resolucaoGlossario = await analyticGlossaryResolver.resolverConceito(mensagem, empresaId);
+    if (resolucaoGlossario?.precisaConfirmacao) {
+      return {
+        intencao:            'desconhecido',
+        periodo:             { tipo: 'nenhum' },
+        filtros:             {},
+        agrupar_por:         null,
+        ordenar_por:         null,
+        limite:              null,
+        confianca:           0,
+        precisa_confirmacao: true,
+        origem:              'texto',
+        _provedor:           'nenhum',
+        _erro:               resolucaoGlossario.perguntaEsclarecimento,
+        _erroTipo:           'conceito_analitico_ambiguo',
+        _erros:              [],
+      };
+    }
+    const optsComGlossario = resolucaoGlossario?.definicaoTecnica
+      ? { ...opts, conceitoAnalitico: resolucaoGlossario }
+      : opts;
+    const intent = await _classificarBase(mensagem, empresaId, optsComGlossario);
+    if (resolucaoGlossario?.definicaoTecnica) {
+      // O orquestrador legado auto-avalia "confianca" de forma subjetiva e nao-deterministica
+      // (mesma pergunta pode sair 0.7 ou 0.9 em chamadas diferentes) — quando o UNICO motivo
+      // do bloqueio foi essa baixa confianca (_baixaConfianca), e o glossario JA resolveu o
+      // conceito com dominio explicito (sem ambiguidade), a certeza do glossario e mais forte
+      // que a auto-avaliacao do LLM: desfaz o bloqueio em vez de depender de "convencer" o
+      // modelo a dar uma nota mais alta a cada chamada. Nao desfaz bloqueios por OUTRO motivo
+      // (ex: entidade/filial ambigua) — so o especificamente causado por _baixaConfianca.
+      if (intent._baixaConfianca && intent.precisa_confirmacao) {
+        intent.precisa_confirmacao = false;
+        intent._baixaConfianca = false;
+        intent._erro = null;
+        intent._confiancaOriginalAntesGlossario = intent.confianca;
+        intent.confianca = 1;
+      }
+      intent._glossario = resolucaoGlossario;
+      // "Analise horizontal" sem periodo-base explicito na pergunta: calcula o periodo
+      // imediatamente anterior de mesma duracao a partir do periodo ja resolvido pelo
+      // classificador acima, e anexa como aviso — nunca bloqueia, nunca pergunta de novo.
+      const analyticGlossaryResolver = require('./analytic-glossary-resolver');
+      const resolucaoPeriodoBase = analyticGlossaryResolver.resolverPeriodoBaseSeHorizontal(resolucaoGlossario.termo, intent.periodo);
+      if (resolucaoPeriodoBase) {
+        intent._glossario.periodoBase = resolucaoPeriodoBase.periodoBase;
+        intent._glossario.avisoPeriodoBase = resolucaoPeriodoBase.avisoTexto;
+      }
+    }
+    return intent;
+  } catch (e) {
+    console.warn('[IA classificar] Falha ao consultar glossario de conceitos analiticos (seguindo fluxo normal):', e.message);
+    return _classificarBase(mensagem, empresaId, opts);
+  }
 }
 
 function temConfiguracaoMinima(empresaId) {

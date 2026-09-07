@@ -42,6 +42,7 @@
         { id: 'iac-admin-sinonimos',     label: 'Equivalências',           href: '/app/ia-command/admin-sinonimos.html',      icon: '🔤' },
         { id: 'iac-admin-normalizacao',  label: 'Normalização Linguística', href: '/app/ia-command/admin-normalizacao.html',   icon: '🧹' },
         { id: 'iac-admin-spec-feedback', label: 'Feedback Técnico da IA',    href: '/app/ia-command/admin-spec-feedback.html',  icon: '🛠️' },
+        { id: 'iac-admin-glossario',     label: 'Glossário de Conceitos',   href: '/app/ia-command/admin-glossario.html',      icon: '📖' },
       ],
     },
     {

@@ -196,6 +196,13 @@ function buildUserPrompt({ mensagem, historico, estadoAnterior, contextoTecnico,
   // pela IA (confirmado em teste real — a IA reintroduzia o nome como filtro de
   // cliente/fornecedor mesmo com o campo presente no contexto tecnico).
   const _instrucaoFilialLoboGuara = contextoTecnico?.instrucao_filial_lobo_guara || null;
+  // Mesmo padrao/mesma causa raiz: periodo-base de "analise horizontal" (glossario de
+  // conceitos analiticos) enterrado dentro do query_plan_texto era tratado pela IA como
+  // "guia consultivo, nao autoritativo" (ver instrucao logo abaixo: "a decisao semantica
+  // final continua sendo sua... use exatamente as datas declaradas") — confirmado em teste
+  // real contra dados de producao (empresa PLANTIVO): a IA ignorava a comparacao de dois
+  // periodos e listava so o periodo unico mencionado na pergunta.
+  const _instrucaoPeriodoHorizontal = contextoTecnico?.instrucao_periodo_horizontal || null;
 
   return [
     _empresasIahubStr
@@ -203,6 +210,9 @@ function buildUserPrompt({ mensagem, historico, estadoAnterior, contextoTecnico,
       : '',
     _instrucaoFilialLoboGuara
       ? `⚠️ INSTRUCAO CRITICA DE ESCOPO — LEIA ANTES DE QUALQUER COISA:\n${_instrucaoFilialLoboGuara}\nREGRA ABSOLUTA: NAO declare esse nome em "entidades_necessarias". NAO coloque esse nome em filtros de SA1.A1_NOME, SA2.A2_NOME, F1_LOJA, E2_LOJA ou qualquer outro campo cadastral/loja/fornecedor. O backend aplicara o filtro de filial correto automaticamente depois — ignore esse nome completamente ao montar o SQL.\n`
+      : '',
+    _instrucaoPeriodoHorizontal
+      ? `⚠️ INSTRUCAO CRITICA DE PERIODO — LEIA ANTES DE QUALQUER COISA:\n${_instrucaoPeriodoHorizontal}\n`
       : '',
     `Mensagem atual do usuario:\n${mensagem || ''}`,
     '',
