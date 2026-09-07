@@ -21,6 +21,7 @@ const dialogResolver      = require('../ai/dialog-resolver');
 const conversationService = require('../ai/conversation-service');
 const conversationalTurnRouter = require('../ai/conversational-turn-router');
 const externalInfoService = require('../ai/external-info-service');
+const analyticGlossaryResolver = require('../ai/analytic-glossary-resolver');
 const crud                = require('../database/crud');
 const { getDB }           = require('../database');
 const { alertarOperacionalTelegram } = require('./operational-alerts');
@@ -3222,6 +3223,7 @@ class IACWhatsAppService extends EventEmitter {
       _intentPendente: null,
       _intentPendenteEmpresaId: null,
       _intentPendenteEmpresasAll: null,
+      _glossarioDominioPendente: null,
     });
   }
 
@@ -3767,6 +3769,79 @@ class IACWhatsAppService extends EventEmitter {
     return resposta;
   }
 
+  // Item 6 do glossario analitico: quando o sistema pergunta "sobre qual dado — Faturamento,
+  // Compras, ..." (glossario nao sabe o dominio de um termo tecnico como "markup"), a resposta
+  // curta do usuario ("Vendas", "Compras") precisa ser entendida como a resposta aquela
+  // pergunta, nao como uma consulta nova e solta.
+  //
+  // Diferente de _responderFilialPendente/_responderEntidadePendente (que aplicam
+  // _textoPareceNovaConsulta ANTES de interpretar a resposta), aqui a ordem e invertida:
+  // "vendas"/"compras"/"financeiro" SAO justamente palavras que _textoPareceNovaConsulta
+  // reconhece como "sinal de nova consulta" — se checassemos isso primeiro, a resposta esperada
+  // seria descartada por engano. Por isso primeiro tenta reconhecer um dominio valido
+  // (extrairDominioExplicito, o mesmo mecanismo que gerou a pergunta) e so trata como "nova
+  // consulta"/dominio invalido se isso falhar.
+  //
+  // Nao tenta retomar a execucao tecnica de onde parou (spec/plano especifico do modulo) —
+  // isso exigiria serializar objetos nao serializaveis. Em vez disso, remonta a pergunta
+  // original como TEXTO com o dominio anexado e reprocessa do zero pelo pipeline normal
+  // (intentService.classificar + intentRouter.rotear), que ja resolve modulo/spec sozinho.
+  async _responderGlossarioDominioPendente(sender, texto, empresaIdPadrao, t0) {
+    const ctx = this._getSenderContext(sender);
+    const pendente = ctx?._glossarioDominioPendente;
+    if (!pendente) return null;
+
+    if (_textoCancelaPendente(texto)) {
+      this._setSenderContext(sender, { _glossarioDominioPendente: null });
+      return 'Consulta anterior cancelada. Pode enviar a nova pergunta.';
+    }
+
+    const dominio = analyticGlossaryResolver.extrairDominioExplicito(texto);
+    if (!dominio) {
+      if (_textoPareceNovaConsulta(texto)) {
+        this._setSenderContext(sender, { _glossarioDominioPendente: null });
+        return null; // deixa o pipeline normal tratar como consulta nova
+      }
+      const opcoes = 'Faturamento/Vendas, Compras, Financeiro (contas a pagar/receber), Fluxo de Caixa, Comissão, Estoque';
+      return `Não reconheci esse domínio. Escolha uma das opções: ${opcoes}.`;
+    }
+
+    this._setSenderContext(sender, { _glossarioDominioPendente: null });
+
+    const empresaPendente = Number(empresaIdPadrao || this._empresaId);
+    if (!Number.isFinite(empresaPendente) || empresaPendente <= 0) return null;
+
+    // Remonta a pergunta original com o dominio confirmado anexado — extrairDominioExplicito()
+    // ja reconhece esse texto reconstruido normalmente no reprocessamento (mesma taxonomia).
+    const mensagemEnriquecida = `${pendente.mensagemOriginal} (${dominio.labels.join(' e ')})`;
+
+    let intentReprocessado;
+    try {
+      intentReprocessado = await intentService.classificar(mensagemEnriquecida, empresaPendente);
+    } catch (e) {
+      this.log(`[_responderGlossarioDominioPendente] Falha ao reclassificar: ${e.message}`, 'warning');
+      return 'Não consegui processar essa consulta agora. Tente reformular a pergunta completa novamente.';
+    }
+
+    const resultado = await intentRouter.rotear(intentReprocessado, empresaPendente);
+    this._logResultadoIntent({ intent: intentReprocessado, resultado, escopo: 'pendente' });
+    const resposta = resultado.resposta_direta || resultado.mensagem || 'Não encontrei dados para essa consulta.';
+
+    if (resultado.tipo !== 'erro' && resultado.tipo !== 'desconhecido' && intentReprocessado.intencao !== 'desconhecido') {
+      this._saveLastIntent(sender, intentReprocessado, empresaPendente);
+    }
+    this._registrarInterpretacao({
+      empresaId: empresaPendente,
+      sender,
+      texto: mensagemEnriquecida,
+      intent: intentReprocessado,
+      resultado,
+      resposta,
+      duracaoMs: Date.now() - t0,
+    });
+    return resposta;
+  }
+
   async _resolverSender(msg) {
     const raw = msg.from;
     const candidatos = [raw, msg.author];
@@ -4214,6 +4289,13 @@ class IACWhatsAppService extends EventEmitter {
       const iniciado = await this._iniciarDialogoFeedback(sender, textoExecucao);
       if (iniciado) return iniciado;
     }
+
+    // Checado ANTES do roteador conversacional dinamico (acessos/cotacoes externas) e das
+    // demais pendencias: a resposta esperada aqui e justamente uma palavra de dominio ERP
+    // ("Vendas", "Compras", "Financeiro"), que precisa ser reconhecida como confirmacao da
+    // pergunta pendente antes de qualquer outro handler ter chance de interpreta-la diferente.
+    const respostaGlossarioDominioPendente = await this._responderGlossarioDominioPendente(sender, textoExecucao, empresaId, _t0);
+    if (respostaGlossarioDominioPendente) return respostaGlossarioDominioPendente;
 
     const respostaConversacionalDinamica = await this._tentarResponderTurnoConversacionalDinamico({
       texto: textoExecucao,
@@ -4757,6 +4839,23 @@ class IACWhatsAppService extends EventEmitter {
     if (!resultado || typeof resultado !== 'object') {
       this.log(`Roteador retornou resultado inválido (${typeof resultado}) para empresa #${empresaId}. Abortando pipeline.`, 'error');
       return '⚠️ Ocorreu um erro interno ao processar sua consulta. Tente novamente.';
+    }
+
+    // Item 6 (glossario analitico): a pergunta acionou o glossario mas nao ha dominio de dado
+    // explicito na mensagem (ex: "markup" sem "vendas"/"compras" no texto) — antes de tratar
+    // como "desconhecido"/"erro" generico (que cairia nos Hooks 2/3 abaixo, perdendo a chance
+    // de reconhecer a proxima resposta do usuario como o dominio), arma a pendencia e devolve
+    // a pergunta de esclarecimento diretamente.
+    if (resultado._glossarioDominioPendente) {
+      const perguntaDominio = resultado.mensagem || resultado.resposta_direta
+        || 'Sobre qual dado você quer essa consulta — Faturamento/Vendas, Compras, Financeiro, Fluxo de Caixa, Comissão, Estoque?';
+      this._setSenderContext(sender, { _glossarioDominioPendente: resultado._glossarioDominioPendente });
+      this._registrarInterpretacao({
+        empresaId, sender, texto: textoExecucao,
+        intent, resultado: { ...resultado, mensagem: perguntaDominio },
+        resposta: perguntaDominio, duracaoMs: Date.now() - _t0,
+      });
+      return perguntaDominio;
     }
 
     // Hook 2 — Fallback de continuidade: intent não classificado (desconhecido) +

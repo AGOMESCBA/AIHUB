@@ -4023,8 +4023,9 @@ async function prepararSql({ spec, sql, sx2, sx2Empresa = null, sx3, protheus, m
 // padrao de destaque no TOPO do prompt (fora do guia tecnico).
 // Quando a IA principal falha em extrair SQL (sql_nao_extraido), antes de devolver a mensagem
 // generica de erro, tenta uma segunda leitura via glossario: talvez a causa seja um termo
-// tecnico de negocio que a IA principal nao conhece (ex: "markup"). Retorna { resposta } quando
-// so ha uma orientacao a devolver (pede o dominio, ou falhou), ou { glossario } quando a
+// tecnico de negocio que a IA principal nao conhece (ex: "markup"). Retorna { pendenciaDominio }
+// quando falta saber o dominio de dado (o chamador deve armar uma pendencia no WhatsApp para
+// interpretar a proxima resposta do usuario como o dominio, item 6), ou { glossario } quando a
 // definicao foi resolvida — nesse caso o chamador deve REEXECUTAR a geracao de SQL com
 // intent._glossario preenchido, em vez de so avisar o usuario que aprendeu o termo (a definicao
 // ja esta pronta para uso imediato, nao ha motivo para exigir que o usuario pergunte de novo).
@@ -4034,7 +4035,15 @@ async function _tentarGlossarioAposFalhaSql(mensagem, empresaId) {
     const analyticGlossaryResolver = require('../../ai/analytic-glossary-resolver');
     const resolucao = await analyticGlossaryResolver.resolverConceitoPorFalhaSql(mensagem, empresaId);
     if (!resolucao) return null;
-    if (resolucao.precisaConfirmacao) return { resposta: resolucao.perguntaEsclarecimento };
+    if (resolucao.precisaConfirmacao) {
+      return {
+        pendenciaDominio: {
+          termo: resolucao.termo,
+          perguntaEsclarecimento: resolucao.perguntaEsclarecimento,
+          definicaoTecnicaPreExtraida: resolucao.definicaoTecnicaPreExtraida || null,
+        },
+      };
+    }
     if (resolucao.definicaoTecnica) return { glossario: resolucao };
     return null;
   } catch (e) {
@@ -4780,15 +4789,23 @@ async function executar(spec, intent, empresaId) {
       if (tentativaGlossario?.glossario) {
         return executar(spec, { ...intent, _glossario: tentativaGlossario.glossario, _glossarioTentado: true }, empresaId);
       }
-      if (tentativaGlossario?.resposta) {
+      if (tentativaGlossario?.pendenciaDominio) {
+        // Marcador exclusivo (_glossarioDominioPendente) para service.js armar a pendencia de
+        // dominio (item 6) — nao reaproveita "subtipo: confirmacao_necessaria" porque esse
+        // subtipo tambem e usado por outros fluxos (filial/entidade) sem relacao com glossario.
         return {
           tipo: 'erro',
           subtipo: 'sql_nao_extraido',
-          resposta_direta: tentativaGlossario.resposta,
+          resposta_direta: tentativaGlossario.pendenciaDominio.perguntaEsclarecimento,
           sql_gerado: JSON.stringify(plano.obj, null, 2),
           _sql_auditoria: auditoriaBase,
           duracao_ms: Date.now() - t0,
           _ia_owner_plano: plano.obj,
+          _glossarioDominioPendente: {
+            termo: tentativaGlossario.pendenciaDominio.termo,
+            mensagemOriginal: mensagem,
+            definicaoTecnicaPreExtraida: tentativaGlossario.pendenciaDominio.definicaoTecnicaPreExtraida,
+          },
         };
       }
     }

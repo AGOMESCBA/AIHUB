@@ -413,7 +413,19 @@ async function rotear(intent, empresaId) {
       const analyticGlossaryResolver = require('../../ai/analytic-glossary-resolver');
       const resolucao = await analyticGlossaryResolver.resolverConceitoPorFalhaSql(mensagem, empresaId);
       if (resolucao?.precisaConfirmacao) {
-        return { tipo: 'desconhecido', subtipo: 'confirmacao_necessaria', mensagem: resolucao.perguntaEsclarecimento };
+        // Marcador exclusivo (_glossarioDominioPendente) para service.js armar a pendencia de
+        // dominio (item 6) — nao reaproveita "subtipo: confirmacao_necessaria" porque esse
+        // subtipo tambem e usado por outros fluxos (filial/entidade) sem relacao com glossario.
+        return {
+          tipo: 'desconhecido',
+          subtipo: 'confirmacao_necessaria',
+          mensagem: resolucao.perguntaEsclarecimento,
+          _glossarioDominioPendente: {
+            termo: resolucao.termo,
+            mensagemOriginal: mensagem,
+            definicaoTecnicaPreExtraida: resolucao.definicaoTecnicaPreExtraida,
+          },
+        };
       }
       if (resolucao?.definicaoTecnica) {
         const _todosModulos = Object.keys(SPEC_LOADERS);

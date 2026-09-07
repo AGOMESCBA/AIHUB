@@ -264,7 +264,19 @@ async function resolverConceitoPorFalhaSql(mensagem, empresaId) {
 
   const dominio = extrairDominioExplicito(mensagem);
   if (!dominio) {
-    return { precisaConfirmacao: true, perguntaEsclarecimento: _perguntaEsclarecimentoDominio(termo) };
+    // A mesma chamada de IA que achou o termo ja pode ter retornado a definicao tecnica junto
+    // (o prompt de extracao pede os dois campos de uma vez) — preserva aqui em vez de descartar,
+    // para quando o dominio chegar depois (resposta do usuario a pergunta de esclarecimento) nao
+    // seja necessario gastar uma segunda chamada de IA so para redefinir o mesmo termo.
+    const definicaoTecnicaPreExtraida = typeof extracao?.definicao_tecnica === 'string' && extracao.definicao_tecnica.trim()
+      ? extracao.definicao_tecnica.trim()
+      : null;
+    return {
+      precisaConfirmacao: true,
+      perguntaEsclarecimento: _perguntaEsclarecimentoDominio(termo),
+      termo,
+      definicaoTecnicaPreExtraida,
+    };
   }
 
   const existente = glossaryStore.buscarPorTermo(termo, dominio.chave);

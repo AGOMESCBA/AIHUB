@@ -244,6 +244,11 @@ async function okAsync(desc, fn) {
       assert.ok(resultado);
       assert.strictEqual(resultado.precisaConfirmacao, true, 'markup nao especifica dominio de dado na pergunta, deve pedir esclarecimento antes de gerar SQL');
       assert.ok(resultado.perguntaEsclarecimento.includes('markup'));
+      // Item 6 (pendencia de dominio): o termo e a definicao ja extraidos nesta mesma chamada
+      // de IA precisam ser preservados no retorno, para nao gastar uma segunda chamada de IA
+      // quando o usuario responder o dominio depois.
+      assert.strictEqual(resultado.termo, 'markup');
+      assert.strictEqual(resultado.definicaoTecnicaPreExtraida, 'Markup e o percentual aplicado sobre o custo do item para formar o preco de venda: (preco_venda - custo) / custo * 100.');
     } finally {
       aiProviderClient.chamarIA = original;
       getDB().prepare("DELETE FROM analytic_glossary WHERE termo = 'markup'").run();
