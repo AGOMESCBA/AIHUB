@@ -204,6 +204,13 @@ function buildUserPrompt({ mensagem, historico, estadoAnterior, contextoTecnico,
   // real contra dados de producao (empresa PLANTIVO): a IA ignorava a comparacao de dois
   // periodos e listava so o periodo unico mencionado na pergunta.
   const _instrucaoPeriodoHorizontal = contextoTecnico?.instrucao_periodo_horizontal || null;
+  // Mesma causa raiz/mesmo padrao acima, para "analise vertical": bug real confirmado em
+  // producao (08/09/2026, empresa CAIEIRA, bateria de testes reais) — a definicao tecnica do
+  // glossario (decompor por produto/cliente + percentual) so estava dentro do query_plan_texto
+  // "consultivo", e a IA devolvia 1 linha so (total do mes, sem decompor) em 3 de 3 tentativas
+  // consecutivas, mesmo o mesmo termo funcionando corretamente na PLANTIVO — confirma que a
+  // definicao nao era respeitada de forma confiavel enterrada no guia consultivo.
+  const _instrucaoAnaliseVertical = contextoTecnico?.instrucao_analise_vertical || null;
 
   return [
     _empresasIahubStr
@@ -214,6 +221,9 @@ function buildUserPrompt({ mensagem, historico, estadoAnterior, contextoTecnico,
       : '',
     _instrucaoPeriodoHorizontal
       ? `⚠️ INSTRUCAO CRITICA DE PERIODO — LEIA ANTES DE QUALQUER COISA:\n${_instrucaoPeriodoHorizontal}\n`
+      : '',
+    _instrucaoAnaliseVertical
+      ? `⚠️ INSTRUCAO CRITICA DE ESTRUTURA — LEIA ANTES DE QUALQUER COISA:\n${_instrucaoAnaliseVertical}\n`
       : '',
     `Mensagem atual do usuario:\n${mensagem || ''}`,
     '',

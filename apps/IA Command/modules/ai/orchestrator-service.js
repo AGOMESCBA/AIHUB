@@ -105,6 +105,15 @@ function _corrigirPeriodoAgrupamento({ periodo, agrupamentos, mensagem } = {}) {
       return { periodo: { tipo: 'nenhum' }, agrupamentos: [...grupos] };
     }
   }
+  // Bug real confirmado em producao (08/09/2026): quando ha ancora de data explicita ("do
+  // ano por mes"), o bloco acima e pulado inteiro e "mes"/"ano" nunca era adicionado a
+  // agrupamentos por este codigo determinístico — o sistema dependia so da IA (nao
+  // deterministica) devolver agrupamentos=['mes'] sozinha, sem garantia. Aqui o periodo e
+  // preservado (ja temos ancora de data), mas o agrupamento pedido na frase ainda precisa
+  // ser adicionado explicitamente, senao a pergunta "do ano por mes" retorna 1 linha do ano
+  // inteiro somado, nao uma linha por mes.
+  if (/\bpor ano\b/.test(texto)) grupos.add('ano');
+  if (/\bpor mes\b|\bpor meses\b|\bmes a mes\b|\bmensal\b/.test(texto)) grupos.add('mes');
   return { periodo: p, agrupamentos: [...grupos] };
 }
 
@@ -629,4 +638,5 @@ module.exports = {
   contratoParaIntent,
   _periodoEfetivo,
   _contratoHistoricoRecente,
+  _test: { _temDataExplicita, _corrigirPeriodoAgrupamento, _normalizarPeriodo, _normalizarDataPeriodo },
 };

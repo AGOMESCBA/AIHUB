@@ -2954,10 +2954,35 @@ function validarParentesesBalanceados(sql = '') {
   return { ok: true, erros: [] };
 }
 
+// Bug real confirmado em producao (08/09/2026, empresa CAIEIRA): "analise vertical" gerava
+// SQL agrupado por competencia/mes (1 linha, SUM total do periodo) em vez de decompor por
+// produto/cliente com percentual — reforco textual (_instrucaoAnaliseVertical) sozinho nao
+// bastou (a IA ainda "desistia" da decomposicao apos um erro de sintaxe numa tentativa
+// anterior). Guard deterministico complementar: quando a mensagem pede "analise vertical" e
+// o SELECT final NAO tem nenhuma coluna de percentual (nem "percentual" no nome nem "* 100"
+// no calculo), bloqueia e devolve instrucao de correcao — mesmo padrao de retry ja usado
+// para os demais guards deste arquivo.
+function validarDecomposicaoAnaliseVertical(sql, mensagem) {
+  const texto = String(mensagem || '');
+  if (!/\banalise\s+vertical\b/i.test(texto)) return { ok: true, erros: [] };
+  const sqlTexto = String(sql || '');
+  const temPercentual = /\bpercentual\b/i.test(sqlTexto) || /\*\s*100\b/.test(sqlTexto);
+  if (temPercentual) return { ok: true, erros: [] };
+  return {
+    ok: false,
+    erros: [
+      'A pergunta pede analise vertical, mas o SQL nao tem nenhuma coluna de percentual — provavelmente agrupou so por competencia/mes (1 linha com o total do periodo) em vez de decompor por produto/cliente. ' +
+      'Analise vertical SEMPRE decompoe o total em varias linhas (uma por item de uma dimensao de negocio: produto, cliente, etc.), cada uma com seu percentual sobre o total do periodo: (valor_do_item / total_geral) * 100. ' +
+      'Se uma tentativa anterior falhou por erro de sintaxe no calculo do percentual, NAO abandone a decomposicao — corrija so o erro de sintaxe, mantendo produto/cliente como dimensao e a coluna de percentual.',
+    ],
+  };
+}
+
 function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '', opts = {}) {
   const texto = String(sql || '').trim();
   const erros = [];
   const permitirSelectTop = opts.permitirSelectTop === true;
+  erros.push(...validarDecomposicaoAnaliseVertical(texto, mensagem).erros);
   erros.push(...validarParentesesBalanceados(texto).erros);
   erros.push(...validarPontoEVirgulaUnico(texto).erros);
   erros.push(...validarJoinDepoisWhere(texto).erros);
@@ -4226,6 +4251,40 @@ function _instrucaoPeriodoHorizontal(intent) {
   ].join('\n');
 }
 
+const RE_TERMO_VERTICAL = /vertical/i;
+
+// Mesmo padrao/mesma causa raiz de _instrucaoPeriodoHorizontal: a definicao tecnica de
+// "analise vertical" (glossario de conceitos analiticos) so era injetada dentro de
+// query_plan_texto — "guia consultivo, nao autoritativo" para a IA geradora. Bug real
+// confirmado em producao (08/09/2026, empresa CAIEIRA, bateria de testes reais): mesmo com
+// definicao completa no glossario pedindo decomposicao por produto + percentual, a IA
+// devolvia 1 linha so (o total do mes, sem decompor) em 3 de 3 tentativas consecutivas — o
+// mesmo termo funcionava corretamente na PLANTIVO, confirmando que a definicao nao estava
+// sendo respeitada de forma confiavel. Move a instrucao para o destaque de topo do prompt,
+// mesmo mecanismo ja validado para analise horizontal.
+function _instrucaoAnaliseVertical(intent) {
+  const glossario = intent?._glossario;
+  if (!RE_TERMO_VERTICAL.test(glossario?.termo || '')) return null;
+  if (!glossario?.definicaoTecnica) return null;
+  return [
+    `A pergunta pede "${glossario.termo}" — por definicao, isso SEMPRE decompoe um total por uma dimensao (produto, cliente, etc.), calculando o percentual de cada item sobre o total do periodo. Uma unica linha com o total geral NAO e analise vertical (e apenas o proprio total, 100% de si mesmo — nao decompoe nada).`,
+    `Definicao tecnica do conceito (ja resolvida, use como guia de calculo): ${glossario.definicaoTecnica}`,
+    '',
+    'CHECKLIST OBRIGATORIO antes de responder (falhar qualquer item invalida a resposta):',
+    '1. O SQL final DEVE retornar MULTIPLAS linhas — uma por item da dimensao escolhida (produto, cliente, etc.), nunca uma linha so com o total geral.',
+    '2. Cada linha DEVE ter uma coluna de percentual = (valor_do_item / total_geral_do_periodo) * 100.',
+    '3. Se a pergunta nao especificar a dimensao, escolha a mais natural para o dominio (em faturamento/vendas, produto ou cliente).',
+    '4. PROIBIDO incluir uma linha extra de "Total" no proprio resultado (o formatador ja soma e exibe o total automaticamente) — decompor E nao ter linha de total sao coisas diferentes, as duas se aplicam ao mesmo tempo.',
+    '5. PREFERENCIA FORTE — use window function SUM(...) OVER (), NUNCA subquery escalar repetindo os filtros WHERE: SUM(SUM(valor)) OVER () no lugar de "(SELECT SUM(valor) FROM ... WHERE mesmos_filtros_repetidos)". A window function reaproveita automaticamente o mesmo FROM/JOIN/WHERE do SELECT principal, sem repetir nenhum filtro — elimina o erro mais comum desta consulta (parenteses desbalanceados ao repetir manualmente os filtros de CFOP/periodo dentro da subquery).',
+    '',
+    'ERRADO (rejeitado mesmo sem erro de sintaxe): SELECT SUM(valor) AS faturamento, SUBSTRING(campo_data,1,6) AS competencia FROM ... GROUP BY SUBSTRING(campo_data,1,6) — isso agrupa por MES, nao pela dimensao pedida (produto/cliente), e retorna 1 linha para o mes, sem decompor nada.',
+    'ERRADO tambem (funciona, mas e a causa mais comum de erro de sintaxe): SELECT dim.nome AS produto, SUM(valor) AS faturamento, (SUM(valor) * 100.0 / (SELECT SUM(valor) FROM tabela WHERE <repete todos os filtros de CFOP e periodo aqui de novo>)) AS percentual FROM ... GROUP BY dim.nome — a subquery escalar reescreve manualmente todos os filtros, e e facil perder a conta de quantos parenteses fecham.',
+    'CERTO (SEMPRE PREFIRA ESTE FORMATO): SELECT dim.nome AS produto, SUM(valor) AS faturamento, (SUM(valor) * 100.0 / SUM(SUM(valor)) OVER ()) AS percentual FROM ... WHERE <filtros uma unica vez> GROUP BY dim.nome ORDER BY faturamento DESC — SUM(SUM(valor)) OVER () calcula o total geral automaticamente a partir do mesmo WHERE/GROUP BY, sem repetir nenhum filtro nem abrir uma subquery nova.',
+    'Antes de finalizar o SQL, verifique: "meu SELECT agrupa por MES/competencia em vez de por produto/cliente?" Se sim, esta ERRADO — troque o agrupamento para a dimensao pedida. Verifique tambem se ha uma coluna de percentual calculada em cada linha, e se voce usou SUM(...) OVER () em vez de repetir os filtros numa subquery.',
+    'Se o SQL anterior falhou por erro de sintaxe (ex: parenteses desbalanceados no calculo do percentual via subquery), NAO tente corrigir a subquery — troque para o formato SUM(SUM(valor)) OVER (), que elimina o problema na raiz.',
+  ].join('\n');
+}
+
 async function executar(spec, intent, empresaId) {
   const t0 = Date.now();
   const mensagem = intent._mensagemOriginal || intent.intencao || spec.defaultMessage || 'consulta';
@@ -4339,6 +4398,7 @@ async function executar(spec, intent, empresaId) {
   // So depende de intentEfetivo (ja disponivel aqui), nao de planoConsulta/queryPlan (que so
   // existem mais tarde) — mover para ca garante que a PRIMEIRA chamada ja recebe a instrucao.
   contextoTecnico.instrucao_periodo_horizontal = _instrucaoPeriodoHorizontal(intentEfetivo);
+  contextoTecnico.instrucao_analise_vertical = _instrucaoAnaliseVertical(intentEfetivo);
   const tabelaFisica = (sx2Arg, base) => tabelaFisicaSX2(sx2Arg, base) || `${String(base || '').trim().toUpperCase()}${inferirSufixoSX2(sx2Arg, protheus.sufixoTabela)}`;
   const helpers = { connectionFactory, tabelaFisicaSX2: tabelaFisica, escapeSqlLiteral, baseTabelaSX2 };
   const expandirMetadadosParaSql = (sqlAtual) => {
@@ -4839,6 +4899,7 @@ async function executar(spec, intent, empresaId) {
   contextoTecnico.query_plan = planoConsulta;
   contextoTecnico.query_plan_texto = _comDefinicaoGlossario(queryPlan.formatQueryPlanForPrompt(planoConsulta), intentEfetivo);
   contextoTecnico.instrucao_periodo_horizontal = _instrucaoPeriodoHorizontal(intentEfetivo);
+  contextoTecnico.instrucao_analise_vertical = _instrucaoAnaliseVertical(intentEfetivo);
   auditoriaBase.query_plan = planoConsulta;
 
   if (confirmacaoPodeEncerrarPlano(plano.obj)) {
@@ -5003,6 +5064,7 @@ async function executar(spec, intent, empresaId) {
       contextoTecnico.query_plan = planoConsulta;
       contextoTecnico.query_plan_texto = _comDefinicaoGlossario(queryPlan.formatQueryPlanForPrompt(planoConsulta), intentEfetivo);
       contextoTecnico.instrucao_periodo_horizontal = _instrucaoPeriodoHorizontal(intentEfetivo);
+      contextoTecnico.instrucao_analise_vertical = _instrucaoAnaliseVertical(intentEfetivo);
       auditoriaBase.query_plan = planoConsulta;
       if (typeof spec.validarCorrigirSqlGerado === 'function') {
         const guard = await spec.validarCorrigirSqlGerado({
@@ -5231,6 +5293,7 @@ async function executar(spec, intent, empresaId) {
       contextoTecnico.query_plan = planoConsulta;
       contextoTecnico.query_plan_texto = _comDefinicaoGlossario(queryPlan.formatQueryPlanForPrompt(planoConsulta), intentEfetivo);
       contextoTecnico.instrucao_periodo_horizontal = _instrucaoPeriodoHorizontal(intentEfetivo);
+      contextoTecnico.instrucao_analise_vertical = _instrucaoAnaliseVertical(intentEfetivo);
       auditoriaBase.query_plan = planoConsulta;
       if (plano.sql) sqlOriginalIa = plano.sql;
     }
