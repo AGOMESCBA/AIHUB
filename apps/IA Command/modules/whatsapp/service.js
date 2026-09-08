@@ -2905,12 +2905,24 @@ class IACWhatsAppService extends EventEmitter {
     let corpo = respostaTexto;
     if (apresentacao?.resumo) {
       partes.push(apresentacao.resumo);
-      // O resumo aparece ao final do texto original (textoApresentacao concatena
-      // introducao+detalhe+resumo+sugestao) — remove essa ocorrencia final para nao duplicar.
-      if (corpo.endsWith(apresentacao.resumo)) {
-        corpo = corpo.slice(0, corpo.length - apresentacao.resumo.length).replace(/\n+$/, '');
+      // Bug real confirmado em producao (08/09/2026): esta checagem so removia a duplicata
+      // quando o resumo estava exatamente no FINAL do corpo, mas textoApresentacao concatena
+      // introducao+detalhe+resumo+sugestao — a sugestao ("Posso comparar com o periodo
+      // anterior...") vem DEPOIS do resumo sempre que sugerirComparacao nao for false no
+      // mesmo lugar que gerou o texto original, entao o corpo nunca terminava exatamente no
+      // resumo e a remocao nunca acontecia, duplicando a "Leitura rapida" (uma no cabecalho,
+      // outra intacta no meio do corpo). Localiza e remove a ocorrencia onde quer que esteja.
+      const posResumo = corpo.indexOf(apresentacao.resumo);
+      if (posResumo >= 0) {
+        corpo = (corpo.slice(0, posResumo) + corpo.slice(posResumo + apresentacao.resumo.length))
+          .replace(/\n{3,}/g, '\n\n')
+          .trim();
       }
     }
+    // Resposta enxuta (pedido do usuario, 08/09/2026): a introducao "Entendi. Consultei X no
+    // periodo de Y e encontrei N registro(s)." repete informacao que ja esta no cabecalho
+    // (pergunta + Leitura rapida), sem acrescentar nada novo — remove essa linha do corpo.
+    corpo = corpo.replace(/^Entendi\. Consultei[^.]*\.\s*/i, '').trim();
     return { cabecalho: partes.join('\n\n'), corpo };
   }
 

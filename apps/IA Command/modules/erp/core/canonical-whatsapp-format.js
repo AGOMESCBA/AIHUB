@@ -301,6 +301,7 @@ function labelDimensao(col) {
   if (/^vendedor/.test(k)) return 'Vendedor';
   if (/^fornecedor/.test(k)) return 'Fornecedor';
   if (/^cliente/.test(k)) return 'Cliente';
+  if (/^(analista|nome_analista)$/.test(k)) return 'Analista';
   if (RE_DOCUMENTO.test(k)) return 'Documento';
   if (RE_CATEGORIA_SEMANTICA.test(k)) return 'Categoria';
   if (/^(banco|bancos|e8_banco|a6_cod|banco_nome)$/.test(k)) return 'Banco';
@@ -606,6 +607,7 @@ function ordemDimensoesPedidas(opts = {}) {
     { canon: 'numero_pedido', re: /\bnumero\s+d[oa]\s+pedido(?:\s+de\s+compra)?\b|\bpedido(?:\s+de\s+compra)?\b/g },
     { canon: 'documento', re: /\bdocumento\b|\bnota\s+fiscal\b|\bnf\b|\btitulo\b|\bduplicata\b/g },
     { canon: 'cliente', re: /\bcliente\b/g },
+    { canon: 'analista', re: /\banalista\b/g },
     { canon: 'fornecedor', re: /\bfornecedor\b/g },
     { canon: 'vendedor', re: /\bvendedor\b/g },
     { canon: 'produto', re: /\bproduto\b/g },
@@ -728,6 +730,7 @@ function dimensaoAtendeCanon(dim, canon) {
   if (canon === 'numero_pedido') return /^(pedido|numero_pedido|num_pedido|cr_num|c7_num)$/.test(k);
   if (canon === 'documento') return isDocumento(dim);
   if (canon === 'aprovador') return /^aprovador|^cr_aprov$|^ak_cod$|^ak_nome$/.test(k);
+  if (canon === 'analista') return /^(analista|nome_analista)$/.test(k);
   return k === canon || k.startsWith(`${canon}_`) || k.endsWith(`_${canon}`);
 }
 
@@ -940,12 +943,13 @@ function colBaseCrescimento(metricas = []) {
     || metricas.find(col => !isMetricaCrescimento(col) && !/_anterior$/i.test(keyNorm(col)));
 }
 
-function recalcularCrescimentoTemporal(entradas, metricas) {
+function recalcularCrescimentoTemporal(entradas, metricas, opts = {}) {
   const crescimentoValor = metricas.filter(isCrescimentoValor);
   const crescimentoPct = metricas.filter(col => isMetricaCrescimento(col) && isPercentual(col));
   if (!entradas.length || (!crescimentoValor.length && !crescimentoPct.length)) return entradas;
   const base = colBaseCrescimento(metricas);
   if (!base) return entradas;
+  const sobrescrever = opts.sobrescrever === true;
 
   let anterior = null;
   for (const [, totais] of entradas) {
@@ -953,8 +957,23 @@ function recalcularCrescimentoTemporal(entradas, metricas) {
     const temAtual = atual !== null;
     const temAnterior = anterior !== null;
     const diff = temAtual && temAnterior ? atual - anterior : null;
-    for (const col of crescimentoValor) totais[col] = diff;
-    for (const col of crescimentoPct) totais[col] = diff !== null && anterior !== 0 ? (diff / anterior) * 100 : null;
+    // Bug real confirmado em producao (08/09/2026, analise horizontal com 1 linha so — mes
+    // atual comparado a um periodo-base ja calculado no proprio SQL, ex: glossario de
+    // "analise horizontal"): este loop foi desenhado para series de N linhas ao longo do
+    // tempo, onde o crescimento e calculado comparando cada linha com a ANTERIOR da propria
+    // lista — nesse caso o SQL normalmente nao traz crescimento pronto. Mas quando o SQL ja
+    // calculou a variacao (ex: comparando periodo atual vs periodo-base num unico SELECT),
+    // sobrescrever incondicionalmente com "diff" (que da null na 1a linha, por falta de
+    // "anterior" na lista) descartava um valor correto ja calculado. Preserva o valor do SQL
+    // quando ele ja e um numero valido; so recalcula quando o SQL nao trouxe nada (null/vazio).
+    // No consolidado multiempresa, porem, os percentuais de cada empresa nao podem ser somados:
+    // nesse modo o caller passa sobrescrever=true para recalcular sobre o total agregado.
+    for (const col of crescimentoValor) {
+      if (sobrescrever || parseNumber(totais[col]) === null) totais[col] = diff;
+    }
+    for (const col of crescimentoPct) {
+      if (sobrescrever || parseNumber(totais[col]) === null) totais[col] = diff !== null && anterior !== 0 ? (diff / anterior) * 100 : null;
+    }
     if (temAtual) anterior = atual;
   }
   return entradas;
@@ -1026,7 +1045,8 @@ function chaveDimensaoCanonica(col) {
   if (/^(baixa|data_baixa|dt_baixa|e1_baixa|e2_baixa)$/.test(k)) return 'baixa';
   if (/^(documento|doc|titulo|duplicata|nota|nota_fiscal|nf|nfe|e1_num|e2_num)$/.test(k)) return 'documento';
   if (/^(fornecedor|fornec|nome_fornecedor|e2_fornece|a2_nome)$/.test(k)) return 'fornecedor';
-  if (/^(cliente|nome_cliente|e1_cliente|a1_nome)$/.test(k)) return 'cliente';
+  if (/^(cliente|nome_cliente|id_cliente|cliente_id|e1_cliente|a1_nome)$/.test(k)) return 'cliente';
+  if (/^(analista|nome_analista)$/.test(k)) return 'analista';
   if (/^(vendedor|nome_vendedor)$/.test(k)) return 'vendedor';
   if (/^(produto|nome_produto|descricao_produto)$/.test(k)) return 'produto';
   if (/^(competencia|ano_mes|aaaamm|aaaa_mm|referencia|periodo)$/.test(k)) return 'competencia';
@@ -2247,7 +2267,7 @@ function renderAll(sucessos, opts = {}) {
   let entradas = [...porDim.entries()].sort(([labelA, a], [labelB, b]) => dimTemporal
     ? sortValorDimensao(dim, labelA).localeCompare(sortValorDimensao(dim, labelB))
     : (b[primary] || 0) - (a[primary] || 0));
-  if (dimTemporal) entradas = recalcularCrescimentoTemporal(entradas, shape.metricas);
+  if (dimTemporal) entradas = recalcularCrescimentoTemporal(entradas, shape.metricas, { sobrescrever: true });
   linhas.push('');
   if (dimTemporal) {
     linhas.push('\u{1F3E2} *Por Empresa*');

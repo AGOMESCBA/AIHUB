@@ -409,17 +409,38 @@ function calcularPeriodoBaseAnterior(periodoAtual) {
   return { dataInicio: _paraAaaammdd(inicioBase), dataFim: _paraAaaammdd(fimBase) };
 }
 
-// So se aplica quando: (1) o termo detectado e uma variante de "horizontal" (nao vertical/
-// outros — esses nao comparam periodos); (2) ja existe um periodo atual resolvido pelo
-// classificador base; (3) a definicao/pergunta nao ja trouxe um segundo periodo explicito
-// (nesse caso a propria IA geradora ja tem o suficiente, nao inventamos nada por cima).
+// O mes-base da SERIE e sempre 1 UNICO mes civil — o mes imediatamente anterior ao INICIO do
+// periodo pedido, independente de quantos meses o periodo pedido cobre. Bug real confirmado em
+// producao (08/09/2026): usar calcularPeriodoBaseAnterior aqui (que calcula "mesma duracao"
+// quando o periodo nao e 1 mes civil) fazia um periodo de 8 meses (jan-ago) resultar num
+// "mes-base" de OUTROS 8 meses (mai/2025-dez/2025) em vez de um unico mes (dez/2025) — a IA
+// entao gerava uma serie de 21 linhas em vez das 9 esperadas (dez/2025 + jan-set/2026).
+function _mesCivilAnteriorA(dataInicioAaaammdd) {
+  const inicio = _paraDate(dataInicioAaaammdd);
+  if (!inicio) return null;
+  const inicioBaseMes = new Date(inicio.getFullYear(), inicio.getMonth() - 1, 1);
+  const fimBaseMes = new Date(inicio.getFullYear(), inicio.getMonth(), 0);
+  return { dataInicio: _paraAaaammdd(inicioBaseMes), dataFim: _paraAaaammdd(fimBaseMes) };
+}
+
+// Bug real confirmado em producao (08/09/2026): o formato antigo de comparacao unica
+// ("Faturamento Atual | Faturamento Base | Variacao Absoluta | Crescimento %" numa unica
+// linha, lado a lado) foi avaliado pelo usuario como confuso — nao fica claro visualmente
+// qual valor e de qual mes, e o subtotal/total geral somava colunas que nao deveriam ser
+// somadas. Unificado (08/09/2026) com o formato de serie mensal (ja validado como claro):
+// TODA analise horizontal agora gera uma linha POR COMPETENCIA dentro do periodo pedido —
+// se o periodo e "so este mes", vira uma serie de 2 linhas (mes anterior=base, mes atual);
+// se o periodo cobre N meses ("mes a mes"), vira uma serie de N+1 linhas (mes-base + os N
+// meses pedidos). Mesma estrutura sempre (competencia, faturamento, indice_base,
+// variacao_percentual), so muda quantas linhas.
 function resolverPeriodoBaseSeHorizontal(termo, periodoAtual) {
   if (!RE_TERMO_HORIZONTAL.test(termo || '')) return null;
-  const base = calcularPeriodoBaseAnterior(periodoAtual);
+  const base = _mesCivilAnteriorA(periodoAtual?.dataInicio);
   if (!base) return null;
   return {
-    periodoBase: base,
-    avisoTexto: `Assumindo comparação com o período imediatamente anterior de mesma duração (${base.dataInicio}–${base.dataFim}). Se quiser comparar com outra base (ex: mesmo período do ano passado), me avise.`,
+    serieMode: 'indice_base',
+    periodoInicioSerie: base.dataInicio,
+    avisoTexto: `Assumindo comparação a partir do mês imediatamente anterior (${base.dataInicio}–${base.dataFim}) como base 100%. Se quiser comparar com outra base (ex: mesmo período do ano passado), me avise.`,
   };
 }
 

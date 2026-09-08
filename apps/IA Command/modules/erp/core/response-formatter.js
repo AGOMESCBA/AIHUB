@@ -1122,8 +1122,17 @@ function _sugestaoComparacaoHumana(resultado, intent, opts) {
   const periodo = resultado?.periodo || intent?.periodo;
   if (!periodo?.dataInicio || !periodo?.dataFim) return '';
   if (String(periodo?.tipo || '').includes('comparacao')) return '';
-  const textoIntent = _normalizarNome([intent?.intencao, intent?.acao, intent?.tipo, intent?.comparativo].filter(Boolean).join(' '));
-  if (/compar|evolu|variac|aumento|queda/.test(textoIntent)) return '';
+  // Bug real confirmado em producao (08/09/2026): analise horizontal (glossario) JA E uma
+  // comparacao entre 2 periodos — sugerir "posso comparar com o periodo anterior" depois de
+  // uma resposta que ja faz exatamente isso e redundante e confunde o usuario. O texto
+  // original da pergunta ("analise horizontal") nao entrava nesta checagem, so campos
+  // estruturados do intent que nao contem esse termo — inclui _mensagemOriginal e o termo do
+  // glossario (_glossario.termo), alem de "horizontal" na lista de palavras que suprimem.
+  const textoIntent = _normalizarNome([
+    intent?.intencao, intent?.acao, intent?.tipo, intent?.comparativo,
+    intent?._mensagemOriginal, intent?._glossario?.termo,
+  ].filter(Boolean).join(' '));
+  if (/compar|evolu|variac|aumento|queda|horizontal/.test(textoIntent)) return '';
   return 'Posso comparar com o periodo anterior. Se preferir, peca "comparar com o mesmo periodo do ano passado".';
 }
 
@@ -1133,7 +1142,15 @@ function montarApresentacaoResposta(texto, resultado, intent, opts = {}) {
   if (resultado?.tipo !== 'sucesso_ai_sql' || !rows.length) return null;
 
   const jaHumanizado = /^\s*(entendi|consultei|verifiquei|analisei)\b/i.test(texto);
-  const periodo = _periodoEmLinha(resultado?.periodo || intent?.periodo);
+  // Bug real confirmado em producao (08/09/2026, analise horizontal): resultado.periodo pode
+  // vir de periodoResolvidoComComparativos (runner.js), que combina dataInicio do periodo
+  // ATUAL com dataFim do periodo-BASE quando ha 2 periodos comparativos (ex: analise
+  // horizontal atual-vs-base) — produzindo frases sem sentido tipo "periodo de 01/09 a
+  // 31/08" (inicio depois do fim). O usuario pediu informacao de UM periodo (o atual); o
+  // periodo-base e so um dado interno de calculo, nunca o que a pergunta pediu ver como
+  // intervalo. intent.periodo (resolvido pelo classificador, sempre o periodo real da
+  // pergunta) e a fonte confiavel aqui; resultado.periodo so como fallback se intent nao tiver.
+  const periodo = _periodoEmLinha(intent?.periodo || resultado?.periodo);
   const assunto = _nomeAssuntoHumano(resultado, intent);
   const intro = `Entendi. Consultei ${assunto}${periodo ? ` no periodo de ${periodo.toLowerCase()}` : ''} e encontrei ${rows.length} registro(s).`;
   const resumo = _resumoHumanoRows(rows, intent);

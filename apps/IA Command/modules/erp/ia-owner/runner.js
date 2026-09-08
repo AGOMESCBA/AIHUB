@@ -4183,28 +4183,34 @@ function _comDefinicaoGlossario(queryPlanTexto, intent) {
 // periodo de comparacao explicito na pergunta — precisa ir no destaque de topo do prompt
 // (contextoTecnico.instrucao_periodo_horizontal, consumido em prompt-builder.js), nao dentro
 // do query_plan_texto, que a IA trata como sugerivel/substituivel pela leitura da pergunta.
+// Formato UNICO para toda analise horizontal (unificado 08/09/2026 a pedido do usuario: o
+// formato antigo "1 linha, colunas lado a lado" foi avaliado como confuso — nao fica claro
+// visualmente qual valor e de qual mes, e o subtotal somava colunas que nao deveriam ser
+// somadas). Sempre gera uma SERIE de linhas (uma por competencia), formato indice-base: o
+// PRIMEIRO mes da serie (o mes-base, imediatamente anterior ao periodo pedido) = indice 100,
+// cada mes seguinte = indice relativo ao mes anterior DENTRO da serie. Quando a pergunta pede
+// so "este mes", a serie tem 2 linhas (mes anterior=base, mes atual); quando pede "mes a mes"
+// de um intervalo maior, a serie tem N linhas — mesma estrutura sempre, so muda o tamanho.
 function _instrucaoPeriodoHorizontal(intent) {
   const glossario = intent?._glossario;
-  if (!glossario?.periodoBase) return null;
-  const pAtualIni = intent.periodo?.dataInicio || '?';
-  const pAtualFim = intent.periodo?.dataFim || '?';
-  const pBaseIni = glossario.periodoBase.dataInicio;
-  const pBaseFim = glossario.periodoBase.dataFim;
+  if (glossario?.serieMode !== 'indice_base') return null;
+  const pIni = glossario.periodoInicioSerie || intent.periodo?.dataInicio || '?';
+  const pFim = intent.periodo?.dataFim || '?';
   return [
-    `A pergunta pede "${glossario.termo}", que por definicao SEMPRE compara DOIS periodos — mesmo que o texto da pergunta mencione apenas um periodo explicitamente. Isso NAO e uma leitura alternativa da pergunta: e o significado literal do termo "${glossario.termo}".`,
-    `PERIODO ATUAL: ${pAtualIni} a ${pAtualFim}.`,
-    `PERIODO BASE DE COMPARACAO (calculado — imediatamente anterior, mesma duracao, pois a pergunta nao especificou outra base): ${pBaseIni} a ${pBaseFim}.`,
+    `A pergunta pede "${glossario.termo}", que por definicao SEMPRE compara periodos ao longo do tempo — mesmo que o texto mencione so "este mes", a analise horizontal inclui o mes-base (imediatamente anterior) alem do periodo pedido.`,
+    `PERIODO COMPLETO DA SERIE (mes-base + periodo pedido): ${pIni} a ${pFim}.`,
     '',
     'CHECKLIST OBRIGATORIO antes de responder (falhar qualquer item invalida a resposta):',
-    `1. O SQL final DEVE retornar linhas para OS DOIS periodos (${pAtualIni}-${pAtualFim} E ${pBaseIni}-${pBaseFim}), nunca so um.`,
-    '2. Estruture com uma CTE/subquery por periodo (ou UNION ALL rotulado por periodo), nunca um unico SELECT com um so filtro de data.',
-    '3. Calcule variacao absoluta (atual - base) e percentual ((atual - base) / base * 100) como colunas do resultado.',
-    '4. NAO gere detalhamento por dia/mes dentro do periodo atual (ex: GROUP BY competencia listando so um mes) — isso e o erro mais comum e INVALIDA a resposta, mesmo que o SQL execute sem erro.',
+    `1. O SQL final DEVE retornar UMA LINHA POR COMPETENCIA (mes) dentro de ${pIni} a ${pFim} — agrupando por SUBSTRING do campo de data (formato YYYYMM). Se o periodo cobre 2 meses, retorne 2 linhas; se cobre 8 meses, retorne 8 linhas.`,
+    '2. Cada linha compara o faturamento daquele mes com o do MES ANTERIOR dentro da propria serie (nao com o mesmo mes do ano anterior).',
+    '3. Formato INDICE-BASE: o PRIMEIRO mes da serie (o mais antigo, o mes-base) tem indice_base = 100.00 e variacao_percentual = NULL (nao ha mes anterior na serie para compara-lo). Cada mes seguinte tem indice_base = (faturamento_mes / faturamento_primeiro_mes_da_serie) * 100, e variacao_percentual = ((faturamento_mes - faturamento_mes_anterior) / faturamento_mes_anterior) * 100.',
+    '4. Use window function (LAG() OVER (ORDER BY competencia) para o mes anterior, FIRST_VALUE() OVER (ORDER BY competencia) para o mes-base) — nao gere SELECTs separados por mes nem UNION ALL manual.',
+    '5. Colunas obrigatorias no SELECT final, EXATAMENTE estes nomes: competencia (YYYYMM), faturamento, indice_base, variacao_percentual. PROIBIDO usar os nomes antigos faturamento_atual/faturamento_base/variacao_absoluta — o formato "colunas lado a lado numa linha so" NAO deve mais ser usado.',
     '',
-    `ERRADO (rejeitado mesmo sem erro de sintaxe): SELECT ... WHERE campo_data BETWEEN '${pAtualIni}' AND '${pAtualFim}' GROUP BY competencia — isso ignora o periodo base e retorna so 1 linha/periodo.`,
-    `CERTO (UNION ALL, uma linha por periodo): WITH atual AS (SELECT ... WHERE campo_data BETWEEN '${pAtualIni}' AND '${pAtualFim}'), base AS (SELECT ... WHERE campo_data BETWEEN '${pBaseIni}' AND '${pBaseFim}') SELECT '${pAtualIni.slice(0,6)}' AS competencia, atual.* FROM atual UNION ALL SELECT '${pBaseIni.slice(0,6)}' AS competencia, base.* FROM base.`,
-    `TAMBEM CERTO (colunas lado a lado numa unica linha): WITH atual AS (...), base AS (...) SELECT '${pAtualIni.slice(0,6)}' AS competencia, atual.faturamento AS faturamento_atual, base.faturamento AS faturamento_base, (atual.faturamento - base.faturamento) AS variacao_absoluta FROM atual, base — OBRIGATORIO incluir a coluna literal "AS competencia" (com esse nome exato) referente ao periodo atual, mesmo no formato de colunas lado a lado; sem essa coluna a resposta e rejeitada por validacao tecnica mesmo com o calculo correto.`,
-    'Antes de finalizar o SQL, verifique: "meu SELECT tem uma unica clausula BETWEEN/faixa de data? Se sim, esta ERRADO para analise horizontal — refaca com os dois periodos." Verifique tambem se o SELECT final tem uma coluna literal "AS competencia" (nome exato, sem sufixo).',
+    `ERRADO (rejeitado mesmo sem erro de sintaxe): SELECT ... WHERE campo_data BETWEEN '${intent.periodo?.dataInicio || '?'}' AND '${pFim}' GROUP BY competencia — isso ignora o mes-base e retorna so 1 linha do periodo pedido.`,
+    `ERRADO tambem: colunas lado a lado numa unica linha (faturamento_atual, faturamento_base, variacao_absoluta) — formato descontinuado, sempre use a serie de linhas.`,
+    `CERTO: WITH mensal AS (SELECT SUBSTRING(campo_data,1,6) AS competencia, SUM(valor) AS faturamento FROM ... WHERE campo_data BETWEEN '${pIni}' AND '${pFim}' GROUP BY SUBSTRING(campo_data,1,6)) SELECT competencia, faturamento, (faturamento * 100.0 / FIRST_VALUE(faturamento) OVER (ORDER BY competencia)) AS indice_base, CASE WHEN LAG(faturamento) OVER (ORDER BY competencia) IS NULL OR LAG(faturamento) OVER (ORDER BY competencia) = 0 THEN NULL ELSE ((faturamento - LAG(faturamento) OVER (ORDER BY competencia)) * 100.0 / LAG(faturamento) OVER (ORDER BY competencia)) END AS variacao_percentual FROM mensal ORDER BY competencia.`,
+    'Antes de finalizar o SQL, verifique: "meu SELECT tem uma unica clausula BETWEEN cobrindo so o periodo pedido, sem o mes-base?" Se sim, esta ERRADO — inclua o mes-base no filtro de data. Verifique tambem os nomes exatos das colunas: competencia, faturamento, indice_base, variacao_percentual.',
   ].join('\n');
 }
 

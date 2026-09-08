@@ -1204,13 +1204,16 @@ async function classificar(mensagem, empresaId, opts = {}) {
       }
       intent._glossario = resolucaoGlossario;
       // "Analise horizontal" sem periodo-base explicito na pergunta: calcula o periodo
-      // imediatamente anterior de mesma duracao a partir do periodo ja resolvido pelo
-      // classificador acima, e anexa como aviso — nunca bloqueia, nunca pergunta de novo.
+      // imediatamente anterior a partir do periodo ja resolvido pelo classificador acima, e
+      // anexa como aviso — nunca bloqueia, nunca pergunta de novo. Sempre no formato serie
+      // indice-base (uma linha por competencia, mes-base=100%), unificado independente de o
+      // periodo pedido cobrir 1 mes ou N meses (ver analytic-glossary-resolver.js).
       const analyticGlossaryResolver = require('./analytic-glossary-resolver');
       const resolucaoPeriodoBase = analyticGlossaryResolver.resolverPeriodoBaseSeHorizontal(resolucaoGlossario.termo, intent.periodo);
       if (resolucaoPeriodoBase) {
-        intent._glossario.periodoBase = resolucaoPeriodoBase.periodoBase;
+        intent._glossario.periodoInicioSerie = resolucaoPeriodoBase.periodoInicioSerie || null;
         intent._glossario.avisoPeriodoBase = resolucaoPeriodoBase.avisoTexto;
+        intent._glossario.serieMode = resolucaoPeriodoBase.serieMode || null;
       }
     }
     return intent;
