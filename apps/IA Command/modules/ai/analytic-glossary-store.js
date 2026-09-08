@@ -45,12 +45,37 @@ function buscarPorTermo(termo, dominio = '') {
 }
 
 function criar(payload = {}) {
-  const id = uuid();
   const ts = agora();
   const termoNorm = normalizarTermo(payload.termo);
   if (!termoNorm) throw new Error('analytic-glossary-store: termo obrigatorio.');
   if (!payload.definicaoTecnica) throw new Error('analytic-glossary-store: definicaoTecnica obrigatoria.');
+  const dominioNorm = normalizarDominio(payload.dominio);
 
+  // O indice UNIQUE (termo, dominio) cobre TODAS as linhas, ativas ou nao — uma entrada
+  // desativada (ativo=0) continua ocupando o par termo+dominio. Sem este upsert, reaprender
+  // um termo que ja foi desativado (ex: definicao tecnica corrigida apos bug) falha com
+  // UNIQUE constraint no INSERT puro, e o caller (fail-open) segue sem glossario nenhum —
+  // bug real confirmado em producao (07/09/2026, "analise vertical" apos correcao do prompt).
+  const existenteQualquerStatus = getDB().prepare(`
+    SELECT id FROM analytic_glossary WHERE termo = ? AND dominio = ?
+  `).get(termoNorm, dominioNorm);
+
+  if (existenteQualquerStatus) {
+    getDB().prepare(`
+      UPDATE analytic_glossary
+      SET definicao_tecnica = ?, origem = ?, pergunta_origem = ?, ativo = 1, atualizado_em = ?
+      WHERE id = ?
+    `).run(
+      payload.definicaoTecnica,
+      payload.origem || 'ia_aprendido',
+      payload.perguntaOrigem || null,
+      ts,
+      existenteQualquerStatus.id,
+    );
+    return existenteQualquerStatus.id;
+  }
+
+  const id = uuid();
   getDB().prepare(`
     INSERT INTO analytic_glossary (
       id, termo, dominio, definicao_tecnica, origem, pergunta_origem, ativo, criado_em, atualizado_em
@@ -58,7 +83,7 @@ function criar(payload = {}) {
   `).run(
     id,
     termoNorm,
-    normalizarDominio(payload.dominio),
+    dominioNorm,
     payload.definicaoTecnica,
     payload.origem || 'ia_aprendido',
     payload.perguntaOrigem || null,

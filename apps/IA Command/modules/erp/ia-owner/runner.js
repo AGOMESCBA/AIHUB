@@ -349,7 +349,32 @@ function _linhasEntidadesRetry(entidadesResolvidas = []) {
 
 function _blocoRetryTecnicoIaOwner(subtipo, mensagem, linhasEntidades) {
   let bloco;
-  if (/JOIN SE[12]->SE5 incompleto/i.test(mensagem)) {
+  if (/SUM\(\.\.\.\)\s*OVER\s*\(\.\.\.\)[\s\S]*JUNTO com GROUP BY/i.test(mensagem)) {
+    // Bug real confirmado em producao (07/09/2026, fluxo de caixa previsto): a IA insiste
+    // em adicionar GROUP BY no SELECT final mesmo apos a instrucao textual do spec repetir
+    // a proibicao — reforco maximo aqui, com o padrao exato pronto para copiar, seguindo o
+    // mesmo formato "Tarefa/Nao fazer" dos demais blocos de retry desta funcao.
+    bloco = [
+      'Contrato obrigatorio — SELECT FINAL DO FLUXO DE CAIXA NAO PODE TER GROUP BY:',
+      '- O SELECT final (o que usa SUM(...) OVER (...) para o saldo acumulado) NUNCA leva GROUP BY. A CTE "fluxo" ja entrega uma linha por periodo — nao ha nada para agregar de novo.',
+      '- Estrutura EXATA e obrigatoria do SELECT final (copie este formato, trocando so os nomes de coluna se necessario):',
+      '  SELECT fluxo.competencia, saldo_base.saldo_bancario_base, fluxo.total_a_receber, fluxo.total_a_pagar,',
+      '         (saldo_base.saldo_bancario_base + SUM(fluxo.delta_mes) OVER (ORDER BY fluxo.competencia ROWS UNBOUNDED PRECEDING)) AS fluxo_liquido',
+      '  FROM fluxo',
+      '  CROSS JOIN saldo_base',
+      '  ORDER BY fluxo.competencia;',
+      '- Repare: NAO ha clausula GROUP BY em nenhuma linha acima, apos o ultimo FROM/CROSS JOIN/ORDER BY.',
+      '- GROUP BY dentro das CTEs internas (receber, pagar) continua correto e obrigatorio — a proibicao e SOMENTE no ultimo SELECT do SQL inteiro.',
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL a partir da pergunta original.',
+      '- Preserve todas as CTEs (saldo_recente, saldo_base, datas, receber, pagar, fluxo) exatamente como estavam.',
+      '- Troque APENAS o SELECT final para remover o GROUP BY, seguindo a estrutura exata acima.',
+      '',
+      'Nao fazer:',
+      '- Nao adicione GROUP BY no SELECT final, mesmo que pareça necessário por ter colunas nao agregadas junto de SUM(...) OVER(...) — essa combinacao esta correta sem GROUP BY porque OVER() e uma window function, nao uma agregacao classica.',
+    ];
+  } else if (/JOIN SE[12]->SE5 incompleto/i.test(mensagem)) {
     // Bug real confirmado em producao: a IA usa E5_NUM (campo que nao existe) em vez
     // de E5_NUMERO, ou omite o campo por completo — mesmo com o template correto no
     // spec. Reforca aqui com o ON completo pronto para copiar, nome de campo exato.
@@ -1877,14 +1902,26 @@ function validarAgregadoSemGroupBy(sql = '') {
   for (const parte of partes) {
     const { select, group } = extrairSelectEGroupByNivelZero(parte);
     if (!select || group) continue;
-    if (!/\b(SUM|COUNT|AVG|MIN|MAX|STRING_AGG)\s*\(/i.test(select)) continue;
+    // Remove o padrao FUNCAO(...) OVER(...) inteiro antes de checar agregacao: SUM(x)
+    // OVER(...) e uma window function (calculada por linha, preserva o grao original), nao
+    // uma agregacao classica que reduz linhas e exigiria GROUP BY para as demais colunas do
+    // SELECT. Bug real confirmado em producao (07/09/2026, fluxo de caixa projetado): esta
+    // checagem tratava SUM(...) OVER(...) como se fosse SUM(...) agregador comum e
+    // rejeitava SQL correto (saldo cumulativo via window function), mesmo sem nenhum GROUP
+    // BY necessario. Remover so o miolo do OVER(...) nao bastava — o SUM(...) que vem ANTES
+    // do OVER continuava no texto e disparava o falso positivo; e necessario remover a
+    // funcao de agregacao E o OVER(...) que a segue como uma unidade so.
+    const REGEX_AGREGADO_OVER = /\b(?:SUM|COUNT|AVG|MIN|MAX|STRING_AGG)\s*\([^()]*(?:\([^()]*\)[^()]*)*\)\s*OVER\s*\([^()]*(?:\([^()]*\)[^()]*)*\)/gi;
+    const selectSemWindow = String(select || '').replace(REGEX_AGREGADO_OVER, '');
+    if (!/\b(SUM|COUNT|AVG|MIN|MAX|STRING_AGG)\s*\(/i.test(selectSemWindow)) continue;
     for (const itemBruto of dividirExpressoesSql(select)) {
       const item = itemBruto
         .replace(/^\s*DISTINCT\s+/i, '')
         .replace(/\s+AS\s+[A-Z_][A-Z0-9_]*\s*$/i, '')
         .trim();
       if (!item || /^['"\d]/.test(item)) continue;
-      if (/\b(SUM|COUNT|AVG|MIN|MAX|STRING_AGG)\s*\(/i.test(item)) continue;
+      const itemSemWindow = item.replace(REGEX_AGREGADO_OVER, '');
+      if (/\b(SUM|COUNT|AVG|MIN|MAX|STRING_AGG)\s*\(/i.test(itemSemWindow)) continue;
       if (!/\b[A-Z][A-Z0-9_]*\s*\.\s*[A-Z][A-Z0-9_]*\b/i.test(item)) continue;
       erros.push(`SELECT com agregacao sem GROUP BY contem expressao nao agregada: ${item}. Adicione GROUP BY para essa expressao ou substitua por literal/alias fixo de periodo no UNION ALL.`);
     }
@@ -2890,10 +2927,38 @@ function validarTesDescricaoQuandoAgrupado(sql = '', mensagem = '') {
   };
 }
 
+// Bug real confirmado em producao (07/09/2026, analise vertical do faturamento, CAIEIRA):
+// a IA gerou uma subquery de percentual com parenteses desbalanceados — abriu 2 niveis
+// ("(SUM(x) * 100.0 / (SELECT ...") mas fechou so 1 antes de "AS total_faturamento". O SQL
+// e sintaticamente invalido, mas o proxy/motor nao retornou erro de sintaxe — devolveu 0
+// linhas silenciosamente. Sem esta checagem, SQL malformado chega ate o ERP sem deteccao.
+function validarParentesesBalanceados(sql = '') {
+  const texto = String(sql || '');
+  let nivel = 0;
+  let aspas = false;
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i];
+    if (c === "'" && texto[i - 1] !== '\\') { aspas = !aspas; continue; }
+    if (aspas) continue;
+    if (c === '(') nivel++;
+    else if (c === ')') {
+      nivel--;
+      if (nivel < 0) {
+        return { ok: false, erros: [`SQL tem parenteses desbalanceados: ")" a mais na posicao ${i} (fecha um parentese que nao foi aberto). Revise a expressao inteira e conte os parenteses abertos e fechados com cuidado.`] };
+      }
+    }
+  }
+  if (nivel !== 0) {
+    return { ok: false, erros: [`SQL tem parenteses desbalanceados: ${nivel} parentese(s) "(" sem fechamento correspondente ")". Isso e SQL sintaticamente invalido — normalmente acontece em expressoes com subquery aninhada (ex: calculo de percentual "(SUM(x) * 100.0 / (SELECT ...))") onde falta um ")" de fechamento antes do proximo AS/virgula/FROM. Revise a expressao inteira e conte os parenteses abertos e fechados com cuidado.`] };
+  }
+  return { ok: true, erros: [] };
+}
+
 function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '', opts = {}) {
   const texto = String(sql || '').trim();
   const erros = [];
   const permitirSelectTop = opts.permitirSelectTop === true;
+  erros.push(...validarParentesesBalanceados(texto).erros);
   erros.push(...validarPontoEVirgulaUnico(texto).erros);
   erros.push(...validarJoinDepoisWhere(texto).erros);
   erros.push(...validarFiltroFiscalCarregada(texto, mensagem).erros);

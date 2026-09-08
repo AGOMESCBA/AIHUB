@@ -16,6 +16,28 @@ const CAMPOS_CLIENTE_SEGURANCA = ['E1_CLIENTE'];
 
 const TABELAS = ['SE1', 'SE2', 'SE5', 'SE8', 'SA1', 'SA2', 'SA3', 'SA6', 'SED', 'FK1', 'FK2', 'FK7'];
 
+// Acha a posicao de uma keyword fora de qualquer parenteses (nivel 0) — usado para distinguir
+// o SELECT/GROUP BY final de um SQL com CTEs do que esta apenas dentro de uma CTE interna.
+function _localizarKeywordNivelZero(sql = '', keyword, inicio = 0) {
+  const texto = String(sql || '');
+  const alvo = String(keyword || '').toUpperCase();
+  let nivel = 0;
+  let aspas = false;
+  for (let i = Math.max(0, inicio); i <= texto.length - alvo.length; i++) {
+    const c = texto[i];
+    if (c === "'" && texto[i - 1] !== '\\') aspas = !aspas;
+    if (aspas) continue;
+    if (c === '(') { nivel++; continue; }
+    if (c === ')') { nivel = Math.max(0, nivel - 1); continue; }
+    if (nivel !== 0) continue;
+    if (texto.slice(i, i + alvo.length).toUpperCase() !== alvo) continue;
+    const antes = i > 0 ? texto[i - 1] : ' ';
+    const depois = texto[i + alvo.length] || ' ';
+    if (!/[A-Z0-9_]/i.test(antes) && !/[A-Z0-9_]/i.test(depois)) return i;
+  }
+  return -1;
+}
+
 const CAMPOS_SX3_ESSENCIAIS = {
   SE1: ['E1_FILIAL', 'E1_PREFIXO', 'E1_NUM', 'E1_PARCELA', 'E1_TIPO', 'E1_CLIENTE', 'E1_LOJA', 'E1_EMISSAO', 'E1_VENCTO', 'E1_VENCREA', 'E1_VALOR', 'E1_SALDO', 'E1_NATUREZ', 'E1_SITUACA', 'E1_VEND1', 'E1_VEND2', 'E1_VEND3', 'E1_VEND4', 'E1_VEND5', 'E1_VALCOM1', 'D_E_L_E_T_'],
   SE2: ['E2_FILIAL', 'E2_PREFIXO', 'E2_NUM', 'E2_PARCELA', 'E2_TIPO', 'E2_FORNECE', 'E2_LOJA', 'E2_EMISSAO', 'E2_VENCTO', 'E2_VENCREA', 'E2_VALOR', 'E2_SALDO', 'E2_NATUREZ', 'E2_SITUACA', 'D_E_L_E_T_'],
@@ -296,8 +318,60 @@ const sqlPatternsProibidos = [
     mensagem: 'FULL OUTER JOIN nao e suportado neste ambiente. Para combinar datas de receber e pagar que podem nao coincidir, use uma CTE "datas" com UNION das datas distintas de cada lado, e LEFT JOIN dessa CTE para as subqueries de receber e pagar — nunca JOIN direto entre as duas subqueries.',
   },
   {
-    regex: /\bSE8\b(?=[\s\S]*?\bJOIN\s+\w+\s+SA6\b)(?![\s\S]*?\bE8_AGENCIA\s*=\s*SA6\.A6_AGENCIA\b)/i,
-    mensagem: 'JOIN SE8→SA6 incompleto: falta E8_AGENCIA = SA6.A6_AGENCIA AND SE8.E8_CONTA = SA6.A6_NUMCON na condicao ON. Sem esses campos, o banco retorna zero linhas ou duplicidade por agencia.',
+    // Bug real confirmado em producao (07/09/2026, fluxo de caixa previsto, PLANTIVO e
+    // CAIEIRA): quando o SELECT final combina uma window function (SUM(...) OVER (...),
+    // usada para acumular o saldo projetado ao longo do periodo) com GROUP BY no mesmo
+    // SELECT, e a coluna dentro do OVER() nao esta listada no GROUP BY, este ambiente NAO
+    // retorna erro de SQL invalido — silenciosamente devolve zero linhas. Confirmado via
+    // teste isolado: identica CTE, mesmo dado real, so a presenca/ausencia do GROUP BY no
+    // SELECT externo muda o resultado de "correto" para "vazio". Os exemplos corretos do
+    // proprio spec (fluxoCaixaProjetado, financeiro-fragmentos-spec.js) NUNCA usam GROUP BY
+    // junto com a window function de acumulo — a IA as vezes adiciona por conta propria,
+    // provavelmente generalizando de outras instrucoes do spec que pedem GROUP BY em
+    // contextos diferentes (agrupamento por entidade). Detecta o padrao e devolve instrucao
+    // de correcao especifica em vez de deixar a resposta silenciosamente vazia.
+    validar(sql) {
+      const texto = String(sql || '');
+      // Acha o ultimo SELECT de nivel-zero (o SELECT final, fora de qualquer CTE) varrendo
+      // todas as ocorrencias — CTEs tambem comecam com SELECT dentro de parenteses (nivel >
+      // 0) e ja sao ignoradas por localizarKeywordNivelZero, mas um SQL com UNION ALL de
+      // nivel-zero teria mais de um SELECT valido; pegamos o ultimo, que e onde o
+      // agregado final (SUM...OVER + GROUP BY) sempre fica neste padrao de fluxo de caixa.
+      let posSelect = -1;
+      let cursor = 0;
+      for (;;) {
+        const pos = _localizarKeywordNivelZero(texto, 'SELECT', cursor);
+        if (pos < 0) break;
+        posSelect = pos;
+        cursor = pos + 6;
+      }
+      if (posSelect < 0) return null;
+      const selectFinal = texto.slice(posSelect);
+      const usaWindowAcumulada = /\bSUM\s*\([^)]*\)\s*OVER\s*\(/i.test(selectFinal);
+      if (!usaWindowAcumulada) return null;
+      const temGroupBy = _localizarKeywordNivelZero(selectFinal, 'GROUP', 0) >= 0;
+      if (!temGroupBy) return null;
+      return (
+        'SQL usa SUM(...) OVER (...) (window function de acumulo, tipica do fluxo de caixa projetado/saldo cumulativo) JUNTO com GROUP BY no SELECT FINAL (fora das CTEs). ' +
+        'Neste ambiente essa combinacao NAO gera erro — devolve silenciosamente ZERO linhas, mesmo com dado real disponivel. ' +
+        'Remova o GROUP BY do SELECT final: a CTE "fluxo" (ou equivalente) ja entrega uma linha por periodo, nao ha necessidade de agregar de novo nesse SELECT. GROUP BY dentro de CTEs internas (ex.: receber, pagar) continua correto e nao deve ser removido. ' +
+        'Siga exatamente o padrao dos exemplos corretos do fluxo de caixa projetado, que usam SUM(...) OVER (...) sem nenhum GROUP BY no SELECT final.'
+      );
+    },
+  },
+  {
+    // BUG REAL confirmado em producao (07/09/2026, PLANTIVO): esta validacao rejeitava SQL
+    // tecnicamente correto so porque a IA escreveu a condicao ON na ordem "SA6.A6_AGENCIA =
+    // SE8.E8_AGENCIA" (SA6 primeiro) em vez de "SE8.E8_AGENCIA = SA6.A6_AGENCIA" (SE8 primeiro)
+    // — logicamente identico, mas a regex antiga so aceitava uma das duas ordens. A regex
+    // abaixo aceita AMBAS as ordens dos operandos, para os dois campos da chave (agencia e
+    // conta), sem enfraquecer a checagem real (ainda exige que os dois campos existam no ON).
+    regex: /\bSE8\b(?=[\s\S]*?\bJOIN\s+\w+\s+SA6\b)(?![\s\S]*?\b(?:E8_AGENCIA\s*=\s*SA6\.A6_AGENCIA|SA6\.A6_AGENCIA\s*=\s*(?:SE8\.)?E8_AGENCIA)\b)/i,
+    mensagem: 'JOIN SE8→SA6 incompleto: falta E8_AGENCIA = SA6.A6_AGENCIA (em qualquer ordem) na condicao ON. Sem isso, o banco retorna zero linhas ou duplicidade por agencia.',
+  },
+  {
+    regex: /\bSE8\b(?=[\s\S]*?\bJOIN\s+\w+\s+SA6\b)(?![\s\S]*?\b(?:E8_CONTA\s*=\s*SA6\.A6_NUMCON|SA6\.A6_NUMCON\s*=\s*(?:SE8\.)?E8_CONTA)\b)/i,
+    mensagem: 'JOIN SE8→SA6 incompleto: falta E8_CONTA = SA6.A6_NUMCON (em qualquer ordem) na condicao ON. Sem isso, o banco retorna zero linhas ou duplicidade por conta.',
   },
   {
     // Bug real confirmado em producao: a IA gera JOIN SE1<->SE5 ou SE2<->SE5 sem a
@@ -557,6 +631,45 @@ const sqlPatternsProibidos = [
           'Consulta de titulos a receber em aberto (SE1.E1_SALDO > 0) sem filtro de SE1.E1_TIPO. ' +
           'NCC (nota de credito cliente) e RA (recebimento antecipado) sao movimentos de compensacao que distorcem o saldo real a receber quando misturados. ' +
           'Adicione AND SE1.E1_TIPO NOT IN (\'RA\', \'NCC\') ao WHERE, a menos que o usuario tenha pedido RA/NCC explicitamente.'
+        );
+      }
+      return null;
+    },
+  },
+  {
+    // Bug real confirmado em producao (intermitente, 2 de 3 tentativas): em vez de excluir
+    // RA/NCC/PA/NDF por NOT IN (padrao correto, guard acima), a IA as vezes filtra por
+    // IGUALDADE a um unico tipo (ex.: SE1.E1_TIPO = 'NM'). Isso EXCLUI silenciosamente
+    // titulos legitimos de outros tipos de movimento normais (ex.: NF), gerando saldo menor
+    // que o real ou ate 0 registros quando a base nao tem titulos exatamente desse tipo.
+    // So e valido quando o usuario pediu explicitamente aquele tipo especifico.
+    validar(sql, mensagem) {
+      const texto = String(mensagem || '');
+      // Mesmo padrao de reconhecimento textual do guard de exclusao NDF/NCC (acima): aceita
+      // tanto a sigla quanto a expressao em portugues equivalente — BUG REAL confirmado por
+      // teste de regressao (financeiro-antecipacao-pa-ra.test.js): "Total de pagamentos
+      // antecipados com saldo" nao contem a sigla "PA" no texto, so a expressao por extenso,
+      // e a versao anterior (so sigla) bloqueava esse pedido legitimo de isolar PA.
+      const pedeTipoExplicito = /\b(NM|NF|PA|NDF|RA|NCC)\b/i.test(texto)
+        || /\bpagamentos?\s+antecipados?\b/i.test(texto)
+        || /\brecebimentos?\s+antecipados?\b/i.test(texto)
+        || /\bnotas?\s+de\s+d[ée]bito\b/i.test(texto)
+        || /\bnotas?\s+de\s+cr[ée]dito\b/i.test(texto);
+
+      const matchPagar = sql.match(/\bSE2\s*\.\s*E2_TIPO\s*(?:=|IN\s*\()\s*'?([A-Z]{2,4})'?/i);
+      if (matchPagar && !pedeTipoExplicito) {
+        return (
+          `SQL usa SE2.E2_TIPO = '${matchPagar[1]}' — filtro de INCLUSAO de um unico tipo de movimento, sem pedido explicito do usuario para esse tipo. ` +
+          'Isso exclui silenciosamente titulos legitimos de outros tipos normais (ex.: NF), gerando saldo menor que o real ou zero registros. ' +
+          'Para consultas de saldo/posicao em aberto, o filtro correto e por EXCLUSAO: troque para AND SE2.E2_TIPO NOT IN (\'PA\', \'NDF\').'
+        );
+      }
+      const matchReceber = sql.match(/\bSE1\s*\.\s*E1_TIPO\s*(?:=|IN\s*\()\s*'?([A-Z]{2,4})'?/i);
+      if (matchReceber && !pedeTipoExplicito) {
+        return (
+          `SQL usa SE1.E1_TIPO = '${matchReceber[1]}' — filtro de INCLUSAO de um unico tipo de movimento, sem pedido explicito do usuario para esse tipo. ` +
+          'Isso exclui silenciosamente titulos legitimos de outros tipos normais (ex.: NF), gerando saldo menor que o real ou zero registros. ' +
+          'Para consultas de saldo/posicao em aberto, o filtro correto e por EXCLUSAO: troque para AND SE1.E1_TIPO NOT IN (\'RA\', \'NCC\').'
         );
       }
       return null;

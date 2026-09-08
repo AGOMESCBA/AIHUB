@@ -366,6 +366,23 @@ function precoMedioVenda() {
 `;
 }
 
+function markup() {
+  return `
+## Markup / margem de vendas ja realizadas — analise RETROATIVA (nao formacao de preco futuro)
+- "markup", "margem", "margem de lucro", "markup das vendas/faturamento" (sem contexto de "preco futuro", "quanto devo cobrar", "reajuste de tabela") = analise retroativa: comparar o que ja foi vendido (SD2.D2_TOTAL) contra o custo historico daquela venda (SD2.D2_CUSTO1). NAO use SB0 (tabela de precos sugeridos, sem custo) nem SB2/SB1 (custo atual de estoque/standard, servem para formacao de PRECO FUTURO, nao para markup do que ja vendeu).
+- SD2.D2_CUSTO1 = Custo Total da Mercadoria Vendida (CMV) historico, gravado no momento em que aquela nota foi faturada (ja e o total da linha, nao unitario — nao multiplique por D2_QUANT de novo).
+- FORMULAS (compare sempre contra D2_TOTAL, o valor de venda da mesma linha):
+  - Lucro bruto: SUM(SD2.D2_TOTAL) - SUM(SD2.D2_CUSTO1).
+  - Markup percentual (quanto o preco de venda supera o custo): CASE WHEN SUM(SD2.D2_CUSTO1) > 0 THEN ((SUM(SD2.D2_TOTAL) - SUM(SD2.D2_CUSTO1)) / SUM(SD2.D2_CUSTO1)) * 100 ELSE NULL END.
+  - Margem percentual (quanto do preco de venda e lucro): CASE WHEN SUM(SD2.D2_TOTAL) > 0 AND SUM(SD2.D2_CUSTO1) > 0 THEN ((SUM(SD2.D2_TOTAL) - SUM(SD2.D2_CUSTO1)) / SUM(SD2.D2_TOTAL)) * 100 ELSE NULL END. REGRA ABSOLUTA: a guarda "SUM(SD2.D2_CUSTO1) > 0" e OBRIGATORIA tambem na margem, nao so no markup — sem ela, custo zerado produz margem = 100% (falso positivo enganoso: parece "100% de lucro" quando na verdade e "sem dado de custo apurado"). Markup e margem sao formulas DIFERENTES (markup divide pelo custo, margem divide pela venda) — se a pergunta nao deixar claro qual das duas, calcule as duas e rotule cada uma corretamente.
+  - Sempre agregue com SUM antes de dividir (nunca AVG de uma razao por linha) — dividir por linha individual distorce o resultado quando o custo varia entre vendas do mesmo produto/periodo.
+- EXEMPLO — markup e margem do mes, por produto: SELECT SB1.B1_COD AS cod_produto, SB1.B1_DESC AS produto, SUM(SD2.D2_TOTAL) AS total_vendido, SUM(SD2.D2_CUSTO1) AS custo_total, CASE WHEN SUM(SD2.D2_CUSTO1) > 0 THEN ((SUM(SD2.D2_TOTAL) - SUM(SD2.D2_CUSTO1)) / SUM(SD2.D2_CUSTO1)) * 100 ELSE NULL END AS markup_percentual FROM SD2 SD2 JOIN SF2 SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SF2.D_E_L_E_T_ = ' ' JOIN SB1 SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' ' WHERE SD2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N' AND <filtro_periodo_em_SF2.F2_EMISSAO> GROUP BY SB1.B1_COD, SB1.B1_DESC.
+- TRANSPARENCIA OBRIGATORIA (resposta_planejada ou texto de acompanhamento, quando o SQL retornar 1 linha total): sempre mostre o total vendido (SUM(D2_TOTAL)) e o custo total (SUM(D2_CUSTO1)) apurados, ALEM do percentual — nunca mostre so o percentual isolado. Isso permite o usuario avaliar se o numero faz sentido, mesmo em casos anomalos.
+- Se SUM(SD2.D2_CUSTO1) vier ZERO para o periodo (empresa pode nao apurar custo no Protheus para essas notas), o markup/margem retornam NULL pela formula acima — quando isso acontecer, adicione um aviso textual explicito: "Nao foi possivel calcular o markup: o custo (D2_CUSTO1) nao esta apurado para essas vendas no Protheus." Nao omita o aviso nem troque a metrica por outra coisa (ex: preco medio) silenciosamente.
+- Se o custo total for MAIOR que o valor vendido (markup/margem NEGATIVOS), isso e um resultado valido tecnicamente mas incomum — inclua um aviso textual: "Atencao: o custo apurado (R$ X) e maior que o valor vendido (R$ Y) neste periodo, resultando em markup negativo. Isso pode refletir venda abaixo do custo, ou uma inconsistencia na apuracao de custo do periodo — vale confirmar com a area responsavel." Mostre o aviso, mas NAO recuse gerar a resposta nem troque os numeros.
+`;
+}
+
 function crescimento({ granularidade = 'mensal' } = {}) {
   const { tam, alias } = TRUNC_POR_GRANULARIDADE[granularidade] || TRUNC_POR_GRANULARIDADE.mensal;
   return `
@@ -461,6 +478,10 @@ const FRAGMENTOS = {
     texto: precoMedioVenda,
     keywords: [/\bpre[cç]o\s+m[eé]di[ao]\b/i, /\bvalor\s+m[eé]di[ao]\s+(por|de)\s+(unidade|kg|saco|tonelada|item)\b/i],
   },
+  markup: {
+    texto: markup,
+    keywords: [/\bmark[\s-]?up\b/i, /\bmargem\b/i],
+  },
   crescimento_diario: {
     texto: () => crescimento({ granularidade: 'diaria' }),
     keywords: [/\b(crescimento|varia[cç][aã]o|evolu[cç][aã]o|aumento|queda)\b.*\bdi[aá]ri[ao]\b|\bdi[aá]ri[ao]\b.*\b(crescimento|varia[cç][aã]o)\b/i, /\bdia\s+a\s+dia\b/i],
@@ -493,6 +514,7 @@ const ORDEM_FALLBACK = [
   'media_mensal',
   'media_anual',
   'preco_medio_venda',
+  'markup',
   'crescimento_diario',
   'crescimento_mensal',
   'crescimento_anual',

@@ -154,7 +154,8 @@ function receberPosicao() {
 - Saldo a receber/em aberto: SE1.E1_SALDO, com SE1.E1_SALDO > 0. Titulos com E1_SALDO = 0 ja foram recebidos — nunca os inclua em consultas de aberto. Vencimento SEMPRE SE1.E1_VENCREA — PROIBIDO usar SE1.E1_VENCTO. NAO filtre SE1.E1_SITUACA.
 - REGRA ABSOLUTA — valor do titulo em aberto: use SEMPRE SE1.E1_SALDO, NUNCA SE1.E1_VALOR. E1_VALOR e o valor ORIGINAL do titulo (na emissao); E1_SALDO e o que efetivamente falta receber apos baixas/pagamentos parciais. Isso vale tanto para SOMA agregada quanto para LISTAGEM individual de titulos (ex: titulo a titulo por vencimento) — usar E1_VALOR em titulo com baixa parcial exibe um valor maior do que realmente resta a receber.
 - Natureza financeira (categoria contabil do titulo, ex.: "vendas", "servicos", "aluguel" — NAO tem relacao com RA/NCC): SE1.E1_NATUREZ -> SED.ED_CODIGO.
-- REGRA ABSOLUTA — NDF/NCC nunca representam saldo real em aberto: exclua SEMPRE SE1.E1_TIPO IN ('RA', 'NCC') das consultas de saldo/posicao/em aberto por padrao, no WHERE. RA (recebimento antecipado) e NCC (nota de credito cliente) sao movimentos de compensacao, nao obrigacoes reais futuras — misturá-los distorce o saldo real a receber. So inclua RA ou NCC quando o usuario pedir EXPLICITAMENTE (ver secao "Antecipacoes PA/RA" e "Titulos especiais — NDF, NCC"). ATENCAO — NUNCA confunda com o campo acima: E1_TIPO identifica o TIPO DE MOVIMENTO do titulo (NM, RA, NCC, etc.); E1_NATUREZ e a categoria contabil (nao tem os valores 'RA'/'NCC'). O filtro de RA/NCC e SEMPRE em SE1.E1_TIPO, jamais em SE1.E1_NATUREZ.
+- REGRA ABSOLUTA — NDF/NCC nunca representam saldo real em aberto: exclua SEMPRE SE1.E1_TIPO IN ('RA', 'NCC') das consultas de saldo/posicao/em aberto por padrao, no WHERE. RA (recebimento antecipado) e NCC (nota de credito cliente) sao movimentos de compensacao, nao obrigacoes reais futuras — misturá-los distorce o saldo real a receber. So inclua RA ou NCC quando o usuario pedir EXPLICITAMENTE (ver secao "Antecipacoes PA/RA" e "Titulos especiais — NDF, NCC"). ATENCAO — NUNCA confunda com o campo acima: E1_TIPO identifica o TIPO DE MOVIMENTO do titulo; E1_NATUREZ e a categoria contabil (nao tem os valores 'RA'/'NCC'). O filtro de RA/NCC e SEMPRE em SE1.E1_TIPO, jamais em SE1.E1_NATUREZ.
+- REGRA ABSOLUTA — PROIBIDO filtrar E1_TIPO por igualdade a um unico valor (ex: SE1.E1_TIPO = 'NM') em consultas de posicao/em aberto sem o usuario ter pedido explicitamente esse tipo especifico. Isso EXCLUI silenciosamente titulos legitimos de outros tipos de movimento normais (ex: NF), gerando saldo menor que o real ou ate 0 registros quando a base nao tem titulos exatamente desse tipo. O filtro correto e SEMPRE por EXCLUSAO (NOT IN ('RA', 'NCC')), nunca por INCLUSAO de um tipo unico, salvo pedido explicito do usuario.
 - REGRA ABSOLUTA — periodo/data especifica em posicao/em aberto: filtre DIRETAMENTE SE1.E1_VENCREA (ex: SE1.E1_VENCREA = '20260629' ou BETWEEN). PROIBIDO fazer JOIN com a tabela de baixas/movimentos (SE5 ou equivalente) para aplicar filtro de data nesta operacao — baixas/movimentos sao da operacao "Contas a receber — realizado" (outro fragmento, dados JA PAGOS/RECEBIDOS), sem relacao com vencimento em aberto. Misturar E1_SALDO > 0 (saldo aberto) com filtro pela data de baixa produz resultado sem sentido de negocio.
 - saldo_a_receber: COALESCE(SUM(SE1.E1_SALDO),0) AS saldo_a_receber.
 - Agrupamento e granularidade sao decididos pela pergunta, sem padrao fixo. Exemplo por cliente: GROUP BY SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME.
@@ -299,6 +300,7 @@ function fluxoCaixaProjetado() {
 - Caso na pergunta do usuario esteja somente "fluxo de caixa" sem qualificador, entenda como fluxo de caixa projetado.
 - Fluxo de caixa projetado e operacao propria. Nao trate como simples contas a pagar/receber.
 - Fluxo de caixa projetado = saldo_bancario_base + saldo_a_receber_projetado - saldo_a_pagar_projetado. Fluxo projetado usa titulos em aberto: SE1.E1_SALDO > 0 e SE2.E2_SALDO > 0, por vencimento futuro/periodo solicitado. NUNCA use SE5/FK no fluxo projetado — SE5/FK sao baixas ja realizadas, nao projecao. Se o periodo projetado comecar antes da data atual, considere titulos a partir da data atual.
+- REGRA ABSOLUTA — exclua movimentos de compensacao/antecipacao: RA (recebimento antecipado) e NCC (nota de credito cliente) distorcem saldo_a_receber_projetado; PA (pagamento antecipado) e NDF (nota de debito fornecedor) distorcem saldo_a_pagar_projetado. Adicione SEMPRE AND SE1.E1_TIPO NOT IN ('RA', 'NCC') na CTE de receber e AND SE2.E2_TIPO NOT IN ('PA', 'NDF') na CTE de pagar — inclusive na CTE "datas" (UNION). So inclua esses tipos se o usuario pedir explicitamente RA/NCC/PA/NDF.
 - REGRA ABSOLUTA — calcule cada componente em CTE/subquery ESCALAR SEPARADA, sem JOIN entre elas: uma CTE/subquery para saldo_bancario_base (SE8+SA6), outra para saldo_a_receber_projetado (SUM de SE1.E1_SALDO agrupado por data de vencimento, se detalhado por periodo), outra para saldo_a_pagar_projetado (SUM de SE2.E2_SALDO agrupado por data de vencimento). PROIBIDO fazer JOIN entre SE8 e SE1/SE2 — nao existe chave relacional entre saldo bancario (numero de conta) e titulos (data de vencimento). Combine os componentes apenas no SELECT final, por data quando detalhado por dia/mes, ou em uma unica linha quando sintetico.
 - Datas SEMPRE no formato Protheus CHAR(8) YYYYMMDD (ex: '20260622'). PROIBIDO usar formato 'YYYY-MM-DD' ou CONVERT/CAST para DATE em comparacoes — os campos de data do Protheus sao strings YYYYMMDD, comparacao deve ser feita como string.
 - O periodo (dia, mes, ano, ou intervalo arbitrario) e definido pela pergunta do usuario e deve ser aplicado de forma CONSISTENTE as fontes envolvidas — nunca calcule saldo bancario em uma data e receber/pagar em outra data diferente.
@@ -307,6 +309,7 @@ function fluxoCaixaProjetado() {
 - Se SE8/SA6 nao estiverem disponiveis, retorne os componentes disponiveis e use saldo_bancario_base = 0 apenas deixando claro pelo alias que faltou saldo bancario.
 - Granularidade da resposta (decidida pela pergunta do usuario, nao fixada aqui): sintetico = 1 linha com os componentes; por fornecedor/cliente = decompoe o lado a pagar OU a receber por entidade, mantendo saldo bancario como referencia unica (nao duplicada por entidade); por titulo = lista linha a linha sem agregacao.
 - REGRA OBRIGATORIA — projecao por dia/mes (multiplas linhas): o saldo bancario projetado e CUMULATIVO ao longo do periodo, NUNCA o mesmo valor fixo repetido em todas as linhas. O fluxo_liquido de cada linha deve se somar ao saldo acumulado das linhas anteriores, nao sempre ao saldo_bancario_base original. Use SUM(total_a_receber - total_a_pagar) OVER (ORDER BY data_ref) para calcular o delta acumulado, e some saldo_bancario_base a esse acumulado: saldo_projetado_na_data = saldo_bancario_base + SUM(total_a_receber - total_a_pagar) OVER (ORDER BY data_ref ROWS UNBOUNDED PRECEDING). PROIBIDO fazer CROSS JOIN do saldo_bancario_base fixo em cada linha sem acumular o delta das linhas anteriores — isso faz cada mes/dia parecer uma projecao isolada do saldo de hoje, em vez de uma projecao progressiva.
+- REGRA ABSOLUTA — PROIBIDO GROUP BY no SELECT final (o que faz o SUM(...) OVER(...) acima): a CTE "fluxo" ja entrega exatamente uma linha por dia/mes/periodo, entao o SELECT final que combina fluxo com saldo_base NUNCA precisa de GROUP BY — so precisa de FROM fluxo CROSS JOIN saldo_base ORDER BY. Adicionar GROUP BY nesse SELECT final nao gera erro de sintaxe neste ambiente, mas devolve silenciosamente ZERO linhas (bug confirmado do motor SQL). Isso NAO se aplica as CTEs internas "receber"/"pagar", que continuam usando GROUP BY normalmente — a proibicao e SOMENTE no ultimo SELECT do SQL, apos a ultima CTE.
 - REGRA ABSOLUTA — nomenclatura do alias de data/competencia no SELECT final: quando detalhado por dia, use AS dia (valor YYYYMMDD). Quando detalhado por mes, use AS competencia (valor YYYYMM, formato SUBSTRING(campo,1,6)) — NUNCA use o alias "mes" sozinho. O formatador de WhatsApp identifica a coluna "mes" apenas quando o valor e um numero de 1 a 12 (mes do calendario); um valor YYYYMM com alias "mes" e mal interpretado e quebra a quebra por linha da resposta.
 - PROIBIDO usar SE5/FK no fluxo de caixa projetado.
 - PROIBIDO usar FULL OUTER JOIN em qualquer hipotese (nao suportado neste ambiente). Para combinar datas de receber e pagar que podem nao coincidir (ex: detalhado por dia/mes), use uma CTE "datas" com UNION das datas distintas de cada lado, e LEFT JOIN dessa CTE para receber e pagar — nunca JOIN direto entre as duas subqueries de receber/pagar.
@@ -325,20 +328,20 @@ saldo_base AS (
   SELECT COALESCE(SUM(E8_SALATUA), 0) AS saldo_bancario_base FROM saldo_recente WHERE rn = 1
 ),
 datas AS (
-  SELECT DISTINCT E1_VENCREA AS data_ref FROM SE1xxx WHERE D_E_L_E_T_ = ' ' AND E1_SALDO > 0 AND E1_VENCREA BETWEEN '20260622' AND '20260722'
+  SELECT DISTINCT E1_VENCREA AS data_ref FROM SE1xxx WHERE D_E_L_E_T_ = ' ' AND E1_SALDO > 0 AND E1_TIPO NOT IN ('RA', 'NCC') AND E1_VENCREA BETWEEN '20260622' AND '20260722'
   UNION
-  SELECT DISTINCT E2_VENCREA FROM SE2xxx WHERE D_E_L_E_T_ = ' ' AND E2_SALDO > 0 AND E2_VENCREA BETWEEN '20260622' AND '20260722'
+  SELECT DISTINCT E2_VENCREA FROM SE2xxx WHERE D_E_L_E_T_ = ' ' AND E2_SALDO > 0 AND E2_TIPO NOT IN ('PA', 'NDF') AND E2_VENCREA BETWEEN '20260622' AND '20260722'
 ),
 receber AS (
   SELECT SE1.E1_VENCREA AS data_ref, COALESCE(SUM(SE1.E1_SALDO), 0) AS total_a_receber
   FROM SE1xxx SE1
-  WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_SALDO > 0 AND SE1.E1_VENCREA BETWEEN '20260622' AND '20260722'
+  WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_SALDO > 0 AND SE1.E1_TIPO NOT IN ('RA', 'NCC') AND SE1.E1_VENCREA BETWEEN '20260622' AND '20260722'
   GROUP BY SE1.E1_VENCREA
 ),
 pagar AS (
   SELECT SE2.E2_VENCREA AS data_ref, COALESCE(SUM(SE2.E2_SALDO), 0) AS total_a_pagar
   FROM SE2xxx SE2
-  WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 AND SE2.E2_VENCREA BETWEEN '20260622' AND '20260722'
+  WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 AND SE2.E2_TIPO NOT IN ('PA', 'NDF') AND SE2.E2_VENCREA BETWEEN '20260622' AND '20260722'
   GROUP BY SE2.E2_VENCREA
 ),
 fluxo AS (
@@ -373,20 +376,20 @@ saldo_base AS (
   SELECT COALESCE(SUM(E8_SALATUA), 0) AS saldo_bancario_base FROM saldo_recente WHERE rn = 1
 ),
 datas AS (
-  SELECT DISTINCT SUBSTRING(E1_VENCREA, 1, 6) AS competencia FROM SE1xxx WHERE D_E_L_E_T_ = ' ' AND E1_SALDO > 0 AND E1_VENCREA BETWEEN '20260622' AND '20260920'
+  SELECT DISTINCT SUBSTRING(E1_VENCREA, 1, 6) AS competencia FROM SE1xxx WHERE D_E_L_E_T_ = ' ' AND E1_SALDO > 0 AND E1_TIPO NOT IN ('RA', 'NCC') AND E1_VENCREA BETWEEN '20260622' AND '20260920'
   UNION
-  SELECT DISTINCT SUBSTRING(E2_VENCREA, 1, 6) FROM SE2xxx WHERE D_E_L_E_T_ = ' ' AND E2_SALDO > 0 AND E2_VENCREA BETWEEN '20260622' AND '20260920'
+  SELECT DISTINCT SUBSTRING(E2_VENCREA, 1, 6) FROM SE2xxx WHERE D_E_L_E_T_ = ' ' AND E2_SALDO > 0 AND E2_TIPO NOT IN ('PA', 'NDF') AND E2_VENCREA BETWEEN '20260622' AND '20260920'
 ),
 receber AS (
   SELECT SUBSTRING(SE1.E1_VENCREA, 1, 6) AS competencia, COALESCE(SUM(SE1.E1_SALDO), 0) AS total_a_receber
   FROM SE1xxx SE1
-  WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_SALDO > 0 AND SE1.E1_VENCREA BETWEEN '20260622' AND '20260920'
+  WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_SALDO > 0 AND SE1.E1_TIPO NOT IN ('RA', 'NCC') AND SE1.E1_VENCREA BETWEEN '20260622' AND '20260920'
   GROUP BY SUBSTRING(SE1.E1_VENCREA, 1, 6)
 ),
 pagar AS (
   SELECT SUBSTRING(SE2.E2_VENCREA, 1, 6) AS competencia, COALESCE(SUM(SE2.E2_SALDO), 0) AS total_a_pagar
   FROM SE2xxx SE2
-  WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 AND SE2.E2_VENCREA BETWEEN '20260622' AND '20260920'
+  WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 AND SE2.E2_TIPO NOT IN ('PA', 'NDF') AND SE2.E2_VENCREA BETWEEN '20260622' AND '20260920'
   GROUP BY SUBSTRING(SE2.E2_VENCREA, 1, 6)
 ),
 fluxo AS (

@@ -849,6 +849,37 @@ function addAvisoNaoSomavel(linhas, metricas = []) {
   linhas.push(`_Obs.: ${alvo} nao foi somado por ser indicador nao somavel._`);
 }
 
+// Achado real (07/09/2026): a instrucao do spec pedia para a IA escrever um aviso textual
+// quando o custo (D2_CUSTO1) vem zerado (markup nao calculavel) ou quando o custo supera o
+// valor vendido (markup negativo, resultado tecnicamente valido mas incomum) — mas a IA nem
+// sempre preenche "resposta_planejada" com esse aviso (decisao dela, nao garantida). Em vez de
+// depender do texto livre da IA, o formatador determinístico adiciona o aviso.
+// Recebe `rows` (dados brutos), NAO shape.metricas: quando o custo vem zerado, a formula SQL
+// (CASE WHEN SUM(D2_CUSTO1) > 0 ...) retorna markup_percentual/margem_percentual como NULL, e
+// detectarShape() DESCARTA colunas totalmente nulas de shape.metricas — checar so o shape
+// filtrado faria este aviso nunca disparar justamente no caso mais importante (custo ausente).
+function addAvisoMarkup(linhas, rows = [], totais = {}) {
+  const primeira = rows?.[0];
+  if (!primeira || typeof primeira !== 'object') return;
+  const chaves = Object.keys(primeira);
+  const temMarkup = chaves.some(k => /^markup_percentual$|^margem_percentual$/i.test(keyNorm(k)));
+  if (!temMarkup) return;
+  const colCusto = chaves.find(k => /^custo_total$/i.test(keyNorm(k)));
+  const colVenda = chaves.find(k => /^total_vendid[oa]$/i.test(keyNorm(k)));
+  if (!colCusto) return;
+  const custo = toNumber(totais[colCusto] ?? primeira[colCusto]);
+  if (!(custo > 0)) {
+    linhas.push('_Aviso: nao foi possivel calcular o markup — o custo (D2_CUSTO1) nao esta apurado para essas vendas no Protheus._');
+    return;
+  }
+  if (colVenda) {
+    const venda = toNumber(totais[colVenda] ?? primeira[colVenda]);
+    if (venda > 0 && custo > venda) {
+      linhas.push(`_Atencao: o custo apurado (${brl(custo)}) e maior que o valor vendido (${brl(venda)}) neste periodo, resultando em markup negativo. Pode refletir venda abaixo do custo ou inconsistencia na apuracao — vale confirmar com a area responsavel._`);
+    }
+  }
+}
+
 function valsMetricas(totais, metricas) {
   return metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
 }
@@ -1881,12 +1912,14 @@ function renderSingle(rows, opts = {}) {
     linhas.push('');
     if (!resultado && !metricasTotal.length) {
       addAvisoNaoSomavel(linhas, shape.metricas);
+      addAvisoMarkup(linhas, rows, totais);
       return linhas.join('\n');
     }
     const totalStr = resultado
       ? brl(resultado.valor)
       : metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
     linhas.push(`*Total Geral*: ${totalStr}`);
+    addAvisoMarkup(linhas, rows, totais);
     return linhas.join('\n');
   }
 
