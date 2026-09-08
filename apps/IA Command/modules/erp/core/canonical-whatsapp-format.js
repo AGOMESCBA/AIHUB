@@ -607,6 +607,7 @@ function ordemDimensoesPedidas(opts = {}) {
     { canon: 'numero_pedido', re: /\bnumero\s+d[oa]\s+pedido(?:\s+de\s+compra)?\b|\bpedido(?:\s+de\s+compra)?\b/g },
     { canon: 'documento', re: /\bdocumento\b|\bnota\s+fiscal\b|\bnf\b|\btitulo\b|\bduplicata\b/g },
     { canon: 'cliente', re: /\bcliente\b/g },
+    { canon: 'aguardando_retorno', re: /\baguardando\s+retorno\b|\bretorno\b/g },
     { canon: 'analista', re: /\banalista\b/g },
     { canon: 'fornecedor', re: /\bfornecedor\b/g },
     { canon: 'vendedor', re: /\bvendedor\b/g },
@@ -730,6 +731,7 @@ function dimensaoAtendeCanon(dim, canon) {
   if (canon === 'numero_pedido') return /^(pedido|numero_pedido|num_pedido|cr_num|c7_num)$/.test(k);
   if (canon === 'documento') return isDocumento(dim);
   if (canon === 'aprovador') return /^aprovador|^cr_aprov$|^ak_cod$|^ak_nome$/.test(k);
+  if (canon === 'aguardando_retorno') return /^(aguardando_retorno|aguardando|retorno|status_retorno)$/.test(k);
   if (canon === 'analista') return /^(analista|nome_analista)$/.test(k);
   return k === canon || k.startsWith(`${canon}_`) || k.endsWith(`_${canon}`);
 }
@@ -756,6 +758,13 @@ function hierarquiaExplicitaMultinivel(dimensoes, opts = {}) {
     const ordemPedido = ordemDimensoesPedidas(opts);
     if (ordemPedido.length < 3) return null;
   }
+  const ordemPedido = ordemDimensoesPedidas(opts);
+  if (
+    ordemPedido.length === 3
+    && ordenadas.length === 3
+    && !ordenadas.some(isTemporal)
+    && !ordenadas.some(isDocumento)
+  ) return ordenadas;
   if (!ordenadas.some(isTemporal) || !ordenadas.some(isDocumento)) return null;
   if (isTemporal(ordenadas[0])) return null;
   return ordenadas;

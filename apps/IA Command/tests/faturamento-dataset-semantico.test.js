@@ -10,6 +10,7 @@ const camposPermitidos = ['F2_EMISSAO', 'D2_TOTAL', 'A1_NOME'];
 const camposChamados = [
   { coluna: 'chamado', tipo: 'identificador', descricao: 'Numero do chamado.' },
   { coluna: 'empresa_cliente', tipo: 'dimensao', descricao: 'Cliente.', agrupavel: 1 },
+  { coluna: 'aguardando_retorno', tipo: 'dimensao', descricao: 'Status de aguardando retorno.', agrupavel: 1 },
   { coluna: 'nome_analista', tipo: 'dimensao', descricao: 'Analista.', agrupavel: 1 },
 ];
 
@@ -90,6 +91,7 @@ const promptChamados = runner._test._buildSystemPrompt(
 );
 assert(promptChamados.includes('PROIBIDO usar total_* para COUNT'), 'prompt deve proibir total_* em COUNT');
 assert(promptChamados.includes('COUNT(chamado) AS qtd_chamados'), 'prompt deve orientar qtd_* para chamados');
+assert(promptChamados.includes('Nao transforme em Sim/Nao'), 'prompt deve preservar categorias reais de aguardando retorno');
 
 const sqlCountTotal = `
 SELECT TOP 10000 empresa_cliente, nome_analista, COUNT(chamado) AS total_chamados, COUNT(DISTINCT empresa_cliente) AS total_clientes, COUNT(*) AS total

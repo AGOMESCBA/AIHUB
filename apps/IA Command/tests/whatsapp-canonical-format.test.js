@@ -222,6 +222,29 @@ ok('chamados em atraso: agrupa por cliente e analista sem formatar contagem como
   assert.ok(!texto.includes('R$'), texto);
 });
 
+ok('chamados em atraso: agrupa por cliente, aguardando retorno e analista', () => {
+  const rows = [
+    { empresa_cliente: 'CAIEIRA', aguardando_retorno: 'RETORNO - CLIENTE', nome_analista: 'Kelbyr Cruz', qtd_chamados: 2 },
+    { empresa_cliente: 'CAIEIRA', aguardando_retorno: 'RETORNO - ATENDENTE', nome_analista: 'Lucas Jordan Souza', qtd_chamados: 1 },
+    { empresa_cliente: 'COABRA', aguardando_retorno: 'RETORNO - FORNECEDOR', nome_analista: 'Edson Assis', qtd_chamados: 1 },
+  ];
+  const shape = canonical.detectarShape(rows, {
+    mensagem: 'Chamados em atraso agrupados por cliente, aguardando retorno e analista',
+  });
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Chamados',
+    contextoConsulta: 'Chamados em atraso agrupados por cliente, aguardando retorno e analista',
+  });
+
+  assert.strictEqual(shape.tipo, 'detalhe_multidimensional');
+  assert.deepStrictEqual(shape.dimensoes, ['empresa_cliente', 'aguardando_retorno', 'nome_analista']);
+  assert.ok(texto.includes('*Detalhamento por Cliente, Aguardando Retorno, Analista*'), texto);
+  assert.ok(/CAIEIRA[\s\S]*RETORNO - CLIENTE[\s\S]*Kelbyr Cruz: Qtd Chamados: \*2\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Qtd Chamados: \*4\*/.test(texto), texto);
+  assert.ok(!/\bSim\b|\bN[ãa]o\b/i.test(texto), texto);
+  assert.ok(!texto.includes('R$'), texto);
+});
+
 ok('faturamento do dia: usa emissao unica como contexto e nao interpreta filial como mes', () => {
   const rows = [
     { emissao: '20260824', filial: '010101', cliente: 'AGRICOLA D S F LTDA', vlr_total: 6635 },

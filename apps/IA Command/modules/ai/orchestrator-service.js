@@ -47,22 +47,48 @@ function _intencaoPorModulo(modulo, intencoes = []) {
   return registro?.nome || (MODULOS_DINAMICOS.has(alvo) ? `${alvo}_dinamico` : null);
 }
 
+// Bug real confirmado em producao (08/09/2026): esta funcao so removia separadores
+// (replace(/\D/g, '')), assumindo que a IA sempre responde data em ordem YYYY-MM-DD/YYYYMMDD.
+// Quando a IA responde no formato brasileiro DD/MM/YYYY (ex: "01/01/2026", visto ao resolver
+// "do ano" apos reforcar o prompt de periodo), a remocao ingenua produzia "01012026" —
+// dia e ano invertidos — em vez de "20260101". Detecta o formato DD/MM/YYYY (ou DD-MM-YYYY)
+// explicitamente e reordena antes de aplicar a mesma limpeza de separadores nos demais casos.
+function _normalizarDataPeriodo(valor) {
+  const s = String(valor || '').trim();
+  const mBr = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (mBr) {
+    const [, dd, mm, yyyy] = mBr;
+    return `${yyyy}${mm.padStart(2, '0')}${dd.padStart(2, '0')}`;
+  }
+  return s.replace(/\D/g, '');
+}
+
 function _normalizarPeriodo(periodo = {}) {
   const tipo = String(periodo?.tipo || 'nenhum').trim() || 'nenhum';
   const dataInicio = periodo?.dataInicio || periodo?.data_inicio || null;
   const dataFim = periodo?.dataFim || periodo?.data_fim || null;
   return {
     tipo,
-    ...(dataInicio ? { dataInicio: String(dataInicio).replace(/\D/g, '') } : {}),
-    ...(dataFim ? { dataFim: String(dataFim).replace(/\D/g, '') } : {}),
+    ...(dataInicio ? { dataInicio: _normalizarDataPeriodo(dataInicio) } : {}),
+    ...(dataFim ? { dataFim: _normalizarDataPeriodo(dataFim) } : {}),
   };
 }
 
+// Bug real confirmado em producao (08/09/2026): "Faturamento do ano por mes" (e qualquer
+// variante "do ano"/"no ano"/"deste ano" combinada com "por mes"/"por ano") zerava
+// intent.periodo inteiro para {tipo:'nenhum'} em _corrigirPeriodoAgrupamento — porque "do
+// ano" sozinho nao batia em nenhuma ancora aqui (so reconhecia ano numerico tipo 2025, mes
+// por extenso, ou "ano atual"/"ano passado" com a palavra extra). Isso descartava o periodo
+// que a IA principal ja tinha calculado corretamente (dataInicio/dataFim do ano corrente),
+// afetando qualquer intencao ai_text_to_sql com esse padrao de frase, nao so analise
+// horizontal — "do ano"/"no ano"/"deste ano"/"desse ano" sao referencias temporais explicitas
+// tao validas quanto "ano atual", so com uma preposicao diferente.
 function _temDataExplicita(mensagem = '') {
   const texto = _normalizarTexto(mensagem);
   return /\b(?:19|20)\d{2}\b/.test(texto)
     || /\b(janeiro|fevereiro|marco|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/.test(texto)
-    || /\b(hoje|ontem|semana|mes atual|m[eê]s atual|mes passado|m[eê]s passado|ano atual|ano passado|periodo|per[ií]odo)\b/.test(texto);
+    || /\b(hoje|ontem|semana|mes atual|m[eê]s atual|mes passado|m[eê]s passado|ano atual|ano passado|periodo|per[ií]odo)\b/.test(texto)
+    || /\b(?:do|no|deste|desse|neste|nesse)\s+ano\b/.test(texto);
 }
 
 function _corrigirPeriodoAgrupamento({ periodo, agrupamentos, mensagem } = {}) {
@@ -400,7 +426,7 @@ function buildSystemPrompt() {
     '- Nao reinterprete historico antigo por texto livre quando existir contrato_orquestrador: prefira o contrato estruturado.',
     '- Se a pergunta atual trouxer novo periodo/filtro/modulo, ela prevalece sobre o historico.',
     '- Nao herde contexto quando a pergunta atual trocar explicitamente de assunto ou dominio.',
-    '- "por ano" e "por mes" normalmente sao agrupamentos, nao periodos, salvo quando houver ano/mes/data explicitos.',
+    '- "por ano" e "por mes" normalmente sao agrupamentos, nao periodos, salvo quando houver ano/mes/data explicitos. IMPORTANTE: "do ano"/"deste ano"/"no ano" e uma referencia de PERIODO explicita (o ano corrente) mesmo sem numero — nesse caso preencha periodo com o ano corrente completo (dataInicio=01/01, dataFim=31/12 do ano atual) E adicione "mes" a agrupamentos quando a pergunta tambem pedir "por mes"/"mes a mes" — as duas coisas coexistem, uma nao anula a outra.',
     '- Se houver duvida real, marque precisa_confirmacao=true.',
     '- REGRA CRITICA DE DATA: use SEMPRE o campo "data_atual" do user prompt como ancora para calculos de ano. NUNCA use anos de treinamento. "ultimos 3 anos" com data_atual=2026 = anos 2024, 2025, 2026. Quando gerar filtros.anos ou qualquer lista de anos, calcule a partir de data_atual.',
     '- REGRA filtros.empresa — QUANDO USAR: gere filtros.empresa SOMENTE quando o usuario escrever explicitamente a palavra "empresa(s)" seguida de um nome na mensagem atual (ex: "empresa C3I", "empresa J2A"). Esse campo identifica uma empresa-canal IAHub (tenant/escopo de execucao), nao e um cliente cadastral.',
@@ -464,7 +490,14 @@ function buildUserPrompt({ mensagem, historicoResumido, contextoAnterior, intenc
       termo: conceitoAnalitico.termo,
       definicao_tecnica: conceitoAnalitico.definicaoTecnica,
     };
-    payload.instrucao_conceito_analitico = `O termo "${conceitoAnalitico.termo}" ja foi definido tecnicamente (ver campo conceito_analitico_resolvido) — isso NAO e mais uma incerteza. Escolha o modulo principal da pergunta normalmente; se a pergunta cruzar dois modulos (ex: vendas e compras), escolha o modulo que e o sujeito principal da analise e NAO reduza a confianca por causa disso — o cruzamento entre modulos e resolvido em uma etapa posterior do sistema, fora do seu escopo aqui.`;
+    // Bug real confirmado em producao (08/09/2026): a definicao tecnica de "analise
+    // horizontal" menciona "apresentados mes a mes" (linguagem do CALCULO, para a IA que gera
+    // SQL depois) — mas essa MESMA frase, lida aqui pela IA que classifica modulo/periodo,
+    // fazia ela devolver periodo={tipo:'nenhum'} e agrupamentos=['mes'] mesmo quando a
+    // pergunta original nao pedia agrupamento nenhum (ex: "Analise horizontal das vendas do
+    // ano", sem "por mes"). Reforca explicitamente que periodo/agrupamentos continuam
+    // decididos SOMENTE pela pergunta do usuario, nunca pela definicao tecnica do conceito.
+    payload.instrucao_conceito_analitico = `O termo "${conceitoAnalitico.termo}" ja foi definido tecnicamente (ver campo conceito_analitico_resolvido) — isso NAO e mais uma incerteza. Escolha o modulo principal da pergunta normalmente; se a pergunta cruzar dois modulos (ex: vendas e compras), escolha o modulo que e o sujeito principal da analise e NAO reduza a confianca por causa disso — o cruzamento entre modulos e resolvido em uma etapa posterior do sistema, fora do seu escopo aqui. IMPORTANTE: a definicao tecnica descreve COMO O CALCULO funciona (uma etapa posterior, fora do seu escopo aqui) — ela pode mencionar "mes a mes" ou "por mes" como parte da explicacao do conceito, mas isso NAO significa que a PERGUNTA do usuario pediu agrupamento por mes. Decida periodo e agrupamentos SOMENTE pelo texto literal da pergunta do usuario, exatamente como faria para qualquer outra pergunta sem conceito analitico — nunca infira agrupamento ou ausencia de periodo a partir do texto da definicao tecnica.`;
   }
   return JSON.stringify(payload);
 }

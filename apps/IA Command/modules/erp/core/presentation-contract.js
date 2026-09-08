@@ -22,6 +22,7 @@ const DIMENSIONS = [
   { canon: 'fornecedor', label: 'Fornecedor', aliases: ['fornecedor', 'fornec', 'nome_fornecedor', 'e2_fornece', 'a2_nome'] },
   { canon: 'aprovador', label: 'Aprovador', aliases: ['aprovador', 'nome_aprovador', 'cr_aprov', 'ak_nome'] },
   { canon: 'cliente', label: 'Cliente', aliases: ['cliente', 'nome_cliente', 'empresa_cliente', 'a1_nome', 'a1_nreduz', 'id_cliente', 'cliente_id', 'e1_cliente'] },
+  { canon: 'aguardando_retorno', label: 'Aguardando Retorno', aliases: ['aguardando_retorno', 'aguardando', 'retorno', 'status_retorno'] },
   { canon: 'analista', label: 'Analista', aliases: ['analista', 'nome_analista'] },
   { canon: 'filial', label: 'Filial', aliases: ['filial', 'e1_filial', 'e2_filial'] },
   { canon: 'prefixo', label: 'Prefixo', aliases: ['prefixo', 'e1_prefixo', 'e2_prefixo'] },

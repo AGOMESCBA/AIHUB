@@ -230,6 +230,7 @@ function _buildSystemPrompt(dataset, { campos, metricas, campoData, suboperacaoD
     instrucaoFiltroMes,
     '- Quando a pergunta pedir agrupamento por cliente/produto/vendedor, mantenha o filtro de periodo solicitado; agrupamento nunca substitui filtro de periodo.',
     '- Quando a pergunta pedir agrupamento por cliente e existir campo de nome/razao social do cliente (ex: empresa_cliente, nome_cliente, A1_NOME, A1_NREDUZ), use esse campo como dimensao principal. Use id/codigo do cliente apenas se nao houver nome ou se a pergunta pedir explicitamente o codigo.',
+    '- Quando a pergunta pedir "aguardando retorno", "retorno" ou "por aguardando", use a coluna categórica aguardando_retorno quando existir. Nao transforme em Sim/Nao; preserve valores como RETORNO - CLIENTE, RETORNO - ATENDENTE e RETORNO - FORNECEDOR.',
     instrucaoAgrupamentoMes,
     '- Em consultas com UNION ALL, cada SELECT deve estar sintaticamente completo antes do UNION. Feche funcoes no GROUP BY, por exemplo: GROUP BY SUBSTRING(F2_EMISSAO, 1, 6).',
     '- Para metricas somadas, use COALESCE(SUM(campo), 0) para retornar zero quando nao houver movimentos.',
