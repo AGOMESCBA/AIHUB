@@ -9,6 +9,7 @@ const crud = require('../database/crud');
 const connectionFactory = require('../erp/providers/connection-factory');
 const semanticDatasetRunner = require('../erp/core/semantic-dataset-ai-runner');
 const temporalContract = require('../erp/core/temporal-contract');
+const canonicalWhatsappFormat = require('../erp/core/canonical-whatsapp-format');
 
 const SQL_HANDLERS = {
   compras: require('../erp/totvs_protheus/compras/ai-sql-handler-v2'),
@@ -406,11 +407,33 @@ function _erpDoModulo(empresaId, modulo) {
 
 const SQL_FIXO_GENERICO_LIMITE_LINHAS = 30;
 
+function _contextoAgrupamentoSqlFixo(rows, titulo) {
+  const first = Array.isArray(rows) && rows.length ? rows[0] : null;
+  if (!first) return titulo;
+  const cols = Object.keys(first);
+  const dimsChamados = ['aguardando_retorno', 'empresa_cliente', 'nome_analista']
+    .filter(col => cols.includes(col));
+  if (dimsChamados.length >= 3) {
+    return `${titulo || 'Consulta agendada'} agrupados por aguardando retorno, cliente e por analista`;
+  }
+  return titulo;
+}
+
 // Formata o resultado do SQL fixo generico como listagem linha a linha, sem somar colunas
 // (diferente de formatarAiSqlLocal, feito para agregacoes da IA sem GROUP BY explicito).
 // SQL fixo e escrito pelo proprio admin com colunas ja nomeadas para leitura — cada linha do
 // resultado e um registro distinto (ex: um chamado), nao uma metrica a ser consolidada.
 function _formatarSqlFixoGenerico(rows, titulo) {
+  const contexto = _contextoAgrupamentoSqlFixo(rows, titulo);
+  try {
+    const canonico = canonicalWhatsappFormat.renderSingle(rows, {
+      contextoConsulta: contexto,
+      mensagem: contexto,
+      nomeModulo: 'Chamados',
+    });
+    if (canonico) return canonico;
+  } catch (_) {}
+
   try {
     return semanticDatasetRunner.formatarRespostaSemantica(rows, titulo);
   } catch (_) {}
@@ -591,8 +614,8 @@ function _executarViaWorker(workerPort, empresaId, numero, pergunta, jobNome, mo
   return _postWorker(workerPort, '/scheduled-question', { empresaId, numero, pergunta, jobNome, modulo });
 }
 
-function _enviarViaWorker(workerPort, empresaId, numero, resposta, ok, jobNome) {
-  return _postWorker(workerPort, '/send-message', { empresaId, numero, resposta, ok, jobNome }, 30000);
+function _enviarViaWorker(workerPort, empresaId, numero, resposta, ok, jobNome, preservarLayout = false) {
+  return _postWorker(workerPort, '/send-message', { empresaId, numero, resposta, ok, jobNome, preservarLayout }, 30000);
 }
 
 async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 'sistema' } = {}) {
@@ -627,7 +650,7 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
             const resultadoDest = sqlTemMacroDestinatario(sqlFixo(job))
               ? await executarSqlFixoUmaVez(empresaId, job, [dest])
               : (resultado || (resultado = await executarSqlFixoUmaVez(empresaId, job, destinatarios)));
-            await _enviarViaWorker(canal.worker_port, empresaId, dest.numero, resultadoDest.resposta, resultadoDest.ok, job.nome);
+            await _enviarViaWorker(canal.worker_port, empresaId, dest.numero, resultadoDest.resposta, resultadoDest.ok, job.nome, true);
             if (resultadoDest.ok === false) falhas++;
             else sucessos++;
             resumo.push(`${dest.nome || dest.numero}: ${resultadoDest.ok === false ? (resultadoDest.error_detail || 'executado com erro na consulta') : 'enviado'}`);
@@ -750,6 +773,7 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
         ok: resultadoDest.ok,
         rows: resultadoDest.rows || null,
         intent: resultadoDest.intent || null,
+        preservarLayout: true,
       });
       if (resultadoDest.ok === false) falhas++;
       else sucessos++;
@@ -799,6 +823,7 @@ module.exports = {
     validarSqlFixoBasico,
     erroSqlFixoPermiteRetryIA,
     tentarRetryIaAposSqlFixo,
+    _formatarSqlFixoGenerico,
     macrosDataSql,
     resolverMacroDataSql,
     resolverMacroDestinatarioSql,

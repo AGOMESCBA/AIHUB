@@ -122,6 +122,44 @@ const crud = require('../modules/database/crud');
     crud.listar = listarOriginal;
   }
 
+  const respostaChamadosAgendamento = scheduledRunner._test._formatarSqlFixoGenerico([
+    { aguardando_retorno: 'RETORNO - ATENDENTE', empresa_cliente: 'COABRA', nome_analista: 'Edson Assis', qtd_chamados: 1 },
+    { aguardando_retorno: 'RETORNO - ATENDENTE', empresa_cliente: 'COABRA', nome_analista: 'Maria Eduarda Almeida', qtd_chamados: 1 },
+    { aguardando_retorno: 'RETORNO - CLIENTE', empresa_cliente: 'CAIEIRA', nome_analista: 'Lucas Jordan Souza', qtd_chamados: 1 },
+  ], 'Chamados em atraso Aguardando Retorno');
+  assert.ok(
+    respostaChamadosAgendamento.includes('Detalhamento por Aguardando Retorno, Cliente, Analista'),
+    respostaChamadosAgendamento,
+  );
+  assert.ok(
+    respostaChamadosAgendamento.includes('📋 *Detalhamento por Aguardando Retorno, Cliente, Analista*\n\n🔖 *Aguardando Retorno: RETORNO - ATENDENTE*'),
+    respostaChamadosAgendamento,
+  );
+  assert.ok(
+    respostaChamadosAgendamento.includes('Cliente: COABRA'),
+    respostaChamadosAgendamento,
+  );
+  assert.ok(
+    respostaChamadosAgendamento.includes('│  ├─ *Cliente: COABRA*\n│  │  • Analista Edson Assis: Qtd Chamados: *1*'),
+    respostaChamadosAgendamento,
+  );
+  assert.ok(
+    respostaChamadosAgendamento.includes('│  │  ▪ *Subtotal COABRA*: Qtd Chamados: *2*'),
+    respostaChamadosAgendamento,
+  );
+  assert.ok(
+    respostaChamadosAgendamento.includes('\n\n🔖 *Subtotal RETORNO - ATENDENTE*: Qtd Chamados: *2*'),
+    respostaChamadosAgendamento,
+  );
+  assert.ok(
+    respostaChamadosAgendamento.includes('\n\n🔖 *Aguardando Retorno: RETORNO - CLIENTE*'),
+    respostaChamadosAgendamento,
+  );
+  assert.ok(
+    !respostaChamadosAgendamento.includes('RETORNO - ATENDENTE | COABRA | Edson Assis'),
+    respostaChamadosAgendamento,
+  );
+
   console.log('scheduled-question-sql-fixo-guardrail.test.js: ok');
 })().catch((err) => {
   console.error(err);

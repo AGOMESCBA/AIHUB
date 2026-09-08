@@ -1165,11 +1165,11 @@ ok('pedidos aprovados respeitam hierarquia pedida por aprovador dia e pedido', (
 
   assert.strictEqual(shape.tipo, 'detalhe_multidimensional');
   assert.deepStrictEqual(shape.dimensoes, ['aprovador', 'dia', 'numero_pedido']);
-  assert.ok(texto.includes('*Aprovador: ANA COSTA*'), texto);
-  assert.ok(texto.includes('  *Dia: 01/09/2026*'), texto);
-  assert.ok(texto.includes('    1. Documento 590001: Valor Pedido: *R$'), texto);
-  assert.ok(texto.includes('*Aprovador: BRUNO LIMA*'), texto);
-  assert.ok(texto.indexOf('*Aprovador: ANA COSTA*') < texto.indexOf('  *Dia: 01/09/2026*'), texto);
+  assert.ok(texto.includes('▪ *Aprovador: ANA COSTA*'), texto);
+  assert.ok(texto.includes('│  ├─ *Dia: 01/09/2026*'), texto);
+  assert.ok(texto.includes('│  │  • Documento 590001: Valor Pedido: *R$'), texto);
+  assert.ok(texto.includes('▪ *Aprovador: BRUNO LIMA*'), texto);
+  assert.ok(texto.indexOf('▪ *Aprovador: ANA COSTA*') < texto.indexOf('│  ├─ *Dia: 01/09/2026*'), texto);
   assert.ok(!texto.includes('*Detalhamento por Dia, Aprovador'), texto);
 });
 

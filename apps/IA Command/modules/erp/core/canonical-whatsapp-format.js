@@ -1778,13 +1778,21 @@ function ordenarNosDetalheMultidimensional(entries, dim, primary) {
   });
 }
 
+function iconeGrupoDimensao(dim) {
+  const k = keyNorm(dim);
+  if (/^(aguardando_retorno|aguardando|retorno|status_retorno|status_chamado|status)$/.test(k)) return '\u{1F516}';
+  if (isTemporal(dim)) return '\u{1F4C5}';
+  if (/^(cliente|nome_cliente|empresa_cliente|fornecedor|nome_fornecedor|vendedor|nome_vendedor|analista|nome_analista|aprovador)$/.test(k)) return '\u{25AA}';
+  return null;
+}
+
 function renderDetalheMultidimensional(rows, shape, linhas) {
   const { root, totalGeral } = montarDetalheMultidimensional(rows, shape);
   const titulo = `Detalhamento por ${shape.dimensoes.map(labelDimensao).join(', ')}`;
   const primary = shape.metricas[0];
   const MAX_ITENS_POR_NIVEL = 200;
 
-  function renderNode(node, nivel, prefixo) {
+  function renderNode(node, nivel, prefixo, guiaFilhos) {
     const dim = shape.dimensoes[nivel];
     const ultimo = nivel === shape.dimensoes.length - 1;
     const entries = ordenarNosDetalheMultidimensional([...node.filhos.entries()], dim, primary);
@@ -1793,12 +1801,17 @@ function renderDetalheMultidimensional(rows, shape, linhas) {
     visiveis.forEach(([valor, child], idx) => {
       const label = labelValorDimensao(dim, valor);
       if (ultimo) {
-        linhas.push(`${prefixo}${idx + 1}. ${labelDimensao(dim)} ${label}: ${valsMetricas(child.total, shape.metricas)}`);
+        linhas.push(`${prefixo}\u{2022} ${labelDimensao(dim)} ${label}: ${valsMetricas(child.total, shape.metricas)}`);
       } else {
         if (nivel > 0 || idx > 0) linhas.push('');
-        linhas.push(`${prefixo}*${labelDimensao(dim)}: ${label}*`);
-        renderNode(child, nivel + 1, `${prefixo}  `);
-        linhas.push(`${prefixo}\u{1F9FE} *Subtotal*: ${valsMetricas(child.total, shape.metricas)}`);
+        const iconeGrupo = iconeGrupoDimensao(dim);
+        const marcadorGrupo = nivel > 0 ? '\u{251C}\u{2500} ' : (iconeGrupo ? `${iconeGrupo} ` : '\u{25AA} ');
+        linhas.push(`${prefixo}${marcadorGrupo}*${labelDimensao(dim)}: ${label}*`);
+        renderNode(child, nivel + 1, guiaFilhos, `${guiaFilhos}\u{2502}  `);
+        if (nivel === 0) linhas.push('');
+        const rotuloSubtotal = iconeGrupo ? `*Subtotal ${label}*` : '*Subtotal*';
+        const prefixoSubtotal = nivel > 0 ? guiaFilhos : prefixo;
+        linhas.push(`${prefixoSubtotal}${iconeGrupo || '\u{1F9FE}'} ${rotuloSubtotal}: ${valsMetricas(child.total, shape.metricas)}`);
       }
     });
     if (entries.length > visiveis.length) {
@@ -1807,7 +1820,8 @@ function renderDetalheMultidimensional(rows, shape, linhas) {
   }
 
   linhas.push(`\u{1F4CB} *${titulo}*`);
-  renderNode(root, 0, '');
+  linhas.push('');
+  renderNode(root, 0, '', '\u{2502}  ');
   linhas.push('');
   linhas.push(`*Total Geral*: ${valsMetricas(totalGeral, shape.metricas)}`);
 }

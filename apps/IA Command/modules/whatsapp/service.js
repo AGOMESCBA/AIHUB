@@ -4152,8 +4152,9 @@ class IACWhatsAppService extends EventEmitter {
 
   // ── IA Pipeline: classify → route → format ──────────────────────────────────
 
-  _formatScheduledDeliveryMessage({ resposta = '', ok = true } = {}) {
+  _formatScheduledDeliveryMessage({ resposta = '', ok = true, preservarLayout = false } = {}) {
     const corpo = String(resposta || '').trim() || 'Consulta concluida sem conteudo para exibir.';
+    if (preservarLayout) return corpo;
     const pareceErro = !ok || /^(nao consegui|não consegui|nao foi possivel|não foi possivel|ocorreu um erro|erro\b)/i.test(corpo);
     const linhas = [
       '*IA Command - Agendamento*',
@@ -4226,7 +4227,7 @@ class IACWhatsAppService extends EventEmitter {
   // rows/intent (opcionais): quando presentes, permitem anexar PDF/Excel automaticamente
   // conforme anexar_pdf_automatico_acima_de/anexar_excel_automatico_acima_de da empresa —
   // SEM oferta interativa (agendamento e fire-and-forget, ninguem responde a pergunta).
-  async sendScheduledQuestionDelivery({ empresaId, numero, resposta, ok = true, rows = null, intent = null } = {}) {
+  async sendScheduledQuestionDelivery({ empresaId, numero, resposta, ok = true, rows = null, intent = null, preservarLayout = false } = {}) {
     if (!this.client || this.status !== 'connected') {
       throw new Error('WhatsApp nao esta conectado.');
     }
@@ -4241,7 +4242,7 @@ class IACWhatsAppService extends EventEmitter {
     }
 
     const t0 = Date.now();
-    await this.sendMessage(digits, this._formatScheduledDeliveryMessage({ resposta, ok }));
+    await this.sendMessage(digits, this._formatScheduledDeliveryMessage({ resposta, ok, preservarLayout }));
 
     if (Array.isArray(rows) && rows.length) {
       try {

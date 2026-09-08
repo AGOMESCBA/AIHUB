@@ -270,12 +270,12 @@ const server = http.createServer((req, res) => {
     req.on('data', d => { body += d; });
     req.on('end', async () => {
       try {
-        const { empresaId, numero, resposta, ok, jobNome } = JSON.parse(body || '{}');
+        const { empresaId, numero, resposta, ok, jobNome, preservarLayout } = JSON.parse(body || '{}');
         if (!empresaId || !numero || !resposta) {
           res.writeHead(400);
           return res.end(JSON.stringify({ erro: 'empresaId, numero e resposta são obrigatórios.' }));
         }
-        await svc.sendScheduledQuestionDelivery({ empresaId, numero, resposta, ok });
+        await svc.sendScheduledQuestionDelivery({ empresaId, numero, resposta, ok, preservarLayout: !!preservarLayout });
         const statusEmoji = ok === false ? '⚠️' : '✅';
         const nomeJob = jobNome ? `"${jobNome}"` : 'Agendamento';
         _enfileirar('iac-log', { tipo: ok === false ? 'warning' : 'success', msg: `${statusEmoji} ${nomeJob} enviado → ${numero}` });

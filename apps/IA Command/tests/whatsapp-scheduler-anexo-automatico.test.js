@@ -24,6 +24,15 @@ limpar();
 
 const ServiceProto = WhatsAppServiceModule.prototype;
 assert(typeof ServiceProto.sendScheduledQuestionDelivery === 'function');
+assert.strictEqual(
+  ServiceProto._formatScheduledDeliveryMessage({ resposta: 'Corpo pronto', ok: true, preservarLayout: true }),
+  'Corpo pronto',
+  'preservarLayout deve enviar a resposta pronta sem cabecalho/rodape de agendamento',
+);
+assert.ok(
+  ServiceProto._formatScheduledDeliveryMessage({ resposta: 'Corpo pronto', ok: true }).includes('IA Command - Agendamento'),
+  'sem preservarLayout, mantem cabecalho padrao de agendamento',
+);
 
 function criarFakeSelf() {
   const enviosTexto = [];
