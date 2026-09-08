@@ -473,12 +473,57 @@ function reduzirDimensoesFinanceirasDetalhe(dimensoes, metricas, opts = {}) {
     .slice(0, 3);
 }
 
+function isColunaContextoRodape(col) {
+  const k = keyNorm(col);
+  return /_contexto$/.test(k) || /^(codigo_identidade|nome_identidade|codigo_analista_destinatario|nome_analista_destinatario)$/.test(k);
+}
+
+function valorUnicoContexto(rows, aliases = []) {
+  const valores = new Set();
+  for (const row of rows || []) {
+    for (const alias of aliases) {
+      if (!Object.prototype.hasOwnProperty.call(row || {}, alias)) continue;
+      const valor = String(row[alias] ?? '').trim();
+      if (valor) valores.add(valor);
+    }
+  }
+  return valores.size === 1 ? [...valores][0] : null;
+}
+
+function addRodapeContexto(linhas, rows) {
+  const codigoAnalista = valorUnicoContexto(rows, [
+    'codigo_analista_contexto',
+    'cod_analista_contexto',
+    'codigo_identidade_contexto',
+    'codigo_analista_destinatario',
+    'codigo_identidade',
+  ]);
+  const nomeAnalista = valorUnicoContexto(rows, [
+    'nome_analista_contexto',
+    'analista_contexto',
+    'nome_identidade_contexto',
+    'nome_analista_destinatario',
+  ]);
+  if (!codigoAnalista && !nomeAnalista) return;
+  linhas.push('');
+  const partes = [];
+  if (codigoAnalista) partes.push(`Codigo: *${codigoAnalista}*`);
+  if (nomeAnalista) partes.push(`Nome: *${nomeAnalista}*`);
+  linhas.push(`\u{1F464} *Analista*: ${partes.join(' | ')}`);
+}
+
+function finalizarComRodapeContexto(linhas, rows) {
+  addRodapeContexto(linhas, rows);
+  return linhas.join('\n');
+}
+
 function detectarShape(rows, opts = {}) {
   if (!Array.isArray(rows) || !rows.length) return null;
   const keys = Object.keys(rows[0] || {});
   const amostra = sampleRows(rows);
   const metricas = normalizarMetricasFinanceiras(keys.filter(k => {
     const nk = keyNorm(k);
+    if (isColunaContextoRodape(k)) return false;
     if (presentation.dimension(k)) return false;
     const metric = presentation.metric(k, opts);
     if (metric) return amostra.some(r => isNumericValue(r[k]) || (metric.type === 'percent' && parseNumber(r[k]) === null));
@@ -494,6 +539,7 @@ function detectarShape(rows, opts = {}) {
   const dimensoes = keys.filter(k => {
     const nk = keyNorm(k);
     if (metricas.includes(k)) return false;
+    if (isColunaContextoRodape(k)) return false;
     if (presentation.dimension(k)) return amostra.some(r => String(r[k] ?? '').trim() !== '');
     if (!RE_TEMPORAL.test(nk) && !RE_ENTIDADE.test(nk) && !RE_DOCUMENTO.test(nk) && !RE_BANCARIO.test(nk) && !RE_CATEGORIA_SEMANTICA.test(nk)) return false;
     if (RE_TEMPORAL.test(nk)) return amostra.some(r => isTemporalDimensionValue(k, r[k]));
@@ -1945,8 +1991,8 @@ function renderSingle(rows, opts = {}) {
 
   if (shape.tipo === 'metricas_simples') {
     const totais = somarMetricas(rows, shape.metricas);
-    if (renderComparativoAnoMetricas(linhas, totais, shape.metricas, opts)) return linhas.join('\n');
-    if (renderAvisoComparativoSemPeriodo(linhas, opts, shape.metricas)) return linhas.join('\n');
+    if (renderComparativoAnoMetricas(linhas, totais, shape.metricas, opts)) return finalizarComRodapeContexto(linhas, rows);
+    if (renderAvisoComparativoSemPeriodo(linhas, opts, shape.metricas)) return finalizarComRodapeContexto(linhas, rows);
     const metricasTotal = metricasTotalizaveis(shape.metricas);
     linhas.push('\u{1F4CA} *Resumo*');
     linhas.push(...renderMetricas(totais, shape.metricas));
@@ -1956,39 +2002,39 @@ function renderSingle(rows, opts = {}) {
     if (!resultado && !metricasTotal.length) {
       addAvisoNaoSomavel(linhas, shape.metricas);
       addAvisoMarkup(linhas, rows, totais);
-      return linhas.join('\n');
+      return finalizarComRodapeContexto(linhas, rows);
     }
     const totalStr = resultado
       ? brl(resultado.valor)
       : metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
     linhas.push(`*Total Geral*: ${totalStr}`);
     addAvisoMarkup(linhas, rows, totais);
-    return linhas.join('\n');
+    return finalizarComRodapeContexto(linhas, rows);
   }
 
   if (shape.tipo === 'categoria_metrica_unica') {
     renderCategoriaMetricaUnica(rows, shape, linhas);
-    return linhas.join('\n');
+    return finalizarComRodapeContexto(linhas, rows);
   }
 
   if (shape.tipo === 'duas_dimensoes' || shape.tipo === 'detalhe_documento') {
     renderDuasDimensoes(rows, shape, linhas);
-    return linhas.join('\n');
+    return finalizarComRodapeContexto(linhas, rows);
   }
 
   if (shape.tipo === 'detalhe_temporal_multidimensional') {
     renderDetalheTemporalMultidimensional(rows, shape, linhas);
-    return linhas.join('\n');
+    return finalizarComRodapeContexto(linhas, rows);
   }
 
   if (shape.tipo === 'detalhe_multidimensional') {
     renderDetalheMultidimensional(rows, shape, linhas);
-    return linhas.join('\n');
+    return finalizarComRodapeContexto(linhas, rows);
   }
 
   if (shape.tipo === 'multiplas_dimensoes') {
     renderMultiplasDimensoes(rows, shape, linhas);
-    return linhas.join('\n');
+    return finalizarComRodapeContexto(linhas, rows);
   }
 
   const dim = shape.dimensao;
@@ -2023,7 +2069,7 @@ function renderSingle(rows, opts = {}) {
     const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
     linhas.push(`\u{1F3C6} *${labelDimensao(dim)} com maior destaque*: ${labelValorDimensao(dim, label)}`);
     linhas.push(`  ${vals}`);
-    return linhas.join('\n');
+    return finalizarComRodapeContexto(linhas, rows);
   }
 
   const metricasTotal = metricasTotalizaveis(shape.metricas);
@@ -2043,13 +2089,13 @@ function renderSingle(rows, opts = {}) {
   linhas.push('');
   if (!metricasTotal.length) {
     addAvisoNaoSomavel(linhas, shape.metricas);
-    return linhas.join('\n');
+    return finalizarComRodapeContexto(linhas, rows);
   }
   linhas.push(`\u{1F9FE} *Subtotal*: ${metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ')}`);
   const resultado = formulaResultado(metricasTotal, totais);
   if (resultado) linhas.push(`*Total Geral*: ${brl(resultado.valor)}`);
   else linhas.push(`*Total Geral*: ${metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ')}`);
-  return linhas.join('\n');
+  return finalizarComRodapeContexto(linhas, rows);
 }
 
 function shapesCompativeis(shapes) {
@@ -2076,6 +2122,7 @@ function renderAll(sucessos, opts = {}) {
   if (!shapesCompativeis(shapes)) return renderAllShapesMistos(sucessos, shapes, opts);
 
   const shape = shapes[0];
+  const allRows = sucessos.flatMap(s => s.rows || []);
   const linhas = ['*Consolidado - Todas as empresas*'];
   if (opts.contextoConsulta || opts.mensagem) linhas.push(`_${opts.contextoConsulta || opts.mensagem}_`);
   linhas.push('');
@@ -2100,9 +2147,9 @@ function renderAll(sucessos, opts = {}) {
       }
       linhas.push('');
       renderComparativoAnoMetricas(linhas, totalGeral, shape.metricas, opts);
-      return linhas.join('\n');
+      return finalizarComRodapeContexto(linhas, allRows);
     }
-    if (renderAvisoComparativoSemPeriodo(linhas, opts, shape.metricas)) return linhas.join('\n');
+    if (renderAvisoComparativoSemPeriodo(linhas, opts, shape.metricas)) return finalizarComRodapeContexto(linhas, allRows);
 
     linhas.push('\u{1F4CA} *Resumo*');
     for (const s of sucessos) {
@@ -2115,7 +2162,7 @@ function renderAll(sucessos, opts = {}) {
     linhas.push('');
     if (!metricasTotal.length) {
       addAvisoNaoSomavel(linhas, shape.metricas);
-      return linhas.join('\n');
+      return finalizarComRodapeContexto(linhas, allRows);
     }
     linhas.push(...renderMetricas(totalGeral, metricasTotal));
     const resultado = formulaResultado(metricasTotal, totalGeral);
@@ -2124,7 +2171,7 @@ function renderAll(sucessos, opts = {}) {
       ? brl(resultado.valor)
       : metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeral[col])}*`).join(' | ');
     linhas.push(`*Total Geral*: ${totalStr}`);
-    return linhas.join('\n');
+    return finalizarComRodapeContexto(linhas, allRows);
   }
 
   if (shape.tipo === 'categoria_metrica_unica') {
@@ -2146,31 +2193,31 @@ function renderAll(sucessos, opts = {}) {
     const resultadoTotal = resultadoCategorias(entradasTotal);
     if (resultadoTotal) linhas.push(`\u{1F9FE} *Resultado*: *${brl(resultadoTotal.valor)}*`);
     linhas.push(`*Total Geral*: ${resultadoTotal ? brl(resultadoTotal.valor) : valsCategoriaMetricaUnica(entradasTotal)}`);
-    return linhas.join('\n');
+    return finalizarComRodapeContexto(linhas, allRows);
   }
 
   if (shape.tipo === 'duas_dimensoes' || shape.tipo === 'detalhe_documento') {
     const rows = sucessos.flatMap(s => s.rows || []);
     renderDuasDimensoes(rows, shape, linhas);
-    return linhas.join('\n');
+    return finalizarComRodapeContexto(linhas, allRows);
   }
 
   if (shape.tipo === 'detalhe_temporal_multidimensional') {
     const rows = sucessos.flatMap(s => s.rows || []);
     renderDetalheTemporalMultidimensional(rows, shape, linhas);
-    return linhas.join('\n');
+    return finalizarComRodapeContexto(linhas, allRows);
   }
 
   if (shape.tipo === 'detalhe_multidimensional') {
     const rows = sucessos.flatMap(s => s.rows || []);
     renderDetalheMultidimensional(rows, shape, linhas);
-    return linhas.join('\n');
+    return finalizarComRodapeContexto(linhas, rows);
   }
 
   if (shape.tipo === 'multiplas_dimensoes') {
     const rows = sucessos.flatMap(s => s.rows || []);
     renderMultiplasDimensoes(rows, shape, linhas);
-    return linhas.join('\n');
+    return finalizarComRodapeContexto(linhas, rows);
   }
 
   const dim = shape.dimensao;
@@ -2239,7 +2286,7 @@ function renderAll(sucessos, opts = {}) {
     linhas.push(`\u{1F9FE} *Subtotal*: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeral[col] || 0)}*`).join(' | ')}`);
     linhas.push('');
     linhas.push(`*Total Geral*: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeral[col] || 0)}*`).join(' | ')}`);
-    return linhas.join('\n');
+    return finalizarComRodapeContexto(linhas, allRows);
   }
 
   const metricasTotal = metricasTotalizaveis(shape.metricas);
@@ -2267,7 +2314,7 @@ function renderAll(sucessos, opts = {}) {
       linhas.push('');
     }
     addAvisoNaoSomavel(linhas, shape.metricas);
-    return linhas.join('\n');
+    return finalizarComRodapeContexto(linhas, allRows);
   }
 
   const porDim = new Map();
@@ -2330,7 +2377,7 @@ function renderAll(sucessos, opts = {}) {
     : `*Total Geral*: ${metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeralExibicao[col])}*`).join(' | ')}`;
 
   linhas.push(totalGeralLinha);
-  return linhas.join('\n');
+  return finalizarComRodapeContexto(linhas, allRows);
 }
 
 module.exports = {

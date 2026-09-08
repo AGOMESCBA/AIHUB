@@ -245,6 +245,53 @@ ok('chamados em atraso: agrupa por cliente, aguardando retorno e analista', () =
   assert.ok(!texto.includes('R$'), texto);
 });
 
+ok('chamados por status e cliente: exibe analista unico no rodape sem agrupar por analista', () => {
+  const rows = [
+    {
+      aguardando_retorno: 'RETORNO - ATENDENTE',
+      empresa_cliente: 'COABRA',
+      qtd_chamados: 2,
+      codigo_analista_contexto: 'ANA123',
+      nome_analista_contexto: 'Matheus Marcondes',
+    },
+    {
+      aguardando_retorno: 'RETORNO - CLIENTE',
+      empresa_cliente: 'CAIEIRA',
+      qtd_chamados: 3,
+      codigo_analista_contexto: 'ANA123',
+      nome_analista_contexto: 'Matheus Marcondes',
+    },
+  ];
+  const shape = canonical.detectarShape(rows, {
+    mensagem: 'Chamados do Consultor - Status e Cliente',
+  });
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Chamados',
+    contextoConsulta: 'Chamados do Consultor - Status e Cliente',
+  });
+
+  assert.deepStrictEqual(shape.dimensoes, ['aguardando_retorno', 'empresa_cliente']);
+  assert.ok(texto.includes('*Por Aguardando Retorno e Cliente*'), texto);
+  assert.ok(texto.includes('\u{1F464} *Analista*: Codigo: *ANA123* | Nome: *Matheus Marcondes*'), texto);
+  assert.ok(!texto.includes('codigo_analista_contexto'), texto);
+  assert.ok(!texto.includes('nome_analista_contexto'), texto);
+});
+
+ok('chamados por status e cliente: nao exibe rodape de analista quando houver mais de um', () => {
+  const rows = [
+    { aguardando_retorno: 'RETORNO - ATENDENTE', empresa_cliente: 'COABRA', qtd_chamados: 2, codigo_analista_contexto: 'ANA123', nome_analista_contexto: 'Matheus Marcondes' },
+    { aguardando_retorno: 'RETORNO - CLIENTE', empresa_cliente: 'CAIEIRA', qtd_chamados: 3, codigo_analista_contexto: 'ANA456', nome_analista_contexto: 'Edson Assis' },
+  ];
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Chamados',
+    contextoConsulta: 'Chamados do Consultor - Status e Cliente',
+  });
+
+  assert.ok(!texto.includes('*Analista*: Codigo'), texto);
+  assert.ok(!texto.includes('Matheus Marcondes'), texto);
+  assert.ok(!texto.includes('Edson Assis'), texto);
+});
+
 ok('faturamento do dia: usa emissao unica como contexto e nao interpreta filial como mes', () => {
   const rows = [
     { emissao: '20260824', filial: '010101', cliente: 'AGRICOLA D S F LTDA', vlr_total: 6635 },
