@@ -37,7 +37,6 @@
       id: 'conhecimento-ia', label: 'Conhecimento da IA', icon: '🧠', defaultOpen: false,
       items: [
         { id: 'iac-admin-modulos',       label: 'Módulos',                 href: '/app/ia-command/admin-modulos.html',        icon: '📂' },
-        { id: 'iac-admin-datasets',      label: 'Datasets ERP',            href: '/app/ia-command/admin-datasets.html',       icon: '📊' },
         { id: 'iac-admin-intencoes',     label: 'Intenções',               href: '/app/ia-command/admin-intencoes.html',      icon: '🧠' },
         { id: 'iac-admin-sinonimos',     label: 'Equivalências',           href: '/app/ia-command/admin-sinonimos.html',      icon: '🔤' },
         { id: 'iac-admin-normalizacao',  label: 'Normalização Linguística', href: '/app/ia-command/admin-normalizacao.html',   icon: '🧹' },
@@ -49,6 +48,7 @@
       id: 'configuracao', label: 'Configuração', icon: '⚙', defaultOpen: false,
       items: [
         { id: 'iac-config-conexoes',  label: 'Conexões ERP',            href: '/app/ia-command/config-conexoes.html',            icon: '🔌' },
+        { id: 'iac-admin-datasets',   label: 'Datasets ERP',            href: '/app/ia-command/admin-datasets.html',             icon: '📊' },
         { id: 'iac-config-ia',        label: 'Configuração de IA',       href: '/app/ia-command/config-ia.html',                  icon: '🤖' },
         { id: 'iac-config-middleware', label: 'Middleware SQL Protheus', href: '/app/ia-command/config-middleware-protheus.html', icon: '🛡' },
         { id: 'iac-migrar-dados',     label: 'Migrar Dados',             href: '/app/ia-command/migrar-dados.html',               icon: '⇄' },

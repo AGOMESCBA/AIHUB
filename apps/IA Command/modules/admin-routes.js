@@ -5,6 +5,7 @@ const { getEmpresaId } = require('./empresa-context');
 const { normalizarTexto } = require('./ai/local-intent-resolver');
 const periodResolver = require('./ai/period-resolver');
 const messageTemplates = require('./whatsapp/message-templates');
+const recipientGroups = require('./whatsapp/recipient-group-store');
 const usageDb = require('./ai/usage-db');
 const empresasDb = require('../../../modules/empresas/database');
 const sistemasDb = require('../../../modules/sistemas/database');
@@ -1032,6 +1033,32 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     const row = crud.buscarPorId('whatsapp_allowed_numbers', req.params.id);
     if (!row || row.empresa_id !== eid(req)) return res.status(404).json({ error: 'Nao encontrado.' });
     res.json(row);
+  });
+
+  app.get('/api/ia-command/admin/numeros-whatsapp/:id/grupos', requireAuth, requireIaCommand, canNumeros, (req, res) => {
+    const row = crud.buscarPorId('whatsapp_allowed_numbers', req.params.id);
+    if (!row || row.empresa_id !== eid(req) || Number(row.ativo || 0) !== 1) {
+      return res.status(404).json({ error: 'Numero autorizado nao encontrado.' });
+    }
+    res.json(recipientGroups.listarGruposDoNumero(eid(req), req.params.id));
+  });
+
+  app.put('/api/ia-command/admin/numeros-whatsapp/:id/grupos', requireAuth, requireIaCommand, canNumeros, (req, res) => {
+    const row = crud.buscarPorId('whatsapp_allowed_numbers', req.params.id);
+    if (!row || row.empresa_id !== eid(req) || Number(row.ativo || 0) !== 1) {
+      return res.status(404).json({ error: 'Numero autorizado nao encontrado.' });
+    }
+    try {
+      const grupos = recipientGroups.substituirGruposDoNumero(eid(req), req.params.id, req.body?.grupos || req.body?.grupo_ids || []);
+      _audit(req, 'editar_grupos_numero_whatsapp', {
+        id: req.params.id,
+        numero: row.numero,
+        grupos: grupos.filter(g => Number(g.selecionado || 0) === 1).map(g => g.id),
+      });
+      res.json(grupos);
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ error: err.message });
+    }
   });
 
   function _extrairCamposNumeroWa(body, opts = {}) {

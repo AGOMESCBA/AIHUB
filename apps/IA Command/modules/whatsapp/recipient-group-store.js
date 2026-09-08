@@ -132,6 +132,25 @@ function listarMembros(empresaId, grupoId) {
   `).all(Number(empresaId), String(grupoId)).map(memberFromRow);
 }
 
+function listarGruposDoNumero(empresaId, numeroId) {
+  return getDB().prepare(`
+    SELECT g.*,
+           CASE WHEN m.id IS NOT NULL AND m.ativo = 1 THEN 1 ELSE 0 END AS selecionado,
+           (SELECT COUNT(*)
+              FROM whatsapp_recipient_group_members mc
+              JOIN whatsapp_allowed_numbers n ON n.id = mc.numero_id AND n.empresa_id = mc.empresa_id AND n.ativo = 1
+             WHERE mc.grupo_id = g.id AND mc.ativo = 1) AS membros_count
+    FROM whatsapp_recipient_groups g
+    LEFT JOIN whatsapp_recipient_group_members m
+      ON m.grupo_id = g.id
+     AND m.empresa_id = g.empresa_id
+     AND m.numero_id = ?
+     AND m.ativo = 1
+    WHERE g.empresa_id = ? AND g.ativo = 1
+    ORDER BY g.nome COLLATE NOCASE ASC
+  `).all(String(numeroId), Number(empresaId)).map(groupFromRow);
+}
+
 function substituirMembros(empresaId, grupoId, numeroIds = []) {
   const grupo = buscarGrupo(empresaId, grupoId);
   if (!grupo) throw Object.assign(new Error('Grupo nao encontrado.'), { statusCode: 404 });
@@ -161,6 +180,48 @@ function substituirMembros(empresaId, grupoId, numeroIds = []) {
     `);
     for (const numeroId of numeros) upsert.run(uuid(), String(grupoId), Number(empresaId), numeroId, now, now);
     return buscarGrupo(empresaId, grupoId);
+  });
+  return tx();
+}
+
+function substituirGruposDoNumero(empresaId, numeroId, grupoIds = []) {
+  const db = getDB();
+  const numero = db.prepare(`
+    SELECT id
+    FROM whatsapp_allowed_numbers
+    WHERE empresa_id = ? AND id = ? AND ativo = 1
+  `).get(Number(empresaId), String(numeroId));
+  if (!numero) throw Object.assign(new Error('Numero autorizado nao encontrado.'), { statusCode: 404 });
+
+  const ids = [...new Set((grupoIds || [])
+    .map(item => typeof item === 'object' && item ? (item.id || item.grupo_id) : item)
+    .map(String)
+    .filter(Boolean))];
+
+  const tx = db.transaction(() => {
+    const now = agora();
+    db.prepare('UPDATE whatsapp_recipient_group_members SET ativo = 0, atualizado_em = ? WHERE empresa_id = ? AND numero_id = ?')
+      .run(now, Number(empresaId), String(numeroId));
+
+    if (!ids.length) return listarGruposDoNumero(empresaId, numeroId);
+
+    const placeholders = ids.map(() => '?').join(',');
+    const grupos = db.prepare(`
+      SELECT id
+      FROM whatsapp_recipient_groups
+      WHERE empresa_id = ? AND ativo = 1 AND id IN (${placeholders})
+    `).all(Number(empresaId), ...ids).map(row => String(row.id));
+    if (grupos.length !== ids.length) {
+      throw Object.assign(new Error('Um ou mais grupos nao pertencem aos grupos ativos desta empresa.'), { statusCode: 400 });
+    }
+
+    const upsert = db.prepare(`
+      INSERT INTO whatsapp_recipient_group_members (id, grupo_id, empresa_id, numero_id, ativo, criado_em, atualizado_em)
+      VALUES (?, ?, ?, ?, 1, ?, ?)
+      ON CONFLICT(grupo_id, numero_id) DO UPDATE SET ativo = 1, atualizado_em = excluded.atualizado_em
+    `);
+    for (const grupoId of grupos) upsert.run(uuid(), grupoId, Number(empresaId), String(numeroId), now, now);
+    return listarGruposDoNumero(empresaId, numeroId);
   });
   return tx();
 }
@@ -207,7 +268,9 @@ module.exports = {
   atualizarGrupo,
   excluirGrupo,
   listarMembros,
+  listarGruposDoNumero,
   substituirMembros,
+  substituirGruposDoNumero,
   buscarGruposPorIds,
   listarMembrosAtivosDosGrupos,
 };

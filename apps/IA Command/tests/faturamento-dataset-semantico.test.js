@@ -111,4 +111,23 @@ assert(sqlCountNormalizado.includes('COUNT(DISTINCT empresa_cliente) AS qtd_clie
 assert(sqlCountNormalizado.includes('COUNT(*) AS qtd_registros'), sqlCountNormalizado);
 assert(!/AS\s+total(?:_|\b)/i.test(sqlCountNormalizado), sqlCountNormalizado);
 
+const sqlSemAguardandoNoGroupBy = `
+SELECT TOP 10000 empresa_cliente, nome_analista, COUNT(*) AS qtd_chamados
+FROM base
+WHERE status_chamado IN ('Pendente', 'Andamento')
+  AND sla_situacao_atual_chamado = 'Em atraso'
+  AND aguardando_retorno IS NOT NULL
+GROUP BY empresa_cliente, nome_analista
+`;
+const sqlAguardandoForcado = runner._test._sanitizarSqlSelectDataset(
+  sqlSemAguardandoNoGroupBy,
+  { sql_base: '', erp: 'SoftExpert' },
+  'data_abertura_chamado',
+  ['empresa_cliente', 'aguardando_retorno', 'nome_analista', 'chamado', 'status_chamado', 'sla_situacao_atual_chamado'],
+  'Chamados em atraso aguardando retorno agrupados por cliente e por analista',
+  camposChamados,
+);
+assert(/SELECT TOP 10000\s+aguardando_retorno,\s+empresa_cliente,\s+nome_analista,\s+COUNT\(\*\) AS qtd_chamados/i.test(sqlAguardandoForcado), sqlAguardandoForcado);
+assert(/GROUP BY\s+aguardando_retorno,\s+empresa_cliente,\s+nome_analista/i.test(sqlAguardandoForcado), sqlAguardandoForcado);
+
 console.log('faturamento-dataset-semantico.test.js: ok');

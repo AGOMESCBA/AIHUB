@@ -105,6 +105,16 @@
     .access-mods-dyn-extra select { width:90px; }
     .access-mods-dyn-extra input { width:110px;text-transform:uppercase; }
     .access-mods-dyn-empty { font-size:11px;color:var(--text-lo);font-style:italic; }
+    .group-toolbar { display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px; }
+    .group-toolbar .form-control { flex:1;min-width:220px;height:36px;font-size:13px; }
+    .group-list { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg-base);padding:8px; }
+    .group-item { display:flex;align-items:flex-start;gap:8px;border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--bg-card);cursor:pointer;min-width:0; }
+    .group-item:hover { border-color:var(--accent-light); }
+    .group-item input { margin-top:2px;flex-shrink:0; }
+    .group-name { display:block;color:var(--text-hi);font-weight:800;font-size:13px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+    .group-desc { display:block;color:var(--text-lo);font-size:12px;line-height:1.35;margin-top:2px; }
+    .group-meta { display:block;color:var(--text-lo);font-size:11px;margin-top:5px; }
+    .empty { padding:28px 18px;text-align:center;color:var(--text-md);font-size:13px;line-height:1.6; }
 
     /* Cartoes de empresa (aba Empresas / modal global) — substitui a tabela larga por linha */
     .empresa-cards { display:flex;flex-direction:column;gap:12px; }
@@ -247,7 +257,7 @@
             <div class="editor-actions">
               <span class="save-feedback" id="save-feedback"></span>
               <button class="btn btn-ghost" onclick="fecharFormulario()">← Voltar a lista</button>
-              <button class="btn btn-primary" onclick="salvar()">Salvar</button>
+              <button class="btn btn-primary" onclick="salvarAtual()">Salvar</button>
             </div>
           </div>
 
@@ -257,6 +267,7 @@
               <!-- Abas -->
               <div class="form-tabs">
                 <button class="form-tab active" onclick="mudarAba('geral',this)">Geral</button>
+                <button class="form-tab" onclick="mudarAba('grupos',this)">Grupos</button>
                 <button class="form-tab" onclick="mudarAba('empresas',this)">Empresas WhatsApp</button>
                 <button class="form-tab" onclick="mudarAba('empresas-protheus',this)">Empresas Protheus</button>
               </div>
@@ -291,6 +302,36 @@
                     <div class="form-group" style="margin-bottom:0">
                       <label class="form-label">Observacoes</label>
                       <textarea id="f-observacoes" class="form-control" rows="4" placeholder="ex: Diretor financeiro, liberado para consultas de faturamento."></textarea>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <!-- ABA: GRUPOS -->
+              <div class="tab-pane" id="tab-grupos">
+                <section class="form-section">
+                  <div class="form-section-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                    <div>
+                      <div class="form-section-title">Grupos do Usuario</div>
+                      <div class="form-section-subtitle">Selecione os grupos WhatsApp aos quais este numero pertence.</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+                      <button class="btn btn-ghost" type="button" onclick="carregarGruposNumero()">Atualizar</button>
+                      <button class="btn btn-primary" type="button" onclick="salvarGruposNumero()">Salvar grupos</button>
+                    </div>
+                  </div>
+                  <div class="form-section-body">
+                    <div class="info-box" style="margin-top:0;margin-bottom:14px;border-color:#f59e0b;background:#fffbeb;color:#92400e" data-warn-box>
+                      <strong>Atencao:</strong> as alteracoes desta aba sao salvas apenas pelo botao <strong>"Salvar grupos"</strong> acima.
+                    </div>
+                    <div class="info-box" id="grupos-info" style="margin-top:0;margin-bottom:14px">Salve o numero antes para selecionar os grupos.</div>
+                    <div class="group-toolbar">
+                      <input id="q-grupos" class="form-control" placeholder="Filtrar grupos..." oninput="renderGruposNumero()">
+                      <button class="btn btn-ghost" type="button" onclick="marcarGruposNumero(true)">Marcar todos</button>
+                      <button class="btn btn-ghost" type="button" onclick="marcarGruposNumero(false)">Limpar</button>
+                    </div>
+                    <div class="group-list" id="grupos-list">
+                      <div class="empty">Nenhum numero carregado.</div>
                     </div>
                   </div>
                 </section>
@@ -430,6 +471,8 @@
   let dados = [];
   let acessosContato = { empresas: [], acessos: [] };
   let acessosGlobaisContato = { empresas: [], acessos: [] };
+  let gruposNumero = [];
+  let selectedGroups = new Set();
   let filtrosVisiveis = false;
   let quickFilterFn = null;
   let editId = null;
@@ -491,6 +534,19 @@
     document.getElementById(`tab-${aba}`).classList.add('active');
   }
 
+  function abaAtiva() {
+    const pane = document.querySelector('.tab-pane.active');
+    return pane?.id?.replace(/^tab-/, '') || 'geral';
+  }
+
+  function salvarAtual() {
+    const aba = abaAtiva();
+    if (aba === 'empresas') return salvarEmpresasContato();
+    if (aba === 'empresas-protheus') return salvarEmpresasProtheusContato();
+    if (aba === 'grupos') return salvarGruposNumero();
+    return salvar();
+  }
+
   function abrirFormulario(id) {
     editId = id || null;
     resetForm();
@@ -525,8 +581,13 @@
     document.getElementById('f-observacoes').value = '';
     document.getElementById('f-ativo').value = '0';
     acessosContato = { empresas: [], acessos: [] };
+    gruposNumero = [];
+    selectedGroups = new Set();
+    const buscaGrupos = document.getElementById('q-grupos');
+    if (buscaGrupos) buscaGrupos.value = '';
     renderEmpresasContato();
     renderEmpresasProtheus();
+    renderGruposNumero('Salve o numero antes para selecionar os grupos.');
     feedback('', true);
   }
 
@@ -544,7 +605,7 @@
     document.getElementById('f-ativo').value = String(row.ativo ?? 1);
     document.getElementById('form-title').textContent = row.nome || 'Editar Numero';
     document.getElementById('form-subtitle').textContent = `ID ${String(row.id).slice(0,8)}...`;
-    await carregarAcessosContato();
+    await Promise.all([carregarAcessosContato(), carregarGruposNumero()]);
   }
 
   async function carregarAcessosContato() {
@@ -565,6 +626,82 @@
     acessosContato = await res.json();
     renderEmpresasContato();
     renderEmpresasProtheus();
+  }
+
+  async function carregarGruposNumero() {
+    if (!editId) {
+      gruposNumero = [];
+      selectedGroups = new Set();
+      renderGruposNumero('Salve o numero antes para selecionar os grupos.');
+      return;
+    }
+    const res = await fetch(`/api/ia-command/admin/numeros-whatsapp/${encodeURIComponent(editId)}/grupos`);
+    if (!res.ok) {
+      gruposNumero = [];
+      selectedGroups = new Set();
+      renderGruposNumero('Nao foi possivel carregar os grupos.');
+      return;
+    }
+    gruposNumero = await res.json();
+    selectedGroups = new Set(gruposNumero.filter(g => Number(g.selecionado || 0) === 1).map(g => String(g.id)));
+    renderGruposNumero();
+  }
+
+  function renderGruposNumero(msg) {
+    const info = document.getElementById('grupos-info');
+    const el = document.getElementById('grupos-list');
+    if (!info || !el) return;
+    if (msg) info.textContent = msg;
+    else info.textContent = gruposNumero.length
+      ? `${selectedGroups.size} de ${gruposNumero.length} grupo(s) selecionado(s).`
+      : 'Nenhum grupo ativo cadastrado para esta empresa.';
+
+    const busca = document.getElementById('q-grupos')?.value.trim().toLowerCase() || '';
+    const rows = gruposNumero.filter(g => !busca || `${g.nome || ''} ${g.descricao || ''}`.toLowerCase().includes(busca));
+    if (!rows.length) {
+      el.innerHTML = `<div class="empty">${gruposNumero.length ? 'Nenhum grupo encontrado para o filtro.' : 'Nenhum grupo ativo cadastrado para esta empresa.'}</div>`;
+      return;
+    }
+    el.innerHTML = rows.map(g => `
+      <label class="group-item">
+        <input type="checkbox" value="${esc(g.id)}" ${selectedGroups.has(String(g.id)) ? 'checked' : ''} onchange="toggleGrupoNumero(this)">
+        <span style="min-width:0">
+          <span class="group-name">${esc(g.nome || 'Grupo')}</span>
+          <span class="group-desc">${esc(g.descricao || 'Sem descricao')}</span>
+          <span class="group-meta">${Number(g.membros_count || 0)} membro(s)</span>
+        </span>
+      </label>
+    `).join('');
+  }
+
+  function toggleGrupoNumero(el) {
+    if (el.checked) selectedGroups.add(String(el.value));
+    else selectedGroups.delete(String(el.value));
+    renderGruposNumero();
+  }
+
+  function marcarGruposNumero(marcar) {
+    const busca = document.getElementById('q-grupos')?.value.trim().toLowerCase() || '';
+    gruposNumero
+      .filter(g => !busca || `${g.nome || ''} ${g.descricao || ''}`.toLowerCase().includes(busca))
+      .forEach(g => marcar ? selectedGroups.add(String(g.id)) : selectedGroups.delete(String(g.id)));
+    renderGruposNumero();
+  }
+
+  async function salvarGruposNumero() {
+    if (!editId) return feedback('Salve o numero antes de selecionar grupos.', false);
+    const res = await fetch(`/api/ia-command/admin/numeros-whatsapp/${encodeURIComponent(editId)}/grupos`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ grupos: [...selectedGroups] }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) return feedback(data?.error || 'Erro ao salvar grupos.', false);
+    gruposNumero = Array.isArray(data) ? data : [];
+    selectedGroups = new Set(gruposNumero.filter(g => Number(g.selecionado || 0) === 1).map(g => String(g.id)));
+    feedback('Grupos salvos com sucesso!', true);
+    renderGruposNumero();
+    await carregar();
   }
 
   function acessoPorEmpresa(empresaId) {
@@ -880,7 +1017,7 @@
         modulo: chk.dataset.dynModulo,
         liberado: chk.checked ? 1 : 0,
         papel: item.querySelector('[data-dyn-papel]')?.value || null,
-        codigo_identidade: item.querySelector('[data-dyn-codigo]')?.value || null,
+        codigo_identidade: (item.querySelector('[data-dyn-codigo]')?.value || '').trim().toUpperCase() || null,
       };
     });
   }
@@ -1243,6 +1380,10 @@
       <div class="help-item"><div class="help-item-label">Nome</div><div class="help-item-desc">Identificacao interna do contato autorizado.</div></div>
       <div class="help-item"><div class="help-item-label">Numero</div><div class="help-item-desc">Use DDI e DDD, por exemplo <em>5592999999999</em>. A comparacao usa apenas digitos.</div></div>
       <div class="help-item"><div class="help-item-label">Status</div><div class="help-item-desc">Numeros inativos ficam registrados, mas nao autorizam novas interacoes.</div></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Aba: Grupos</div>
+      <div class="help-item-desc">Selecione os grupos WhatsApp aos quais este numero pertence. A lista usa os grupos ativos cadastrados na empresa atual e o salvamento desta aba nao altera os dados gerais do contato.</div>
     </div>
     <div class="help-section">
       <div class="help-section-title">Aba: Empresas WhatsApp</div>
