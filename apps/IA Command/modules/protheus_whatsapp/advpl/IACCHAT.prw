@@ -139,7 +139,7 @@
    sem exigir cadastro previo do parametro. ANTES DE HOMOLOGACAO/PRODUCAO:
      1. Cadastrar o parametro MV_IACURL em Configurador (SIGACFG) > Ambiente >
         Cadastros > Parametros, com a URL definitiva do IAHub daquele ambiente
-        (o valor de teste abaixo e http://200.106.188.87:3000 — endereco de
+        (o valor de teste abaixo e http://137.131.212.29:3000 — endereco de
         desenvolvimento, NAO usar em producao sem confirmar).
      2. Remover ou esvaziar IAC_HUB_URL_PADRAO neste fonte apos o parametro
         estar cadastrado em todas as instalacoes-alvo, para que a ausencia do
@@ -177,7 +177,7 @@
 // piloto. So e usado enquanto o parametro MV_IACURL nao estiver cadastrado
 // (ver IACUrlTok()/IACUrlChat() e instrucoes no cabecalho do arquivo acima).
 // TODO antes de producao: cadastrar MV_IACURL e remover/esvaziar esta linha.
-#DEFINE IAC_HUB_URL_PADRAO  "http://200.106.188.87:3000"
+#DEFINE IAC_HUB_URL_PADRAO  "http://137.131.212.29:3000"
 
 // Sem fallback para empresa_id: se MV_IACEMID nao for encontrado, o chat deve
 // bloquear a abertura em vez de consultar uma empresa incorreta no IA Command.

@@ -2865,6 +2865,19 @@ class IACWhatsAppService extends EventEmitter {
 
   _formatarRespostaResultado(resultado, intent, { empresaId, messageTemplates, escopo = 'single' } = {}) {
     try {
+      const rows = Array.isArray(resultado?.rows) ? resultado.rows : [];
+      const pergunta = String(intent?._mensagemOriginal || intent?.mensagem || intent?.pergunta || '').trim();
+      if (resultado?.tipo === 'sucesso_ai_sql' && rows.length && /\bagru[p]?ad[oa]s?\s+por\b/i.test(pergunta)) {
+        const respostaCanonica = canonicalWhatsappFormat.renderSingle(rows, {
+          nomeModulo: intent?.modulo || intent?.intencao || null,
+          contextoConsulta: pergunta,
+          mensagem: pergunta,
+        });
+        if (respostaCanonica) {
+          this.log(`Resposta formatada canonica: escopo=${escopo} | tipo=${resultado?.tipo || 'n/a'} | chars=${String(respostaCanonica || '').length}`, 'info');
+          return respostaCanonica;
+        }
+      }
       const resposta = responseFormatter.formatar(resultado, intent, {
         empresaId,
         messageTemplates,

@@ -1045,7 +1045,7 @@ function chaveDimensaoCanonica(col) {
   if (/^(baixa|data_baixa|dt_baixa|e1_baixa|e2_baixa)$/.test(k)) return 'baixa';
   if (/^(documento|doc|titulo|duplicata|nota|nota_fiscal|nf|nfe|e1_num|e2_num)$/.test(k)) return 'documento';
   if (/^(fornecedor|fornec|nome_fornecedor|e2_fornece|a2_nome)$/.test(k)) return 'fornecedor';
-  if (/^(cliente|nome_cliente|id_cliente|cliente_id|e1_cliente|a1_nome)$/.test(k)) return 'cliente';
+  if (/^(cliente|nome_cliente|empresa_cliente|id_cliente|cliente_id|e1_cliente|a1_nome|a1_nreduz)$/.test(k)) return 'cliente';
   if (/^(analista|nome_analista)$/.test(k)) return 'analista';
   if (/^(vendedor|nome_vendedor)$/.test(k)) return 'vendedor';
   if (/^(produto|nome_produto|descricao_produto)$/.test(k)) return 'produto';

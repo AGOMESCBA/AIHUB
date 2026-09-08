@@ -7,6 +7,11 @@ const ROOT = path.resolve(__dirname, '..');
 const runner = require(path.join(ROOT, 'modules/erp/core/semantic-dataset-ai-runner'));
 
 const camposPermitidos = ['F2_EMISSAO', 'D2_TOTAL', 'A1_NOME'];
+const camposChamados = [
+  { coluna: 'chamado', tipo: 'identificador', descricao: 'Numero do chamado.' },
+  { coluna: 'empresa_cliente', tipo: 'dimensao', descricao: 'Cliente.', agrupavel: 1 },
+  { coluna: 'nome_analista', tipo: 'dimensao', descricao: 'Analista.', agrupavel: 1 },
+];
 
 const sqlModeloUnion = `
 SET ROWCOUNT 10000;
@@ -78,5 +83,30 @@ assert(sqlDatasetGroupByCorrigido.includes('GROUP BY SUBSTRING(F2_EMISSAO, 1, 6)
 assert(sqlDatasetGroupByCorrigido.trim().endsWith('GROUP BY SUBSTRING(F2_EMISSAO, 1, 6)'), 'dataset deve fechar SUBSTRING no ultimo SELECT');
 const validacaoSintaxeCorrigida = runner._test._validarSintaxeBasicaSqlDataset(sqlDatasetGroupByCorrigido);
 assert.strictEqual(validacaoSintaxeCorrigida.ok, true, `dataset corrigido deve ter sintaxe valida: ${validacaoSintaxeCorrigida.erros.join(' | ')}`);
+
+const promptChamados = runner._test._buildSystemPrompt(
+  { nome: 'softexpert_chamados', erp: 'SoftExpert', view_nome: 'ITSM_CHAMADOS' },
+  { campos: camposChamados, metricas: [], campoData: 'data_abertura_chamado' },
+);
+assert(promptChamados.includes('PROIBIDO usar total_* para COUNT'), 'prompt deve proibir total_* em COUNT');
+assert(promptChamados.includes('COUNT(chamado) AS qtd_chamados'), 'prompt deve orientar qtd_* para chamados');
+
+const sqlCountTotal = `
+SELECT TOP 10000 empresa_cliente, nome_analista, COUNT(chamado) AS total_chamados, COUNT(DISTINCT empresa_cliente) AS total_clientes, COUNT(*) AS total
+FROM base
+GROUP BY empresa_cliente, nome_analista
+`;
+const sqlCountNormalizado = runner._test._sanitizarSqlSelectDataset(
+  sqlCountTotal,
+  { sql_base: '', erp: 'SoftExpert' },
+  'data_abertura_chamado',
+  ['empresa_cliente', 'nome_analista', 'chamado'],
+  'Chamados em atraso agrupados por cliente e analista',
+  camposChamados,
+);
+assert(sqlCountNormalizado.includes('COUNT(chamado) AS qtd_chamados'), sqlCountNormalizado);
+assert(sqlCountNormalizado.includes('COUNT(DISTINCT empresa_cliente) AS qtd_clientes'), sqlCountNormalizado);
+assert(sqlCountNormalizado.includes('COUNT(*) AS qtd_registros'), sqlCountNormalizado);
+assert(!/AS\s+total(?:_|\b)/i.test(sqlCountNormalizado), sqlCountNormalizado);
 
 console.log('faturamento-dataset-semantico.test.js: ok');

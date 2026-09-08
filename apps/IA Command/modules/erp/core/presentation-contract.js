@@ -21,7 +21,8 @@ const DIMENSIONS = [
   { canon: 'documento', label: 'Documento', aliases: ['documento', 'doc', 'titulo', 'duplicata', 'nota', 'nota_fiscal', 'nf', 'nfe', 'e1_num', 'e2_num', 'f1_doc', 'f2_doc', 'd1_doc', 'd2_doc', 'cr_num', 'c7_num', 'numero_pedido', 'num_pedido', 'pedido'] },
   { canon: 'fornecedor', label: 'Fornecedor', aliases: ['fornecedor', 'fornec', 'nome_fornecedor', 'e2_fornece', 'a2_nome'] },
   { canon: 'aprovador', label: 'Aprovador', aliases: ['aprovador', 'nome_aprovador', 'cr_aprov', 'ak_nome'] },
-  { canon: 'cliente', label: 'Cliente', aliases: ['cliente', 'nome_cliente', 'e1_cliente', 'a1_nome'] },
+  { canon: 'cliente', label: 'Cliente', aliases: ['cliente', 'nome_cliente', 'empresa_cliente', 'a1_nome', 'a1_nreduz', 'id_cliente', 'cliente_id', 'e1_cliente'] },
+  { canon: 'analista', label: 'Analista', aliases: ['analista', 'nome_analista'] },
   { canon: 'filial', label: 'Filial', aliases: ['filial', 'e1_filial', 'e2_filial'] },
   { canon: 'prefixo', label: 'Prefixo', aliases: ['prefixo', 'e1_prefixo', 'e2_prefixo'] },
   { canon: 'parcela', label: 'Parcela', aliases: ['parcela', 'e1_parcela', 'e2_parcela'] },
@@ -54,6 +55,8 @@ const METRICS = [
   { canon: 'crescimento_valor', label: 'Crescimento Valor', type: 'money', totalRule: 'ignore', aliases: ['crescimento_valor', 'variacao_valor', 'valor_crescimento', 'valor_variacao'] },
   { canon: 'crescimento_percentual', label: 'Crescimento %', type: 'percent', totalRule: 'ignore', aliases: ['crescimento_percentual', 'crescimento_pct', 'variacao_percentual', 'variacao_pct', 'percentual_crescimento', 'percentual_variacao'] },
   { canon: 'pedidos', label: 'Total Pedidos', type: 'quantity', totalRule: 'sum', aliases: ['total_pedidos', 'qtd_pedidos', 'quantidade_pedidos', 'pedidos_total', 'pedidos_qtd'] },
+  { canon: 'chamados', label: 'Qtd Chamados', type: 'quantity', totalRule: 'sum', aliases: ['total_chamados', 'qtd_chamados', 'quantidade_chamados', 'chamados_total', 'chamados_qtd'] },
+  { canon: 'dias_atraso', label: 'Dias Atraso', type: 'quantity', totalRule: 'sum', aliases: ['total_dias_atraso', 'dias_atraso', 'dias_duracao_chamado', 'total_dias_duracao'] },
   { canon: 'quantidade', label: 'Quantidade', type: 'quantity', totalRule: 'sum', aliases: ['quantidade', 'qtd', 'qtde', 'd1_quant', 'd2_quant'] },
   { canon: 'valor', label: 'Valor', type: 'money', totalRule: 'sum', aliases: ['valor', 'e1_valor', 'e2_valor'] },
 ];

@@ -2,7 +2,7 @@
 #Include "PROTHEUS.ch"
 #Include "FWMVCDef.ch"
 
-#Define IAC_HUB_URL_PADRAO  "http://200.106.188.87:3000"
+#Define IAC_HUB_URL_PADRAO  "http://137.131.212.29:3000"
 
 /*/{Protheus.doc} IACadUsr
     Cadastro de celular por usuario Protheus - IA Command.

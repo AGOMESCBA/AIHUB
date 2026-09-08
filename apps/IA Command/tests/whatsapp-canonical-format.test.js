@@ -199,6 +199,29 @@ ok('contas a pagar do dia: usa vencimento unico como contexto e agrupa por forne
   assert.ok(/\*Total Geral\*: Vlr Titulo: \*R\$\s*701,91\*/.test(texto), texto);
 });
 
+ok('chamados em atraso: agrupa por cliente e analista sem formatar contagem como moeda', () => {
+  const rows = [
+    { id_cliente: 46, nome_analista: 'Edson Assis', total_chamados: 1, total_dias_atraso: 4 },
+    { id_cliente: 46, nome_analista: 'Lucas Jordan Souza', total_chamados: 1, total_dias_atraso: 2 },
+    { id_cliente: 44, nome_analista: 'Kelbyr Cruz', total_chamados: 2, total_dias_atraso: 7 },
+  ];
+  const shape = canonical.detectarShape(rows, {
+    mensagem: 'Chamados em atraso agrupados por cliente e analista',
+  });
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Chamados',
+    contextoConsulta: 'Chamados em atraso agrupados por cliente e analista',
+  });
+
+  assert.strictEqual(shape.tipo, 'duas_dimensoes');
+  assert.deepStrictEqual(shape.dimensoes, ['id_cliente', 'nome_analista']);
+  assert.ok(texto.includes('*Por Cliente e Analista*'), texto);
+  assert.ok(/2\. \*44\*: Qtd Chamados: \*2\* \| Dias Atraso: \*7\*/.test(texto), texto);
+  assert.ok(/Kelbyr Cruz: Qtd Chamados: \*2\* \| Dias Atraso: \*7\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Qtd Chamados: \*4\* \| Dias Atraso: \*13\*/.test(texto), texto);
+  assert.ok(!texto.includes('R$'), texto);
+});
+
 ok('faturamento do dia: usa emissao unica como contexto e nao interpreta filial como mes', () => {
   const rows = [
     { emissao: '20260824', filial: '010101', cliente: 'AGRICOLA D S F LTDA', vlr_total: 6635 },

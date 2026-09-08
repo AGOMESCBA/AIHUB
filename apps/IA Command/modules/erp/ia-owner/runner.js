@@ -2975,7 +2975,18 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '', opts =
     erros.push('SQL deve iniciar com SET ROWCOUNT N; SELECT ... ou SET ROWCOUNT N; WITH ... (CTE)');
   }
   if (!permitirSelectTop && /\bSELECT\s+TOP\s+\d+/i.test(texto)) {
-    erros.push('Nao use SELECT TOP; use apenas SET ROWCOUNT como limite global.');
+    // Bug real confirmado em producao (08/09/2026): mensagem generica demais — a IA usa
+    // SELECT TOP tipicamente para pegar "o item com maior valor" DENTRO de uma CTE (ex:
+    // "produto que mais vendeu"), e SET ROWCOUNT (a alternativa sugerida) so limita a query
+    // EXTERNA inteira, nao resolve esse caso — a IA nao tinha instrucao de qual estrutura usar
+    // no lugar, repetiu o mesmo erro por 4 tentativas ate esgotar o retry e falhar para o
+    // usuario. Ensina a alternativa correta e concreta (ORDER BY + ROW_NUMBER = 1 dentro da
+    // propria CTE), copia-cola pronto para o padrao mais comum de uso de TOP 1.
+    erros.push(
+      'Nao use SELECT TOP; SET ROWCOUNT so limita a query EXTERNA inteira, nao serve para pegar "o maior/top N" DENTRO de uma CTE/subquery. ' +
+      'Para pegar 1 (ou N) linha com maior valor dentro de uma CTE, use ROW_NUMBER() OVER (ORDER BY coluna DESC) AS rn na propria CTE e filtre WHERE rn <= N na CTE seguinte — nunca SELECT TOP em nenhum nivel do SQL. ' +
+      'Exemplo: WITH ranking AS (SELECT cod, valor, ROW_NUMBER() OVER (ORDER BY valor DESC) AS rn FROM ...) SELECT cod FROM ranking WHERE rn = 1.'
+    );
   }
   if (/\bIN\s*\(\s*SELECT\s+[A-Z0-9_]+\s+FROM\s+(?:SA2|SB1|SBM|SF4|SED|CTT)\d*[\s\S]{0,300}\bIS\s+NOT\s+NULL\s*\)/i.test(texto)) {
     erros.push('Subquery cadastral IN (SELECT ... IS NOT NULL) e filtro inutil; remova.');
@@ -4205,7 +4216,8 @@ function _instrucaoPeriodoHorizontal(intent) {
     '2. Cada linha compara o faturamento daquele mes com o do MES ANTERIOR dentro da propria serie (nao com o mesmo mes do ano anterior).',
     '3. Formato INDICE-BASE: o PRIMEIRO mes da serie (o mais antigo, o mes-base) tem indice_base = 100.00 e variacao_percentual = NULL (nao ha mes anterior na serie para compara-lo). Cada mes seguinte tem indice_base = (faturamento_mes / faturamento_primeiro_mes_da_serie) * 100, e variacao_percentual = ((faturamento_mes - faturamento_mes_anterior) / faturamento_mes_anterior) * 100.',
     '4. Use window function (LAG() OVER (ORDER BY competencia) para o mes anterior, FIRST_VALUE() OVER (ORDER BY competencia) para o mes-base) — nao gere SELECTs separados por mes nem UNION ALL manual.',
-    '5. Colunas obrigatorias no SELECT final, EXATAMENTE estes nomes: competencia (YYYYMM), faturamento, indice_base, variacao_percentual. PROIBIDO usar os nomes antigos faturamento_atual/faturamento_base/variacao_absoluta — o formato "colunas lado a lado numa linha so" NAO deve mais ser usado.',
+    '5. Colunas MINIMAS obrigatorias no SELECT final, com EXATAMENTE estes nomes: competencia (YYYYMM), faturamento, indice_base, variacao_percentual. PROIBIDO usar os nomes antigos faturamento_atual/faturamento_base/variacao_absoluta — o formato "colunas lado a lado numa linha so" NAO deve mais ser usado.',
+    '6. Se a pergunta pedir OUTRA metrica alem do faturamento (ex: "em valor e quantidade", "com ticket medio"), essa metrica extra tambem precisa da SUA PROPRIA analise horizontal completa — nao basta incluir a coluna bruta ao lado das outras. Gere um par indice_base/variacao_percentual DEDICADO para ela (ex: quantidade, indice_base_quantidade, variacao_percentual_quantidade), calculado com FIRST_VALUE()/LAG() sobre ESSA metrica, do mesmo jeito que o item 3 exige para o faturamento. Incluir so o valor bruto da metrica extra sem o indice/variacao dela e um erro: a pergunta pediu analise horizontal DAQUELA metrica tambem, nao so um numero a mais do lado.',
     '',
     `ERRADO (rejeitado mesmo sem erro de sintaxe): SELECT ... WHERE campo_data BETWEEN '${intent.periodo?.dataInicio || '?'}' AND '${pFim}' GROUP BY competencia — isso ignora o mes-base e retorna so 1 linha do periodo pedido.`,
     `ERRADO tambem: colunas lado a lado numa unica linha (faturamento_atual, faturamento_base, variacao_absoluta) — formato descontinuado, sempre use a serie de linhas.`,

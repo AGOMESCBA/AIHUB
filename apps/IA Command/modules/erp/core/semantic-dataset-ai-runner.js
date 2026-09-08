@@ -139,7 +139,7 @@ function _buildSystemPrompt(dataset, { campos, metricas, campoData, suboperacaoD
   const campoQuantidade = _campoPreferido(campos, ['D2_QUANT', 'QUANTIDADE'], /^quantidade$/i, 'QUANTIDADE');
   const campoValorDevolvido = _campoPreferido(campos, ['D2_VALDEV', 'D1_TOTAL', 'VALOR_DEVOLVIDO'], /valor.*devolv|devolv.*valor/i, 'VALOR_DEVOLVIDO');
   const campoQuantidadeDevolvida = _campoPreferido(campos, ['D2_QTDEDEV', 'D1_QUANT', 'QUANTIDADE_DEVOLVIDA'], /quantidade.*devolv|qtd.*devolv|devolv.*quantidade/i, 'QUANTIDADE_DEVOLVIDA');
-  const campoCliente = _campoPreferido(campos, ['A1_NOME', 'A1_NREDUZ', 'F2_CLIENTE', 'CLIENTE'], /cliente/i, 'CLIENTE');
+  const campoCliente = _campoPreferido(campos, ['empresa_cliente', 'nome_cliente', 'A1_NOME', 'A1_NREDUZ', 'CLIENTE', 'F2_CLIENTE', 'id_cliente'], /cliente/i, 'CLIENTE');
   const campoProduto = _campoPreferido(campos, ['B1_DESC', 'D2_COD', 'PRODUTO'], /produto/i, 'PRODUTO');
   const campoVendedor = _campoPreferido(campos, ['A3_NOME', 'F2_VEND1', 'VENDEDOR', 'EAR'], /vendedor|ear/i, 'VENDEDOR');
   const campoCfop = _campoPreferido(campos, ['D2_CF', 'CFOP'], /^cfop$/i, 'CFOP');
@@ -229,9 +229,11 @@ function _buildSystemPrompt(dataset, { campos, metricas, campoData, suboperacaoD
     '- Para datas, use o campo temporal informado abaixo. Ele pode ser texto Protheus YYYYMMDD ou datetime.',
     instrucaoFiltroMes,
     '- Quando a pergunta pedir agrupamento por cliente/produto/vendedor, mantenha o filtro de periodo solicitado; agrupamento nunca substitui filtro de periodo.',
+    '- Quando a pergunta pedir agrupamento por cliente e existir campo de nome/razao social do cliente (ex: empresa_cliente, nome_cliente, A1_NOME, A1_NREDUZ), use esse campo como dimensao principal. Use id/codigo do cliente apenas se nao houver nome ou se a pergunta pedir explicitamente o codigo.',
     instrucaoAgrupamentoMes,
     '- Em consultas com UNION ALL, cada SELECT deve estar sintaticamente completo antes do UNION. Feche funcoes no GROUP BY, por exemplo: GROUP BY SUBSTRING(F2_EMISSAO, 1, 6).',
     '- Para metricas somadas, use COALESCE(SUM(campo), 0) para retornar zero quando nao houver movimentos.',
+    '- REGRA DE ALIAS PARA CONTAGEM: COUNT(*) e COUNT(campo) representam quantidade, nunca valor. Use sempre alias qtd_* ou quantidade_* (ex: COUNT(chamado) AS qtd_chamados, COUNT(DISTINCT cliente) AS qtd_clientes). PROIBIDO usar total_* para COUNT. Reserve total_* para SUM de valor monetario/financeiro.',
     `- Para faturamento, use a metrica ${campoFaturamento} quando existir.`,
     `- Faturamento liquido = ${campoFaturamento} - ${campoValorDevolvido}, quando a pergunta mencionar devolucao, devolucoes, liquido ou abatendo devolucoes.`,
     `- Quantidade liquida = ${campoQuantidade} - ${campoQuantidadeDevolvida}, quando a pergunta mencionar devolucao, devolucoes, liquido ou abatendo devolucoes.`,
@@ -377,8 +379,19 @@ function _sanitizarSqlSelectDataset(sql, dataset, campoData, camposPermitidos, m
   let out = String(sql || '');
   out = _normalizarCampoDataLegado(out, campoData, camposPermitidos);
   out = _removerFiltroEmpresaDivergente(out, _empresaFixaSqlBase(dataset?.sql_base));
+  out = _normalizarAliasCountQuantidade(out);
   out = _corrigirGroupBySubstringIncompleto(out);
   return out;
+}
+
+function _normalizarAliasCountQuantidade(sql) {
+  return String(sql || '').replace(
+    /\bCOUNT\s*\(\s*(DISTINCT\s+)?([^()]*)\)\s+AS\s+(\[?)total(?:_([A-Za-z0-9_]+))?(\]?)/gi,
+    (_m, distinct, expr, abre, sufixo, fecha) => {
+      const alvo = sufixo ? `qtd_${sufixo}` : 'qtd_registros';
+      return `COUNT(${distinct || ''}${String(expr || '').trim()}) AS ${abre || ''}${alvo}${fecha || ''}`;
+    },
+  );
 }
 
 function _corrigirGroupBySubstringIncompleto(sql) {
