@@ -191,39 +191,63 @@ function resolverMacroDataSql(nome, deslocamento, job, referencia = new Date()) 
   return macros[chave];
 }
 
-// Macros de identidade (seguranca por papel dinamico, ex: SoftExpert) — resolvem o codigo,
-// papel e sistema cadastrados em whatsapp_numero_modulos para o UNICO destinatario do job.
-// So fazem sentido quando o job tem exatamente 1 destinatario: SQL fixo executa uma unica
-// vez e manda a mesma resposta para todos, entao um codigo por pessoa so e correto se so
-// houver uma pessoa. Retorna undefined (macro nao resolvida, permanece {{...}} no SQL) se
-// nao houver destinatario, houver mais de um, ou o cadastro nao tiver modulo/papel/codigo.
-function _identidadeDoDestinatarioUnico(job, destinatarios) {
+const MACROS_DESTINATARIO_SQL = new Set([
+  'CODIGO_IDENTIDADE',
+  'PAPEL_IDENTIDADE',
+  'SISTEMA_IDENTIDADE',
+  'COD_VENDEDOR_ERP',
+  'COD_CLIENTE_ERP',
+  'COD_APROVADOR_ERP',
+  'COD_APROV_ERP',
+]);
+
+function sqlTemMacroDestinatario(sql) {
+  let encontrou = false;
+  String(sql || '').replace(/\{\{\s*([A-Z0-9_]+)(?::\s*[+-]?\d+)?\s*\}\}/gi, (match, nome) => {
+    if (MACROS_DESTINATARIO_SQL.has(String(nome || '').toUpperCase())) encontrou = true;
+    return match;
+  });
+  return encontrou;
+}
+
+// Macros de destinatario resolvem campos cadastrados no numero autorizado. Quando o job
+// tiver varios destinatarios, o executor roda o SQL fixo uma vez por destinatario.
+function _dadosDoDestinatarioUnico(job, destinatarios) {
   if (!Array.isArray(destinatarios) || destinatarios.length !== 1) return null;
-  const numeroId = destinatarios[0]?.id || destinatarios[0]?.numero_id;
+  const numeroId = destinatarios[0]?.numero_id || destinatarios[0]?.id;
   const erp = _erpDoModulo(job.empresa_id, job.modulo);
-  if (!numeroId || !erp) return null;
+  if (!numeroId) return null;
   try {
-    const row = crud.listar('whatsapp_numero_modulos', {})
-      .find(m => m.numero_id === numeroId && String(m.erp || '').toLowerCase() === erp && String(m.modulo || '').toLowerCase() === String(job.modulo || '').toLowerCase());
-    if (!row) return null;
+    const numero = crud.listar('whatsapp_allowed_numbers', { empresa_id: Number(job.empresa_id) })
+      .find(n => String(n.id) === String(numeroId));
+    const modulo = erp
+      ? crud.listar('whatsapp_numero_modulos', {})
+        .find(m => String(m.numero_id) === String(numeroId) && String(m.erp || '').toLowerCase() === erp && String(m.modulo || '').toLowerCase() === String(job.modulo || '').toLowerCase())
+      : null;
     return {
-      codigo: row.codigo_identidade || null,
-      papel: row.papel || null,
+      codigo: modulo?.codigo_identidade || null,
+      papel: modulo?.papel || null,
       sistema: erp,
+      cod_vendedor_erp: numero?.erp_id || null,
+      cod_cliente_erp: numero?.cod_cliente_erp || null,
+      cod_aprovador_erp: numero?.cod_aprov_erp || null,
     };
   } catch (_) {
     return null;
   }
 }
 
-function resolverMacroIdentidadeSql(nome, job, destinatarios) {
+function resolverMacroDestinatarioSql(nome, job, destinatarios) {
   const chave = String(nome || '').toUpperCase();
-  if (!['CODIGO_IDENTIDADE', 'PAPEL_IDENTIDADE', 'SISTEMA_IDENTIDADE'].includes(chave)) return undefined;
-  const identidade = _identidadeDoDestinatarioUnico(job, destinatarios);
-  if (!identidade) return undefined;
-  if (chave === 'CODIGO_IDENTIDADE') return identidade.codigo || undefined;
-  if (chave === 'PAPEL_IDENTIDADE') return identidade.papel || undefined;
-  if (chave === 'SISTEMA_IDENTIDADE') return identidade.sistema || undefined;
+  if (!MACROS_DESTINATARIO_SQL.has(chave)) return undefined;
+  const dados = _dadosDoDestinatarioUnico(job, destinatarios);
+  if (!dados) return undefined;
+  if (chave === 'CODIGO_IDENTIDADE') return dados.codigo || undefined;
+  if (chave === 'PAPEL_IDENTIDADE') return dados.papel || undefined;
+  if (chave === 'SISTEMA_IDENTIDADE') return dados.sistema || undefined;
+  if (chave === 'COD_VENDEDOR_ERP') return dados.cod_vendedor_erp || undefined;
+  if (chave === 'COD_CLIENTE_ERP') return dados.cod_cliente_erp || undefined;
+  if (chave === 'COD_APROVADOR_ERP' || chave === 'COD_APROV_ERP') return dados.cod_aprovador_erp || undefined;
   return undefined;
 }
 
@@ -231,10 +255,10 @@ function aplicarMacrosSql(sql, job, referencia = new Date(), destinatarios = nul
   return String(sql || '').replace(/\{\{\s*([A-Z0-9_]+)(?::\s*([+-]?\d+))?\s*\}\}/gi, (match, nome, deslocamento) => {
     const valorData = resolverMacroDataSql(nome, deslocamento, job, referencia);
     if (valorData !== undefined) return valorData;
-    const valorIdentidade = resolverMacroIdentidadeSql(nome, job, destinatarios);
-    if (valorIdentidade !== undefined) {
-      // Escapa aspas simples: o valor entra direto no SQL (ex: WHERE campo = '{{CODIGO_IDENTIDADE}}').
-      return String(valorIdentidade).replace(/'/g, "''");
+    const valorDestinatario = resolverMacroDestinatarioSql(nome, job, destinatarios);
+    if (valorDestinatario !== undefined) {
+      // Escapa aspas simples: o valor entra direto no SQL (ex: WHERE campo = '{{codigo_identidade}}').
+      return String(valorDestinatario).replace(/'/g, "''");
     }
     return match;
   });
@@ -597,14 +621,18 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
       let resultado;
       if (sqlFixo(job)) {
         // SQL fixo: executa localmente e envia para cada destinatário via worker
-        resultado = await executarSqlFixoUmaVez(empresaId, job, destinatarios);
+        resultado = null;
         for (const { dest, deliveryId } of entregas) {
           try {
-            await _enviarViaWorker(canal.worker_port, empresaId, dest.numero, resultado.resposta, resultado.ok, job.nome);
-            if (resultado.ok === false) falhas++;
+            const resultadoDest = sqlTemMacroDestinatario(sqlFixo(job))
+              ? await executarSqlFixoUmaVez(empresaId, job, [dest])
+              : (resultado || (resultado = await executarSqlFixoUmaVez(empresaId, job, destinatarios)));
+            await _enviarViaWorker(canal.worker_port, empresaId, dest.numero, resultadoDest.resposta, resultadoDest.ok, job.nome);
+            if (resultadoDest.ok === false) falhas++;
             else sucessos++;
-            resumo.push(`${dest.nome || dest.numero}: ${resultado.ok === false ? (resultado.error_detail || 'executado com erro na consulta') : 'enviado'}`);
+            resumo.push(`${dest.nome || dest.numero}: ${resultadoDest.ok === false ? (resultadoDest.error_detail || 'executado com erro na consulta') : 'enviado'}`);
             store.atualizarDelivery(deliveryId, { status: 'sucesso', sent_at: new Date().toISOString(), erro: null });
+            if (!resultado) resultado = resultadoDest;
           } catch (err) {
             falhas++;
             recipientIdsFalhos.push(dest.id);
@@ -622,14 +650,14 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
         store.atualizarDelivery(deliveryId, { status: 'sucesso', sent_at: new Date().toISOString(), erro: null });
       }
       const statusDelivery = sucessos && !falhas ? 'sucesso' : sucessos ? 'parcial' : 'erro';
-      if (resultado.interpretation_log_id) {
+      if (resultado?.interpretation_log_id) {
         try { interpretationLog.atualizarEntregue(resultado.interpretation_log_id, Date.now() - started); } catch (_) {}
       }
       store.atualizarRun(empresaId, run.id, {
         status: statusDelivery,
-        resposta: resultado.resposta,
+        resposta: resultado?.resposta || resumo.join('\n'),
         erro: falhas ? resumo.filter(x => !x.endsWith(': enviado')).join('\n') : null,
-        interpretation_log_id: resultado.interpretation_log_id,
+        interpretation_log_id: resultado?.interpretation_log_id || null,
         finished_at: new Date().toISOString(),
         duration_ms: Date.now() - started,
       });
@@ -675,49 +703,57 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
   let primeiroLogId = null;
   let primeiraResposta = null;
   let resultadoUnico = null;
+  const sqlFixoComMacroDestinatario = sqlFixo(job) && sqlTemMacroDestinatario(sqlFixo(job));
 
   const entregas = destinatarios.map(dest => ({
     dest,
     deliveryId: store.criarDelivery(empresaId, run.id, job.id, dest),
   }));
 
-  try {
-    resultadoUnico = await executarPerguntaUmaVez(svc, empresaId, job, destinatarios);
-    primeiroLogId = resultadoUnico.interpretation_log_id || null;
-    primeiraResposta = resultadoUnico.resposta || null;
-  } catch (err) {
-    const recipientIdsFalhos = [];
-    for (const entrega of entregas) {
-      falhas++;
-      recipientIdsFalhos.push(entrega.dest.id);
-      resumo.push(`${entrega.dest.nome || entrega.dest.numero}: ${err.message}`);
-      store.atualizarDelivery(entrega.deliveryId, { status: 'erro', erro: err.message });
+  if (!sqlFixoComMacroDestinatario) {
+    try {
+      resultadoUnico = await executarPerguntaUmaVez(svc, empresaId, job, destinatarios);
+      primeiroLogId = resultadoUnico.interpretation_log_id || null;
+      primeiraResposta = resultadoUnico.resposta || null;
+    } catch (err) {
+      const recipientIdsFalhos = [];
+      for (const entrega of entregas) {
+        falhas++;
+        recipientIdsFalhos.push(entrega.dest.id);
+        resumo.push(`${entrega.dest.nome || entrega.dest.numero}: ${err.message}`);
+        store.atualizarDelivery(entrega.deliveryId, { status: 'erro', erro: err.message });
+      }
+      store.atualizarRun(empresaId, run.id, {
+        status: 'erro',
+        finished_at: new Date().toISOString(),
+        duration_ms: Date.now() - started,
+        interpretation_log_id: null,
+        resposta: resumo.join('\n'),
+        erro: resumo.join('\n'),
+      });
+      throw Object.assign(err, { recipientIdsFalhos });
     }
-    store.atualizarRun(empresaId, run.id, {
-      status: 'erro',
-      finished_at: new Date().toISOString(),
-      duration_ms: Date.now() - started,
-      interpretation_log_id: null,
-      resposta: resumo.join('\n'),
-      erro: resumo.join('\n'),
-    });
-    throw Object.assign(err, { recipientIdsFalhos });
   }
 
   const recipientIdsFalhos = [];
   for (const { dest, deliveryId } of entregas) {
     try {
+      const resultadoDest = sqlFixoComMacroDestinatario
+        ? await executarSqlFixoUmaVez(empresaId, job, [dest])
+        : resultadoUnico;
+      if (!primeiroLogId) primeiroLogId = resultadoDest.interpretation_log_id || null;
+      if (!primeiraResposta) primeiraResposta = resultadoDest.resposta || null;
       await svc.sendScheduledQuestionDelivery({
         empresaId,
         numero: dest.numero,
-        resposta: resultadoUnico.resposta,
-        ok: resultadoUnico.ok,
-        rows: resultadoUnico.rows || null,
-        intent: resultadoUnico.intent || null,
+        resposta: resultadoDest.resposta,
+        ok: resultadoDest.ok,
+        rows: resultadoDest.rows || null,
+        intent: resultadoDest.intent || null,
       });
-      if (resultadoUnico.ok === false) falhas++;
+      if (resultadoDest.ok === false) falhas++;
       else sucessos++;
-      resumo.push(`${dest.nome || dest.numero}: ${resultadoUnico.ok === false ? (resultadoUnico.error_detail || 'executado com erro na consulta') : 'enviado'}`);
+      resumo.push(`${dest.nome || dest.numero}: ${resultadoDest.ok === false ? (resultadoDest.error_detail || 'executado com erro na consulta') : 'enviado'}`);
       store.atualizarDelivery(deliveryId, { status: 'sucesso', sent_at: new Date().toISOString(), erro: null });
     } catch (err) {
       falhas++;
@@ -754,6 +790,7 @@ module.exports = {
   avaliarMacrosSql,
   _test: {
     aplicarMacrosSql,
+    sqlTemMacroDestinatario,
     macrosPendentesSql,
     validarMacrosResolvidasSql,
     avaliarMacrosSql,
@@ -764,6 +801,7 @@ module.exports = {
     tentarRetryIaAposSqlFixo,
     macrosDataSql,
     resolverMacroDataSql,
+    resolverMacroDestinatarioSql,
     executarSqlFixoUmaVez,
     montarIntentSqlFixo,
     _erpDoModulo,

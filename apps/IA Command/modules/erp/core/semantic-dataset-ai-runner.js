@@ -381,8 +381,49 @@ function _sanitizarSqlSelectDataset(sql, dataset, campoData, camposPermitidos, m
   out = _normalizarCampoDataLegado(out, campoData, camposPermitidos);
   out = _removerFiltroEmpresaDivergente(out, _empresaFixaSqlBase(dataset?.sql_base));
   out = _normalizarAliasCountQuantidade(out);
+  out = _garantirAguardandoRetornoAgrupado(out, mensagem, camposPermitidos);
   out = _corrigirGroupBySubstringIncompleto(out);
   return out;
+}
+
+function _temCampoPermitido(camposPermitidos = [], campo) {
+  const alvo = String(campo || '').trim().toUpperCase();
+  return (camposPermitidos || []).some(c => String(c || '').trim().toUpperCase() === alvo);
+}
+
+function _mencionaAguardandoRetornoComoAgrupamento(mensagem) {
+  const texto = String(mensagem || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  if (!/\baguardando\s+retorno\b|\bretorno\b/.test(texto)) return false;
+  return /\bagrupad[oa]s?\b|\bagrupar\b|\bpor\b/.test(texto);
+}
+
+function _garantirAguardandoRetornoAgrupado(sql, mensagem, camposPermitidos = []) {
+  if (!_mencionaAguardandoRetornoComoAgrupamento(mensagem)) return sql;
+  if (!_temCampoPermitido(camposPermitidos, 'aguardando_retorno')) return sql;
+  let out = String(sql || '');
+  if (!/\bGROUP\s+BY\b/i.test(out)) return out;
+
+  const selectsBase = [...out.matchAll(/\bSELECT\s+(?:TOP\s+\d+\s+)?([\s\S]*?)\bFROM\s+base\b/gi)];
+  const selectFinal = selectsBase.length ? String(selectsBase[selectsBase.length - 1][1] || '') : '';
+  const temSelect = /\baguardando_retorno\b/i.test(selectFinal);
+  if (!temSelect) {
+    out = out.replace(
+      /\bSELECT\s+(TOP\s+\d+\s+)?/i,
+      (_m, top) => `SELECT ${top || ''}aguardando_retorno, `,
+    );
+  }
+
+  const groupMatch = out.match(/\bGROUP\s+BY\s+([\s\S]*?)(\s+ORDER\s+BY\b|$)/i);
+  if (!groupMatch) return out;
+  if (/\baguardando_retorno\b/i.test(groupMatch[1])) return out;
+
+  return out.replace(
+    /\bGROUP\s+BY\s+([\s\S]*?)(\s+ORDER\s+BY\b|$)/i,
+    (_m, groupBy, fim) => `GROUP BY aguardando_retorno, ${String(groupBy || '').trim()}${fim || ''}`,
+  );
 }
 
 function _normalizarAliasCountQuantidade(sql) {
