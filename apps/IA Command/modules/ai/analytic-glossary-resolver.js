@@ -428,13 +428,39 @@ function _mesCivilAnteriorA(dataInicioAaaammdd) {
 // linha, lado a lado) foi avaliado pelo usuario como confuso — nao fica claro visualmente
 // qual valor e de qual mes, e o subtotal/total geral somava colunas que nao deveriam ser
 // somadas. Unificado (08/09/2026) com o formato de serie mensal (ja validado como claro):
-// TODA analise horizontal agora gera uma linha POR COMPETENCIA dentro do periodo pedido —
-// se o periodo e "so este mes", vira uma serie de 2 linhas (mes anterior=base, mes atual);
-// se o periodo cobre N meses ("mes a mes"), vira uma serie de N+1 linhas (mes-base + os N
-// meses pedidos). Mesma estrutura sempre (competencia, faturamento, indice_base,
-// variacao_percentual), so muda quantas linhas.
+// TODA analise horizontal agora gera uma linha POR COMPETENCIA dentro do periodo pedido.
+//
+// Segundo bug real confirmado em producao (08/09/2026, empresa CAIEIRA): quando o usuario ja
+// pede um periodo de VARIOS meses ("do ano por mes" = jan-set), o sistema buscava um mes-base
+// ADICIONAL fora desse periodo (dezembro/2025) so para ter uma referencia de indice 100% —
+// mas essa linha extra nao faz parte do periodo pedido, e ao entrar na soma do Subtotal/Total
+// Geral distorcia o "faturamento do ano" (somava um mes de 2025 junto). Usuario confirmou
+// (08/09/2026): o mes-base NUNCA deve ser buscado fora do periodo pedido — quando o periodo ja
+// cobre 2+ meses, o PROPRIO PRIMEIRO MES do periodo pedido e a base (indice 100%, sem
+// crescimento), sem buscar nenhum dado de fora. So busca um mes-base externo (mes anterior)
+// quando o periodo pedido e um UNICO mes — senao a serie teria 1 linha so, sem nada pra
+// comparar (esse caso continua igual: "analise horizontal do mes" = 2 linhas, mes anterior +
+// mes atual).
+function _ehUnicoMesCivil(periodoAtual) {
+  const inicio = _paraDate(periodoAtual?.dataInicio);
+  const fim = _paraDate(periodoAtual?.dataFim);
+  if (!inicio || !fim) return false;
+  return _ehMesCivilCompleto(inicio, fim);
+}
+
 function resolverPeriodoBaseSeHorizontal(termo, periodoAtual) {
   if (!RE_TERMO_HORIZONTAL.test(termo || '')) return null;
+
+  if (!_ehUnicoMesCivil(periodoAtual)) {
+    // Periodo ja cobre 2+ meses: nao busca nada fora dele. O primeiro mes do PROPRIO periodo
+    // pedido e a base visual (indice 100%, crescimento N/A) — nunca um mes anterior externo.
+    return {
+      serieMode: 'indice_base',
+      periodoInicioSerie: periodoAtual?.dataInicio || null,
+      avisoTexto: null,
+    };
+  }
+
   const base = _mesCivilAnteriorA(periodoAtual?.dataInicio);
   if (!base) return null;
   return {

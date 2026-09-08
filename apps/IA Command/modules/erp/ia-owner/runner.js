@@ -4232,9 +4232,21 @@ function _instrucaoPeriodoHorizontal(intent) {
   if (glossario?.serieMode !== 'indice_base') return null;
   const pIni = glossario.periodoInicioSerie || intent.periodo?.dataInicio || '?';
   const pFim = intent.periodo?.dataFim || '?';
+  // Bug real confirmado em producao (08/09/2026, empresa CAIEIRA): quando o periodo pedido ja
+  // cobre 2+ meses ("do ano por mes"), o usuario NAO quer um mes adicional fora do periodo so
+  // para servir de base — isso distorcia o Subtotal/Total Geral (somava um mes de fora do
+  // periodo pedido junto com o total). periodoInicioSerie === intent.periodo.dataInicio (o
+  // resolver ja garante isso) significa "sem mes-base externo": o PRIMEIRO mes do PROPRIO
+  // periodo pedido e a base visual (indice 100%, sem crescimento), nada busca fora dele. So
+  // quando o periodo pedido e um unico mes o resolver busca 1 mes anterior como base — nesse
+  // caso pIni difere de intent.periodo.dataInicio, e a serie tem 1 linha a mais que o pedido.
+  const temMesBaseExterno = pIni !== (intent.periodo?.dataInicio || '?');
+  const introducao = temMesBaseExterno
+    ? `A pergunta pede "${glossario.termo}", que por definicao SEMPRE compara periodos ao longo do tempo — mesmo que o texto mencione so "este mes", a analise horizontal inclui o mes-base (imediatamente anterior) alem do periodo pedido.`
+    : `A pergunta pede "${glossario.termo}" para o periodo ${intent.periodo?.dataInicio || '?'} a ${pFim}. Este periodo JA cobre 2 ou mais meses — NAO busque nenhum mes adicional fora dele. O PRIMEIRO mes do proprio periodo pedido (${pIni}) e a base visual: indice_base = 100.00 e variacao_percentual = NULL para ele, exatamente como qualquer outro "mes-base", so que sem precisar de dado de fora do periodo. PROIBIDO incluir no SQL qualquer mes anterior a ${pIni} — isso adicionaria uma linha fora do periodo pedido, distorcendo o Subtotal/Total Geral da resposta.`;
   return [
-    `A pergunta pede "${glossario.termo}", que por definicao SEMPRE compara periodos ao longo do tempo — mesmo que o texto mencione so "este mes", a analise horizontal inclui o mes-base (imediatamente anterior) alem do periodo pedido.`,
-    `PERIODO COMPLETO DA SERIE (mes-base + periodo pedido): ${pIni} a ${pFim}.`,
+    introducao,
+    `PERIODO COMPLETO DA SERIE: ${pIni} a ${pFim}.`,
     '',
     'CHECKLIST OBRIGATORIO antes de responder (falhar qualquer item invalida a resposta):',
     `1. O SQL final DEVE retornar UMA LINHA POR COMPETENCIA (mes) dentro de ${pIni} a ${pFim} — agrupando por SUBSTRING do campo de data (formato YYYYMM). Se o periodo cobre 2 meses, retorne 2 linhas; se cobre 8 meses, retorne 8 linhas.`,
@@ -4244,10 +4256,14 @@ function _instrucaoPeriodoHorizontal(intent) {
     '5. Colunas MINIMAS obrigatorias no SELECT final, com EXATAMENTE estes nomes: competencia (YYYYMM), faturamento, indice_base, variacao_percentual. PROIBIDO usar os nomes antigos faturamento_atual/faturamento_base/variacao_absoluta — o formato "colunas lado a lado numa linha so" NAO deve mais ser usado.',
     '6. Se a pergunta pedir OUTRA metrica alem do faturamento (ex: "em valor e quantidade", "com ticket medio"), essa metrica extra tambem precisa da SUA PROPRIA analise horizontal completa — nao basta incluir a coluna bruta ao lado das outras. Gere um par indice_base/variacao_percentual DEDICADO para ela (ex: quantidade, indice_base_quantidade, variacao_percentual_quantidade), calculado com FIRST_VALUE()/LAG() sobre ESSA metrica, do mesmo jeito que o item 3 exige para o faturamento. Incluir so o valor bruto da metrica extra sem o indice/variacao dela e um erro: a pergunta pediu analise horizontal DAQUELA metrica tambem, nao so um numero a mais do lado.',
     '',
-    `ERRADO (rejeitado mesmo sem erro de sintaxe): SELECT ... WHERE campo_data BETWEEN '${intent.periodo?.dataInicio || '?'}' AND '${pFim}' GROUP BY competencia — isso ignora o mes-base e retorna so 1 linha do periodo pedido.`,
+    ...(temMesBaseExterno
+      ? [`ERRADO (rejeitado mesmo sem erro de sintaxe): SELECT ... WHERE campo_data BETWEEN '${intent.periodo?.dataInicio || '?'}' AND '${pFim}' GROUP BY competencia — isso ignora o mes-base e retorna so 1 linha do periodo pedido.`]
+      : [`ERRADO (rejeitado mesmo sem erro de sintaxe): incluir QUALQUER competencia anterior a '${pIni}' no WHERE ou no resultado — o periodo pedido ja cobre 2+ meses, nao ha mes-base fora dele. O WHERE deve cobrir EXATAMENTE '${pIni}' a '${pFim}', nem um dia a menos nem a mais.`]),
     `ERRADO tambem: colunas lado a lado numa unica linha (faturamento_atual, faturamento_base, variacao_absoluta) — formato descontinuado, sempre use a serie de linhas.`,
     `CERTO: WITH mensal AS (SELECT SUBSTRING(campo_data,1,6) AS competencia, SUM(valor) AS faturamento FROM ... WHERE campo_data BETWEEN '${pIni}' AND '${pFim}' GROUP BY SUBSTRING(campo_data,1,6)) SELECT competencia, faturamento, (faturamento * 100.0 / FIRST_VALUE(faturamento) OVER (ORDER BY competencia)) AS indice_base, CASE WHEN LAG(faturamento) OVER (ORDER BY competencia) IS NULL OR LAG(faturamento) OVER (ORDER BY competencia) = 0 THEN NULL ELSE ((faturamento - LAG(faturamento) OVER (ORDER BY competencia)) * 100.0 / LAG(faturamento) OVER (ORDER BY competencia)) END AS variacao_percentual FROM mensal ORDER BY competencia.`,
-    'Antes de finalizar o SQL, verifique: "meu SELECT tem uma unica clausula BETWEEN cobrindo so o periodo pedido, sem o mes-base?" Se sim, esta ERRADO — inclua o mes-base no filtro de data. Verifique tambem os nomes exatos das colunas: competencia, faturamento, indice_base, variacao_percentual.',
+    temMesBaseExterno
+      ? 'Antes de finalizar o SQL, verifique: "meu SELECT tem uma unica clausula BETWEEN cobrindo so o periodo pedido, sem o mes-base?" Se sim, esta ERRADO — inclua o mes-base no filtro de data. Verifique tambem os nomes exatos das colunas: competencia, faturamento, indice_base, variacao_percentual.'
+      : `Antes de finalizar o SQL, verifique: "meu WHERE inclui alguma data anterior a '${pIni}'?" Se sim, esta ERRADO — remova, o periodo pedido nao tem mes-base externo. Verifique tambem os nomes exatos das colunas: competencia, faturamento, indice_base, variacao_percentual.`,
   ].join('\n');
 }
 
