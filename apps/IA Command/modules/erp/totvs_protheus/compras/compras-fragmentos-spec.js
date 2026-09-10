@@ -50,6 +50,7 @@ function base() {
 - SF1 -> SA2:
   SF1.F1_FORNECE = SA2.A2_COD
   AND SF1.F1_LOJA = SA2.A2_LOJA
+- Quando SA2 for usado apenas para exibir/agrupar fornecedor, prefira LEFT JOIN SA2 para nao descartar compras validas por falta ou divergencia no cadastro do fornecedor.
 - SD1 -> SB1: SD1.D1_COD = SB1.B1_COD
 - SB1 -> SBM: SB1.B1_GRUPO = SBM.BM_GRUPO
 - SD1 -> SC7: SD1.D1_PEDIDO = SC7.C7_NUM AND SD1.D1_ITEMPC = SC7.C7_ITEM
@@ -72,6 +73,12 @@ function base() {
 - Qualifique campos sempre pelo alias base (SD1.D1_TOTAL, nunca SD1990.D1_TOTAL).
 - Nao crie filtros cadastrais vazios do tipo IN (SELECT codigo FROM cadastro WHERE codigo IS NOT NULL).
 - Nunca use UPDATE, DELETE, INSERT, DROP, ALTER, TRUNCATE, EXEC, DECLARE, MERGE, SELECT INTO.
+
+## Regra Fiscal Brasileira de CFOP para Compras
+- REGRA OBRIGATORIA: compras/custo real em valor financeiro devem excluir CFOP iniciado por 19 usando SD1.D1_CF NOT LIKE '19%'.
+- A regra se aplica a "compras", "total de compras", "compras por dia", "compras por fornecedor", "compras por produto", "compras por natureza", "compras por centro de custo" e despesas/contas a pagar originadas de compras quando a metrica monetaria vier de SD1.D1_TOTAL.
+- Razao fiscal: CFOP 19xx representa remessa/transferencia/entrada sem obrigacao financeira; nao entra no total financeiro de compras.
+- So remova essa exclusao quando o usuario pedir explicitamente remessas, transferencias, CFOP 19, todas as entradas ou movimentacao/volume fisico.
 
 ## Exibicao de entidades
 - fornecedor: SA2.A2_NOME AS fornecedor. Codigo/loja como cod_fornecedor e loja_fornecedor.
@@ -132,6 +139,7 @@ Avalie a METRICA e a granularidade da pergunta para determinar a estrutura do FR
 
 ### Consultas por VALOR Financeiro Total (sem produto/item)
 - Quando o usuario pedir "Total de compras", "Compras do ano", "Compras do mes" ou "Compras de um periodo" — metricas puramente monetarias, sem especificar produto, grupo de produto ou QUANTIDADE — use FROM SD1 JOIN SF1 com metrica COALESCE(SUM(SD1.D1_TOTAL), 0) AS valor_compra.
+- Em toda metrica monetaria de compras baseada em SD1.D1_TOTAL, inclua obrigatoriamente no WHERE: AND SD1.D1_CF NOT LIKE '19%'.
 - Agrupamentos por fornecedor sao compativeis com SD1 JOIN SF1: faca JOIN com SA2 (via Joins padrao SF1->SA2). SD1 continua como origem da metrica.
 - Se usar SF1 sozinha (sem SD1) a metrica pode ser COALESCE(SUM(SF1.F1_VALBRUT), 0) AS valor_compra. Porem EXPRESSAMENTE PROIBIDO usar SUM(SF1.F1_VALBRUT) quando SD1 estiver no FROM/JOIN: o relacionamento 1-para-muitos entre SF1 e SD1 multiplica F1_VALBRUT pela quantidade de itens da nota, gerando valores duplicados errados.
 `;

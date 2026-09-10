@@ -202,6 +202,15 @@ function validarFiltroTipoSF2(sql = '') {
   return "SF2 usada sem filtro SF2.F2_TIPO. REGRA OBRIGATORIA: toda query de faturamento que use SF2 deve filtrar SF2.F2_TIPO = 'N' no WHERE. Isso exclui devolucoes de compras (tipo 'D'), complementos e outros tipos que nao representam receita de venda. Adicione AND SF2.F2_TIPO = 'N' ao WHERE.";
 }
 
+function validarGranularidadeSemanalFaturamento(sql = '', mensagem = '') {
+  const msg = _normalizarTextoFiscal(mensagem);
+  if (!/\bseman\w*\b|\bsexta\s+feira\b|\bsexta-feira\b/.test(msg)) return null;
+  const texto = String(sql || '');
+  if (!/\bDATEPART\s*\(\s*WEEK\s*,/i.test(texto)) return null;
+  if (/\bAS\s+(?:periodo_inicio|periodo_fim|periodo_label|semana_inicio|semana_fim|semana_fim_sexta)\b/i.test(texto)) return null;
+  return 'Consulta semanal de faturamento nao pode usar apenas DATEPART(WEEK) como periodo. Retorne alias temporal claro (periodo_inicio, periodo_fim, periodo_label, semana_fim ou semana_fim_sexta) e agrupe por esse mesmo bloco temporal; para acumulado, use CTE semanal e aplique SUM(total_vendas) OVER no SELECT externo.';
+}
+
 const CFOPS_TRANSFERENCIA_SEM_RECEITA = ['5151', '6151', '5152', '6152', '5155', '6155', '5156', '6156'];
 const CFOPS_DEVOLUCAO_COMPRA_ST_SEM_RECEITA = ['5410', '6410', '5411', '6411', '5412', '6412', '5413', '6413'];
 // Excecao dentro do grupo 59xx/69xx (documental/logistico, regra geral sem receita): 5932/6932
@@ -251,6 +260,35 @@ function _temExcecaoCfop59_69ComReceita(sql = '') {
     ...texto.matchAll(/\bSD2\s*\.\s*D2_CF\s+IN\s*\(([^)]*)\)/gi),
   ];
   return matches.some(match => codigos.every(cfop => new RegExp(`'${cfop}'`).test(match[1])));
+}
+
+function _cfopsExcecao59_69Presentes(sql = '') {
+  const texto = String(sql || '');
+  const matches = [
+    ...texto.matchAll(/\bSD2\s*\.\s*D2_CF\s+IN\s*\(([^)]*)\)/gi),
+  ];
+  const presentes = new Set();
+  for (const match of matches) {
+    for (const cfop of CFOPS_59_69_COM_RECEITA) {
+      if (new RegExp(`'${cfop}'`).test(match[1])) presentes.add(cfop);
+    }
+  }
+  return [...presentes];
+}
+
+function _diagnosticoCfopReceita(sql = '') {
+  const excecoesPresentes = _cfopsExcecao59_69Presentes(sql);
+  const excecoesFaltantes = CFOPS_59_69_COM_RECEITA.filter(cfop => !excecoesPresentes.includes(cfop));
+  return {
+    excecoesPresentes,
+    excecoesFaltantes,
+    temExclusaoRemessa: _temExclusaoRemessa(sql),
+    temExclusaoTransferencia: _temExclusaoTransferencia(sql),
+    temExclusaoDevolucaoCompra: _temExclusaoPrefixos(sql, '52', '62'),
+    temExclusaoDevolucaoCompraST: _temExclusaoLista(sql, CFOPS_DEVOLUCAO_COMPRA_ST_SEM_RECEITA),
+    temExclusaoAtivoUsoConsumo: _temExclusaoPrefixos(sql, '55', '65'),
+    temExclusaoCreditoRessarcimento: _temExclusaoPrefixos(sql, '56', '66'),
+  };
 }
 
 function _temExclusaoRemessa(sql = '') {
@@ -308,6 +346,15 @@ function validarExclusaoCfopReceita(sql = '', mensagem = '') {
   if (!_mensagemPedeReceitaPadrao(mensagem)) return null;
   if (!_sqlUsaSD2Receita(sql)) return null;
   if (_temExclusaoSemReceitaOperacional(sql)) return null;
+  const diagnostico = _diagnosticoCfopReceita(sql);
+  if (diagnostico.excecoesPresentes.length && diagnostico.excecoesFaltantes.length) {
+    return [
+      `Regra fiscal brasileira de CFOP: filtro de receita incompleto. Faltam CFOPs de receita real na excecao 59/69: ${diagnostico.excecoesFaltantes.join(', ')}.`,
+      "A excecao deve conter exatamente os 4 codigos: IN ('5932','6932','5933','6933').",
+      'Nao use lista parcial, porque isso exclui receita real do grupo 59/69.',
+      `Use o filtro fiscal nacional completo: ${FILTRO_CFOP_RECEITA_PADRAO}.`,
+    ].join(' ');
+  }
   return [
     'Regra fiscal brasileira de CFOP: faturamento/vendas/receita representam somente operacoes que geram receita.',
     'CFOP de remessa, transferencia, devolucao de compra, ativo/material de uso ou consumo, credito/ressarcimento de ICMS e devolucao de compra com ST nao representa receita operacional de venda no entendimento fiscal nacional, independentemente do ERP.',
@@ -619,6 +666,9 @@ module.exports = {
       validar: validarFiltroTipoSF2,
     },
     {
+      validar: validarGranularidadeSemanalFaturamento,
+    },
+    {
       validar: validarExclusaoCfopReceita,
     },
     {
@@ -689,6 +739,7 @@ module.exports = {
     validarExclusaoCfopReceita,
     _mensagemPedeReceitaPadrao,
     _temExclusaoSemReceitaOperacional,
+    _diagnosticoCfopReceita,
     FILTRO_CFOP_RECEITA_PADRAO,
   },
 };

@@ -6,7 +6,7 @@ const RE_METRICA = /valor|total|saldo|salatua|juros|multa|desconto|vlr|vl_|brut|
 const RE_MEDIA = /media|medio|ticket|avg|pct|percent|taxa|indice|proporcao/i;
 const RE_SKIP = /percentual|percent|crescimento|variacao|taxa|indice|id$|^id_|codigo|cod_/i;
 const RE_QTD = /qtd|quantidade|qt_|volume/i;
-const RE_TEMPORAL = /^(ano_mes|aaaamm|aaaa_mm|competencia|referencia|ano|mes|mes_ano|periodo|data|data_.*|dt_.*|.*_data|dia|trimestre|semestre|vencimento|vencto|vencrea|emissao|baixa|.*_(vencimento|vencto|vencrea|emissao|baixa))$/i;
+const RE_TEMPORAL = /^(ano_mes|aaaamm|aaaa_mm|competencia|referencia|ano|mes|mes_ano|periodo|periodo_label|label_periodo|rotulo_periodo|periodo_inicio|inicio_periodo|data_inicio_periodo|periodo_fim|fim_periodo|data_fim_periodo|semana|numero_semana|semana_numero|semana_mes|semana_inicio|semana_fim|semana_fim_sexta|quinzena|numero_quinzena|quinzena_mes|dezena|numero_dezena|dezena_mes|data|data_.*|dt_.*|.*_data|dia|trimestre|semestre|vencimento|vencto|vencrea|emissao|baixa|.*_(vencimento|vencto|vencrea|emissao|baixa))$/i;
 const RE_ENTIDADE = /^(vendedor|fornecedor|cliente|produto|servico|funcionario|unidade|empresa|filial|grupo|categoria|depto|departamento|cc|centro|nome|descri|aprovador)/i;
 const RE_DOCUMENTO = /^(documento|doc|nota|nota_fiscal|nf|nfe|titulo|duplicata|f2_doc|d2_doc|e1_num|e2_num|pedido|numero_pedido|num_pedido|cr_num|c7_num)$/i;
 const RE_BANCARIO = /^(banco|bancos|e8_banco|a6_cod|banco_nome|agencia|e8_agencia|a6_agencia|conta|conta_corrente|e8_conta|a6_numcon|conta_bancaria)$/i;
@@ -314,6 +314,14 @@ function labelDimensao(col) {
   if (/^grupo/.test(k)) return 'Grupo';
   if (/^categoria/.test(k)) return 'Categoria';
   if (/^filial/.test(k)) return 'Filial';
+  if (/^(periodo_label|label_periodo|rotulo_periodo)$/.test(k)) return 'Periodo';
+  if (/^(periodo_inicio|inicio_periodo|data_inicio_periodo)$/.test(k)) return 'Periodo Inicio';
+  if (/^(periodo_fim|fim_periodo|data_fim_periodo)$/.test(k)) return 'Periodo Fim';
+  if (/^(semana|numero_semana|semana_numero|semana_mes)$/.test(k)) return 'Semana';
+  if (/^(semana_inicio)$/.test(k)) return 'Semana Inicio';
+  if (/^(semana_fim|semana_fim_sexta)$/.test(k)) return 'Semana Fim';
+  if (/^(quinzena|numero_quinzena|quinzena_mes)$/.test(k)) return 'Quinzena';
+  if (/^(dezena|numero_dezena|dezena_mes)$/.test(k)) return 'Dezena';
   if (/^mes/.test(k)) return 'Mes';
   if (/^ano/.test(k)) return 'Ano';
   return String(col || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -337,6 +345,18 @@ function labelValorDimensao(col, valor) {
     const n = parseInt(s, 10);
     if (n >= 1 && n <= 12) return MESES[n - 1];
   }
+  if (/^(semana|numero_semana|semana_numero|semana_mes)$/.test(k)) {
+    const n = parseInt(s, 10);
+    return Number.isFinite(n) && n > 0 ? `Semana ${n}` : (s || '(sem identificacao)');
+  }
+  if (/^(quinzena|numero_quinzena|quinzena_mes)$/.test(k)) {
+    const n = parseInt(s, 10);
+    return n === 1 || n === 2 ? `${n}a quinzena` : (s || '(sem identificacao)');
+  }
+  if (/^(dezena|numero_dezena|dezena_mes)$/.test(k)) {
+    const n = parseInt(s, 10);
+    return n >= 1 && n <= 3 ? `${n}a dezena` : (s || '(sem identificacao)');
+  }
   if (/^\d{6}$/.test(s)) {
     const ano = s.slice(0, 4);
     const mes = parseInt(s.slice(4, 6), 10);
@@ -357,6 +377,10 @@ function sortValorDimensao(col, valor) {
   if (/^mes$/.test(k)) {
     const n = parseInt(s, 10);
     return n >= 1 && n <= 12 ? String(n).padStart(2, '0') : s;
+  }
+  if (/^(semana|numero_semana|semana_numero|semana_mes|quinzena|numero_quinzena|quinzena_mes|dezena|numero_dezena|dezena_mes)$/.test(k)) {
+    const n = parseInt(s, 10);
+    return Number.isFinite(n) ? String(n).padStart(3, '0') : s;
   }
   if (/^\d{6}$/.test(s) || /^\d{8}$/.test(s)) return s;
   if (/^\d{4}-\d{2}/.test(s)) return s.slice(0, 10);
@@ -418,6 +442,18 @@ function isTemporalDimensionValue(col, v) {
   if (/^(mes)$/.test(k)) {
     const n = parseInt(s, 10);
     return (n >= 1 && n <= 12) || /^[a-z]/i.test(s);
+  }
+  if (/^(semana|numero_semana|semana_numero|semana_mes)$/.test(k)) {
+    const n = parseInt(s, 10);
+    return (n >= 1 && n <= 53) || /^[a-z]/i.test(s);
+  }
+  if (/^(quinzena|numero_quinzena|quinzena_mes)$/.test(k)) {
+    const n = parseInt(s, 10);
+    return (n >= 1 && n <= 2) || /^[a-z]/i.test(s);
+  }
+  if (/^(dezena|numero_dezena|dezena_mes)$/.test(k)) {
+    const n = parseInt(s, 10);
+    return (n >= 1 && n <= 3) || /^[a-z]/i.test(s);
   }
   if (/^(ano)$/.test(k)) return /^\d{4}$/.test(s);
   return /^\d{6}$/.test(s) || /^\d{8}$/.test(s) || /^\d{4}-\d{2}/.test(s) || /^\d{2}\/\d{2}\/\d{4}$/.test(s);
@@ -1105,6 +1141,14 @@ function chaveDimensaoCanonica(col) {
   if (/^(vendedor|nome_vendedor)$/.test(k)) return 'vendedor';
   if (/^(produto|nome_produto|descricao_produto)$/.test(k)) return 'produto';
   if (/^(competencia|ano_mes|aaaamm|aaaa_mm|referencia|periodo)$/.test(k)) return 'competencia';
+  if (/^(periodo_label|label_periodo|rotulo_periodo)$/.test(k)) return 'periodo_label';
+  if (/^(periodo_inicio|inicio_periodo|data_inicio_periodo)$/.test(k)) return 'periodo_inicio';
+  if (/^(semana_inicio)$/.test(k)) return 'semana_inicio';
+  if (/^(semana_fim|semana_fim_sexta)$/.test(k)) return 'semana_fim';
+  if (/^(periodo_fim|fim_periodo|data_fim_periodo)$/.test(k)) return 'periodo_fim';
+  if (/^(semana|numero_semana|semana_numero|semana_mes)$/.test(k)) return 'semana';
+  if (/^(quinzena|numero_quinzena|quinzena_mes)$/.test(k)) return 'quinzena';
+  if (/^(dezena|numero_dezena|dezena_mes)$/.test(k)) return 'dezena';
   return keyNorm(labelDimensao(col));
 }
 
@@ -1123,6 +1167,14 @@ function labelDimensaoCanonica(canon, col) {
   if (canon === 'emissao') return 'Emissao';
   if (canon === 'baixa') return 'Baixa';
   if (canon === 'competencia') return 'Competencia';
+  if (canon === 'periodo_label') return 'Periodo';
+  if (canon === 'periodo_inicio') return 'Periodo Inicio';
+  if (canon === 'periodo_fim') return 'Periodo Fim';
+  if (canon === 'semana_inicio') return 'Semana Inicio';
+  if (canon === 'semana_fim') return 'Semana Fim';
+  if (canon === 'semana') return 'Semana';
+  if (canon === 'quinzena') return 'Quinzena';
+  if (canon === 'dezena') return 'Dezena';
   return labelDimensao(col || canon);
 }
 
@@ -1358,7 +1410,7 @@ function renderAllShapesMistos(sucessos, shapes, opts = {}) {
     }
 
     entradasDim = [...grupos.entries()].sort(([a], [b]) => sortValorDimensao(dimBase, a).localeCompare(sortValorDimensao(dimBase, b)));
-    if (['vencimento', 'competencia', 'emissao', 'baixa', 'dia'].includes(dimCanon)) {
+    if (['vencimento', 'competencia', 'emissao', 'baixa', 'dia', 'periodo_label', 'periodo_inicio', 'periodo_fim', 'semana_inicio', 'semana_fim', 'semana', 'quinzena', 'dezena'].includes(dimCanon)) {
       entradasDim = recalcularCrescimentoTemporalCanonico(entradasDim, metricasCanon);
     }
     Object.assign(totalGeral, totalCanonicoOrdenado(entradasDim, metricasCanonTotal));

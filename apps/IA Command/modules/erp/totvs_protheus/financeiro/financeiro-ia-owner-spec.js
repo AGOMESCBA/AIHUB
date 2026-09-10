@@ -309,6 +309,14 @@ function regrasTecnicas({ modeloBaixasReceber, modeloBaixasPagar, mensagem } = {
     const fragmento = fragmentosSpec.FRAGMENTOS[chave];
     if (fragmento) partes.push(fragmento.texto(ctx));
   }
+  if (chaves.includes('receber_posicao') && chaves.includes('pagar_posicao') && !/\b(receb|client|pag|fornece)\w*\b/i.test(String(mensagem || ''))) {
+    partes.push(
+      '## Ambiguidade — "a vencer"/"vencido" sem lado explicito\n' +
+      '- A pergunta usa "a vencer", "vencido(s)" ou "vence hoje" sem indicar se e sobre contas a RECEBER (SE1/cliente) ou a PAGAR (SE2/fornecedor).\n' +
+      '- PROIBIDO escolher um lado por conta propria ou somar SE1 e SE2 juntos sem o usuario pedir explicitamente ambos.\n' +
+      '- Retorne precisa_confirmacao=true com pergunta_confirmacao perguntando se e sobre contas a receber, a pagar, ou ambas.'
+    );
+  }
   return partes.join('\n').trim();
 }
 
@@ -410,6 +418,34 @@ const sqlPatternsProibidos = [
           'Saldo bancario puro (SE8) nao pode incluir SE5. ' +
           'SE5 e tabela de baixas/movimentos — so deve ser usada com SE1 (receber) ou SE2 (pagar). ' +
           'Para saldo bancario use SOMENTE SE8 e SA6. Remova o JOIN SE5.'
+        );
+      }
+      return null;
+    },
+  },
+  {
+    // Bug real confirmado em producao (2 ocorrencias, 2026-09-10, CAIEIRA): pergunta
+    // "saldo bancario atual" (saldo bancario puro, sem qualquer mencao a titulos/contas)
+    // gerou SQL misturando SE1/SE2 com condicao fantasiada (SE2.E2_NATUREZ = 'ACERTO'),
+    // sem base em nenhuma parte da pergunta nem do spec. O fragmento "Saldo bancario"
+    // ja proibe isso em texto ("Nao inclua SE1/SE2/SE5/FK em saldo bancario puro"), mas
+    // a IA ignorou a instrucao textual duas vezes. Este guard torna a regra estrutural
+    // SEM confundir com fluxo de caixa (que legitimamente combina SE8+SE1+SE2, sem SE5/FK
+    // — ver fluxoCaixaProjetado): fluxo de caixa sempre produz os aliases obrigatorios
+    // saldo_bancario_base + (total_a_receber/total_a_pagar ou valor_recebido/valor_pago)
+    // exigidos no proprio spec desses fragmentos. Saldo bancario puro nunca tem esses
+    // aliases. Bloqueia SE1/SE2 apenas quando SE8 esta presente e nenhum desses aliases
+    // de fluxo aparece — ou seja, quando a operacao nao se declarou como fluxo de caixa.
+    validar(sql) {
+      const usaSE8 = /\b(?:FROM|JOIN)\s+SE8/i.test(sql);
+      const usaSE1ouSE2 = /\b(?:FROM|JOIN)\s+SE[12]\b/i.test(sql) || /\bSE[12]\s*\./i.test(sql);
+      const declaraFluxoCaixa = /\bsaldo_bancario_base\b/i.test(sql)
+        && (/\btotal_a_receber\b/i.test(sql) || /\btotal_a_pagar\b/i.test(sql) || /\bvalor_recebido\b/i.test(sql) || /\bvalor_pago\b/i.test(sql));
+      if (usaSE8 && usaSE1ouSE2 && !declaraFluxoCaixa) {
+        return (
+          'Saldo bancario puro (SE8) nao pode referenciar SE1 ou SE2. ' +
+          'Saldo bancario e operacao propria, isolada de contas a pagar/receber — usa SOMENTE SE8 e SA6. ' +
+          'Se a intencao e fluxo de caixa (que combina saldo bancario com receber/pagar), inclua os aliases obrigatorios saldo_bancario_base e total_a_receber/total_a_pagar (ou valor_recebido/valor_pago) conforme o modelo do fragmento de fluxo de caixa. Caso contrario, remova toda referencia a SE1/SE2 desta consulta.'
         );
       }
       return null;

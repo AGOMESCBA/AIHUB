@@ -29,6 +29,20 @@ assert(systemPrompt.includes('debito_liquido = debito_bruto - credito_pa_ndf'), 
 assert(systemPrompt.includes('credito_liquido = credito_bruto - credito_ra_ncc'), 'prompt deve conter formula do liquido em contas a receber');
 assert(systemPrompt.includes('Saldo bancario puro usa SOMENTE SE8 e SA6'), 'saldo bancario deve ficar separado');
 assert(systemPrompt.includes('Fluxo de caixa projetado'), 'prompt deve preservar fluxo projetado');
+assert(systemPrompt.includes('Registros Deletados/Excluidos'), 'prompt deve recusar perguntas sobre registros deletados/excluidos');
+
+const perguntaTitulosDeletados = 'quantos títulos a pagar foram deletados nesta semana?';
+const bloqueioTitulosDeletados = queryPlan.detectarConsultaRegistrosDeletados(perguntaTitulosDeletados);
+assert.strictEqual(bloqueioTitulosDeletados.bloqueado, true, 'pergunta sobre titulos deletados deve ser fora de escopo');
+
+const bloqueioRunnerDeletados = runner._test.respostaConsultaRegistrosDeletados('quantos registros de contas a pagar foram deletados hoje?');
+assert.strictEqual(bloqueioRunnerDeletados.subtipo, 'consulta_registros_deletados_fora_escopo', 'runner deve bloquear consulta de deletados antes do SQL');
+assert.strictEqual(/SQL|SELECT|D_E_L_E_T_/i.test(bloqueioRunnerDeletados.resposta_direta), false, 'resposta ao usuario nao deve sugerir SQL nem D_E_L_E_T_');
+assert.strictEqual(
+  queryPlan.detectarConsultaRegistrosDeletados('saldo a pagar excluindo PA').bloqueado,
+  false,
+  'filtro legitimo "excluindo PA" nao deve ser tratado como consulta de registros deletados',
+);
 
 assert.deepStrictEqual(
   financeiroSpec._test.gruposBuscaEntidade({ texto: 'ACME', tipo: 'desconhecido' }, { carteira: 'receber' }),

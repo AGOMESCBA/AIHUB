@@ -22,9 +22,36 @@ function _containsAny(texto, termos) {
   return termos.some(termo => _containsTerm(texto, termo));
 }
 
+function detectarConsultaRegistrosDeletados(mensagem = '') {
+  const texto = normalizarTexto(mensagem);
+  if (!texto) return { bloqueado: false };
+
+  const acaoRegistroDeletado = /\b(?:deletad[oa]s?|excluid[oa]s?|apag[oa]d[oa]s?|removid[oa]s?|eliminad[oa]s?|delecao|delete|deleted)\b/i;
+  const entidadeRegistro = /\b(?:registros?|titulos?|documentos?|duplicatas?|contas?|contas a pagar|contas a receber|notas?|pedidos?|clientes?|fornecedores?|produtos?|itens?|lancamentos?|movimentos?|movimentacoes?|vendas?|faturamentos?|receitas?|compras?|comissoes?)\b/i;
+  const construcaoPassiva = /\b(?:foi|foram|esta|estao|ficou|ficaram)\s+(?:deletad[oa]s?|excluid[oa]s?|apag[oa]d[oa]s?|removid[oa]s?|eliminad[oa]s?)\b/i;
+  const perguntaQuantidade = /\b(?:quantos?|quantas?|total|qtd|quantidade)\b/i;
+
+  if (!acaoRegistroDeletado.test(texto)) return { bloqueado: false };
+  if (!entidadeRegistro.test(texto) && !construcaoPassiva.test(texto)) return { bloqueado: false };
+
+  return {
+    bloqueado: true,
+    motivo: 'consulta_registros_deletados_fora_escopo',
+    mensagem: perguntaQuantidade.test(texto)
+      ? 'Consultas sobre quantidade de registros deletados, excluidos, apagados ou removidos estao fora do escopo. O IAHub consulta apenas registros validos do ERP.'
+      : 'Consultas envolvendo registros deletados, excluidos, apagados ou removidos estao fora do escopo. O IAHub consulta apenas registros validos do ERP.',
+  };
+}
+
 function _normalizarAgrupamentos(grupos = []) {
   const normalizados = [...new Set((Array.isArray(grupos) ? grupos : [])
     .map(g => String(g || '').toLowerCase())
+    .map(g => {
+      if (/^seman/.test(g)) return 'semana';
+      if (/^quinzen/.test(g)) return 'quinzena';
+      if (/^dezen/.test(g)) return 'dezena';
+      return g;
+    })
     .filter(Boolean))];
 
   // "grupo de produto" contem a palavra "produto", mas a granularidade pedida
@@ -93,6 +120,9 @@ function _inferirAgrupamentos(texto) {
     ['natureza', ['natureza']],
     // "titulo"/"titulos" isolados mantidos pois indicam granularidade de listagem
     ['documento', ['por documento', 'por documentos', 'por titulo', 'por titulos', 'por duplicata', 'por duplicatas', 'documento', 'documentos', 'titulo', 'titulos', 'duplicata', 'duplicatas']],
+    ['semana', ['por semana', 'por semanas', 'semana a semana', 'semanal', 'semanais', 'toda semana', 'todas as semanas', 'sexta feira', 'sexta-feira']],
+    ['quinzena', ['por quinzena', 'por quinzenas', 'quinzenal', 'quinzenais', 'primeira quinzena', 'segunda quinzena']],
+    ['dezena', ['por dezena', 'por dezenas', 'dezenal', 'dezenais', 'primeira dezena', 'segunda dezena', 'terceira dezena', 'de 10 em 10 dias']],
     ['mes', ['por mes', 'por meses', 'mes a mes', 'todos os meses', 'todo mes', 'mensal']],
     ['ano', ['por ano', 'ano a ano', 'anual']],
     ['dia', ['por dia', 'diario', 'por data', 'por data de vencimento', 'por vencimento', 'data de vencimento']],
@@ -239,6 +269,9 @@ function _inferirPlanoCompras(texto) {
 }
 
 function _inferirPlanoFaturamento(texto) {
+  const resultadoMensalVerticalVariacao = _containsAny(texto, ['resultado mensal', 'resultado por mes'])
+    && _containsAny(texto, ['analise vertical'])
+    && _containsAny(texto, ['variacao', 'positivo', 'positiva', 'negativo', 'negativa']);
   const comparativo = _containsAny(texto, [
     'comparativo', 'comparar', 'compare', 'comparacao', 'versus', 'vs',
     'crescimento', 'cresceu', 'evolucao', 'variacao', 'aumento', 'queda',
@@ -258,6 +291,7 @@ function _inferirPlanoFaturamento(texto) {
         : 'consulta',
     comparativo,
     calcularPercentualCrescimento,
+    resultadoMensalVerticalVariacao,
     dataPadrao: 'emissao',
     exigirSaldoAberto: false,
     proibirFiltroData: false,
@@ -324,6 +358,10 @@ function buildQueryPlan({ modulo, mensagem, periodo = {}, filtros = {}, entidade
   if (plano.proibirFiltroData) plano.regras.push('nao_filtrar_data_sem_periodo_explicito');
   if (plano.exigirSaldoAberto) plano.regras.push('exigir_saldo_em_aberto');
   if (plano.calcularPercentualCrescimento) plano.regras.push('calcular_percentual_crescimento');
+  if (plano.modulo === 'faturamento' && plano.resultadoMensalVerticalVariacao) {
+    if (!plano.agrupamentos.includes('mes')) plano.agrupamentos.push('mes');
+    plano.regras.push('faturamento_resultado_mensal_vertical_variacao');
+  }
   if (plano.modulo === 'financeiro' && plano.operacao === 'fluxo_caixa') {
     if (plano.fluxoTipo === 'realizado') plano.regras.push('fluxo_caixa_realizado');
     else plano.regras.push('fluxo_caixa_projetado');
@@ -407,6 +445,9 @@ function reconciliarPlanoComMensagem(plano = {}, mensagem = '') {
   const grupos = new Set(ajustado.agrupamentos || []);
   if (_containsAny(texto, ['por ano', 'ano a ano', 'anual'])) grupos.add('ano');
   if (_containsAny(texto, ['por mes', 'por meses', 'mes a mes', 'mensal'])) grupos.add('mes');
+  if (_containsAny(texto, ['por semana', 'por semanas', 'semana a semana', 'semanal', 'semanais', 'sexta feira', 'sexta-feira'])) grupos.add('semana');
+  if (_containsAny(texto, ['por quinzena', 'por quinzenas', 'quinzenal', 'quinzenais', 'primeira quinzena', 'segunda quinzena'])) grupos.add('quinzena');
+  if (_containsAny(texto, ['por dezena', 'por dezenas', 'dezenal', 'dezenais', 'de 10 em 10 dias'])) grupos.add('dezena');
   if (_containsAny(texto, ['por banco', 'por bancos'])) grupos.add('banco');
   if (_containsAny(texto, ['por conta', 'por contas', 'conta bancaria', 'contas bancarias'])) grupos.add('conta');
   ajustado.agrupamentos = _normalizarAgrupamentos([...grupos]);
@@ -586,11 +627,18 @@ function formatQueryPlanForPrompt(plano = {}) {
     linhas.push(`  agrupamentos_sugeridos: ${agrupamentosSql.join(', ')}`);
     linhas.push('  regra_agrupamentos: trate como leitura semantica auxiliar; preserve quando fizer sentido para a pergunta, mas nao force agrupamento se a melhor resposta pedir listagem, escalar ou outra granularidade.');
   }
+  if (agrupamentosSql.some(g => ['semana', 'quinzena', 'dezena'].includes(g))) {
+    linhas.push('  granularidade_temporal_avancada: para semana/quinzena/dezena, retorne aliases claros de periodo (periodo_inicio, periodo_fim ou periodo_label) alem da metrica; nao use apenas numero solto como DATEPART(WEEK).');
+    linhas.push('  acumulado_temporal: primeiro agregue em CTE/subquery por periodo; depois calcule acumulado/comparativo em SELECT externo usando os aliases agregados, nunca campo de data bruto no OVER junto com GROUP BY.');
+  }
   if (Array.isArray(plano.regras) && plano.regras.length) linhas.push(`  regras: ${plano.regras.join(', ')}`);
   if (plano.comparativo) linhas.push('  comparativo: gere linhas comparaveis para os periodos solicitados.');
   if (plano.calcularPercentualCrescimento) linhas.push('  calculo_obrigatorio: incluir crescimento/variacao entre os periodos comparados, com valor anterior e percentual quando houver denominador valido.');
   if (plano.modulo === 'faturamento' && plano.calcularPercentualCrescimento && Array.isArray(plano.agrupamentos) && plano.agrupamentos.includes('mes')) {
     linhas.push('  faturamento_crescimento_mensal: primeiro agregue faturamento por competencia; depois, na query externa, use LAG(h.faturamento) OVER (ORDER BY h.competencia) para calcular faturamento_mes_anterior, crescimento_valor e crescimento_percentual.');
+  }
+  if (plano.modulo === 'faturamento' && Array.isArray(plano.regras) && plano.regras.includes('faturamento_resultado_mensal_vertical_variacao')) {
+    linhas.push('  faturamento_resultado_mensal_vertical_variacao: "resultado mensal" significa faturamento mensal. Use CTE mensal por SUBSTRING(SF2.F2_EMISSAO,1,6) AS competencia e faturamento; no SELECT externo retorne competencia, faturamento, percentual_vertical sobre SUM(faturamento) OVER (), faturamento_anterior via LAG, variacao_valor, variacao_percentual e direcao_variacao com positiva/negativa/neutra/sem_base.');
   }
   if (plano.proibirFiltroData) linhas.push('  periodo_nao_detectado: evite adicionar filtro de data se a pergunta realmente nao pedir periodo; se a mensagem trouxer "do dia", "hoje", "mes", "ano" ou equivalente, resolva o periodo pela pergunta.');
   if (plano.exigirSaldoAberto) linhas.push('  obrigatorio: filtrar saldo em aberto na carteira correspondente.');
@@ -884,6 +932,7 @@ function enriquecerContratoComGroupBy(contrato, intent) {
 
 module.exports = {
   normalizarTexto,
+  detectarConsultaRegistrosDeletados,
   buildQueryPlan,
   buildBaseQueryPlan,
   reconciliarPlanoComMensagem,

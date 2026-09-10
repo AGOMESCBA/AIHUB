@@ -1459,6 +1459,34 @@ ok('pedeExtremoUnico: NAO reconhece frase iniciada por "quais" (marca de plural 
   assert.strictEqual(canonical._test.pedeExtremoUnico({ mensagem: 'Quais os produtos mais vendidos?' }), false);
 });
 
+ok('granularidade semanal: semana numerica vira dimensao e nao e colapsada por competencia', () => {
+  const texto = canonical.renderSingle([
+    { competencia: '202608', semana: 1, total_vendas: 100 },
+    { competencia: '202608', semana: 2, total_vendas: 150 },
+  ], {
+    nomeModulo: 'Faturamento',
+    contextoConsulta: 'Vendas totais semanais do mes de agosto',
+  });
+
+  assert.ok(texto.includes('*Por Semana*'), texto);
+  assert.ok(texto.includes('Semana 1: Total Vendas: *R$'), texto);
+  assert.ok(texto.includes('Semana 2: Total Vendas: *R$'), texto);
+  assert.ok(!texto.includes('*Por Competencia*'), texto);
+});
+
+ok('granularidade temporal avancada: periodo_fim ordena e exibe acumulado semanal', () => {
+  const texto = canonical.renderSingle([
+    { competencia: '202608', semana_fim_sexta: '2026-08-07', total_vendas: 100, total_acumulado: 100 },
+    { competencia: '202608', semana_fim_sexta: '2026-08-14', total_vendas: 150, total_acumulado: 250 },
+  ], {
+    nomeModulo: 'Faturamento',
+    contextoConsulta: 'Vendas totais semanais do mes de agosto acumulado ate sexta-feira',
+  });
+
+  assert.ok(texto.includes('*Por Semana Fim*'), texto);
+  assert.ok(texto.indexOf('07/08/2026') < texto.indexOf('14/08/2026'), texto);
+  assert.ok(texto.includes('Total Acumulado: *R$'), texto);
+});
+
 console.log(`\nwhatsapp-canonical-format.test.js: ${passou} passaram, ${falhou} falharam`);
 if (falhou) process.exit(1);
-

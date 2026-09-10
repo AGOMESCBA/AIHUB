@@ -109,6 +109,7 @@
     .pane-body { margin:0;padding:12px;min-height:310px;max-height:calc(100vh - 335px);overflow:auto;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;color:var(--text-md); }
     .pane-body.text { font-family:inherit;font-size:13.5px;color:var(--text-hi); }
     .dialog-grid { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
+    .guardrail-summary { margin-bottom:12px; }
     .error-box { display:none;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:12px;font-size:13px;white-space:pre-wrap;word-break:break-word; }
 
     .modal-backdrop { position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,.48);z-index:500;padding:18px; }
@@ -251,6 +252,7 @@
             <button class="tab-btn active" data-tab="general-tab" type="button">Dados gerais</button>
             <button class="tab-btn" data-tab="query-tab" type="button">Query</button>
             <button class="tab-btn" data-tab="prompt-tab" type="button">Prompt IA</button>
+            <button class="tab-btn" data-tab="guardrail-tab" type="button">Guardrails</button>
             <button class="tab-btn" data-tab="dialog-tab" type="button">Dialogo</button>
           </div>
 
@@ -301,6 +303,14 @@
               </div>
             </div>
           </div>
+
+          <div id="guardrail-tab" class="tab-panel">
+            <div class="meta-grid guardrail-summary" id="guardrail-summary"></div>
+            <div class="pane">
+              <div class="pane-head"><span class="pane-title">Retry tecnico / fallback IA</span><button class="btn btn-ghost copy-btn" data-copy="guardrail-trace" type="button">Copiar</button></div>
+              <pre class="pane-body" id="guardrail-trace"></pre>
+            </div>
+          </div>
         </div>
       </section>
     </div>
@@ -339,7 +349,7 @@
     <h3>Coluna Pipeline</h3>
     <p><strong>Chat-first:</strong> a pergunta foi enviada ao modelo de IA no formato de conversa. <strong>Classico:</strong> usou o pipeline legado. <strong>Reuso:</strong> SQL canonico reutilizado sem nova chamada a IA. <strong>Consolidado:</strong> resposta montada a partir do pipeline dinamico consolidado.</p>
     <h3>Abas do detalhe</h3>
-    <p><strong>Dados gerais:</strong> metadados, motor, pipeline, duracao, confianca, intencao e pergunta original. <strong>Query:</strong> SQL gerado/executado e resposta completa entregue ao usuario. <strong>Prompt IA:</strong> prompts registrados para auditoria. <strong>Dialogo:</strong> trace do caminho percorrido e decisao estruturada em JSON.</p>
+    <p><strong>Dados gerais:</strong> metadados, motor, pipeline, duracao, confianca, intencao e pergunta original. <strong>Query:</strong> SQL gerado/executado e resposta completa entregue ao usuario. <strong>Prompt IA:</strong> prompts registrados para auditoria. <strong>Guardrails:</strong> tentativas rejeitadas, retries enviados para IA, respostas da IA no retry e bloqueios sem retry. <strong>Dialogo:</strong> trace do caminho percorrido e decisao estruturada em JSON.</p>
     <h3>Quando usar</h3>
     <p>Localize uma mensagem pelo celular ou texto, abra o detalhe e veja exatamente o que o sistema entendeu. Para validar equivalencias ou intencoes novas, faca uma pergunta real pelo WhatsApp e confira aqui se o motor, a intencao e o dataset foram escolhidos corretamente.</p>
     <h3>Limpar log</h3>
@@ -842,6 +852,7 @@
     $('prompt-user').textContent = aud.prompt_user || '(nao registrado)';
     $('trace-json').textContent = pretty(row.trace_json);
     $('intent-json').textContent = pretty(row.intent_json);
+    fillGuardrailTrace(aud);
     const sqlError = $('sql-error');
     if (row.sql_validacao_erro) {
       sqlError.textContent = `Erro de validacao SQL: ${row.sql_validacao_erro}`;
@@ -913,6 +924,24 @@
       return texto;
     });
     return textoBlocos.join('\n\n');
+  }
+
+  function fillGuardrailTrace(aud) {
+    const trace = Array.isArray(aud.guardrail_retry_trace) ? aud.guardrail_retry_trace : [];
+    const resumo = aud.guardrail_retry_resumo || {};
+    const meta = [
+      ['Eventos', resumo.total_eventos ?? trace.length],
+      ['Rejeicoes', resumo.rejeicoes ?? trace.filter(e => e?.evento === 'sql_rejeitado').length],
+      ['Reenvios IA', resumo.reenvios_ia ?? trace.filter(e => e?.evento === 'retry_enviado_ia').length],
+      ['Respostas IA', resumo.respostas_ia_retry ?? trace.filter(e => e?.evento === 'ia_respondeu_retry').length],
+      ['Esgotou retry', resumo.esgotou_retry ? 'Sim' : 'Nao'],
+      ['Sem retry', resumo.bloqueio_sem_retry ? 'Sim' : 'Nao'],
+      ['Ultima tentativa', resumo.ultima_tentativa || '-'],
+    ];
+    $('guardrail-summary').innerHTML = meta.map(([label, value]) => `<div class="meta-item"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`).join('');
+    $('guardrail-trace').textContent = trace.length
+      ? JSON.stringify(trace, null, 2)
+      : 'Nenhum retry tecnico de guardrail registrado nesta interpretacao.';
   }
 
   function activateTab(id) {

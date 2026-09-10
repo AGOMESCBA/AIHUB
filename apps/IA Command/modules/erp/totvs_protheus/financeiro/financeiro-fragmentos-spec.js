@@ -584,7 +584,10 @@ const FRAGMENTOS = {
   },
   receber_posicao: {
     texto: receberPosicao,
-    keywords: [/\ba\s+receber\b/i, /\brecebiv\w*/i, /\bem\s+aberto\b.*\b(receber|client)/i],
+    keywords: [
+      /\ba\s+receber\b/i, /\brecebiv\w*/i, /\bem\s+aberto\b.*\b(receber|client)/i,
+      /\ba\s+vencer\b/i, /\bvence\w*\s+(hoje|hj)\b/i, /\bvencid\w*\b/i, /\bvencimento\w*\s+(hoje|hj)\b/i,
+    ],
   },
   receber_realizado: {
     texto: receberRealizado,
@@ -597,7 +600,10 @@ const FRAGMENTOS = {
   },
   pagar_posicao: {
     texto: pagarPosicao,
-    keywords: [/\ba\s+pagar\b/i, /\bem\s+aberto\b.*\b(pagar|fornece)/i],
+    keywords: [
+      /\ba\s+pagar\b/i, /\bem\s+aberto\b.*\b(pagar|fornece)/i,
+      /\ba\s+vencer\b/i, /\bvence\w*\s+(hoje|hj)\b/i, /\bvencid\w*\b/i, /\bvencimento\w*\s+(hoje|hj)\b/i,
+    ],
   },
   pagar_realizado: {
     texto: pagarRealizado,

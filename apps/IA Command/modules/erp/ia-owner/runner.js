@@ -171,6 +171,45 @@ function limitarTexto(valor, max = 4000) {
   return texto.length > max ? `${texto.slice(0, max)}...` : texto;
 }
 
+function registrarGuardrailRetry(auditoriaBase, evento = {}) {
+  if (!auditoriaBase || typeof auditoriaBase !== 'object') return null;
+  const traceAtual = Array.isArray(auditoriaBase.guardrail_retry_trace)
+    ? auditoriaBase.guardrail_retry_trace
+    : [];
+  const item = {
+    ts: new Date().toISOString(),
+    evento: String(evento.evento || 'guardrail'),
+    origem: evento.origem || auditoriaBase.origem || null,
+    tentativa: evento.tentativa ?? null,
+    max_tentativas: evento.maxTentativas ?? evento.max_tentativas ?? null,
+    subtipo: evento.subtipo || null,
+    motivo: evento.motivo ? limitarTexto(evento.motivo, 4000) : null,
+    erro: evento.erro ? limitarTexto(evento.erro, 6000) : null,
+    sql_rejeitado: evento.sql ? limitarTexto(evento.sql, 16000) : null,
+    retry_prompt: evento.retryPrompt ? limitarTexto(evento.retryPrompt, 20000) : null,
+    sql_ia_bruto: evento.sqlIaBruto ? limitarTexto(evento.sqlIaBruto, 16000) : null,
+  };
+  Object.keys(item).forEach(chave => {
+    if (item[chave] === null || item[chave] === undefined || item[chave] === '') delete item[chave];
+  });
+  auditoriaBase.guardrail_retry_trace = [...traceAtual, item].slice(-30);
+  auditoriaBase.guardrail_retry_resumo = resumirGuardrailRetry(auditoriaBase.guardrail_retry_trace);
+  return item;
+}
+
+function resumirGuardrailRetry(trace = []) {
+  const eventos = Array.isArray(trace) ? trace : [];
+  return {
+    total_eventos: eventos.length,
+    rejeicoes: eventos.filter(e => e?.evento === 'sql_rejeitado').length,
+    reenvios_ia: eventos.filter(e => e?.evento === 'retry_enviado_ia').length,
+    respostas_ia_retry: eventos.filter(e => e?.evento === 'ia_respondeu_retry').length,
+    esgotou_retry: eventos.some(e => e?.evento === 'retry_esgotado'),
+    bloqueio_sem_retry: eventos.some(e => e?.evento === 'bloqueio_sem_retry'),
+    ultima_tentativa: eventos.reduce((max, e) => Math.max(max, Number(e?.tentativa || 0)), 0) || null,
+  };
+}
+
 function cacheDeterministicoAtivo() {
   return String(process.env.IAC_NLSQL_DETERMINISTIC_CACHE || '').trim() === '1';
 }
@@ -446,6 +485,44 @@ function _blocoRetryTecnicoIaOwner(subtipo, mensagem, linhasEntidades) {
       '- Nao filtrar por nome, descricao ou LIKE.',
       '- Nao remover periodo, metrica ou demais filtros ja corretos.',
     ];
+  } else if (REGEX_ERRO_RESULTADO_MENSAL_VERTICAL_VARIACAO.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio — RESULTADO MENSAL COM ANALISE VERTICAL E VARIACAO:',
+      '- Em faturamento, "resultado mensal" significa faturamento mensal/receita de vendas.',
+      '- A dimensao da analise e o mes/competencia. Nao troque por produto, cliente ou total unico.',
+      '- Use CTE mensal agregando SUBSTRING(SF2.F2_EMISSAO,1,6) AS competencia e COALESCE(SUM(SD2.D2_TOTAL),0) AS faturamento.',
+      '- No SELECT externo retorne obrigatoriamente: competencia, faturamento, percentual_vertical, faturamento_anterior, variacao_valor, variacao_percentual e direcao_variacao.',
+      '- percentual_vertical deve usar SUM(h.faturamento) OVER () como denominador do total do periodo.',
+      '- variacao deve usar LAG(h.faturamento) OVER (ORDER BY h.competencia). direcao_variacao deve classificar sem_base, positiva, negativa ou neutra.',
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL a partir da pergunta original.',
+      '- Preserve periodo, filtros fiscais de CFOP, SF2.F2_TIPO e D_E_L_E_T_.',
+      '- Corrija somente a estrutura analitica mensal que faltou.',
+      '',
+      'Nao fazer:',
+      '- Nao retornar apenas competencia + faturamento.',
+      '- Nao retornar somente crescimento/variacao sem percentual_vertical.',
+      '- Nao retornar percentual_vertical sem variacao_valor/variacao_percentual/direcao_variacao.',
+    ];
+  } else if (REGEX_ERRO_CFOP_COMPRAS_19.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio — REGRA FISCAL BRASILEIRA DE CFOP PARA COMPRAS:',
+      '- Quando a pergunta pedir compras/custo real em valor financeiro, retorne somente entradas que compoem obrigacao financeira de compra.',
+      '- Essa e uma regra fiscal nacional de interpretacao de CFOP, nao uma regra especifica do ERP.',
+      "- CFOP 19xx representa remessa/transferencia/entrada sem obrigacao financeira: exclua usando AND SD1.D1_CF NOT LIKE '19%'.",
+      "- A regra se aplica a compras totais e tambem a compras detalhadas por dia, fornecedor, produto, natureza ou centro de custo quando a metrica monetaria usa SD1.D1_TOTAL.",
+      '- So nao aplique essa exclusao se a pergunta pedir explicitamente remessas, transferencias, CFOP 19, todas as entradas ou movimentacao/volume fisico.',
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL a partir da pergunta original.',
+      '- Preserve periodo, metrica, entidades resolvidas, agrupamentos, SF1.F1_TIPO IN (\'N\',\'C\') e D_E_L_E_T_.',
+      "- Adicione AND SD1.D1_CF NOT LIKE '19%' no WHERE do bloco de compras que usa SD1/SF1 e SD1.D1_TOTAL.",
+      '',
+      'Nao fazer:',
+      '- Nao retornar CFOP 19xx dentro de compras/custo real em valor financeiro padrao.',
+      '- Nao remover filtros de periodo, seguranca ou D_E_L_E_T_ ja corretos.',
+    ];
   } else if (REGEX_ERRO_CFOP_RECEITA.test(mensagem)) {
     bloco = [
       'Contrato obrigatorio — REGRA FISCAL BRASILEIRA DE CFOP PARA RECEITA:',
@@ -453,6 +530,8 @@ function _blocoRetryTecnicoIaOwner(subtipo, mensagem, linhasEntidades) {
       '- Essa e uma regra fiscal nacional de interpretacao de CFOP, nao uma regra especifica do ERP.',
       "- Remessas nao geram receita: exclua CFOP com prefixo 59/69 usando AND (NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') OR SD2.D2_CF IN ('5932','6932','5933','6933')).",
       "- EXCECAO DENTRO DO PREFIXO 59/69: CFOP 5932/6932 (frete de transportadora) e 5933/6933 (servico tributado por ISS) SAO receita real — NAO exclua esses 4 codigos, mesmo comecando com 59/69. So 5931/6931 (retencao de imposto de frete de autonomo) e 5934/6934 (remessa simbolica em armazem geral) continuam sem receita.",
+      "- CORRECAO OBRIGATORIA E LITERAL: se a tentativa anterior trouxe IN ('5932','6932','6933') ou qualquer lista parcial, substitua por IN ('5932','6932','5933','6933').",
+      "- CHECK FISCAL ANTES DE RESPONDER: confira visualmente que os 4 codigos aparecem na excecao do prefixo 59/69: 5932, 6932, 5933 e 6933. Se faltar 5933, a resposta esta fiscalmente errada e sera rejeitada.",
       "- Transferencias nao geram receita: exclua AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156').",
       "- Devolucoes de compra nao geram receita: exclua AND NOT (SD2.D2_CF LIKE '52%' OR SD2.D2_CF LIKE '62%').",
       "- Devolucoes de compra com ST nao geram receita: exclua AND SD2.D2_CF NOT IN ('5410','6410','5411','6411','5412','6412','5413','6413').",
@@ -702,7 +781,9 @@ function _blocoRetryGenericoIaOwner(linhasEntidades) {
   ];
 }
 
+const REGEX_ERRO_CFOP_COMPRAS_19 = /regra fiscal brasileira de compras|CFOP iniciado por 19|D1_CF NOT LIKE '19%'|REGRA FISCAL BRASILEIRA DE CFOP PARA COMPRAS/i;
 const REGEX_ERRO_CFOP_RECEITA = /fiscal brasileira de CFOP|Faturamento\/vendas\/receita representam somente operacoes que geram receita|REGRA (?:NACIONAL|FISCAL BRASILEIRA) DE CFOP PARA RECEITA|Exclua (?:remessas e transferencias|saidas sem receita operacional) por padrao/i;
+const REGEX_ERRO_RESULTADO_MENSAL_VERTICAL_VARIACAO = /resultado mensal.*analise vertical|resultado mensal.*variacao|analise vertical.*resultado mensal.*variacao|faturamento mensal.*percentual_vertical.*direcao_variacao/i;
 
 // Reforco final para o guard de CFOP (regra critica que NUNCA pode falhar): o SQL com
 // erro e o ultimo bloco de conteudo tecnico que a IA le antes de gerar a nova resposta
@@ -717,7 +798,18 @@ function _reforcoFinalRetryCfop(mensagemErro) {
     'LEMBRETE FINAL (nao ignore mesmo apos ler o SQL acima):',
     "O SQL acima esta ERRADO porque nao exclui todos os CFOPs sem receita operacional (ou excluiu 5932/5933/6932/6933 que SAO receita). Antes de responder, adicione ao WHERE do bloco de receita (SD2):",
     "AND (NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') OR SD2.D2_CF IN ('5932','6932','5933','6933')) AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156') AND NOT (SD2.D2_CF LIKE '52%' OR SD2.D2_CF LIKE '62%') AND SD2.D2_CF NOT IN ('5410','6410','5411','6411','5412','6412','5413','6413') AND NOT (SD2.D2_CF LIKE '55%' OR SD2.D2_CF LIKE '65%') AND NOT (SD2.D2_CF LIKE '56%' OR SD2.D2_CF LIKE '66%')",
-    'Nao repita o SQL acima sem esse filtro.',
+    "Se o SQL antigo tinha IN ('5932','6932','6933'), ele esta incompleto: faltou 5933. Nao repita o SQL acima sem os 4 codigos da excecao.",
+  ].join('\n');
+}
+
+function _reforcoFinalRetryCfopCompras19(mensagemErro) {
+  if (!REGEX_ERRO_CFOP_COMPRAS_19.test(String(mensagemErro || ''))) return '';
+  return [
+    '',
+    'LEMBRETE FINAL (nao ignore mesmo apos ler o SQL acima):',
+    "O SQL acima esta ERRADO porque soma valor financeiro de compras (SD1.D1_TOTAL) sem excluir CFOP 19xx. Antes de responder, adicione ao WHERE do bloco de compras (SD1/SF1):",
+    "AND SD1.D1_CF NOT LIKE '19%'",
+    'Nao repita o SQL acima sem esse filtro, exceto se a pergunta pedir explicitamente remessas, transferencias, CFOP 19, todas as entradas ou movimentacao/volume fisico.',
   ].join('\n');
 }
 
@@ -758,6 +850,7 @@ function _reforcoFinalRetryPaRaBaixa(mensagemErro) {
 // multiplas violacoes simultaneas (ver split por " | " em buildRetryTecnicoIaOwner).
 function _reforcosFinaisRetry(mensagemErro) {
   return [
+    _reforcoFinalRetryCfopCompras19(mensagemErro),
     _reforcoFinalRetryCfop(mensagemErro),
     _reforcoFinalRetrySf2Tipo(mensagemErro),
     _reforcoFinalRetryPaRaBaixa(mensagemErro),
@@ -838,6 +931,8 @@ function respostaGuardrailUsuario(mensagemErro, subtipo = '') {
     orientacao = "Para recebimentos antecipados, a consulta precisa isolar o tipo RA: use SE1.E1_TIPO = 'RA'. Usar diferente de RA exclui justamente o que foi pedido.";
   } else if (/pergunta pede pagamentos antecipados|SE2\.E2_TIPO\s*<>\s*'PA'|EXCLUI os antecipados/i.test(msg)) {
     orientacao = "Para pagamentos antecipados, a consulta precisa isolar o tipo PA: use SE2.E2_TIPO = 'PA'. Usar diferente de PA exclui justamente o que foi pedido.";
+  } else if (/regra fiscal brasileira de compras|CFOP iniciado por 19|D1_CF NOT LIKE '19%'/i.test(msg)) {
+    orientacao = "Para compras/custo real em valor financeiro, a consulta precisa excluir CFOP 19xx com SD1.D1_CF NOT LIKE '19%', exceto quando a pergunta pedir remessas, transferências, CFOP 19 ou movimentação física.";
   } else if (/CFOP|receita operacional|remessas|transferencias/i.test(msg)) {
     orientacao = "Para faturamento/receita, a consulta precisa excluir operações sem receita operacional por CFOP, mantendo apenas as exceções fiscais permitidas.";
   } else if (/periodo/i.test(subtipo) || /per[ií]odo|data/i.test(msg)) {
@@ -852,6 +947,18 @@ function respostaGuardrailUsuario(mensagemErro, subtipo = '') {
     '',
     'Você pode perguntar novamente já com essa correção.'
   ].filter(Boolean).join('\n');
+}
+
+function respostaConsultaRegistrosDeletados(mensagem = '') {
+  const bloqueio = queryPlan.detectarConsultaRegistrosDeletados(mensagem);
+  if (!bloqueio.bloqueado) return null;
+  return {
+    tipo: 'erro',
+    subtipo: bloqueio.motivo,
+    resposta_direta: bloqueio.mensagem,
+    sql_gerado: `-- bloqueado: ${bloqueio.motivo}`,
+    _resposta_guardrail_usuario: true,
+  };
 }
 
 function extrairJson(raw) {
@@ -2570,8 +2677,8 @@ function validarAliasesUsadosDeclarados(sql, spec = {}) {
     vistos.add(chave);
     erros.push(
       `Alias de tabela usado sem FROM/JOIN declarado: "${alias}.${campo}". ` +
-      `Adicione FROM/JOIN da tabela ${alias}<sufixo> com alias ${alias} e filtro ${alias}.D_E_L_E_T_ = ' ', ` +
-      `ou remova todos os campos ${alias}.* do SELECT/GROUP BY/ORDER BY/WHERE.`
+      `Antes de corrigir, pergunte-se: a pergunta original pede algo de ${alias}? Se a resposta for nao (ex: ${alias} apareceu por engano, sobrou de um raciocinio anterior, ou nao tem relacao com o que foi pedido), a correcao certa e SEMPRE remover todos os campos ${alias}.* do SELECT/GROUP BY/ORDER BY/WHERE — nunca declare um FROM/JOIN novo so para fazer este erro desaparecer. ` +
+      `So declare FROM/JOIN da tabela ${alias}<sufixo> com alias ${alias} e filtro ${alias}.D_E_L_E_T_ = ' ' se ${alias} for de fato uma tabela exigida pela pergunta.`
     );
   }
 
@@ -2905,6 +3012,25 @@ function validarComparativoCrossModuleNormalizado(sql, spec = {}, mensagem = '')
   };
 }
 
+function validarGranularidadeSemanalTransversal(sql = '', mensagem = '') {
+  const msg = String(mensagem || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  if (!/\b(?:semana|semanal|semanais|sexta\s+feira|sexta-feira)\b/i.test(msg)) return { ok: true, erros: [] };
+
+  const texto = String(sql || '');
+  if (!/\bDATEPART\s*\(\s*WEEK\s*,/i.test(texto)) return { ok: true, erros: [] };
+  if (/\bAS\s+(?:periodo_inicio|periodo_fim|periodo_label|semana_inicio|semana_fim|semana_fim_sexta)\b/i.test(texto)) return { ok: true, erros: [] };
+
+  return {
+    ok: false,
+    erros: [
+      'Consulta semanal nao pode usar apenas DATEPART(WEEK) como periodo. Retorne alias temporal claro (periodo_inicio, periodo_fim, periodo_label, semana_fim ou semana_fim_sexta) e agrupe por esse mesmo bloco temporal; para acumulado, use CTE semanal e aplique SUM(valor_agregado) OVER no SELECT externo.',
+    ],
+  };
+}
+
 function validarTesDescricaoQuandoAgrupado(sql = '', mensagem = '') {
   const msg = String(mensagem || '');
   if (!/\bTES\b|tipo(?:s)?\s+de\s+sa[ií]da/i.test(msg)) return { ok: true, erros: [] };
@@ -2978,17 +3104,45 @@ function validarDecomposicaoAnaliseVertical(sql, mensagem) {
   };
 }
 
+function validarResultadoMensalVerticalVariacao(sql, mensagem) {
+  const texto = String(mensagem || '');
+  const pedeResultadoMensal = /\bresultado\s+(mensal|por\s+m[eê]s)\b/i.test(texto);
+  const pedeVertical = /\ban[aá]lise\s+vertical\b/i.test(texto);
+  const pedeVariacao = /\bvaria[cç][aã]o\b|\bpositiv[ao]s?\b|\bnegativ[ao]s?\b/i.test(texto);
+  if (!(pedeResultadoMensal && pedeVertical && pedeVariacao)) return { ok: true, erros: [] };
+
+  const sqlTexto = String(sql || '');
+  const erros = [];
+  if (!/\bcompetencia\b/i.test(sqlTexto) || !/\bSUBSTRING\s*\(\s*SF2\s*\.\s*F2_EMISSAO\s*,\s*1\s*,\s*6\s*\)/i.test(sqlTexto)) {
+    erros.push('Resultado mensal com analise vertical e variacao deve retornar competencia mensal usando SUBSTRING(SF2.F2_EMISSAO,1,6) AS competencia.');
+  }
+  if (!/\bpercentual_vertical\b/i.test(sqlTexto) || !/\bSUM\s*\(\s*(?:\w+\.)?faturamento\s*\)\s*OVER\s*\(\s*\)/i.test(sqlTexto)) {
+    erros.push('Resultado mensal com analise vertical precisa da coluna percentual_vertical calculada sobre o total do periodo: h.faturamento * 100.0 / NULLIF(SUM(h.faturamento) OVER (),0).');
+  }
+  if (!/\bLAG\s*\(/i.test(sqlTexto) || !/\bfaturamento_anterior\b/i.test(sqlTexto) || !/\bvariacao_valor\b/i.test(sqlTexto) || !/\bvariacao_percentual\b/i.test(sqlTexto)) {
+    erros.push('Resultado mensal com variacao positiva/negativa precisa calcular faturamento_anterior via LAG, variacao_valor e variacao_percentual.');
+  }
+  if (!/\bdirecao_variacao\b/i.test(sqlTexto) || !/\bpositiva\b/i.test(sqlTexto) || !/\bnegativa\b/i.test(sqlTexto)) {
+    erros.push('Resultado mensal com variacao positiva/negativa precisa retornar direcao_variacao classificando positiva, negativa, neutra ou sem_base.');
+  }
+  return { ok: erros.length === 0, erros };
+}
+
 function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '', opts = {}) {
   const texto = String(sql || '').trim();
   const erros = [];
   const permitirSelectTop = opts.permitirSelectTop === true;
   erros.push(...validarDecomposicaoAnaliseVertical(texto, mensagem).erros);
+  if (String(spec.nome || '').toLowerCase() === 'faturamento') {
+    erros.push(...validarResultadoMensalVerticalVariacao(texto, mensagem).erros);
+  }
   erros.push(...validarParentesesBalanceados(texto).erros);
   erros.push(...validarPontoEVirgulaUnico(texto).erros);
   erros.push(...validarJoinDepoisWhere(texto).erros);
   erros.push(...validarFiltroFiscalCarregada(texto, mensagem).erros);
   erros.push(...validarDevolucaoConsistente(texto, mensagem).erros);
   erros.push(...validarComparativoCrossModuleNormalizado(texto, spec, mensagem).erros);
+  erros.push(...validarGranularidadeSemanalTransversal(texto, mensagem).erros);
   if (String(spec.nome || '').toLowerCase() === 'faturamento') {
     erros.push(...validarTesDescricaoQuandoAgrupado(texto, mensagem).erros);
   }
@@ -4282,6 +4436,17 @@ function _instrucaoAnaliseVertical(intent) {
   const glossario = intent?._glossario;
   if (!RE_TERMO_VERTICAL.test(glossario?.termo || '')) return null;
   if (!glossario?.definicaoTecnica) return null;
+  const mensagem = String(intent?._mensagemOriginal || '');
+  if (/\bresultado\s+(mensal|por\s+m[eê]s)\b/i.test(mensagem) && /\bvaria[cç][aã]o\b/i.test(mensagem)) {
+    return [
+      `A pergunta pede "${glossario.termo}" junto com resultado mensal e variacao — neste caso a dimensao da analise vertical e a competencia mensal, nao produto/cliente.`,
+      'CHECKLIST OBRIGATORIO antes de responder:',
+      '1. Gere uma CTE mensal por SUBSTRING(SF2.F2_EMISSAO,1,6) AS competencia, somando SD2.D2_TOTAL AS faturamento.',
+      '2. No SELECT externo retorne competencia, faturamento, percentual_vertical, faturamento_anterior, variacao_valor, variacao_percentual e direcao_variacao.',
+      '3. percentual_vertical usa SUM(h.faturamento) OVER (); variacao usa LAG(h.faturamento) OVER (ORDER BY h.competencia).',
+      '4. direcao_variacao deve indicar sem_base, positiva, negativa ou neutra.',
+    ].join('\n');
+  }
   return [
     `A pergunta pede "${glossario.termo}" — por definicao, isso SEMPRE decompoe um total por uma dimensao (produto, cliente, etc.), calculando o percentual de cada item sobre o total do periodo. Uma unica linha com o total geral NAO e analise vertical (e apenas o proprio total, 100% de si mesmo — nao decompoe nada).`,
     `Definicao tecnica do conceito (ja resolvida, use como guia de calculo): ${glossario.definicaoTecnica}`,
@@ -4304,6 +4469,10 @@ function _instrucaoAnaliseVertical(intent) {
 async function executar(spec, intent, empresaId) {
   const t0 = Date.now();
   const mensagem = intent._mensagemOriginal || intent.intencao || spec.defaultMessage || 'consulta';
+  const bloqueioRegistrosDeletados = respostaConsultaRegistrosDeletados(mensagem);
+  if (bloqueioRegistrosDeletados) {
+    return { ...bloqueioRegistrosDeletados, duracao_ms: Date.now() - t0 };
+  }
   _traceIaOwner('ia_owner_executar_inicio', {
     empresa_id: empresaId,
     modulo: spec.nome || spec.handlerName || null,
@@ -5237,6 +5406,19 @@ async function executar(spec, intent, empresaId) {
       if (semConexao || timeoutAgente) {
         return { tipo: 'erro', subtipo: 'sem_conexao', resposta_direta: mensagemErro(spec, 'sem_conexao'), sql_gerado: preparado?.sqlFinal || plano.sql, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0 };
       }
+      const sqlErroTentativa = preparado?.sqlFinal || e._sql || plano.sql;
+      const subtipoTentativa = e._tipo || 'erro_erp';
+      if (subtipoEhInconsistenciaConsulta(subtipoTentativa)) {
+        registrarGuardrailRetry(auditoriaBase, {
+          evento: 'sql_rejeitado',
+          origem: 'ia_owner',
+          tentativa,
+          maxTentativas,
+          subtipo: subtipoTentativa,
+          erro: e.message,
+          sql: sqlErroTentativa,
+        });
+      }
       // Violacao de seguranca (vendedor tentando acessar dados de outro vendedor): falha
       // direto, sem retry. Dar a IA outra chance de gerar SQL para o mesmo pedido e um risco
       // de seguranca, nao um erro tecnico corrigivel.
@@ -5263,9 +5445,20 @@ async function executar(spec, intent, empresaId) {
         };
       }
       if (tentativa >= maxTentativas) {
-        const sqlErro = preparado?.sqlFinal || e._sql || plano.sql;
-        const subtipo = e._tipo || 'erro_erp';
+        const sqlErro = sqlErroTentativa;
+        const subtipo = subtipoTentativa;
         const ehGuardrail = subtipoEhInconsistenciaConsulta(subtipo);
+        if (ehGuardrail) {
+          registrarGuardrailRetry(auditoriaBase, {
+            evento: 'retry_esgotado',
+            origem: 'ia_owner',
+            tentativa,
+            maxTentativas,
+            subtipo,
+            erro: e.message,
+            sql: sqlErro,
+          });
+        }
         return {
           tipo: 'erro',
           subtipo,
@@ -5277,17 +5470,41 @@ async function executar(spec, intent, empresaId) {
           _ia_owner_plano: plano.obj,
         };
       }
+      const retryTecnico = buildRetryTecnicoIaOwner({ erro: e, entidadesResolvidas });
+      const sqlComErroRetry = sqlErroTentativa + _reforcosFinaisRetry(e.message);
       const retryPrompt = promptBuilder.buildUserPrompt({
         mensagem,
         historico,
         estadoAnterior,
         contextoTecnico,
         entidadesResolvidas,
-        tentativa: buildRetryTecnicoIaOwner({ erro: e, entidadesResolvidas }),
+        tentativa: retryTecnico,
         erroSql: e.message,
-        sqlComErro: (preparado?.sqlFinal || e._sql || plano.sql) + _reforcosFinaisRetry(e.message),
+        sqlComErro: sqlComErroRetry,
       });
+      if (subtipoEhInconsistenciaConsulta(subtipoTentativa)) {
+        registrarGuardrailRetry(auditoriaBase, {
+          evento: 'retry_enviado_ia',
+          origem: 'ia_owner',
+          tentativa: tentativa + 1,
+          maxTentativas,
+          subtipo: subtipoTentativa,
+          erro: e.message,
+          sql: sqlErroTentativa,
+          retryPrompt,
+        });
+      }
       plano = await chamarIaOwner(spec, keys, cfg, retryPrompt, { ...modeloOpts, maxTokens: spec.maxTokens || 3500 });
+      if (subtipoEhInconsistenciaConsulta(subtipoTentativa)) {
+        registrarGuardrailRetry(auditoriaBase, {
+          evento: 'ia_respondeu_retry',
+          origem: 'ia_owner',
+          tentativa: tentativa + 1,
+          maxTentativas,
+          subtipo: subtipoTentativa,
+          sqlIaBruto: plano.sql,
+        });
+      }
       auditoriaBase.prompt_user = plano.userPrompt || retryPrompt;
       auditoriaBase.sql_ia_bruto = plano.sql || auditoriaBase.sql_ia_bruto;
       auditoriaBase.plano_ia_owner = plano.obj || auditoriaBase.plano_ia_owner;
@@ -5321,6 +5538,14 @@ async function executar(spec, intent, empresaId) {
 async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
   const t0 = Date.now();
   const mensagem = intent._mensagemOriginal || intent.intencao || spec.defaultMessage || 'consulta';
+  const bloqueioRegistrosDeletados = respostaConsultaRegistrosDeletados(mensagem);
+  if (bloqueioRegistrosDeletados) {
+    return {
+      ...bloqueioRegistrosDeletados,
+      _sql_auditoria: { origem: 'ia_owner_reuso', sql_final_executado: null },
+      duracao_ms: Date.now() - t0,
+    };
+  }
   const _sqlTrim = String(sqlCanonico || '').trim();
   if (!_sqlTrim || _sqlTrim === 'null') {
     return { tipo: 'erro', subtipo: 'sql_nao_extraido', resposta_direta: mensagemErro(spec, 'sql_invalido'), sql_gerado: null, _sql_auditoria: { origem: 'ia_owner_reuso', sql_final_executado: null }, duracao_ms: Date.now() - t0 };
@@ -5489,6 +5714,18 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
       const sqlErro = preparado?.sqlFinal || e._sql || sqlCanonico;
       console.warn(`[${spec.logPrefix || 'IAOwner'}] executarSqlDireto falhou para empresa #${empresaId}: subtipo=${e._tipo || 'erro_erp'} | erro=${limitarTexto(e.message, 300)}`);
       const subtipo = e._tipo || 'erro_erp';
+      if (subtipoEhInconsistenciaConsulta(subtipo)) {
+        registrarGuardrailRetry(auditoriaBase, {
+          evento: 'bloqueio_sem_retry',
+          origem: 'ia_owner_reuso',
+          tentativa: tentativaDireto,
+          maxTentativas: MAX_TENTATIVAS_DIRETO,
+          subtipo,
+          motivo: 'executarSqlDireto valida SQL canonico/reutilizado e nao chama a IA para corrigir guardrail; fallback para LLM acontece somente antes do reuso semantico ou no fluxo ia_owner principal.',
+          erro: e.message,
+          sql: sqlErro,
+        });
+      }
       return {
         tipo: 'erro',
         subtipo,
@@ -5519,6 +5756,7 @@ module.exports = {
     buildContextoTecnico,
     confirmacaoPodeEncerrarPlano,
     respostaGuardrailUsuario,
+    respostaConsultaRegistrosDeletados,
     planoTentaFiltrarOutraEntidadeSeguranca,
     codigoEntidadeSegurancaCitadoNaMensagem,
     _codigosErpEquivalentes,
@@ -5535,6 +5773,8 @@ module.exports = {
     validarFiltroFiscalCarregada,
     validarPrecedenciaOrRemessaSemParenteses,
     validarDevolucaoConsistente,
+    validarGranularidadeSemanalTransversal,
+    validarResultadoMensalVerticalVariacao,
     normalizarAliasesBaseAusentes,
     validarPeriodoDeclaradoNoSql,
     validarPeriodosComparativosNoSql,
@@ -5549,6 +5789,8 @@ module.exports = {
     aplicarPeriodosComparativoContinuidade,
     _buildContextoFormatacao,
     validarSelectContraGroupBy,
+    registrarGuardrailRetry,
+    resumirGuardrailRetry,
     validarAgregadoSemGroupBy,
     dividirSelectsPorUnionNivelZero,
     validarAliasesTabelaDuplicados,

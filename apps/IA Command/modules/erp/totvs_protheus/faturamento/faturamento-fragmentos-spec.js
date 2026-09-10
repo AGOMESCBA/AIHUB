@@ -394,6 +394,20 @@ function crescimento({ granularidade = 'mensal' } = {}) {
 `;
 }
 
+function resultadoMensalAnalitico() {
+  return `
+## Resultado mensal de faturamento com analise vertical e variacao
+- Em faturamento, "resultado mensal" sem outra metrica explicita significa faturamento mensal/receita de vendas. Nao trate como margem/lucro e nao escolha produto/cliente como dimensao quando a pergunta pedir resultado mensal.
+- Quando a pergunta combinar "resultado mensal", "analise vertical" e "variacao positiva/negativa", retorne uma linha por competencia mensal.
+- Use duas camadas: (1) CTE mensal com SD2 JOIN SF2, agrupada por SUBSTRING(SF2.F2_EMISSAO,1,6) AS competencia e COALESCE(SUM(SD2.D2_TOTAL),0) AS faturamento; (2) SELECT externo usando somente os aliases da CTE.
+- SELECT externo obrigatorio: competencia, faturamento, percentual_vertical, faturamento_anterior, variacao_valor, variacao_percentual e direcao_variacao.
+- percentual_vertical = h.faturamento * 100.0 / NULLIF(SUM(h.faturamento) OVER (), 0). Isso e a participacao de cada mes no total do periodo filtrado.
+- variacao mensal = comparar contra o mes anterior via LAG(h.faturamento) OVER (ORDER BY h.competencia). variacao_percentual deve retornar NULL quando nao houver mes anterior ou quando o denominador for zero.
+- direcao_variacao deve classificar o mes como 'sem_base' no primeiro mes, 'positiva' quando variacao_valor > 0, 'negativa' quando variacao_valor < 0 e 'neutra' quando igual a zero.
+- Aplique periodo, SF2.F2_TIPO = 'N', D_E_L_E_T_ e os filtros fiscais de CFOP de receita dentro da CTE mensal.
+`;
+}
+
 function identidadeVendedor() {
   return `
 ## Identidade do vendedor — REGRA DE SEGURANCA OBRIGATORIA
@@ -419,6 +433,20 @@ function comparativoPeriodos() {
 `;
 }
 
+function granularidadeTemporalAvancada() {
+  return `
+## Granularidade temporal avancada em faturamento (semana, quinzena, dezena)
+- Campo temporal padrao: SF2.F2_EMISSAO. Metrica padrao de vendas/faturamento: COALESCE(SUM(SD2.D2_TOTAL),0) AS total_vendas ou faturamento. Preserve os filtros obrigatorios de SF2/SD2 e CFOP de receita.
+- "por semana", "semanal" ou "semanais": retorne uma linha por semana com alias temporal claro. PROIBIDO retornar apenas DATEPART(WEEK, SF2.F2_EMISSAO) AS semana; numero de semana sozinho e ambiguo. Retorne pelo menos periodo_fim/semana_fim ou periodo_label.
+- Para "ate o final de cada sexta-feira": calcule semana_fim_sexta a partir de SF2.F2_EMISSAO, sem depender de DATEFIRST: CAST(DATEADD(DAY, (7 - (DATEDIFF(DAY, '19000105', CAST(SF2.F2_EMISSAO AS DATE)) % 7)) % 7, CAST(SF2.F2_EMISSAO AS DATE)) AS DATE) AS semana_fim_sexta. Agrupe por esta mesma expressao.
+- Para quinzena: use CASE WHEN SUBSTRING(SF2.F2_EMISSAO,7,2) <= '15' THEN 1 ELSE 2 END AS quinzena e retorne periodo_label (ex: CONCAT(CASE..., 'a quinzena/', SUBSTRING(SF2.F2_EMISSAO,5,2), '/', SUBSTRING(SF2.F2_EMISSAO,1,4))).
+- Para dezena: use CASE WHEN SUBSTRING(SF2.F2_EMISSAO,7,2) <= '10' THEN 1 WHEN SUBSTRING(SF2.F2_EMISSAO,7,2) <= '20' THEN 2 ELSE 3 END AS dezena e retorne periodo_label.
+- Acumulado por semana/quinzena/dezena SEMPRE usa duas camadas: CTE interna agrega por bloco temporal; SELECT externo calcula SUM(total_vendas) OVER (ORDER BY periodo_fim ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_acumulado. NUNCA use SUM(SD2.D2_TOTAL) OVER (ORDER BY SF2.F2_EMISSAO) no mesmo SELECT que tem GROUP BY.
+- Exemplo estrutural semanal acumulado: WITH semanal AS (SELECT SUBSTRING(SF2.F2_EMISSAO,1,6) AS competencia, CAST(DATEADD(DAY, (7 - (DATEDIFF(DAY, '19000105', CAST(SF2.F2_EMISSAO AS DATE)) % 7)) % 7, CAST(SF2.F2_EMISSAO AS DATE)) AS DATE) AS semana_fim_sexta, COALESCE(SUM(SD2.D2_TOTAL),0) AS total_vendas FROM SD2 SD2 JOIN SF2 SF2 ON ... WHERE <filtro_periodo_em_SF2.F2_EMISSAO> GROUP BY SUBSTRING(SF2.F2_EMISSAO,1,6), CAST(DATEADD(DAY, (7 - (DATEDIFF(DAY, '19000105', CAST(SF2.F2_EMISSAO AS DATE)) % 7)) % 7, CAST(SF2.F2_EMISSAO AS DATE)) AS DATE)) SELECT competencia, semana_fim_sexta, total_vendas, SUM(total_vendas) OVER (ORDER BY semana_fim_sexta ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_acumulado FROM semanal ORDER BY semana_fim_sexta.
+- Comparativo de dois meses em valores semanais: se o usuario nao disser quais dois meses, use mes atual x mes anterior. Retorne competencia, semana_fim/semana_fim_sexta, total_vendas e percentual_variacao; os dois meses devem aparecer no resultado, nunca duas CTEs com o mesmo periodo. Para comparar semanas equivalentes, derive semana_mes como 1,2,3... por ROW_NUMBER() OVER (PARTITION BY competencia ORDER BY semana_fim_sexta) numa CTE agregada e compare por semana_mes.
+`;
+}
+
 const FRAGMENTOS = {
   // identidade_vendedor nao tem keywords: e sempre injetado pelo classificador,
   // independente do texto da pergunta (regra de seguranca, nao de assunto).
@@ -432,7 +460,7 @@ const FRAGMENTOS = {
   },
   metrica_valor_total: {
     texto: metricaValorTotal,
-    keywords: [/\b(faturamento|vendas?|receita)\s+(do|de|no)\s+(dia|mes|ano|periodo)\b/i, /\btotal\s+(?:de\s+)?(?:faturad[oa]|vendid[oa]|vendas?)\b/i, /\btotal\s+de\s+(faturamento|vendas?|receita)\b/i, /\bquanto\s+vendemos\b/i],
+    keywords: [/\b(faturamento|vendas?|receita)\s+(do|de|no)\s+(dia|mes|ano|periodo)\b/i, /\bresultado\s+(mensal|por\s+m[eê]s)\b/i, /\btotal\s+(?:de\s+)?(?:faturad[oa]|vendid[oa]|vendas?)\b/i, /\btotal\s+de\s+(faturamento|vendas?|receita)\b/i, /\bquanto\s+vendemos\b/i],
   },
   metrica_quantidade_item: {
     texto: metricaQuantidadeItem,
@@ -453,6 +481,10 @@ const FRAGMENTOS = {
   frequencia_cliente: {
     texto: frequenciaCliente,
     keywords: [/\btodos\s+os\s+meses\b/i, /\bfrequ[eê]ncia\b/i, /\brecorr[eê]ncia\b/i, /\btodo\s+mes\b/i],
+  },
+  granularidade_temporal_avancada: {
+    texto: granularidadeTemporalAvancada,
+    keywords: [/\bseman\w*\b/i, /\bsexta(?:-|\s)?feira\b/i, /\bquinzen\w*\b/i, /\bdezen\w*\b/i, /\b10\s+em\s+10\s+dias\b/i, /\bacumulad[oa]\b/i],
   },
   media_diaria: {
     texto: () => media({ granularidade: 'diaria' }),
@@ -495,6 +527,10 @@ const FRAGMENTOS = {
     keywords: [/\bcrescimento\b/i, /\bvaria[cç][aã]o\b/i, /\bevolu[cç][aã]o\b/i, /\baumento\b/i, /\bqueda\b/i, /\bm[eê]s\s+a\s+m[eê]s\b/i],
     excluiSe: [/\b(crescimento|varia[cç][aã]o)\b.*\b(di[aá]ri[ao]|anual)\b|\b(di[aá]ri[ao]|anual)\b.*\b(crescimento|varia[cç][aã]o)\b/i],
   },
+  resultado_mensal_analitico: {
+    texto: resultadoMensalAnalitico,
+    keywords: [/\bresultado\s+(mensal|por\s+m[eê]s)\b[\s\S]{0,120}\ban[aá]lise\s+vertical\b[\s\S]{0,120}\bvaria[cç][aã]o\b/i, /\bresultado\s+(mensal|por\s+m[eê]s)\b[\s\S]{0,120}\bvaria[cç][aã]o\b[\s\S]{0,120}\ban[aá]lise\s+vertical\b/i],
+  },
   comparativo_periodos: {
     texto: comparativoPeriodos,
     keywords: [/\bcompar\w*\b/i, /\bversus\b/i, /\bvs\.?\b/i, /\bem\s+rela[cç][aã]o\s+a\b/i, /\bcontra\b.*\b(mes|ano|periodo)\b/i],
@@ -510,12 +546,14 @@ const ORDEM_FALLBACK = [
   'grupo_cliente',
   'cfop_tes_centro_custo',
   'frequencia_cliente',
+  'granularidade_temporal_avancada',
   'media_diaria',
   'media_mensal',
   'media_anual',
   'preco_medio_venda',
   'markup',
   'crescimento_diario',
+  'resultado_mensal_analitico',
   'crescimento_mensal',
   'crescimento_anual',
   'comparativo_periodos',

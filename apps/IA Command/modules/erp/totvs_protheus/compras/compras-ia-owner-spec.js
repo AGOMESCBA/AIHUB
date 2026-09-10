@@ -41,6 +41,42 @@ function validarDeleteFiltros(sql = '') {
   return `FROM/JOIN sem filtro D_E_L_E_T_: ${faltando.join(', ')}. REGRA ABSOLUTA: toda tabela no FROM ou JOIN deve ter alias.D_E_L_E_T_ = ' ' — tabela no FROM: WHERE alias.D_E_L_E_T_ = ' '; tabela em JOIN: AND alias.D_E_L_E_T_ = ' ' dentro do ON. Adicione os filtros faltantes.`;
 }
 
+function normalizarTextoFiscal(texto = '') {
+  return String(texto || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function perguntaPedeIncluirCfop19Compras(mensagem = '') {
+  const texto = normalizarTextoFiscal(mensagem);
+  return /\bremessas?\b|\btransferencias?\b|\bcfop\s*19\b|\bcf\s*19\b|\bcodigo\s+fiscal\s+19\b|\btodas?\s+as\s+entradas\b|\bmovimentacao\s+(?:fisica|total)\b|\bvolume\s+fisico\b/.test(texto);
+}
+
+function sqlTemExclusaoCfop19Compras(sql = '') {
+  const texto = String(sql || '');
+  return /\bSD1\s*\.\s*D1_CF\s+NOT\s+LIKE\s*'19%'/i.test(texto)
+    || /\bNOT\s*\(\s*SD1\s*\.\s*D1_CF\s+LIKE\s*'19%'\s*\)/i.test(texto)
+    || /\bLEFT\s*\(\s*SD1\s*\.\s*D1_CF\s*,\s*2\s*\)\s*(?:<>|!=)\s*'19'/i.test(texto)
+    || /\bSUBSTRING\s*\(\s*SD1\s*\.\s*D1_CF\s*,\s*1\s*,\s*2\s*\)\s*(?:<>|!=)\s*'19'/i.test(texto);
+}
+
+function validarExclusaoCfop19Compras(sql = '', mensagem = '') {
+  const texto = String(sql || '');
+  const usaSd1 = /\b(?:FROM|JOIN)\s+\w*SD1\w*\s+SD1\b/i.test(texto);
+  const usaSf1 = /\b(?:FROM|JOIN)\s+\w*SF1\w*\s+SF1\b/i.test(texto);
+  const usaValorCompras = /\bSD1\s*\.\s*D1_TOTAL\b/i.test(texto);
+  const usaTipoCompra = /\bSF1\s*\.\s*F1_TIPO\s+IN\s*\((?=[^)]*'N')(?=[^)]*'C')[^)]*\)/i.test(texto);
+  if (!usaSd1 || !usaSf1 || !usaValorCompras || !usaTipoCompra) return null;
+  if (perguntaPedeIncluirCfop19Compras(mensagem)) return null;
+  if (sqlTemExclusaoCfop19Compras(texto)) return null;
+  return (
+    "Regra fiscal brasileira de compras: compras/custo real em valor financeiro deve excluir CFOP iniciado por 19 usando AND SD1.D1_CF NOT LIKE '19%'. " +
+    "CFOP 19xx representa remessa/transferencia/entrada sem obrigacao financeira e nao entra no total financeiro de compras. " +
+    "So remova essa exclusao quando o usuario pedir explicitamente remessas, transferencias, CFOP 19, todas as entradas ou movimentacao/volume fisico."
+  );
+}
+
 function garantirIntencao(empresaId) {
   try {
     const { getDB } = require('../../../database');
@@ -426,7 +462,7 @@ module.exports = {
   regrasTecnicas,
   sx3PromptLimit: 90,
   maxTokens: 4200,
-  dimensionLeftJoinBases: ['CTT', 'SF4', 'SBM'],
+  dimensionLeftJoinBases: ['SA2', 'CTT', 'SF4', 'SBM'],
   sanitizarFiltrosFilialSX2: true,
   sqlPatternsProibidos: [
     {
@@ -456,6 +492,9 @@ module.exports = {
         if (/\bSF1\s*\.\s*F1_TIPO\b/i.test(texto)) return null;
         return "SF1 usada sem filtro SF1.F1_TIPO. REGRA OBRIGATORIA: toda query fiscal que use SF1 deve informar o tipo da NF de entrada. Use SF1.F1_TIPO IN ('N','C') para compra/custo real, ou SF1.F1_TIPO = 'D' quando a pergunta for devolucao de venda. Nunca use SF1 sem F1_TIPO.";
       },
+    },
+    {
+      validar: validarExclusaoCfop19Compras,
     },
     {
       regex: /\bA2_NOME\s+(?:IN\s*\(|=|LIKE\b)/i,

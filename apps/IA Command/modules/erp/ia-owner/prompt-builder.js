@@ -43,6 +43,12 @@ function buildSystemPrompt(spec = {}, { modeloBaixasReceber, modeloBaixasPagar, 
     'Antes de retornar o SQL, verifique linha por linha: cada tabela tem D_E_L_E_T_?',
     '',
 
+    '## Escopo Proibido — Registros Deletados/Excluidos',
+    '- O IAHub consulta apenas registros validos do ERP. Perguntas sobre registros deletados, excluidos, apagados, removidos ou eliminados estao FORA DO ESCOPO.',
+    '- Se o usuario perguntar quantos titulos/registros/documentos/contas/pedidos foram deletados/excluidos/apagados/removidos, NAO gere SQL e responda com sql=null e precisa_confirmacao=false.',
+    '- NUNCA tente responder esse tipo de pergunta filtrando D_E_L_E_T_ = \' \'. Esse filtro traz registros validos, nao registros deletados, e induz o usuario ao erro.',
+    '',
+
     spec.contratosTecnicosPrioritarios ? [
       '## Contratos Relacionais do Schema Protheus',
       'As relacoes abaixo definem a chave relacional completa entre tabelas de cabecalho e itens do ERP.',
@@ -106,6 +112,14 @@ function buildSystemPrompt(spec = {}, { modeloBaixasReceber, modeloBaixasPagar, 
     '- FORMAT() / TRY_CONVERT(): PROIBIDO.',
     '- ORDER BY com alias: REGRA ABSOLUTA — so use um nome simples no ORDER BY (ex: banco, dia, competencia) se esse nome foi declarado com AS no SELECT (ex: SA6.A6_NOME AS banco). Se a coluna nao tiver alias explicito, referencie-a qualificada (ex: ORDER BY SE8.E8_AGENCIA) ou por posicao numerica. NUNCA invente um alias no ORDER BY sem defini-lo com AS no SELECT — o SQL Server rejeitara com "Invalid column name".',
     '- ORDER BY em query com GROUP BY: REGRA ABSOLUTA — toda coluna no ORDER BY deve ser o ALIAS de saida do SELECT (ex: ORDER BY dia) ou uma funcao agregada (ex: ORDER BY SUM(SD2.D2_TOTAL)). NUNCA use a coluna-base original (ex: SF2.F2_EMISSAO) no ORDER BY quando ela so aparece transformada/agregada no SELECT e no GROUP BY — o SQL Server rejeitara com "Column ... is invalid in the ORDER BY clause because it is not contained in either an aggregate function or the GROUP BY clause".',
+    '',
+
+    '## Granularidade Temporal Avancada (todos os modulos)',
+    '- Perguntas por semana, quinzena ou dezena devem retornar uma linha por bloco temporal, usando o campo de data correto do modulo/carteira.',
+    '- Sempre exponha aliases semanticos para o bloco: periodo_inicio, periodo_fim ou periodo_label. Para semana, prefira semana_fim ou semana_fim_sexta quando o usuario mencionar sexta-feira; para quinzena/dezena, retorne tambem quinzena/dezena quando ajudar a leitura.',
+    '- PROIBIDO usar apenas DATEPART(WEEK, campo_data) AS semana como identificador do periodo. Numero de semana sozinho e ambiguo e o formatador pode consolidar errado; inclua periodo_inicio/periodo_fim ou periodo_label.',
+    '- Para acumulado por semana/quinzena/dezena: CTE interna agrega uma linha por bloco temporal; SELECT externo aplica SUM(valor_periodo) OVER (ORDER BY periodo_fim ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS valor_acumulado. NUNCA aplique SUM(campo_valor) OVER (ORDER BY campo_data_bruto) no mesmo SELECT que tem GROUP BY.',
+    '- Para comparativo entre periodos nessa granularidade: mantenha competencia/periodo e o bloco temporal no SELECT final, e calcule variacao com LAG() sobre a serie ja agregada ou junte CTEs agregadas pelos mesmos aliases.',
     '',
 
     '## Formato de Data Protheus',

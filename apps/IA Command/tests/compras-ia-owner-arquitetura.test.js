@@ -18,6 +18,7 @@ assert(systemPrompt.includes('mes passado'), 'prompt deve conter regra cronologi
 assert(systemPrompt.includes('resposta_planejada'), 'prompt deve orientar resposta planejada WhatsApp');
 assert(systemPrompt.includes("Nunca use SF1.F1_TIPO = '1'"), 'prompt deve proibir F1_TIPO = 1 em compras');
 assert(systemPrompt.includes("SF1.F1_TIPO IN ('N','C')"), 'prompt deve incluir notas normais e complementares em compras');
+assert(systemPrompt.includes("SD1.D1_CF NOT LIKE '19%'"), 'prompt deve incluir regra fiscal obrigatoria de CFOP 19xx em compras');
 assert(systemPrompt.includes('escopo de tenant IAHub'), 'prompt deve separar empresa IAHub de entidade cadastral');
 assert(systemPrompt.includes('SA2.A2_NOME AS fornecedor'), 'entidades devem retornar descricao de fornecedor');
 assert(systemPrompt.includes('SB1.B1_DESC AS produto'), 'entidades devem retornar descricao de produto');
@@ -105,6 +106,49 @@ const validacaoTipoNormalSemComplementar = runner._test.validarSqlIaOwnerBasico(
 assert.strictEqual(validacaoTipoNormalSemComplementar.ok, false, 'compras com apenas F1_TIPO=N deve ser rejeitada');
 assert(validacaoTipoNormalSemComplementar.erros.some(e => e.includes("IN ('N','C')")), 'deve orientar F1_TIPO IN N,C');
 
+const sqlComprasMesSemCfop19 = `
+SET ROWCOUNT 50000;
+SELECT COALESCE(SUM(SD1.D1_TOTAL),0) AS valor_compra
+FROM SD1990 SD1
+INNER JOIN SF1990 SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA
+WHERE SD1.D_E_L_E_T_ = ' ' AND SF1.D_E_L_E_T_ = ' '
+AND SF1.F1_TIPO IN ('N','C')
+AND SD1.D1_DTDIGIT BETWEEN '20260901' AND '20260930'
+`;
+const validacaoComprasMesSemCfop19 = runner._test.validarSqlIaOwnerBasico(sqlComprasMesSemCfop19, comprasSpec, sx2, 'Compras do mes');
+assert.strictEqual(validacaoComprasMesSemCfop19.ok, false, 'compras em valor sem excluir CFOP 19xx deve ser rejeitada');
+assert(validacaoComprasMesSemCfop19.erros.some(e => e.includes("SD1.D1_CF NOT LIKE '19%'")), 'deve orientar exclusao fiscal de CFOP 19xx');
+
+const sqlComprasMesDetalhadasComCfop19 = `
+SET ROWCOUNT 50000;
+SELECT CONVERT(VARCHAR(10), CAST(SD1.D1_DTDIGIT AS DATE), 103) AS dia, SA2.A2_NOME AS fornecedor, COALESCE(SUM(SD1.D1_TOTAL),0) AS valor_compra
+FROM SD1990 SD1
+INNER JOIN SF1990 SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA
+LEFT JOIN SA2990 SA2 ON SF1.F1_FORNECE = SA2.A2_COD AND SF1.F1_LOJA = SA2.A2_LOJA AND SA2.D_E_L_E_T_ = ' '
+WHERE SD1.D_E_L_E_T_ = ' ' AND SF1.D_E_L_E_T_ = ' '
+AND SF1.F1_TIPO IN ('N','C')
+AND SD1.D1_CF NOT LIKE '19%'
+AND SD1.D1_DTDIGIT BETWEEN '20260901' AND '20260930'
+GROUP BY SD1.D1_DTDIGIT, SA2.A2_NOME
+ORDER BY dia, fornecedor
+`;
+const validacaoComprasMesDetalhadasComCfop19 = runner._test.validarSqlIaOwnerBasico(sqlComprasMesDetalhadasComCfop19, comprasSpec, sx2, 'Compras do mês detalhadas por dia e fornecedor');
+assert.strictEqual(validacaoComprasMesDetalhadasComCfop19.ok, true, `compras detalhadas com CFOP 19xx excluido deveria passar: ${validacaoComprasMesDetalhadasComCfop19.erros.join(' | ')}`);
+assert(comprasSpec.dimensionLeftJoinBases.includes('SA2'), 'SA2 deve ser dimensao preservadora de total quando usada para exibicao');
+
+const sqlComprasRemessasCfop19 = `
+SET ROWCOUNT 50000;
+SELECT COALESCE(SUM(SD1.D1_TOTAL),0) AS valor_remessa
+FROM SD1990 SD1
+INNER JOIN SF1990 SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA
+WHERE SD1.D_E_L_E_T_ = ' ' AND SF1.D_E_L_E_T_ = ' '
+AND SF1.F1_TIPO IN ('N','C')
+AND SD1.D1_CF LIKE '19%'
+AND SD1.D1_DTDIGIT BETWEEN '20260901' AND '20260930'
+`;
+const validacaoComprasRemessasCfop19 = runner._test.validarSqlIaOwnerBasico(sqlComprasRemessasCfop19, comprasSpec, sx2, 'Compras de remessas CFOP 19 no mes');
+assert.strictEqual(validacaoComprasRemessasCfop19.ok, true, `pergunta explicita de remessas CFOP 19 deve permitir inclusao: ${validacaoComprasRemessasCfop19.erros.join(' | ')}`);
+
 const sqlBom = `
 SET ROWCOUNT 50000;
 SELECT
@@ -115,7 +159,7 @@ FROM (
   SELECT SD1.D1_TOTAL AS valor_compra, 0 AS valor_devolucao
   FROM SD1990 SD1
   INNER JOIN SF1990 SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA
-  WHERE SD1.D_E_L_E_T_ = ' ' AND SF1.D_E_L_E_T_ = ' ' AND SF1.F1_TIPO IN ('N','C') AND SD1.D1_DTDIGIT BETWEEN '20260601' AND '20260630'
+  WHERE SD1.D_E_L_E_T_ = ' ' AND SF1.D_E_L_E_T_ = ' ' AND SF1.F1_TIPO IN ('N','C') AND SD1.D1_CF NOT LIKE '19%' AND SD1.D1_DTDIGIT BETWEEN '20260601' AND '20260630'
   UNION ALL
   SELECT 0 AS valor_compra, SD2.D2_TOTAL AS valor_devolucao
   FROM SD2990 SD2

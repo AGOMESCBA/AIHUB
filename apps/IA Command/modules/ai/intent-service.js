@@ -184,6 +184,7 @@ const TERMOS_ESCOPO_DINAMICO = {
     'faturamento', 'faturado', 'vendas', 'venda', 'receita',
     'movimento', 'notas', 'nf', 'nfe', 'nf-e', 'nota fiscal',
     'saida', 'saidas', 'emissao', 'fat', 'resultado vendas',
+    'resultado mensal', 'resultado por mes',
     'vendas realizadas', 'pedidos faturados', 'carregada', 'carregado',
     'carga', 'entrega futura', 'nota mae', 'nota mãe', 'venda futura',
     'movimentacao total', 'movimentação total', 'todas as saidas',
@@ -448,7 +449,7 @@ function _normalizarMensagemDinamica(mensagem, normalizacoes = []) {
 const BONUS_DOMINIO_PRIMARIO = 10;
 const KEYWORDS_PRIMARIAS = {
   compras: ['compras', 'compra', 'pedido compra', 'pedidos compra', 'nota entrada', 'notas entrada', 'ordem compra'],
-  faturamento: ['faturamento', 'fatura', 'nota fiscal', 'notas fiscais', 'venda', 'vendas', 'nf', 'carregada', 'carregado', 'entrega futura', 'nota mae', 'nota mãe', 'movimentacao total', 'movimentação total'],
+  faturamento: ['faturamento', 'fatura', 'nota fiscal', 'notas fiscais', 'venda', 'vendas', 'nf', 'carregada', 'carregado', 'entrega futura', 'nota mae', 'nota mãe', 'movimentacao total', 'movimentação total', 'resultado mensal', 'resultado por mes'],
   financeiro: ['financeiro', 'contas pagar', 'contas receber', 'pagamento', 'pagamentos', 'pago', 'pagos', 'pagas', 'recebimento', 'recebimentos', 'recebido', 'recebidos', 'recebidas', 'contas pagas', 'contas recebidas', 'fluxo caixa', 'lancamento', 'titulo', 'titulos', 'duplicata', 'duplicatas'],
   comissao: ['comissao', 'comissoes', 'comissionamento'],
   estoque: ['estoque', 'saldo em estoque', 'posicao de estoque', 'requisicao', 'transferencia de estoque', 'giro de estoque', 'curva abc'],
@@ -489,7 +490,7 @@ function _intencaoAiSqlPreferencial(mensagem, intencoes = [], sinonimos = [], no
   const BONUS_DOMINIO_PRIMARIO = 10;
   const KEYWORDS_PRIMARIAS = {
     compras: ['compras', 'compra', 'pedido compra', 'pedidos compra', 'nota entrada', 'notas entrada', 'ordem compra'],
-    faturamento: ['faturamento', 'fatura', 'nota fiscal', 'notas fiscais', 'venda', 'vendas', 'nf', 'carregada', 'carregado', 'entrega futura', 'nota mae', 'nota mãe', 'movimentacao total', 'movimentação total'],
+    faturamento: ['faturamento', 'fatura', 'nota fiscal', 'notas fiscais', 'venda', 'vendas', 'nf', 'carregada', 'carregado', 'entrega futura', 'nota mae', 'nota mãe', 'movimentacao total', 'movimentação total', 'resultado mensal', 'resultado por mes'],
     financeiro: ['financeiro', 'contas pagar', 'contas receber', 'pagamento', 'pagamentos', 'pago', 'pagos', 'pagas', 'recebimento', 'recebimentos', 'recebido', 'recebidos', 'recebidas', 'contas pagas', 'contas recebidas', 'fluxo caixa', 'lancamento', 'titulo', 'titulos', 'duplicata', 'duplicatas'],
     comissao: ['comissao', 'comissoes', 'comissionamento'],
     estoque: ['estoque', 'saldo em estoque', 'posicao de estoque', 'requisicao', 'transferencia de estoque', 'giro de estoque', 'curva abc'],
@@ -688,6 +689,8 @@ const _SINONIMOS_SISTEMA = [
   { termo: 'emissao',                camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
   { termo: 'fat',                    camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
   { termo: 'resultado vendas',       camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
+  { termo: 'resultado mensal',       camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
+  { termo: 'resultado por mes',      camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
   { termo: 'vendas realizadas',      camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
   { termo: 'pedidos faturados',      camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
   { termo: 'carregada',              camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },

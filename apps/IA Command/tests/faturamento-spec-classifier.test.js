@@ -110,6 +110,11 @@ ok('"comparado com" aciona comparativo_periodos', () => {
 
 console.log('\n[5] Fallback — pergunta sem match conhecido');
 
+ok('"resultado mensal + analise vertical + variacao" aciona fragmento analitico mensal', () => {
+  const r = classificarFragmentos('Resultado mensal de 2026, analise vertical e variacao positiva ou negativa');
+  assert.ok(contemTodos(r, ['metrica_valor_total', 'crescimento_mensal', 'resultado_mensal_analitico']), `obteve: ${JSON.stringify(r)}`);
+});
+
 ok('pergunta vazia retorna null', () => {
   assert.strictEqual(classificarFragmentos(''), null);
 });

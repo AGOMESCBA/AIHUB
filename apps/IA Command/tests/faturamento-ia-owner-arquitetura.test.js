@@ -13,6 +13,7 @@ const faturamentoSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/fatu
 const intentRouter = require(path.join(ROOT, 'modules/erp/core/intent-router'));
 const entityResolver = require(path.join(ROOT, 'modules/ai/entity-resolver'));
 const periodResolver = require(path.join(ROOT, 'modules/ai/period-resolver'));
+const intentService = require(path.join(ROOT, 'modules/ai/intent-service'));
 const queryPlan = require(path.join(ROOT, 'modules/erp/core/query-plan'));
 const whatsappServiceSrc = fs.readFileSync(path.join(ROOT, 'modules/whatsapp/service.js'), 'utf8');
 
@@ -48,6 +49,23 @@ assert(
   queryPlan.formatQueryPlanForPrompt(planoCrescimentoMensal).includes('faturamento_crescimento_mensal'),
   'plano formatado deve orientar LAG mensal para o IA-owner',
 );
+const perguntaResultadoMensalAnalitico = 'Resultado mensal de 2026, analise vertical e variacao positiva ou negativa';
+const intencaoResultadoMensal = intentService._intencaoAiSqlPreferencial(perguntaResultadoMensalAnalitico, [
+  { nome: 'financeiro_dinamico', modulo: 'financeiro', acao: 'ai_text_to_sql' },
+  { nome: 'faturamento_dinamico', modulo: 'faturamento', acao: 'ai_text_to_sql' },
+], [], []);
+assert.strictEqual(intencaoResultadoMensal?.modulo, 'faturamento', 'resultado mensal analitico deve rotear para faturamento');
+const planoResultadoMensalAnalitico = queryPlan.buildQueryPlan({
+  modulo: 'faturamento',
+  mensagem: perguntaResultadoMensalAnalitico,
+  periodo: { tipo: 'ano', dataInicio: '20260101', dataFim: '20261231' },
+});
+assert(planoResultadoMensalAnalitico.agrupamentos.includes('mes'), 'resultado mensal analitico deve agrupar por mes');
+assert(planoResultadoMensalAnalitico.regras.includes('faturamento_resultado_mensal_vertical_variacao'), 'query-plan deve marcar regra especifica de resultado mensal analitico');
+assert(
+  queryPlan.formatQueryPlanForPrompt(planoResultadoMensalAnalitico).includes('percentual_vertical'),
+  'plano formatado deve orientar percentual vertical e variacao mensal',
+);
 assert.deepStrictEqual(
   entityResolver.extrairExplicitos('faturamento medio por produto de janeiro a junho de 2026'),
   [],
@@ -62,6 +80,32 @@ assert.strictEqual(
   runner._test.maxTentativasPrepararSql([{ tipo: 'cliente', codigo: '000048', _todos: true }]),
   4,
   'com entidade resolvida o runner deve ter 4 tentativas de SQL',
+);
+const auditoriaRetry = { origem: 'ia_owner' };
+runner._test.registrarGuardrailRetry(auditoriaRetry, {
+  evento: 'sql_rejeitado',
+  tentativa: 1,
+  maxTentativas: 4,
+  subtipo: 'contrato_ia_owner_invalido',
+  erro: 'SQL rejeitado por contrato IA-OWNER',
+  sql: 'SELECT 1',
+});
+runner._test.registrarGuardrailRetry(auditoriaRetry, {
+  evento: 'retry_enviado_ia',
+  tentativa: 2,
+  maxTentativas: 4,
+  subtipo: 'contrato_ia_owner_invalido',
+  retryPrompt: 'RETRY TECNICO IA-OWNER',
+});
+assert.strictEqual(auditoriaRetry.guardrail_retry_trace.length, 2, 'auditoria deve guardar o caminho de guardrail/retry');
+assert.strictEqual(auditoriaRetry.guardrail_retry_resumo.reenvios_ia, 1, 'resumo deve contabilizar reenvios para IA');
+assert(
+  systemPrompt.includes('Granularidade Temporal Avancada'),
+  'prompt-base deve orientar semana/quinzena/dezena para todos os modulos',
+);
+assert(
+  faturamentoSpec.regrasTecnicas({ mensagem: 'Vendas totais semanais do mes de agosto ate sexta-feira' }).includes('Granularidade temporal avancada em faturamento'),
+  'faturamento deve injetar fragmento de granularidade semanal/quinzenal/dezenal',
 );
 
 const perguntaJunhoVariosAnos = 'Faturamento do mes de Junho dos anos de 2025 e 2026 por ANO E grupo de produto';
@@ -677,5 +721,165 @@ assert.strictEqual(runner._test.validarPontoEVirgulaUnico(sqlCTEValido).ok, true
 // validarSqlIaOwnerBasico deve incluir a checagem de ponto-e-virgula
 const validacaoCompletaComBug = runner._test.validarSqlIaOwnerBasico(sqlPontoVirgulaNoMeio, faturamentoSpec, { SF2010: 'E', SD2010: 'E' }, 'quantidade faturada hoje');
 assert.strictEqual(validacaoCompletaComBug.ok, false, 'validarSqlIaOwnerBasico deve propagar a rejeicao de ponto-e-virgula solto');
+
+const sqlSemanalDatepartSolto = `
+SET ROWCOUNT 10000;
+SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 6) AS competencia,
+       SUM(SD2.D2_TOTAL) AS total_vendas,
+       DATEPART(WEEK, SF2.F2_EMISSAO) AS semana
+FROM SF2010 SF2
+JOIN SD2010 SD2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SD2.D_E_L_E_T_ = ' '
+WHERE SF2.F2_EMISSAO BETWEEN '20260801' AND '20260831'
+  AND SF2.F2_TIPO = 'N'
+  AND SF2.D_E_L_E_T_ = ' '
+  AND ${FILTRO_CFOP_RECEITA.replace(/^AND\s+/i, '')}
+GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 6), DATEPART(WEEK, SF2.F2_EMISSAO)
+ORDER BY semana;
+`;
+const validacaoSemanalDatepartSolto = runner._test.validarSqlIaOwnerBasico(
+  sqlSemanalDatepartSolto,
+  faturamentoSpec,
+  {},
+  'Vendas totais semanais do mes de agosto',
+);
+assert.strictEqual(validacaoSemanalDatepartSolto.ok, false, 'faturamento semanal com DATEPART(WEEK) solto deve ser rejeitado');
+assert(validacaoSemanalDatepartSolto.erros.some(e => e.includes('DATEPART(WEEK)')), 'erro deve orientar alias temporal claro para semana');
+
+const sqlCfopReceitaParcial = `
+SET ROWCOUNT 50000;
+SELECT SB1.B1_DESC AS produto, COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_vendida
+FROM SD2010 SD2
+JOIN SF2010 SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
+JOIN SB1010 SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '
+WHERE SF2.D_E_L_E_T_ = ' ' AND SD2.D_E_L_E_T_ = ' ' AND SF2.F2_EMISSAO BETWEEN '20260801' AND '20260831' AND SF2.F2_TIPO = 'N'
+  AND (NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') OR SD2.D2_CF IN ('5932','6932','6933'))
+  AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156')
+  AND NOT (SD2.D2_CF LIKE '52%' OR SD2.D2_CF LIKE '62%')
+  AND SD2.D2_CF NOT IN ('5410','6410','5411','6411','5412','6412','5413','6413')
+  AND NOT (SD2.D2_CF LIKE '55%' OR SD2.D2_CF LIKE '65%')
+  AND NOT (SD2.D2_CF LIKE '56%' OR SD2.D2_CF LIKE '66%')
+GROUP BY SB1.B1_DESC
+ORDER BY quantidade_vendida ASC
+OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY;
+`;
+const validacaoCfopParcial = runner._test.validarSqlIaOwnerBasico(
+  sqlCfopReceitaParcial,
+  faturamentoSpec,
+  { SF2010: 'E', SD2010: 'E', SB1010: 'E' },
+  'Qual foi produto menos vendido nesta ultima consulta',
+);
+assert.strictEqual(validacaoCfopParcial.ok, false, 'CFOP de receita parcial deve ser rejeitado');
+assert(validacaoCfopParcial.erros.some(e => e.includes('Faltam CFOPs') && e.includes('5933')), 'erro deve diagnosticar explicitamente o CFOP 5933 ausente');
+const retryCfopParcial = runner._test.buildRetryTecnicoIaOwner({
+  erro: Object.assign(new Error(validacaoCfopParcial.erros.join(' | ')), { _tipo: 'contrato_ia_owner_invalido' }),
+});
+assert(retryCfopParcial.includes("IN ('5932','6932','5933','6933')"), 'retry de CFOP deve levar a excecao completa literal');
+assert(retryCfopParcial.includes('Se faltar 5933'), 'retry de CFOP deve destacar o erro especifico de lista parcial');
+
+const sqlSemanalAcumuladoValido = `
+SET ROWCOUNT 10000;
+WITH semanal AS (
+  SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 6) AS competencia,
+         CAST(DATEADD(DAY, (7 - (DATEDIFF(DAY, '19000105', CAST(SF2.F2_EMISSAO AS DATE)) % 7)) % 7, CAST(SF2.F2_EMISSAO AS DATE)) AS DATE) AS semana_fim_sexta,
+         COALESCE(SUM(SD2.D2_TOTAL), 0) AS total_vendas
+  FROM SF2010 SF2
+  JOIN SD2010 SD2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SD2.D_E_L_E_T_ = ' '
+  WHERE SF2.F2_EMISSAO BETWEEN '20260801' AND '20260831'
+    AND SF2.F2_TIPO = 'N'
+    AND SF2.D_E_L_E_T_ = ' '
+    AND ${FILTRO_CFOP_RECEITA.replace(/^AND\s+/i, '')}
+  GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 6),
+           CAST(DATEADD(DAY, (7 - (DATEDIFF(DAY, '19000105', CAST(SF2.F2_EMISSAO AS DATE)) % 7)) % 7, CAST(SF2.F2_EMISSAO AS DATE)) AS DATE)
+)
+SELECT competencia,
+       semana_fim_sexta,
+       total_vendas,
+       SUM(total_vendas) OVER (ORDER BY semana_fim_sexta ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_acumulado
+FROM semanal
+ORDER BY semana_fim_sexta;
+`;
+const validacaoSemanalAcumulado = runner._test.validarSqlIaOwnerBasico(
+  sqlSemanalAcumuladoValido,
+  faturamentoSpec,
+  {},
+  'Vendas totais semanais do mes de agosto, mostrando o resultado acumulado ate o final de cada sexta-feira',
+);
+assert.strictEqual(validacaoSemanalAcumulado.ok, true, `semanal acumulado em CTE deve ser aceito: ${validacaoSemanalAcumulado.erros.join(' | ')}`);
+
+const planoSemanalTransversal = queryPlan.buildQueryPlan({
+  modulo: 'compras',
+  mensagem: 'Pedidos de compra por quinzena e por dezena',
+  periodo: { tipo: 'mes_atual', dataInicio: '20260901', dataFim: '20260930' },
+});
+assert(planoSemanalTransversal.agrupamentos.includes('quinzena'), 'query-plan transversal deve reconhecer quinzena');
+assert(planoSemanalTransversal.agrupamentos.includes('dezena'), 'query-plan transversal deve reconhecer dezena');
+assert(queryPlan.formatQueryPlanForPrompt(planoSemanalTransversal).includes('granularidade_temporal_avancada'), 'query-plan deve explicar granularidade temporal avancada no prompt');
+
+const sqlResultadoMensalSemVertical = `
+SET ROWCOUNT 50000;
+WITH mensal AS (
+  SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 6) AS competencia,
+         COALESCE(SUM(SD2.D2_TOTAL), 0) AS faturamento
+  FROM SD2010 SD2
+  JOIN SF2010 SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
+  WHERE SF2.F2_EMISSAO BETWEEN '20260101' AND '20261231'
+    AND SF2.F2_TIPO = 'N'
+    AND SD2.D_E_L_E_T_ = ' '
+    AND SF2.D_E_L_E_T_ = ' '
+    AND ${FILTRO_CFOP_RECEITA.replace(/^AND\s+/i, '')}
+  GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 6)
+)
+SELECT competencia,
+       faturamento,
+       LAG(faturamento) OVER (ORDER BY competencia) AS faturamento_anterior,
+       faturamento - LAG(faturamento) OVER (ORDER BY competencia) AS variacao_valor,
+       CASE WHEN LAG(faturamento) OVER (ORDER BY competencia) IS NULL OR LAG(faturamento) OVER (ORDER BY competencia) = 0 THEN NULL ELSE ((faturamento - LAG(faturamento) OVER (ORDER BY competencia)) * 100.0 / LAG(faturamento) OVER (ORDER BY competencia)) END AS variacao_percentual
+FROM mensal
+ORDER BY competencia;
+`;
+const validacaoResultadoMensalSemVertical = runner._test.validarSqlIaOwnerBasico(
+  sqlResultadoMensalSemVertical,
+  faturamentoSpec,
+  { SF2010: 'E', SD2010: 'E' },
+  perguntaResultadoMensalAnalitico,
+);
+assert.strictEqual(validacaoResultadoMensalSemVertical.ok, false, 'resultado mensal analitico sem percentual_vertical deve ser rejeitado');
+assert(validacaoResultadoMensalSemVertical.erros.some(e => e.includes('percentual_vertical')), 'erro deve citar percentual_vertical faltante');
+const retryResultadoMensal = runner._test.buildRetryTecnicoIaOwner({
+  erro: Object.assign(new Error(validacaoResultadoMensalSemVertical.erros.join(' | ')), { _tipo: 'contrato_ia_owner_invalido' }),
+});
+assert(retryResultadoMensal.includes('RESULTADO MENSAL COM ANALISE VERTICAL E VARIACAO'), 'retry deve usar bloco especifico do resultado mensal analitico');
+
+const sqlResultadoMensalAnaliticoValido = `
+SET ROWCOUNT 50000;
+WITH mensal AS (
+  SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 6) AS competencia,
+         COALESCE(SUM(SD2.D2_TOTAL), 0) AS faturamento
+  FROM SD2010 SD2
+  JOIN SF2010 SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
+  WHERE SF2.F2_EMISSAO BETWEEN '20260101' AND '20261231'
+    AND SF2.F2_TIPO = 'N'
+    AND SD2.D_E_L_E_T_ = ' '
+    AND SF2.D_E_L_E_T_ = ' '
+    AND ${FILTRO_CFOP_RECEITA.replace(/^AND\s+/i, '')}
+  GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 6)
+)
+SELECT h.competencia,
+       h.faturamento,
+       h.faturamento * 100.0 / NULLIF(SUM(h.faturamento) OVER (), 0) AS percentual_vertical,
+       LAG(h.faturamento) OVER (ORDER BY h.competencia) AS faturamento_anterior,
+       h.faturamento - LAG(h.faturamento) OVER (ORDER BY h.competencia) AS variacao_valor,
+       CASE WHEN LAG(h.faturamento) OVER (ORDER BY h.competencia) IS NULL OR LAG(h.faturamento) OVER (ORDER BY h.competencia) = 0 THEN NULL ELSE ((h.faturamento - LAG(h.faturamento) OVER (ORDER BY h.competencia)) * 100.0 / LAG(h.faturamento) OVER (ORDER BY h.competencia)) END AS variacao_percentual,
+       CASE WHEN LAG(h.faturamento) OVER (ORDER BY h.competencia) IS NULL THEN 'sem_base' WHEN h.faturamento - LAG(h.faturamento) OVER (ORDER BY h.competencia) > 0 THEN 'positiva' WHEN h.faturamento - LAG(h.faturamento) OVER (ORDER BY h.competencia) < 0 THEN 'negativa' ELSE 'neutra' END AS direcao_variacao
+FROM mensal h
+ORDER BY h.competencia;
+`;
+const validacaoResultadoMensalAnaliticoValido = runner._test.validarSqlIaOwnerBasico(
+  sqlResultadoMensalAnaliticoValido,
+  faturamentoSpec,
+  { SF2010: 'E', SD2010: 'E' },
+  perguntaResultadoMensalAnalitico,
+);
+assert.strictEqual(validacaoResultadoMensalAnaliticoValido.ok, true, `resultado mensal analitico completo deve ser aceito: ${validacaoResultadoMensalAnaliticoValido.erros.join(' | ')}`);
 
 console.log('faturamento-ia-owner-arquitetura.test.js: ok');

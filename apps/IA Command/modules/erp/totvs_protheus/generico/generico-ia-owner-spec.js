@@ -18,6 +18,79 @@ const TABELAS = [];
 
 const CAMPOS_SX3_ESSENCIAIS = {};
 
+// Mapa modulo -> tabelas, usado SOMENTE para o guard de roteamento abaixo (nao para dar
+// conhecimento de dominio ao spec generico, que continua enxuto de proposito). Lido dos
+// proprios specs dedicados (fonte unica de verdade) — nunca hardcoded aqui, para nao
+// desatualizar se um modulo ganhar/perder tabela.
+const MODULOS_COM_SPEC = {
+  faturamento: () => require('../faturamento/faturamento-ia-owner-spec'),
+  compras:     () => require('../compras/compras-ia-owner-spec'),
+  financeiro:  () => require('../financeiro/financeiro-ia-owner-spec'),
+  comissao:    () => require('../comissao/comissao-ia-owner-spec'),
+  estoque:     () => require('../estoque/estoque-ia-owner-spec'),
+};
+
+function _tabelaPorModulo() {
+  const mapa = new Map();
+  for (const [modulo, loader] of Object.entries(MODULOS_COM_SPEC)) {
+    let tabelas = [];
+    try { tabelas = loader().tabelas || []; } catch (_) { tabelas = []; }
+    for (const t of tabelas) {
+      const chave = String(t || '').toUpperCase();
+      if (!chave) continue;
+      if (!mapa.has(chave)) mapa.set(chave, []);
+      mapa.get(chave).push(modulo);
+    }
+  }
+  return mapa;
+}
+
+// Exemplos de vocabulario por modulo, usados so para orientar a reformulacao na mensagem
+// de erro do guard abaixo — nao tem nenhum efeito em SQL nem em classificacao.
+const EXEMPLOS_POR_MODULO = {
+  faturamento: '"faturamento do mês", "nota fiscal emitida" ou "vendas por cliente"',
+  compras: '"pedido de compra", "nota de entrada" ou "compras por fornecedor"',
+  financeiro: '"saldo bancário", "conta a pagar/receber" ou "fluxo de caixa"',
+  comissao: '"comissão do vendedor" ou "comissão por período"',
+  estoque: '"saldo de estoque", "posição de estoque" ou "produto por local"',
+};
+
+// Guard de ROTEAMENTO, nao de negocio: pergunta caiu em erp_generico (sem spec dedicado
+// reconhecido pelo classificador), mas o SQL gerado referencia tabela que pertence a um
+// modulo com spec proprio — sinal de que a classificacao de intencao errou o modulo, nao
+// que o dominio realmente carece de spec (ex: RH, producao). Bloqueia e pede reformulacao
+// em vez de deixar a IA gerar SQL sem nenhum guardrail de dominio (sqlPatternsProibidos
+// deste spec e []).
+function _construirGuardRoteamento() {
+  const porTabela = _tabelaPorModulo();
+  return {
+    validar(sql) {
+      const texto = String(sql || '').toUpperCase();
+      const encontrados = new Map(); // tabela -> modulos
+      for (const [tabela, modulos] of porTabela.entries()) {
+        const re = new RegExp(`\\b${tabela}\\d*\\b`, 'i');
+        if (re.test(texto)) encontrados.set(tabela, modulos);
+      }
+      if (!encontrados.size) return null;
+
+      const exclusivas = [...encontrados.entries()].filter(([, modulos]) => modulos.length === 1);
+      if (exclusivas.length) {
+        const modulo = exclusivas[0][1][0];
+        const exemplos = EXEMPLOS_POR_MODULO[modulo] || 'termos especificos do modulo correto';
+        return (
+          `Essa pergunta parece ser sobre ${modulo}, mas foi processada fora desse contexto. ` +
+          `Tente reformular mencionando termos como ${exemplos}.`
+        );
+      }
+      const modulosEnvolvidos = [...new Set([...encontrados.values()].flat())].sort();
+      return (
+        `Essa pergunta parece pertencer a um dos módulos do sistema (${modulosEnvolvidos.join(', ')}), mas não foi reconhecida corretamente. ` +
+        `Tente reformular sendo mais específico sobre o assunto (ex: "vendas", "contas a pagar", "comissão de vendedor").`
+      );
+    },
+  };
+}
+
 const regrasTecnicas = `
 ## Contexto Tecnico Generico Protheus
 Voce esta respondendo uma pergunta sobre um dominio SEM spec dedicado neste sistema
@@ -47,7 +120,7 @@ module.exports = {
   regrasTecnicas,
   sx3PromptLimit: 60,
   maxTokens: 3000,
-  sqlPatternsProibidos: [],
+  sqlPatternsProibidos: [_construirGuardRoteamento()],
   mensagensErro: {
     ia_indisponivel: 'Nao consigo processar sua consulta no momento. Tente novamente em breve.',
     sql_invalido: 'Tive uma inconsistencia ao interpretar sua consulta. Por favor, reformule a pergunta e tente novamente.',
