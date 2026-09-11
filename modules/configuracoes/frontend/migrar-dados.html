@@ -513,8 +513,13 @@ function renderTabelas() {
 }
 
 // ─── Dependências entre tabelas ────────────────────────────────────────────
-// SX2 e SX3 têm FK em connections — conexões devem ser migradas primeiro.
-const DEPS = { iac_sx2: ['iac_conexoes'], iac_sx3: ['iac_conexoes'] };
+// Tabelas Protheus com FK em connections — conexões devem ser migradas primeiro.
+const DEPS = {
+  iac_sx2: ['iac_conexoes'],
+  iac_sx3: ['iac_conexoes'],
+  iac_protheus_company_tree: ['iac_conexoes'],
+  iac_protheus_company_profile: ['iac_conexoes'],
+};
 
 function aplicarDependencias() {
   const checks = document.querySelectorAll('.mig-check');
@@ -528,7 +533,7 @@ function aplicarDependencias() {
     if (obrigatorios.has(c.dataset.id)) {
       c.checked = true;
       c.disabled = true;
-      c.title = 'Obrigatório como pré-requisito das tabelas SX selecionadas';
+      c.title = 'Obrigatório como pré-requisito das tabelas Protheus selecionadas';
     } else {
       c.disabled = false;
       c.title = '';

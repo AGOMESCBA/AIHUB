@@ -677,6 +677,22 @@
       return d ? `+${d}` : '';
     }
 
+    function digitCountBeforeCaret(value, caret) {
+      return digits(String(value || '').slice(0, Math.max(0, caret || 0))).length;
+    }
+
+    function caretAfterDigitIndex(value, digitIndex) {
+      if (digitIndex <= 0) return value.startsWith('+') ? 1 : 0;
+      let seen = 0;
+      for (let i = 0; i < value.length; i += 1) {
+        if (/\d/.test(value[i])) {
+          seen += 1;
+          if (seen >= digitIndex) return i + 1;
+        }
+      }
+      return value.length;
+    }
+
     function setStatus(msg, type) {
       const el = $('status');
       el.textContent = msg || '';
@@ -808,9 +824,11 @@
     });
 
     $('phone').addEventListener('input', () => {
-      const pos = $('phone').selectionStart;
-      $('phone').value = formatPhone($('phone').value);
-      try { $('phone').setSelectionRange(pos, pos); } catch (_err) {}
+      const input = $('phone');
+      const digitIndex = digitCountBeforeCaret(input.value, input.selectionStart);
+      input.value = formatPhone(input.value);
+      const pos = caretAfterDigitIndex(input.value, digitIndex);
+      try { input.setSelectionRange(pos, pos); } catch (_err) {}
     });
 
     $('phone').addEventListener('keydown', e => {

@@ -1,12 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 const db = require('./database');
-const { APP_DATA_DIR, appDataDir } = require('../data-paths');
+const { APP_DATA_DIR, appDataDir, appDataFile } = require('../data-paths');
 const empresasDb = require('../empresas/database');
+const usuariosDb = require('../usuarios/database');
 const { empresaDataFile } = require('../../../IA Recruit/backend/data-paths');
 
 const DATA_DIR = APP_DATA_DIR;
 const SISTEMA_UPLOAD_DIR = appDataDir('uploads', 'sistema');
+const PERMISSOES_FILE = appDataFile('permissoes.json');
 
 // --- IA Command SQLite helpers ---
 
@@ -60,6 +62,9 @@ function migrarIacSimples(iacDb, tabela, origemId, destinoId, opts = {}) {
       const r = { ...row };
       if (!autoincPk) r.id = remapId(row.id, destinoId);
       r.empresa_id = empresaIdComoTexto ? String(destinoId) : destinoId;
+      if (Object.prototype.hasOwnProperty.call(r, 'empresa_iahub_vinculo_id')) {
+        r.empresa_iahub_vinculo_id = destinoId;
+      }
       for (const campo of camposRef) {
         if (r[campo]) r[campo] = remapId(r[campo], destinoId);
       }
@@ -242,16 +247,18 @@ function migrarConexoes(iacDb, origemId, destinoId) {
 // opts.autoincPk = true  → PK é INTEGER AUTOINCREMENT (ai_config, audio_config, whatsapp_config)
 // opts.camposRef = [...]  → campos TEXT que referenciam IDs de outras tabelas IAC e devem ser remapeados
 const IAC_TABELAS = {
-  // Configuração IA — PK AUTOINCREMENT, sem referências cruzadas
-  iac_ai_config:    { sistema: 'iac', grupo: 'Configuração IA', label: 'Configuração de IA',       tabela: 'ai_config',    tipo: 'simples', default: true,  opts: { autoincPk: true } },
-  iac_audio_config: { sistema: 'iac', grupo: 'Configuração IA', label: 'Configuração de áudio',    tabela: 'audio_config', tipo: 'simples', default: true,  opts: { autoincPk: true } },
+  // Configuração — segue o menu IA Command > Configuração.
+  iac_conexoes:     { sistema: 'iac', grupo: 'Configuração', label: 'Conexões ERP + config Protheus', tabela: 'connections',  tipo: 'conexoes', default: true },
+  iac_datasets:     { sistema: 'iac', grupo: 'Configuração', label: 'Datasets ERP',                   tabela: 'datasets',     tipo: 'simples', default: true, opts: {} },
+  iac_ai_config:    { sistema: 'iac', grupo: 'Configuração', label: 'Configuração de IA',             tabela: 'ai_config',    tipo: 'simples', default: true, opts: { autoincPk: true } },
+  iac_audio_config: { sistema: 'iac', grupo: 'Configuração', label: 'Configuração de áudio',          tabela: 'audio_config', tipo: 'simples', default: true, opts: { autoincPk: true } },
 
-  // IA / NLP — PK TEXT; intentions referencia intention_modules.id e datasets.id
-  iac_intention_modules: { sistema: 'iac', grupo: 'IA / NLP', label: 'Módulos de intenção',        tabela: 'intention_modules',     tipo: 'simples', default: true, opts: {} },
-  iac_datasets:          { sistema: 'iac', grupo: 'IA / NLP', label: 'Datasets',                   tabela: 'datasets',              tipo: 'simples', default: true, opts: {} },
-  iac_intentions:        { sistema: 'iac', grupo: 'IA / NLP', label: 'Intenções',                  tabela: 'intentions',            tipo: 'simples', default: true, opts: { camposRef: ['modulo', 'dataset_id'] } },
-  iac_synonyms:          { sistema: 'iac', grupo: 'IA / NLP', label: 'Sinônimos / equivalências',  tabela: 'synonyms',              tipo: 'simples', default: true, opts: {} },
-  iac_conv_dialogs:      { sistema: 'iac', grupo: 'IA / NLP', label: 'Diálogos conversacionais',  tabela: 'conversational_dialogs', tipo: 'simples', default: true, opts: {} },
+  // Conhecimento da IA — PK TEXT; intentions referencia intention_modules.id e datasets.id.
+  iac_intention_modules: { sistema: 'iac', grupo: 'Conhecimento da IA', label: 'Módulos',                   tabela: 'intention_modules',      tipo: 'simples', default: true, opts: {} },
+  iac_intentions:        { sistema: 'iac', grupo: 'Conhecimento da IA', label: 'Intenções',                 tabela: 'intentions',             tipo: 'simples', default: true, opts: { camposRef: ['modulo', 'dataset_id'] } },
+  iac_synonyms:          { sistema: 'iac', grupo: 'Conhecimento da IA', label: 'Equivalências',             tabela: 'synonyms',               tipo: 'simples', default: true, opts: {} },
+  iac_conv_dialogs:      { sistema: 'iac', grupo: 'Conhecimento da IA', label: 'Diálogos conversacionais',  tabela: 'conversational_dialogs', tipo: 'simples', default: true, opts: {} },
+  iac_spec_feedback:     { sistema: 'iac', grupo: 'Conhecimento da IA', label: 'Feedback Técnico da IA',    tabela: 'spec_feedback_propostas', tipo: 'simples', default: true, opts: {} },
 
   // WhatsApp — config tem PK AUTOINCREMENT; demais têm PK TEXT
   iac_wa_config:    { sistema: 'iac', grupo: 'WhatsApp', label: 'Configuração WhatsApp', tabela: 'whatsapp_config',            tipo: 'simples', default: true,  opts: { autoincPk: true } },
@@ -261,21 +268,23 @@ const IAC_TABELAS = {
   // whatsapp_sessions: PK é a própria empresa_id (1 sessão por empresa) — sem remapeamento de id.
   iac_wa_sessions:  { sistema: 'iac', grupo: 'WhatsApp', label: 'Sessão WhatsApp (status/QR)', tabela: 'whatsapp_sessions', tipo: 'porempresa', default: true, opts: {} },
 
-  // Conexão ERP — migração especial: cascateia protheus_config e erp_config
-  iac_conexoes: { sistema: 'iac', grupo: 'Conexão ERP', label: 'Conexões ERP + config Protheus',              tabela: 'connections',  tipo: 'conexoes', default: true },
-  // Dicionários Protheus — migrados individualmente; dependem de connections existir no destino
-  iac_sx2: { sistema: 'iac', grupo: 'Conexão ERP', label: 'Dicionário SX2 — compartilhamento de tabelas', tabela: 'protheus_sx2', tipo: 'sx',      default: true,  opts: {} },
-  iac_sx3: { sistema: 'iac', grupo: 'Conexão ERP', label: 'Dicionário SX3 — campos do Protheus',          tabela: 'protheus_sx3', tipo: 'sx',      default: false, opts: {} },
+  // Integração > ERP Protheus — migrados individualmente; dependem de connections existir no destino.
+  iac_sx2: { sistema: 'iac', grupo: 'Integração / ERP Protheus', label: 'Tabelas Protheus (SX2)',           tabela: 'protheus_sx2', tipo: 'sx', default: true, opts: {} },
+  iac_sx3: { sistema: 'iac', grupo: 'Integração / ERP Protheus', label: 'Campos Protheus (SX3)',            tabela: 'protheus_sx3', tipo: 'sx', default: false, opts: {} },
+  iac_protheus_company_tree: { sistema: 'iac', grupo: 'Integração / ERP Protheus', label: 'Empresas Protheus', tabela: 'protheus_company_tree', tipo: 'simples', default: true, opts: { camposRef: ['connection_id'] } },
+  iac_protheus_company_profile: { sistema: 'iac', grupo: 'Integração / ERP Protheus', label: 'Configuração de Empresas Protheus', tabela: 'protheus_company_profile', tipo: 'simples', default: true, opts: { camposRef: ['connection_id'] } },
+  iac_protheus_web_users: { sistema: 'iac', grupo: 'Integração / ERP Protheus', label: 'Usuários Protheus', tabela: 'protheus_web_user_permissions', tipo: 'simples', default: true, opts: {} },
 
   // Agendamento — jobs + recipients/runs dependentes (FK job_id), migrados juntos em cascata.
-  iac_scheduled_questions: { sistema: 'iac', grupo: 'Agendamento', label: 'Perguntas agendadas + destinatários + histórico de execuções', tabela: 'scheduled_question_jobs', tipo: 'scheduled', default: true },
+  iac_scheduled_questions: { sistema: 'iac', grupo: 'Agendamento', label: 'Perguntas Agendadas + Histórico de Execuções', tabela: 'scheduled_question_jobs', tipo: 'scheduled', default: true },
+  iac_chat_favorites:      { sistema: 'iac', grupo: 'Agendamento', label: 'Favoritos do Chat', tabela: 'protheus_chat_favorites', tipo: 'simples', default: true, opts: {} },
 
-  // Aprendizado de IA / NL-SQL — exemplos, políticas e configurações aprendidas pelo motor semântico
-  iac_nlsql_examples: { sistema: 'iac', grupo: 'Aprendizado de IA', label: 'Exemplos semânticos (NL-SQL)',        tabela: 'nlsql_semantic_examples',   tipo: 'simples',   default: true, opts: {} },
-  iac_nlsql_policies: { sistema: 'iac', grupo: 'Aprendizado de IA', label: 'Políticas semânticas',                tabela: 'nlsql_semantic_policies',   tipo: 'simples',   default: true, opts: {} },
+  // Aprendizado NL-SQL — exemplos, políticas e configurações aprendidas pelo motor semântico.
+  iac_nlsql_examples: { sistema: 'iac', grupo: 'Aprendizado NL-SQL', label: 'Saúde do Aprendizado / Exemplos semânticos', tabela: 'nlsql_semantic_examples', tipo: 'simples', default: true, opts: {} },
+  iac_nlsql_policies: { sistema: 'iac', grupo: 'Aprendizado NL-SQL', label: 'Decisões Automáticas / Políticas semânticas', tabela: 'nlsql_semantic_policies', tipo: 'simples', default: true, opts: {} },
   // nlsql_semantic_settings: PK é a própria empresa_id — sem remapeamento de id.
-  iac_nlsql_settings: { sistema: 'iac', grupo: 'Aprendizado de IA', label: 'Configurações do motor semântico',    tabela: 'nlsql_semantic_settings',   tipo: 'porempresa', default: true, opts: {} },
-  iac_nlsql_shadow:   { sistema: 'iac', grupo: 'Aprendizado de IA', label: 'Log de shadow-testing semântico',     tabela: 'nlsql_semantic_shadow_log', tipo: 'simples',   default: false, opts: {} },
+  iac_nlsql_settings: { sistema: 'iac', grupo: 'Aprendizado NL-SQL', label: 'Calibração / Configurações do motor semântico', tabela: 'nlsql_semantic_settings', tipo: 'porempresa', default: true, opts: {} },
+  iac_nlsql_shadow:   { sistema: 'iac', grupo: 'Aprendizado NL-SQL', label: 'Shadow Mode', tabela: 'nlsql_semantic_shadow_log', tipo: 'simples', default: false, opts: {} },
 
   // Logs — desligado por padrão
   iac_exec_log:   { sistema: 'iac', grupo: 'Logs', label: 'Log de execuções',      tabela: 'execution_log',      tipo: 'simples', default: false, opts: {} },
@@ -283,12 +292,11 @@ const IAC_TABELAS = {
   iac_unmatched:  { sistema: 'iac', grupo: 'Logs', label: 'Mensagens sem resposta', tabela: 'unmatched_messages', tipo: 'simples', default: false, opts: {} },
   iac_audit_log:  { sistema: 'iac', grupo: 'Logs', label: 'Log de auditoria',       tabela: 'audit_log',          tipo: 'simples', default: false, opts: {} },
   iac_chat_history: { sistema: 'iac', grupo: 'Logs', label: 'Histórico de conversas (chat)', tabela: 'chat_history', tipo: 'simples', default: false, opts: { autoincPk: true, empresaIdComoTexto: true } },
-
-  // Propostas de correção de spec (revisão humana das sugestões da IA)
-  iac_spec_feedback: { sistema: 'iac', grupo: 'IA / NLP', label: 'Propostas de correção de spec', tabela: 'spec_feedback_propostas', tipo: 'simples', default: true, opts: {} },
+  iac_chat_forwardings: { sistema: 'iac', grupo: 'Logs', label: 'Encaminhamentos', tabela: 'protheus_chat_forwardings', tipo: 'simples', default: false, opts: {} },
 };
 
 const MIGRACAO_TABELAS = {
+  permissoes_rotinas: { grupo: 'Seguranca', label: 'Acessos a rotinas por empresa', tipo: 'permissoes_rotinas', default: true },
   config:             { grupo: 'Configuracoes', label: 'WhatsApp Curriculo', campos: ['config'], defaults: { config: {} }, default: true },
   email_config:       { grupo: 'Configuracoes', label: 'E-mail por vaga', campos: ['email_config'], defaults: { email_config: {} }, default: true },
   email_geral_config: { grupo: 'Configuracoes', label: 'E-mail avulso', campos: ['email_geral_config'], defaults: { email_geral_config: {} }, default: true },
@@ -324,6 +332,20 @@ function saveEmpresaData(empresaId, data) {
   fs.writeFileSync(empresaDataFile(empresaId), JSON.stringify(data, null, 2), 'utf8');
 }
 
+function readPermissoesData() {
+  if (!fs.existsSync(PERMISSOES_FILE)) return [];
+  try {
+    const data = JSON.parse(fs.readFileSync(PERMISSOES_FILE, 'utf8'));
+    return Array.isArray(data) ? data : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function savePermissoesData(data) {
+  fs.writeFileSync(PERMISSOES_FILE, JSON.stringify(Array.isArray(data) ? data : [], null, 2), 'utf8');
+}
+
 function clone(value) {
   if (value === undefined) return undefined;
   return JSON.parse(JSON.stringify(value));
@@ -339,6 +361,38 @@ function previewTabela(data, tabela) {
   const def = MIGRACAO_TABELAS[tabela];
   const principal = def.campos[0];
   return countCampo(data[principal]);
+}
+
+function countPermissoesEmpresa(permissoes, empresaId) {
+  if (!Array.isArray(permissoes)) return 0;
+  const usuariosComuns = new Set(usuariosDb.listar().filter(u => u.role !== 'admin').map(u => Number(u.id)));
+  return permissoes.filter(p => (
+    Number(p?.empresa_id) === Number(empresaId)
+    && usuariosComuns.has(Number(p?.usuario_id))
+  )).length;
+}
+
+function migrarPermissoesRotinas(origemId, destinoId) {
+  const todas = readPermissoesData();
+  const usuariosComuns = new Set(usuariosDb.listar().filter(u => u.role !== 'admin').map(u => Number(u.id)));
+  const agora = new Date().toISOString();
+  const origem = todas
+    .filter(p => (
+      Number(p?.empresa_id) === Number(origemId)
+      && usuariosComuns.has(Number(p?.usuario_id))
+    ))
+    .map(p => ({
+      ...p,
+      empresa_id: Number(destinoId),
+      rotinas: Array.isArray(p.rotinas) ? [...p.rotinas] : [],
+      atualizado_em: agora,
+    }));
+
+  const semDestino = todas.filter(p => (
+    Number(p?.empresa_id) !== Number(destinoId)
+    || !usuariosComuns.has(Number(p?.usuario_id))
+  ));
+  savePermissoesData([...semDestino, ...origem]);
 }
 
 function normalizarEmpresa(value, destinoId, destinoNome) {
@@ -359,6 +413,7 @@ function normalizarEmpresa(value, destinoId, destinoNome) {
 // evitando 1 backup por tabela quando o usuário só fez "uma migração" do ponto de vista dele.
 const _lotesComBackupIahub = new Set();
 const _lotesComBackupIac   = new Set();
+const _lotesComBackupPermissoes = new Set();
 
 // Evita crescimento indefinido em memória — cada lote é só algumas strings,
 // mas o processo roda dias/semanas sem reiniciar.
@@ -384,6 +439,22 @@ function criarBackupDestino(destinoId, loteId) {
   const backupFile = path.join(backupDir, `empresa_${destinoId}_antes_migracao_${stamp}.json`);
   fs.copyFileSync(file, backupFile);
   if (loteId) { _lotesComBackupIahub.add(loteId); _limitarSetDeLotes(_lotesComBackupIahub); }
+  return backupFile;
+}
+
+function criarBackupPermissoes(loteId) {
+  if (loteId && _lotesComBackupPermissoes.has(loteId)) return null;
+  if (!fs.existsSync(PERMISSOES_FILE)) {
+    if (loteId) _lotesComBackupPermissoes.add(loteId);
+    return null;
+  }
+
+  const backupDir = path.join(path.dirname(PERMISSOES_FILE), 'backups');
+  fs.mkdirSync(backupDir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupFile = path.join(backupDir, `permissoes_antes_migracao_${stamp}.json`);
+  fs.copyFileSync(PERMISSOES_FILE, backupFile);
+  if (loteId) { _lotesComBackupPermissoes.add(loteId); _limitarSetDeLotes(_lotesComBackupPermissoes); }
   return backupFile;
 }
 
@@ -418,6 +489,11 @@ function dirsBackupMigracao() {
   try {
     const arquivoQualquer = empresaDataFile(1);
     dirs.push({ origem: 'iahub', dir: path.join(path.dirname(arquivoQualquer), 'backups') });
+  } catch (_) {}
+
+  // IAHub — permissões por rotina ficam em arquivo global (permissoes.json).
+  try {
+    dirs.push({ origem: 'iahub-permissoes', dir: path.join(path.dirname(PERMISSOES_FILE), 'backups') });
   } catch (_) {}
 
   // IA Command — backup do banco inteiro (ia-command_antes_migracao_empresa_*.db)
@@ -679,14 +755,15 @@ module.exports = function registerRoutes(app, { requireAuth, requireAdmin, requi
 
     const origemData = readEmpresaData(origemId);
     const destinoData = readEmpresaData(destinoId);
+    const permissoesData = readPermissoesData();
     const iacDb = getIacDb();
 
     const tabelasIahub = Object.entries(MIGRACAO_TABELAS).map(([id, def]) => ({
       id,
       grupo: def.grupo,
       label: def.label,
-      origem: previewTabela(origemData, id),
-      destino: previewTabela(destinoData, id),
+      origem: def.tipo === 'permissoes_rotinas' ? countPermissoesEmpresa(permissoesData, origemId) : previewTabela(origemData, id),
+      destino: def.tipo === 'permissoes_rotinas' ? countPermissoesEmpresa(permissoesData, destinoId) : previewTabela(destinoData, id),
     }));
 
     const tabelasIac = Object.entries(IAC_TABELAS).map(([id, def]) => ({
@@ -745,6 +822,12 @@ module.exports = function registerRoutes(app, { requireAuth, requireAdmin, requi
 
         for (const tabela of tabelasIahub) {
           const def = MIGRACAO_TABELAS[tabela];
+          if (def.tipo === 'permissoes_rotinas') {
+            criarBackupPermissoes(loteId);
+            migrarPermissoesRotinas(origemId, destinoId);
+            migradas.push({ id: tabela, label: def.label, sistema: 'iahub' });
+            continue;
+          }
           for (const campo of def.campos) {
             const valor = Object.prototype.hasOwnProperty.call(origemData, campo)
               ? clone(origemData[campo])
