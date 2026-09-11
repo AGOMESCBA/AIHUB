@@ -4,9 +4,9 @@ const https = require('https');
 
 const DEFAULT_TIMEOUT_MS = 8000;
 
-function getJson(url, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+function getJson(url, { timeoutMs = DEFAULT_TIMEOUT_MS, headers = {} } = {}) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers: { 'User-Agent': 'IACommand/1.0' } }, (res) => {
+    const req = https.get(url, { headers: { 'User-Agent': 'IACommand/1.0', ...headers } }, (res) => {
       let body = '';
       res.setEncoding('utf8');
       res.on('data', chunk => { body += chunk; });
@@ -126,6 +126,23 @@ async function geocodeOpenMeteo(local) {
   return first;
 }
 
+// Reverse geocoding (coordenadas -> nome de cidade) via Nominatim/OpenStreetMap — a
+// Open-Meteo nao tem endpoint de reverse geocoding. Uso pontual (so quando o usuario
+// compartilha localizacao pelo WhatsApp, baixo volume), respeitando a exigencia de
+// User-Agent identificavel da politica de uso do Nominatim. Falha aqui NAO deve quebrar
+// a resposta de temperatura (o dado principal) — quem chama trata erro com fallback.
+async function reverseGeocodeNominatim(latitude, longitude) {
+  // zoom=16 (nivel de bairro) para obter suburb/neighbourhood, alem de cidade/estado.
+  const url = `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=pt-BR&zoom=16`;
+  const data = await getJson(url, { headers: { 'User-Agent': 'IACommand/1.0 (contato: suporte@iahub)' } });
+  const addr = data?.address;
+  if (!addr) throw new Error('endereco nao encontrado');
+  const cidade = addr.city || addr.town || addr.village || addr.municipality || addr.county;
+  if (!cidade) throw new Error('cidade nao identificada');
+  const bairro = addr.suburb || addr.neighbourhood || addr.city_district || null;
+  return [bairro, cidade, addr.state].filter(Boolean).join(', ');
+}
+
 // Aceita coordenadas diretas (localizacao compartilhada pelo WhatsApp) OU nome de local
 // (geocodificado). Sem nenhum dos dois, lanca erro explicito — SEM fallback de cidade fixa:
 // quem chama (conversational-turn-router/whatsapp service) e responsavel por perguntar a
@@ -142,6 +159,13 @@ async function climaOpenMeteo(req) {
     latitude = geo.latitude;
     longitude = geo.longitude;
     nomeLocal = [geo.name, geo.admin1, geo.country_code].filter(Boolean).join(', ');
+  } else {
+    try {
+      nomeLocal = await reverseGeocodeNominatim(latitude, longitude);
+    } catch (_) {
+      // Mantem "sua localização" — a temperatura em si (dado principal) ja foi obtida
+      // com as coordenadas corretas, so o nome de exibicao nao pode ser resolvido agora.
+    }
   }
 
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`;
