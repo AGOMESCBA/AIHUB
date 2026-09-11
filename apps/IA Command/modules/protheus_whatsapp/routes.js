@@ -34,6 +34,7 @@ let whatsappManager;
 let scheduledQuestionRunner;
 let canonicalWhatsappFormat;
 let loboGuaraFilialResolver;
+let empresasIahubDb;
 
 function getChatService() {
   if (!chatService) chatService = require('./service');
@@ -58,6 +59,17 @@ function getCanonicalWhatsappFormat() {
 function getLoboGuaraFilialResolver() {
   if (!loboGuaraFilialResolver) loboGuaraFilialResolver = require('../erp/totvs_protheus/SX/lobo-guara-filial-resolver');
   return loboGuaraFilialResolver;
+}
+
+function getEmpresasIahubDb() {
+  if (empresasIahubDb === undefined) {
+    try {
+      empresasIahubDb = require('../../../IAHUB/backend/empresas/database');
+    } catch (_) {
+      empresasIahubDb = null;
+    }
+  }
+  return empresasIahubDb;
 }
 
 function publicRateLimit(req, res, chave, { janelaMs = 60 * 1000, max = 30 } = {}) {
@@ -503,6 +515,24 @@ function empresasPermitidasDaSessao(sessao) {
       // true/false = confirmado existir ou nao na tabela empresas.
       existeNoCadastro: null,
     }));
+
+  try {
+    const empresasDb = getEmpresasIahubDb();
+    if (empresasDb) {
+      const nomesIahub = new Map();
+      for (const emp of empresasDb.listar()) {
+        const id = Number(emp?.id || 0);
+        const nome = String(emp?.nome || emp?.razao_social || '').trim();
+        if (id && nome) nomesIahub.set(id, nome);
+      }
+      for (const emp of empresas) {
+        emp.existeNoCadastro = nomesIahub.has(emp.empresa_id);
+        const nome = nomesIahub.get(emp.empresa_id);
+        if (nome) emp.nome = nome;
+      }
+      return empresas;
+    }
+  } catch (_) {}
 
   try {
     const ids = empresas.map(emp => emp.empresa_id).filter(Boolean);
