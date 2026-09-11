@@ -126,14 +126,28 @@ async function geocodeOpenMeteo(local) {
   return first;
 }
 
+// Aceita coordenadas diretas (localizacao compartilhada pelo WhatsApp) OU nome de local
+// (geocodificado). Sem nenhum dos dois, lanca erro explicito — SEM fallback de cidade fixa:
+// quem chama (conversational-turn-router/whatsapp service) e responsavel por perguntar a
+// cidade ao usuario antes de chegar aqui, nunca adivinhar um local.
 async function climaOpenMeteo(req) {
-  const local = req.local || 'Manaus';
-  const geo = await geocodeOpenMeteo(local);
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${geo.latitude}&longitude=${geo.longitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`;
+  let latitude = req.latitude;
+  let longitude = req.longitude;
+  let nomeLocal = 'sua localização';
+
+  if (latitude == null || longitude == null) {
+    const local = String(req.local || '').trim();
+    if (!local) throw new Error('local nao informado');
+    const geo = await geocodeOpenMeteo(local);
+    latitude = geo.latitude;
+    longitude = geo.longitude;
+    nomeLocal = [geo.name, geo.admin1, geo.country_code].filter(Boolean).join(', ');
+  }
+
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`;
   const data = await getJson(url);
   const atual = data?.current;
   if (!atual || atual.temperature_2m == null) throw new Error('resposta sem temperatura');
-  const nomeLocal = [geo.name, geo.admin1, geo.country_code].filter(Boolean).join(', ');
   return {
     titulo: `Temperatura em ${nomeLocal}`,
     valor: `${fmtNumero(atual.temperature_2m, 1)} ${data.current_units?.temperature_2m || 'C'}`,

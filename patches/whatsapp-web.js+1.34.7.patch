@@ -1,0 +1,82 @@
+diff --git a/node_modules/whatsapp-web.js/src/structures/Chat.js b/node_modules/whatsapp-web.js/src/structures/Chat.js
+index 40211bf..fd148bd 100644
+--- a/node_modules/whatsapp-web.js/src/structures/Chat.js
++++ b/node_modules/whatsapp-web.js/src/structures/Chat.js
+@@ -19,7 +19,10 @@ class Chat extends Base {
+          * ID that represents the chat
+          * @type {object}
+          */
+-        this.id = data.id;
++        // WhatsApp Web (jul/2026) renomeou id._serialized -> id.$1 (mesmo valor).
++        this.id = (data.id && data.id._serialized == null && data.id.$1 != null)
++            ? Object.assign({}, data.id, { _serialized: data.id.$1 })
++            : data.id;
+ 
+         /**
+          * Title of the chat
+diff --git a/node_modules/whatsapp-web.js/src/structures/Contact.js b/node_modules/whatsapp-web.js/src/structures/Contact.js
+index 4ee5194..9f2f576 100644
+--- a/node_modules/whatsapp-web.js/src/structures/Contact.js
++++ b/node_modules/whatsapp-web.js/src/structures/Contact.js
+@@ -26,7 +26,10 @@ class Contact extends Base {
+          * ID that represents the contact
+          * @type {ContactId}
+          */
+-        this.id = data.id;
++        // WhatsApp Web (jul/2026) renomeou id._serialized -> id.$1 (mesmo valor).
++        this.id = (data.id && data.id._serialized == null && data.id.$1 != null)
++            ? Object.assign({}, data.id, { _serialized: data.id.$1 })
++            : data.id;
+ 
+         /**
+          * Contact's phone number
+diff --git a/node_modules/whatsapp-web.js/src/structures/Message.js b/node_modules/whatsapp-web.js/src/structures/Message.js
+index dd977e8..13c1471 100644
+--- a/node_modules/whatsapp-web.js/src/structures/Message.js
++++ b/node_modules/whatsapp-web.js/src/structures/Message.js
+@@ -34,7 +34,11 @@ class Message extends Base {
+          * ID that represents the message
+          * @type {object}
+          */
+-        this.id = data.id;
++        // WhatsApp Web (jul/2026) renomeou id._serialized -> id.$1 (mesmo valor).
++        // Sem isso, downloadMedia() envia msgId=undefined e falha com erro opaco "r: r".
++        this.id = (data.id && data.id._serialized == null && data.id.$1 != null)
++            ? Object.assign({}, data.id, { _serialized: data.id.$1 })
++            : data.id;
+ 
+         /**
+          * ACK status for the message
+@@ -566,6 +570,7 @@ class Message extends Base {
+                         mediaKey: msg.mediaKey,
+                         mediaKeyTimestamp: msg.mediaKeyTimestamp,
+                         type: msg.type,
++                        mimetype: msg.mimetype,
+                         signal: new AbortController().signal,
+                         downloadQpl: mockQpl,
+                     });
+diff --git a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js b/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
+index 540078a..bdeb748 100644
+--- a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
++++ b/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
+@@ -981,15 +981,17 @@ exports.LoadUtils = () => {
+ 
+         model.lastMessage = null;
+         if (model.msgs && model.msgs.length) {
+-            const lastMessage = chat.lastReceivedKey
++            // WhatsApp Web (jul/2026) renomeou _serialized -> $1 (mesmo valor) em alguns objetos de key.
++            const lastReceivedKeyId = chat.lastReceivedKey && (chat.lastReceivedKey._serialized || chat.lastReceivedKey.$1);
++            const lastMessage = lastReceivedKeyId
+                 ? window
+                       .require('WAWebCollections')
+-                      .Msg.get(chat.lastReceivedKey._serialized) ||
++                      .Msg.get(lastReceivedKeyId) ||
+                   (
+                       await window
+                           .require('WAWebCollections')
+                           .Msg.getMessagesById([
+-                              chat.lastReceivedKey._serialized,
++                              lastReceivedKeyId,
+                           ])
+                   )?.messages?.[0]
+                 : null;

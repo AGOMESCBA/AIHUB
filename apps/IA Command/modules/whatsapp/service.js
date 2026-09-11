@@ -3280,6 +3280,29 @@ class IACWhatsAppService extends EventEmitter {
         mensagem: resposta,
         acessos_count: resumo.acessos.length,
       };
+    } else if (rota.tipo === 'externo' && rota.categoria === 'clima' && !rota.local) {
+      // Pergunta de clima sem cidade explicita: em vez de assumir uma cidade fixa (fallback
+      // fixo removido de proposito, ver external-info-service.js), pede a cidade ou a
+      // localizacao nativa do WhatsApp e guarda a pendencia para a proxima mensagem
+      // (retomada em _responderClimaPendenteLocal).
+      this._setSenderContext(sender, {
+        _climaPendenteLocal: { categoria: rota.categoria, fontePreferida: rota.fontePreferida || null },
+      });
+      resposta = 'De qual cidade você quer saber o clima? Me diga o nome da cidade ou compartilhe sua localização (clipe 📎 → Localização).';
+      intent = {
+        intencao: 'consulta_externa_clima_pendente',
+        periodo: { tipo: 'nenhum' },
+        filtros: {},
+        confianca: 1,
+        _provedor: 'roteador_conversacional',
+        _resolvidoLocalmente: true,
+        _mensagemOriginal: texto,
+      };
+      resultado = {
+        tipo: 'dialogo',
+        subtipo: 'consulta_externa_clima_pendente',
+        mensagem: resposta,
+      };
     } else if (rota.tipo === 'externo') {
       const consulta = await externalInfoService.consultar(rota);
       resposta = consulta.resposta;
@@ -3867,6 +3890,79 @@ class IACWhatsAppService extends EventEmitter {
     return resposta;
   }
 
+  // Retomada da pendencia "clima sem cidade" (ver _tentarResponderTurnoConversacionalDinamico,
+  // ramo rota.categoria === 'clima' && !rota.local): a proxima mensagem do remetente e
+  // interpretada como a cidade, OU, se for uma mensagem de localizacao nativa do WhatsApp
+  // (msg.type === 'location'), usa as coordenadas diretas — mais precisas que geocodificar
+  // um nome digitado e imune a erro de geocoder com sufixo de UF.
+  async _responderClimaPendenteLocal(sender, texto, msg, empresaIdPadrao, t0) {
+    const ctx = this._getSenderContext(sender);
+    const pendente = ctx?._climaPendenteLocal;
+    if (!pendente) return null;
+
+    if (_textoCancelaPendente(texto)) {
+      this._setSenderContext(sender, { _climaPendenteLocal: null });
+      return 'Consulta de clima cancelada. Pode enviar uma nova pergunta.';
+    }
+
+    let rotaResolvida = null;
+    if (msg?.type === 'location' && msg.location) {
+      rotaResolvida = {
+        categoria: pendente.categoria,
+        fontePreferida: pendente.fontePreferida,
+        latitude: msg.location.latitude,
+        longitude: msg.location.longitude,
+      };
+    } else {
+      if (!String(texto || '').trim()) return null;
+      if (_textoPareceNovaConsulta(texto)) {
+        this._setSenderContext(sender, { _climaPendenteLocal: null });
+        return null; // deixa o pipeline normal tratar como consulta nova
+      }
+      // Mesma limpeza aplicada quando a cidade vem junto da pergunta original (ex: "clima
+      // em Cuiaba - MT") — sem isso, responder so "Cuiaba - MT" na pendencia falha no
+      // geocoder por causa do sufixo de UF, que aqui nao passa pela extracao com "em/de/para".
+      const cidade = conversationalTurnRouter.limparNomeLocal(texto);
+      if (!cidade) return null;
+      rotaResolvida = { categoria: pendente.categoria, fontePreferida: pendente.fontePreferida, local: cidade };
+    }
+
+    this._setSenderContext(sender, { _climaPendenteLocal: null });
+
+    const empresaPendente = Number(empresaIdPadrao || this._empresaId);
+    const consulta = await externalInfoService.consultar(rotaResolvida);
+    const resposta = consulta.resposta;
+    const intent = {
+      intencao: `consulta_externa_${rotaResolvida.categoria}`,
+      periodo: { tipo: 'nenhum' },
+      filtros: rotaResolvida.local ? { local: rotaResolvida.local } : {},
+      confianca: 1,
+      _provedor: consulta.resultado?.fonteId || 'fonte_online',
+      _resolvidoLocalmente: true,
+      _mensagemOriginal: texto,
+      _rotaConversacional: rotaResolvida,
+    };
+    const resultado = {
+      tipo: consulta.ok ? 'dialogo' : 'erro',
+      subtipo: `consulta_externa_${rotaResolvida.categoria}`,
+      mensagem: resposta,
+      fonte_usada: consulta.resultado?.fonte || null,
+      fonte_solicitada: rotaResolvida.fontePreferida || null,
+      data_informacao: consulta.resultado?.dataInformacao || null,
+      erros_fontes: consulta.erros || [],
+    };
+    this._registrarInterpretacao({
+      empresaId: empresaPendente,
+      sender,
+      texto,
+      intent,
+      resultado,
+      resposta,
+      duracaoMs: Date.now() - t0,
+    });
+    return resposta;
+  }
+
   async _resolverSender(msg) {
     const raw = msg.from;
     const candidatos = [raw, msg.author];
@@ -3962,6 +4058,12 @@ class IACWhatsAppService extends EventEmitter {
     try {
       if (tipo === 'chat' || tipo === 'text') {
         await this._handleText(msg, sender);
+      } else if (tipo === 'location') {
+        // So tem efeito quando ha uma pendencia esperando localizacao (ex: clima sem
+        // cidade — ver _responderClimaPendenteLocal). Fora desse caso, cai no pipeline
+        // normal com texto vazio e nao produz resposta (comportamento igual a antes,
+        // quando 'location' caia direto no else abaixo e era ignorado).
+        await this._handleText(msg, sender);
       } else if (['audio', 'ptt', 'voice'].includes(tipo)) {
         await this._handleAudio(msg, sender);
       } else {
@@ -4029,7 +4131,7 @@ class IACWhatsAppService extends EventEmitter {
         );
       });
       const resposta = await Promise.race([
-        this._pipeline(texto, sender, { _pipelineTs: t0, _recebidoEm: t0, _timingCtx }),
+        this._pipeline(texto, sender, { _pipelineTs: t0, _recebidoEm: t0, _timingCtx, _msg: msg }),
         timeoutPipeline,
       ]).finally(async () => {
         clearTimeout(timeoutId);
@@ -4322,6 +4424,13 @@ class IACWhatsAppService extends EventEmitter {
     // pergunta pendente antes de qualquer outro handler ter chance de interpreta-la diferente.
     const respostaGlossarioDominioPendente = await this._responderGlossarioDominioPendente(sender, textoExecucao, empresaId, _t0);
     if (respostaGlossarioDominioPendente) return respostaGlossarioDominioPendente;
+
+    // Checado ANTES do roteador conversacional dinamico: se ha pendencia de "clima sem
+    // cidade" aguardando resposta, a mensagem atual (texto com nome de cidade, ou uma
+    // mensagem de localizacao nativa do WhatsApp) e a retomada dessa pendencia, nao uma
+    // nova pergunta a ser reclassificada do zero.
+    const respostaClimaPendente = await this._responderClimaPendenteLocal(sender, textoExecucao, opts._msg || null, empresaId, _t0);
+    if (respostaClimaPendente) return respostaClimaPendente;
 
     const respostaConversacionalDinamica = await this._tentarResponderTurnoConversacionalDinamico({
       texto: textoExecucao,

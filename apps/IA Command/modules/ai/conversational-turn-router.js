@@ -10,6 +10,11 @@ function normalizar(texto) {
 
 const TERMOS_ERP = /\b(faturamento|vendas?|compras?|financeiro|contas?\s+a\s+pagar|contas?\s+a\s+receber|estoque|comissao|comissoes|pedido|nota fiscal|cliente|fornecedor|produto)\b/;
 
+const UFS_BRASIL = [
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
+  'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
+];
+
 const FONTES = [
   ['banco_central', /\b(banco central|bacen|bcb|ptax)\b/],
   ['awesomeapi', /\b(awesome\s*api|awesomeapi)\b/],
@@ -28,13 +33,37 @@ function detectarFontePreferida(textoNorm) {
   return fonte ? fonte[0] : null;
 }
 
+// Palavras de tempo/assunto que nao fazem parte de nome de cidade, mesmo quando aparecem
+// no MEIO do trecho capturado (ex: "clima de hoje em cuiaba" captura "hoje em cuiaba" —
+// sem essa limpeza, "hoje em cuiaba" e enviado como se fosse o nome da cidade e o geocoder
+// nao encontra nada).
+const PALAVRAS_TEMPO_CLIMA = /\b(hoje|amanha|agora|depois de amanha|essa semana|esta semana)\b/gi;
+
+// Limpeza de nome de cidade compartilhada entre a extracao da pergunta original
+// (detectarLocalClima) e a retomada de pendencia "clima sem cidade" (whatsapp/service.js
+// _responderClimaPendenteLocal, onde o usuario responde so com o nome da cidade). Remove
+// palavras de tempo remanescentes e sufixo de UF — sem essa limpeza, o geocoder da
+// Open-Meteo retorna zero resultados para "Cuiaba - MT", so aceita "Cuiaba".
+function limparNomeLocal(texto) {
+  let local = String(texto || '').trim().replace(/\s+/g, ' ');
+  local = local.replace(PALAVRAS_TEMPO_CLIMA, ' ').replace(/^\s*(?:em|de|para)\s+/i, '').trim().replace(/\s+/g, ' ');
+  // Remove sufixo de UF (ex: "Cuiaba - MT", "Cuiaba/MT", "Cuiaba (MT)", "Cuiaba MT") — o
+  // geocoder da Open-Meteo nao reconhece esses sufixos e retorna zero resultados com eles.
+  // Exige separador explicito (espaco, hifen, barra, parenteses) antes da sigla, usando a
+  // lista fechada das 27 UFs — sem exigir esse separador, cidades cujo final por coincidencia
+  // vira sigla de UF real (ex: "Rio de Janeiro" termina em "ro" = Rondonia, "cuiaba" termina
+  // em "ba" = Bahia) seriam cortadas por engano.
+  local = local.replace(new RegExp(`[\\s,/(-]+(?:${UFS_BRASIL.join('|')})\\)?\\s*$`, 'i'), '').trim();
+  return local;
+}
+
 function detectarLocalClima(texto) {
   const original = String(texto || '').trim();
-  const m = original.match(/\b(?:em|de|para)\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s.'-]{2,80})\s*[?.!]*$/i);
+  const m = original.match(/\b(?:em|de|para)\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s.'/()-]{2,80})\s*[?.!]*$/i);
   if (!m) return null;
-  const local = m[1].trim().replace(/\s+/g, ' ');
+  const local = limparNomeLocal(m[1]);
   const normalizado = normalizar(local);
-  if (['hoje', 'amanha', 'agora', 'tempo', 'clima', 'temperatura'].includes(normalizado)) return null;
+  if (!local || ['hoje', 'amanha', 'agora', 'tempo', 'clima', 'temperatura'].includes(normalizado)) return null;
   return local;
 }
 
@@ -94,4 +123,5 @@ module.exports = {
   normalizar,
   detectarFontePreferida,
   detectarLocalClima,
+  limparNomeLocal,
 };
