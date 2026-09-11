@@ -86,6 +86,46 @@ function migrarIacPorEmpresa(iacDb, tabela, origemId, destinoId) {
   stmt.run(cols.map(c => r[c]));
 }
 
+function migrarWhatsappGrupos(iacDb, origemId, destinoId) {
+  const grupos = iacDb.prepare('SELECT * FROM whatsapp_recipient_groups WHERE empresa_id = ?').all(origemId);
+  const grupoIdMap = {};
+  for (const g of grupos) grupoIdMap[g.id] = remapId(g.id, destinoId);
+
+  const oldGroupIds = grupos.map(g => g.id);
+  const ph = oldGroupIds.length ? oldGroupIds.map(() => '?').join(', ') : "'__noop__'";
+  const membros = iacDb.prepare(`SELECT * FROM whatsapp_recipient_group_members WHERE grupo_id IN (${ph})`).all(...oldGroupIds);
+
+  const tx = iacDb.transaction(() => {
+    iacDb.prepare('DELETE FROM whatsapp_recipient_group_members WHERE empresa_id = ?').run(destinoId);
+    iacDb.prepare('DELETE FROM whatsapp_recipient_groups WHERE empresa_id = ?').run(destinoId);
+
+    if (grupos.length) {
+      const cols = Object.keys(grupos[0]);
+      const stmt = iacDb.prepare(`INSERT INTO whatsapp_recipient_groups (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
+      for (const row of grupos) {
+        const r = { ...row, id: grupoIdMap[row.id], empresa_id: destinoId };
+        stmt.run(cols.map(c => r[c]));
+      }
+    }
+
+    if (membros.length) {
+      const cols = Object.keys(membros[0]);
+      const stmt = iacDb.prepare(`INSERT INTO whatsapp_recipient_group_members (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
+      for (const row of membros) {
+        const r = {
+          ...row,
+          id: remapId(row.id, destinoId),
+          grupo_id: grupoIdMap[row.grupo_id] ?? row.grupo_id,
+          empresa_id: destinoId,
+          numero_id: remapId(row.numero_id, destinoId),
+        };
+        stmt.run(cols.map(c => r[c]));
+      }
+    }
+  });
+  tx();
+}
+
 // Migra scheduled_question_jobs + recipients/runs dependentes (FK job_id).
 function migrarScheduledQuestions(iacDb, origemId, destinoId) {
   const jobs = iacDb.prepare('SELECT * FROM scheduled_question_jobs WHERE empresa_id = ?').all(origemId);
@@ -96,9 +136,11 @@ function migrarScheduledQuestions(iacDb, origemId, destinoId) {
   const ph = oldJobIds.length ? oldJobIds.map(() => '?').join(', ') : "'__noop__'";
   const recipients = iacDb.prepare(`SELECT * FROM scheduled_question_recipients WHERE job_id IN (${ph})`).all(...oldJobIds);
   const runs        = iacDb.prepare(`SELECT * FROM scheduled_question_runs WHERE job_id IN (${ph})`).all(...oldJobIds);
+  const groups      = iacDb.prepare(`SELECT * FROM scheduled_question_job_groups WHERE job_id IN (${ph})`).all(...oldJobIds);
 
   const tx = iacDb.transaction(() => {
     iacDb.prepare('DELETE FROM scheduled_question_runs WHERE empresa_id = ?').run(destinoId);
+    iacDb.prepare('DELETE FROM scheduled_question_job_groups WHERE empresa_id = ?').run(destinoId);
     iacDb.prepare('DELETE FROM scheduled_question_recipients WHERE empresa_id = ?').run(destinoId);
     iacDb.prepare('DELETE FROM scheduled_question_jobs WHERE empresa_id = ?').run(destinoId);
 
@@ -115,6 +157,22 @@ function migrarScheduledQuestions(iacDb, origemId, destinoId) {
       const stmt = iacDb.prepare(`INSERT INTO scheduled_question_recipients (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
       for (const row of recipients) {
         const r = { ...row, id: remapId(row.id, destinoId), job_id: jobIdMap[row.job_id] ?? row.job_id, empresa_id: destinoId };
+        if (r.numero_id) r.numero_id = remapId(r.numero_id, destinoId);
+        if (r.grupo_id) r.grupo_id = remapId(r.grupo_id, destinoId);
+        stmt.run(cols.map(c => r[c]));
+      }
+    }
+    if (groups.length) {
+      const cols = Object.keys(groups[0]);
+      const stmt = iacDb.prepare(`INSERT INTO scheduled_question_job_groups (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
+      for (const row of groups) {
+        const r = {
+          ...row,
+          id: remapId(row.id, destinoId),
+          job_id: jobIdMap[row.job_id] ?? row.job_id,
+          empresa_id: destinoId,
+          grupo_id: remapId(row.grupo_id, destinoId),
+        };
         stmt.run(cols.map(c => r[c]));
       }
     }
@@ -260,13 +318,15 @@ const IAC_TABELAS = {
   iac_conv_dialogs:      { sistema: 'iac', grupo: 'Conhecimento da IA', label: 'Diálogos conversacionais',  tabela: 'conversational_dialogs', tipo: 'simples', default: true, opts: {} },
   iac_spec_feedback:     { sistema: 'iac', grupo: 'Conhecimento da IA', label: 'Feedback Técnico da IA',    tabela: 'spec_feedback_propostas', tipo: 'simples', default: true, opts: {} },
 
-  // WhatsApp — config tem PK AUTOINCREMENT; demais têm PK TEXT
-  iac_wa_config:    { sistema: 'iac', grupo: 'WhatsApp', label: 'Configuração WhatsApp', tabela: 'whatsapp_config',            tipo: 'simples', default: true,  opts: { autoincPk: true } },
-  iac_wa_numeros:   { sistema: 'iac', grupo: 'WhatsApp', label: 'Números autorizados',   tabela: 'whatsapp_allowed_numbers',   tipo: 'simples', default: true,  opts: {} },
-  iac_wa_templates: { sistema: 'iac', grupo: 'WhatsApp', label: 'Templates de mensagem', tabela: 'whatsapp_message_templates', tipo: 'simples', default: true,  opts: {} },
-  iac_wa_canais:    { sistema: 'iac', grupo: 'WhatsApp', label: 'Canais — associações',  tabela: 'whatsapp_channel_companies', tipo: 'simples', default: false, opts: {} },
-  // whatsapp_sessions: PK é a própria empresa_id (1 sessão por empresa) — sem remapeamento de id.
-  iac_wa_sessions:  { sistema: 'iac', grupo: 'WhatsApp', label: 'Sessão WhatsApp (status/QR)', tabela: 'whatsapp_sessions', tipo: 'porempresa', default: true, opts: {} },
+  // Operação / WhatsApp — nomes espelhados do menu do IA Command.
+  iac_wa_config:    { sistema: 'iac', grupo: 'Operação', label: 'WhatsApp Services', tabela: 'whatsapp_config', tipo: 'simples', default: true, opts: { autoincPk: true } },
+  iac_wa_sessions:  { sistema: 'iac', grupo: 'Operação', label: 'Monitor WhatsApp',   tabela: 'whatsapp_sessions', tipo: 'porempresa', default: true, opts: {} },
+
+  iac_wa_canais:    { sistema: 'iac', grupo: 'WhatsApp', label: 'Canais',               tabela: 'whatsapp_channel_companies', tipo: 'simples', default: false, opts: {} },
+  iac_wa_numeros:   { sistema: 'iac', grupo: 'WhatsApp', label: 'Números Autorizados',  tabela: 'whatsapp_allowed_numbers',   tipo: 'simples', default: true,  opts: {} },
+  iac_wa_grupos:    { sistema: 'iac', grupo: 'WhatsApp', label: 'Grupos',               tabela: 'whatsapp_recipient_groups',   tipo: 'whatsapp_grupos', default: true, opts: {} },
+  iac_wa_templates: { sistema: 'iac', grupo: 'WhatsApp', label: 'Mensagens WhatsApp',   tabela: 'whatsapp_message_templates', tipo: 'simples', default: true,  opts: {} },
+  iac_wa_response_config: { sistema: 'iac', grupo: 'WhatsApp', label: 'Modelos de Resposta', tabela: 'whatsapp_response_config', tipo: 'simples', default: true, opts: { autoincPk: true } },
 
   // Integração > ERP Protheus — migrados individualmente; dependem de connections existir no destino.
   iac_sx2: { sistema: 'iac', grupo: 'Integração / ERP Protheus', label: 'Tabelas Protheus (SX2)',           tabela: 'protheus_sx2', tipo: 'sx', default: true, opts: {} },
@@ -292,7 +352,7 @@ const IAC_TABELAS = {
   iac_unmatched:  { sistema: 'iac', grupo: 'Logs', label: 'Mensagens sem resposta', tabela: 'unmatched_messages', tipo: 'simples', default: false, opts: {} },
   iac_audit_log:  { sistema: 'iac', grupo: 'Logs', label: 'Log de auditoria',       tabela: 'audit_log',          tipo: 'simples', default: false, opts: {} },
   iac_chat_history: { sistema: 'iac', grupo: 'Logs', label: 'Histórico de conversas (chat)', tabela: 'chat_history', tipo: 'simples', default: false, opts: { autoincPk: true, empresaIdComoTexto: true } },
-  iac_chat_forwardings: { sistema: 'iac', grupo: 'Logs', label: 'Encaminhamentos', tabela: 'protheus_chat_forwardings', tipo: 'simples', default: false, opts: {} },
+  iac_chat_forwardings: { sistema: 'iac', grupo: 'Auditoria e Diagnóstico', label: 'Histórico de Interpretações, Auditoria, Encaminhamentos e NL-SQL', tabela: 'protheus_chat_forwardings', tipo: 'simples', default: false, opts: {} },
 };
 
 const MIGRACAO_TABELAS = {
@@ -856,6 +916,8 @@ module.exports = function registerRoutes(app, { requireAuth, requireAdmin, requi
             migrarIacPorEmpresa(iacDb, def.tabela, origemId, destinoId);
           } else if (def.tipo === 'scheduled') {
             migrarScheduledQuestions(iacDb, origemId, destinoId);
+          } else if (def.tipo === 'whatsapp_grupos') {
+            migrarWhatsappGrupos(iacDb, origemId, destinoId);
           } else {
             migrarIacSimples(iacDb, def.tabela, origemId, destinoId, def.opts || {});
           }

@@ -513,12 +513,14 @@ function renderTabelas() {
 }
 
 // ─── Dependências entre tabelas ────────────────────────────────────────────
-// Tabelas Protheus com FK em connections — conexões devem ser migradas primeiro.
+// Dependências entre rotinas migradas.
 const DEPS = {
   iac_sx2: ['iac_conexoes'],
   iac_sx3: ['iac_conexoes'],
   iac_protheus_company_tree: ['iac_conexoes'],
   iac_protheus_company_profile: ['iac_conexoes'],
+  iac_wa_grupos: ['iac_wa_numeros'],
+  iac_scheduled_questions: ['iac_wa_numeros'],
 };
 
 function aplicarDependencias() {
@@ -533,7 +535,7 @@ function aplicarDependencias() {
     if (obrigatorios.has(c.dataset.id)) {
       c.checked = true;
       c.disabled = true;
-      c.title = 'Obrigatório como pré-requisito das tabelas Protheus selecionadas';
+      c.title = 'Obrigatório como pré-requisito das rotinas selecionadas';
     } else {
       c.disabled = false;
       c.title = '';
