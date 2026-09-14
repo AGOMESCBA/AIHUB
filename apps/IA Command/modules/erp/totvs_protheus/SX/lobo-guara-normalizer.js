@@ -21,6 +21,14 @@
 const sx2SqlNormalizer = require('./sx2-sql-normalizer');
 const { aliasTabelaSql, campoFilialBase, modoTabelaSX2, modoEmpresaSX2 } = sx2SqlNormalizer;
 
+const TABELAS_MOVIMENTO_COM_FILIAL = new Set([
+  'SD1', 'SD2',
+  'SF1', 'SF2',
+  'SE1', 'SE2', 'SE3', 'SE5', 'SE8',
+  'SC7',
+  'FK1', 'FK2', 'FK5', 'FK6', 'FK7', 'FKA', 'FKB',
+]);
+
 function _escaparRegex(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -123,6 +131,9 @@ function _injetarFiltroFilial(sql, aliases, sx2, sx2Empresa, chaves, codigosEmpr
       escopoEmpresa = true;
     } else if (modo === 'C' || modo === 'G') {
       continue; // compartilhada/global em todos os niveis relevantes — sem filial significativa
+    } else if (!modo && TABELAS_MOVIMENTO_COM_FILIAL.has(String(base || '').toUpperCase())) {
+      // SX2 ausente para tabela transacional/documental: permite recorte por
+      // filial no proprio movimento sem liberar cadastros compartilhaveis.
     } else {
       continue; // modo SX2 ausente/desconhecido — nunca aplica filtro de filial por fallback
     }

@@ -70,6 +70,53 @@ const desconhecida = normalizer._injetarFiltroFilial(
 assert.strictEqual(desconhecida.aplicado, false, 'sem SX2 real, nao deve filtrar por filial por fallback');
 assertNaoContem(desconhecida.sql, 'SB1.B1_FILIAL IN', 'tabela sem SX2 real nao pode receber filtro de filial');
 
+const movimentaisSemSx2 = normalizer._injetarFiltroFilial(
+  `
+SET ROWCOUNT 50000;
+SELECT COALESCE(SUM(SD2.D2_TOTAL), 0) AS faturamento
+FROM SD2010 SD2
+JOIN SF2010 SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL
+WHERE SUBSTRING(SF2.F2_EMISSAO, 1, 8) = '20260914'
+  AND SF2.F2_TIPO = 'N'
+  AND SD2.D_E_L_E_T_ = ' '
+  AND SF2.D_E_L_E_T_ = ' ';
+`,
+  { SD2: 'SD2', SF2: 'SF2' },
+  null,
+  null,
+  escopoFiliais,
+  null,
+);
+
+assert.strictEqual(movimentaisSemSx2.aplicado, true, 'movimentais sem SX2 devem aceitar recorte manual de filial');
+assert(movimentaisSemSx2.sql.includes("SD2.D2_FILIAL IN ('0100', '0101', '0102')"), 'SD2 sem SX2 deve filtrar por filial');
+assert(movimentaisSemSx2.sql.includes("SF2.F2_FILIAL IN ('0100', '0101', '0102')"), 'SF2 sem SX2 deve filtrar por filial');
+
+const escopoCompletoSemSx2 = normalizer.aplicarEscopoLoboGuara(
+  `
+SET ROWCOUNT 50000;
+SELECT COALESCE(SUM(SD2.D2_TOTAL), 0) AS faturamento
+FROM SD2010 SD2
+JOIN SF2010 SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL
+WHERE SUBSTRING(SF2.F2_EMISSAO, 1, 8) = '20260914'
+  AND SF2.F2_TIPO = 'N'
+  AND SD2.D_E_L_E_T_ = ' '
+  AND SF2.D_E_L_E_T_ = ' ';
+`,
+  {
+    db: {},
+    ctx: { connectionId: 123 },
+    sx2: null,
+    sx2Empresa: null,
+    filialState: { modo: 'especifica', chaves: escopoFiliais },
+  },
+);
+
+assert.strictEqual(escopoCompletoSemSx2.aplicado, true, 'normalizador completo deve aplicar escopo em SD2/SF2 sem SX2');
+assert.strictEqual(escopoCompletoSemSx2.motivo, null, 'normalizador completo nao deve retornar nenhuma_tabela_aceitou_filtro');
+assert(escopoCompletoSemSx2.sql.includes("SD2.D2_FILIAL IN ('0100', '0101', '0102')"), 'normalizador completo deve filtrar SD2');
+assert(escopoCompletoSemSx2.sql.includes("SF2.F2_FILIAL IN ('0100', '0101', '0102')"), 'normalizador completo deve filtrar SF2');
+
 const exclusivaPorEmpresa = normalizer._injetarFiltroFilial(
   "SELECT SA1.A1_NOME FROM SA1010 SA1 WHERE SA1.D_E_L_E_T_ = ' '",
   { SA1: 'SA1' },
