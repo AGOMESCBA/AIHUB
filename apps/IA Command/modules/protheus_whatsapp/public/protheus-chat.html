@@ -2325,11 +2325,13 @@
   const params = new URLSearchParams(window.location.search);
   let token = params.get('token');
   const launchTicket = params.get('launchTicket') || params.get('ticket') || '';
+  const loginPathParam = params.get('loginPath') || params.get('returnTo') || '';
   const usuarioLabelParam = params.get('usuario') || '';
   const origemAcessoParam = params.get('origem') || '';
   const sessionTokenKey = 'iaCommandProtheusChatToken';
   const sessionUserKey = 'iaCommandProtheusChatUsuario';
   const sessionOrigemKey = 'iaCommandProtheusChatOrigem';
+  const sessionLoginPathKey = 'iaCommandProtheusChatLoginPath';
   const usuarioLabel = usuarioLabelParam || lerSessaoNavegador(sessionUserKey) || '';
   const origemAcesso = origemAcessoParam || lerSessaoNavegador(sessionOrigemKey) || '';
 
@@ -2337,11 +2339,26 @@
     try { return sessionStorage.getItem(chave) || ''; } catch (_err) { return ''; }
   }
 
-  function salvarSessaoNavegador(novoToken, usuario) {
+  function normalizarLoginPath(valor) {
+    const path = String(valor || '').trim();
+    if (!path || !path.startsWith('/') || path.includes('?') || path.includes('#') || path.includes('..')) return '';
+    if (!/^\/[A-Za-z0-9/_-]+$/.test(path)) return '';
+    return path.replace(/\/+$/g, '') || '';
+  }
+
+  let loginPathRetorno = normalizarLoginPath(loginPathParam || lerSessaoNavegador(sessionLoginPathKey))
+    || '/api/ia-command/protheus/web-login';
+
+  function salvarSessaoNavegador(novoToken, usuario, loginPath) {
     try {
       if (novoToken) sessionStorage.setItem(sessionTokenKey, novoToken);
       if (usuario) sessionStorage.setItem(sessionUserKey, usuario);
       if (origemAcessoParam) sessionStorage.setItem(sessionOrigemKey, origemAcessoParam);
+      const path = normalizarLoginPath(loginPath || loginPathRetorno);
+      if (path) {
+        loginPathRetorno = path;
+        sessionStorage.setItem(sessionLoginPathKey, path);
+      }
     } catch (_err) {}
   }
 
@@ -2350,6 +2367,7 @@
       sessionStorage.removeItem(sessionTokenKey);
       sessionStorage.removeItem(sessionUserKey);
       sessionStorage.removeItem(sessionOrigemKey);
+      sessionStorage.removeItem(sessionLoginPathKey);
     } catch (_err) {}
   }
 
@@ -2362,7 +2380,7 @@
   // uma copia em sessionStorage (escopo da aba) e limpamos quando a API retorna
   // 401. O servidor tambem nao grava a querystring em log (ver routes.js).
   if (token && window.history && window.history.replaceState) {
-    salvarSessaoNavegador(token, usuarioLabelParam);
+    salvarSessaoNavegador(token, usuarioLabelParam, loginPathRetorno);
     const urlLimpa = window.location.pathname + (usuarioLabelParam ? '?usuario=' + encodeURIComponent(usuarioLabelParam) : '');
     window.history.replaceState({}, document.title, urlLimpa);
   }
@@ -2787,6 +2805,8 @@
   async function carregarEmpresasDisponiveis() {
     bootLog('empresas:inicio');
     const data = await api('/empresas');
+    const loginPath = normalizarLoginPath(data.loginPath);
+    if (loginPath) salvarSessaoNavegador(null, null, loginPath);
     empresasDisponiveis = Array.isArray(data.empresas) ? data.empresas : [];
     empresaAtualId = Number(data.empresaId || empresasDisponiveis[0]?.empresaId || 0) || null;
     if (!empresasDisponiveis.length && empresaAtualId) {
@@ -2801,6 +2821,8 @@
   async function carregarBootstrapInicial() {
     bootLog('bootstrap:inicio');
     const data = await api('/bootstrap');
+    const loginPath = normalizarLoginPath(data.loginPath);
+    if (loginPath) salvarSessaoNavegador(null, null, loginPath);
     empresasDisponiveis = Array.isArray(data.empresas) ? data.empresas : [];
     empresaAtualId = Number(data.empresaId || empresasDisponiveis[0]?.empresaId || 0) || null;
     if (!empresasDisponiveis.length && empresaAtualId) {
@@ -7282,8 +7304,9 @@
     const isAcessoWebDireto = origemAcesso === 'web';
     btnSairWeb.style.display = isAcessoWebDireto ? '' : 'none';
     btnSairWeb.addEventListener('click', function () {
+      const retorno = loginPathRetorno || '/api/ia-command/protheus/web-login';
       limparSessaoNavegador();
-      window.location.href = '/api/ia-command/protheus/web-login';
+      window.location.href = retorno;
     });
   }
 
@@ -7560,7 +7583,7 @@
     aguardarTokenLaunch(launchTicket)
       .then((tk) => {
         token = tk;
-        salvarSessaoNavegador(token, usuarioLabelParam);
+        salvarSessaoNavegador(token, usuarioLabelParam, loginPathRetorno);
         if (window.history && window.history.replaceState) {
           const urlLimpa = window.location.pathname + (usuarioLabelParam ? '?usuario=' + encodeURIComponent(usuarioLabelParam) : '');
           window.history.replaceState({}, document.title, urlLimpa);

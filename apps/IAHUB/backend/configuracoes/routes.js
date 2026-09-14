@@ -86,6 +86,42 @@ function migrarIacPorEmpresa(iacDb, tabela, origemId, destinoId) {
   stmt.run(cols.map(c => r[c]));
 }
 
+function migrarAiConfig(iacDb, origemId, destinoId) {
+  const origem = iacDb.prepare('SELECT * FROM ai_config WHERE empresa_id = ? ORDER BY rowid DESC LIMIT 1').get(origemId);
+  const destinoAtual = iacDb.prepare('SELECT * FROM ai_config WHERE empresa_id = ? ORDER BY rowid DESC LIMIT 1').get(destinoId);
+  iacDb.prepare('DELETE FROM ai_config WHERE empresa_id = ?').run(destinoId);
+  if (!origem) return;
+
+  const r = { ...origem, empresa_id: destinoId };
+  delete r.id;
+
+  const preservar = [
+    'protheus_web_login_ativo',
+    'protheus_web_login_path',
+    'protheus_web_login_access_key',
+    'protheus_chat_secret',
+    'protheus_web_login_otp_ttl_min',
+    'protheus_web_login_max_tentativas',
+    'protheus_web_login_exigir_https',
+  ];
+  for (const campo of preservar) {
+    if (!Object.prototype.hasOwnProperty.call(r, campo)) continue;
+    if (destinoAtual && Object.prototype.hasOwnProperty.call(destinoAtual, campo)) {
+      r[campo] = destinoAtual[campo];
+    } else if (campo === 'protheus_web_login_ativo') {
+      r[campo] = 0;
+    } else if (campo === 'protheus_web_login_path') {
+      r[campo] = '/api/ia-command/protheus/web-login';
+    } else if (campo === 'protheus_web_login_access_key' || campo === 'protheus_chat_secret') {
+      r[campo] = null;
+    }
+  }
+
+  const cols = Object.keys(r);
+  const stmt = iacDb.prepare(`INSERT INTO ai_config (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
+  stmt.run(cols.map(c => r[c]));
+}
+
 function migrarWhatsappGrupos(iacDb, origemId, destinoId) {
   const grupos = iacDb.prepare('SELECT * FROM whatsapp_recipient_groups WHERE empresa_id = ?').all(origemId);
   const grupoIdMap = {};
@@ -308,7 +344,7 @@ const IAC_TABELAS = {
   // Configuração — segue o menu IA Command > Configuração.
   iac_conexoes:     { sistema: 'iac', grupo: 'Configuração', label: 'Conexões ERP + config Protheus', tabela: 'connections',  tipo: 'conexoes', default: true },
   iac_datasets:     { sistema: 'iac', grupo: 'Configuração', label: 'Datasets ERP',                   tabela: 'datasets',     tipo: 'simples', default: true, opts: {} },
-  iac_ai_config:    { sistema: 'iac', grupo: 'Configuração', label: 'Configuração de IA',             tabela: 'ai_config',    tipo: 'simples', default: true, opts: { autoincPk: true } },
+  iac_ai_config:    { sistema: 'iac', grupo: 'Configuração', label: 'Configuração de IA',             tabela: 'ai_config',    tipo: 'ai_config', default: true, opts: {} },
   iac_audio_config: { sistema: 'iac', grupo: 'Configuração', label: 'Configuração de áudio',          tabela: 'audio_config', tipo: 'simples', default: true, opts: { autoincPk: true } },
 
   // Conhecimento da IA — PK TEXT; intentions referencia intention_modules.id e datasets.id.
@@ -910,6 +946,8 @@ module.exports = function registerRoutes(app, { requireAuth, requireAdmin, requi
           const def = IAC_TABELAS[tabela];
           if (def.tipo === 'conexoes') {
             migrarConexoes(iacDb, origemId, destinoId);
+          } else if (def.tipo === 'ai_config') {
+            migrarAiConfig(iacDb, origemId, destinoId);
           } else if (def.tipo === 'sx') {
             migrarSxDict(iacDb, def.tabela, origemId, destinoId);
           } else if (def.tipo === 'porempresa') {

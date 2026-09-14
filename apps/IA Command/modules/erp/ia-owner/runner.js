@@ -4091,7 +4091,7 @@ function interpolarRespostaPlanejada(template, rows = []) {
   return /\{[a-zA-Z0-9_]+\}/.test(saida) ? null : saida;
 }
 
-async function prepararSql({ spec, sql, sx2, sx2Empresa = null, sx3, protheus, middlewareCfg, entidades, filial, periodo, planoConsulta, mensagem, permitirSelectTop = false, empresaId = null, filialLoboGuaraState = null }) {
+async function prepararSql({ spec, sql, sx2, sx2LoboGuara = undefined, sx2Empresa = null, sx3, protheus, middlewareCfg, entidades, filial, periodo, planoConsulta, mensagem, permitirSelectTop = false, empresaId = null, filialLoboGuaraState = null }) {
   let sqlEntradaNormalizado = normalizarAliasesBaseAusentes(sql, spec);
   sqlEntradaNormalizado = sx2SqlNormalizer.adaptarSqlCanonicoPorSX2(sqlEntradaNormalizado, sx2, {
     logPrefix: spec.logPrefix,
@@ -4277,8 +4277,9 @@ async function prepararSql({ spec, sql, sx2, sx2Empresa = null, sx3, protheus, m
         // gerasse SQL contra tabela global/compartilhada (nenhuma tabela
         // aceita filtro de filial) registrava "aplicado com sucesso" na
         // auditoria mesmo sem nenhum WHERE de filial ter entrado.
+        const sx2FilialLoboGuara = sx2LoboGuara === undefined ? sx2 : sx2LoboGuara;
         const resultadoNormalizer = loboGuaraNormalizer.aplicarEscopoLoboGuara(out, {
-          db: getDB(), ctx: ctxLoboGuara, sx2, sx2Empresa, filialState: filialLoboGuaraState, logPrefix: spec.logPrefix,
+          db: getDB(), ctx: ctxLoboGuara, sx2: sx2FilialLoboGuara, sx2Empresa, filialState: filialLoboGuaraState, logPrefix: spec.logPrefix,
         });
         out = resultadoNormalizer.sql;
         if (filialLoboGuaraState) {
@@ -5293,7 +5294,7 @@ async function executar(spec, intent, empresaId) {
       }
       expandirMetadadosParaSql(plano.sql);
       _traceIaOwner('ia_owner_preparar_sql_inicio', { empresa_id: empresaId, tentativa });
-      preparado = await prepararSql({ spec: { ...spec, tabelas: tabelasMetadados }, sql: plano.sql, sx2, sx2Empresa, sx3: sx3Validacao, protheus, middlewareCfg: { ...middlewareCfg, limite_ranking: intentEfetivo?.limite }, entidades: entidadesResolvidas, filial, periodo: periodoAutoritativo || plano.obj.periodo, planoConsulta, mensagem, empresaId, filialLoboGuaraState: intentEfetivo?._filialLoboGuara || null });
+      preparado = await prepararSql({ spec: { ...spec, tabelas: tabelasMetadados }, sql: plano.sql, sx2, sx2LoboGuara: sx2Puro, sx2Empresa, sx3: sx3Validacao, protheus, middlewareCfg: { ...middlewareCfg, limite_ranking: intentEfetivo?.limite }, entidades: entidadesResolvidas, filial, periodo: periodoAutoritativo || plano.obj.periodo, planoConsulta, mensagem, empresaId, filialLoboGuaraState: intentEfetivo?._filialLoboGuara || null });
       _traceIaOwner('ia_owner_preparar_sql_fim', {
         empresa_id: empresaId,
         tentativa,
@@ -5561,7 +5562,8 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
     };
   }
   const protheus = configProtheus(empresaId);
-  const sx2 = completarSX2Permitidas(modosSX2(spec.tabelas, protheus.conexaoId, empresaId), spec.tabelas, protheus.sufixoTabela);
+  const sx2Puro = modosSX2(spec.tabelas, protheus.conexaoId, empresaId);
+  const sx2 = completarSX2Permitidas(sx2Puro, spec.tabelas, protheus.sufixoTabela);
   const sx2Empresa = modosEmpresaSX2(spec.tabelas, protheus.conexaoId, empresaId);
   const { validacao: sx3Validacao } = camposSX3(spec.tabelas, protheus.conexaoId, empresaId, spec.sx3PromptLimit || 80, spec.camposSx3Essenciais || {});
   const middlewareCfg = spec.sqlMiddleware.carregarConfig(empresaId);
@@ -5644,7 +5646,7 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
       });
       auditoriaBase.query_plan = planoConsulta;
       const permitirSelectTop = permitirSelectTopPorIntent(intent);
-      preparado = await prepararSql({ spec, sql: sqlCanonico, sx2, sx2Empresa, sx3: sx3Validacao, protheus, middlewareCfg: { ...middlewareCfg, limite_ranking: intent?.limite }, entidades, filial: intent.filtros?.filial || 'TODAS', periodo: intent._periodoCanonicoResolvido || intent.periodo, planoConsulta, mensagem, permitirSelectTop, empresaId, filialLoboGuaraState: intent?._filialLoboGuara || null });
+      preparado = await prepararSql({ spec, sql: sqlCanonico, sx2, sx2LoboGuara: sx2Puro, sx2Empresa, sx3: sx3Validacao, protheus, middlewareCfg: { ...middlewareCfg, limite_ranking: intent?.limite }, entidades, filial: intent.filtros?.filial || 'TODAS', periodo: intent._periodoCanonicoResolvido || intent.periodo, planoConsulta, mensagem, permitirSelectTop, empresaId, filialLoboGuaraState: intent?._filialLoboGuara || null });
       auditoriaBase.sql_apos_sx3 = sx3SqlValidator.normalizarReferenciasAliasSql(sqlCanonico);
       auditoriaBase.sql_apos_contratos_relacionais = preparado.sqlAposContratosRelacionais;
       auditoriaBase.contratos_relacionais_aplicados = preparado.contratosRelacionaisAplicados;

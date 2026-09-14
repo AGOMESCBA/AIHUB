@@ -123,6 +123,8 @@ function _injetarFiltroFilial(sql, aliases, sx2, sx2Empresa, chaves, codigosEmpr
       escopoEmpresa = true;
     } else if (modo === 'C' || modo === 'G') {
       continue; // compartilhada/global em todos os niveis relevantes — sem filial significativa
+    } else {
+      continue; // modo SX2 ausente/desconhecido — nunca aplica filtro de filial por fallback
     }
 
     const campo = campoFilialBase(base);

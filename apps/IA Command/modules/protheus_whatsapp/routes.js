@@ -219,8 +219,16 @@ function carregarWebLoginConfigEmpresa(empresaId) {
 function resolverWebLoginConfigPorPath(req) {
   const reqPath = webLoginPathReq(req);
   const configs = carregarWebLoginConfigs();
-  const config = configs.find(c => c.ativo && c.path === reqPath && c.path !== WEB_LOGIN_DEFAULT_PATH);
-  if (config) return config;
+  const configsPath = configs.filter(c => c.ativo && c.path === reqPath && c.path !== WEB_LOGIN_DEFAULT_PATH);
+  if (configsPath.length === 1) return configsPath[0];
+  if (configsPath.length > 1) {
+    const informado = webLoginAccessKeyInformada(req);
+    if (informado) {
+      const configPorChave = configsPath.find(c => c.accessKey && compararSeguro(informado, c.accessKey));
+      if (configPorChave) return configPorChave;
+    }
+    return { duplicado: true, path: reqPath, empresas: configsPath.map(c => c.empresaId).filter(Boolean) };
+  }
   if (reqPath === WEB_LOGIN_DEFAULT_PATH || (WEB_LOGIN_ENV_PATH && reqPath === WEB_LOGIN_ENV_PATH)) return normalizarWebLoginConfig(null);
   return null;
 }
@@ -1278,6 +1286,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
   app.get(webLoginRoutes, (req, res) => {
     const config = resolverWebLoginConfigPorPath(req);
     if (!config) return res.status(404).send('Not found');
+    if (config.duplicado) return res.status(409).send('Rota publica do ChatWeb duplicada. Ajuste a Configuracao de IA das empresas envolvidas.');
     if (!webLoginAccessAutorizado(req, res, config)) return;
     if (!webLoginHttpsAutorizado(req, res, config)) return;
     setPublicChatSecurityHeaders(res);
@@ -1292,6 +1301,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     try {
       const pathConfig = resolverWebLoginConfigPorPath(req);
       if (!pathConfig) return res.status(404).send('Not found');
+      if (pathConfig.duplicado) return res.status(409).json({ error: 'Rota publica do ChatWeb duplicada. Ajuste a Configuracao de IA das empresas envolvidas.' });
       if (!webLoginAccessAutorizado(req, res, pathConfig)) return;
       if (!webLoginHttpsAutorizado(req, res, pathConfig)) return;
 
@@ -1359,6 +1369,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     try {
       const pathConfig = resolverWebLoginConfigPorPath(req);
       if (!pathConfig) return res.status(404).send('Not found');
+      if (pathConfig.duplicado) return res.status(409).json({ error: 'Rota publica do ChatWeb duplicada. Ajuste a Configuracao de IA das empresas envolvidas.' });
       if (!webLoginAccessAutorizado(req, res, pathConfig)) return;
       if (!webLoginHttpsAutorizado(req, res, pathConfig)) return;
 
@@ -1400,7 +1411,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
         launchTicket,
         expiraEm,
         usuario: permissoes.usuarioNome,
-        chatUrl: `/api/ia-command/protheus/chat?launchTicket=${encodeURIComponent(launchTicket)}&usuario=${encodeURIComponent(permissoes.usuarioNome)}&origem=web`,
+        chatUrl: `/api/ia-command/protheus/chat?launchTicket=${encodeURIComponent(launchTicket)}&usuario=${encodeURIComponent(permissoes.usuarioNome)}&origem=web&loginPath=${encodeURIComponent(pathConfig.path)}`,
       });
     } catch (err) {
       const status = Number(err.statusCode || err.status || 500);
@@ -1435,10 +1446,11 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       empresaId: Number(req.protheusChat.empresaId),
       empresas: empresas.length,
     });
-    res.json({
-      empresaId: Number(req.protheusChat.empresaId),
-      empresas,
-    });
+      res.json({
+        empresaId: Number(req.protheusChat.empresaId),
+        empresas,
+        loginPath: carregarWebLoginConfigEmpresa(req.protheusChat.empresaId).path,
+      });
   });
 
   // ── Arvore de filiais Lobo Guara (selecao manual de escopo no chat) ──
@@ -1535,6 +1547,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
         empresaId: Number(req.protheusChat.empresaId),
         empresas,
         sessoes,
+        loginPath: carregarWebLoginConfigEmpresa(req.protheusChat.empresaId).path,
       });
     } catch (err) {
       perfLog('GET /bootstrap', inicio, { status: 500, erro: err.message });
