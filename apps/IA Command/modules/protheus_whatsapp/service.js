@@ -35,6 +35,10 @@ const { consolidarEscopoFilial } = require('./filial-scope-consolidator');
 // (modules/whatsapp/service.js:4307-4317), habilitado aqui pela primeira vez
 // para o chat embutido (antes, este canal nunca chamava resolverDaMensagem).
 function resolverEscopoFilialLoboGuara({ db, empresaId, textoParaIA, selecaoUi, filiaisPermitidasSessao }) {
+  if (!loboGuaraFilialResolver.empresaUsaLoboGuara(db, empresaId)) {
+    return { filialLoboGuara: null, auditoria: null };
+  }
+
   const ctx = loboGuaraFilialResolver.contextoLoboGuara(db, empresaId);
   const uiTouched = !!selecaoUi?.uiTouched;
 

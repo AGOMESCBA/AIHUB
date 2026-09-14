@@ -24,14 +24,30 @@ function _normalizar(s) {
     .toLowerCase().trim();
 }
 
-// Le empresa_codigo (usado so como default de exibicao) do erp_config —
-// nao decide mais se o filtro liga (ver contextoLoboGuara).
-function _empresaCodigoPadrao(db, empresaId) {
+// Le config Protheus oficial da empresa; modelo_dados decide se o escopo
+// Lobo Guara pode ligar, e empresa_codigo segue como default de exibicao.
+function _configProtheusEmpresa(db, empresaId) {
   try {
     const row = db.prepare(
       "SELECT config FROM erp_config WHERE empresa_id = ? AND erp = 'protheus' AND connection_id IS NULL ORDER BY atualizado_em DESC, criado_em DESC LIMIT 1"
     ).get(empresaId);
-    const cfg = row?.config ? JSON.parse(row.config) : {};
+    return row?.config ? JSON.parse(row.config) : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function modeloDadosEmpresa(db, empresaId) {
+  return String(_configProtheusEmpresa(db, empresaId)?.modelo_dados || 'TRADICIONAL').trim().toUpperCase();
+}
+
+function empresaUsaLoboGuara(db, empresaId) {
+  return modeloDadosEmpresa(db, empresaId) === 'LOBO_GUARA';
+}
+
+function _empresaCodigoPadrao(db, empresaId) {
+  try {
+    const cfg = _configProtheusEmpresa(db, empresaId);
     return String(cfg.empresa_codigo || '').trim() || null;
   } catch (_) {
     return null;
@@ -52,15 +68,13 @@ function _resolverConnectionId(empresaId) {
   }
 }
 
-// Contexto pronto para resolver filial nesta empresa: existe arvore curada e
-// confirmada (protheus_company_profile.validated=1), com pelo menos um no
-// cadastrado — independente do rotulo TRADICIONAL/LOBO_GUARA em modelo_dados
-// (esse campo deixou de ser o gate; ele so descrevia se a empresa faz parte
-// de um grupo com varias empresas juridicas, nao se tem controle de filial).
-// Falha fechada — qualquer coisa fora disso retorna null, e o chamador nao
-// aplica filtro nenhum (comportamento igual ao de hoje para quem nao tem
-// arvore validada).
+// Contexto pronto para resolver filial nesta empresa: exige modelo_dados
+// LOBO_GUARA e arvore curada/validada (protheus_company_profile.validated=1).
+// TRADICIONAL pode ter SYS_COMPANY importado, mas isso e cadastro do ERP,
+// nao autorizacao para aplicar escopo Lobo Guara.
 function contextoLoboGuara(db, empresaId) {
+  if (!empresaUsaLoboGuara(db, empresaId)) return null;
+
   const connectionId = _resolverConnectionId(empresaId);
   if (!connectionId) return null;
 
@@ -259,6 +273,8 @@ function empresasDonasDasFiliais(db, connectionId, filiaisChave) {
 
 module.exports = {
   contextoLoboGuara,
+  modeloDadosEmpresa,
+  empresaUsaLoboGuara,
   resolverDaMensagem,
   expandirFiliaisDaEmpresa,
   empresasDonasDasFiliais,
