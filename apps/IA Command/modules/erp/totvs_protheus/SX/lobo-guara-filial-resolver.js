@@ -24,30 +24,13 @@ function _normalizar(s) {
     .toLowerCase().trim();
 }
 
-// Le config Protheus oficial da empresa; modelo_dados decide se o escopo
-// Lobo Guara pode ligar, e empresa_codigo segue como default de exibicao.
-function _configProtheusEmpresa(db, empresaId) {
+// Le empresa_codigo (usado so como default de exibicao) do erp_config.
+function _empresaCodigoPadrao(db, empresaId) {
   try {
     const row = db.prepare(
       "SELECT config FROM erp_config WHERE empresa_id = ? AND erp = 'protheus' AND connection_id IS NULL ORDER BY atualizado_em DESC, criado_em DESC LIMIT 1"
     ).get(empresaId);
-    return row?.config ? JSON.parse(row.config) : {};
-  } catch (_) {
-    return {};
-  }
-}
-
-function modeloDadosEmpresa(db, empresaId) {
-  return String(_configProtheusEmpresa(db, empresaId)?.modelo_dados || 'TRADICIONAL').trim().toUpperCase();
-}
-
-function empresaUsaLoboGuara(db, empresaId) {
-  return modeloDadosEmpresa(db, empresaId) === 'LOBO_GUARA';
-}
-
-function _empresaCodigoPadrao(db, empresaId) {
-  try {
-    const cfg = _configProtheusEmpresa(db, empresaId);
+    const cfg = row?.config ? JSON.parse(row.config) : {};
     return String(cfg.empresa_codigo || '').trim() || null;
   } catch (_) {
     return null;
@@ -68,13 +51,10 @@ function _resolverConnectionId(empresaId) {
   }
 }
 
-// Contexto pronto para resolver filial nesta empresa: exige modelo_dados
-// LOBO_GUARA e arvore curada/validada (protheus_company_profile.validated=1).
-// TRADICIONAL pode ter SYS_COMPANY importado, mas isso e cadastro do ERP,
-// nao autorizacao para aplicar escopo Lobo Guara.
+// Contexto pronto para resolver filial nesta empresa: existe arvore curada e
+// confirmada (protheus_company_profile.validated=1), com pelo menos um no
+// cadastrado. O filtro final continua sendo decidido por SX2, tabela a tabela.
 function contextoLoboGuara(db, empresaId) {
-  if (!empresaUsaLoboGuara(db, empresaId)) return null;
-
   const connectionId = _resolverConnectionId(empresaId);
   if (!connectionId) return null;
 
@@ -273,8 +253,6 @@ function empresasDonasDasFiliais(db, connectionId, filiaisChave) {
 
 module.exports = {
   contextoLoboGuara,
-  modeloDadosEmpresa,
-  empresaUsaLoboGuara,
   resolverDaMensagem,
   expandirFiliaisDaEmpresa,
   empresasDonasDasFiliais,

@@ -5,8 +5,6 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
 const normalizer = require(path.join(ROOT, 'modules/erp/totvs_protheus/SX/lobo-guara-normalizer'));
-const filialResolver = require(path.join(ROOT, 'modules/erp/totvs_protheus/SX/lobo-guara-filial-resolver'));
-
 function assertNaoContem(sql, trecho, mensagem) {
   assert.strictEqual(sql.includes(trecho), false, mensagem || `nao deve conter ${trecho}`);
 }
@@ -96,36 +94,5 @@ const todasCompartilhadas = normalizer._injetarFiltroFilial(
 
 assert.strictEqual(todasCompartilhadas.aplicado, false, 'se todas as tabelas sao compartilhadas, nao deve injetar filtro de filial');
 assertNaoContem(todasCompartilhadas.sql, '_FILIAL IN', 'nenhum filtro de filial deve ser criado em tabelas compartilhadas');
-
-function dbModeloDados(modeloDados) {
-  return {
-    prepare(sql) {
-      return {
-        get() {
-          if (/FROM erp_config/i.test(sql)) {
-            return { config: JSON.stringify({ modelo_dados: modeloDados }) };
-          }
-          throw new Error('contextoLoboGuara nao deveria consultar perfil/arvore para empresa tradicional');
-        },
-      };
-    },
-  };
-}
-
-assert.strictEqual(
-  filialResolver.empresaUsaLoboGuara(dbModeloDados('TRADICIONAL'), 3),
-  false,
-  'empresa TRADICIONAL nao deve ativar escopo Lobo Guara',
-);
-assert.strictEqual(
-  filialResolver.contextoLoboGuara(dbModeloDados('TRADICIONAL'), 3),
-  null,
-  'empresa TRADICIONAL com SYS_COMPANY importado nao deve entrar no contexto Lobo Guara',
-);
-assert.strictEqual(
-  filialResolver.empresaUsaLoboGuara(dbModeloDados('LOBO_GUARA'), 4),
-  true,
-  'empresa LOBO_GUARA deve poder seguir para validacao de arvore/perfil',
-);
 
 console.log('lobo-guara-sx2-filial-scope.test.js: ok');
