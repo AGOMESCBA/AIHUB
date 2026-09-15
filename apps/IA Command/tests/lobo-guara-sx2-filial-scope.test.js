@@ -127,8 +127,12 @@ WHERE SF2.F2_EMISSAO = '20260914' AND SF2.F2_TIPO = 'N';
 `,
   {
     db: {
-      prepare() {
-        return { all: () => [{ empresa_codigo: '01' }] };
+      prepare(sql) {
+        return {
+          all: () => String(sql).includes('filial_codigo')
+            ? [{ filial_codigo: '00' }, { filial_codigo: '01' }, { filial_codigo: '0102' }]
+            : [{ empresa_codigo: '01' }],
+        };
       },
     },
     ctx: { connectionId: 123 },
@@ -140,8 +144,8 @@ WHERE SF2.F2_EMISSAO = '20260914' AND SF2.F2_TIPO = 'N';
 );
 
 assert.strictEqual(escopoTradicionalSemSx2.aplicado, true, 'tradicional sem SX2 deve aplicar filial fisica nas movimentais');
-assert(escopoTradicionalSemSx2.sql.includes("SD2.D2_FILIAL IN ('01')"), 'tradicional deve filtrar SD2 pela filial fisica');
-assert(escopoTradicionalSemSx2.sql.includes("SF2.F2_FILIAL IN ('01')"), 'tradicional deve filtrar SF2 pela filial fisica');
+assert(escopoTradicionalSemSx2.sql.includes("SD2.D2_FILIAL IN ('00', '01', '0102')"), 'tradicional deve filtrar SD2 pela filial_codigo fisica');
+assert(escopoTradicionalSemSx2.sql.includes("SF2.F2_FILIAL IN ('00', '01', '0102')"), 'tradicional deve filtrar SF2 pela filial_codigo fisica');
 assertNaoContem(escopoTradicionalSemSx2.sql, "'0100'", 'tradicional nao deve usar chave hierarquica como filial fisica');
 
 const escopoTradicionalComSx2E = normalizer.aplicarEscopoLoboGuara(
@@ -154,8 +158,12 @@ WHERE SF2.F2_EMISSAO = '20260914' AND SF2.F2_TIPO = 'N';
 `,
   {
     db: {
-      prepare() {
-        return { all: () => [{ empresa_codigo: '01' }] };
+      prepare(sql) {
+        return {
+          all: () => String(sql).includes('filial_codigo')
+            ? [{ filial_codigo: '00' }, { filial_codigo: '01' }, { filial_codigo: '0102' }]
+            : [{ empresa_codigo: '01' }],
+        };
       },
     },
     ctx: { connectionId: 123 },
@@ -167,9 +175,40 @@ WHERE SF2.F2_EMISSAO = '20260914' AND SF2.F2_TIPO = 'N';
 );
 
 assert.strictEqual(escopoTradicionalComSx2E.aplicado, true, 'tradicional com SX2 E deve aplicar filial fisica');
-assert(escopoTradicionalComSx2E.sql.includes("SD2.D2_FILIAL IN ('01')"), 'tradicional com SX2 E deve filtrar SD2 por codigo fisico');
-assert(escopoTradicionalComSx2E.sql.includes("SF2.F2_FILIAL IN ('01')"), 'tradicional com SX2 E deve filtrar SF2 por codigo fisico');
+assert(escopoTradicionalComSx2E.sql.includes("SD2.D2_FILIAL IN ('00', '01', '0102')"), 'tradicional com SX2 E deve filtrar SD2 por filial_codigo');
+assert(escopoTradicionalComSx2E.sql.includes("SF2.F2_FILIAL IN ('00', '01', '0102')"), 'tradicional com SX2 E deve filtrar SF2 por filial_codigo');
 assertNaoContem(escopoTradicionalComSx2E.sql, "'0100'", 'tradicional com SX2 E nao deve usar chave hierarquica');
+
+const escopoTradicionalMatriz = normalizer.aplicarEscopoLoboGuara(
+  `
+SET ROWCOUNT 10000;
+SELECT COALESCE(SUM(SD2.D2_TOTAL), 0) AS faturamento
+FROM SD2010 SD2
+JOIN SF2010 SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL
+WHERE SF2.F2_EMISSAO = '20260914' AND SF2.F2_TIPO = 'N';
+`,
+  {
+    db: {
+      prepare(sql) {
+        return {
+          all: () => String(sql).includes('filial_codigo')
+            ? [{ filial_codigo: '00' }]
+            : [{ empresa_codigo: '01' }],
+        };
+      },
+    },
+    ctx: { connectionId: 123 },
+    sx2: { SD2010: 'E', SF2010: 'E' },
+    sx2Empresa: null,
+    filialState: { modo: 'especifica', chaves: ['0100'] },
+    preferirEmpresaCodigoFallback: true,
+  },
+);
+
+assert.strictEqual(escopoTradicionalMatriz.aplicado, true, 'tradicional matriz deve aplicar filial fisica 00');
+assert(escopoTradicionalMatriz.sql.includes("SD2.D2_FILIAL IN ('00')"), '0100 deve virar filial_codigo 00 em SD2');
+assert(escopoTradicionalMatriz.sql.includes("SF2.F2_FILIAL IN ('00')"), '0100 deve virar filial_codigo 00 em SF2');
+assertNaoContem(escopoTradicionalMatriz.sql, "'0100'", 'matriz tradicional nao deve usar filial_chave');
 
 const exclusivaPorEmpresa = normalizer._injetarFiltroFilial(
   "SELECT SA1.A1_NOME FROM SA1010 SA1 WHERE SA1.D_E_L_E_T_ = ' '",

@@ -98,8 +98,9 @@ function _resolverChavesEscopo(filialState, db, connectionId) {
 // M0_LEIAUTE do grupo, ex.: 6 digitos 'EEUUFF') — o Protheus grava so o
 // segmento de empresa (ex.: 2 digitos). Confirmado com dado real: F2_FILIAL
 // (exclusiva) tem 6 digitos, A1_FILIAL (exclusiva so por empresa) tem 2.
-// `codigosEmpresa` traz o codigo de empresa (curto, 2 digitos), nunca
-// filial_chave completa nem decomposicao via SUBSTRING/mascara.
+// `codigosEmpresa` traz o codigo de empresa (curto, 2 digitos), usado apenas
+// para tabelas exclusivas por empresa. Em TRADICIONAL, tabelas movimentais
+// usam opts.codigosFilialTradicional, que vem de filial_codigo da SYS_COMPANY_CFG.
 function _injetarFiltroFilial(sql, aliases, sx2, sx2Empresa, chaves, codigosEmpresa, opts = {}) {
   if (!chaves || !chaves.length) return { sql, aplicado: false, avisos: [] };
 
@@ -124,11 +125,12 @@ function _injetarFiltroFilial(sql, aliases, sx2, sx2Empresa, chaves, codigosEmpr
     let valoresTabela = chaves;
     let escopoEmpresa = false;
     if (modo === 'E') {
-      if (opts.preferirEmpresaCodigoFallback && codigosEmpresa && codigosEmpresa.length) {
-        valoresTabela = codigosEmpresa;
-        escopoEmpresa = true;
+      if (opts.preferirEmpresaCodigoFallback) {
+        const codigosFilial = opts.codigosFilialTradicional || [];
+        if (!codigosFilial.length) continue; // TRADICIONAL sem filial_codigo: nao troca por empresa_codigo
+        valoresTabela = codigosFilial;
       }
-      // segue com valoresTabela = chaves (filial pontual) — nada a fazer aqui.
+      // LOBO_GUARA usa filial_chave; TRADICIONAL usa filial_codigo.
     } else if (modoEmp === 'E') {
       if (!codigosEmpresa || !codigosEmpresa.length) continue; // sem empresa dona identificada -- nao filtra às cegas
       valoresTabela = codigosEmpresa;
@@ -138,9 +140,10 @@ function _injetarFiltroFilial(sql, aliases, sx2, sx2Empresa, chaves, codigosEmpr
     } else if (!modo && TABELAS_MOVIMENTO_COM_FILIAL.has(String(base || '').toUpperCase())) {
       // SX2 ausente para tabela transacional/documental: permite recorte por
       // filial no proprio movimento sem liberar cadastros compartilhaveis.
-      if (opts.preferirEmpresaCodigoFallback && codigosEmpresa && codigosEmpresa.length) {
-        valoresTabela = codigosEmpresa;
-        escopoEmpresa = true;
+      if (opts.preferirEmpresaCodigoFallback) {
+        const codigosFilial = opts.codigosFilialTradicional || [];
+        if (!codigosFilial.length) continue; // TRADICIONAL sem filial_codigo: nao troca por empresa_codigo
+        valoresTabela = codigosFilial;
       }
     } else {
       continue; // modo SX2 ausente/desconhecido — nunca aplica filtro de filial por fallback
@@ -294,15 +297,21 @@ function aplicarEscopoLoboGuara(sql, { db, ctx, sx2, sx2Empresa, filialState, lo
   // tiver X2_MODOEMP='E' — evita consulta desnecessária à árvore no caminho comum.
   const precisaEscopoEmpresa = (sx2Empresa && Object.values(aliases).some(
     base => modoEmpresaSX2(sx2Empresa, base) === 'E'
-  )) || (preferirEmpresaCodigoFallback && Object.values(aliases).some(
-    base => TABELAS_MOVIMENTO_COM_FILIAL.has(String(base || '').toUpperCase())
   ));
+  const precisaFilialFisicaTradicional = preferirEmpresaCodigoFallback && Object.values(aliases).some((base) => {
+    const b = String(base || '').toUpperCase();
+    const modo = sx2 ? modoTabelaSX2(sx2, b) : null;
+    return modo === 'E' || (!modo && TABELAS_MOVIMENTO_COM_FILIAL.has(b));
+  });
   const resolver = require('./lobo-guara-filial-resolver');
   const codigosEmpresa = precisaEscopoEmpresa
     ? resolver.empresasDonasDasFiliais(db, ctx.connectionId, chaves)
     : null;
+  const codigosFilialTradicional = precisaFilialFisicaTradicional
+    ? resolver.filiaisFisicasDasFiliais(db, ctx.connectionId, chaves)
+    : null;
 
-  const { sql: sqlFinal, aplicado } = _injetarFiltroFilial(out, aliases, sx2, sx2Empresa, chaves, codigosEmpresa, { logPrefix, preferirEmpresaCodigoFallback });
+  const { sql: sqlFinal, aplicado } = _injetarFiltroFilial(out, aliases, sx2, sx2Empresa, chaves, codigosEmpresa, { logPrefix, preferirEmpresaCodigoFallback, codigosFilialTradicional });
   return { sql: sqlFinal, aplicado, motivo: aplicado ? null : 'nenhuma_tabela_aceitou_filtro' };
 }
 

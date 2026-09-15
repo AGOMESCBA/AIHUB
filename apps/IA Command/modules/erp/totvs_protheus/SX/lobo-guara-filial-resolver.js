@@ -251,11 +251,30 @@ function empresasDonasDasFiliais(db, connectionId, filiaisChave) {
   return rows.map(r => r.empresa_codigo).filter(Boolean);
 }
 
+// Para empresa TRADICIONAL, a selecao da UI ainda chega como filial_chave
+// (ex.: 0100), mas o campo XX_FILIAL das tabelas Protheus usa a filial fisica
+// da SYS_COMPANY_CFG (ex.: filial_codigo=00). Nunca usar empresa_codigo aqui.
+function filiaisFisicasDasFiliais(db, connectionId, filiaisChave) {
+  const chaves = [...new Set((filiaisChave || []).filter(Boolean))];
+  if (!chaves.length) return [];
+
+  const placeholders = chaves.map(() => '?').join(',');
+  const rows = db.prepare(`
+    SELECT DISTINCT filial_codigo FROM protheus_company_tree
+     WHERE connection_id = ? AND ativo = 1 AND tipo_no = 'filial'
+       AND filial_chave IN (${placeholders})
+       AND filial_codigo IS NOT NULL AND TRIM(filial_codigo) <> ''
+  `).all(connectionId, ...chaves);
+
+  return rows.map(r => String(r.filial_codigo || '').trim()).filter(Boolean);
+}
+
 module.exports = {
   contextoLoboGuara,
   resolverDaMensagem,
   expandirFiliaisDaEmpresa,
   empresasDonasDasFiliais,
+  filiaisFisicasDasFiliais,
   arvoreAgrupadaParaSelecao,
   _normalizar,
   _clonar,
