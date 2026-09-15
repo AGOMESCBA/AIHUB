@@ -210,6 +210,37 @@ assert(escopoTradicionalMatriz.sql.includes("SD2.D2_FILIAL IN ('00')"), '0100 de
 assert(escopoTradicionalMatriz.sql.includes("SF2.F2_FILIAL IN ('00')"), '0100 deve virar filial_codigo 00 em SF2');
 assertNaoContem(escopoTradicionalMatriz.sql, "'0100'", 'matriz tradicional nao deve usar filial_chave');
 
+const escopoLoboGuaraMesmoComFilialFisica = normalizer.aplicarEscopoLoboGuara(
+  `
+SET ROWCOUNT 10000;
+SELECT COALESCE(SUM(SD2.D2_TOTAL), 0) AS faturamento
+FROM SD2010 SD2
+JOIN SF2010 SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL
+WHERE SF2.F2_EMISSAO = '20260915' AND SF2.F2_TIPO = 'N';
+`,
+  {
+    db: {
+      prepare(sql) {
+        return {
+          all: () => String(sql).includes('filial_codigo')
+            ? [{ filial_codigo: '01' }, { filial_codigo: '02' }, { filial_codigo: '03' }]
+            : [{ empresa_codigo: '01' }],
+        };
+      },
+    },
+    ctx: { connectionId: 456 },
+    sx2: { SD2010: 'E', SF2010: 'E' },
+    sx2Empresa: null,
+    filialState: { modo: 'especifica', chaves: ['010101', '010102', '010103'] },
+    preferirEmpresaCodigoFallback: false,
+  },
+);
+
+assert.strictEqual(escopoLoboGuaraMesmoComFilialFisica.aplicado, true, 'lobo guara deve aplicar filial_chave nas exclusivas por filial');
+assert(escopoLoboGuaraMesmoComFilialFisica.sql.includes("SD2.D2_FILIAL IN ('010101', '010102', '010103')"), 'lobo guara deve filtrar SD2 pela filial_chave completa');
+assert(escopoLoboGuaraMesmoComFilialFisica.sql.includes("SF2.F2_FILIAL IN ('010101', '010102', '010103')"), 'lobo guara deve filtrar SF2 pela filial_chave completa');
+assertNaoContem(escopoLoboGuaraMesmoComFilialFisica.sql, "IN ('01', '02', '03')", 'lobo guara nao deve usar filial_codigo fisica curta');
+
 const exclusivaPorEmpresa = normalizer._injetarFiltroFilial(
   "SELECT SA1.A1_NOME FROM SA1010 SA1 WHERE SA1.D_E_L_E_T_ = ' '",
   { SA1: 'SA1' },

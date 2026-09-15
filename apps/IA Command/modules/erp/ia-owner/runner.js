@@ -1700,6 +1700,35 @@ function buildEstadoAnterior(intent = {}) {
 // confirmados, não assumidos) antes de qualquer fragmento usar essa tabela.
 const FK_BASES_CONDICIONAIS = new Set(['FK1', 'FK2', 'FK5', 'FK6', 'FK7', 'FKA', 'FKB', 'SCR', 'SAK', 'DBM']);
 
+function normalizarModeloDados(valor) {
+  const v = String(valor || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim().toUpperCase().replace(/[\s-]+/g, '_');
+  if (v === 'LOBOGUARA' || v === 'LOBO_GUARA') return 'LOBO_GUARA';
+  if (v === 'TRADICIONAL') return 'TRADICIONAL';
+  return null;
+}
+
+function carregarModeloDadosDireto(db, empresaId) {
+  try {
+    const row = db.prepare(
+      "SELECT config FROM erp_config WHERE empresa_id = ? AND erp = 'protheus' AND connection_id IS NULL ORDER BY atualizado_em DESC, criado_em DESC LIMIT 1"
+    ).get(empresaId);
+    const cfg = row?.config ? JSON.parse(row.config) : {};
+    return normalizarModeloDados(cfg?.modelo_dados);
+  } catch (_) {
+    return null;
+  }
+}
+
+function modeloDadosEfetivo(db, empresaId, middlewareCfg = {}) {
+  const direto = db && empresaId ? carregarModeloDadosDireto(db, empresaId) : null;
+  const middleware = normalizarModeloDados(middlewareCfg?.modelo_dados);
+  if (direto === 'LOBO_GUARA' || middleware === 'LOBO_GUARA') return 'LOBO_GUARA';
+  if (direto === 'TRADICIONAL' || middleware === 'TRADICIONAL') return 'TRADICIONAL';
+  return 'TRADICIONAL';
+}
+
 function buildContextoTecnico({ spec, empresaId, protheus, sx2, sx2Puro, sx3Prompt, middlewareCfg, filial }) {
   // sx2Puro = mapa direto do SX2 do IAHub (null quando nada cadastrado).
   // Se null → tenant sem SX2 cadastrado → FK não existe → modelo SE5.
@@ -1748,8 +1777,8 @@ function buildContextoTecnico({ spec, empresaId, protheus, sx2, sx2Puro, sx3Prom
     sx3: sx3Exposto,
     filial: filial || protheus.filialPadrao || 'TODAS',
     filialPadrao: protheus.filialPadrao || null,
-    modeloDados: middlewareCfg.modelo_dados || 'TRADICIONAL',
-    campoFilial: middlewareCfg.campo_filial || null,
+    modeloDados: normalizarModeloDados(middlewareCfg?.modelo_dados) || 'TRADICIONAL',
+    campoFilial: middlewareCfg?.campo_filial || null,
     modelo_baixas_receber: temFK1 ? (temFK7 ? 'FK7_FK1' : 'FK1') : 'SE5',
     modelo_baixas_pagar: temFK2 ? (temFK7 ? 'FK7_FK2' : 'FK2') : 'SE5',
     tem_aprovacao_pedido_compra: temSCR,
@@ -4268,7 +4297,8 @@ async function prepararSql({ spec, sql, sx2, sx2LoboGuara = undefined, sx2Empres
   if (empresaId && spec.aplicarLoboGuaraNormalizer !== false) {
     try {
       const { getDB } = require('../../database');
-      const ctxLoboGuara = loboGuaraFilialResolver.contextoLoboGuara(getDB(), empresaId);
+      const db = getDB();
+      const ctxLoboGuara = loboGuaraFilialResolver.contextoLoboGuara(db, empresaId);
       if (ctxLoboGuara) {
         // [CORRIGIDO apos revisao de codigo] aplicarEscopoLoboGuara() devolve
         // { sql, aplicado, motivo } — aplicado reflete se algum predicado de
@@ -4278,13 +4308,14 @@ async function prepararSql({ spec, sql, sx2, sx2LoboGuara = undefined, sx2Empres
         // aceita filtro de filial) registrava "aplicado com sucesso" na
         // auditoria mesmo sem nenhum WHERE de filial ter entrado.
         const sx2FilialLoboGuara = sx2LoboGuara === undefined ? sx2 : sx2LoboGuara;
-        const modeloDados = String(middlewareCfg?.modelo_dados || 'TRADICIONAL').trim().toUpperCase();
+        const modeloDados = modeloDadosEfetivo(db, empresaId, middlewareCfg);
         const resultadoNormalizer = loboGuaraNormalizer.aplicarEscopoLoboGuara(out, {
-          db: getDB(), ctx: ctxLoboGuara, sx2: sx2FilialLoboGuara, sx2Empresa, filialState: filialLoboGuaraState, logPrefix: spec.logPrefix,
+          db, ctx: ctxLoboGuara, sx2: sx2FilialLoboGuara, sx2Empresa, filialState: filialLoboGuaraState, logPrefix: spec.logPrefix,
           preferirEmpresaCodigoFallback: modeloDados === 'TRADICIONAL',
         });
         out = resultadoNormalizer.sql;
         if (filialLoboGuaraState) {
+          filialEscopoResultado.modeloDados = modeloDados;
           filialEscopoResultado.aplicado = !!resultadoNormalizer.aplicado;
           if (!resultadoNormalizer.aplicado) filialEscopoResultado.erro = resultadoNormalizer.motivo || 'nao_aplicado';
         }
@@ -5761,6 +5792,8 @@ module.exports = {
     confirmacaoPodeEncerrarPlano,
     respostaGuardrailUsuario,
     respostaConsultaRegistrosDeletados,
+    normalizarModeloDados,
+    modeloDadosEfetivo,
     planoTentaFiltrarOutraEntidadeSeguranca,
     codigoEntidadeSegurancaCitadoNaMensagem,
     _codigosErpEquivalentes,
