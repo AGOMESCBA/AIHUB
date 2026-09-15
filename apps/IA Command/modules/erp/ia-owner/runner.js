@@ -4278,8 +4278,10 @@ async function prepararSql({ spec, sql, sx2, sx2LoboGuara = undefined, sx2Empres
         // aceita filtro de filial) registrava "aplicado com sucesso" na
         // auditoria mesmo sem nenhum WHERE de filial ter entrado.
         const sx2FilialLoboGuara = sx2LoboGuara === undefined ? sx2 : sx2LoboGuara;
+        const modeloDados = String(middlewareCfg?.modelo_dados || 'TRADICIONAL').trim().toUpperCase();
         const resultadoNormalizer = loboGuaraNormalizer.aplicarEscopoLoboGuara(out, {
           db: getDB(), ctx: ctxLoboGuara, sx2: sx2FilialLoboGuara, sx2Empresa, filialState: filialLoboGuaraState, logPrefix: spec.logPrefix,
+          preferirEmpresaCodigoFallback: modeloDados === 'TRADICIONAL',
         });
         out = resultadoNormalizer.sql;
         if (filialLoboGuaraState) {

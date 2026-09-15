@@ -124,6 +124,10 @@ function _injetarFiltroFilial(sql, aliases, sx2, sx2Empresa, chaves, codigosEmpr
     let valoresTabela = chaves;
     let escopoEmpresa = false;
     if (modo === 'E') {
+      if (opts.preferirEmpresaCodigoFallback && codigosEmpresa && codigosEmpresa.length) {
+        valoresTabela = codigosEmpresa;
+        escopoEmpresa = true;
+      }
       // segue com valoresTabela = chaves (filial pontual) — nada a fazer aqui.
     } else if (modoEmp === 'E') {
       if (!codigosEmpresa || !codigosEmpresa.length) continue; // sem empresa dona identificada -- nao filtra às cegas
@@ -134,6 +138,10 @@ function _injetarFiltroFilial(sql, aliases, sx2, sx2Empresa, chaves, codigosEmpr
     } else if (!modo && TABELAS_MOVIMENTO_COM_FILIAL.has(String(base || '').toUpperCase())) {
       // SX2 ausente para tabela transacional/documental: permite recorte por
       // filial no proprio movimento sem liberar cadastros compartilhaveis.
+      if (opts.preferirEmpresaCodigoFallback && codigosEmpresa && codigosEmpresa.length) {
+        valoresTabela = codigosEmpresa;
+        escopoEmpresa = true;
+      }
     } else {
       continue; // modo SX2 ausente/desconhecido — nunca aplica filtro de filial por fallback
     }
@@ -264,7 +272,7 @@ function _amarrarJoinPorEmpresa(sql, aliases, sx2, sx2Empresa, opts = {}) {
 // `motivo` e null quando aplicado=true, ou uma string curta explicando por
 // que nao aplicou (usado so para log/diagnostico, nao e para exibir ao
 // usuario final).
-function aplicarEscopoLoboGuara(sql, { db, ctx, sx2, sx2Empresa, filialState, logPrefix } = {}) {
+function aplicarEscopoLoboGuara(sql, { db, ctx, sx2, sx2Empresa, filialState, logPrefix, preferirEmpresaCodigoFallback = false } = {}) {
   if (!ctx || !db) return { sql, aplicado: false, motivo: 'sem_contexto_lobo_guara' };
 
   const aliases = aliasTabelaSql(sql);
@@ -284,15 +292,17 @@ function aplicarEscopoLoboGuara(sql, { db, ctx, sx2, sx2Empresa, filialState, lo
 
   // Só precisa resolver a empresa dona se alguma tabela do SQL de fato
   // tiver X2_MODOEMP='E' — evita consulta desnecessária à árvore no caminho comum.
-  const precisaEscopoEmpresa = sx2Empresa && Object.values(aliases).some(
+  const precisaEscopoEmpresa = (sx2Empresa && Object.values(aliases).some(
     base => modoEmpresaSX2(sx2Empresa, base) === 'E'
-  );
+  )) || (preferirEmpresaCodigoFallback && Object.values(aliases).some(
+    base => TABELAS_MOVIMENTO_COM_FILIAL.has(String(base || '').toUpperCase())
+  ));
   const resolver = require('./lobo-guara-filial-resolver');
   const codigosEmpresa = precisaEscopoEmpresa
     ? resolver.empresasDonasDasFiliais(db, ctx.connectionId, chaves)
     : null;
 
-  const { sql: sqlFinal, aplicado } = _injetarFiltroFilial(out, aliases, sx2, sx2Empresa, chaves, codigosEmpresa, { logPrefix });
+  const { sql: sqlFinal, aplicado } = _injetarFiltroFilial(out, aliases, sx2, sx2Empresa, chaves, codigosEmpresa, { logPrefix, preferirEmpresaCodigoFallback });
   return { sql: sqlFinal, aplicado, motivo: aplicado ? null : 'nenhuma_tabela_aceitou_filtro' };
 }
 
