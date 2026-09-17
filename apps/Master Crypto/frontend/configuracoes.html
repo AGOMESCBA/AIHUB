@@ -63,16 +63,36 @@
         <option value="live-disabled">Exchange real desabilitada</option>
       </select>
     </div>
+    <div class="form-group" style="grid-column: 1 / -1; margin-top: 10px; border-top: 1px solid #e2e8f0; padding-top: 14px;">
+      <h4 style="margin: 0 0 10px 0; color: #1e293b; font-size: 14px;">🔑 Credenciais de Exchange (Binance / Bybit / OKX / KuCoin)</h4>
+    </div>
+    <div class="form-group">
+      <label for="selected_exchange">Corretora Ativa</label>
+      <select id="selected_exchange" class="form-control">
+        <option value="BINANCE">Binance</option>
+        <option value="BYBIT">Bybit</option>
+        <option value="OKX">OKX</option>
+        <option value="KUCOIN">KuCoin</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="exchange_api_key">API Key da Corretora</label>
+      <input id="exchange_api_key" type="password" class="form-control" placeholder="Cole a API Key da empresa">
+    </div>
+    <div class="form-group">
+      <label for="exchange_api_secret">API Secret da Corretora</label>
+      <input id="exchange_api_secret" type="password" class="form-control" placeholder="Cole o API Secret da empresa">
+    </div>
   </div>
   <div class="form-actions">
-    <button class="btn btn-primary" type="button" onclick="saveSettings()">Salvar Parametros</button>
+    <button class="btn btn-primary" type="button" onclick="saveSettings()">Salvar Parametros & Chaves API</button>
     <button class="btn btn-secondary" type="button" onclick="loadSettings()">Recarregar</button>
   </div>
 </div>
 
 <script src="/js/auth.js"></script>
 <script>
-  const fields = ['initial_bank_usd', 'risk_per_trade_pct', 'min_risk_reward_ratio', 'scanner_top_limit', 'scanner_timeframe', 'mode'];
+  const fields = ['initial_bank_usd', 'risk_per_trade_pct', 'min_risk_reward_ratio', 'scanner_top_limit', 'scanner_timeframe', 'mode', 'selected_exchange', 'exchange_api_key', 'exchange_api_secret'];
 
   async function loadSettings() {
     await (window._iahubAuthReady || Promise.resolve());
@@ -97,6 +117,9 @@
       scanner_top_limit: Number(document.getElementById('scanner_top_limit').value),
       scanner_timeframe: document.getElementById('scanner_timeframe').value,
       mode: document.getElementById('mode').value,
+      selected_exchange: document.getElementById('selected_exchange').value,
+      exchange_api_key: document.getElementById('exchange_api_key').value,
+      exchange_api_secret: document.getElementById('exchange_api_secret').value,
     };
     setStatus('Salvando parametros...');
     const res = await fetch('/api/master-crypto/company/settings', {
