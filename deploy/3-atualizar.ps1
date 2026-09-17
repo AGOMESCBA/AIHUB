@@ -261,6 +261,18 @@ function Start-IaHubServices {
     }
 }
 
+function Ensure-MasterCryptoFirewallRule {
+    Write-Host "[6/7] Garantindo Firewall do Master Crypto (porta 8000)..." -ForegroundColor Yellow
+
+    $rule8000 = Get-NetFirewallRule -DisplayName "IAHub Master Crypto Backend 8000" -ErrorAction SilentlyContinue
+    if (!$rule8000) {
+        New-NetFirewallRule -DisplayName "IAHub Master Crypto Backend 8000" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow | Out-Null
+        Write-Host "      Porta 8000 liberada no Firewall para o Master Crypto!" -ForegroundColor Green
+    } else {
+        Write-Host "      Porta 8000 ja liberada. OK." -ForegroundColor Gray
+    }
+}
+
 $zipCheck = [System.IO.Compression.ZipFile]::OpenRead($Zip)
 try {
     $unsafeEntries = @()
@@ -398,7 +410,9 @@ if (Test-Path -LiteralPath $masterCryptoRequirements) {
 }
 
 # ── 4. Reiniciar o servico ────────────────────────────────────
-Write-Host "[6/6] Reiniciando servicos IAHub..." -ForegroundColor Yellow
+Ensure-MasterCryptoFirewallRule
+
+Write-Host "[7/7] Reiniciando servicos IAHub..." -ForegroundColor Yellow
 Start-IaHubServices
 
 Write-Host ""

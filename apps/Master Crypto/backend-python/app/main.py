@@ -31,6 +31,7 @@ app = FastAPI(
 )
 
 from app.api.v1.news import router as news_router
+from app.api.v1.orders import router as orders_router
 
 app.include_router(scanner_router, prefix=settings.API_V1_STR)
 app.include_router(opportunities_router, prefix=settings.API_V1_STR)
@@ -40,6 +41,7 @@ app.include_router(backtest_router, prefix=settings.API_V1_STR)
 app.include_router(btc_cycle_router, prefix=settings.API_V1_STR)
 app.include_router(analyst_router, prefix=settings.API_V1_STR)
 app.include_router(news_router, prefix=settings.API_V1_STR)
+app.include_router(orders_router, prefix=settings.API_V1_STR)
 
 from typing import List
 
@@ -66,14 +68,7 @@ ws_manager = ConnectionManager()
 
 @app.get("/health")
 def health_check():
-    return {
-        "status": "healthy",
-        "project": settings.PROJECT_NAME,
-        "version": settings.VERSION,
-        "worker_running": worker.is_running,
-        "active_ws_connections": len(ws_manager.active_connections),
-        "mode": "SaaS-ready Base"
-    }
+    return {"status": "healthy"}
 
 @app.websocket("/api/v1/ws/market")
 async def websocket_market_endpoint(websocket: WebSocket):

@@ -89,7 +89,7 @@ Esse script:
 - Instala os pacotes npm (`npm install`)
 - Registra o IAHub como **serviço Windows** (inicia automaticamente com o servidor)
 - Configura o **Nginx** como proxy reverso na porta 80
-- Abre as portas 80 e 3000 no Firewall do Windows
+- Abre as portas 80, 3000 e 8000 no Firewall do Windows
 
 Ao final você verá:
 
@@ -109,7 +109,23 @@ O Firewall do Windows já foi aberto pelos scripts, mas o servidor cloud da ADDI
 
 1. Acesse o painel de controle da ADDIT
 2. Localize seu servidor e vá em **Firewall** ou **Security Groups** ou **Regras de entrada**
-3. Adicione uma regra de entrada:
+3. Garanta entrada TCP para:
+   - `80` para acesso HTTP via Nginx
+   - `3000` para acesso direto ao IAHub quando necessario
+   - `8000` para o backend Python/FastAPI do Master Crypto usado pelo app mobile
+
+Health check esperado do Master Crypto:
+
+```powershell
+Invoke-WebRequest http://137.131.212.29:8000/health
+```
+
+Resposta esperada:
+
+```json
+{"status":"healthy"}
+```
+4. Adicione uma regra de entrada:
    - **Protocolo:** TCP
    - **Porta:** 80
    - **Origem:** 0.0.0.0/0 *(acesso de qualquer IP)* ou restrinja ao seu IP se quiser

@@ -219,6 +219,14 @@ if (!$rule3000) {
     Write-Host "      Porta 3000 ja liberada. OK." -ForegroundColor Gray
 }
 
+$rule8000 = Get-NetFirewallRule -DisplayName "IAHub Master Crypto Backend 8000" -ErrorAction SilentlyContinue
+if (!$rule8000) {
+    New-NetFirewallRule -DisplayName "IAHub Master Crypto Backend 8000" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow | Out-Null
+    Write-Host "      Porta 8000 liberada no Firewall para o Master Crypto!" -ForegroundColor Green
+} else {
+    Write-Host "      Porta 8000 ja liberada. OK." -ForegroundColor Gray
+}
+
 # ── Iniciar servicos ──────────────────────────────────────────
 Write-Host ""
 Write-Host "Iniciando servicos..." -ForegroundColor Yellow

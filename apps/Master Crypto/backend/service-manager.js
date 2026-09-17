@@ -6,7 +6,8 @@ const { spawn } = require('child_process');
 const IAHUB_ROOT = path.join(__dirname, '..', '..', '..');
 const backendDir = process.env.MASTER_CRYPTO_BACKEND_DIR || path.join(__dirname, '..', 'backend-python');
 const pythonExe = process.env.MASTER_CRYPTO_PYTHON || path.join(backendDir, '.venv', 'Scripts', 'python.exe');
-const host = process.env.MASTER_CRYPTO_HOST || '0.0.0.0';
+const bindHost = process.env.MASTER_CRYPTO_HOST || '0.0.0.0';
+const connectHost = process.env.MASTER_CRYPTO_CONNECT_HOST || '127.0.0.1';
 const port = Number(process.env.MASTER_CRYPTO_PORT || 8000);
 const logFile = process.env.MASTER_CRYPTO_LOG_FILE || path.join(IAHUB_ROOT, 'logs', 'master-crypto-python.log');
 
@@ -15,7 +16,8 @@ let startedByIahub = false;
 let lastStatus = {
   state: 'stopped',
   pid: null,
-  url: `http://${host}:${port}`,
+  url: `http://${bindHost}:${port}`,
+  healthUrl: `http://${connectHost}:${port}/health`,
   backendDir,
   message: 'Nao iniciado',
   checkedAt: null,
@@ -38,7 +40,7 @@ function appendLog(line) {
 
 function healthCheck(timeoutMs = 1200) {
   return new Promise((resolve) => {
-    const req = http.get({ host, port, path: '/health', timeout: timeoutMs }, (res) => {
+    const req = http.get({ host: connectHost, port, path: '/health', timeout: timeoutMs }, (res) => {
       res.resume();
       resolve(res.statusCode >= 200 && res.statusCode < 500);
     });
@@ -62,7 +64,7 @@ async function start() {
   }
 
   if (await healthCheck()) {
-    updateStatus({ state: 'running-external', pid: null, message: `Motor Python ja responde em ${host}:${port}` });
+    updateStatus({ state: 'running-external', pid: null, message: `Motor Python ja responde em ${connectHost}:${port}` });
     return lastStatus;
   }
 
@@ -79,15 +81,15 @@ async function start() {
   }
 
   try {
-    child = spawn(pythonExe, ['-m', 'uvicorn', 'app.main:app', '--host', host, '--port', String(port)], {
+    child = spawn(pythonExe, ['-m', 'uvicorn', 'app.main:app', '--host', bindHost, '--port', String(port)], {
       cwd: backendDir,
       env: { ...process.env },
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     startedByIahub = true;
-    updateStatus({ state: 'starting', pid: child.pid, message: `Iniciando motor Python em ${host}:${port}` });
-    appendLog(`START pid=${child.pid} cwd=${backendDir}`);
+    updateStatus({ state: 'starting', pid: child.pid, message: `Iniciando motor Python em ${bindHost}:${port}` });
+    appendLog(`START pid=${child.pid} cwd=${backendDir} bind=${bindHost}:${port}`);
 
     child.stdout.on('data', (chunk) => appendLog(chunk.toString().trimEnd()));
     child.stderr.on('data', (chunk) => appendLog(chunk.toString().trimEnd()));
@@ -100,7 +102,7 @@ async function start() {
 
     setTimeout(async () => {
       if (await healthCheck(1800)) {
-        updateStatus({ state: 'running', pid: child?.pid || null, message: `Motor Python ativo em ${host}:${port}` });
+        updateStatus({ state: 'running', pid: child?.pid || null, message: `Motor Python ativo em ${bindHost}:${port}` });
       }
     }, 1500);
   } catch (err) {
@@ -128,7 +130,7 @@ function getStatus() {
 }
 
 function getInternalApiBaseUrl() {
-  return `http://${host}:${port}/api/v1`;
+  return `http://${connectHost}:${port}/api/v1`;
 }
 
 function registerShutdownHook(signalName) {
