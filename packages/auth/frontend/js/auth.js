@@ -16,6 +16,7 @@
 // nova zona em _ZONAS_TEMA (o CSS compartilhado ja suporta).
 const _ZONAS_TEMA = [
   { chave: 'iac_theme',     dentro: () => location.pathname.includes('/app/ia-command/') },
+  { chave: 'mc_theme',      dentro: () => location.pathname.includes('/app/master-crypto/') },
   { chave: 'launcher_theme', dentro: () => location.pathname === '/iahub.html' || location.pathname.endsWith('/iahub.html') },
 ];
 function _zonaTemaAtual() {
@@ -181,6 +182,17 @@ const _PAGINA_ROTINA = {
   '/app/ia-command/admin-agendamento.html':           'iac-admin-agendamento',
   '/app/ia-command/admin-agendamento-historico.html': 'iac-admin-agendamento',
   '/app/ia-command/admin-chat-favoritos.html':        'iac-admin-chat-favoritos',
+  // Master Crypto
+  '/app/master-crypto/radar.html':             'mc-radar',
+  '/app/master-crypto/oportunidades.html':     'mc-oportunidades',
+  '/app/master-crypto/plano-trade.html':       'mc-plano-trade',
+  '/app/master-crypto/analista-ia.html':       'mc-analista-ia',
+  '/app/master-crypto/ciclo-btc.html':         'mc-ciclo-btc',
+  '/app/master-crypto/backtest.html':          'mc-backtest',
+  '/app/master-crypto/noticias.html':          'mc-noticias',
+  '/app/master-crypto/paper-trading.html':     'mc-paper-trading',
+  '/app/master-crypto/historico-trades.html':  'mc-historico-trades',
+  '/app/master-crypto/configuracoes.html':     'mc-configuracoes',
   // ── IAHub / IA Recruit
   '/dashboard.html':        'dashboard',
   '/monitores.html':        'monitores',
@@ -245,6 +257,17 @@ const _ROTINA_LABELS = {
   'iac-admin-chat-favoritos':   'IA Command - Chat Favoritos',
   'iac-admin-grupos-whatsapp':  'IA Command - Grupos WhatsApp',
   'iac-admin-usuarios-protheus-web': 'IA Command - Usuários Protheus (Chat Web)',
+  // Master Crypto
+  'mc-radar': 'Master Crypto - Radar de Oportunidades',
+  'mc-oportunidades': 'Master Crypto - Oportunidades Ativas',
+  'mc-plano-trade': 'Master Crypto - Plano de Trade',
+  'mc-analista-ia': 'Master Crypto - Analista IA',
+  'mc-ciclo-btc': 'Master Crypto - Ciclos do Bitcoin',
+  'mc-backtest': 'Master Crypto - Backtest',
+  'mc-noticias': 'Master Crypto - Noticias e Sentimento',
+  'mc-paper-trading': 'Master Crypto - Paper Trading',
+  'mc-historico-trades': 'Master Crypto - Historico de Trades',
+  'mc-configuracoes': 'Master Crypto - Parametros e Risco',
   // ── IAHub / IA Recruit
   'dashboard': 'Dashboard',
   'monitores': 'Monitores',

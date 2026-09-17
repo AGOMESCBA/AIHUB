@@ -6,7 +6,7 @@ const { spawn } = require('child_process');
 const IAHUB_ROOT = path.join(__dirname, '..', '..', '..');
 const backendDir = process.env.MASTER_CRYPTO_BACKEND_DIR || path.join(__dirname, '..', 'backend-python');
 const pythonExe = process.env.MASTER_CRYPTO_PYTHON || path.join(backendDir, '.venv', 'Scripts', 'python.exe');
-const host = process.env.MASTER_CRYPTO_HOST || '127.0.0.1';
+const host = process.env.MASTER_CRYPTO_HOST || '0.0.0.0';
 const port = Number(process.env.MASTER_CRYPTO_PORT || 8000);
 const logFile = process.env.MASTER_CRYPTO_LOG_FILE || path.join(IAHUB_ROOT, 'logs', 'master-crypto-python.log');
 

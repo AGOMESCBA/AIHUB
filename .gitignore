@@ -27,3 +27,5 @@ data/auditoria.log
 .claude/spec/
 .claude/template/
 *.rar
+__pycache__/
+*.pyc
