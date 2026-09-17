@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Analista IA - Master Crypto AI</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="./css/master-crypto.css">
+  <style>
+    body { background: var(--bg-base, #f8fafc); padding: 16px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .analyst-shell { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: stretch; }
+    .chat-box { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); height: calc(100vh - 132px); min-height: 440px; display: flex; flex-direction: column; overflow: hidden; }
+    .chat-messages { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+    .msg { max-width: 82%; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; line-height: 1.5; white-space: pre-wrap; }
+    .msg-ai { align-self: flex-start; background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+    .msg-user { align-self: flex-end; background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
+    .msg strong { display: block; margin-bottom: 4px; }
+    .chat-input { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border); background: var(--bg-card); }
+    .chat-input input { flex: 1; min-width: 0; height: 38px; border: 1px solid var(--border); border-radius: 6px; padding: 0 12px; color: var(--text-hi); }
+    .side-panel { display: flex; flex-direction: column; gap: 12px; }
+    .suggestion-list { display: flex; flex-direction: column; gap: 8px; }
+    .suggestion-list button { justify-content: flex-start; text-align: left; height: auto; min-height: 34px; white-space: normal; }
+    .context-line { color: var(--text-md); font-size: 13px; line-height: 1.45; }
+    .status-line { color: var(--text-lo); font-size: 12px; margin-top: 6px; }
+    @media (max-width: 980px) { .analyst-shell { grid-template-columns: 1fr; } .chat-box { height: 58vh; } }
+  </style>
+</head>
+<body>
+  <div class="page-kicker">ANALISE / ASSISTENTE INTELIGENTE</div>
+  <div class="head-row">
+    <div class="head-title">
+      <span>Analista IA Assistente</span>
+      <span class="head-count" id="companyStatus">carregando contexto...</span>
+    </div>
+    <div class="head-actions">
+      <button class="btn btn-secondary" type="button" onclick="loadContext()">Atualizar</button>
+    </div>
+  </div>
+
+  <div class="analyst-shell">
+    <section class="chat-box">
+      <div class="chat-messages" id="chatMsgs"></div>
+      <div class="chat-input">
+        <input type="text" id="userInput" placeholder="Pergunte sobre stop, alvo, BTC, risco ou banca" autocomplete="off">
+        <button class="btn btn-primary" type="button" onclick="sendMsg()">Enviar</button>
+      </div>
+    </section>
+
+    <aside class="side-panel">
+      <div class="meta-item">
+        <span>Contexto carregado</span>
+        <strong id="contextTitle">-</strong>
+        <div class="context-line" id="contextBody">Aguardando scanner.</div>
+      </div>
+      <div class="meta-item">
+        <span>Perguntas sugeridas</span>
+        <div class="suggestion-list" id="suggestions"></div>
+      </div>
+      <div class="meta-item">
+        <span>Seguranca multiempresa</span>
+        <div class="context-line">O assistente roda pelo proxy autenticado do IAHUB. A empresa ativa na aba e enviada ao backend em cada requisicao.</div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    let currentOpportunity = null;
+    let btcRegime = 'TRENDING_UP';
+
+    function esc(value) {
+      return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+    }
+
+    function normalizeOpportunity(raw) {
+      const score = raw.opportunity || {};
+      const plan = raw.trade_plan || score.trade_plan || {};
+      const totalScore = Number(raw.opportunity_score ?? score.total_score ?? raw.score ?? 0);
+      const entryMin = Number(plan.entry_zone_min ?? raw.entry_min ?? 0);
+      const entryMax = Number(plan.entry_zone_max ?? raw.entry_max ?? 0);
+      return {
+        symbol: raw.symbol || score.symbol || plan.symbol || '-',
+        strategy: raw.strategy || plan.strategy || '-',
+        score: totalScore,
+        entry_range: entryMin && entryMax ? `${entryMin.toFixed(2)} - ${entryMax.toFixed(2)}` : (raw.entry_range || '-'),
+        stop_loss: plan.stop_loss ?? raw.stop_loss ?? '-',
+        target_t2: plan.target_t2 ?? raw.target_2 ?? '-',
+        potential: plan.potential_gain_pct ? `${Number(plan.potential_gain_pct).toFixed(2)}%` : '-',
+      };
+    }
+
+    function addMessage(type, label, text) {
+      const box = document.getElementById('chatMsgs');
+      const div = document.createElement('div');
+      div.className = `msg ${type === 'user' ? 'msg-user' : 'msg-ai'}`;
+      div.innerHTML = `<strong>${esc(label)}</strong>${esc(text)}`;
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    async function loadSuggestions() {
+      const wrap = document.getElementById('suggestions');
+      wrap.innerHTML = '<span class="status-line">Carregando...</span>';
+      try {
+        const data = await fetch('/api/master-crypto/analyst/suggestions').then(r => r.json());
+        const suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
+        wrap.innerHTML = suggestions.map(item => `<button class="btn btn-secondary btn-sm" type="button" onclick="askSuggestion('${esc(item)}')">${esc(item)}</button>`).join('');
+      } catch (_) {
+        wrap.innerHTML = '<span class="status-line">Sugestoes indisponiveis no momento.</span>';
+      }
+    }
+
+    async function loadContext() {
+      await (window._iahubAuthReady || Promise.resolve());
+      document.getElementById('companyStatus').textContent = 'sincronizando...';
+      try {
+        const summary = await fetch('/api/master-crypto/company/summary').then(r => r.json()).catch(() => ({}));
+        const settings = summary.settings || {};
+        const topLimit = Number(settings.scanner_top_limit || 20);
+        const timeframe = encodeURIComponent(settings.scanner_timeframe || '4h');
+        const data = await fetch(`/api/master-crypto/opportunities/active?top_limit=${topLimit}&timeframe=${timeframe}`).then(r => r.json());
+        const opportunities = Array.isArray(data.opportunities) ? data.opportunities : [];
+        currentOpportunity = opportunities.length ? normalizeOpportunity(opportunities[0]) : null;
+        btcRegime = data?.btc_context?.trend_status || 'TRENDING_UP';
+        if (currentOpportunity) {
+          document.getElementById('contextTitle').textContent = `${currentOpportunity.symbol} - ${currentOpportunity.score.toFixed(0)}/100`;
+          document.getElementById('contextBody').textContent = `${currentOpportunity.strategy}. Entrada ${currentOpportunity.entry_range}, stop ${currentOpportunity.stop_loss}, alvo T2 ${currentOpportunity.target_t2}. BTC: ${btcRegime}.`;
+          document.getElementById('companyStatus').textContent = 'contexto da empresa ativo';
+        } else {
+          document.getElementById('contextTitle').textContent = 'Sem oportunidade ativa';
+          document.getElementById('contextBody').textContent = 'O assistente continua disponivel para perguntas gerais de risco e mercado.';
+          document.getElementById('companyStatus').textContent = 'sem oportunidade ativa';
+        }
+      } catch (_) {
+        document.getElementById('companyStatus').textContent = 'backend indisponivel';
+        document.getElementById('contextBody').textContent = 'Nao foi possivel carregar o scanner agora.';
+      }
+    }
+
+    async function sendMsg() {
+      const input = document.getElementById('userInput');
+      const message = input.value.trim();
+      if (!message) return;
+      input.value = '';
+      addMessage('user', 'Voce', message);
+      addMessage('ai', 'Master Crypto AI', 'Analisando...');
+      const pending = document.querySelector('#chatMsgs .msg-ai:last-child');
+      try {
+        const res = await fetch('/api/master-crypto/analyst/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, opportunity: currentOpportunity, btc_regime: btcRegime }),
+        });
+        const data = await res.json();
+        pending.innerHTML = `<strong>Master Crypto AI</strong>${esc(data.reply || 'Nao consegui montar uma resposta agora.')}`;
+      } catch (_) {
+        pending.innerHTML = '<strong>Master Crypto AI</strong>O motor do analista esta indisponivel neste momento.';
+      }
+      document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+    }
+
+    function askSuggestion(text) {
+      document.getElementById('userInput').value = text;
+      sendMsg();
+    }
+
+    document.getElementById('userInput').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') sendMsg();
+    });
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await loadContext();
+      await loadSuggestions();
+      addMessage('ai', 'Master Crypto AI', 'Contexto carregado. Posso explicar o stop, o alvo, o risco da banca ou o impacto do BTC sobre a oportunidade atual.');
+    });
+  </script>
+</body>
+</html>

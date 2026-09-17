@@ -143,10 +143,15 @@
                     <input type="number" min="500" id="f-limite_parte_whatsapp" class="form-control" placeholder="3500">
                     <div class="form-hint-default">Acima disso, o texto e dividido em varias mensagens "(1/N)". Padrao: 3500.</div>
                   </div>
-                  <div class="form-group" style="margin-bottom:0">
+                  <div class="form-group">
                     <label class="form-label">Limite para oferecer anexo (caracteres)</label>
                     <input type="number" min="500" id="f-limite_pergunta_anexo_caracteres" class="form-control" placeholder="8000">
                     <div class="form-hint-default">Acima disso, ao final da mensagem completa (dividida em partes), o sistema pergunta se o usuario quer PDF/Excel. O texto nunca e resumido — o detalhamento completo sempre e enviado. Padrao: 8000.</div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Itens exibidos na listagem (top destaques)</label>
+                    <input type="number" min="1" id="f-top_destaques_whatsapp" class="form-control" placeholder="50">
+                    <div class="form-hint-default">Quantos itens aparecem na lista de texto antes de cortar para "... e mais N" e oferecer PDF/Excel com a lista completa. 0 ou vazio = usa o padrao (50).</div>
                   </div>
                 </div>
               </section>
@@ -219,7 +224,7 @@
   }
 
   const CAMPOS_NUMERICOS = [
-    'limite_parte_whatsapp', 'limite_pergunta_anexo_caracteres',
+    'limite_parte_whatsapp', 'limite_pergunta_anexo_caracteres', 'top_destaques_whatsapp',
     'anexar_pdf_automatico_acima_de', 'anexar_excel_automatico_acima_de',
   ];
 
@@ -336,6 +341,7 @@
         { title: 'Empresa', field: 'empresa_id', width: 110, headerFilter: true },
         { title: 'Limite Parte', field: 'limite_parte_whatsapp', width: 120, hozAlign: 'center' },
         { title: 'Limite Oferta Anexo', field: 'limite_pergunta_anexo_caracteres', width: 150, hozAlign: 'center' },
+        { title: 'Itens na Lista', field: 'top_destaques_whatsapp', width: 110, hozAlign: 'center' },
         { title: 'PDF Auto', field: 'anexar_pdf_automatico_acima_de', width: 100, hozAlign: 'center', formatter: c => {
           const v = Number(c.getValue() || 0);
           return v > 0 ? `<span class="badge-on">≥ ${v}</span>` : '<span class="badge-off">off</span>';

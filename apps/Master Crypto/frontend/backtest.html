@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backtest - Master Crypto AI</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="./css/master-crypto.css">
+  <style>
+    body { background: var(--bg-base, #f8fafc); padding: 16px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .toolbar { display:flex; align-items:end; gap:10px; flex-wrap:wrap; margin-bottom:12px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:12px; box-shadow:var(--shadow-sm); }
+    .field { display:flex; flex-direction:column; gap:4px; min-width:150px; }
+    .field label { font-size:11px; color:var(--text-lo); font-weight:800; text-transform:uppercase; }
+    .field input, .field select { height:34px; border:1px solid var(--border); border-radius:6px; padding:0 10px; color:var(--text-hi); background:#fff; }
+    .empty-state { height:200px; display:flex; align-items:center; justify-content:center; color:var(--text-lo); font-weight:800; }
+  </style>
+</head>
+<body>
+  <div class="page-kicker">ESTRATEGIAS / BACKTEST HISTORICO</div>
+  <div class="head-row">
+    <div class="head-title">
+      <span>Backtest & Performance</span>
+      <span class="head-count" id="statusText">aguardando execucao</span>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="field">
+      <label for="symbolInput">Ativo</label>
+      <input id="symbolInput" value="BTCUSDT">
+    </div>
+    <div class="field">
+      <label for="timeframeInput">Timeframe</label>
+      <select id="timeframeInput">
+        <option value="4h">4H</option>
+        <option value="1h">1H</option>
+        <option value="1d">1D</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="limitInput">Candles</label>
+      <input id="limitInput" type="number" min="60" max="1000" step="20" value="300">
+    </div>
+    <button class="btn btn-primary" type="button" onclick="runBacktest()">Executar</button>
+  </div>
+
+  <div class="meta-grid" id="metaGrid"></div>
+
+  <div class="table-card">
+    <div class="table-wrap">
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Entrada</th>
+            <th>Saida</th>
+            <th>Estrategia</th>
+            <th>Resultado</th>
+            <th>PNL %</th>
+            <th>PNL USD</th>
+          </tr>
+        </thead>
+        <tbody id="tradesBody"></tbody>
+      </table>
+      <div class="empty-state" id="emptyState">Execute um backtest para visualizar os resultados</div>
+    </div>
+  </div>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    function esc(value) {
+      return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+    }
+
+    function fmtPct(value) {
+      return `${Number(value || 0).toFixed(2)}%`;
+    }
+
+    function renderResult(data) {
+      document.getElementById('metaGrid').innerHTML = `
+        <div class="meta-item"><span>Candles analisados</span><strong>${Number(data.total_candles_analyzed || 0)}</strong></div>
+        <div class="meta-item"><span>Total de operacoes</span><strong>${Number(data.total_trades || 0)}</strong></div>
+        <div class="meta-item"><span>Win rate</span><strong class="text-positive">${fmtPct(data.win_rate_pct)}</strong></div>
+        <div class="meta-item"><span>Profit factor</span><strong>${Number(data.profit_factor || 0).toFixed(2)}</strong></div>
+        <div class="meta-item"><span>Max drawdown</span><strong class="text-negative">${fmtPct(data.max_drawdown_pct)}</strong></div>
+        <div class="meta-item"><span>Retorno liquido</span><strong class="${Number(data.net_return_pct || 0) >= 0 ? 'text-positive' : 'text-negative'}">${fmtPct(data.net_return_pct)}</strong></div>
+      `;
+      const trades = Array.isArray(data.trades) ? data.trades : [];
+      const tbody = document.getElementById('tradesBody');
+      const empty = document.getElementById('emptyState');
+      tbody.innerHTML = trades.map(trade => `
+        <tr>
+          <td>${esc(trade.entry_idx)}</td>
+          <td>${esc(trade.exit_idx)}</td>
+          <td><span class="badge badge-blue">${esc(trade.strategy)}</span></td>
+          <td><span class="badge ${trade.result === 'WIN' ? 'badge-ok' : 'badge-red'}">${esc(trade.result)}</span></td>
+          <td class="${Number(trade.pnl_pct || 0) >= 0 ? 'text-positive' : 'text-negative'}">${fmtPct(trade.pnl_pct)}</td>
+          <td class="${Number(trade.pnl_usd || 0) >= 0 ? 'text-positive' : 'text-negative'}">${Number(trade.pnl_usd || 0).toFixed(2)}</td>
+        </tr>
+      `).join('');
+      empty.style.display = trades.length ? 'none' : 'flex';
+    }
+
+    async function runBacktest() {
+      await (window._iahubAuthReady || Promise.resolve());
+      const symbol = document.getElementById('symbolInput').value.trim().replace('/', '').toUpperCase() || 'BTCUSDT';
+      const timeframe = document.getElementById('timeframeInput').value;
+      const limit = Number(document.getElementById('limitInput').value || 300);
+      document.getElementById('statusText').textContent = 'executando...';
+      try {
+        const data = await fetch(`/api/master-crypto/backtest/run?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}&limit=${limit}`).then(r => r.json());
+        renderResult(data);
+        document.getElementById('statusText').textContent = `${data.symbol || symbol} - ${String(data.timeframe || timeframe).toUpperCase()}`;
+      } catch (_) {
+        document.getElementById('statusText').textContent = 'backend indisponivel';
+        document.getElementById('metaGrid').innerHTML = '<div class="meta-item"><span>Status</span><strong>Falha ao executar</strong></div>';
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', runBacktest);
+  </script>
+</body>
+</html>

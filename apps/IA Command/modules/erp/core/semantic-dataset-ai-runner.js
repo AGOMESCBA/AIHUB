@@ -4,6 +4,7 @@ const aiProviderClient = require('./ai-provider-client');
 const connectionFactory = require('../providers/connection-factory');
 const responseFormatter = require('./response-formatter');
 const canonicalWhatsappFormat = require('./canonical-whatsapp-format');
+const whatsappResponseConfig = require('../../whatsapp/whatsapp-response-config');
 const { resolverVendedorFixoPorEmpresa } = require('../totvs_protheus/guards/vendedor-seguranca');
 const { resolverClienteFixoPorEmpresa } = require('../totvs_protheus/guards/cliente-seguranca');
 const entitySqlGuard = require('../totvs_protheus/guards/entity-sql-guard');
@@ -1119,7 +1120,7 @@ function _intentFormatacaoDataset(intent = {}) {
   return clone;
 }
 
-function _formatarRespostaDataset(rows, intent, mensagem, dataset = {}) {
+function _formatarRespostaDataset(rows, intent, mensagem, dataset = {}, empresaId = null) {
   const camposDataset = _campos(dataset);
   const ehProtheus = String(dataset.erp || 'protheus').trim().toLowerCase() === 'protheus';
 
@@ -1141,6 +1142,7 @@ function _formatarRespostaDataset(rows, intent, mensagem, dataset = {}) {
       contextoConsulta: mensagem,
       mensagem,
       nomeModulo: 'Faturamento',
+      limiteItensLista: empresaId ? whatsappResponseConfig.obterConfigWhatsapp(empresaId).top_destaques_whatsapp : undefined,
     });
     if (canonico) return canonico;
   } catch (_) {
@@ -1541,7 +1543,7 @@ async function executar(dataset, intent, empresaId, opts = {}) {
     const rows = intent._escopoExecucao === 'whatsapp_all'
       ? _normalizarRowsMultiempresa(rowsBrutas)
       : rowsBrutas;
-    const respostaFallback = _formatarRespostaDataset(rows, intent, mensagem, dataset);
+    const respostaFallback = _formatarRespostaDataset(rows, intent, mensagem, dataset, empresaId);
     const periodoCanonico = _periodoComDatas(intent?._periodoCanonicoResolvido)
       || _periodoComDatas(intent?.periodo)
       || _periodoComDatas(plano?.periodo)

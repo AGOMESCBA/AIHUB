@@ -12,6 +12,7 @@ const whatsappResponseConfig = require('./whatsapp-response-config');
 const CAMPOS_EDITAVEIS = [
   'limite_parte_whatsapp',
   'limite_pergunta_anexo_caracteres',
+  'top_destaques_whatsapp',
   'anexar_pdf_automatico_acima_de',
   'anexar_excel_automatico_acima_de',
   'formato_padrao_anexo',
@@ -40,6 +41,12 @@ module.exports = function registrarRotasWhatsappResponseConfig(app, { requireAut
       if (campo === 'formato_padrao_anexo') {
         const v = String(body[campo] || '').trim().toLowerCase();
         campos[campo] = ['pdf', 'excel'].includes(v) ? v : null;
+      } else if (campo === 'top_destaques_whatsapp') {
+        // Diferente dos campos "acima_de" (onde 0 = desativado e' um valor valido), aqui
+        // 0/vazio significa "sem override" -> grava null e obterConfigWhatsapp cai no
+        // DEFAULT (50). Nao existe corte valido de 0 itens numa listagem.
+        const n = Number(body[campo]);
+        campos[campo] = Number.isFinite(n) && n > 0 ? n : null;
       } else {
         const n = Number(body[campo]);
         campos[campo] = Number.isFinite(n) && n >= 0 ? n : null;

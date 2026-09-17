@@ -19,6 +19,7 @@ const sessionStore = require('./session-store');
 const userPermissionsStore = require('./user-permissions-store');
 const { getDB } = require('../database');
 const whatsappChannels = require('../whatsapp/channel-store');
+const whatsappResponseConfig = require('../whatsapp/whatsapp-response-config');
 
 const PROTHEUS_SECRET = process.env.IAC_PROTHEUS_CHAT_SECRET || '';
 const LAUNCH_TICKET_TTL_MS = 5 * 60 * 1000;
@@ -779,13 +780,14 @@ function montarGradeTexto(rows, limiteLinhas = 12) {
   return linhas.join('\n');
 }
 
-function montarMensagemEncaminhamento({ pergunta, resumo, rows }) {
+function montarMensagemEncaminhamento({ pergunta, resumo, rows, empresaId = null }) {
   const perguntaTxt = String(pergunta || '(sem pergunta registrada)').trim();
   const rowsLista = Array.isArray(rows) ? rows : [];
   const textoCanonico = rowsLista.length
     ? getCanonicalWhatsappFormat().renderSingle(rowsLista, {
         contextoConsulta: perguntaTxt,
         nomeModulo: 'IA Command',
+        limiteItensLista: empresaId ? whatsappResponseConfig.obterConfigWhatsapp(empresaId).top_destaques_whatsapp : undefined,
       })
     : null;
 
@@ -1682,7 +1684,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
 
       const pergunta = perguntaDaResposta({ sessaoId: req.params.id, respostaCriadaEm: relatorio.criadoEm });
       const resumo = resumoDaResposta(relatorio.texto);
-      const texto = montarMensagemEncaminhamento({ pergunta, resumo, rows: relatorio.rows });
+      const texto = montarMensagemEncaminhamento({ pergunta, resumo, rows: relatorio.rows, empresaId });
 
       perfLog('GET /whatsapp-preview', inicio, { status: 200, empresaId, rows: relatorio.rows?.length || 0 });
       res.json({
@@ -1801,7 +1803,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
 
       const pergunta = perguntaDaResposta({ sessaoId: req.params.id, respostaCriadaEm: relatorio.criadoEm });
       const resumo = resumoDaResposta(relatorio.texto);
-      const texto = montarMensagemEncaminhamento({ pergunta, resumo, rows: relatorio.rows });
+      const texto = montarMensagemEncaminhamento({ pergunta, resumo, rows: relatorio.rows, empresaId });
 
       const resultados = [];
       for (const contato of contatos) {

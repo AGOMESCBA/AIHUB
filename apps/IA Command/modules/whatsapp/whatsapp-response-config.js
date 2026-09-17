@@ -9,6 +9,7 @@ const { getDB } = require('../database');
 const DEFAULTS = {
   limite_parte_whatsapp: 3500,
   limite_pergunta_anexo_caracteres: 8000,
+  top_destaques_whatsapp: 50,          // itens exibidos na listagem antes de cortar para "... e mais N"
   anexar_pdf_automatico_acima_de: 0,   // 0 = desativado
   anexar_excel_automatico_acima_de: 0, // 0 = desativado
   formato_padrao_anexo: 'excel',

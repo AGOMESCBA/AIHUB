@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Noticias & Sentimento - Master Crypto AI</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="./css/master-crypto.css">
+  <style>
+    body { background: var(--bg-base, #f8fafc); padding: 16px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .news-list { display:flex; flex-direction:column; gap:10px; }
+    .news-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow-sm); }
+    .news-card h4 { margin: 0 0 6px; color: var(--text-hi); font-size: 15px; }
+    .news-card p { margin: 0; color: var(--text-md); font-size: 13px; line-height: 1.5; }
+    .news-meta { font-size: 11px; color: var(--text-lo); font-weight: 800; margin-top: 8px; text-transform: uppercase; }
+    .empty-state { height:220px; display:flex; align-items:center; justify-content:center; color:var(--text-lo); font-weight:800; }
+  </style>
+</head>
+<body>
+  <div class="page-kicker">ESTRATEGIAS / NOTICIAS & SENTIMENTO</div>
+  <div class="head-row">
+    <div class="head-title">
+      <span>Noticias & Sentimento Macro</span>
+      <span class="head-count" id="statusText">carregando...</span>
+    </div>
+    <div class="head-actions">
+      <button class="btn btn-secondary" type="button" onclick="loadNews()">Atualizar</button>
+    </div>
+  </div>
+
+  <div class="meta-grid" id="sentimentGrid"></div>
+  <div class="news-list" id="newsList"></div>
+  <div class="empty-state" id="emptyState" style="display:none">Nenhuma noticia retornada pelo motor</div>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    function esc(value) {
+      return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+    }
+
+    function firstDefined(obj, keys, fallback = '-') {
+      for (const key of keys) if (obj && obj[key] != null && obj[key] !== '') return obj[key];
+      return fallback;
+    }
+
+    function renderSentiment(summary) {
+      document.getElementById('sentimentGrid').innerHTML = `
+        <div class="meta-item"><span>Sentimento geral</span><strong>${esc(firstDefined(summary, ['overall_sentiment', 'sentiment', 'label']))}</strong></div>
+        <div class="meta-item"><span>Score macro</span><strong class="text-positive">${esc(firstDefined(summary, ['score', 'sentiment_score', 'impact_score'], 0))}</strong></div>
+        <div class="meta-item"><span>Noticias avaliadas</span><strong>${esc(firstDefined(summary, ['news_count', 'count'], '-'))}</strong></div>
+        <div class="meta-item"><span>Modo</span><strong>Feed protegido IAHUB</strong></div>
+      `;
+    }
+
+    function renderArticles(articles) {
+      const list = document.getElementById('newsList');
+      const empty = document.getElementById('emptyState');
+      list.innerHTML = articles.map(article => {
+        const title = firstDefined(article, ['title_pt', 'title', 'headline']);
+        const summary = firstDefined(article, ['summary_pt', 'summary', 'description'], '');
+        const source = firstDefined(article, ['source', 'publisher']);
+        const sentiment = firstDefined(article, ['sentiment_pt', 'sentiment']);
+        const impact = firstDefined(article, ['impact_score', 'score']);
+        return `
+          <article class="news-card">
+            <h4>${esc(title)}</h4>
+            <p>${esc(summary)}</p>
+            <div class="news-meta">${esc(source)} - Sentimento: ${esc(sentiment)} - Impacto ${esc(impact)}</div>
+          </article>
+        `;
+      }).join('');
+      empty.style.display = articles.length ? 'none' : 'flex';
+    }
+
+    async function loadNews() {
+      await (window._iahubAuthReady || Promise.resolve());
+      document.getElementById('statusText').textContent = 'consultando feed...';
+      try {
+        const data = await fetch('/api/master-crypto/news/feed?limit=10').then(r => r.json());
+        const summary = data.sentiment_summary || {};
+        renderSentiment({ ...summary, news_count: data.news_count });
+        renderArticles(Array.isArray(data.articles) ? data.articles : []);
+        document.getElementById('statusText').textContent = `${Number(data.news_count || 0)} noticias`;
+      } catch (_) {
+        document.getElementById('statusText').textContent = 'backend indisponivel';
+        renderSentiment({});
+        renderArticles([]);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', loadNews);
+  </script>
+</body>
+</html>

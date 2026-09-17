@@ -76,6 +76,15 @@ function keyNorm(s) {
   return norm(s).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 }
 
+// Quantos itens aparecem numa listagem antes de cortar para "... e mais N". Configuravel
+// por empresa (whatsapp_response_config.top_destaques_whatsapp, repassado via opts pelo
+// service.js); 0/ausente/invalido cai no padrao historico de 50.
+const LIMITE_ITENS_LISTA_PADRAO = 50;
+function limiteItensLista(opts) {
+  const n = Number(opts?.limiteItensLista);
+  return Number.isFinite(n) && n > 0 ? n : LIMITE_ITENS_LISTA_PADRAO;
+}
+
 function toNumber(v) {
   const n = parseNumber(v);
   return n === null ? 0 : n;
@@ -1434,11 +1443,12 @@ function renderAllShapesMistos(sucessos, shapes, opts = {}) {
   }
   linhas.push('');
   if (entradasDim) {
+    const limite = limiteItensLista(opts);
     linhas.push(`\u{1F4CB} *Por ${dimLabel}*`);
-    entradasDim.slice(0, 50).forEach(([label, totais], idx) => {
+    entradasDim.slice(0, limite).forEach(([label, totais], idx) => {
       linhas.push(`  ${idx + 1}. ${labelValorDimensao(dimBase, label)}: ${valsMetricasCanonicas(totais, metricasCanon, opts)}`);
     });
-    if (entradasDim.length > 50) linhas.push(`  ... e mais ${entradasDim.length - 50}`);
+    if (entradasDim.length > limite) linhas.push(`  ... e mais ${entradasDim.length - limite}`);
     linhas.push('');
   }
   linhas.push(`\u{1F9FE} *Subtotal*: ${valsMetricasCanonicas(totalGeral, metricasCanonTotal, opts)}`);
@@ -1604,7 +1614,8 @@ function ordenarEntradasDimensao(entries, dim, primary) {
     : (gb[primary] || gb.total?.[primary] || 0) - (ga[primary] || ga.total?.[primary] || 0));
 }
 
-function renderDuasDimensoesComTemporalUnico(rows, shape, linhas, contexto) {
+function renderDuasDimensoesComTemporalUnico(rows, shape, linhas, contexto, opts = {}) {
+  const limite = Math.round(limiteItensLista(opts) * 1.6);
   const dimItem = shape.dimensoes.find(dim => dim !== contexto.dim);
   if (!dimItem) return false;
 
@@ -1628,7 +1639,7 @@ function renderDuasDimensoesComTemporalUnico(rows, shape, linhas, contexto) {
 
   linhas.push(`\u{1F4CB} *Por ${labelDimensao(dimItem)}*`);
   linhas.push(`\u{1F5D3} *${labelDimensao(contexto.dim)}: ${labelValorDimensao(contexto.dim, contexto.valor)}*`);
-  entradas.slice(0, 80).forEach(([item, totais], idx) => {
+  entradas.slice(0, limite).forEach(([item, totais], idx) => {
     if (itemEhCategoria) {
       linhas.push(`  ${idx + 1}. ${valsMetricasPorCategoria(totais, shape.metricas, item)}`);
       return;
@@ -1636,7 +1647,7 @@ function renderDuasDimensoesComTemporalUnico(rows, shape, linhas, contexto) {
     const label = labelValorDimensao(dimItem, item);
     linhas.push(`  ${idx + 1}. ${labelDimensao(dimItem)} ${label}: ${valsMetricas(totais, shape.metricas)}`);
   });
-  if (entradas.length > 80) linhas.push(`  ... e mais ${entradas.length - 80}`);
+  if (entradas.length > limite) linhas.push(`  ... e mais ${entradas.length - limite}`);
 
   linhas.push('');
   const totalStr = resultado ? `${resultado.label}: *${brl(resultado.valor)}*` : valsMetricas(totalGeral, shape.metricas);
@@ -1645,10 +1656,11 @@ function renderDuasDimensoesComTemporalUnico(rows, shape, linhas, contexto) {
   return true;
 }
 
-function renderDuasDimensoes(rows, shape, linhas) {
+function renderDuasDimensoes(rows, shape, linhas, opts = {}) {
+  const limite = limiteItensLista(opts);
   const detalheDoc = shape.tipo === 'detalhe_documento';
   const temporalUnico = !detalheDoc ? contextoTemporalUnico(rows, shape.dimensoes) : null;
-  if (temporalUnico && renderDuasDimensoesComTemporalUnico(rows, shape, linhas, temporalUnico)) return;
+  if (temporalUnico && renderDuasDimensoesComTemporalUnico(rows, shape, linhas, temporalUnico, opts)) return;
 
   const { outerDim, innerDim, grupos, totalGeral } = montarDuasDimensoes(rows, shape);
   const primary = shape.metricas[0];
@@ -1660,7 +1672,7 @@ function renderDuasDimensoes(rows, shape, linhas) {
 
   linhas.push(`\u{1F4CB} *${titulo}*`);
   const gruposOrdenados = ordenarEntradasDimensao([...grupos.entries()], outerDim, primary);
-  gruposOrdenados.slice(0, 50).forEach(([outer, grupo], idxGrupo) => {
+  gruposOrdenados.slice(0, limite).forEach(([outer, grupo], idxGrupo) => {
     const resultadoGrupo = innerEhCategoria ? resultadoCategorias(totaisPorCategoriaItens(grupo.itens, shape.metricas)) : null;
     const valsGrupo = resultadoGrupo
       ? `${resultadoGrupo.label}: *${brl(resultadoGrupo.valor)}*`
@@ -1669,17 +1681,17 @@ function renderDuasDimensoes(rows, shape, linhas) {
     linhas.push(`${idxGrupo + 1}. *${labelValorDimensao(outerDim, outer)}*: ${valsGrupo}`);
 
     const itensOrdenados = ordenarEntradasDimensao([...grupo.itens.entries()], innerDim, primary);
-    itensOrdenados.slice(0, 50).forEach(([inner, totais], idxItem) => {
+    itensOrdenados.slice(0, limite).forEach(([inner, totais], idxItem) => {
       const label = detalheDoc ? labelDocumento(inner) : labelValorDimensao(innerDim, inner);
       const valsItem = outerEhCategoria
         ? valsMetricasPorCategoria(totais, shape.metricas, outer)
         : innerEhCategoria ? valsMetricasPorCategoria(totais, shape.metricas, inner) : valsMetricas(totais, shape.metricas);
       linhas.push(`   ${idxItem + 1}. ${label}: ${valsItem}`);
     });
-    if (itensOrdenados.length > 50) linhas.push(`   ... e mais ${itensOrdenados.length - 50}`);
+    if (itensOrdenados.length > limite) linhas.push(`   ... e mais ${itensOrdenados.length - limite}`);
     linhas.push(`   \u{1F9FE} Subtotal: ${valsGrupo}`);
   });
-  if (gruposOrdenados.length > 50) linhas.push(`... e mais ${gruposOrdenados.length - 50}`);
+  if (gruposOrdenados.length > limite) linhas.push(`... e mais ${gruposOrdenados.length - limite}`);
 
   linhas.push('');
   const totaisCategoria = outerEhCategoria
@@ -1924,7 +1936,10 @@ function renderDetalheMultidimensional(rows, shape, linhas) {
   linhas.push(`*Total Geral*: ${valsMetricas(totalGeral, shape.metricas)}`);
 }
 
-function renderMultiplasDimensoes(rows, shape, linhas) {
+function renderMultiplasDimensoes(rows, shape, linhas, opts = {}) {
+  // Combinacoes de 3+ dimensoes geram mais linhas por grupo; mantem a mesma proporcao
+  // historica (80 = 50 x 1.6) sobre o limite configurado, em vez de um valor fixo.
+  const limite = Math.round(limiteItensLista(opts) * 1.6);
   const temporalUnico = contextoTemporalUnico(rows, shape.dimensoes);
   let dimensoesExibicao = temporalUnico
     ? shape.dimensoes.filter(dim => dim !== temporalUnico.dim)
@@ -1948,13 +1963,13 @@ function renderMultiplasDimensoes(rows, shape, linhas) {
     return a.chave.join('|').localeCompare(b.chave.join('|'));
   });
 
-  entradas.slice(0, 80).forEach((grupo, idx) => {
+  entradas.slice(0, limite).forEach((grupo, idx) => {
     const dims = dimensoesExibicao
       .map((dim, i) => `${labelDimensao(dim)} ${labelValorDimensao(dim, grupo.chave[i])}`)
       .join(' | ');
     linhas.push(`  ${idx + 1}. ${dims}: ${valsMetricas(grupo.total, shape.metricas)}`);
   });
-  if (entradas.length > 80) linhas.push(`  ... e mais ${entradas.length - 80}`);
+  if (entradas.length > limite) linhas.push(`  ... e mais ${entradas.length - limite}`);
 
   linhas.push('');
   linhas.push(`\u{1F9FE} *Subtotal*: ${valsMetricas(totalGeral, shape.metricas)}`);
@@ -2030,7 +2045,7 @@ function renderMensalPorAno(linhas, dim, entradas, metricas, metricasTotal) {
   return true;
 }
 
-function renderSingle(rows, opts = {}) {
+function _renderSingleImpl(rows, opts = {}) {
   const shape = detectarShape(rows, opts);
   if (!shape) return null;
 
@@ -2070,7 +2085,7 @@ function renderSingle(rows, opts = {}) {
   }
 
   if (shape.tipo === 'duas_dimensoes' || shape.tipo === 'detalhe_documento') {
-    renderDuasDimensoes(rows, shape, linhas);
+    renderDuasDimensoes(rows, shape, linhas, opts);
     return finalizarComRodapeContexto(linhas, rows);
   }
 
@@ -2085,7 +2100,7 @@ function renderSingle(rows, opts = {}) {
   }
 
   if (shape.tipo === 'multiplas_dimensoes') {
-    renderMultiplasDimensoes(rows, shape, linhas);
+    renderMultiplasDimensoes(rows, shape, linhas, opts);
     return finalizarComRodapeContexto(linhas, rows);
   }
 
@@ -2127,12 +2142,13 @@ function renderSingle(rows, opts = {}) {
   const metricasTotal = metricasTotalizaveis(shape.metricas);
   const agrupouAnoMes = renderMensalPorAno(linhas, dim, entradas, shape.metricas, metricasTotal);
   if (!agrupouAnoMes) {
+    const limite = limiteItensLista(opts);
     linhas.push(`\u{1F4CB} *Por ${labelDimensao(dim)}*`);
-    entradas.slice(0, 50).forEach(([label, totais], idx) => {
+    entradas.slice(0, limite).forEach(([label, totais], idx) => {
       const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
       linhas.push(`  ${idx + 1}. ${labelValorDimensao(dim, label)}: ${vals}`);
     });
-    if (entradas.length > 50) linhas.push(`  ... e mais ${entradas.length - 50}`);
+    if (entradas.length > limite) linhas.push(`  ... e mais ${entradas.length - limite}`);
   }
 
   const totais = dimTemporal && temMetricaPosicional(shape.metricas)
@@ -2164,7 +2180,7 @@ function shapesCompativeis(shapes) {
   );
 }
 
-function renderAll(sucessos, opts = {}) {
+function _renderAllImpl(sucessos, opts = {}) {
   if (!Array.isArray(sucessos) || !sucessos.length) return null;
   if (sucessos.some(s => !Array.isArray(s.rows) || !s.rows.length)) return null;
   let shapes = sucessos.map(s => detectarShape(s.rows, opts));
@@ -2250,7 +2266,7 @@ function renderAll(sucessos, opts = {}) {
 
   if (shape.tipo === 'duas_dimensoes' || shape.tipo === 'detalhe_documento') {
     const rows = sucessos.flatMap(s => s.rows || []);
-    renderDuasDimensoes(rows, shape, linhas);
+    renderDuasDimensoes(rows, shape, linhas, opts);
     return finalizarComRodapeContexto(linhas, allRows);
   }
 
@@ -2268,7 +2284,7 @@ function renderAll(sucessos, opts = {}) {
 
   if (shape.tipo === 'multiplas_dimensoes') {
     const rows = sucessos.flatMap(s => s.rows || []);
-    renderMultiplasDimensoes(rows, shape, linhas);
+    renderMultiplasDimensoes(rows, shape, linhas, opts);
     return finalizarComRodapeContexto(linhas, rows);
   }
 
@@ -2329,11 +2345,12 @@ function renderAll(sucessos, opts = {}) {
     }
     linhas.push('');
     linhas.push(`\u{1F4CB} *Por ${labelDimensao(dim)}*`);
-    entradas.slice(0, 50).forEach(([label, totais], idx) => {
+    const limite = limiteItensLista(opts);
+    entradas.slice(0, limite).forEach(([label, totais], idx) => {
       const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col] || 0)}*`).join(' | ');
       linhas.push(`  ${idx + 1}. ${labelValorDimensao(dim, label)}: ${vals}`);
     });
-    if (entradas.length > 50) linhas.push(`  ... e mais ${entradas.length - 50}`);
+    if (entradas.length > limite) linhas.push(`  ... e mais ${entradas.length - limite}`);
     linhas.push('');
     linhas.push(`\u{1F9FE} *Subtotal*: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeral[col] || 0)}*`).join(' | ')}`);
     linhas.push('');
@@ -2358,7 +2375,7 @@ function renderAll(sucessos, opts = {}) {
         .sort(([labelA, a], [labelB, b]) => dimTemporal
           ? sortValorDimensao(dim, labelA).localeCompare(sortValorDimensao(dim, labelB))
           : (b[primary] || 0) - (a[primary] || 0))
-        .slice(0, 50)
+        .slice(0, limiteItensLista(opts))
         .forEach(([label, totais], idx) => {
           const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
           linhas.push(`  ${idx + 1}. ${labelValorDimensao(dim, label)}: ${vals}`);
@@ -2412,12 +2429,13 @@ function renderAll(sucessos, opts = {}) {
   }
   const agrupouAnoMes = renderMensalPorAno(linhas, dim, entradas, shape.metricas, metricasTotal);
   if (!agrupouAnoMes) {
+    const limite = limiteItensLista(opts);
     linhas.push(`\u{1F4CB} *Por ${labelDimensao(dim)}*`);
-    entradas.slice(0, 50).forEach(([label, totais], idx) => {
+    entradas.slice(0, limite).forEach(([label, totais], idx) => {
       const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
       linhas.push(`  ${idx + 1}. ${labelValorDimensao(dim, label)}: ${vals}`);
     });
-    if (entradas.length > 50) linhas.push(`  ... e mais ${entradas.length - 50}`);
+    if (entradas.length > limite) linhas.push(`  ... e mais ${entradas.length - limite}`);
   }
   linhas.push('');
   const totalGeralExibicao = {};
@@ -2430,6 +2448,39 @@ function renderAll(sucessos, opts = {}) {
 
   linhas.push(totalGeralLinha);
   return finalizarComRodapeContexto(linhas, allRows);
+}
+
+// Todos os pontos de corte de listagem emitem o mesmo literal "... e mais N" (ver
+// limiteItensLista acima) — detectar via regex evita instrumentar cada um dos ~8 pontos
+// de corte espalhados pelas funcoes de render com um 2o valor de retorno.
+const RE_CORTE_LISTA = /\.\.\. e mais (\d+)/;
+function _comMetadadosCorte(texto) {
+  if (typeof texto !== 'string') return { texto, cortouLista: false, itensOcultos: 0 };
+  const m = texto.match(RE_CORTE_LISTA);
+  return {
+    texto,
+    cortouLista: !!m,
+    itensOcultos: m ? Number(m[1]) : 0,
+  };
+}
+
+// renderSingle/renderAll sao consumidos hoje por 5+ call-sites de producao como STRING pura
+// (retorno direto, concatenacao em .join('\n')) — nunca mudar o retorno padrao para objeto.
+// Quem precisar do metadado de corte (hoje: _decidirFormatoResposta, para saber se deve
+// oferecer PDF/Excel mesmo com texto curto) passa opts.comMetadados=true e recebe
+// { texto, cortouLista, itensOcultos } em vez da string.
+function renderSingle(rows, opts = {}) {
+  const resultado = _renderSingleImpl(rows, opts);
+  if (!opts.comMetadados) return resultado;
+  if (resultado === null) return null;
+  return _comMetadadosCorte(resultado);
+}
+
+function renderAll(sucessos, opts = {}) {
+  const resultado = _renderAllImpl(sucessos, opts);
+  if (!opts.comMetadados) return resultado;
+  if (resultado === null) return null;
+  return _comMetadadosCorte(resultado);
 }
 
 module.exports = {

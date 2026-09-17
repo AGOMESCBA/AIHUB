@@ -10,6 +10,7 @@ const connectionFactory = require('../erp/providers/connection-factory');
 const semanticDatasetRunner = require('../erp/core/semantic-dataset-ai-runner');
 const temporalContract = require('../erp/core/temporal-contract');
 const canonicalWhatsappFormat = require('../erp/core/canonical-whatsapp-format');
+const whatsappResponseConfig = require('../whatsapp/whatsapp-response-config');
 
 const SQL_HANDLERS = {
   compras: require('../erp/totvs_protheus/compras/ai-sql-handler-v2'),
@@ -423,13 +424,14 @@ function _contextoAgrupamentoSqlFixo(rows, titulo) {
 // (diferente de formatarAiSqlLocal, feito para agregacoes da IA sem GROUP BY explicito).
 // SQL fixo e escrito pelo proprio admin com colunas ja nomeadas para leitura — cada linha do
 // resultado e um registro distinto (ex: um chamado), nao uma metrica a ser consolidada.
-function _formatarSqlFixoGenerico(rows, titulo) {
+function _formatarSqlFixoGenerico(rows, titulo, empresaId = null) {
   const contexto = _contextoAgrupamentoSqlFixo(rows, titulo);
   try {
     const canonico = canonicalWhatsappFormat.renderSingle(rows, {
       contextoConsulta: contexto,
       mensagem: contexto,
       nomeModulo: 'Chamados',
+      limiteItensLista: empresaId ? whatsappResponseConfig.obterConfigWhatsapp(empresaId).top_destaques_whatsapp : undefined,
     });
     if (canonico) return canonico;
   } catch (_) {}
@@ -472,7 +474,7 @@ async function _executarSqlFixoGenerico(empresaId, job, erp, sql, sqlOriginal, d
     const titulo = job.pergunta || job.nome || null;
     resultado = {
       tipo: 'sucesso_ai_sql',
-      resposta_direta: _formatarSqlFixoGenerico(rows, titulo),
+      resposta_direta: _formatarSqlFixoGenerico(rows, titulo, empresaId),
       rows: rows || [],
       sql_gerado: sql,
       duracao_ms: Date.now() - t0,

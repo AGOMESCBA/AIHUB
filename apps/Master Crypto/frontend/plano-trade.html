@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plano de Trade - Master Crypto AI</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="./css/master-crypto.css">
+  <style>
+    body { background: var(--bg-base, #f8fafc); padding: 16px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .trade-shell { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, .8fr); gap: 14px; }
+    .chart-box { background: #0b0e11; border: 1px solid #1f2937; border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 14px; min-height: 320px; }
+    .chart-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; color:#e5e7eb; }
+    .chart-head strong { color:#f8fafc; }
+    canvas.binance-chart { width: 100%; height: 260px; display:block; background:#0b0e11; border-radius:8px; }
+    .side-stack { display:flex; flex-direction:column; gap:12px; }
+    .plan-note { color: var(--text-md); font-size: 13px; line-height: 1.55; margin: 0; }
+    .status-line { font-size:12px; color:var(--text-lo); margin-top:8px; }
+    @media (max-width: 980px) { .trade-shell { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="page-kicker">ANALISE / PLANO DE TRADE</div>
+  <div class="head-row">
+    <div class="head-title">
+      <span id="pageTitle">Plano de Trade</span>
+      <span class="head-count" id="pageSub">carregando...</span>
+    </div>
+    <div class="head-actions">
+      <button class="btn btn-secondary" type="button" onclick="loadPlan()">Atualizar</button>
+      <button class="btn btn-primary" type="button" onclick="startPaperTrade()">Simular compra</button>
+    </div>
+  </div>
+
+  <div class="trade-shell">
+    <section class="chart-box">
+      <div class="chart-head">
+        <strong id="chartTitle">Grafico Binance Pro</strong>
+        <span id="chartMeta">4H</span>
+      </div>
+      <canvas id="tradeCanvas" class="binance-chart"></canvas>
+    </section>
+
+    <aside class="side-stack">
+      <div class="meta-grid" id="planGrid"></div>
+      <div class="meta-item">
+        <span>Leitura operacional</span>
+        <p class="plan-note" id="planNote">Aguardando scanner.</p>
+        <div class="status-line" id="paperStatus"></div>
+      </div>
+      <div class="meta-item">
+        <span>Criterio IAHUB</span>
+        <p class="plan-note">A oportunidade vem do scanner global. A execucao simulada, banca e historico sao gravados somente na empresa ativa desta aba.</p>
+      </div>
+    </aside>
+  </div>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    let selectedOpportunity = null;
+    let candles = [];
+
+    function esc(value) {
+      return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+    }
+
+    function normalizeOpportunity(raw) {
+      const score = raw.opportunity || {};
+      const plan = raw.trade_plan || score.trade_plan || {};
+      const position = raw.position_sizing || {};
+      const totalScore = Number(raw.opportunity_score ?? score.total_score ?? raw.score ?? 0);
+      const entryMin = Number(plan.entry_zone_min ?? raw.entry_min ?? 0);
+      const entryMax = Number(plan.entry_zone_max ?? raw.entry_max ?? 0);
+      const stop = Number(plan.stop_loss ?? raw.stop_loss ?? 0);
+      const target2 = Number(plan.target_t2 ?? raw.target_2 ?? 0);
+      return {
+        symbol: raw.symbol || score.symbol || plan.symbol || '-',
+        score: totalScore,
+        strategy: raw.strategy || plan.strategy || '-',
+        entryLabel: entryMin && entryMax ? `${entryMin.toFixed(2)} - ${entryMax.toFixed(2)}` : '-',
+        stopLabel: stop ? stop.toFixed(2) : '-',
+        targetLabel: target2 ? target2.toFixed(2) : '-',
+        rr: Number(plan.risk_reward_ratio ?? raw.risk_reward_ratio ?? 0),
+        potential: Number(plan.potential_gain_pct || 0),
+        plan,
+        positionSizeUsd: Number(position.position_size_usd || 200),
+        currentPrice: entryMin && entryMax ? (entryMin + entryMax) / 2 : 0,
+      };
+    }
+
+    function renderEmpty(message) {
+      document.getElementById('pageSub').textContent = 'sem oportunidade';
+      document.getElementById('planGrid').innerHTML = '<div class="meta-item"><span>Status</span><strong>Nenhum plano ativo</strong></div>';
+      document.getElementById('planNote').textContent = message;
+      drawChart([]);
+    }
+
+    function renderPlan(op) {
+      document.getElementById('pageTitle').textContent = `Plano Estrategico - ${op.symbol}`;
+      document.getElementById('pageSub').textContent = `${op.strategy} - Score ${op.score.toFixed(0)}/100`;
+      document.getElementById('chartTitle').textContent = `${op.symbol} / Binance`;
+      document.getElementById('planGrid').innerHTML = `
+        <div class="meta-item"><span>Entrada ideal</span><strong style="color:#2563eb">${esc(op.entryLabel)}</strong></div>
+        <div class="meta-item"><span>Stop loss tecnico</span><strong class="text-negative">${esc(op.stopLabel)}</strong></div>
+        <div class="meta-item"><span>Alvo T2</span><strong class="text-positive">${esc(op.targetLabel)}</strong></div>
+        <div class="meta-item"><span>Risco/Retorno</span><strong>${op.rr ? `1:${op.rr}` : '-'}</strong></div>
+      `;
+      document.getElementById('planNote').textContent = `Setup ${op.strategy} com potencial estimado de ${op.potential ? op.potential.toFixed(2) + '%' : '-'} no alvo T2. Antes de executar, confira se o preco esta dentro da zona de entrada e respeite o risco configurado para a empresa.`;
+    }
+
+    async function loadPlan() {
+      await (window._iahubAuthReady || Promise.resolve());
+      document.getElementById('pageSub').textContent = 'carregando...';
+      try {
+        const summary = await fetch('/api/master-crypto/company/summary').then(r => r.json()).catch(() => ({}));
+        const settings = summary.settings || {};
+        const timeframe = settings.scanner_timeframe || '4h';
+        const topLimit = Number(settings.scanner_top_limit || 20);
+        document.getElementById('chartMeta').textContent = timeframe.toUpperCase();
+        const data = await fetch(`/api/master-crypto/opportunities/active?top_limit=${topLimit}&timeframe=${encodeURIComponent(timeframe)}`).then(r => r.json());
+        const list = Array.isArray(data.opportunities) ? data.opportunities : [];
+        if (!list.length) {
+          selectedOpportunity = null;
+          renderEmpty('O scanner nao retornou uma oportunidade valida no momento.');
+          return;
+        }
+        selectedOpportunity = normalizeOpportunity(list[0]);
+        renderPlan(selectedOpportunity);
+        await loadCandles(selectedOpportunity.symbol, timeframe);
+      } catch (_) {
+        selectedOpportunity = null;
+        renderEmpty('Nao foi possivel carregar o plano pelo backend agora.');
+      }
+    }
+
+    async function loadCandles(symbol, timeframe) {
+      try {
+        const cleanSymbol = String(symbol).replace('/', '');
+        const data = await fetch(`/api/master-crypto/market/candles?symbol=${encodeURIComponent(cleanSymbol)}&interval=${encodeURIComponent(timeframe)}&limit=60`).then(r => r.json());
+        candles = Array.isArray(data.candles) ? data.candles : [];
+      } catch (_) {
+        candles = [];
+      }
+      drawChart(candles);
+    }
+
+    function candleValue(candle, key, fallbackIndex) {
+      if (Array.isArray(candle)) return Number(candle[fallbackIndex]);
+      return Number(candle[key] ?? candle[key.toUpperCase()] ?? 0);
+    }
+
+    function drawChart(rows) {
+      const canvas = document.getElementById('tradeCanvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      ctx.fillStyle = '#0b0e11';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = '#1f2937';
+      for (let i = 1; i < 5; i += 1) {
+        const y = (canvas.height / 5) * i;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+      if (!rows.length) {
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '13px Segoe UI';
+        ctx.fillText('Sem candles disponiveis', 18, 34);
+        return;
+      }
+      const slice = rows.slice(-50);
+      const highs = slice.map(c => candleValue(c, 'high', 2));
+      const lows = slice.map(c => candleValue(c, 'low', 3));
+      const max = Math.max(...highs);
+      const min = Math.min(...lows);
+      const range = Math.max(max - min, 1);
+      const gap = canvas.width / slice.length;
+      slice.forEach((candle, index) => {
+        const open = candleValue(candle, 'open', 1);
+        const high = candleValue(candle, 'high', 2);
+        const low = candleValue(candle, 'low', 3);
+        const close = candleValue(candle, 'close', 4);
+        const x = index * gap + gap / 2;
+        const yHigh = canvas.height - ((high - min) / range) * (canvas.height - 22) - 11;
+        const yLow = canvas.height - ((low - min) / range) * (canvas.height - 22) - 11;
+        const yOpen = canvas.height - ((open - min) / range) * (canvas.height - 22) - 11;
+        const yClose = canvas.height - ((close - min) / range) * (canvas.height - 22) - 11;
+        ctx.strokeStyle = close >= open ? '#0ecb81' : '#ef4444';
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.beginPath();
+        ctx.moveTo(x, yHigh);
+        ctx.lineTo(x, yLow);
+        ctx.stroke();
+        ctx.fillRect(x - Math.max(gap * .28, 2), Math.min(yOpen, yClose), Math.max(gap * .56, 4), Math.max(Math.abs(yClose - yOpen), 2));
+      });
+    }
+
+    async function startPaperTrade() {
+      const status = document.getElementById('paperStatus');
+      if (!selectedOpportunity?.plan?.symbol) {
+        status.textContent = 'Nenhum plano valido carregado para simulacao.';
+        return;
+      }
+      status.textContent = 'Registrando simulacao nesta empresa...';
+      const tradeId = `${selectedOpportunity.symbol}-${Date.now()}`.replace(/[^A-Za-z0-9_-]/g, '_');
+      try {
+        const res = await fetch('/api/master-crypto/paper/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trade_id: tradeId,
+            symbol: selectedOpportunity.symbol,
+            current_market_price: selectedOpportunity.currentPrice,
+            trade_plan: selectedOpportunity.plan,
+            position_size_usd: selectedOpportunity.positionSizeUsd,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        status.textContent = res.ok && data.status !== 'REJECTED'
+          ? 'Compra simulada registrada na empresa atual.'
+          : (data.reason || 'Nao foi possivel registrar a simulacao.');
+      } catch (_) {
+        status.textContent = 'Backend indisponivel para paper trading.';
+      }
+    }
+
+    window.addEventListener('resize', () => drawChart(candles));
+    window.addEventListener('DOMContentLoaded', loadPlan);
+  </script>
+</body>
+</html>

@@ -40,6 +40,16 @@ const DEFAULT_SYSTEMS = [
     badge: 'IA Command',
     active: true,
   },
+  {
+    code: 'master-crypto',
+    name: 'Master Crypto AI',
+    description: 'Scanner 24x7 de Oportunidades, Plano de Trade, Analista IA e Ciclos do Bitcoin.',
+    url: '/app/master-crypto',
+    image_url: '',
+    accent: '#0ecb81',
+    badge: 'Master Crypto',
+    active: true,
+  },
 ];
 
 function listarSystems() {

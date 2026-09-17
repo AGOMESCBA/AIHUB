@@ -13,6 +13,7 @@ const responseFormatter = require('../core/response-formatter');
 const channelStore = require('../../whatsapp/channel-store');
 const queryPlan = require('../core/query-plan');
 const canonicalWhatsappFormat = require('../core/canonical-whatsapp-format');
+const whatsappResponseConfig = require('../../whatsapp/whatsapp-response-config');
 const canonicalIntent = require('../nlsql-cache/canonical-intent');
 const sqlTemplate = require('../nlsql-cache/sql-template');
 const nlsqlSemanticExamples = require('../nlsql-cache/nlsql-semantic-examples');
@@ -4027,7 +4028,11 @@ async function formatarResposta(spec, mensagem, rows, keys, cfg, intent, periodo
 
   // Tenta formatters programáticos antes de chamar IA (sem limite de tokens, sem truncamento)
   const contextoFormatacao = _buildContextoFormatacao(mensagem, contextoConsulta);
-  const canonico = canonicalWhatsappFormat.renderSingle(rows, { contextoConsulta: contextoFormatacao, nomeModulo });
+  const canonico = canonicalWhatsappFormat.renderSingle(rows, {
+    contextoConsulta: contextoFormatacao,
+    nomeModulo,
+    limiteItensLista: empresaId ? whatsappResponseConfig.obterConfigWhatsapp(empresaId).top_destaques_whatsapp : undefined,
+  });
   if (canonico) {
     if (intent) intent._formatacaoCaminho = 'canonico';
     return canonico;

@@ -31,6 +31,10 @@ function systemActiveFromRotinas(systemCode, rotinas) {
     return rotinas.some(rotina => String(rotina).startsWith('iac-'));
   }
 
+  if (systemCode === 'master-crypto') {
+    return rotinas.some(rotina => String(rotina).startsWith('mc-') || rotina === 'master-crypto');
+  }
+
   return false;
 }
 

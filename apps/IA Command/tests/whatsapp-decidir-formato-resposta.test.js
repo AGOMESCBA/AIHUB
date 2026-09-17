@@ -194,6 +194,27 @@ async function rodar() {
     assert(!fakeSelf._senderContextMap.get(senderAgendamentoAuto)?._aguardandoRespostaAnexo, 'agendamento nunca deve marcar oferta pendente');
   }
 
+  // 9. BUG REAL REPORTADO: lista cortada pelo formatador canonico ("... e mais N") mas
+  // texto ainda abaixo de limite_pergunta_anexo_caracteres (ex: 50 clientes cabem em
+  // ~1850 chars, bem abaixo do limiar de 8000) — antes desta correcao, o usuario nunca
+  // recebia a oferta de anexo nem via os itens ocultos em lugar nenhum.
+  {
+    limpar();
+    const senderCorte = SENDER_TESTE + '_lista_cortada';
+    const rows = Array.from({ length: 69 }, (_, i) => ({ cliente: `Cliente ${i}`, faturamento: 1000 - i }));
+    const resultado = { rows };
+    const texto = '📋 *Por Cliente*\n' + Array.from({ length: 50 }, (_, i) => `  ${i + 1}. Cliente ${i}: R$ ${1000 - i}`).join('\n') + '\n  ... e mais 19';
+    assert(texto.length < 8000, 'pre-condicao do teste: texto deve ficar abaixo do limiar padrao de oferta (reproduz o bug real)');
+    const decisao = await ServiceProto._decidirFormatoResposta.call(fakeSelf, resultado, {}, texto, { empresaId: EMPRESA_TESTE, sender: senderCorte });
+    assert(decisao.texto.includes('1 - PDF'), 'lista cortada deve oferecer anexo mesmo com texto curto');
+    assert(decisao.texto.includes('... e mais 19'), 'texto original (com o corte) deve ser preservado');
+    assert(decisao.texto.includes('A lista acima foi resumida'), 'mensagem de oferta deve mencionar o motivo real (lista resumida), nao "consulta grande" quando o texto e curto');
+    const ctx = fakeSelf._senderContextMap.get(senderCorte);
+    assert.strictEqual(ctx._aguardandoRespostaAnexo, true, 'deve marcar oferta pendente mesmo com texto curto');
+    const cached = getDB().prepare('SELECT rows_count FROM whatsapp_query_cache WHERE id = ?').get(ctx._anexoQueryCacheId);
+    assert.strictEqual(cached.rows_count, 69, 'anexo deve ser gerado a partir das 69 rows completas, nao das 50 exibidas no texto');
+  }
+
   limpar();
   console.log('whatsapp-decidir-formato-resposta.test.js: ok');
 }

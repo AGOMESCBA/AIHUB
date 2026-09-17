@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Configuracoes - Master Crypto AI</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="./css/master-crypto.css">
+  <style>
+    body { background: #f8fafc; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .card-box { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); margin-bottom: 16px; }
+    .form-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px; max-width: 860px; }
+    .form-group { margin-bottom: 0; }
+    .form-group label { display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 6px; }
+    .form-control { width: 100%; height: 38px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 12px; font-size: 14px; box-sizing:border-box; }
+    .form-actions { display:flex; align-items:center; gap:10px; margin-top:18px; }
+    .status-line { font-size: 12px; color: var(--text-lo); }
+  </style>
+</head>
+<body>
+<div class="page-kicker">CONFIGURACAO / PARAMETROS & RISCO</div>
+<div class="head-row">
+  <div>
+    <div class="head-title">Ajustes do Motor Algoritmico & Scanner 24x7</div>
+    <div class="status-line" id="statusLine">Carregando parametros da empresa...</div>
+  </div>
+</div>
+
+<div class="card-box">
+  <div class="form-grid">
+    <div class="form-group">
+      <label for="initial_bank_usd">Banca inicial por empresa (USD)</label>
+      <input id="initial_bank_usd" type="number" class="form-control" min="1" step="100">
+    </div>
+    <div class="form-group">
+      <label for="risk_per_trade_pct">Risco por Trade (% da Banca)</label>
+      <input id="risk_per_trade_pct" type="number" class="form-control" min="0.1" max="100" step="0.1">
+    </div>
+    <div class="form-group">
+      <label for="min_risk_reward_ratio">Relacao Risco/Retorno Minima (R:R)</label>
+      <input id="min_risk_reward_ratio" type="number" class="form-control" min="0.1" step="0.1">
+    </div>
+    <div class="form-group">
+      <label for="scanner_top_limit">Profundidade Padrao do Scanner</label>
+      <select id="scanner_top_limit" class="form-control">
+        <option value="10">Top 10 Criptomoedas</option>
+        <option value="20">Top 20 Criptomoedas</option>
+        <option value="30">Top 30 Criptomoedas</option>
+        <option value="50">Top 50 Criptomoedas</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="scanner_timeframe">Timeframe padrao</label>
+      <select id="scanner_timeframe" class="form-control">
+        <option value="1h">1H</option>
+        <option value="4h">4H</option>
+        <option value="1d">1D</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="mode">Modo operacional</label>
+      <select id="mode" class="form-control">
+        <option value="demo">Simulacao por empresa</option>
+        <option value="live-disabled">Exchange real desabilitada</option>
+      </select>
+    </div>
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-primary" type="button" onclick="saveSettings()">Salvar Parametros</button>
+    <button class="btn btn-secondary" type="button" onclick="loadSettings()">Recarregar</button>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script>
+  const fields = ['initial_bank_usd', 'risk_per_trade_pct', 'min_risk_reward_ratio', 'scanner_top_limit', 'scanner_timeframe', 'mode'];
+
+  async function loadSettings() {
+    await (window._iahubAuthReady || Promise.resolve());
+    setStatus('Carregando parametros da empresa...');
+    try {
+      const data = await fetch('/api/master-crypto/company/settings').then(r => r.json());
+      fields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && data[id] !== undefined) el.value = data[id];
+      });
+      setStatus(`Parametros carregados para ${window._iahubEmpresa?.nome || 'empresa selecionada'}.`);
+    } catch (err) {
+      setStatus('Nao foi possivel carregar os parametros desta empresa.');
+    }
+  }
+
+  async function saveSettings() {
+    const body = {
+      initial_bank_usd: Number(document.getElementById('initial_bank_usd').value),
+      risk_per_trade_pct: Number(document.getElementById('risk_per_trade_pct').value),
+      min_risk_reward_ratio: Number(document.getElementById('min_risk_reward_ratio').value),
+      scanner_top_limit: Number(document.getElementById('scanner_top_limit').value),
+      scanner_timeframe: document.getElementById('scanner_timeframe').value,
+      mode: document.getElementById('mode').value,
+    };
+    setStatus('Salvando parametros...');
+    const res = await fetch('/api/master-crypto/company/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      setStatus('Nao foi possivel salvar os parametros.');
+      return;
+    }
+    setStatus('Parametros salvos para esta empresa.');
+    await loadSettings();
+  }
+
+  function setStatus(text) {
+    document.getElementById('statusLine').textContent = text;
+  }
+
+  window.addEventListener('DOMContentLoaded', loadSettings);
+</script>
+</body>
+</html>

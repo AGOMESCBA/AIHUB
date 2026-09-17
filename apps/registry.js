@@ -93,6 +93,18 @@ const APPS = {
       fromRoot('modules', 'configuracoes', 'frontend'),
     ],
   },
+  masterCrypto: {
+    code: 'master-crypto',
+    name: 'Master Crypto AI',
+    rootDir: fromRoot('apps', 'Master Crypto'),
+    frontendDir: fromRoot('apps', 'Master Crypto', 'frontend'),
+    backendDir: fromRoot('apps', 'Master Crypto', 'backend'),
+    staticDirs: [
+      fromRoot('apps', 'Master Crypto', 'frontend'),
+      fromRoot('packages', 'ui', 'frontend'),
+      fromRoot('packages', 'auth', 'frontend'),
+    ],
+  },
 };
 
 module.exports = {

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Historico de Trades - Master Crypto AI</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="./css/master-crypto.css">
+  <style>
+    body { background: #f8fafc; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .empty-state { height: 260px; display: flex; align-items: center; justify-content: center; color: var(--text-lo); font-weight: 800; }
+    .status-line { font-size: 12px; color: var(--text-lo); margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+<div class="page-kicker">SIMULACAO / HISTORICO DE TRADES</div>
+<div class="head-row">
+  <div>
+    <div class="head-title">Historico de Execucoes Encerradas</div>
+    <div class="status-line" id="statusLine">Carregando historico da empresa...</div>
+  </div>
+  <div class="head-actions">
+    <button class="btn btn-secondary" type="button" onclick="loadHistory()">Atualizar</button>
+  </div>
+</div>
+
+<div class="table-card">
+  <div class="table-wrap" style="min-height:340px">
+    <table class="history-table">
+      <thead>
+        <tr>
+          <th>Data/Hora</th>
+          <th>Ativo</th>
+          <th>Estrategia</th>
+          <th>Entrada</th>
+          <th>Saida</th>
+          <th>Status</th>
+          <th>Resultado Liquido</th>
+        </tr>
+      </thead>
+      <tbody id="historyBody"></tbody>
+    </table>
+    <div class="empty-state" id="emptyState" style="display:none">Nenhum trade encerrado nesta empresa</div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script>
+  const fmtUsd = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'USD' });
+
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+  }
+
+  function fmtDate(value) {
+    if (!value) return '-';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '-';
+    return d.toLocaleString('pt-BR');
+  }
+
+  async function loadHistory() {
+    await (window._iahubAuthReady || Promise.resolve());
+    const status = document.getElementById('statusLine');
+    status.textContent = 'Atualizando historico da empresa...';
+    try {
+      const data = await fetch('/api/master-crypto/paper/history').then(r => r.json());
+      renderHistory(Array.isArray(data.trades) ? data.trades : []);
+      status.textContent = `Historico carregado para ${window._iahubEmpresa?.nome || 'empresa selecionada'}.`;
+    } catch (err) {
+      renderHistory([]);
+      status.textContent = 'Nao foi possivel carregar o historico desta empresa.';
+    }
+  }
+
+  function renderHistory(trades) {
+    const tbody = document.getElementById('historyBody');
+    const empty = document.getElementById('emptyState');
+    tbody.innerHTML = '';
+    empty.style.display = trades.length ? 'none' : 'flex';
+    trades.forEach(trade => {
+      const pnl = Number(trade.pnl_usd || 0);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${fmtDate(trade.closed_at || trade.opened_at)}</td>
+        <td><strong>${esc(trade.symbol)}</strong></td>
+        <td>${esc(trade.strategy)}</td>
+        <td>${fmtUsd.format(Number(trade.simulated_fill_price || trade.entry_price || 0))}</td>
+        <td>${trade.closed_at ? esc(trade.close_reason || 'Encerrado') : '-'}</td>
+        <td><span class="badge ${pnl >= 0 ? 'badge-ok' : 'badge-red'}">${esc(trade.status)}</span></td>
+        <td><span class="${pnl >= 0 ? 'text-positive' : 'text-negative'}">${pnl >= 0 ? '+' : ''}${fmtUsd.format(pnl)} (${Number(trade.pnl_pct || 0).toFixed(2)}%)</span></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  window.addEventListener('DOMContentLoaded', loadHistory);
+</script>
+</body>
+</html>

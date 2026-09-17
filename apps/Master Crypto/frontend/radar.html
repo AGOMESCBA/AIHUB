@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Radar de Oportunidades - Master Crypto AI</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="./css/master-crypto.css">
+  <style>
+    body { background: var(--bg-base, #f8fafc); padding: 16px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .table-wrap { height: calc(100vh - 300px); min-height: 340px; }
+    .detail-shell { display: none; margin-top: 14px; }
+    .detail-shell.open { display: block; }
+    .tabs { display:flex; gap:4px; border-bottom:1px solid var(--border); background:var(--bg-card); padding:0 16px; overflow-x:auto; }
+    .tab-btn { padding:10px 16px; border:none; background:transparent; color:var(--text-lo); font-size:13px; font-weight:800; border-bottom:2px solid transparent; cursor:pointer; margin-bottom:-1px; white-space:nowrap; }
+    .tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
+    .tab-panel { display:none; padding:18px; }
+    .tab-panel.active { display:block; }
+    .paper-status { display:block; margin-top:10px; font-size:12px; color:var(--text-lo); }
+    .empty-state { height: 220px; display:flex; align-items:center; justify-content:center; color:var(--text-lo); font-weight:800; }
+  </style>
+</head>
+<body>
+
+<div class="page-kicker">OPERACAO / RADAR 24X7</div>
+<div class="head-row">
+  <div class="head-title">
+    <span>Radar de Oportunidades</span>
+    <span class="head-count" id="activeCount">carregando...</span>
+  </div>
+  <div class="head-actions">
+    <button class="btn btn-secondary" type="button" onclick="loadData()">Atualizar</button>
+    <button class="btn btn-secondary" type="button" onclick="toggleGuia()">Ajuda</button>
+  </div>
+</div>
+
+<div class="meta-grid">
+  <div class="meta-item"><span>Banca Virtual Disponivel</span><strong class="text-positive" id="bankValue">-</strong></div>
+  <div class="meta-item"><span>Contexto do Bitcoin</span><strong class="text-positive" id="btcContextValue">-</strong></div>
+  <div class="meta-item"><span>Win Rate Acumulado</span><strong class="text-positive" id="winRateValue">-</strong></div>
+  <div class="meta-item"><span>Profundidade Scanner</span><strong id="scannerDepthValue">-</strong></div>
+</div>
+
+<div class="group-panel">
+  <div class="group-panel-row">
+    <span style="font-size:12px;font-weight:800;color:var(--text-lo,#64748b);">FILTRAR ESTRATEGIA:</span>
+    <button class="group-chip active" type="button" data-filter="">Todas</button>
+    <button class="group-chip" type="button" data-filter="PULLBACK">Pullback</button>
+    <button class="group-chip" type="button" data-filter="BREAKOUT">Breakout</button>
+    <button class="group-chip" type="button" data-filter="RECOVERY">Recovery</button>
+  </div>
+</div>
+
+<div class="table-card">
+  <div class="table-wrap">
+    <table class="history-table">
+      <thead>
+        <tr>
+          <th style="width:130px;">Ativo</th>
+          <th style="width:100px;">Score</th>
+          <th style="width:130px;">Estrategia</th>
+          <th style="width:150px;">Entrada Ideal</th>
+          <th style="width:120px;">Stop Loss</th>
+          <th style="width:160px;">Alvo T2</th>
+          <th style="width:100px;">R/R</th>
+          <th style="width:120px;">Acao</th>
+        </tr>
+      </thead>
+      <tbody id="opportunitiesBody"></tbody>
+    </table>
+    <div class="empty-state" id="emptyState" style="display:none">Nenhuma oportunidade retornada pelo scanner</div>
+  </div>
+</div>
+
+<div class="detail-shell" id="detailShell">
+  <div class="editor-bar">
+    <div class="editor-title">
+      <strong id="detailSymbol" style="font-size:16px;color:var(--text-hi);">Plano de Trade</strong><br>
+      <span id="detailSub" style="font-size:12px;color:var(--text-lo);">-</span>
+    </div>
+    <button class="btn btn-secondary btn-sm" type="button" onclick="closeDetail()">Fechar</button>
+  </div>
+
+  <div class="detail-card">
+    <div class="tabs">
+      <button class="tab-btn active" type="button" data-tab="plano">Plano</button>
+      <button class="tab-btn" type="button" data-tab="score">Score</button>
+      <button class="tab-btn" type="button" data-tab="paper">Simulacao Compra</button>
+      <button class="tab-btn" type="button" data-tab="guia">Como Usar</button>
+    </div>
+    <div class="tab-panel active" id="panel-plano">
+      <div class="meta-grid" id="detailGrid"></div>
+    </div>
+    <div class="tab-panel" id="panel-score">
+      <div class="meta-grid" id="scoreGrid"></div>
+    </div>
+    <div class="tab-panel" id="panel-paper">
+      <button class="btn btn-primary" type="button" onclick="executeSelectedPaperTrade()">Executar Compra Simulada ($200 USD)</button>
+      <span class="paper-status" id="paperStatus"></span>
+    </div>
+    <div class="tab-panel" id="panel-guia">
+      <div style="background:var(--accent-glow);border:1px solid var(--accent);border-radius:8px;padding:16px;">
+        <h4 style="color:var(--accent);margin-top:0;">Como usar o Radar de Oportunidades</h4>
+        <p style="color:var(--text-md);line-height:1.6;margin:0">
+          O radar usa dados globais de mercado. A banca, parametros, paper trading e historico sao gravados por empresa.
+          Selecione uma oportunidade, revise entrada/stop/alvos e registre primeiro como compra simulada.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script>
+  const fmtUsd = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'USD' });
+  const fmtPct = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+  let allOpportunities = [];
+  let selectedOpportunity = null;
+  let currentFilter = '';
+
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+  }
+
+  function normalizeOpportunity(raw) {
+    const score = raw.opportunity || {};
+    const plan = raw.trade_plan || score.trade_plan || {};
+    const position = raw.position_sizing || {};
+    const totalScore = Number(raw.opportunity_score ?? score.total_score ?? raw.score ?? 0);
+    const entryMin = Number(plan.entry_zone_min ?? raw.entry_min ?? 0);
+    const entryMax = Number(plan.entry_zone_max ?? raw.entry_max ?? 0);
+    const stop = Number(plan.stop_loss ?? raw.stop_loss ?? 0);
+    const target2 = Number(plan.target_t2 ?? raw.target_2 ?? 0);
+    return {
+      symbol: raw.symbol || score.symbol || plan.symbol || '-',
+      score: totalScore,
+      strategy: raw.strategy || plan.strategy || '-',
+      entryLabel: entryMin && entryMax ? `${entryMin.toFixed(2)} - ${entryMax.toFixed(2)}` : (raw.entry_range || '-'),
+      stopLabel: stop ? stop.toFixed(2) : (raw.stop_loss || '-'),
+      targetLabel: target2 ? target2.toFixed(2) : (raw.target_2 || '-'),
+      rr: Number(plan.risk_reward_ratio ?? raw.risk_reward_ratio ?? 0),
+      plan,
+      dimensionScores: score.dimension_scores || {},
+      positionSizeUsd: Number(position.position_size_usd || 200),
+      currentPrice: entryMin && entryMax ? (entryMin + entryMax) / 2 : Number(raw.current_price || 0),
+    };
+  }
+
+  async function loadCompanySummary() {
+    try {
+      const summary = await fetch('/api/master-crypto/company/summary').then(r => r.json());
+      const metrics = summary.paper_metrics || {};
+      const settings = summary.settings || {};
+      const balance = Number(metrics.current_balance_usd ?? settings.initial_bank_usd ?? 0);
+      const wins = Number(metrics.wins_count || 0);
+      const losses = Number(metrics.losses_count || 0);
+      document.getElementById('bankValue').textContent = fmtUsd.format(balance);
+      document.getElementById('winRateValue').textContent = `${fmtPct.format(Number(metrics.win_rate_pct || 0))}% (${wins}W / ${losses}L)`;
+      document.getElementById('scannerDepthValue').textContent = `Top ${settings.scanner_top_limit || 20} - ${(settings.scanner_timeframe || '4h').toUpperCase()} Baseline`;
+      return settings;
+    } catch (_) {
+      document.getElementById('bankValue').textContent = '-';
+      document.getElementById('winRateValue').textContent = '-';
+      document.getElementById('scannerDepthValue').textContent = 'Top 20 - 4H Baseline';
+      return { scanner_top_limit: 20, scanner_timeframe: '4h' };
+    }
+  }
+
+  async function loadData() {
+    await (window._iahubAuthReady || Promise.resolve());
+    const settings = await loadCompanySummary();
+    try {
+      const topLimit = Number(settings.scanner_top_limit || 20);
+      const timeframe = encodeURIComponent(settings.scanner_timeframe || '4h');
+      const res = await fetch(`/api/master-crypto/opportunities/active?top_limit=${topLimit}&timeframe=${timeframe}`);
+      if (!res.ok) throw new Error('scanner');
+      const data = await res.json();
+      if (data?.btc_context) {
+        document.getElementById('btcContextValue').textContent = `${data.btc_context.trend_status || '-'} (${Number(data.btc_context.score || 0).toFixed(0)}/100)`;
+      }
+      allOpportunities = Array.isArray(data.opportunities) ? data.opportunities.map(normalizeOpportunity) : [];
+      renderOpportunities();
+    } catch (_) {
+      allOpportunities = [];
+      renderOpportunities();
+      document.getElementById('btcContextValue').textContent = '-';
+    }
+  }
+
+  function renderOpportunities() {
+    const tbody = document.getElementById('opportunitiesBody');
+    const empty = document.getElementById('emptyState');
+    const rows = currentFilter ? allOpportunities.filter(op => String(op.strategy).toUpperCase() === currentFilter) : allOpportunities;
+    tbody.innerHTML = '';
+    empty.style.display = rows.length ? 'none' : 'flex';
+    document.getElementById('activeCount').textContent = `(${rows.length} oportunidades)`;
+    rows.forEach((op, index) => {
+      const tr = document.createElement('tr');
+      tr.className = 'data-row';
+      tr.onclick = () => openDetail(index, op);
+      tr.innerHTML = `
+        <td><strong>${esc(op.symbol)}</strong></td>
+        <td><span class="badge ${op.score >= 80 ? 'badge-ok' : 'badge-warn'}">${op.score.toFixed(0)} / 100</span></td>
+        <td><span class="badge badge-blue">${esc(op.strategy)}</span></td>
+        <td>${esc(op.entryLabel)}</td>
+        <td><span class="text-negative">${esc(op.stopLabel)}</span></td>
+        <td><span class="text-positive">${esc(op.targetLabel)}</span></td>
+        <td>${op.rr ? `1:${op.rr}` : '-'}</td>
+        <td><button class="btn btn-sm btn-primary" type="button">Ver Plano</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function openDetail(_index, op) {
+    selectedOpportunity = op;
+    document.getElementById('detailSymbol').textContent = `Plano de Trade - ${op.symbol}`;
+    document.getElementById('detailSub').textContent = `Estrategia: ${op.strategy} - Score ${op.score.toFixed(0)}/100`;
+    document.getElementById('paperStatus').textContent = '';
+    document.getElementById('detailGrid').innerHTML = `
+      <div class="meta-item"><span>Entrada ideal</span><strong>${esc(op.entryLabel)}</strong></div>
+      <div class="meta-item"><span>Stop loss</span><strong class="text-negative">${esc(op.stopLabel)}</strong></div>
+      <div class="meta-item"><span>Alvo T2</span><strong class="text-positive">${esc(op.targetLabel)}</strong></div>
+      <div class="meta-item"><span>Risco/Retorno</span><strong>${op.rr ? `1:${op.rr}` : '-'}</strong></div>
+    `;
+    const scoreEntries = Object.entries(op.dimensionScores || {});
+    document.getElementById('scoreGrid').innerHTML = scoreEntries.length
+      ? scoreEntries.map(([key, value]) => `<div class="meta-item"><span>${esc(key)}</span><strong>${Number(value || 0).toFixed(0)} / 100</strong></div>`).join('')
+      : '<div class="meta-item"><span>Score total</span><strong>-</strong></div>';
+    document.getElementById('detailShell').classList.add('open');
+  }
+
+  function closeDetail() {
+    document.getElementById('detailShell').classList.remove('open');
+  }
+
+  function toggleGuia() {
+    document.getElementById('detailShell').classList.add('open');
+    switchDetailTab('guia');
+  }
+
+  function switchDetailTab(tabName) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabName));
+    document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.toggle('active', panel.id === `panel-${tabName}`));
+  }
+
+  async function executeSelectedPaperTrade() {
+    const status = document.getElementById('paperStatus');
+    if (!selectedOpportunity?.plan?.symbol) {
+      status.textContent = 'Selecione uma oportunidade carregada pelo radar para simular.';
+      return;
+    }
+    const tradeId = `${selectedOpportunity.symbol}-${Date.now()}`.replace(/[^A-Za-z0-9_-]/g, '_');
+    status.textContent = 'Registrando compra simulada para esta empresa...';
+    const res = await fetch('/api/master-crypto/paper/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        trade_id: tradeId,
+        symbol: selectedOpportunity.symbol,
+        current_market_price: selectedOpportunity.currentPrice,
+        trade_plan: selectedOpportunity.plan,
+        position_size_usd: selectedOpportunity.positionSizeUsd || 200,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.status === 'REJECTED') {
+      status.textContent = data.reason || 'Nao foi possivel registrar a compra simulada.';
+      return;
+    }
+    status.textContent = 'Compra simulada registrada nesta empresa.';
+    await loadCompanySummary();
+  }
+
+  document.addEventListener('click', (e) => {
+    const chip = e.target.closest('.group-chip[data-filter]');
+    if (!chip) return;
+    document.querySelectorAll('.group-chip').forEach(item => item.classList.toggle('active', item === chip));
+    currentFilter = chip.dataset.filter || '';
+    renderOpportunities();
+  });
+
+  document.addEventListener('click', (e) => {
+    const tab = e.target.closest('.tab-btn[data-tab]');
+    if (tab) switchDetailTab(tab.dataset.tab);
+  });
+
+  window.addEventListener('DOMContentLoaded', loadData);
+</script>
+</body>
+</html>

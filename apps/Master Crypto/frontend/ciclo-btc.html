@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ciclos do Bitcoin - Master Crypto AI</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="./css/master-crypto.css">
+  <style>
+    body { background: var(--bg-base, #f8fafc); padding: 16px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .cycle-layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(300px, .8fr); gap: 14px; }
+    .chart-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 14px; }
+    canvas { width: 100%; height: 320px; display: block; }
+    .text-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 16px; }
+    .text-card p { color: var(--text-md); line-height: 1.55; margin: 0; font-size: 13px; white-space: pre-wrap; }
+    @media (max-width: 980px) { .cycle-layout { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="page-kicker">ESTRATEGIAS / CICLOS DO BITCOIN</div>
+  <div class="head-row">
+    <div class="head-title">
+      <span>Analise de Ciclos do Bitcoin</span>
+      <span class="head-count" id="statusText">carregando...</span>
+    </div>
+    <div class="head-actions">
+      <button class="btn btn-secondary" type="button" onclick="loadCycle()">Atualizar</button>
+    </div>
+  </div>
+
+  <div class="meta-grid" id="metaGrid"></div>
+
+  <div class="cycle-layout">
+    <section class="chart-card">
+      <canvas id="cycleCanvas"></canvas>
+    </section>
+    <aside class="text-card">
+      <div class="page-kicker">LEITURA MACRO</div>
+      <p id="cycleText">Aguardando comparacao.</p>
+    </aside>
+  </div>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    let currentSeries = {};
+
+    function esc(value) {
+      return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+    }
+
+    function renderMeta(data) {
+      document.getElementById('metaGrid').innerHTML = `
+        <div class="meta-item"><span>Ano mais similar</span><strong>${esc(data.most_similar_year)}</strong></div>
+        <div class="meta-item"><span>Similaridade ${esc(data.compare_year_1)}</span><strong class="text-positive">${Number(data.similarity_score_year_1 || 0).toFixed(1)}%</strong></div>
+        <div class="meta-item"><span>Similaridade ${esc(data.compare_year_2)}</span><strong>${Number(data.similarity_score_year_2 || 0).toFixed(1)}%</strong></div>
+        <div class="meta-item"><span>Dias pos-halving</span><strong>${Number(data.days_since_halving || 0)}</strong></div>
+      `;
+    }
+
+    function drawCycle(series) {
+      const canvas = document.getElementById('cycleCanvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const keys = Object.keys(series || {});
+      if (!keys.length) {
+        ctx.fillStyle = '#64748b';
+        ctx.font = '13px Segoe UI';
+        ctx.fillText('Sem serie para exibicao', 18, 32);
+        return;
+      }
+      const all = keys.flatMap(key => series[key] || []);
+      const maxDay = Math.max(...all.map(p => Number(p.day || 0)), 1);
+      const values = all.map(p => Number(p.return_pct || 0));
+      const min = Math.min(...values, -5);
+      const max = Math.max(...values, 5);
+      const range = Math.max(max - min, 1);
+      const pad = 34;
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i += 1) {
+        const y = pad + ((canvas.height - pad * 2) / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(pad, y);
+        ctx.lineTo(canvas.width - pad, y);
+        ctx.stroke();
+      }
+      const colors = ['#0ecb81', '#2563eb', '#a855f7'];
+      keys.forEach((key, idx) => {
+        const rows = series[key] || [];
+        ctx.strokeStyle = colors[idx % colors.length];
+        ctx.lineWidth = idx === 0 ? 3 : 2;
+        ctx.beginPath();
+        rows.forEach((point, index) => {
+          const x = pad + (Number(point.day || 0) / maxDay) * (canvas.width - pad * 2);
+          const y = canvas.height - pad - ((Number(point.return_pct || 0) - min) / range) * (canvas.height - pad * 2);
+          if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        ctx.fillStyle = colors[idx % colors.length];
+        ctx.fillText(key, canvas.width - pad - 52, pad + 16 + idx * 18);
+      });
+    }
+
+    async function loadCycle() {
+      await (window._iahubAuthReady || Promise.resolve());
+      document.getElementById('statusText').textContent = 'consultando motor...';
+      try {
+        const data = await fetch('/api/master-crypto/btc-cycle/compare').then(r => r.json());
+        renderMeta(data);
+        currentSeries = data.normalized_series || {};
+        drawCycle(currentSeries);
+        document.getElementById('cycleText').textContent = `${data.cycle_phase_description || ''}\n\n${data.layman_explanation || ''}\n\n${data.disclaimer || ''}`;
+        document.getElementById('statusText').textContent = `ano ${data.current_year}`;
+      } catch (_) {
+        document.getElementById('statusText').textContent = 'backend indisponivel';
+        document.getElementById('metaGrid').innerHTML = '<div class="meta-item"><span>Status</span><strong>Sem dados</strong></div>';
+        document.getElementById('cycleText').textContent = 'Nao foi possivel carregar a comparacao de ciclos agora.';
+        drawCycle({});
+      }
+    }
+
+    window.addEventListener('resize', () => drawCycle(currentSeries));
+    window.addEventListener('DOMContentLoaded', loadCycle);
+  </script>
+</body>
+</html>

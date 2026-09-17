@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Master Crypto AI - IAHUB</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="./css/master-crypto.css">
+</head>
+<body class="mc-shell-responsive">
+<div class="layout" id="layout">
+
+  <!-- Menu Lateral (Sidebar) -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()" style="cursor:pointer;">
+      <div class="logo-icon" style="background:#0ecb81 !important;">⚡</div>
+      <span class="logo-text">Master Crypto AI</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer">
+      <span style="font-size:11px;color:var(--text-lo)">Scanner 24x7 & Inteligência de Swing Trade</span>
+    </div>
+  </nav>
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebarDrawer()" aria-hidden="true"></div>
+
+  <!-- Main Workspace Shell -->
+  <div class="main">
+
+    <!-- Topbar -->
+    <div class="topbar mc-topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6"  x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title" id="shell-title">Master Crypto AI</span>
+      <div class="mc-actions">
+        <a class="shell-nav-btn" href="/iahub.html" title="Voltar ao IAHub">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>
+          </svg>
+          <span>IAHub</span>
+        </a>
+        <a class="shell-nav-btn primary" href="/app/master-crypto/guia.html" target="_blank" title="Guia do Sistema">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+            <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"/>
+          </svg>
+          <span>Guia</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- MDI Tab Bar -->
+    <div class="mdi-tabbar-wrap">
+      <button class="mdi-scroll-btn" id="mdi-scroll-left" title="Rolar para esquerda" onclick="scrollMdiTabs(-1)">&#9664;</button>
+      <div class="mdi-tabbar" id="mdi-tabbar"></div>
+      <button class="mdi-scroll-btn" id="mdi-scroll-right" title="Rolar para direita" onclick="scrollMdiTabs(1)">&#9654;</button>
+    </div>
+
+    <!-- Container do Conteúdo das Rotinas em Abas (Iframe MDI) -->
+    <div class="mdi-content" id="mdi-content">
+      <div class="mdi-empty" id="mdi-empty">
+        <div class="mdi-empty-icon">⚡</div>
+        <div class="mdi-empty-title">Nenhuma rotina aberta</div>
+        <div class="mdi-empty-sub">Selecione uma opção no menu lateral para começar</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="./js/sidebar.js"></script>
+<script src="./js/tab-manager.js"></script>
+<script>
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('#sidebar a.nav-item');
+    if (!link) return;
+    e.preventDefault();
+    const url   = new URL(link.href, location.origin).pathname;
+    const label = link.querySelector('.nav-label')?.textContent?.trim() || url;
+    const icon  = link.querySelector('.nav-icon')?.textContent?.trim()  || '📄';
+    window.openTab(url, label, icon);
+    window.closeSidebarDrawer?.();
+  });
+
+  // No shell MDI do IAHUB, trocar empresa no cabeçalho atualiza o contexto e recarrega todas as abas
+  window._iahubAuthReady?.then(() => {
+    window._trocarEmpresa = async function (empresa_id) {
+      const res = await fetch('/api/empresas/selecionar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ empresa_id, system_code: 'master-crypto' }),
+      });
+      if (!res.ok) return;
+
+      const lista = await fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []);
+      const emp = lista.find(e => Number(e.id) === Number(empresa_id));
+      if (emp) {
+        const empresaNome = emp.razao_social || emp.nome || '';
+        window._iahubEmpresa = { id: emp.id, nome: empresaNome };
+        window._iahubAtualizarEmpresaBadge?.({ id: emp.id, nome: empresaNome });
+        await window.trocarEmpresaTodasAbas?.(emp.id, empresaNome);
+      }
+
+      const drop = document.getElementById('_empresa-dropdown');
+      if (drop) drop.style.display = 'none';
+    };
+  });
+</script>
+</body>
+</html>

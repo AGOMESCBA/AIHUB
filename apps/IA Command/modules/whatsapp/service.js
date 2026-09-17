@@ -2872,6 +2872,7 @@ class IACWhatsAppService extends EventEmitter {
           nomeModulo: intent?.modulo || intent?.intencao || null,
           contextoConsulta: pergunta,
           mensagem: pergunta,
+          limiteItensLista: whatsappResponseConfig.obterConfigWhatsapp(empresaId).top_destaques_whatsapp,
         });
         if (respostaCanonica) {
           this.log(`Resposta formatada canonica: escopo=${escopo} | tipo=${resultado?.tipo || 'n/a'} | chars=${String(respostaCanonica || '').length}`, 'info');
@@ -2960,6 +2961,12 @@ class IACWhatsAppService extends EventEmitter {
       if (cabecalho) textoCompleto = `${cabecalho}\n\n${corpo}`;
     }
     const tamanho = textoCompleto.length;
+    // O formatador canonico corta listagens em cfg.top_destaques_whatsapp itens e imprime
+    // "... e mais N" no lugar do restante. Sem isso, uma lista de 69 clientes pode gerar
+    // um texto curto (<8000 chars) que nunca cruza limite_pergunta_anexo_caracteres — o
+    // usuario nunca recebe os itens ocultos nem a oferta de anexo (bug real reportado).
+    // Trata corte de lista como gatilho de oferta independente do tamanho do texto.
+    const listaCortada = /\.\.\. e mais \d+/.test(textoCompleto);
 
     const formatoAuto = (cfg.anexar_pdf_automatico_acima_de > 0 && rows.length >= cfg.anexar_pdf_automatico_acima_de) ? 'pdf'
       : (cfg.anexar_excel_automatico_acima_de > 0 && rows.length >= cfg.anexar_excel_automatico_acima_de) ? 'excel'
@@ -2971,7 +2978,7 @@ class IACWhatsAppService extends EventEmitter {
     if (origem === 'agendamento') {
       if (!formatoAuto) return { texto: textoCompleto, anexoBuffer: null };
       // cai adiante so para gerar o anexo automatico; nunca monta oferta/cache de resposta pendente
-    } else if (tamanho <= cfg.limite_pergunta_anexo_caracteres) {
+    } else if (tamanho <= cfg.limite_pergunta_anexo_caracteres && !listaCortada) {
       return { texto: textoCompleto, anexoBuffer: null };
     }
 
@@ -3003,7 +3010,10 @@ class IACWhatsAppService extends EventEmitter {
         resumoTexto: respostaTexto,
       });
       if (cacheId) {
-        textoFinal += '\n\nEssa consulta ficou grande para leitura no WhatsApp.\n\nQuer receber a grade completa em arquivo?\nResponda:\n1 - PDF\n2 - Excel\n3 - Não precisa';
+        const motivoOferta = listaCortada
+          ? 'A lista acima foi resumida para caber no WhatsApp.'
+          : 'Essa consulta ficou grande para leitura no WhatsApp.';
+        textoFinal += `\n\n${motivoOferta}\n\nQuer receber a grade completa em arquivo?\nResponda:\n1 - PDF\n2 - Excel\n3 - Não precisa`;
         this._setSenderContext(sender, { _aguardandoRespostaAnexo: true, _anexoQueryCacheId: cacheId, _anexoEmpresaId: empresaId });
       }
     }
@@ -6275,6 +6285,7 @@ class IACWhatsAppService extends EventEmitter {
         }
         const consolidado = canonicalWhatsappFormat.renderAll(sucessosDinamicos, {
           mensagem: String(texto || '').trim(),
+          limiteItensLista: whatsappResponseConfig.obterConfigWhatsapp(empresaLogId).top_destaques_whatsapp,
         }) || this._formatarConsolidadoDinamicoAll(intentDinamicoResolvido, sucessosDinamicos, empresaLogId);
         const respostaConsolidada = sucessosDinamicos
           .map(s => `🏢 *${s.nomeEmpresa}*\n${s.resposta}`)
