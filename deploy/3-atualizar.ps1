@@ -365,13 +365,40 @@ if ($hadDb -and !(Test-Path -LiteralPath $dbPath)) {
 }
 
 # ── 3. Atualizar dependencias npm ────────────────────────────
-Write-Host "[4/5] Atualizando dependencias npm..." -ForegroundColor Yellow
+Write-Host "[4/6] Atualizando dependencias npm..." -ForegroundColor Yellow
 Push-Location $PROJECT_PATH
 npm install --omit=dev
 Pop-Location
 Write-Host "      Dependencias ok!" -ForegroundColor Green
 
+$masterCryptoPythonPath = Join-Path $PROJECT_PATH "apps\Master Crypto\backend-python"
+$masterCryptoRequirements = Join-Path $masterCryptoPythonPath "requirements.txt"
+if (Test-Path -LiteralPath $masterCryptoRequirements) {
+    Write-Host "[5/6] Atualizando dependencias Python do Master Crypto..." -ForegroundColor Yellow
+    $venvPython = Join-Path $masterCryptoPythonPath ".venv\Scripts\python.exe"
+    if (!(Test-Path -LiteralPath $venvPython)) {
+        $py = Get-Command py -ErrorAction SilentlyContinue
+        $python = Get-Command python -ErrorAction SilentlyContinue
+        Push-Location $masterCryptoPythonPath
+        if ($py) {
+            & py -3 -m venv .venv
+        } elseif ($python) {
+            & python -m venv .venv
+        } else {
+            Pop-Location
+            throw "Python nao encontrado no servidor. Instale Python 3 antes de usar o Master Crypto."
+        }
+        Pop-Location
+    }
+    & $venvPython -m pip install --upgrade pip
+    & $venvPython -m pip install -r $masterCryptoRequirements
+    Write-Host "      Dependencias Python do Master Crypto ok!" -ForegroundColor Green
+} else {
+    Write-Host "[5/6] Master Crypto Python nao encontrado no pacote; etapa ignorada." -ForegroundColor Gray
+}
+
 # ── 4. Reiniciar o servico ────────────────────────────────────
+Write-Host "[6/6] Reiniciando servicos IAHub..." -ForegroundColor Yellow
 Start-IaHubServices
 
 Write-Host ""
