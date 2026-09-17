@@ -14,6 +14,9 @@ DEFAULT_SETTINGS = {
     "scanner_timeframe": "4h",
     "min_risk_reward_ratio": 2.0,
     "mode": "demo",
+    "selected_exchange": "BINANCE",
+    "exchange_api_key": "",
+    "exchange_api_secret": "",
 }
 
 
