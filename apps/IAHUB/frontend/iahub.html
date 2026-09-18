@@ -128,6 +128,7 @@
       margin: -52px 0 18px;
       position: relative; z-index: 1;
       box-shadow: 0 10px 22px rgba(15,23,42,.08);
+      overflow: hidden;
     }
     .system-icon svg { width: 42px; height: 42px; stroke: currentColor; }
     .system-name {
@@ -217,9 +218,6 @@
       .hub-logout span { display: none; }
     }
 
-    /* Tema escuro — a maioria das cores desta tela e' hardcoded (nao usa
-       var(--bg-*)/var(--text-*)), diferente do resto do design system,
-       entao precisa de bloco dedicado aqui. */
     :root[data-theme="dark"] .hub-shell { background: var(--bg-base); }
     :root[data-theme="dark"] .systems-panel {
       border-color: var(--border); background: var(--bg-card);
@@ -322,7 +320,7 @@
     const DEFAULT_SYSTEM_CARD_IMAGES = {
       'ia-admin': '/img/system-card-admin.jpg',
       'ia-command': '/img/system-card-command.jpg',
-      'master-crypto': '/img/system-card-default.jpg',
+      'master-crypto': '/img/system-card-crypto-radar-logo.png',
       recrutamento: '/img/system-card-recruit.jpg',
       default: '/img/system-card-default.jpg',
     };
@@ -332,6 +330,9 @@
     }
 
     function systemIcon(system) {
+      if (system?.code === 'master-crypto' || system?.code === 'crypto-radar') {
+        return `<img src="/img/system-card-crypto-radar-logo.png" alt="Crypto Radar AI" style="width:100%;height:100%;object-fit:cover;border-radius:12px;"/>`;
+      }
       const paths = SYSTEM_ICONS[system.code] || SYSTEM_ICONS.default;
       return `<svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
     }
@@ -404,7 +405,7 @@
       }).join('');
     }
 
-    carregarSistemas();
+    document.addEventListener('DOMContentLoaded', carregarSistemas);
   </script>
 </body>
 </html>

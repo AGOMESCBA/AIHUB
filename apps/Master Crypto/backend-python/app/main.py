@@ -75,7 +75,7 @@ async def websocket_market_endpoint(websocket: WebSocket):
     await ws_manager.connect(websocket)
     try:
         # Envia mensagem inicial de boas-vindas / ping
-        await websocket.send_json({"type": "CONNECTED", "message": "Master Crypto WebSocket Live Feed Ativo"})
+        await websocket.send_json({"type": "CONNECTED", "message": "Crypto Radar AI WebSocket Live Feed Ativo"})
         while True:
             # Mantém a conexão viva escutando pings do cliente
             data = await websocket.receive_text()

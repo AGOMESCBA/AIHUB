@@ -488,7 +488,7 @@
   function _setTopbarTitle(tab) {
     const el = document.getElementById('shell-title');
     if (!el) return;
-    el.textContent = tab ? `${tab.icon || 'MC'}  ${tab.label}` : 'Master Crypto AI';
+    el.textContent = tab ? `${tab.icon || 'MC'}  ${tab.label}` : 'Crypto Radar AI';
   }
 
   function _updateScrollBtns() {

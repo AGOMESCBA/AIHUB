@@ -95,7 +95,7 @@ const APPS = {
   },
   masterCrypto: {
     code: 'master-crypto',
-    name: 'Master Crypto AI',
+    name: 'Crypto Radar AI',
     rootDir: fromRoot('apps', 'Master Crypto'),
     frontendDir: fromRoot('apps', 'Master Crypto', 'frontend'),
     backendDir: fromRoot('apps', 'Master Crypto', 'backend'),

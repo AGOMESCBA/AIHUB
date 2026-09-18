@@ -42,12 +42,12 @@ const DEFAULT_SYSTEMS = [
   },
   {
     code: 'master-crypto',
-    name: 'Master Crypto AI',
-    description: 'Scanner 24x7 de Oportunidades, Plano de Trade, Analista IA e Ciclos do Bitcoin.',
+    name: 'Crypto Radar AI',
+    description: 'Radar Crypto 24x7 de Oportunidades, Plano de Trade, Analista IA e Ciclos do Bitcoin.',
     url: '/app/master-crypto',
     image_url: '',
     accent: '#0ecb81',
-    badge: 'Master Crypto',
+    badge: 'Crypto Radar',
     active: true,
   },
 ];

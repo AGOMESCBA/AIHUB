@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Analista IA - Master Crypto AI</title>
+  <title>Analista IA - Crypto Radar AI</title>
   <link rel="stylesheet" href="/css/iahub.css">
   <link rel="stylesheet" href="./css/master-crypto.css">
   <style>
@@ -143,7 +143,7 @@
       if (!message) return;
       input.value = '';
       addMessage('user', 'Voce', message);
-      addMessage('ai', 'Master Crypto AI', 'Analisando...');
+      addMessage('ai', 'Crypto Radar AI', 'Analisando...');
       const pending = document.querySelector('#chatMsgs .msg-ai:last-child');
       try {
         const res = await fetch('/api/master-crypto/analyst/chat', {
@@ -152,9 +152,9 @@
           body: JSON.stringify({ message, opportunity: currentOpportunity, btc_regime: btcRegime }),
         });
         const data = await res.json();
-        pending.innerHTML = `<strong>Master Crypto AI</strong>${esc(data.reply || 'Nao consegui montar uma resposta agora.')}`;
+        pending.innerHTML = `<strong>Crypto Radar AI</strong>${esc(data.reply || 'Nao consegui montar uma resposta agora.')}`;
       } catch (_) {
-        pending.innerHTML = '<strong>Master Crypto AI</strong>O motor do analista esta indisponivel neste momento.';
+        pending.innerHTML = '<strong>Crypto Radar AI</strong>O motor do analista esta indisponivel neste momento.';
       }
       document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
     }
@@ -171,7 +171,7 @@
     window.addEventListener('DOMContentLoaded', async () => {
       await loadContext();
       await loadSuggestions();
-      addMessage('ai', 'Master Crypto AI', 'Contexto carregado. Posso explicar o stop, o alvo, o risco da banca ou o impacto do BTC sobre a oportunidade atual.');
+      addMessage('ai', 'Crypto Radar AI', 'Contexto carregado. Posso explicar o stop, o alvo, o risco da banca ou o impacto do BTC sobre a oportunidade atual.');
     });
   </script>
 </body>
