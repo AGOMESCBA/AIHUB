@@ -2,91 +2,251 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Configuracoes - Crypto Radar AI</title>
+  <title>Configurações - Crypto Radar AI</title>
   <link rel="stylesheet" href="/css/iahub.css">
   <link rel="stylesheet" href="./css/master-crypto.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    body { background: #f8fafc; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    .card-box { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); margin-bottom: 16px; }
-    .form-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px; max-width: 860px; }
-    .form-group { margin-bottom: 0; }
-    .form-group label { display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 6px; }
-    .form-control { width: 100%; height: 38px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 12px; font-size: 14px; box-sizing:border-box; }
-    .form-actions { display:flex; align-items:center; gap:10px; margin-top:18px; }
-    .status-line { font-size: 12px; color: var(--text-lo); }
+    body { background: #f8fafc; padding: 16px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; }
+    .card-box { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    
+    /* TABS STYLE LIKE IA COMMAND */
+    .tabs-header {
+      display: flex;
+      gap: 6px;
+      border-bottom: 2px solid #e2e8f0;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+    .tab-item {
+      background: transparent;
+      border: none;
+      color: #64748b;
+      padding: 12px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .tab-item:hover { color: #0f172a; }
+    .tab-item.active { color: #2563eb; border-bottom-color: #2563eb; background: rgba(37, 99, 235, 0.04); border-radius: 8px 8px 0 0; }
+
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
+    
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+
+    .form-control {
+      width: 100%;
+      height: 44px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 0 44px 0 14px;
+      font-size: 14px;
+      color: #0f172a;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+    .form-control.code-font { font-family: monospace; font-size: 15px; }
+    .form-control:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+
+    .toggle-password-btn {
+      position: absolute;
+      right: 8px;
+      background: transparent;
+      border: none;
+      color: #64748b;
+      cursor: pointer;
+      font-size: 18px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+    }
+    .toggle-password-btn:hover { color: #2563eb; background: #f1f5f9; }
+
+    .btn-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+    .btn {
+      height: 42px;
+      padding: 0 22px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: #2563eb; color: #ffffff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-outline { background: #ffffff; border: 1px solid #2563eb; color: #2563eb; }
+    .btn-outline:hover { background: rgba(37, 99, 235, 0.05); }
+    .btn-secondary { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+    .btn-secondary:hover { background: #e2e8f0; }
+
+    .status-line { font-size: 13px; color: #64748b; font-weight: 500; }
+    
+    .test-feedback {
+      margin-top: 14px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      display: none;
+    }
+    .test-feedback.success { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .test-feedback.error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
   </style>
 </head>
 <body>
-<div class="page-kicker">CONFIGURACAO / PARAMETROS & RISCO</div>
-<div class="head-row">
+<div class="page-kicker">CONFIGURAÇÃO / PARÂMETROS & RISCO</div>
+<div class="head-row" style="margin-bottom: 16px;">
   <div>
-    <div class="head-title">Ajustes do Motor Algoritmico & Scanner 24x7</div>
-    <div class="status-line" id="statusLine">Carregando parametros da empresa...</div>
+    <div class="head-title" style="font-size: 22px; font-weight: 700;">Ajustes do Motor Algorítmico & Scanner 24x7</div>
+    <div class="status-line" id="statusLine">Carregando parâmetros da empresa...</div>
   </div>
 </div>
 
-<div class="card-box">
-  <div class="form-grid">
-    <div class="form-group">
-      <label for="initial_bank_usd">Banca inicial por empresa (USD)</label>
-      <input id="initial_bank_usd" type="number" class="form-control" min="1" step="100">
+<!-- ABAS DE NAVEGAÇÃO ESTILO IA COMMAND -->
+<div class="tabs-header">
+  <button class="tab-item active" onclick="switchTab('tab-corretora', this)">⚡ 1. Corretora & Chaves Binance</button>
+  <button class="tab-item" onclick="switchTab('tab-banca', this)">🎯 2. Banca & Risco</button>
+  <button class="tab-item" onclick="switchTab('tab-scanner', this)">🔍 3. Scanner & Algoritmo</button>
+  <button class="tab-item" onclick="switchTab('tab-empresa', this)">🏢 4. Dados da Empresa</button>
+</div>
+
+<!-- ABA 1: CORRETORA & CHAVES BINANCE -->
+<div id="tab-corretora" class="tab-pane active">
+  <div class="card-box">
+    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 16px; color: #0f172a;">🔑 Credenciais de Exchange (Binance / Bybit / OKX / KuCoin)</h3>
+    <div class="form-grid">
+      <div class="form-group" style="grid-column: 1 / -1;">
+        <label for="selected_exchange">Corretora Ativa</label>
+        <select id="selected_exchange" class="form-control" style="max-width: 320px;">
+          <option value="BINANCE">Binance (Spot & Futures)</option>
+          <option value="BYBIT">Bybit</option>
+          <option value="OKX">OKX</option>
+          <option value="KUCOIN">KuCoin</option>
+        </select>
+      </div>
+      
+      <div class="form-group" style="grid-column: 1 / -1;">
+        <label for="exchange_api_key">API Key da Corretora (Pública)</label>
+        <div class="input-wrapper">
+          <input id="exchange_api_key" type="password" class="form-control code-font" placeholder="Cole a API Key pública fornecida pela Binance">
+          <button type="button" class="toggle-password-btn" title="Mostrar/Ocultar API Key" onclick="toggleVisibility('exchange_api_key', this)">👁️</button>
+        </div>
+      </div>
+
+      <div class="form-group" style="grid-column: 1 / -1;">
+        <label for="exchange_api_secret">API Secret da Corretora (Privado - Criptografado)</label>
+        <div class="input-wrapper">
+          <input id="exchange_api_secret" type="password" class="form-control code-font" placeholder="Cole o API Secret privado fornecido pela Binance">
+          <button type="button" class="toggle-password-btn" title="Mostrar/Ocultar API Secret" onclick="toggleVisibility('exchange_api_secret', this)">👁️</button>
+        </div>
+      </div>
     </div>
-    <div class="form-group">
-      <label for="risk_per_trade_pct">Risco por Trade (% da Banca)</label>
-      <input id="risk_per_trade_pct" type="number" class="form-control" min="0.1" max="100" step="0.1">
+
+    <div class="btn-group">
+      <button class="btn btn-primary" type="button" onclick="saveSettings()">💾 Salvar Chaves de API</button>
+      <button class="btn btn-outline" type="button" onclick="testExchangeConnection()">⚡ Testar Conexão com a Binance</button>
+      <button class="btn btn-secondary" type="button" onclick="loadSettings()">🔄 Recarregar</button>
     </div>
-    <div class="form-group">
-      <label for="min_risk_reward_ratio">Relacao Risco/Retorno Minima (R:R)</label>
-      <input id="min_risk_reward_ratio" type="number" class="form-control" min="0.1" step="0.1">
+
+    <div id="testFeedback" class="test-feedback"></div>
+  </div>
+</div>
+
+<!-- ABA 2: BANCA & RISCO -->
+<div id="tab-banca" class="tab-pane">
+  <div class="card-box">
+    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 16px; color: #0f172a;">🎯 Parâmetros de Banca & Gestão de Risco</h3>
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="initial_bank_usd">Banca inicial por empresa (USD)</label>
+        <input id="initial_bank_usd" type="number" class="form-control" min="1" step="100" value="10000">
+      </div>
+      <div class="form-group">
+        <label for="risk_per_trade_pct">Risco por Trade (% da Banca)</label>
+        <input id="risk_per_trade_pct" type="number" class="form-control" min="0.1" max="100" step="0.1" value="2.0">
+      </div>
+      <div class="form-group">
+        <label for="min_risk_reward_ratio">Relação Risco/Retorno Mínima (R:R)</label>
+        <input id="min_risk_reward_ratio" type="number" class="form-control" min="0.1" step="0.1" value="2.0">
+      </div>
+      <div class="form-group">
+        <label for="mode">Modo operacional</label>
+        <select id="mode" class="form-control">
+          <option value="demo">Simulação por empresa (Paper Trading)</option>
+          <option value="real">Modo Real (Ordens diretas na Binance)</option>
+        </select>
+      </div>
     </div>
-    <div class="form-group">
-      <label for="scanner_top_limit">Profundidade Padrao do Scanner</label>
-      <select id="scanner_top_limit" class="form-control">
-        <option value="10">Top 10 Criptomoedas</option>
-        <option value="20">Top 20 Criptomoedas</option>
-        <option value="30">Top 30 Criptomoedas</option>
-        <option value="50">Top 50 Criptomoedas</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label for="scanner_timeframe">Timeframe padrao</label>
-      <select id="scanner_timeframe" class="form-control">
-        <option value="1h">1H</option>
-        <option value="4h">4H</option>
-        <option value="1d">1D</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label for="mode">Modo operacional</label>
-      <select id="mode" class="form-control">
-        <option value="demo">Simulacao por empresa</option>
-        <option value="live-disabled">Exchange real desabilitada</option>
-      </select>
-    </div>
-    <div class="form-group" style="grid-column: 1 / -1; margin-top: 10px; border-top: 1px solid #e2e8f0; padding-top: 14px;">
-      <h4 style="margin: 0 0 10px 0; color: #1e293b; font-size: 14px;">🔑 Credenciais de Exchange (Binance / Bybit / OKX / KuCoin)</h4>
-    </div>
-    <div class="form-group">
-      <label for="selected_exchange">Corretora Ativa</label>
-      <select id="selected_exchange" class="form-control">
-        <option value="BINANCE">Binance</option>
-        <option value="BYBIT">Bybit</option>
-        <option value="OKX">OKX</option>
-        <option value="KUCOIN">KuCoin</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label for="exchange_api_key">API Key da Corretora</label>
-      <input id="exchange_api_key" type="password" class="form-control" placeholder="Cole a API Key da empresa">
-    </div>
-    <div class="form-group">
-      <label for="exchange_api_secret">API Secret da Corretora</label>
-      <input id="exchange_api_secret" type="password" class="form-control" placeholder="Cole o API Secret da empresa">
+    <div class="btn-group">
+      <button class="btn btn-primary" type="button" onclick="saveSettings()">💾 Salvar Risco & Banca</button>
     </div>
   </div>
-  <div class="form-actions">
-    <button class="btn btn-primary" type="button" onclick="saveSettings()">Salvar Parametros & Chaves API</button>
-    <button class="btn btn-secondary" type="button" onclick="loadSettings()">Recarregar</button>
+</div>
+
+<!-- ABA 3: SCANNER & ALGORITMO -->
+<div id="tab-scanner" class="tab-pane">
+  <div class="card-box">
+    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 16px; color: #0f172a;">🔍 Parâmetros do Scanner Automático</h3>
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="scanner_top_limit">Profundidade Padrão do Scanner</label>
+        <select id="scanner_top_limit" class="form-control">
+          <option value="10">Top 10 Criptomoedas</option>
+          <option value="20" selected>Top 20 Criptomoedas</option>
+          <option value="30">Top 30 Criptomoedas</option>
+          <option value="50">Top 50 Criptomoedas</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="scanner_timeframe">Timeframe padrão</label>
+        <select id="scanner_timeframe" class="form-control">
+          <option value="1h">1H</option>
+          <option value="4h" selected>4H (Baseline de Swing Trade)</option>
+          <option value="1d">1D (Diário)</option>
+        </select>
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" type="button" onclick="saveSettings()">💾 Salvar Parâmetros do Scanner</button>
+    </div>
+  </div>
+</div>
+
+<!-- ABA 4: DADOS DA EMPRESA -->
+<div id="tab-empresa" class="tab-pane">
+  <div class="card-box">
+    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 16px; color: #0f172a;">🏢 Empresa & Token de Licença do App</h3>
+    <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin-bottom: 16px;">
+      Este ambiente responde dinamicamente à empresa selecionada no cabeçalho do IAHub. As chaves de API da Binance cadastradas aqui serão utilizadas em todas as operações e consultas de saldo desta empresa.
+    </p>
+    <div style="padding: 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; color: #1e40af; font-size: 13px;">
+      🏢 <strong>Empresa Ativa:</strong> <span id="companyActiveLabel">Carregando...</span>
+    </div>
   </div>
 </div>
 
@@ -94,18 +254,39 @@
 <script>
   const fields = ['initial_bank_usd', 'risk_per_trade_pct', 'min_risk_reward_ratio', 'scanner_top_limit', 'scanner_timeframe', 'mode', 'selected_exchange', 'exchange_api_key', 'exchange_api_secret'];
 
+  function switchTab(tabId, btn) {
+    document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-item').forEach(el => el.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    btn.classList.add('active');
+  }
+
+  function toggleVisibility(fieldId, btn) {
+    const el = document.getElementById(fieldId);
+    if (el.type === 'password') {
+      el.type = 'text';
+      btn.textContent = '🙈';
+    } else {
+      el.type = 'password';
+      btn.textContent = '👁️';
+    }
+  }
+
   async function loadSettings() {
     await (window._iahubAuthReady || Promise.resolve());
-    setStatus('Carregando parametros da empresa...');
+    setStatus('Carregando parâmetros da empresa...');
+    const companyName = window._iahubEmpresa?.nome || 'Empresa Selecionada';
+    document.getElementById('companyActiveLabel').textContent = `${companyName} (ID: ${window._iahubEmpresa?.id || '-'})`;
+
     try {
       const data = await fetch('/api/master-crypto/company/settings').then(r => r.json());
       fields.forEach(id => {
         const el = document.getElementById(id);
         if (el && data[id] !== undefined) el.value = data[id];
       });
-      setStatus(`Parametros carregados para ${window._iahubEmpresa?.nome || 'empresa selecionada'}.`);
+      setStatus(`Parâmetros carregados para ${companyName}.`);
     } catch (err) {
-      setStatus('Nao foi possivel carregar os parametros desta empresa.');
+      setStatus('Não foi possível carregar os parâmetros desta empresa.');
     }
   }
 
@@ -121,18 +302,53 @@
       exchange_api_key: document.getElementById('exchange_api_key').value,
       exchange_api_secret: document.getElementById('exchange_api_secret').value,
     };
-    setStatus('Salvando parametros...');
+    setStatus('Salvando parâmetros...');
     const res = await fetch('/api/master-crypto/company/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      setStatus('Nao foi possivel salvar os parametros.');
+      setStatus('Não foi possível salvar os parâmetros.');
       return;
     }
-    setStatus('Parametros salvos para esta empresa.');
+    setStatus('Parâmetros salvos com sucesso para esta empresa.');
     await loadSettings();
+  }
+
+  async function testExchangeConnection() {
+    const feedback = document.getElementById('testFeedback');
+    feedback.style.display = 'block';
+    feedback.className = 'test-feedback';
+    feedback.innerHTML = '⚡ Testando conexão com os servidores da Binance... Aguarde...';
+
+    const apiKey = document.getElementById('exchange_api_key').value.trim();
+    const apiSecret = document.getElementById('exchange_api_secret').value.trim();
+    const exchange = document.getElementById('selected_exchange').value;
+
+    try {
+      const res = await fetch('/api/master-crypto/company/test-exchange', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          exchange: exchange,
+          api_key: apiKey,
+          api_secret: apiSecret
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        feedback.className = 'test-feedback success';
+        feedback.innerHTML = `✅ <strong>Conexão Sucesso!</strong> ${data.message}`;
+      } else {
+        feedback.className = 'test-feedback error';
+        feedback.innerHTML = `❌ <strong>Erro no Teste:</strong> ${data.message}`;
+      }
+    } catch(err) {
+      feedback.className = 'test-feedback error';
+      feedback.innerHTML = `❌ <strong>Erro de Comunicação:</strong> Não foi possível testar (${err.message})`;
+    }
   }
 
   function setStatus(text) {
