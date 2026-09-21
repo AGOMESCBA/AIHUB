@@ -9,7 +9,20 @@ from app.engines.opportunity_score import OpportunityScoreEngine
 from app.engines.risk_manager import RiskManager
 from app.engines.price_structure import PriceStructureEngine
 from app.exchange.binance import BinanceAdapter
-from app.domain.schemas import TradePlan, StrategyEnum, MarketRegimeEnum
+def format_price_py(val: float) -> str:
+    if val is None:
+        return "0.00"
+    v = float(val)
+    if abs(v) >= 1000:
+        return f"{v:,.2f}"
+    elif abs(v) >= 10:
+        return f"{v:.2f}"
+    elif abs(v) >= 1:
+        return f"{v:.4f}"
+    elif abs(v) >= 0.0001:
+        return f"{v:.4f}"
+    else:
+        return f"{v:.6f}"
 
 router = APIRouter(prefix="/opportunities", tags=["Trade Opportunities"])
 
@@ -125,15 +138,25 @@ async def get_active_opportunities(timeframe: str = "4h", top_limit: int = 20):
                 }
             )
 
+            min_str = format_price_py(trade_plan.entry_zone_min)
+            max_str = format_price_py(trade_plan.entry_zone_max)
+            stop_str = format_price_py(trade_plan.stop_loss)
+            target_str = format_price_py(trade_plan.target_t2)
+
             opportunities.append({
                 "symbol": symbol,
+                "current_price": close,
                 "score": int(score_result.total_score),
                 "strategy": trade_plan.strategy.value,
                 "regime": regime.value,
                 "potential": f"+{trade_plan.potential_gain_pct}%",
-                "entry_range": f"{trade_plan.entry_zone_min:.2f} - {trade_plan.entry_zone_max:.2f}",
-                "stop_loss": f"{trade_plan.stop_loss:.2f}",
-                "target_t2": f"{trade_plan.target_t2:.2f}",
+                "entry_range": f"${min_str} - ${max_str}",
+                "stop_loss": f"${stop_str}",
+                "target_t2": f"${target_str}",
+                "entry_zone_min": float(trade_plan.entry_zone_min),
+                "entry_zone_max": float(trade_plan.entry_zone_max),
+                "stop_loss_val": float(trade_plan.stop_loss),
+                "target_t2_val": float(trade_plan.target_t2),
                 "rr_ratio": f"1:{trade_plan.risk_reward_ratio:.1f}",
                 "opportunity": score_result,
                 "position_sizing": position_calc,

@@ -29,3 +29,4 @@ data/auditoria.log
 *.rar
 __pycache__/
 *.pyc
+**/.vscode/

@@ -128,6 +128,22 @@ async function rodar() {
   // (o fakeSelf nem define esse metodo — se fosse chamado, o teste quebraria com TypeError)
   console.log('(implicito nos testes acima: fakeSelf nao expoe classificador de intencao, nenhuma chamada falhou por metodo ausente)');
 
+  // 10. BUG REAL REPORTADO: geracao do arquivo falha (ex: pdfBuilder lanca erro) — o
+  // usuario via "Arquivo PDF enviado." mesmo sem receber nada, porque o retorno booleano
+  // de _gerarEEnviarAnexo era descartado pelo chamador. Confirma que a falha agora produz
+  // a mensagem de erro real (nunca a de sucesso) e nao envia nenhum anexo.
+  {
+    const sender = '5599888@c.us';
+    const cacheId = whatsappQueryCache.salvarResultadoTabular({ empresaId: EMPRESA_TESTE, sender, pergunta: 'faturamento', rows: [{ cliente: 'F', faturamento: 500 }], intent: {} });
+    const self = criarFakeSelf();
+    self._gerarEEnviarAnexo = async () => ({ ok: false, motivo: 'falha simulada de geracao' });
+    self._setSenderContext(sender, { _aguardandoRespostaAnexo: true, _anexoQueryCacheId: cacheId, _anexoEmpresaId: EMPRESA_TESTE });
+    const resp = await ServiceProto._tentarResponderPedidoAnexo.call(self, '1', sender, EMPRESA_TESTE);
+    assert(resp && /não consegui gerar/i.test(resp), 'falha na geracao deve responder com mensagem de erro, nunca "enviado"');
+    assert(!/enviado/i.test(resp), 'mensagem de falha nao pode conter a palavra "enviado" (bug real reportado)');
+    assert.strictEqual(self._mensagensEnviadas.length, 0, 'nenhum anexo deve ter sido enviado quando a geracao falha');
+  }
+
   limpar();
   console.log('whatsapp-pedido-anexo.test.js: ok');
 }

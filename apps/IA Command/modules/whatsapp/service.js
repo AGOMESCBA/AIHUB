@@ -3047,6 +3047,10 @@ class IACWhatsAppService extends EventEmitter {
 
   // Gera o arquivo (PDF/Excel) a partir de um resultado tabular ja cacheado e envia via
   // WhatsApp. NUNCA chama IA/classificador de intencao — so le o cache e formata.
+  // Retorna { ok, motivo } em vez de enviar mensagem de erro por conta propria — quem
+  // chama (_tentarResponderPedidoAnexo) e o unico responsavel por decidir o texto de
+  // resposta, evitando a dupla mensagem "Nao consegui gerar..." + "Arquivo enviado."
+  // vista em producao quando o retorno booleano anterior era ignorado pelo chamador.
   async _gerarEEnviarAnexo({ formato, empresaId, sender, cache }) {
     try {
       const estrutura = attachmentBuilder.prepararEstruturaTabular(cache.rows, cache.intent || {});
@@ -3054,11 +3058,10 @@ class IACWhatsAppService extends EventEmitter {
         ? await pdfBuilder.gerarPdf(estrutura, { pergunta: cache.pergunta })
         : await excelBuilder.gerarExcel(estrutura, { pergunta: cache.pergunta });
       await this._enviarAnexoDecisao({ anexoBuffer: buffer, anexoFormato: formato }, sender);
-      return true;
+      return { ok: true };
     } catch (err) {
       this.log(`Falha ao gerar/enviar anexo sob demanda (${formato}): ${err.message}`, 'error');
-      await this._sendReplyMessageSafe(null, sender, 'Não consegui gerar o arquivo agora. Tente novamente em instantes.').catch(() => {});
-      return false;
+      return { ok: false, motivo: err.message };
     }
   }
 
@@ -3091,8 +3094,10 @@ class IACWhatsAppService extends EventEmitter {
         if (!cache) {
           return 'Não encontrei uma resposta com grade nesta conversa para gerar arquivo. Faça uma consulta primeiro.';
         }
-        await this._gerarEEnviarAnexo({ formato: ehPdf ? 'pdf' : 'excel', empresaId: empresaCache, sender, cache });
-        return `Arquivo ${ehPdf ? 'PDF' : 'Excel'} enviado.`;
+        const resultadoAnexo = await this._gerarEEnviarAnexo({ formato: ehPdf ? 'pdf' : 'excel', empresaId: empresaCache, sender, cache });
+        return resultadoAnexo.ok
+          ? `Arquivo ${ehPdf ? 'PDF' : 'Excel'} enviado.`
+          : 'Não consegui gerar o arquivo agora. Tente novamente em instantes.';
       }
       if (ehDispensa) {
         this._setSenderContext(sender, { _aguardandoRespostaAnexo: false, _anexoQueryCacheId: null, _anexoEmpresaId: null });
@@ -3117,8 +3122,10 @@ class IACWhatsAppService extends EventEmitter {
       return 'Não encontrei uma resposta com grade nesta conversa para gerar arquivo. Faça uma consulta primeiro.';
     }
     this._setSenderContext(sender, { _aguardandoRespostaAnexo: false, _anexoQueryCacheId: null, _anexoEmpresaId: null });
-    await this._gerarEEnviarAnexo({ formato, empresaId, sender, cache });
-    return `Arquivo ${formato === 'pdf' ? 'PDF' : 'Excel'} enviado.`;
+    const resultadoAnexo = await this._gerarEEnviarAnexo({ formato, empresaId, sender, cache });
+    return resultadoAnexo.ok
+      ? `Arquivo ${formato === 'pdf' ? 'PDF' : 'Excel'} enviado.`
+      : 'Não consegui gerar o arquivo agora. Tente novamente em instantes.';
   }
 
   _normalizarTraceIntent(trace = []) {
