@@ -39,7 +39,7 @@ function requireSystemAccess(systemCode) {
       return deny(req, res, 401, { error: 'Usuario inativo' });
     }
 
-    const companyId = Number(req.session.empresa_id || req.query?.empresa_id || req.body?.empresa_id || 0);
+    const companyId = Number(req.query?.empresa_id || req.body?.empresa_id || req.session.empresa_id || 0);
     if (!companyId) {
       return deny(req, res, 403, { error: 'Nenhuma empresa selecionada', precisaEmpresa: true });
     }

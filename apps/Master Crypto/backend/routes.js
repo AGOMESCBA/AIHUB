@@ -8,6 +8,15 @@ const serviceManager = require('./service-manager');
 
 const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL || serviceManager.getInternalApiBaseUrl();
 
+function resolveCompanyId(req) {
+  return req.system?.company_id
+    || req.query?.empresa_id
+    || req.body?.empresa_id
+    || req.session?.empresa_id
+    || req.session?.empresaId
+    || '';
+}
+
 router.use(requireAuth);
 router.use(requireEmpresa);
 router.use(requireSystemAccess('master-crypto'));
@@ -34,7 +43,7 @@ router.all('/*', (req, res) => {
     headers: {
       ...req.headers,
       host: targetUrl.host,
-      'x-iahub-company-id': req.system?.company_id || req.session?.empresa_id || req.session?.empresaId || '',
+      'x-iahub-company-id': resolveCompanyId(req),
       'x-iahub-user-id': req.session?.user_id || req.session?.usuarioId || '',
     },
   };
