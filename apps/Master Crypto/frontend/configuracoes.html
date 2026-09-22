@@ -240,12 +240,39 @@
 <!-- ABA 4: DADOS DA EMPRESA -->
 <div id="tab-empresa" class="tab-pane">
   <div class="card-box">
-    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 16px; color: #0f172a;">🏢 Empresa & Token de Licença do App</h3>
+    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 16px; color: #0f172a;">🏢 Empresa & Token de Integração do App Mobile</h3>
     <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin-bottom: 16px;">
-      Este ambiente responde dinamicamente à empresa selecionada no cabeçalho do IAHub. As chaves de API da Binance cadastradas aqui serão utilizadas em todas as operações e consultas de saldo desta empresa.
+      Este ambiente responde dinamicamente à empresa selecionada no cabeçalho do IAHub. Utilize o <strong>Token da Empresa</strong> abaixo para autenticar e vincular o aplicativo móvel Master Crypto às configurações desta empresa.
     </p>
-    <div style="padding: 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; color: #1e40af; font-size: 13px;">
+    
+    <div style="padding: 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; color: #1e40af; font-size: 13px; margin-bottom: 20px;">
       🏢 <strong>Empresa Ativa:</strong> <span id="companyActiveLabel">Carregando...</span>
+    </div>
+
+    <!-- TOKEN DE LICENÇA E INTEGRAÇÃO DO APP -->
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px;">
+      <h4 style="margin-top: 0; margin-bottom: 10px; font-size: 14px; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+        🔑 Token de Acesso da Empresa (App Mobile)
+      </h4>
+      <p style="font-size: 12px; color: #64748b; margin-top: 0; margin-bottom: 14px;">
+        Copie este Token e insira no aplicativo celular do Master Crypto para liberar o acesso:
+      </p>
+
+      <div class="form-group" style="margin-bottom: 14px;">
+        <div class="input-wrapper">
+          <input id="companyTokenInput" type="text" readonly class="form-control code-font" style="font-weight: 700; color: #2563eb; background: #ffffff; letter-spacing: 1px;" value="Carregando token...">
+          <button type="button" class="btn btn-primary btn-sm" style="position: absolute; right: 6px; height: 32px; font-size: 12px; padding: 0 14px;" onclick="copyCompanyToken()">📋 Copiar Token</button>
+        </div>
+      </div>
+
+      <div class="btn-group" style="margin-top: 10px;">
+        <button class="btn btn-outline" type="button" onclick="copyCompanyToken()">📋 Copiar Token para o App</button>
+        <button class="btn btn-secondary" type="button" onclick="generateNewCompanyToken()">🔄 Gerar Novo Token</button>
+      </div>
+
+      <div id="tokenCopiedMsg" style="display: none; margin-top: 10px; font-size: 13px; font-weight: 700; color: #166534; background: #dcfce7; padding: 8px 12px; border-radius: 6px; border: 1px solid #86efac;">
+        ✅ Token copiado para a área de transferência! Insira no App Mobile.
+      </div>
     </div>
   </div>
 </div>
@@ -253,6 +280,41 @@
 <script src="/js/auth.js"></script>
 <script>
   const fields = ['initial_bank_usd', 'risk_per_trade_pct', 'min_risk_reward_ratio', 'scanner_top_limit', 'scanner_timeframe', 'mode', 'selected_exchange', 'exchange_api_key', 'exchange_api_secret'];
+
+  async function loadCompanyToken() {
+    const tokenInput = document.getElementById('companyTokenInput');
+    if (!tokenInput) return;
+    tokenInput.value = 'Carregando token...';
+    try {
+      const data = await fetch('/api/master-crypto/company/mobile-token').then(r => r.json());
+      tokenInput.value = data.mobile_token || '';
+    } catch (_) {
+      tokenInput.value = 'Nao foi possivel carregar o token';
+    }
+  }
+
+  async function copyCompanyToken() {
+    const tokenInput = document.getElementById('companyTokenInput');
+    if (!tokenInput?.value || tokenInput.value.includes('Carregando') || tokenInput.value.includes('Nao foi')) return;
+    await navigator.clipboard.writeText(tokenInput.value);
+      const msg = document.getElementById('tokenCopiedMsg');
+      msg.style.display = 'block';
+      setTimeout(() => { msg.style.display = 'none'; }, 3000);
+  }
+
+  async function generateNewCompanyToken() {
+    if (!confirm('Gerar novo token? O token anterior deixara de autenticar o app mobile desta empresa.')) return;
+    const tokenInput = document.getElementById('companyTokenInput');
+    tokenInput.value = 'Gerando novo token...';
+    try {
+      const data = await fetch('/api/master-crypto/company/mobile-token/regenerate', { method: 'POST' }).then(r => r.json());
+      tokenInput.value = data.mobile_token || '';
+      alert('Novo token gerado e salvo para esta empresa. Atualize o token no aplicativo celular.');
+    } catch (_) {
+      await loadCompanyToken();
+      alert('Nao foi possivel gerar um novo token agora.');
+    }
+  }
 
   function switchTab(tabId, btn) {
     document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
@@ -276,7 +338,9 @@
     await (window._iahubAuthReady || Promise.resolve());
     setStatus('Carregando parâmetros da empresa...');
     const companyName = window._iahubEmpresa?.nome || 'Empresa Selecionada';
-    document.getElementById('companyActiveLabel').textContent = `${companyName} (ID: ${window._iahubEmpresa?.id || '-'})`;
+    const companyId = window._iahubEmpresa?.id || '-';
+    document.getElementById('companyActiveLabel').textContent = `${companyName} (ID: ${companyId})`;
+    await loadCompanyToken();
 
     try {
       const data = await fetch('/api/master-crypto/company/settings').then(r => r.json());

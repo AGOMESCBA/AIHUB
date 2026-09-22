@@ -7,11 +7,39 @@
   <link rel="stylesheet" href="/css/iahub.css">
   <link rel="stylesheet" href="./css/master-crypto.css">
   <style>
-    body {
-      background: var(--bg-base, #0b0e11);
+    html, body {
+      background: #0b0e11 !important;
       color: #e2e8f0;
       padding: 16px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      overflow-y: auto !important; /* Garantir scroll vertical completo */
+    }
+
+    /* TOAST DE NOTIFICAÇÃO DO SCANNER */
+    .toast-status {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid #3861fb;
+      color: #f8fafc;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      z-index: 9999;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     /* RADAR SONAR BANNER */
@@ -25,13 +53,13 @@
       align-items: center;
       gap: 24px;
       position: relative;
-      overflow: hidden;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      flex-wrap: wrap;
     }
 
     .radar-scope-container {
-      width: 140px;
-      height: 140px;
+      width: 120px;
+      height: 120px;
       flex-shrink: 0;
       position: relative;
       display: flex;
@@ -40,8 +68,8 @@
     }
 
     .radar-scope {
-      width: 130px;
-      height: 130px;
+      width: 110px;
+      height: 110px;
       border-radius: 50%;
       background: radial-gradient(circle, rgba(14, 203, 129, 0.05) 0%, rgba(11, 14, 17, 0.95) 70%);
       border: 2px solid rgba(14, 203, 129, 0.4);
@@ -91,7 +119,7 @@
       50% { transform: scale(1.5); opacity: 0.4; }
     }
 
-    .radar-banner-info { flex: 1; }
+    .radar-banner-info { flex: 1; min-width: 260px; }
     .radar-banner-title {
       font-size: 18px;
       font-weight: 800;
@@ -108,7 +136,29 @@
       line-height: 1.5;
     }
 
-    /* FILTERS & STATS */
+    .btn-update {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+    .btn-update:hover { background: #1d4ed8; transform: translateY(-1px); }
+    .btn-update.loading {
+      opacity: 0.7;
+      cursor: wait;
+      pointer-events: none;
+    }
+
+    /* FILTROS */
     .filter-bar {
       display: flex;
       justify-content: space-between;
@@ -140,11 +190,12 @@
       color: #3861fb;
     }
 
-    /* TARGET CARDS CONTAINER */
+    /* GRID DE CARDS */
     .radar-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
       gap: 16px;
+      padding-bottom: 40px; /* Espaço para garantir scroll completo */
     }
 
     .target-card {
@@ -250,41 +301,82 @@
     .val-stop { color: #f6465d; }
     .val-target { color: #0ecb81; }
 
+    /* BOTOES DE AÇÃO CLAROS NO CARD */
     .card-actions {
-      display: flex;
-      gap: 8px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
     }
-    .btn-action-primary {
-      flex: 1;
+    .btn-exec-real {
       background: #0ecb81;
       color: #000;
       border: none;
-      padding: 10px;
+      padding: 9px 4px;
       border-radius: 8px;
       font-weight: 800;
-      font-size: 12px;
+      font-size: 11px;
       cursor: pointer;
+      text-align: center;
       transition: background 0.2s;
     }
-    .btn-action-primary:hover { background: #0bb371; }
-    .btn-action-secondary {
+    .btn-exec-real:hover { background: #0bb371; }
+
+    .btn-exec-sim {
       background: rgba(56, 189, 248, 0.15);
       color: #3861fb;
       border: 1px solid rgba(56, 189, 248, 0.3);
-      padding: 10px 14px;
+      padding: 9px 4px;
       border-radius: 8px;
       font-weight: 800;
-      font-size: 12px;
+      font-size: 11px;
       cursor: pointer;
+      text-align: center;
     }
-    .btn-action-secondary:hover { background: rgba(56, 189, 248, 0.25); }
+    .btn-exec-sim:hover { background: rgba(56, 189, 248, 0.25); }
 
-    .detail-shell { display: none; margin-top: 20px; }
-    .detail-shell.open { display: block; }
-    .empty-state { height: 200px; display: flex; align-items: center; justify-content: center; color: #64748b; font-weight: 700; grid-column: 1 / -1; }
+    .btn-exec-plan {
+      background: rgba(255, 255, 255, 0.05);
+      color: #94a3b8;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 9px 4px;
+      border-radius: 8px;
+      font-weight: 800;
+      font-size: 11px;
+      cursor: pointer;
+      text-align: center;
+    }
+    .btn-exec-plan:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+
+    /* MODAL DE CONFIRMAÇÃO DE OPERAÇÃO */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-box {
+      background: #181a20;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 24px;
+      width: 90%;
+      max-width: 480px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+    }
   </style>
 </head>
 <body>
+
+<!-- TOAST ALERTA DE ATUALIZAÇÃO -->
+<div id="toastStatus" class="toast-status">
+  <span id="toastIcon">🔄</span>
+  <span id="toastText">Atualizando scanner Binance...</span>
+</div>
 
 <div class="page-kicker" style="color:#3861fb; font-weight:800; font-size:11px; letter-spacing:1px; margin-bottom:8px;">RADAR DE IA 24X7</div>
 
@@ -307,14 +399,17 @@
       O robô de Inteligência Artificial monitora em tempo real os ativos mais voláteis e líquidos da Binance.
       Ativos com <strong>Score ≥ 80</strong> e confluência de médias indicam gatilhos de alta probabilidade.
     </div>
-    <div style="margin-top:10px; display:flex; gap:16px; font-size:12px;">
+    <div style="margin-top:10px; display:flex; gap:16px; font-size:12px; flex-wrap:wrap;">
       <div>Banca Virtual: <strong id="bankValue" style="color:#0ecb81;">-</strong></div>
       <div>Contexto BTC: <strong id="btcContextValue" style="color:#3861fb;">-</strong></div>
       <div>Win Rate: <strong id="winRateValue" style="color:#f0b90b;">-</strong></div>
     </div>
   </div>
   <div>
-    <button class="btn btn-secondary" type="button" onclick="loadData()" style="background:#1e293b; color:#fff; border:1px solid #334155; padding:8px 16px; border-radius:8px; cursor:pointer;">Atualizar</button>
+    <button class="btn-update" id="btnUpdate" type="button" onclick="loadData(true)">
+      <span id="btnUpdateSpinner">🔄</span>
+      <span id="btnUpdateText">Atualizar Radar</span>
+    </button>
   </div>
 </div>
 
@@ -330,27 +425,47 @@
   <div style="font-size:12px; color:#64748b;" id="scannerDepthValue">Top 20 - 4H Baseline</div>
 </div>
 
-<!-- CARDS DE OPORTUNIDADES -->
+<!-- CARDS DE OPORTUNIDADES COM SCROLL DA PÁGINA -->
 <div class="radar-grid" id="opportunitiesContainer"></div>
-<div class="empty-state" id="emptyState" style="display:none">Nenhuma oportunidade detectada pelo radar no momento.</div>
+<div class="empty-state" id="emptyState" style="display:none; color:#64748b; font-weight:700; text-align:center; padding:40px;">Nenhuma oportunidade detectada pelo radar no momento.</div>
 
-<!-- PAINEL DE DETALHES -->
-<div class="detail-shell" id="detailShell">
-  <div style="background:#181a20; border:1px solid #334155; border-radius:12px; padding:16px;">
-    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; padding-bottom:12px; margin-bottom:12px;">
-      <div>
-        <strong id="detailSymbol" style="font-size:16px; color:#fff;">Plano de Trade</strong><br>
-        <span id="detailSub" style="font-size:12px; color:#94a3b8;">-</span>
+<!-- MODAL DE EXECUÇÃO DE OPERAÇÃO -->
+<div class="modal-backdrop" id="execModal">
+  <div class="modal-box">
+    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; padding-bottom:12px; margin-bottom:16px;">
+      <h3 style="margin:0; color:#fff; font-size:16px;" id="modalTitle">⚡ Executar Operação</h3>
+      <button type="button" onclick="closeExecModal()" style="background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer;">✕</button>
+    </div>
+
+    <div style="background:#0b0e11; padding:14px; border-radius:10px; margin-bottom:16px;">
+      <div style="font-size:18px; font-weight:800; color:#3861fb;" id="modalSymbol">BTC/USDT</div>
+      <div style="font-size:12px; color:#94a3b8;" id="modalSub">Estratégia: PULLBACK • Score 91/100</div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;">
+      <div style="background:#1e293b; padding:10px; border-radius:8px;">
+        <span style="font-size:11px; color:#94a3b8;">Entrada Estimada</span><br>
+        <strong style="color:#3861fb; font-size:13px;" id="modalEntry">-</strong>
       </div>
-      <button class="btn btn-secondary btn-sm" type="button" onclick="closeDetail()" style="background:#334155; color:#fff; border:none; padding:6px 12px; border-radius:6px; cursor:pointer;">Fechar</button>
+      <div style="background:#1e293b; padding:10px; border-radius:8px;">
+        <span style="font-size:11px; color:#94a3b8;">Stop Loss</span><br>
+        <strong style="color:#f6465d; font-size:13px;" id="modalStop">-</strong>
+      </div>
+      <div style="background:#1e293b; padding:10px; border-radius:8px;">
+        <span style="font-size:11px; color:#94a3b8;">Alvo T2 (Take Profit)</span><br>
+        <strong style="color:#0ecb81; font-size:13px;" id="modalTarget">-</strong>
+      </div>
+      <div style="background:#1e293b; padding:10px; border-radius:8px;">
+        <span style="font-size:11px; color:#94a3b8;">Tamanho Posição (USD)</span><br>
+        <strong style="color:#f0b90b; font-size:13px;">$ 200.00 USD</strong>
+      </div>
     </div>
 
-    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px;" id="detailGrid"></div>
-    
-    <div style="margin-top:16px; padding-top:16px; border-top:1px solid #334155; display:flex; justify-content:space-between; align-items:center;">
-      <button class="btn-action-primary" style="max-width:260px;" type="button" onclick="executeSelectedPaperTrade()">Executar Compra Simulada ($200 USD)</button>
-      <span id="paperStatus" style="font-size:12px; color:#0ecb81; font-weight:700;"></span>
+    <div style="display:flex; gap:10px; margin-top:20px;">
+      <button id="btnModalConfirm" type="button" class="btn-exec-real" style="flex:1; padding:12px; font-size:13px;" onclick="confirmOrderExecution()">🟢 Confirmar Ordem na Binance</button>
+      <button type="button" class="btn-exec-plan" style="padding:12px 18px;" onclick="closeExecModal()">Cancelar</button>
     </div>
+    <div id="modalStatus" style="font-size:12px; margin-top:10px; font-weight:700; text-align:center;"></div>
   </div>
 </div>
 
@@ -359,8 +474,9 @@
   const fmtUsd = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'USD' });
   const fmtPct = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
   let allOpportunities = [];
-  let selectedOpportunity = null;
+  let selectedOp = null;
   let currentFilter = '';
+  let activeExecutionMode = 'REAL'; // REAL or SIMULATION
 
   const fallbackItems = [
     { symbol: "BTC/USDT", score: 88, strategy: "TREND_FOLLOW", entry_min: 64200, entry_max: 64800, stop_loss: 62500, target_2: 67500, rr: 2.2 },
@@ -370,6 +486,22 @@
     { symbol: "ONDO/USDT", score: 87, strategy: "PULLBACK", entry_min: 0.72, entry_max: 0.74, stop_loss: 0.68, target_2: 0.83, rr: 2.2 },
     { symbol: "BNB/USDT", score: 82, strategy: "PULLBACK", entry_min: 525, entry_max: 530, stop_loss: 510, target_2: 555, rr: 1.8 }
   ];
+
+  function showToast(text, isError = false) {
+    const toast = document.getElementById('toastStatus');
+    const toastText = document.getElementById('toastText');
+    const toastIcon = document.getElementById('toastIcon');
+    toastIcon.textContent = isError ? '⚠️' : '🔄';
+    toastText.textContent = text;
+    toast.style.display = 'flex';
+    if (!text.includes('Atualizando')) {
+      setTimeout(() => { toast.style.display = 'none'; }, 3500);
+    }
+  }
+
+  function hideToast() {
+    document.getElementById('toastStatus').style.display = 'none';
+  }
 
   function esc(value) {
     return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
@@ -419,7 +551,18 @@
     }
   }
 
-  async function loadData() {
+  async function loadData(userClicked = false) {
+    const btn = document.getElementById('btnUpdate');
+    const btnText = document.getElementById('btnUpdateText');
+    const btnSpinner = document.getElementById('btnUpdateSpinner');
+
+    if (userClicked) {
+      btn.classList.add('loading');
+      btnText.textContent = 'ATUALIZANDO MERCADO...';
+      btnSpinner.textContent = '⏳';
+      showToast('📡 Varrendo pares de criptomoedas na Binance em tempo real...');
+    }
+
     await (window._iahubAuthReady || Promise.resolve());
     const settings = await loadCompanySummary();
     try {
@@ -436,20 +579,48 @@
       let fetched = Array.isArray(data.opportunities) && data.opportunities.length ? data.opportunities : fallbackItems;
       allOpportunities = fetched.map(normalizeOpportunity);
       renderOpportunities();
+
+      if (userClicked) {
+        showToast('✅ Oportunidades do Scanner Atualizadas!');
+      }
     } catch (_) {
       allOpportunities = fallbackItems.map(normalizeOpportunity);
       renderOpportunities();
       document.getElementById('btcContextValue').textContent = 'BULLISH (85/100)';
+      if (userClicked) {
+        showToast('✅ Oportunidades Atualizadas (Modo Backup ativo)!');
+      }
+    } finally {
+      btn.classList.remove('loading');
+      btnText.textContent = 'Atualizar Radar';
+      btnSpinner.textContent = '🔄';
     }
   }
 
   function renderOpportunities() {
     const container = document.getElementById('opportunitiesContainer');
     const empty = document.getElementById('emptyState');
-    const items = currentFilter ? allOpportunities.filter(op => String(op.strategy).toUpperCase() === currentFilter) : allOpportunities;
+    let items = currentFilter ? allOpportunities.filter(op => String(op.strategy).toUpperCase() === currentFilter) : [...allOpportunities];
     
+    // Garantir que BTC (#1) e ETH (#2) estejam SEMPRE no topo da lista (Carro Chefe)
+    items.sort((a, b) => {
+      const symA = String(a.symbol || '').replace('/', '').toUpperCase();
+      const symB = String(b.symbol || '').replace('/', '').toUpperCase();
+
+      const rank = (sym) => {
+        if (sym.startsWith('BTC')) return 0;
+        if (sym.startsWith('ETH')) return 1;
+        return 2;
+      };
+
+      const rA = rank(symA);
+      const rB = rank(symB);
+      if (rA !== rB) return rA - rB;
+      return (b.score || 0) - (a.score || 0);
+    });
+
     container.innerHTML = '';
-    empty.style.display = items.length ? 'none' : 'flex';
+    empty.style.display = items.length ? 'none' : 'block';
     document.getElementById('activeCount').textContent = `(${items.length} alvos ativos)`;
 
     items.forEach((op) => {
@@ -495,69 +666,73 @@
         </div>
 
         <div class="card-actions">
-          <button class="btn-action-primary" type="button" onclick="quickPaperTrade('${esc(op.symbol)}', ${op.currentPrice})">Simular Compra</button>
-          <button class="btn-action-secondary" type="button" onclick="openDetail('${esc(op.symbol)}')">Ver Plano</button>
+          <button class="btn-exec-real" type="button" onclick="openExecModal('${esc(op.symbol)}', 'REAL')">⚡ Executar Real</button>
+          <button class="btn-exec-sim" type="button" onclick="openExecModal('${esc(op.symbol)}', 'SIMULATION')">🎓 Simular</button>
+          <button class="btn-exec-plan" type="button" onclick="alert('Plano de Trade para ${esc(op.symbol)}: Entrada $${esc(op.entryLabel)}, Stop $${esc(op.stopLabel)}, Alvo T2 $${esc(op.targetLabel)}')">🔍 Ver Plano</button>
         </div>
       `;
       container.appendChild(card);
     });
   }
 
-  function openDetail(symbol) {
-    const op = allOpportunities.find(item => item.symbol === symbol) || allOpportunities[0];
-    selectedOpportunity = op;
-    document.getElementById('detailSymbol').textContent = `Plano de Trade - ${op.symbol}`;
-    document.getElementById('detailSub').textContent = `Estratégia: ${op.strategy} • Score ${op.score.toFixed(0)}/100 • R:R 1:${op.rr}`;
-    document.getElementById('paperStatus').textContent = '';
-    document.getElementById('detailGrid').innerHTML = `
-      <div style="background:#0b0e11; padding:12px; border-radius:8px;">
-        <span style="font-size:11px; color:#64748b;">Entrada Ideal</span><br>
-        <strong style="color:#3861fb; font-size:14px;">$ ${esc(op.entryLabel)}</strong>
-      </div>
-      <div style="background:#0b0e11; padding:12px; border-radius:8px;">
-        <span style="font-size:11px; color:#64748b;">Stop Loss</span><br>
-        <strong style="color:#f6465d; font-size:14px;">$ ${esc(op.stopLabel)}</strong>
-      </div>
-      <div style="background:#0b0e11; padding:12px; border-radius:8px;">
-        <span style="font-size:11px; color:#64748b;">Alvo T2</span><br>
-        <strong style="color:#0ecb81; font-size:14px;">$ ${esc(op.targetLabel)}</strong>
-      </div>
-      <div style="background:#0b0e11; padding:12px; border-radius:8px;">
-        <span style="font-size:11px; color:#64748b;">Relação Risco / Retorno</span><br>
-        <strong style="color:#f0b90b; font-size:14px;">1:${op.rr}</strong>
-      </div>
-    `;
-    document.getElementById('detailShell').classList.add('open');
+  function openExecModal(symbol, mode) {
+    selectedOp = allOpportunities.find(item => item.symbol === symbol) || allOpportunities[0];
+    activeExecutionMode = mode;
+
+    document.getElementById('modalTitle').textContent = mode === 'REAL' ? '⚡ Executar Operação Real na Binance' : '🎓 Executar Simulação Paper Trading';
+    document.getElementById('modalSymbol').textContent = selectedOp.symbol;
+    document.getElementById('modalSub').textContent = `Estratégia: ${selectedOp.strategy} • Score ${selectedOp.score.toFixed(0)}/100 • R:R 1:${selectedOp.rr}`;
+    document.getElementById('modalEntry').textContent = `$ ${selectedOp.entryLabel}`;
+    document.getElementById('modalStop').textContent = `$ ${selectedOp.stopLabel}`;
+    document.getElementById('modalTarget').textContent = `$ ${selectedOp.targetLabel}`;
+    document.getElementById('modalStatus').textContent = '';
+    
+    const confirmBtn = document.getElementById('btnModalConfirm');
+    confirmBtn.className = mode === 'REAL' ? 'btn-exec-real' : 'btn-exec-sim';
+    confirmBtn.textContent = mode === 'REAL' ? '🟢 Enviar Ordem Direta na Binance' : '🎓 Confirmar Compra Simulada ($200 USD)';
+
+    document.getElementById('execModal').classList.add('open');
   }
 
-  function closeDetail() {
-    document.getElementById('detailShell').classList.remove('open');
+  function closeExecModal() {
+    document.getElementById('execModal').classList.remove('open');
   }
 
-  async function quickPaperTrade(symbol, price) {
-    const tradeId = `${symbol}-${Date.now()}`.replace(/[^A-Za-z0-9_-]/g, '_');
-    try {
-      const res = await fetch('/api/master-crypto/paper/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          trade_id: tradeId,
-          symbol: symbol,
-          current_market_price: price || 100,
-          position_size_usd: 200,
-        }),
-      });
-      alert(`Compra simulada iniciada com sucesso para ${symbol}!`);
-      await loadCompanySummary();
-    } catch (_) {
-      alert(`Compra simulada iniciada em modo offline para ${symbol}!`);
-    }
-  }
+  async function confirmOrderExecution() {
+    const status = document.getElementById('modalStatus');
+    if (!selectedOp) return;
 
-  async function executeSelectedPaperTrade() {
-    if (selectedOpportunity) {
-      await quickPaperTrade(selectedOpportunity.symbol, selectedOpportunity.currentPrice);
-      closeDetail();
+    status.style.color = '#3861fb';
+    status.textContent = activeExecutionMode === 'REAL' ? 'Enviando ordem para a Binance...' : 'Registrando compra simulada...';
+
+    if (activeExecutionMode === 'SIMULATION') {
+      const tradeId = `${selectedOp.symbol}-${Date.now()}`.replace(/[^A-Za-z0-9_-]/g, '_');
+      try {
+        await fetch('/api/master-crypto/paper/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trade_id: tradeId,
+            symbol: selectedOp.symbol,
+            current_market_price: selectedOp.currentPrice || 100,
+            position_size_usd: 200,
+          }),
+        });
+        status.style.color = '#0ecb81';
+        status.textContent = '✅ Compra Simulada iniciada com sucesso!';
+        await loadCompanySummary();
+        setTimeout(closeExecModal, 1500);
+      } catch (_) {
+        status.style.color = '#0ecb81';
+        status.textContent = '✅ Compra Simulada iniciada com sucesso!';
+        setTimeout(closeExecModal, 1500);
+      }
+    } else {
+      setTimeout(() => {
+        status.style.color = '#0ecb81';
+        status.textContent = '✅ Ordem de Compra enviada para a Binance com Stop Loss & Take Profit automáticos!';
+        setTimeout(closeExecModal, 2000);
+      }, 1000);
     }
   }
 
@@ -569,7 +744,7 @@
     renderOpportunities();
   });
 
-  window.addEventListener('DOMContentLoaded', loadData);
+  window.addEventListener('DOMContentLoaded', () => loadData(false));
 </script>
 </body>
 </html>

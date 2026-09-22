@@ -1,4 +1,5 @@
 import json
+import secrets
 from copy import deepcopy
 from pathlib import Path
 from threading import RLock
@@ -18,6 +19,10 @@ DEFAULT_SETTINGS = {
     "exchange_api_key": "",
     "exchange_api_secret": "",
 }
+
+
+def _new_mobile_token(company_id: int) -> str:
+    return f"MC-EMP-{company_id}-{secrets.token_urlsafe(24)}"
 
 
 class CompanyStore:
@@ -55,10 +60,13 @@ class CompanyStore:
         if key not in companies:
             companies[key] = {
                 "settings": deepcopy(DEFAULT_SETTINGS),
+                "mobile_token": _new_mobile_token(company_id),
                 "paper": {"active_trades": {}, "trade_history": []},
             }
         company = companies[key]
         company.setdefault("settings", deepcopy(DEFAULT_SETTINGS))
+        if not company.get("mobile_token"):
+            company["mobile_token"] = _new_mobile_token(company_id)
         company.setdefault("paper", {"active_trades": {}, "trade_history": []})
         company["paper"].setdefault("active_trades", {})
         company["paper"].setdefault("trade_history", [])
@@ -79,6 +87,22 @@ class CompanyStore:
             company["settings"] = {**deepcopy(DEFAULT_SETTINGS), **company.get("settings", {}), **clean}
             self._save(data)
             return deepcopy(company["settings"])
+
+    def get_mobile_token(self, company_id: int) -> Dict[str, str]:
+        with self._lock:
+            data = self._load()
+            company = self._company(data, company_id)
+            token = company["mobile_token"]
+            self._save(data)
+            return {"mobile_token": token}
+
+    def regenerate_mobile_token(self, company_id: int) -> Dict[str, str]:
+        with self._lock:
+            data = self._load()
+            company = self._company(data, company_id)
+            company["mobile_token"] = _new_mobile_token(company_id)
+            self._save(data)
+            return {"mobile_token": company["mobile_token"]}
 
     def get_paper_state(self, company_id: int) -> Dict[str, Any]:
         with self._lock:

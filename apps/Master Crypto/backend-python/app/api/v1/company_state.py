@@ -56,6 +56,18 @@ def get_company_summary(request: Request):
     return store.get_summary(ctx.company_id)
 
 
+@router.get("/mobile-token")
+def get_mobile_token(request: Request):
+    ctx = get_iahub_context(request)
+    return store.get_mobile_token(ctx.company_id)
+
+
+@router.post("/mobile-token/regenerate")
+def regenerate_mobile_token(request: Request):
+    ctx = get_iahub_context(request)
+    return store.regenerate_mobile_token(ctx.company_id)
+
+
 @router.post("/test-exchange")
 async def test_exchange_connection(req: ExchangeConnectionTest, request: Request):
     ctx = get_iahub_context(request)
