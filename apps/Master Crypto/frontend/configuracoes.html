@@ -116,9 +116,28 @@
     }
     .test-feedback.success { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
     .test-feedback.error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    .copy-toast {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      z-index: 9999;
+      display: none;
+      min-width: 220px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid #86efac;
+      background: #dcfce7;
+      color: #166534;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+      font-size: 14px;
+      font-weight: 800;
+      text-align: center;
+    }
+    .copy-toast.show { display: block; }
   </style>
 </head>
 <body>
+<div id="copyToast" class="copy-toast">Token copiado</div>
 <div class="page-kicker">CONFIGURAÇÃO / PARÂMETROS & RISCO</div>
 <div class="head-row" style="margin-bottom: 16px;">
   <div>
@@ -296,10 +315,44 @@
   async function copyCompanyToken() {
     const tokenInput = document.getElementById('companyTokenInput');
     if (!tokenInput?.value || tokenInput.value.includes('Carregando') || tokenInput.value.includes('Nao foi')) return;
-    await navigator.clipboard.writeText(tokenInput.value);
-      const msg = document.getElementById('tokenCopiedMsg');
-      msg.style.display = 'block';
-      setTimeout(() => { msg.style.display = 'none'; }, 3000);
+    const copied = await copyTextToClipboard(tokenInput.value, tokenInput);
+    if (!copied) {
+      alert('Nao foi possivel copiar automaticamente. Selecione o token e copie manualmente com Ctrl+C.');
+      return;
+    }
+    showCopyToast();
+    const msg = document.getElementById('tokenCopiedMsg');
+    msg.style.display = 'block';
+    setTimeout(() => { msg.style.display = 'none'; }, 3000);
+  }
+
+  async function copyTextToClipboard(text, inputEl) {
+    inputEl.focus();
+    inputEl.select();
+    inputEl.setSelectionRange(0, text.length);
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (_) {}
+
+    try {
+      return document.execCommand('copy');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function showCopyToast() {
+    const toast = document.getElementById('copyToast');
+    if (!toast) return;
+    toast.classList.add('show');
+    clearTimeout(window._copyToastTimer);
+    window._copyToastTimer = setTimeout(() => {
+      toast.classList.remove('show');
+    }, 2600);
   }
 
   async function generateNewCompanyToken() {

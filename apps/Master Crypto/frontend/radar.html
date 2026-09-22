@@ -15,7 +15,16 @@
       margin: 0;
       min-height: 100vh;
       overflow-y: auto !important; /* Garantir scroll vertical completo */
+      box-sizing: border-box;
+      scrollbar-color: #334155 #0b0e11;
+      scrollbar-width: thin;
     }
+    *, *::before, *::after { box-sizing: inherit; }
+    body { padding-bottom: 44px; }
+    body::-webkit-scrollbar { width: 10px; }
+    body::-webkit-scrollbar-track { background: #0b0e11; }
+    body::-webkit-scrollbar-thumb { background: #334155; border-radius: 999px; }
+    body::-webkit-scrollbar-thumb:hover { background: #475569; }
 
     /* TOAST DE NOTIFICAÇÃO DO SCANNER */
     .toast-status {
@@ -166,12 +175,19 @@
       margin-bottom: 16px;
       gap: 12px;
       flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      padding: 10px 0;
+      background: rgba(11, 14, 17, 0.94);
+      backdrop-filter: blur(8px);
     }
 
     .strategy-chips {
       display: flex;
       gap: 8px;
       overflow-x: auto;
+      padding-bottom: 2px;
     }
     .group-chip {
       background: rgba(30, 41, 59, 0.7);
@@ -193,9 +209,9 @@
     /* GRID DE CARDS */
     .radar-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
       gap: 16px;
-      padding-bottom: 40px; /* Espaço para garantir scroll completo */
+      padding-bottom: 56px; /* Espaco para garantir scroll completo */
     }
 
     .target-card {
@@ -205,6 +221,9 @@
       padding: 16px;
       transition: all 0.25s ease;
       position: relative;
+      min-height: 326px;
+      display: flex;
+      flex-direction: column;
     }
     .target-card:hover {
       transform: translateY(-2px);
@@ -217,6 +236,7 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 12px;
+      gap: 12px;
     }
     .symbol-box {
       display: flex;
@@ -273,6 +293,7 @@
       align-items: center;
       gap: 6px;
       margin-bottom: 14px;
+      min-height: 48px;
     }
     .signal-buy {
       background: rgba(14, 203, 129, 0.15);
@@ -306,6 +327,7 @@
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
       gap: 6px;
+      margin-top: auto;
     }
     .btn-exec-real {
       background: #0ecb81;
@@ -367,6 +389,69 @@
       width: 90%;
       max-width: 480px;
       box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+    }
+    .order-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .order-cell {
+      background: #1e293b;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      padding: 10px;
+      border-radius: 8px;
+    }
+    .order-cell span {
+      color: #94a3b8;
+      display: block;
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+    .order-cell strong { font-size: 13px; }
+    .order-input {
+      width: 100%;
+      height: 38px;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      background: #0b0e11;
+      color: #f8fafc;
+      font-size: 14px;
+      font-weight: 800;
+      padding: 0 10px;
+      outline: none;
+    }
+    .order-input:focus {
+      border-color: #3861fb;
+      box-shadow: 0 0 0 3px rgba(56, 97, 251, 0.16);
+    }
+    .order-hint {
+      margin-top: 6px;
+      color: #64748b;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    @media (max-width: 1100px) {
+      .radar-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+      .metrics-row { grid-template-columns: 1fr; }
+      .target-card { min-height: 0; }
+    }
+
+    @media (max-width: 720px) {
+      html, body { padding: 12px; }
+      .radar-banner { padding: 16px; gap: 14px; }
+      .radar-scope-container { width: 92px; height: 92px; }
+      .radar-scope { width: 86px; height: 86px; }
+      .radar-banner-title { font-size: 16px; align-items: flex-start; flex-direction: column; }
+      .radar-grid { grid-template-columns: 1fr; gap: 12px; }
+      .card-actions { grid-template-columns: 1fr; }
+      .order-grid { grid-template-columns: 1fr; }
+      .modal-actions { flex-direction: column; }
+      .modal-actions > button { width: 100%; }
+      .filter-bar { align-items: stretch; }
+      .strategy-chips { width: 100%; }
+      .btn-update { width: 100%; justify-content: center; }
     }
   </style>
 </head>
@@ -442,26 +527,51 @@
       <div style="font-size:12px; color:#94a3b8;" id="modalSub">Estratégia: PULLBACK • Score 91/100</div>
     </div>
 
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;">
-      <div style="background:#1e293b; padding:10px; border-radius:8px;">
-        <span style="font-size:11px; color:#94a3b8;">Entrada Estimada</span><br>
-        <strong style="color:#3861fb; font-size:13px;" id="modalEntry">-</strong>
+    <div class="order-grid">
+      <div class="order-cell">
+        <span>Preço atual do ativo</span>
+        <strong style="color:#f8fafc;" id="modalCurrentPrice">-</strong>
       </div>
-      <div style="background:#1e293b; padding:10px; border-radius:8px;">
-        <span style="font-size:11px; color:#94a3b8;">Stop Loss</span><br>
-        <strong style="color:#f6465d; font-size:13px;" id="modalStop">-</strong>
+      <div class="order-cell">
+        <span>Saldo disponível</span>
+        <strong style="color:#0ecb81;" id="modalAvailableBalance">-</strong>
       </div>
-      <div style="background:#1e293b; padding:10px; border-radius:8px;">
-        <span style="font-size:11px; color:#94a3b8;">Alvo T2 (Take Profit)</span><br>
-        <strong style="color:#0ecb81; font-size:13px;" id="modalTarget">-</strong>
+      <div class="order-cell">
+        <span>Entrada estimada</span>
+        <strong style="color:#3861fb;" id="modalEntry">-</strong>
       </div>
-      <div style="background:#1e293b; padding:10px; border-radius:8px;">
-        <span style="font-size:11px; color:#94a3b8;">Tamanho Posição (USD)</span><br>
-        <strong style="color:#f0b90b; font-size:13px;">$ 200.00 USD</strong>
+      <div class="order-cell">
+        <span>Stop loss</span>
+        <strong style="color:#f6465d;" id="modalStop">-</strong>
+      </div>
+      <div class="order-cell">
+        <span>Alvo T2 (take profit)</span>
+        <strong style="color:#0ecb81;" id="modalTarget">-</strong>
+      </div>
+      <div class="order-cell">
+        <span>Risco / Retorno</span>
+        <strong style="color:#f0b90b;" id="modalRR">-</strong>
       </div>
     </div>
 
-    <div style="display:flex; gap:10px; margin-top:20px;">
+    <div class="order-grid">
+      <div class="order-cell">
+        <span>Valor a investir (USDT)</span>
+        <input id="modalInvestUsd" class="order-input" type="number" min="0" step="0.01" value="200">
+        <div class="order-hint">Informe quanto quer usar nesta compra.</div>
+      </div>
+      <div class="order-cell">
+        <span>Quantidade do ativo</span>
+        <input id="modalQuantity" class="order-input" type="number" min="0" step="0.000001" value="0">
+        <div class="order-hint">Calculada pelo preço atual. Pode editar manualmente.</div>
+      </div>
+    </div>
+
+    <div style="background:#0b0e11; border:1px solid #334155; border-radius:10px; padding:12px; margin-bottom:16px; font-size:12px; color:#94a3b8;">
+      <div>Resumo da ordem: <strong id="modalOrderSummary" style="color:#f8fafc;">-</strong></div>
+    </div>
+
+    <div class="modal-actions" style="display:flex; gap:10px; margin-top:20px;">
       <button id="btnModalConfirm" type="button" class="btn-exec-real" style="flex:1; padding:12px; font-size:13px;" onclick="confirmOrderExecution()">🟢 Confirmar Ordem na Binance</button>
       <button type="button" class="btn-exec-plan" style="padding:12px 18px;" onclick="closeExecModal()">Cancelar</button>
     </div>
@@ -477,6 +587,7 @@
   let selectedOp = null;
   let currentFilter = '';
   let activeExecutionMode = 'REAL'; // REAL or SIMULATION
+  let availableBalanceUsd = 0;
 
   const fallbackItems = [
     { symbol: "BTC/USDT", score: 88, strategy: "TREND_FOLLOW", entry_min: 64200, entry_max: 64800, stop_loss: 62500, target_2: 67500, rr: 2.2 },
@@ -538,13 +649,23 @@
       const metrics = summary.paper_metrics || {};
       const settings = summary.settings || {};
       const balance = Number(metrics.current_balance_usd ?? settings.initial_bank_usd ?? 10000);
+      availableBalanceUsd = balance;
       const wins = Number(metrics.wins_count || 0);
       const losses = Number(metrics.losses_count || 0);
       document.getElementById('bankValue').textContent = fmtUsd.format(balance);
       document.getElementById('winRateValue').textContent = `${fmtPct.format(Number(metrics.win_rate_pct || 0))}% (${wins}W / ${losses}L)`;
       document.getElementById('scannerDepthValue').textContent = `Top ${settings.scanner_top_limit || 20} - ${(settings.scanner_timeframe || '4h').toUpperCase()} Baseline`;
+      try {
+        const realBalance = await fetch('/api/master-crypto/orders/balance?exchange=BINANCE').then(r => {
+          if (!r.ok) throw new Error('balance');
+          return r.json();
+        });
+        availableBalanceUsd = Number(realBalance.free_usdt ?? balance);
+        document.getElementById('bankValue').textContent = `USDT ${availableBalanceUsd.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      } catch (_) {}
       return settings;
     } catch (_) {
+      availableBalanceUsd = 10000;
       document.getElementById('bankValue').textContent = '$10,000.00';
       document.getElementById('winRateValue').textContent = '0.0%';
       return { scanner_top_limit: 20, scanner_timeframe: '4h' };
@@ -629,7 +750,8 @@
 
       const scoreClass = op.score >= 90 ? 'score-high' : (op.score >= 80 ? 'score-mid' : 'score-low');
       const signalClass = op.isEntry ? 'signal-buy' : 'signal-wait';
-      const signalText = op.isEntry ? '🟢 É HORA DE ENTRAR • Cotação na zona ideal com gatilho ativo' : '🟡 AGUARDAR CONFIRMAÇÃO • Aguarde retorno ao suporte';
+      const signalBadgeText = op.isEntry ? '🟢 ENTRAR AGORA' : '🔴 AGUARDAR (NÃO ENTRAR)';
+      const currentPriceFormatted = Number(op.currentPrice || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
       card.innerHTML = `
         <div class="card-head">
@@ -646,8 +768,9 @@
           </div>
         </div>
 
-        <div class="signal-banner ${signalClass}">
-          <span>${signalText}</span>
+        <div class="signal-banner ${signalClass}" style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-weight:800;">${signalBadgeText}</span>
+          <span style="font-size:11px; font-weight:700;">Preço Atual: <strong style="color:#fff;">$ ${currentPriceFormatted}</strong></span>
         </div>
 
         <div class="metrics-row">
@@ -685,13 +808,50 @@
     document.getElementById('modalEntry').textContent = `$ ${selectedOp.entryLabel}`;
     document.getElementById('modalStop').textContent = `$ ${selectedOp.stopLabel}`;
     document.getElementById('modalTarget').textContent = `$ ${selectedOp.targetLabel}`;
+    document.getElementById('modalRR').textContent = `1:${selectedOp.rr || '-'}`;
+    document.getElementById('modalCurrentPrice').textContent = fmtUsd.format(Number(selectedOp.currentPrice || 0));
+    document.getElementById('modalAvailableBalance').textContent = fmtUsd.format(Number(availableBalanceUsd || 0));
     document.getElementById('modalStatus').textContent = '';
+
+    const defaultUsd = Math.min(200, Number(availableBalanceUsd || 200));
+    document.getElementById('modalInvestUsd').value = defaultUsd > 0 ? defaultUsd.toFixed(2) : '0.00';
+    updateOrderQuantityFromUsd();
     
     const confirmBtn = document.getElementById('btnModalConfirm');
     confirmBtn.className = mode === 'REAL' ? 'btn-exec-real' : 'btn-exec-sim';
     confirmBtn.textContent = mode === 'REAL' ? '🟢 Enviar Ordem Direta na Binance' : '🎓 Confirmar Compra Simulada ($200 USD)';
 
     document.getElementById('execModal').classList.add('open');
+  }
+
+  function updateOrderQuantityFromUsd() {
+    const price = Number(selectedOp?.currentPrice || 0);
+    const usdInput = document.getElementById('modalInvestUsd');
+    const qtyInput = document.getElementById('modalQuantity');
+    const usd = Number(usdInput?.value || 0);
+    if (!price || !qtyInput) return;
+    qtyInput.value = (usd / price).toFixed(8);
+    updateOrderSummary();
+  }
+
+  function updateOrderUsdFromQuantity() {
+    const price = Number(selectedOp?.currentPrice || 0);
+    const usdInput = document.getElementById('modalInvestUsd');
+    const qtyInput = document.getElementById('modalQuantity');
+    const qty = Number(qtyInput?.value || 0);
+    if (!price || !usdInput) return;
+    usdInput.value = (qty * price).toFixed(2);
+    updateOrderSummary();
+  }
+
+  function updateOrderSummary() {
+    const usd = Number(document.getElementById('modalInvestUsd')?.value || 0);
+    const qty = Number(document.getElementById('modalQuantity')?.value || 0);
+    const symbol = selectedOp?.symbol || '-';
+    const base = symbol.split('/')[0] || symbol;
+    const summary = document.getElementById('modalOrderSummary');
+    if (!summary) return;
+    summary.textContent = `${fmtUsd.format(usd)} para comprar aproximadamente ${qty.toFixed(8)} ${base}`;
   }
 
   function closeExecModal() {
@@ -704,6 +864,21 @@
 
     status.style.color = '#3861fb';
     status.textContent = activeExecutionMode === 'REAL' ? 'Enviando ordem para a Binance...' : 'Registrando compra simulada...';
+    const investUsd = Number(document.getElementById('modalInvestUsd')?.value || 0);
+    const quantity = Number(document.getElementById('modalQuantity')?.value || 0);
+    const entryPrice = Number(selectedOp.currentPrice || 0);
+
+    if (!investUsd || !quantity || !entryPrice) {
+      status.style.color = '#f6465d';
+      status.textContent = 'Informe um valor ou quantidade valida para executar.';
+      return;
+    }
+
+    if (availableBalanceUsd > 0 && investUsd > availableBalanceUsd) {
+      status.style.color = '#f6465d';
+      status.textContent = 'Valor maior que o saldo disponivel.';
+      return;
+    }
 
     if (activeExecutionMode === 'SIMULATION') {
       const tradeId = `${selectedOp.symbol}-${Date.now()}`.replace(/[^A-Za-z0-9_-]/g, '_');
@@ -714,8 +889,8 @@
           body: JSON.stringify({
             trade_id: tradeId,
             symbol: selectedOp.symbol,
-            current_market_price: selectedOp.currentPrice || 100,
-            position_size_usd: 200,
+            current_market_price: entryPrice,
+            position_size_usd: investUsd,
           }),
         });
         status.style.color = '#0ecb81';
@@ -728,11 +903,32 @@
         setTimeout(closeExecModal, 1500);
       }
     } else {
-      setTimeout(() => {
+      try {
+        const res = await fetch('/api/master-crypto/orders/real', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            symbol: selectedOp.symbol,
+            exchange: 'BINANCE',
+            side: 'BUY',
+            order_type: 'LIMIT',
+            quantity,
+            entry_price: entryPrice,
+            stop_loss: Number(String(selectedOp.stopLabel).replace(/[^0-9.]/g, '')) || null,
+            target_t2: Number(String(selectedOp.targetLabel).replace(/[^0-9.]/g, '')) || null,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.status === 'REJECTED') {
+          throw new Error(data.detail || data.reason || 'Nao foi possivel enviar a ordem.');
+        }
         status.style.color = '#0ecb81';
-        status.textContent = '✅ Ordem de Compra enviada para a Binance com Stop Loss & Take Profit automáticos!';
+        status.textContent = `✅ Ordem enviada. Quantidade: ${quantity.toFixed(8)} ${selectedOp.symbol.split('/')[0]}`;
         setTimeout(closeExecModal, 2000);
-      }, 1000);
+      } catch (err) {
+        status.style.color = '#f6465d';
+        status.textContent = err.message || 'Nao foi possivel enviar a ordem real.';
+      }
     }
   }
 
@@ -742,6 +938,11 @@
     document.querySelectorAll('.group-chip').forEach(item => item.classList.toggle('active', item === chip));
     currentFilter = chip.dataset.filter || '';
     renderOpportunities();
+  });
+
+  document.addEventListener('input', (e) => {
+    if (e.target?.id === 'modalInvestUsd') updateOrderQuantityFromUsd();
+    if (e.target?.id === 'modalQuantity') updateOrderUsdFromQuantity();
   });
 
   window.addEventListener('DOMContentLoaded', () => loadData(false));

@@ -403,10 +403,10 @@
       const style = doc.createElement('style');
       style.id = '_mdi-style';
       style.textContent = `
-        html, body { overflow: hidden !important; min-width: 0 !important; }
+        html, body { overflow: auto !important; min-width: 0 !important; min-height: 100% !important; }
         #sidebar, .sidebar, .topbar, #_empresa-badge, .sidebar-userinfo { display: none !important; }
-        .layout { display: flex !important; flex-direction: column !important; height: 100% !important; min-width: 0 !important; }
-        .main { margin-left: 0 !important; flex: 1 !important; min-height: 0 !important; min-width: 0 !important; padding-top: 0 !important; }
+        .layout { display: flex !important; flex-direction: column !important; min-height: 100% !important; min-width: 0 !important; }
+        .main { margin-left: 0 !important; flex: 1 !important; min-height: 0 !important; min-width: 0 !important; padding-top: 0 !important; overflow: visible !important; }
         .page-content { min-width: 0 !important; }
         #_mdi-emp-bar {
           display: flex; align-items: center; padding: 5px 16px;
