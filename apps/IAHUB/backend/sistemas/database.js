@@ -50,6 +50,16 @@ const DEFAULT_SYSTEMS = [
     badge: 'Crypto Radar',
     active: true,
   },
+  {
+    code: 'ia-service',
+    name: 'IA Service',
+    description: 'Plataforma inteligente de apoio aos analistas de sustentacao — atendimento tecnico com investigacao guiada por IA.',
+    url: '/app/ia-service',
+    image_url: '',
+    accent: '#f59e0b',
+    badge: 'IA Service',
+    active: true,
+  },
 ];
 
 function listarSystems() {

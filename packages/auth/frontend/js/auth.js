@@ -193,6 +193,10 @@ const _PAGINA_ROTINA = {
   '/app/master-crypto/paper-trading.html':     'mc-paper-trading',
   '/app/master-crypto/historico-trades.html':  'mc-historico-trades',
   '/app/master-crypto/configuracoes.html':     'mc-configuracoes',
+  // ── IA Service
+  '/app/ia-service/atendimentos.html':      'svc-atendimentos',
+  '/app/ia-service/atendimento.html':       'svc-atendimentos',
+  '/app/ia-service/consultores.html':       'svc-consultores',
   // ── IAHub / IA Recruit
   '/dashboard.html':        'dashboard',
   '/monitores.html':        'monitores',
@@ -268,6 +272,9 @@ const _ROTINA_LABELS = {
   'mc-paper-trading': 'Crypto Radar AI - Paper Trading',
   'mc-historico-trades': 'Crypto Radar AI - Historico de Trades',
   'mc-configuracoes': 'Crypto Radar AI - Parametros e Risco',
+  // IA Service
+  'svc-atendimentos': 'IA Service - Atendimentos',
+  'svc-consultores':  'IA Service - Consultores',
   // ── IAHub / IA Recruit
   'dashboard': 'Dashboard',
   'monitores': 'Monitores',

@@ -12,6 +12,7 @@ import 'package:crypto_swing_app/src/core/notification_service.dart';
 class RadarScreen extends ConsumerWidget {
   const RadarScreen({Key? key}) : super(key: key);
 
+  // ignore: unused_field
   final List<Map<String, dynamic>> _fallbackOpportunities = const [
     {"symbol": "BTC/USDT", "score": 88, "strategy": "PULLBACK", "regime": "TRENDING_UP", "potential": "+5.8%", "entry_range": "84387.94 - 84895.80", "stop_loss": "82721.42", "target_t2": "89297.17", "rr_ratio": "1:2.23", "reasons": ["Liderança de mercado altista confirmada", "Cotação em tempo real Binance na zona de gatilho"]},
     {"symbol": "ETH/USDT", "score": 75, "strategy": "BREAKOUT", "regime": "RECOVERY", "potential": "+5.5%", "entry_range": "2671.21 - 2687.29", "stop_loss": "2607.22", "target_t2": "2826.61", "rr_ratio": "1:2.15", "reasons": ["Reversão a partir do suporte diário", "Cruzamento altista EMA 9"]},
@@ -50,16 +51,16 @@ class RadarScreen extends ConsumerWidget {
 
           // SELETOR DE MODO DE EXECUÇÃO (OPERAÇÃO REAL VS TREINO SIMULADO)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
             child: Consumer(
               builder: (context, ref, child) {
                 final mode = ref.watch(radarExecutionModeProvider);
                 final isReal = mode == RadarExecutionMode.real;
 
                 return Container(
-                  height: 40,
+                  height: 38,
                   decoration: BoxDecoration(
-                    color: AppTheme.darkCardSurface,
+                    color: const Color(0xFF0B0E11),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: AppTheme.darkBorder),
                   ),
@@ -132,18 +133,18 @@ class RadarScreen extends ConsumerWidget {
             ),
           ),
 
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
 
           // BARRA DE STATUS DO SCANNER & BTC
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
             child: Row(
               children: [
                 Expanded(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: AppTheme.darkCardSurface,
+                      color: AppTheme.darkBackground,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: AppTheme.darkBorder),
                     ),
@@ -155,7 +156,7 @@ class RadarScreen extends ConsumerWidget {
                             const AppIcon(AppIconType.filter, color: AppTheme.accentBlue, size: 18),
                             const SizedBox(width: 8),
                             Text(
-                              "Scanner Top $selectedTopLimit (4H)",
+                              "Top $selectedTopLimit - 4H",
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                           ],
@@ -180,7 +181,7 @@ class RadarScreen extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
                     color: AppTheme.accentGreen.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(10),
@@ -205,24 +206,10 @@ class RadarScreen extends ConsumerWidget {
           Expanded(
             child: asyncState.when(
               loading: () => const Center(child: CircularProgressIndicator(color: AppTheme.accentBlue)),
-              error: (err, stack) => _buildOpportunitiesList(context, ref, _fallbackOpportunities),
+              error: (err, stack) => _buildRadarError(context, ref, err),
               data: (data) {
                 final list = (data["opportunities"] as List?)?.cast<Map<String, dynamic>>() ?? [];
-                
-                // Garantir que a lista exiba o Top 20 completo
-                final Map<String, Map<String, dynamic>> combined = {};
-                for (final item in _fallbackOpportunities) {
-                  final sym = item["symbol"] as String;
-                  combined[sym] = Map<String, dynamic>.from(item);
-                }
-                for (final item in list) {
-                  final sym = (item["symbol"] as String?) ?? (item["opportunity"] as Map?)?["symbol"] as String?;
-                  if (sym != null && sym.isNotEmpty) {
-                    combined[sym] = Map<String, dynamic>.from(item);
-                  }
-                }
-
-                final displayList = combined.values.toList();
+                final displayList = list.toList();
                 displayList.sort((a, b) {
                   final symA = (a["symbol"] ?? "").toString().replaceAll("/", "").toUpperCase();
                   final symB = (b["symbol"] ?? "").toString().replaceAll("/", "").toUpperCase();
@@ -311,12 +298,88 @@ class RadarScreen extends ConsumerWidget {
     );
   }
 
+  Widget _buildRadarError(BuildContext context, WidgetRef ref, Object err) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppTheme.accentRed.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppTheme.accentRed.withOpacity(0.45)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Não foi possível carregar o radar em tempo real.",
+                style: TextStyle(color: AppTheme.accentRed, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "$err",
+                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: () => ref.read(radarNotifierProvider.notifier).fetchOpportunities(),
+                icon: const AppIcon(AppIconType.refresh, color: Colors.white, size: 16),
+                label: const Text("Tentar novamente"),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildOpportunitiesList(BuildContext context, WidgetRef ref, List<Map<String, dynamic>> items) {
     final execMode = ref.watch(radarExecutionModeProvider);
     final isRealMode = execMode == RadarExecutionMode.real;
 
+    if (items.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppTheme.darkCardSurface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppTheme.darkBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Nenhuma oportunidade agora",
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  "O radar consultou a Binance, mas nenhum ativo atingiu os criterios do algoritmo neste momento.",
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.35),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => ref.read(radarNotifierProvider.notifier).fetchOpportunities(),
+                    icon: const AppIcon(AppIconType.refresh, color: Colors.black, size: 16),
+                    label: const Text("Atualizar Radar", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(backgroundColor: AppTheme.binanceYellow),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
       itemCount: items.length,
       itemBuilder: (context, index) {
         final rawItem = items[index];
@@ -341,6 +404,10 @@ class RadarScreen extends ConsumerWidget {
         final double currentPriceVal = (rawItem["current_price"] as num?)?.toDouble() 
             ?? (rawItem["price"] as num?)?.toDouble() 
             ?? (entryMinVal?.toDouble() ?? 86420.0);
+        final double periodChangePct = (rawItem["period_change_pct"] as num?)?.toDouble()
+            ?? (rawItem["price_change_percent"] as num?)?.toDouble()
+            ?? 0.0;
+        final String periodLabel = (rawItem["period_label"] ?? rawItem["timeframe"] ?? "4H").toString().toUpperCase();
 
         double eMin = entryMinVal?.toDouble() ?? 0.0;
         double eMax = entryMaxVal?.toDouble() ?? 0.0;
@@ -376,6 +443,8 @@ class RadarScreen extends ConsumerWidget {
           "action_signal": actionSignal,
           "action_reason": actionReason,
           "current_price": currentPriceVal,
+          "period_change_pct": periodChangePct,
+          "period_label": periodLabel,
           "reasons": rawItem["reasons"] ?? [
             "Tendência estrutural favorável em $regime",
             "Opportunity Score verificado ($score/100)"
@@ -383,9 +452,9 @@ class RadarScreen extends ConsumerWidget {
         };
 
         return Card(
-          margin: const EdgeInsets.only(bottom: 12),
+          margin: const EdgeInsets.only(bottom: 10),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -394,14 +463,14 @@ class RadarScreen extends ConsumerWidget {
                   children: [
                     Row(
                       children: [
-                        CryptoLogoAvatar(symbol: symbol, size: 40),
-                        const SizedBox(width: 12),
+                        CryptoLogoAvatar(symbol: symbol, size: 38),
+                        const SizedBox(width: 10),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              symbol,
-                              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                              symbol.replaceAll("/", ""),
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
                             ),
                             const SizedBox(height: 2),
                             Container(
@@ -420,32 +489,16 @@ class RadarScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: score >= 90
-                              ? [AppTheme.accentGreen, const Color(0xFF059669)]
-                              : score >= 80
-                                  ? [AppTheme.accentGold, const Color(0xFFD97706)]
-                                  : [AppTheme.accentBlue, const Color(0xFF2563EB)],
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          "\$ ${formatCryptoPrice(currentPriceVal)}",
+                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppTheme.textPrimary),
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: (score >= 90 ? AppTheme.accentGreen : AppTheme.accentBlue).withOpacity(0.3),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          )
-                        ],
-                      ),
-                      child: Center(
-                        child: Text(
-                          "$score",
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
-                        ),
-                      ),
+                        const SizedBox(height: 5),
+                        _scorePill(score),
+                      ],
                     ),
                   ],
                 ),
@@ -454,9 +507,9 @@ class RadarScreen extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
-                    color: isBuyNow ? AppTheme.accentGreen.withOpacity(0.18) : AppTheme.accentRed.withOpacity(0.18),
+                    color: isBuyNow ? AppTheme.accentGreen.withOpacity(0.12) : AppTheme.binanceYellow.withOpacity(0.10),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: isBuyNow ? AppTheme.accentGreen : AppTheme.accentRed, width: 1.2),
+                    border: Border.all(color: isBuyNow ? AppTheme.accentGreen.withOpacity(0.55) : AppTheme.binanceYellow.withOpacity(0.48), width: 1),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -468,10 +521,10 @@ class RadarScreen extends ConsumerWidget {
                             height: 8,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: isBuyNow ? AppTheme.accentGreenLight : AppTheme.accentRed,
+                              color: isBuyNow ? AppTheme.accentGreenLight : AppTheme.binanceYellow,
                               boxShadow: [
                                 BoxShadow(
-                                  color: isBuyNow ? AppTheme.accentGreenLight : AppTheme.accentRed,
+                                  color: isBuyNow ? AppTheme.accentGreenLight : AppTheme.binanceYellow,
                                   blurRadius: 4,
                                 )
                               ],
@@ -483,7 +536,7 @@ class RadarScreen extends ConsumerWidget {
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
-                              color: isBuyNow ? AppTheme.accentGreenLight : AppTheme.accentRed,
+                              color: isBuyNow ? AppTheme.accentGreenLight : AppTheme.binanceYellow,
                               letterSpacing: 0.4,
                             ),
                           ),
@@ -491,6 +544,8 @@ class RadarScreen extends ConsumerWidget {
                       ),
                       Row(
                         children: [
+                          _periodChangePill(periodChangePct, periodLabel),
+                          const SizedBox(width: 8),
                           const Text(
                             "Preço Atual: ",
                             style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
@@ -509,13 +564,19 @@ class RadarScreen extends ConsumerWidget {
                 const Divider(color: AppTheme.darkBorder, height: 1),
                 const SizedBox(height: 10),
 
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _priceBadge("Entrada Ideal", entryRangeStr, AppTheme.accentBlue),
-                    _priceBadge("Stop Loss", stopLossStr, AppTheme.accentRed),
-                    _priceBadge("Stop Gain (T2)", "$targetT2Str ($potentialStr)", AppTheme.accentGreenLight),
-                  ],
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0B0E11),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(child: _priceBadge("Entrada", entryRangeStr, AppTheme.accentBlue)),
+                      Expanded(child: _priceBadge("Stop", stopLossStr, AppTheme.accentRed)),
+                      Expanded(child: _priceBadge("Alvo T2", "$targetT2Str ($potentialStr)", AppTheme.accentGreenLight)),
+                    ],
+                  ),
                 ),
 
                 const SizedBox(height: 12),
@@ -623,6 +684,56 @@ class RadarScreen extends ConsumerWidget {
           style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13),
         ),
       ],
+    );
+  }
+
+  Widget _scorePill(int score) {
+    final color = score >= 80
+        ? AppTheme.accentGreenLight
+        : score >= 60
+            ? AppTheme.binanceYellow
+            : AppTheme.accentBlue;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Text(
+        "Score $score",
+        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w900),
+      ),
+    );
+  }
+
+  Widget _periodChangePill(double value, String label) {
+    final isUp = value > 0;
+    final isDown = value < 0;
+    final color = isUp
+        ? AppTheme.accentGreenLight
+        : isDown
+            ? AppTheme.accentRed
+            : AppTheme.textSecondary;
+    final icon = isUp
+        ? "▲"
+        : isDown
+            ? "▼"
+            : "•";
+    final text = value == 0 ? "- $label" : "$icon ${value > 0 ? '+' : ''}${value.toStringAsFixed(1)}% $label";
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+      ),
     );
   }
 
@@ -822,8 +933,8 @@ class _RadarSonarHeaderWidgetState extends State<_RadarSonarHeaderWidget> with S
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+      padding: const EdgeInsets.all(10),
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 6),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [AppTheme.darkCardSurface, AppTheme.accentBlue.withOpacity(0.15)],
@@ -836,14 +947,14 @@ class _RadarSonarHeaderWidgetState extends State<_RadarSonarHeaderWidget> with S
       child: Row(
         children: [
           SizedBox(
-            width: 64,
-            height: 64,
+            width: 48,
+            height: 48,
             child: Stack(
               alignment: Alignment.center,
               children: [
                 Container(
-                  width: 64,
-                  height: 64,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: const Color(0xFF0B0E11),
@@ -857,11 +968,11 @@ class _RadarSonarHeaderWidgetState extends State<_RadarSonarHeaderWidget> with S
                     ],
                   ),
                 ),
-                Container(width: 64, height: 1, color: AppTheme.accentGreen.withOpacity(0.2)),
-                Container(width: 1, height: 64, color: AppTheme.accentGreen.withOpacity(0.2)),
+                Container(width: 48, height: 1, color: AppTheme.accentGreen.withOpacity(0.2)),
+                Container(width: 1, height: 48, color: AppTheme.accentGreen.withOpacity(0.2)),
                 Container(
-                  width: 38,
-                  height: 38,
+                  width: 28,
+                  height: 28,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(color: AppTheme.accentGreen.withOpacity(0.3)),
@@ -870,8 +981,8 @@ class _RadarSonarHeaderWidgetState extends State<_RadarSonarHeaderWidget> with S
                 RotationTransition(
                   turns: _controller,
                   child: Container(
-                    width: 64,
-                    height: 64,
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: SweepGradient(
@@ -929,4 +1040,3 @@ class _RadarSonarHeaderWidgetState extends State<_RadarSonarHeaderWidget> with S
     );
   }
 }
-

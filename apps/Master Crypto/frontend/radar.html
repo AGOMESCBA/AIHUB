@@ -382,6 +382,33 @@
       border: 1px solid rgba(240, 185, 11, 0.5);
       color: #f0b90b;
     }
+    .period-change {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      min-width: 72px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 900;
+      border: 1px solid transparent;
+    }
+    .period-change.up {
+      background: rgba(14, 203, 129, 0.18);
+      border-color: rgba(14, 203, 129, 0.42);
+      color: #0ecb81;
+    }
+    .period-change.down {
+      background: rgba(246, 70, 93, 0.18);
+      border-color: rgba(246, 70, 93, 0.42);
+      color: #f6465d;
+    }
+    .period-change.flat {
+      background: rgba(148, 163, 184, 0.16);
+      border-color: rgba(148, 163, 184, 0.34);
+      color: #cbd5e1;
+    }
 
     .metrics-row {
       display: grid;
@@ -1200,6 +1227,8 @@
     const strategy = raw.strategy || plan.strategy || 'PULLBACK';
     const isEntry = totalScore >= 80;
     const currentPrice = Number(raw.current_price || raw.last_price || plan.current_price || (entryMin && entryMax ? (entryMin + entryMax) / 2 : 0));
+    const periodChange = Number(raw.period_change_pct ?? raw.price_change_percent ?? raw.change_pct ?? 0);
+    const periodLabel = String(raw.period_label || raw.timeframe || plan.timeframe || '4H').toUpperCase();
     const computedPotential = currentPrice && target2 ? ((target2 - currentPrice) / currentPrice) * 100 : 0;
     const potentialValue = Number(raw.potential_gain_pct ?? raw.potential_pct ?? plan.potential_gain_pct ?? plan.expected_gain_pct ?? computedPotential);
     const regime = raw.regime || raw.market_regime || plan.regime || score.regime || raw.trend_status || '-';
@@ -1222,6 +1251,8 @@
       rr: Number(plan.risk_reward_ratio ?? raw.rr ?? raw.risk_reward_ratio ?? 2.2),
       plan,
       currentPrice,
+      periodChange,
+      periodLabel,
       potentialValue,
       potentialLabel: Number.isFinite(potentialValue) && potentialValue ? formatSignedPct(potentialValue) : '-',
       regime,
@@ -1358,6 +1389,9 @@
       const signalClass = op.isEntry ? 'signal-buy' : 'signal-wait';
       const signalBadgeText = op.isEntry ? '🟢 ENTRAR AGORA' : '🔴 AGUARDAR (NÃO ENTRAR)';
       const currentPriceFormatted = Number(op.currentPrice || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+      const periodClass = op.periodChange > 0 ? 'up' : (op.periodChange < 0 ? 'down' : 'flat');
+      const periodIcon = op.periodChange > 0 ? '▲' : (op.periodChange < 0 ? '▼' : '•');
+      const periodText = op.periodChange ? `${periodIcon} ${formatSignedPct(op.periodChange)} ${esc(op.periodLabel)}` : `- ${esc(op.periodLabel)}`;
 
       card.innerHTML = `
         <div class="card-head">
@@ -1376,7 +1410,10 @@
 
         <div class="signal-banner ${signalClass}" style="display:flex; justify-content:space-between; align-items:center;">
           <span style="font-weight:800;">${signalBadgeText}</span>
-          <span style="font-size:11px; font-weight:700;">Preço Atual: <strong style="color:#fff;">$ ${currentPriceFormatted}</strong></span>
+          <span style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+            <span class="period-change ${periodClass}" title="Variação do candle/período selecionado">${periodText}</span>
+            <span style="font-size:11px; font-weight:700;">Preço Atual: <strong style="color:#fff;">$ ${currentPriceFormatted}</strong></span>
+          </span>
         </div>
 
         <div class="metrics-row">

@@ -55,6 +55,8 @@ async def get_active_opportunities(timeframe: str = "4h", top_limit: int = 20):
             regime = RegimeEngine.classify_regime(df_annotated)
             last = df_annotated.iloc[-1]
             close = float(last["close"])
+            period_open = float(last.get("open", close))
+            period_change_pct = ((close - period_open) / period_open * 100.0) if period_open else 0.0
             rsi = float(last.get("rsi_14", 50.0))
             rvol = float(last.get("rvol", 1.0))
             ema21 = float(last.get("ema_21", close))
@@ -148,6 +150,9 @@ async def get_active_opportunities(timeframe: str = "4h", top_limit: int = 20):
             opportunities.append({
                 "symbol": symbol,
                 "current_price": close,
+                "period_open": period_open,
+                "period_change_pct": round(period_change_pct, 2),
+                "period_label": timeframe.upper(),
                 "score": int(score_result.total_score),
                 "strategy": trade_plan.strategy.value,
                 "regime": regime.value,

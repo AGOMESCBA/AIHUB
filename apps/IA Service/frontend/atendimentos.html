@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Atendimentos - IA Service</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#f59e0b; --accent-light:#fbbf24; --accent-glow:rgba(245,158,11,.1); }
+    body { margin:0; background:var(--bg-app); font-family:inherit; }
+    .page-content { max-width:960px; margin:0 auto; padding:24px 16px; }
+    .head-title { font-size:20px; font-weight:800; color:var(--text-hi); }
+    .head-subtitle { font-size:13px; color:var(--text-md); margin-top:4px; margin-bottom:20px; }
+    .composer-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); padding:16px; margin-bottom:20px; }
+    .composer-card textarea { width:100%; box-sizing:border-box; min-height:120px; resize:vertical; border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:14px; font-family:inherit; background:var(--bg-app); color:var(--text-hi); }
+    .composer-actions { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px; }
+    .composer-hint { font-size:12px; color:var(--text-lo); }
+    #anexos-input { font-size:12px; color:var(--text-md); }
+    .lista-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); overflow:hidden; }
+    .lista-header { padding:12px 16px; border-bottom:1px solid var(--border); font-size:13px; font-weight:800; color:var(--text-hi); }
+    .atendimento-item { padding:12px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .atendimento-item:last-child { border-bottom:none; }
+    .atendimento-codigo { font-weight:700; color:var(--accent); font-size:13px; }
+    .atendimento-preview { font-size:13px; color:var(--text-md); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:0 12px; }
+    .atendimento-status { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-lo); }
+    .empty-state { padding:24px 16px; text-align:center; color:var(--text-lo); font-size:13px; }
+    .error-banner { display:none; background:#fee2e2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:10px 12px; font-size:13px; margin-bottom:14px; }
+  </style>
+</head>
+<body>
+  <div class="page-content">
+    <div class="head-title">IA Service — Atendimentos</div>
+    <div class="head-subtitle">Cole o conteúdo do chamado, anexe evidências se precisar, e pressione Enter para criar o atendimento. (Etapa 1 — fundação: sem investigação por IA ainda.)</div>
+
+    <div id="error-banner" class="error-banner"></div>
+
+    <div class="composer-card">
+      <textarea id="conteudo-bruto" placeholder="Cole aqui o conteúdo do chamado..."></textarea>
+      <div class="composer-actions">
+        <input type="file" id="anexos-input" multiple disabled title="Upload de anexos chega na Etapa 2 — fundação de metadados já implementada no backend">
+        <div>
+          <span class="composer-hint">Ctrl+Enter para criar</span>
+          <button class="btn btn-primary" type="button" onclick="criarAtendimento()">Criar atendimento</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="lista-card">
+      <div class="lista-header">Atendimentos recentes</div>
+      <div id="lista-atendimentos"><div class="empty-state">Carregando…</div></div>
+    </div>
+  </div>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    function showError(msg) {
+      const el = document.getElementById('error-banner');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+    function hideError() {
+      document.getElementById('error-banner').style.display = 'none';
+    }
+
+    async function api(path, opts = {}) {
+      const r = await fetch(path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...opts,
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
+      return body;
+    }
+
+    function empresaIdAtual() {
+      return window._iahubEmpresa?.id || null;
+    }
+
+    async function carregarAtendimentos() {
+      const empresaId = empresaIdAtual();
+      if (!empresaId) return;
+      try {
+        const lista = await api(`/api/ia-service/atendimentos?empresa_id=${empresaId}`);
+        const container = document.getElementById('lista-atendimentos');
+        if (!lista.length) {
+          container.innerHTML = '<div class="empty-state">Nenhum atendimento ainda.</div>';
+          return;
+        }
+        container.innerHTML = lista.map(a => `
+          <div class="atendimento-item">
+            <span class="atendimento-codigo">${a.codigo}</span>
+            <span class="atendimento-preview">${escapeHtml(a.conteudoBruto || '')}</span>
+            <span class="atendimento-status">${a.status}</span>
+          </div>
+        `).join('');
+      } catch (err) {
+        showError('Não foi possível carregar os atendimentos: ' + err.message);
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+    }
+
+    async function criarAtendimento() {
+      hideError();
+      const empresaId = empresaIdAtual();
+      if (!empresaId) return showError('Selecione uma empresa antes de criar um atendimento.');
+
+      const conteudoBruto = document.getElementById('conteudo-bruto').value.trim();
+      if (!conteudoBruto) return showError('Cole o conteúdo do chamado antes de criar o atendimento.');
+
+      try {
+        await api('/api/ia-service/atendimentos', {
+          method: 'POST',
+          body: JSON.stringify({ empresa_id: empresaId, conteudoBruto, origem: 'manual' }),
+        });
+        document.getElementById('conteudo-bruto').value = '';
+        carregarAtendimentos();
+      } catch (err) {
+        showError('Não foi possível criar o atendimento: ' + err.message);
+      }
+    }
+
+    document.getElementById('conteudo-bruto').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.ctrlKey) {
+        e.preventDefault();
+        criarAtendimento();
+      }
+    });
+
+    window._iahubAuthReady?.then(carregarAtendimentos) ?? carregarAtendimentos();
+  </script>
+</body>
+</html>

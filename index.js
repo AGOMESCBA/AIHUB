@@ -168,6 +168,7 @@ const requireRecrutamento = requireSystemAccess('recrutamento');
 const requireIaAdmin      = requireSystemAccess('ia-admin');
 const requireIaCommand    = requireSystemAccess('ia-command');
 const requireMasterCrypto = requireSystemAccess('master-crypto');
+const requireIaService    = requireSystemAccess('ia-service');
 
 // Versão gerada a cada startup — usada para cache-busting de HTML e JS
 const APP_VERSION = Date.now();
@@ -287,11 +288,16 @@ app.get('/app/master-crypto', requireMasterCrypto, (req, res) => {
   res.redirect('/app/master-crypto/shell.html');
 });
 
+app.get('/app/ia-service', requireIaService, (req, res) => {
+  res.redirect('/app/ia-service/atendimentos.html');
+});
+
 mountStaticDirs('/app/ia-recruit', requireRecrutamento, APPS.iaRecruit.legacyStaticDirs);
 mountStaticDirs('/app/recrutamento', requireRecrutamento, APPS.iaRecruit.legacyStaticDirs);
 mountStaticDirs('/app/ia-administracao', requireIaAdmin, APPS.iaAdministracao.legacyStaticDirs);
 mountStaticDirs('/app/ia-command', requireIaCommand, APPS.iaCommand.staticDirs);
 mountStaticDirs('/app/master-crypto', requireMasterCrypto, APPS.masterCrypto.staticDirs);
+mountStaticDirs('/app/ia-service', requireIaService, APPS.iaService.staticDirs);
 
 // ── Arquivos estáticos ────────────────────────────────────────────────────────
 // Uploads têm timestamp no nome (imutáveis) — cache de 1 ano no browser.
@@ -549,6 +555,12 @@ require('./modules/seguranca/routes')(app, { requireAuth });
 // ── IA Command ────────────────────────────────────────────────────────────────
 require('./apps/IA Command/modules/database').inicializarDB();
 require('./apps/IA Command/modules/routes')(app, { requireAuth, requireIaCommand, io });
+
+// ── IA Service ────────────────────────────────────────────────────────────────
+// Banco proprio e exclusivo (ia-service.db) — nunca compartilha tabelas com o
+// IA Command. Ver IA_SERVICE_ANALISE_IAHUB_COMMAND.md e IA_SERVICE_ETAPA1_IMPLEMENTACAO.md.
+require('./apps/IA Service/backend/database').inicializarDB();
+require('./apps/IA Service/backend/routes')(app, { requireAuth, requireIaService });
 
 // ── Master Crypto AI ─────────────────────────────────────────────────────────
 const masterCryptoService = require('./apps/Master Crypto/backend/service-manager');

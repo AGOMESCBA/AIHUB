@@ -11,6 +11,7 @@ const iahubFrontend = fromRoot('apps', 'IAHUB', 'frontend');
 const iaRecruitFrontend = fromRoot('apps', 'IA Recruit', 'frontend');
 const iaAdministracaoFrontend = fromRoot('apps', 'IA Administracao', 'frontend');
 const iaCommandFrontend = fromRoot('apps', 'IA Command', 'frontend');
+const iaServiceFrontend = fromRoot('apps', 'IA Service', 'frontend');
 const uiFrontend = fromRoot('packages', 'ui', 'frontend');
 const authFrontend = fromRoot('packages', 'auth', 'frontend');
 
@@ -103,6 +104,18 @@ const APPS = {
       fromRoot('apps', 'Master Crypto', 'frontend'),
       fromRoot('packages', 'ui', 'frontend'),
       fromRoot('packages', 'auth', 'frontend'),
+    ],
+  },
+  iaService: {
+    code: 'ia-service',
+    name: 'IA Service',
+    rootDir: fromRoot('apps', 'IA Service'),
+    frontendDir: iaServiceFrontend,
+    backendDir: fromRoot('apps', 'IA Service', 'backend'),
+    staticDirs: [
+      iaServiceFrontend,
+      uiFrontend,
+      authFrontend,
     ],
   },
 };

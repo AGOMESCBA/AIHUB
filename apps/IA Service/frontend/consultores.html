@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Consultores - IA Service</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#f59e0b; --accent-light:#fbbf24; --accent-glow:rgba(245,158,11,.1); }
+    body { margin:0; background:var(--bg-app); font-family:inherit; }
+    .page-content { max-width:720px; margin:0 auto; padding:24px 16px; }
+    .head-title { font-size:20px; font-weight:800; color:var(--text-hi); }
+    .head-subtitle { font-size:13px; color:var(--text-md); margin-top:4px; margin-bottom:20px; }
+    .form-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); padding:16px; margin-bottom:20px; }
+    .form-row { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+    .form-field { display:flex; flex-direction:column; gap:4px; flex:1; min-width:160px; }
+    .form-field label { font-size:12px; color:var(--text-lo); font-weight:700; }
+    .form-field input { border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:13px; background:var(--bg-app); color:var(--text-hi); }
+    .lista-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); overflow:hidden; }
+    .lista-header { padding:12px 16px; border-bottom:1px solid var(--border); font-size:13px; font-weight:800; color:var(--text-hi); }
+    .consultor-item { padding:10px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; font-size:13px; }
+    .consultor-item:last-child { border-bottom:none; }
+    .consultor-usuario { font-weight:700; color:var(--text-hi); }
+    .consultor-softexpert { color:var(--text-md); }
+    .consultor-status { margin-left:auto; font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-lo); }
+    .empty-state { padding:24px 16px; text-align:center; color:var(--text-lo); font-size:13px; }
+    .error-banner { display:none; background:#fee2e2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:10px 12px; font-size:13px; margin-bottom:14px; }
+  </style>
+</head>
+<body>
+  <div class="page-content">
+    <div class="head-title">IA Service — Consultores</div>
+    <div class="head-subtitle">Cadastro complementar: vincula um usuário já existente do IA HUB a um id de técnico do SoftExpert. Não cria login novo.</div>
+
+    <div id="error-banner" class="error-banner"></div>
+
+    <div class="form-card">
+      <div class="form-row">
+        <div class="form-field">
+          <label for="usuario-id">ID do usuário IA HUB</label>
+          <input type="number" id="usuario-id" placeholder="Ex.: 17">
+        </div>
+        <div class="form-field">
+          <label for="id-softexpert">ID SoftExpert (opcional)</label>
+          <input type="text" id="id-softexpert" placeholder="Ex.: 784">
+        </div>
+        <button class="btn btn-primary" type="button" onclick="criarConsultor()">Vincular</button>
+      </div>
+    </div>
+
+    <div class="lista-card">
+      <div class="lista-header">Consultores desta empresa</div>
+      <div id="lista-consultores"><div class="empty-state">Carregando…</div></div>
+    </div>
+  </div>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    function showError(msg) {
+      const el = document.getElementById('error-banner');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+    function hideError() {
+      document.getElementById('error-banner').style.display = 'none';
+    }
+
+    async function api(path, opts = {}) {
+      const r = await fetch(path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...opts,
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
+      return body;
+    }
+
+    function empresaIdAtual() {
+      return window._iahubEmpresa?.id || null;
+    }
+
+    async function carregarConsultores() {
+      const empresaId = empresaIdAtual();
+      if (!empresaId) return;
+      try {
+        const lista = await api(`/api/ia-service/consultores?empresa_id=${empresaId}`);
+        const container = document.getElementById('lista-consultores');
+        if (!lista.length) {
+          container.innerHTML = '<div class="empty-state">Nenhum consultor cadastrado ainda.</div>';
+          return;
+        }
+        container.innerHTML = lista.map(c => `
+          <div class="consultor-item">
+            <span class="consultor-usuario">Usuário #${c.usuarioIdIahub}</span>
+            <span class="consultor-softexpert">${c.idSoftexpert ? 'SoftExpert #' + c.idSoftexpert : 'sem vínculo SoftExpert'}</span>
+            <span class="consultor-status">${c.ativo ? 'Ativo' : 'Inativo'}</span>
+          </div>
+        `).join('');
+      } catch (err) {
+        showError('Não foi possível carregar os consultores: ' + err.message);
+      }
+    }
+
+    async function criarConsultor() {
+      hideError();
+      const empresaId = empresaIdAtual();
+      if (!empresaId) return showError('Selecione uma empresa antes de vincular um consultor.');
+
+      const usuarioIdIahub = document.getElementById('usuario-id').value.trim();
+      const idSoftexpert = document.getElementById('id-softexpert').value.trim();
+      if (!usuarioIdIahub) return showError('Informe o ID do usuário IA HUB.');
+
+      try {
+        await api('/api/ia-service/consultores', {
+          method: 'POST',
+          body: JSON.stringify({ empresa_id: empresaId, usuarioIdIahub: Number(usuarioIdIahub), idSoftexpert: idSoftexpert || null }),
+        });
+        document.getElementById('usuario-id').value = '';
+        document.getElementById('id-softexpert').value = '';
+        carregarConsultores();
+      } catch (err) {
+        showError('Não foi possível vincular o consultor: ' + err.message);
+      }
+    }
+
+    window._iahubAuthReady?.then(carregarConsultores) ?? carregarConsultores();
+  </script>
+</body>
+</html>
