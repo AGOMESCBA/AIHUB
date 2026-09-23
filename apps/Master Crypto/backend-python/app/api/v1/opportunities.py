@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from typing import List, Dict
 from app.workers.market_scanner import MarketScanner
-from app.domain.assets import fetch_dynamic_top_by_volume, TOP_20_BASELINE
+from app.domain.assets import fetch_dynamic_top_by_volume_with_source, TOP_20_BASELINE
 from app.engines.indicators import IndicatorEngine
 from app.engines.regimes import RegimeEngine
 from app.engines.strategies import StrategyEngine
@@ -9,6 +9,7 @@ from app.engines.opportunity_score import OpportunityScoreEngine
 from app.engines.risk_manager import RiskManager
 from app.engines.price_structure import PriceStructureEngine
 from app.exchange.binance import BinanceAdapter
+from app.domain.schemas import MarketRegimeEnum, StrategyEnum, TradePlan
 def format_price_py(val: float) -> str:
     if val is None:
         return "0.00"
@@ -37,9 +38,10 @@ async def get_active_opportunities(timeframe: str = "4h", top_limit: int = 20):
     btc_context = await scanner.get_btc_context()
     
     try:
-        symbols = await fetch_dynamic_top_by_volume(top_limit=top_limit)
+        symbols, universe_source = await fetch_dynamic_top_by_volume_with_source(top_limit=top_limit)
     except Exception:
         symbols = TOP_20_BASELINE[:top_limit]
+        universe_source = "BASELINE"
 
     opportunities = []
 
@@ -171,6 +173,7 @@ async def get_active_opportunities(timeframe: str = "4h", top_limit: int = 20):
     return {
         "timeframe": timeframe,
         "top_limit": top_limit,
+        "universe_source": universe_source,
         "btc_context": btc_context,
         "active_opportunities_count": len(opportunities),
         "opportunities": opportunities

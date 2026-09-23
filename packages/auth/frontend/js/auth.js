@@ -184,7 +184,7 @@ const _PAGINA_ROTINA = {
   '/app/ia-command/admin-chat-favoritos.html':        'iac-admin-chat-favoritos',
   // Master Crypto
   '/app/master-crypto/radar.html':             'mc-radar',
-  '/app/master-crypto/oportunidades.html':     'mc-oportunidades',
+  '/app/master-crypto/ativos.html':            'mc-ativos',
   '/app/master-crypto/plano-trade.html':       'mc-plano-trade',
   '/app/master-crypto/analista-ia.html':       'mc-analista-ia',
   '/app/master-crypto/ciclo-btc.html':         'mc-ciclo-btc',
@@ -259,7 +259,7 @@ const _ROTINA_LABELS = {
   'iac-admin-usuarios-protheus-web': 'IA Command - Usuários Protheus (Chat Web)',
   // Crypto Radar AI
   'mc-radar': 'Crypto Radar AI - Radar de Oportunidades',
-  'mc-oportunidades': 'Crypto Radar AI - Oportunidades Ativas',
+  'mc-ativos': 'Crypto Radar AI - Ativos',
   'mc-plano-trade': 'Crypto Radar AI - Plano de Trade',
   'mc-analista-ia': 'Crypto Radar AI - Analista IA',
   'mc-ciclo-btc': 'Crypto Radar AI - Ciclos do Bitcoin',

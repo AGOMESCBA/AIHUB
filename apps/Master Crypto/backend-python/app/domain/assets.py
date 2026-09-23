@@ -4,7 +4,7 @@ Permite ao usuário configurar o limite (Top 10, Top 20, Top 30, Top 50).
 Exclui stablecoins (USDT, USDC, DAI, TUSD, etc.) e tokens pareados.
 """
 
-from typing import List
+from typing import List, Tuple
 import httpx
 
 # Lista Baseline das Top 20 mais consolidadas do mercado
@@ -33,7 +33,7 @@ TOP_20_BASELINE = [
 
 TOP_20_SYMBOLS = TOP_20_BASELINE
 
-async def fetch_dynamic_top_by_volume(top_limit: int = 20) -> List[str]:
+async def fetch_dynamic_top_by_volume_with_source(top_limit: int = 20) -> Tuple[List[str], str]:
     """
     Busca dinamicamente na Binance as 'top_limit' moedas de maior volume de negociação (24h)
     filtrando stablecoins e moedas pareadas.
@@ -44,7 +44,7 @@ async def fetch_dynamic_top_by_volume(top_limit: int = 20) -> List[str]:
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
         if response.status_code != 200:
-            return TOP_20_BASELINE[:top_limit]
+            return TOP_20_BASELINE[:top_limit], "BASELINE"
             
         data = response.json()
         
@@ -60,5 +60,12 @@ async def fetch_dynamic_top_by_volume(top_limit: int = 20) -> List[str]:
     # Ordenar por volume decrescente
     sorted_pairs = sorted(usdt_pairs, key=lambda x: x["quote_volume"], reverse=True)
     dynamic_list = [p["symbol"] for p in sorted_pairs[:top_limit]]
-    
-    return dynamic_list if len(dynamic_list) == top_limit else TOP_20_BASELINE[:top_limit]
+
+    if len(dynamic_list) == top_limit:
+        return dynamic_list, "BINANCE_24H_VOLUME"
+    return TOP_20_BASELINE[:top_limit], "BASELINE"
+
+
+async def fetch_dynamic_top_by_volume(top_limit: int = 20) -> List[str]:
+    symbols, _source = await fetch_dynamic_top_by_volume_with_source(top_limit=top_limit)
+    return symbols

@@ -110,25 +110,34 @@
         <td><span class="text-positive">${fmtUsd.format(Number(trade.target_t2 || 0))}</span></td>
         <td>${Number(trade.quantity || 0).toFixed(6)}</td>
         <td>1:${esc(trade.risk_reward_ratio || '-')}</td>
-        <td><button class="btn btn-sm btn-danger" type="button" onclick="closeTrade('${esc(trade.id)}')">Encerrar</button></td>
+        <td><button class="btn btn-sm btn-danger" type="button" onclick="closeTrade('${esc(trade.id)}', '${esc(trade.symbol)}')">Encerrar</button></td>
       `;
       tbody.appendChild(tr);
     });
   }
 
-  async function closeTrade(tradeId) {
-    const current = Number(prompt('Preco atual para encerramento manual:', '0'));
-    if (!current || current <= 0) return;
-    const res = await fetch('/api/master-crypto/paper/close', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ trade_id: tradeId, current_market_price: current }),
-    });
-    if (!res.ok) {
-      document.getElementById('statusLine').textContent = 'Nao foi possivel encerrar a ordem simulada.';
-      return;
+  async function closeTrade(tradeId, symbol) {
+    const status = document.getElementById('statusLine');
+    const cleanSymbol = String(symbol || '').replace('/', '').toUpperCase();
+    if (!cleanSymbol) return;
+    status.textContent = `Consultando preco real da Binance para ${cleanSymbol}...`;
+    try {
+      const priceData = await fetch(`/api/master-crypto/market/price?symbol=${encodeURIComponent(cleanSymbol)}`).then(r => {
+        if (!r.ok) throw new Error('price');
+        return r.json();
+      });
+      const current = Number(priceData.price || 0);
+      if (!current || current <= 0) throw new Error('invalid-price');
+      const res = await fetch('/api/master-crypto/paper/close', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trade_id: tradeId, current_market_price: current }),
+      });
+      if (!res.ok) throw new Error('close');
+      await loadPaperTrading();
+    } catch (_) {
+      status.textContent = 'Nao foi possivel buscar preco real na Binance para encerrar a ordem simulada.';
     }
-    await loadPaperTrading();
   }
 
   window.addEventListener('DOMContentLoaded', loadPaperTrading);

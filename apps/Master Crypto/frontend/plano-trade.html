@@ -84,7 +84,7 @@
         potential: Number(plan.potential_gain_pct || 0),
         plan,
         positionSizeUsd: Number(position.position_size_usd || 200),
-        currentPrice: entryMin && entryMax ? (entryMin + entryMax) / 2 : 0,
+        currentPrice: Number(raw.current_price || raw.last_price || (entryMin && entryMax ? (entryMin + entryMax) / 2 : 0)),
       };
     }
 

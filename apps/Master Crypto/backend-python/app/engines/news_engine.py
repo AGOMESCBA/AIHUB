@@ -36,65 +36,6 @@ class NewsEngine:
 
     @staticmethod
     async def fetch_crypto_news(limit: int = 20) -> List[Dict[str, Any]]:
-        fallback_news = [
-            {
-                "id": "binance-1",
-                "title": "Binance Flash News: Solana (SOL) breaks key resistance with $1.2B daily volume",
-                "title_pt": "Binance Notícias: Solana (SOL) rompe resistência chave com $1.2B em volume diário",
-                "source": "Binance News Feed",
-                "category": "BINANCE / SPOT",
-                "impact": "HIGH",
-                "sentiment": "BULLISH",
-                "summary": "Solana leads altcoin market recovery after EMA 21 bounce, attracting institutional inflows on Binance Spot.",
-                "summary_pt": "Solana lidera a recuperação do mercado de altcoins após repique na EMA 21, atraindo fluxo de capital institucional na Binance Spot.",
-                "published_at": datetime.now().isoformat(),
-                "url": "https://binance.com/en/news",
-                "btc_impact_score": 92
-            },
-            {
-                "id": "binance-2",
-                "title": "Bitcoin holds strong above $62,000 as Fed signals interest rate policy shift",
-                "title_pt": "Bitcoin se mantém forte acima de $62.000 enquanto o Fed sinaliza mudança na política de juros",
-                "source": "Binance Macro / Bloomberg",
-                "category": "MACRO / FED",
-                "impact": "HIGH",
-                "sentiment": "BULLISH",
-                "summary": "Macro environment remains favorable for crypto swing trading as inflation metrics moderate.",
-                "summary_pt": "O ambiente macroeconômico permanece favorável para Swing Trade em cripto à medida que a inflação desacelera.",
-                "published_at": datetime.now().isoformat(),
-                "url": "https://binance.com/en/news",
-                "btc_impact_score": 88
-            },
-            {
-                "id": "binance-3",
-                "title": "Binance Research: Top 5 Layer-1 Tokens presenting Pullback opportunities",
-                "title_pt": "Binance Research: As 5 principais altcoins de 1ª camada com oportunidade de Pullback",
-                "source": "Binance Research",
-                "category": "ALTCOINS / ANÁLISE",
-                "impact": "MEDIUM",
-                "sentiment": "BULLISH",
-                "summary": "Analytical report shows NEAR, ETH, and SOL maintaining healthy moving average structures.",
-                "summary_pt": "Relatório analítico mostra NEAR, ETH e SOL mantendo estrutura saudável acima das médias móveis principais.",
-                "published_at": datetime.now().isoformat(),
-                "url": "https://research.binance.com",
-                "btc_impact_score": 85
-            },
-            {
-                "id": "binance-4",
-                "title": "Crypto Fear & Greed Index rises to 68 (Moderate Greed)",
-                "title_pt": "Índice de Medo e Ganância Cripto sobe para 68 (Ganância Moderada)",
-                "source": "Alternative.me / Binance Analytics",
-                "category": "SENTIMENTO",
-                "impact": "MEDIUM",
-                "sentiment": "BULLISH",
-                "summary": "Trader optimism supports continuation of upward swings across major pairs.",
-                "summary_pt": "O otimismo dos traders apoia a continuidade das pernadas de alta nos principais pares.",
-                "published_at": datetime.now().isoformat(),
-                "url": "https://binance.com",
-                "btc_impact_score": 75
-            }
-        ]
-
         try:
             url = "https://min-api.cryptocompare.com/data/v2/news/?lang=EN"
             async with httpx.AsyncClient(timeout=5.0) as client:
@@ -131,16 +72,16 @@ class NewsEngine:
                             "url": art.get("url", ""),
                             "btc_impact_score": 85 if sentiment == "BULLISH" else (35 if sentiment == "BEARISH" else 60)
                         })
-                    return parsed if parsed else fallback_news
+                    return parsed
         except Exception:
             pass
 
-        return fallback_news
+        return []
 
     @staticmethod
     def get_market_sentiment_summary(news_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         if not news_list:
-            return {"fear_and_greed_index": 68, "status_pt": "GANÂNCIA MODERADA", "macro_bias": "BULLISH"}
+            return {"fear_and_greed_index": None, "status_pt": "INDISPONIVEL", "macro_bias": "UNKNOWN"}
 
         bullish = sum(1 for n in news_list if n.get("sentiment") == "BULLISH")
         bearish = sum(1 for n in news_list if n.get("sentiment") == "BEARISH")

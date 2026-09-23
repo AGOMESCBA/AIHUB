@@ -35,7 +35,7 @@
       <canvas id="cycleCanvas"></canvas>
     </section>
     <aside class="text-card">
-      <div class="page-kicker">LEITURA MACRO</div>
+      <div class="page-kicker">LEITURA MACRO / MODELO DEMONSTRATIVO</div>
       <p id="cycleText">Aguardando comparacao.</p>
     </aside>
   </div>
@@ -114,7 +114,7 @@
         currentSeries = data.normalized_series || {};
         drawCycle(currentSeries);
         document.getElementById('cycleText').textContent = `${data.cycle_phase_description || ''}\n\n${data.layman_explanation || ''}\n\n${data.disclaimer || ''}`;
-        document.getElementById('statusText').textContent = `ano ${data.current_year}`;
+        document.getElementById('statusText').textContent = `ano ${data.current_year} - demonstrativo`;
       } catch (_) {
         document.getElementById('statusText').textContent = 'backend indisponivel';
         document.getElementById('metaGrid').innerHTML = '<div class="meta-item"><span>Status</span><strong>Sem dados</strong></div>';

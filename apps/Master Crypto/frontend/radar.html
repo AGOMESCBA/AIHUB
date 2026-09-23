@@ -214,6 +214,44 @@
       padding-bottom: 56px; /* Espaco para garantir scroll completo */
     }
 
+    .scanner-loading-state {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      min-height: 180px;
+      margin-top: 18px;
+      padding: 24px;
+      border: 1px solid rgba(56, 97, 251, 0.28);
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.58);
+      color: #cbd5e1;
+      font-size: 14px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .scanner-loading-state.show {
+      display: flex;
+    }
+
+    .scanner-loading-pulse {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #3861fb;
+      box-shadow: 0 0 0 0 rgba(56, 97, 251, 0.7);
+      animation: pulseRing 1.35s infinite;
+      flex: 0 0 auto;
+    }
+
+    @keyframes pulseRing {
+      0% { box-shadow: 0 0 0 0 rgba(56, 97, 251, 0.55); }
+      70% { box-shadow: 0 0 0 12px rgba(56, 97, 251, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(56, 97, 251, 0); }
+    }
+
     .target-card {
       background: rgba(24, 26, 32, 0.95);
       border: 1px solid rgba(255, 255, 255, 0.08);
@@ -512,7 +550,11 @@
 
 <!-- CARDS DE OPORTUNIDADES COM SCROLL DA PÁGINA -->
 <div class="radar-grid" id="opportunitiesContainer"></div>
-<div class="empty-state" id="emptyState" style="display:none; color:#64748b; font-weight:700; text-align:center; padding:40px;">Nenhuma oportunidade detectada pelo radar no momento.</div>
+<div class="scanner-loading-state" id="scannerLoadingState">
+  <span class="scanner-loading-pulse"></span>
+  <span id="scannerLoadingText">Consultando Binance em tempo real e montando o radar...</span>
+</div>
+<div class="empty-state" id="emptyState" style="display:none; color:#64748b; font-weight:700; text-align:center; padding:40px;">Nenhuma cotação real foi carregada agora. Clique em Atualizar Radar e verifique a conexão com a Binance.</div>
 
 <!-- MODAL DE EXECUÇÃO DE OPERAÇÃO -->
 <div class="modal-backdrop" id="execModal">
@@ -589,15 +631,6 @@
   let activeExecutionMode = 'REAL'; // REAL or SIMULATION
   let availableBalanceUsd = 0;
 
-  const fallbackItems = [
-    { symbol: "BTC/USDT", score: 88, strategy: "TREND_FOLLOW", entry_min: 64200, entry_max: 64800, stop_loss: 62500, target_2: 67500, rr: 2.2 },
-    { symbol: "ETH/USDT", score: 91, strategy: "RECOVERY", entry_min: 3000, entry_max: 3020, stop_loss: 2900, target_2: 3250, rr: 2.3 },
-    { symbol: "SOL/USDT", score: 93, strategy: "PULLBACK", entry_min: 118, entry_max: 119.5, stop_loss: 114.5, target_2: 125.8, rr: 2.5 },
-    { symbol: "ENA/USDT", score: 89, strategy: "BREAKOUT", entry_min: 0.52, entry_max: 0.54, stop_loss: 0.48, target_2: 0.62, rr: 2.4 },
-    { symbol: "ONDO/USDT", score: 87, strategy: "PULLBACK", entry_min: 0.72, entry_max: 0.74, stop_loss: 0.68, target_2: 0.83, rr: 2.2 },
-    { symbol: "BNB/USDT", score: 82, strategy: "PULLBACK", entry_min: 525, entry_max: 530, stop_loss: 510, target_2: 555, rr: 1.8 }
-  ];
-
   function showToast(text, isError = false) {
     const toast = document.getElementById('toastStatus');
     const toastText = document.getElementById('toastText');
@@ -612,6 +645,16 @@
 
   function hideToast() {
     document.getElementById('toastStatus').style.display = 'none';
+  }
+
+  function setScannerLoading(active, text = 'Consultando Binance em tempo real e montando o radar...') {
+    const loading = document.getElementById('scannerLoadingState');
+    const loadingText = document.getElementById('scannerLoadingText');
+    const empty = document.getElementById('emptyState');
+    if (!loading) return;
+    if (loadingText) loadingText.textContent = text;
+    loading.classList.toggle('show', Boolean(active));
+    if (empty && active) empty.style.display = 'none';
   }
 
   function esc(value) {
@@ -630,16 +673,16 @@
     const isEntry = totalScore >= 80;
 
     return {
-      symbol: raw.symbol || score.symbol || plan.symbol || 'SOL/USDT',
+      symbol: raw.symbol || score.symbol || plan.symbol || '-',
       score: totalScore,
       strategy: strategy,
       isEntry: isEntry,
-      entryLabel: entryMin && entryMax ? `${entryMin.toFixed(2)} - ${entryMax.toFixed(2)}` : (raw.entry_range || '145.00 - 146.50'),
-      stopLabel: stop ? stop.toFixed(2) : '142.00',
-      targetLabel: target2 ? target2.toFixed(2) : '153.00',
+      entryLabel: entryMin && entryMax ? `${entryMin.toFixed(2)} - ${entryMax.toFixed(2)}` : (raw.entry_range || '-'),
+      stopLabel: stop ? stop.toFixed(2) : (raw.stop_loss || '-'),
+      targetLabel: target2 ? target2.toFixed(2) : (raw.target_2 || '-'),
       rr: Number(plan.risk_reward_ratio ?? raw.rr ?? raw.risk_reward_ratio ?? 2.2),
       plan,
-      currentPrice: entryMin && entryMax ? (entryMin + entryMax) / 2 : Number(raw.current_price || 145.5)
+      currentPrice: Number(raw.current_price || raw.last_price || (entryMin && entryMax ? (entryMin + entryMax) / 2 : 0))
     };
   }
 
@@ -676,13 +719,17 @@
     const btn = document.getElementById('btnUpdate');
     const btnText = document.getElementById('btnUpdateText');
     const btnSpinner = document.getElementById('btnUpdateSpinner');
+    const loadingMessage = userClicked
+      ? 'Atualizando Radar: varrendo pares na Binance em tempo real...'
+      : 'Abrindo Radar: consultando Binance em tempo real e preparando oportunidades...';
 
     if (userClicked) {
       btn.classList.add('loading');
       btnText.textContent = 'ATUALIZANDO MERCADO...';
       btnSpinner.textContent = '⏳';
-      showToast('📡 Varrendo pares de criptomoedas na Binance em tempo real...');
     }
+    setScannerLoading(true, loadingMessage);
+    showToast(`📡 ${loadingMessage}`);
 
     await (window._iahubAuthReady || Promise.resolve());
     const settings = await loadCompanySummary();
@@ -690,27 +737,32 @@
       const topLimit = Number(settings.scanner_top_limit || 20);
       const timeframe = encodeURIComponent(settings.scanner_timeframe || '4h');
       const res = await fetch(`/api/master-crypto/opportunities/active?top_limit=${topLimit}&timeframe=${timeframe}`);
+      if (!res.ok) throw new Error('scanner');
       const data = await res.json();
       if (data?.btc_context) {
         document.getElementById('btcContextValue').textContent = `${data.btc_context.trend_status || 'BULLISH'} (${Number(data.btc_context.score || 85).toFixed(0)}/100)`;
       } else {
-        document.getElementById('btcContextValue').textContent = 'BULLISH (85/100)';
+        document.getElementById('btcContextValue').textContent = '-';
       }
 
-      let fetched = Array.isArray(data.opportunities) && data.opportunities.length ? data.opportunities : fallbackItems;
+      const fetched = Array.isArray(data.opportunities) ? data.opportunities : [];
       allOpportunities = fetched.map(normalizeOpportunity);
+      const sourceLabel = data.universe_source === 'BINANCE_24H_VOLUME' ? 'Binance volume 24h' : 'Baseline';
+      document.getElementById('scannerDepthValue').textContent = `Top ${topLimit} - ${String(settings.scanner_timeframe || '4h').toUpperCase()} ${sourceLabel}`;
+      setScannerLoading(false);
       renderOpportunities();
 
-      if (userClicked) {
-        showToast('✅ Oportunidades do Scanner Atualizadas!');
+      if (userClicked || !fetched.length) {
+        showToast(fetched.length ? '✅ Oportunidades do Scanner Atualizadas!' : '⚠️ Scanner sem oportunidades reais neste momento.', !fetched.length);
+      } else {
+        hideToast();
       }
     } catch (_) {
-      allOpportunities = fallbackItems.map(normalizeOpportunity);
+      allOpportunities = [];
+      setScannerLoading(false);
       renderOpportunities();
-      document.getElementById('btcContextValue').textContent = 'BULLISH (85/100)';
-      if (userClicked) {
-        showToast('✅ Oportunidades Atualizadas (Modo Backup ativo)!');
-      }
+      document.getElementById('btcContextValue').textContent = '-';
+      showToast('⚠️ Não foi possível carregar cotações reais da Binance.', true);
     } finally {
       btn.classList.remove('loading');
       btnText.textContent = 'Atualizar Radar';

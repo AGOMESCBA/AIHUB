@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ativos - Crypto Radar AI</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="./css/master-crypto.css">
+  <style>
+    body {
+      background: #f8fafc;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .assets-hero {
+      background: linear-gradient(135deg, #0f172a, #111827 58%, #132235);
+      color: #f8fafc;
+      border: 1px solid rgba(56, 97, 251, .22);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 14px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, .16);
+    }
+    .assets-hero-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .assets-title {
+      font-size: 22px;
+      font-weight: 900;
+      margin: 0 0 6px;
+      letter-spacing: 0;
+    }
+    .assets-subtitle {
+      color: #cbd5e1;
+      font-size: 13px;
+      line-height: 1.5;
+      max-width: 760px;
+    }
+    .assets-total {
+      display: grid;
+      gap: 4px;
+      min-width: 220px;
+      text-align: right;
+    }
+    .assets-total span {
+      color: #94a3b8;
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 800;
+      letter-spacing: .04em;
+    }
+    .assets-total strong {
+      color: #0ecb81;
+      font-size: 24px;
+      font-weight: 950;
+    }
+    .assets-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .metric-box {
+      background: rgba(255, 255, 255, .07);
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .metric-box span {
+      display: block;
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+    .metric-box strong {
+      color: #fff;
+      font-size: 15px;
+    }
+    .assets-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .asset-search {
+      flex: 1;
+      min-width: 240px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      outline: none;
+      background: #fff;
+      color: var(--text-hi);
+    }
+    .asset-search:focus {
+      border-color: #3861fb;
+      box-shadow: 0 0 0 3px rgba(56, 97, 251, .12);
+    }
+    .assets-status {
+      color: var(--text-lo);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .asset-symbol {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 900;
+    }
+    .asset-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #eef2ff;
+      color: #2555eb;
+      font-size: 12px;
+      font-weight: 950;
+      flex: 0 0 auto;
+    }
+    .empty-state {
+      height: 260px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-lo);
+      font-weight: 800;
+      text-align: center;
+      padding: 24px;
+    }
+    @media (max-width: 760px) {
+      body { padding: 12px; }
+      .assets-total { text-align: left; }
+      .assets-metrics { grid-template-columns: 1fr; }
+      .assets-toolbar { align-items: stretch; }
+      .asset-search, .assets-toolbar .btn { width: 100%; }
+      .table-wrap { overflow-x: auto; }
+      .history-table { min-width: 760px; }
+    }
+  </style>
+</head>
+<body>
+<div class="page-kicker">OPERACAO / ATIVOS</div>
+
+<div class="assets-hero">
+  <div class="assets-hero-top">
+    <div>
+      <h1 class="assets-title">Ativos da Exchange</h1>
+      <div class="assets-subtitle">
+        Carteira real da corretora configurada para a empresa ativa no IAHub. Nesta versao a consulta esta integrada com a Binance.
+      </div>
+    </div>
+    <div class="assets-total">
+      <span>Total estimado</span>
+      <strong id="totalEstimated">-</strong>
+    </div>
+  </div>
+  <div class="assets-metrics">
+    <div class="metric-box"><span>Exchange</span><strong id="exchangeName">BINANCE</strong></div>
+    <div class="metric-box"><span>Ativos com saldo</span><strong id="assetCount">-</strong></div>
+    <div class="metric-box"><span>Atualizacao</span><strong id="updatedAt">-</strong></div>
+  </div>
+</div>
+
+<div class="assets-toolbar">
+  <input class="asset-search" id="assetSearch" type="search" placeholder="Buscar ativo, exemplo BTC, ETH, USDT..." oninput="renderAssets()">
+  <button class="btn btn-secondary" type="button" onclick="loadAssets()">Atualizar Ativos</button>
+  <span class="assets-status" id="statusLine">Carregando saldos da Binance...</span>
+</div>
+
+<div class="table-card">
+  <div class="table-wrap" style="min-height:360px">
+    <table class="history-table">
+      <thead>
+        <tr>
+          <th>Ativo</th>
+          <th>Disponivel</th>
+          <th>Bloqueado</th>
+          <th>Total</th>
+          <th>Preco USDT</th>
+          <th>Valor Estimado</th>
+        </tr>
+      </thead>
+      <tbody id="assetsBody"></tbody>
+    </table>
+    <div class="empty-state" id="emptyState" style="display:none">Nenhum ativo com saldo foi retornado pela Binance.</div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script>
+  const fmtUsd = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'USD' });
+  const fmtQty = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 10 });
+  let allAssets = [];
+
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+  }
+
+  function formatNumber(value) {
+    return fmtQty.format(Number(value || 0));
+  }
+
+  function setStatus(text) {
+    document.getElementById('statusLine').textContent = text;
+  }
+
+  async function loadAssets() {
+    await (window._iahubAuthReady || Promise.resolve());
+    setStatus('Consultando saldos reais da Binance...');
+    try {
+      const res = await fetch('/api/master-crypto/orders/assets?exchange=BINANCE');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Nao foi possivel consultar ativos.');
+      allAssets = Array.isArray(data.assets) ? data.assets : [];
+      document.getElementById('exchangeName').textContent = data.exchange || 'BINANCE';
+      document.getElementById('assetCount').textContent = String(data.assets_count ?? allAssets.length);
+      document.getElementById('totalEstimated').textContent = fmtUsd.format(Number(data.total_estimated_usdt || 0));
+      document.getElementById('updatedAt').textContent = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      setStatus('Saldos carregados com sucesso.');
+      renderAssets();
+    } catch (err) {
+      allAssets = [];
+      document.getElementById('assetCount').textContent = '-';
+      document.getElementById('totalEstimated').textContent = '-';
+      setStatus(err.message || 'Nao foi possivel carregar os ativos.');
+      renderAssets();
+    }
+  }
+
+  function renderAssets() {
+    const query = document.getElementById('assetSearch').value.trim().toUpperCase();
+    const rows = query ? allAssets.filter(item => String(item.asset || '').includes(query)) : allAssets;
+    const tbody = document.getElementById('assetsBody');
+    const empty = document.getElementById('emptyState');
+    tbody.innerHTML = '';
+    empty.style.display = rows.length ? 'none' : 'flex';
+    rows.forEach(item => {
+      const tr = document.createElement('tr');
+      const asset = String(item.asset || '-').toUpperCase();
+      tr.innerHTML = `
+        <td>
+          <div class="asset-symbol">
+            <span class="asset-avatar">${esc(asset.slice(0, 4))}</span>
+            <span>${esc(asset)}</span>
+          </div>
+        </td>
+        <td>${formatNumber(item.free)}</td>
+        <td>${formatNumber(item.locked)}</td>
+        <td><strong>${formatNumber(item.total)}</strong></td>
+        <td>${Number(item.price_usdt || 0) ? fmtUsd.format(Number(item.price_usdt)) : '-'}</td>
+        <td><strong class="text-positive">${fmtUsd.format(Number(item.estimated_usdt || 0))}</strong></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  window.addEventListener('DOMContentLoaded', loadAssets);
+</script>
+</body>
+</html>

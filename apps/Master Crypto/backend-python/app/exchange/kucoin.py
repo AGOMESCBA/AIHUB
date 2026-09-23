@@ -53,7 +53,9 @@ class KuCoinAdapter(ExchangeAdapter):
             return float(data.get("data", {}).get("price", 0.0))
 
     async def place_order(self, symbol: str, side: str, order_type: str, quantity: float, price: Optional[float] = None) -> Dict:
-        return {"order_id": "kucoin_simulated_123", "symbol": symbol, "status": "FILLED", "exchange": "KUCOIN"}
+        raise NotImplementedError(
+            "Envio de ordem real para KuCoin ainda nao esta habilitado neste backend."
+        )
 
     async def cancel_order(self, symbol: str, order_id: str) -> Dict:
         return {"order_id": order_id, "status": "CANCELED", "exchange": "KUCOIN"}

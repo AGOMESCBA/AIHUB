@@ -6,7 +6,7 @@
       id: 'operacao', label: 'Operacao', icon: 'satellite', defaultOpen: true,
       items: [
         { id: 'mc-radar', label: 'Radar de Oportunidades 24x7', href: '/app/master-crypto/radar.html', icon: 'radar' },
-        { id: 'mc-oportunidades', label: 'Oportunidades Ativas', href: '/app/master-crypto/oportunidades.html', icon: 'target' },
+        { id: 'mc-ativos', label: 'Ativos', href: '/app/master-crypto/ativos.html', icon: 'coins' },
       ],
     },
     {
@@ -43,6 +43,7 @@
     satellite: '<path d="M13 7 9 3 7 5l4 4"/><path d="m17 11 4 4-2 2-4-4"/><path d="M8 12a7 7 0 0 0-5 5"/><path d="M11 15a3 3 0 0 0-3 3"/><path d="m8 8 8 8"/><path d="m16 4 4 4-8 8-4-4Z"/>',
     radar: '<path d="M12 12 19 5"/><path d="M20 12a8 8 0 1 1-8-8"/><path d="M16 12a4 4 0 1 1-4-4"/><circle cx="12" cy="12" r="1"/>',
     target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/><path d="M12 3v3M21 12h-3M12 21v-3M3 12h3"/>',
+    coins: '<circle cx="8" cy="8" r="5"/><path d="M8 13v4a5 5 0 0 0 10 0v-4"/><path d="M13 8h3a5 5 0 0 1 0 10h-3"/><path d="M3 8h10"/><path d="M3 11h10"/><path d="M13 13h8"/><path d="M13 16h8"/>',
     'chart-line': '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/><path d="M18 7h1v1"/>',
     candles: '<path d="M7 3v4M7 17v4M5 7h4v10H5Z"/><path d="M17 3v7M17 18v3M15 10h4v8h-4Z"/>',
     bot: '<path d="M12 8V4"/><rect x="5" y="8" width="14" height="10" rx="3"/><path d="M9 18v2M15 18v2"/><path d="M9 13h.01M15 13h.01"/><path d="M4 13H2M22 13h-2"/>',

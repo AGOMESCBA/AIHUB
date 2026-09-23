@@ -54,15 +54,10 @@ class BinanceAdapter(ExchangeAdapter):
         quantity: float,
         price: Optional[float] = None
     ) -> Dict:
-        # Mock/Sandbox para V1 de desenvolvimento inicial
-        return {
-            "order_id": "simulated_order_12345",
-            "symbol": symbol,
-            "status": "FILLED" if order_type == "MARKET" else "NEW",
-            "side": side,
-            "quantity": quantity,
-            "price": price or 0.0
-        }
+        raise NotImplementedError(
+            "Envio de ordem real para Binance ainda nao esta habilitado neste backend. "
+            "Use Paper Trading ou implemente a chamada assinada /api/v3/order antes de operar real."
+        )
 
     async def cancel_order(self, symbol: str, order_id: str) -> Dict:
         return {"order_id": order_id, "status": "CANCELED"}

@@ -91,3 +91,10 @@ async def get_market_candles(symbol: str = "SOLUSDT", interval: str = "4h", limi
     adapter = BinanceAdapter()
     candles = await adapter.get_candles(symbol=symbol, interval=interval, limit=limit)
     return {"symbol": symbol, "interval": interval, "count": len(candles), "candles": candles}
+
+@app.get(f"{settings.API_V1_STR}/market/price")
+async def get_market_price(symbol: str = "BTCUSDT"):
+    clean_symbol = symbol.replace("/", "").upper()
+    adapter = BinanceAdapter()
+    price = await adapter.get_ticker_price(clean_symbol)
+    return {"symbol": clean_symbol, "exchange": "BINANCE", "price": price}

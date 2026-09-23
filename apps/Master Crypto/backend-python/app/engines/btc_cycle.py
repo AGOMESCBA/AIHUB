@@ -98,5 +98,5 @@ class BTCCycleEngine:
                 str(year_a): series_year_a,
                 str(year_b): series_year_b
             },
-            disclaimer="AVISO IMPORTANTE: Desempenho e padrões históricos servem exclusivamente como contexto macro e referência visual. Não constituem garantia nem previsão determinística de retornos futuros."
+            disclaimer="AVISO IMPORTANTE: Esta versão usa série normalizada demonstrativa para leitura macro visual. Não é histórico real da Binance. Desempenho e padrões históricos, quando integrados, servirão exclusivamente como contexto e não constituem garantia nem previsão determinística de retornos futuros."
         )
