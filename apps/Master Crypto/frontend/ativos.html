@@ -8,10 +8,10 @@
   <link rel="stylesheet" href="./css/master-crypto.css">
   <style>
     body {
-      background: #f5f7fb;
+      background: #0b0e11;
       padding: 16px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      color: #0f172a;
+      color: #eaecef;
     }
     .toast-status {
       position: fixed;
@@ -41,31 +41,42 @@
     }
     .wallet-hero {
       background: #181a20;
-      border: 1px solid #252a34;
-      border-radius: 10px;
+      border: 1px solid #2b3139;
+      border-radius: 12px;
       color: #f5f5f5;
       overflow: hidden;
-      box-shadow: 0 14px 34px rgba(15, 23, 42, .16);
+      box-shadow: 0 18px 45px rgba(0, 0, 0, .28);
     }
     .wallet-hero-main {
       display: grid;
-      grid-template-columns: minmax(0, 1.3fr) minmax(260px, .7fr);
+      grid-template-columns: minmax(0, 1fr) auto;
       gap: 18px;
-      padding: 22px;
+      padding: 24px 30px 18px;
+      align-items: start;
     }
     .wallet-kicker {
       color: #f0b90b;
       font-size: 11px;
       font-weight: 900;
       text-transform: uppercase;
-      letter-spacing: .08em;
+      letter-spacing: 0;
       margin-bottom: 8px;
     }
     .wallet-title {
       margin: 0;
-      font-size: 25px;
+      font-size: 19px;
       font-weight: 950;
       letter-spacing: 0;
+    }
+    .wallet-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #f5f5f5;
+    }
+    .wallet-eye {
+      color: #848e9c;
+      font-size: 13px;
     }
     .wallet-subtitle {
       color: #a3a8b8;
@@ -74,15 +85,28 @@
       margin-top: 8px;
       max-width: 760px;
     }
+    .wallet-company {
+      display: inline-flex;
+      align-items: center;
+      margin-top: 14px;
+      border: 1px solid #2b3139;
+      background: #111318;
+      border-radius: 999px;
+      padding: 7px 11px;
+      color: #eaecef;
+      font-size: 12px;
+      font-weight: 850;
+    }
     .wallet-total {
       align-self: stretch;
-      background: #1f232d;
-      border: 1px solid #2b313d;
-      border-radius: 8px;
-      padding: 18px;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
       display: grid;
       align-content: center;
-      gap: 7px;
+      justify-items: start;
+      gap: 8px;
     }
     .wallet-total span,
     .wallet-stat span {
@@ -90,27 +114,52 @@
       font-size: 11px;
       font-weight: 900;
       text-transform: uppercase;
-      letter-spacing: .06em;
+      letter-spacing: 0;
     }
     .wallet-total strong {
-      color: #f0b90b;
-      font-size: 30px;
+      color: #f5f5f5;
+      font-size: 34px;
       font-weight: 950;
       line-height: 1;
     }
+    .wallet-converted {
+      color: #848e9c;
+      font-size: 13px;
+      font-weight: 800;
+      margin-top: -8px;
+    }
+    .wallet-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 3px;
+    }
+    .wallet-action {
+      border: 1px solid #2b3139;
+      background: #29313d;
+      color: #eaecef;
+      border-radius: 6px;
+      padding: 9px 13px;
+      font-size: 13px;
+      font-weight: 900;
+      cursor: default;
+    }
     .wallet-stats {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      border-top: 1px solid #252a34;
-      background: #111318;
+      display: flex;
+      gap: 28px;
+      flex-wrap: wrap;
+      border-top: 1px solid #2b3139;
+      background: #16191f;
+      padding: 12px 30px 14px;
     }
     .wallet-stat {
-      padding: 14px 18px;
-      border-right: 1px solid #252a34;
-      display: grid;
-      gap: 5px;
+      padding: 0;
+      border-right: 0;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
     }
-    .wallet-stat:last-child { border-right: 0; }
     .wallet-stat strong {
       color: #f5f5f5;
       font-size: 15px;
@@ -121,15 +170,16 @@
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 10px;
       align-items: center;
+      background: #0b0e11;
     }
     .asset-search {
-      border: 1px solid #d8e0eb;
+      border: 1px solid #2b3139;
       border-radius: 8px;
       padding: 11px 13px;
       font-size: 13px;
       outline: none;
-      background: #fff;
-      color: #111827;
+      background: #181a20;
+      color: #eaecef;
       width: 100%;
     }
     .asset-search:focus {
@@ -159,16 +209,16 @@
       transform: none;
     }
     .wallet-status {
-      color: #64748b;
+      color: #848e9c;
       font-size: 12px;
       font-weight: 800;
       margin-top: -4px;
     }
     .wallet-alert {
       display: none;
-      border: 1px solid #f5c2c7;
-      background: #fff5f5;
-      color: #842029;
+      border: 1px solid rgba(246, 70, 93, .42);
+      background: rgba(246, 70, 93, .12);
+      color: #ff9aa8;
       border-radius: 8px;
       padding: 14px 16px;
       font-size: 13px;
@@ -179,14 +229,14 @@
       display: block;
       font-size: 14px;
       margin-bottom: 4px;
-      color: #58151c;
+      color: #f6465d;
     }
     .portfolio-card {
-      background: #fff;
-      border: 1px solid #dfe6f0;
-      border-radius: 10px;
+      background: #181a20;
+      border: 1px solid #2b3139;
+      border-radius: 12px;
       overflow: hidden;
-      box-shadow: 0 8px 18px rgba(15, 23, 42, .06);
+      box-shadow: 0 18px 45px rgba(0, 0, 0, .22);
     }
     .portfolio-head {
       display: flex;
@@ -194,21 +244,71 @@
       align-items: center;
       gap: 12px;
       padding: 14px 16px;
-      border-bottom: 1px solid #edf1f7;
+      border-bottom: 1px solid #2b3139;
       flex-wrap: wrap;
     }
     .portfolio-head strong {
       font-size: 15px;
       font-weight: 950;
+      color: #f5f5f5;
     }
     .portfolio-head span {
-      color: #64748b;
+      color: #848e9c;
       font-size: 12px;
       font-weight: 800;
+    }
+    .asset-tabs {
+      display: flex;
+      gap: 22px;
+      margin-top: 18px;
+      color: #848e9c;
+      font-size: 14px;
+      font-weight: 900;
+    }
+    .asset-tabs span {
+      position: relative;
+      color: inherit;
+      font-size: inherit;
+    }
+    .asset-tabs .active {
+      color: #f5f5f5;
+    }
+    .asset-tabs .active::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -9px;
+      height: 3px;
+      border-radius: 999px;
+      background: #f0b90b;
+    }
+    .portfolio-tools {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 16px;
+      flex-wrap: wrap;
+      color: #eaecef;
+      font-size: 13px;
+      font-weight: 850;
+    }
+    .hide-small {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .hide-small input {
+      width: 16px;
+      height: 16px;
+      accent-color: #f0b90b;
     }
     .portfolio-table-wrap {
       min-height: 390px;
       overflow: auto;
+      background: #181a20;
     }
     .portfolio-table {
       width: 100%;
@@ -217,33 +317,33 @@
     }
     .portfolio-table th {
       text-align: right;
-      padding: 12px 14px;
-      background: #fafafa;
+      padding: 13px 18px;
+      background: #181a20;
       color: #848e9c;
       font-size: 11px;
       font-weight: 950;
       text-transform: uppercase;
-      letter-spacing: .04em;
-      border-bottom: 1px solid #edf1f7;
+      letter-spacing: 0;
+      border-bottom: 1px solid #2b3139;
     }
     .portfolio-table th:first-child,
     .portfolio-table td:first-child { text-align: left; }
     .portfolio-table td {
       text-align: right;
-      padding: 13px 14px;
-      border-bottom: 1px solid #f1f5f9;
-      font-size: 13px;
-      color: #1e293b;
+      padding: 14px 18px;
+      border-bottom: 1px solid #252a34;
+      font-size: 14px;
+      color: #eaecef;
       vertical-align: middle;
     }
-    .portfolio-table tr:hover td { background: #fffdf4; }
+    .portfolio-table tr:hover td { background: #1f232d; }
     .assets-loading-state {
       display: none;
       min-height: 300px;
       align-items: center;
       justify-content: center;
       gap: 12px;
-      color: #64748b;
+      color: #848e9c;
       font-size: 13px;
       font-weight: 900;
       text-align: center;
@@ -282,6 +382,11 @@
       font-size: 11px;
       font-weight: 950;
       flex: 0 0 auto;
+      border: 1px solid #2b3139;
+    }
+    .asset-name {
+      color: #f5f5f5;
+      text-align: left;
     }
     .asset-name small {
       display: block;
@@ -290,7 +395,7 @@
       margin-top: 2px;
     }
     .value-usdt {
-      color: #0ecb81;
+      color: #f5f5f5;
       font-weight: 950;
     }
     .empty-state {
@@ -307,11 +412,15 @@
     @media (max-width: 780px) {
       body { padding: 12px; }
       .wallet-hero-main { grid-template-columns: 1fr; padding: 18px; }
-      .wallet-stats { grid-template-columns: 1fr; }
-      .wallet-stat { border-right: 0; border-bottom: 1px solid #252a34; }
-      .wallet-stat:last-child { border-bottom: 0; }
+      .wallet-total { justify-items: start; }
+      .wallet-total strong { font-size: 31px; }
+      .wallet-actions { justify-content: flex-start; }
+      .wallet-stats { gap: 12px; padding: 14px 18px 18px; }
+      .wallet-stat { width: 100%; justify-content: space-between; }
       .wallet-controls { grid-template-columns: 1fr; }
       .btn-refresh { width: 100%; }
+      .portfolio-head { align-items: flex-start; }
+      .portfolio-tools { width: 100%; justify-content: flex-start; }
     }
   </style>
 </head>
@@ -326,17 +435,21 @@
 <main class="wallet-shell">
   <section class="wallet-hero">
     <div class="wallet-hero-main">
-      <div>
-        <div class="wallet-kicker">Spot Wallet / Binance</div>
-        <h1 class="wallet-title">Ativos da Exchange</h1>
-        <div class="wallet-subtitle">
-          Saldos reais da corretora configurada para a empresa ativa no IAHub. A consulta usa a API Key cadastrada em Parametros & Risco.
-        </div>
-      </div>
       <div class="wallet-total">
-        <span>Total estimado</span>
+        <div class="wallet-kicker">Spot Wallet / Binance</div>
+        <div class="wallet-title-row">
+          <h1 class="wallet-title">Valor total est.</h1>
+          <span class="wallet-eye">◉</span>
+        </div>
         <strong id="totalEstimated">-</strong>
-        <span>Convertido para USDT</span>
+        <div class="wallet-converted">Convertido para USDT</div>
+        <div class="wallet-company" id="companyContext">Empresa ativa: sincronizando...</div>
+      </div>
+      <div class="wallet-actions">
+        <button class="wallet-action" type="button">Deposito</button>
+        <button class="wallet-action" type="button">Saque</button>
+        <button class="wallet-action" type="button">Transferir</button>
+        <button class="wallet-action" type="button">Historico</button>
       </div>
     </div>
     <div class="wallet-stats">
@@ -358,18 +471,30 @@
 
   <section class="portfolio-card">
     <div class="portfolio-head">
-      <strong>Portfolio Spot</strong>
-      <span id="portfolioHint">Somente ativos com saldo livre ou bloqueado.</span>
+      <div>
+        <strong>Meus Ativos</strong>
+        <div class="asset-tabs">
+          <span class="active">Visao de ativos</span>
+          <span>Visualizar Conta</span>
+        </div>
+      </div>
+      <div class="portfolio-tools">
+        <span id="portfolioHint">Somente ativos com saldo livre ou bloqueado.</span>
+        <label class="hide-small">
+          <input id="hideSmallAssets" type="checkbox" onchange="renderAssets()">
+          Ocultar ativos &lt; 1 USD
+        </label>
+      </div>
     </div>
     <div class="portfolio-table-wrap">
       <table class="portfolio-table">
         <thead>
           <tr>
             <th>Ativo</th>
+            <th>Total</th>
+            <th>Preco do ativo</th>
             <th>Disponivel</th>
             <th>Bloqueado</th>
-            <th>Total</th>
-            <th>Preco USDT</th>
             <th>Valor estimado</th>
           </tr>
         </thead>
@@ -455,9 +580,29 @@
     document.getElementById('updatedAt').textContent = '-';
   }
 
+  function getEmpresaId() {
+    return window._iahubEmpresa?.id || window._iahubEmpresa?.empresa_id || '';
+  }
+
+  function updateCompanyContext() {
+    const companyName = window._iahubEmpresa?.nome || window._iahubEmpresa?.empresa_nome || 'Empresa selecionada';
+    const companyId = getEmpresaId();
+    document.getElementById('companyContext').textContent = companyId
+      ? `Empresa ativa: ${companyName} (ID: ${companyId})`
+      : `Empresa ativa: ${companyName}`;
+  }
+
+  function apiUrl(path) {
+    const companyId = getEmpresaId();
+    if (!companyId) return path;
+    const sep = path.includes('?') ? '&' : '?';
+    return `${path}${sep}empresa_id=${encodeURIComponent(companyId)}`;
+  }
+
   async function loadAssets(userClicked = false) {
     if (isLoadingAssets) return;
     await (window._iahubAuthReady || Promise.resolve());
+    updateCompanyContext();
     const loadingMessage = userClicked
       ? 'Atualizando Ativos: consultando carteira Spot na Binance...'
       : 'Abrindo Ativos: consultando carteira Spot na Binance...';
@@ -466,7 +611,7 @@
     setAssetsLoading(true, loadingMessage);
     showToast(`📡 ${loadingMessage}`);
     try {
-      const res = await fetch('/api/master-crypto/orders/assets?exchange=BINANCE');
+      const res = await fetch(apiUrl('/api/master-crypto/orders/assets?exchange=BINANCE'));
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || 'Nao foi possivel consultar ativos.');
       allAssets = Array.isArray(data.assets) ? data.assets : [];
@@ -491,7 +636,11 @@
 
   function renderAssets() {
     const query = document.getElementById('assetSearch').value.trim().toUpperCase();
-    const rows = query ? allAssets.filter(item => String(item.asset || '').includes(query)) : allAssets;
+    const hideSmall = document.getElementById('hideSmallAssets')?.checked;
+    let rows = query ? allAssets.filter(item => String(item.asset || '').includes(query)) : allAssets;
+    if (hideSmall) {
+      rows = rows.filter(item => Number(item.estimated_usdt || 0) >= 1);
+    }
     const tbody = document.getElementById('assetsBody');
     const empty = document.getElementById('emptyState');
     tbody.innerHTML = '';
@@ -509,10 +658,10 @@
             <span class="asset-name">${esc(asset)}<small>Spot</small></span>
           </div>
         </td>
-        <td>${formatNumber(item.free)}</td>
-        <td>${formatNumber(item.locked)}</td>
         <td><strong>${formatNumber(item.total)}</strong></td>
         <td>${Number(item.price_usdt || 0) ? fmtUsd.format(Number(item.price_usdt)) : '-'}</td>
+        <td>${formatNumber(item.free)}</td>
+        <td>${formatNumber(item.locked)}</td>
         <td><strong class="value-usdt">${fmtUsd.format(Number(item.estimated_usdt || 0))}</strong></td>
       `;
       tbody.appendChild(tr);

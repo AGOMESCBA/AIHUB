@@ -33,8 +33,8 @@ async def execute_real_order(req: RealOrderRequest, request: Request):
     """
     clean_sym = req.symbol.replace("/", "").upper()
     company_settings = _company_exchange_settings(request)
-    api_key = req.api_key or company_settings.get("exchange_api_key") or settings.BINANCE_API_KEY
-    api_secret = req.api_secret or company_settings.get("exchange_api_secret") or settings.BINANCE_API_SECRET
+    api_key = _clean_credential(req.api_key or company_settings.get("exchange_api_key") or settings.BINANCE_API_KEY)
+    api_secret = _clean_credential(req.api_secret or company_settings.get("exchange_api_secret") or settings.BINANCE_API_SECRET)
 
     adapter = ExchangeFactory.get_adapter(
         exchange_name=req.exchange,
@@ -72,8 +72,8 @@ async def get_exchange_balance(request: Request, exchange: str = "BINANCE"):
     """
     exchange_name = exchange.upper().strip()
     company_settings = _company_exchange_settings(request)
-    api_key = company_settings.get("exchange_api_key") or settings.BINANCE_API_KEY
-    api_secret = company_settings.get("exchange_api_secret") or settings.BINANCE_API_SECRET
+    api_key = _clean_credential(company_settings.get("exchange_api_key") or settings.BINANCE_API_KEY)
+    api_secret = _clean_credential(company_settings.get("exchange_api_secret") or settings.BINANCE_API_SECRET)
 
     if not api_key or not api_secret:
         raise HTTPException(status_code=400, detail="Chaves da corretora nao configuradas para esta empresa")
@@ -116,8 +116,8 @@ async def get_exchange_assets(request: Request, exchange: str = "BINANCE"):
     """
     exchange_name = exchange.upper().strip()
     company_settings = _company_exchange_settings(request)
-    api_key = company_settings.get("exchange_api_key") or settings.BINANCE_API_KEY
-    api_secret = company_settings.get("exchange_api_secret") or settings.BINANCE_API_SECRET
+    api_key = _clean_credential(company_settings.get("exchange_api_key") or settings.BINANCE_API_KEY)
+    api_secret = _clean_credential(company_settings.get("exchange_api_secret") or settings.BINANCE_API_SECRET)
 
     if not api_key or not api_secret:
         raise HTTPException(status_code=400, detail="Chaves da corretora nao configuradas para esta empresa")
@@ -192,6 +192,10 @@ def _company_exchange_settings(request: Request) -> dict:
         return store.get_settings(ctx.company_id)
     except Exception:
         return {}
+
+
+def _clean_credential(value: str | None) -> str:
+    return str(value or "").strip()
 
 
 def _binance_error_message(raw_text: str) -> str:

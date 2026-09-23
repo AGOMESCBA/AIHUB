@@ -116,6 +116,17 @@
     }
     .test-feedback.success { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
     .test-feedback.error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    .test-checks { display: grid; gap: 8px; margin-top: 8px; }
+    .test-check {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      border-radius: 8px;
+      padding: 9px 11px;
+      background: rgba(255, 255, 255, .45);
+      line-height: 1.4;
+    }
+    .test-check strong { display: block; margin-bottom: 2px; }
     .copy-toast {
       position: fixed;
       top: 18px;
@@ -300,12 +311,23 @@
 <script>
   const fields = ['initial_bank_usd', 'risk_per_trade_pct', 'min_risk_reward_ratio', 'scanner_top_limit', 'scanner_timeframe', 'mode', 'selected_exchange', 'exchange_api_key', 'exchange_api_secret'];
 
+  function getEmpresaId() {
+    return window._iahubEmpresa?.id || window._iahubEmpresa?.empresa_id || '';
+  }
+
+  function apiUrl(path) {
+    const companyId = getEmpresaId();
+    if (!companyId) return path;
+    const sep = path.includes('?') ? '&' : '?';
+    return `${path}${sep}empresa_id=${encodeURIComponent(companyId)}`;
+  }
+
   async function loadCompanyToken() {
     const tokenInput = document.getElementById('companyTokenInput');
     if (!tokenInput) return;
     tokenInput.value = 'Carregando token...';
     try {
-      const data = await fetch('/api/master-crypto/company/mobile-token').then(r => r.json());
+      const data = await fetch(apiUrl('/api/master-crypto/company/mobile-token')).then(r => r.json());
       tokenInput.value = data.mobile_token || '';
     } catch (_) {
       tokenInput.value = 'Nao foi possivel carregar o token';
@@ -360,7 +382,7 @@
     const tokenInput = document.getElementById('companyTokenInput');
     tokenInput.value = 'Gerando novo token...';
     try {
-      const data = await fetch('/api/master-crypto/company/mobile-token/regenerate', { method: 'POST' }).then(r => r.json());
+      const data = await fetch(apiUrl('/api/master-crypto/company/mobile-token/regenerate'), { method: 'POST' }).then(r => r.json());
       tokenInput.value = data.mobile_token || '';
       alert('Novo token gerado e salvo para esta empresa. Atualize o token no aplicativo celular.');
     } catch (_) {
@@ -396,7 +418,7 @@
     await loadCompanyToken();
 
     try {
-      const data = await fetch('/api/master-crypto/company/settings').then(r => r.json());
+      const data = await fetch(apiUrl('/api/master-crypto/company/settings')).then(r => r.json());
       fields.forEach(id => {
         const el = document.getElementById(id);
         if (el && data[id] !== undefined) el.value = data[id];
@@ -420,7 +442,7 @@
       exchange_api_secret: document.getElementById('exchange_api_secret').value,
     };
     setStatus('Salvando parâmetros...');
-    const res = await fetch('/api/master-crypto/company/settings', {
+    const res = await fetch(apiUrl('/api/master-crypto/company/settings'), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -437,35 +459,55 @@
     const feedback = document.getElementById('testFeedback');
     feedback.style.display = 'block';
     feedback.className = 'test-feedback';
-    feedback.innerHTML = '⚡ Testando conexão com os servidores da Binance... Aguarde...';
+    feedback.innerHTML = '⚡ Testando conexão pública e leitura autenticada dos ativos... Aguarde...';
 
     const apiKey = document.getElementById('exchange_api_key').value.trim();
     const apiSecret = document.getElementById('exchange_api_secret').value.trim();
     const exchange = document.getElementById('selected_exchange').value;
 
     try {
-      const res = await fetch('/api/master-crypto/company/test-exchange', {
+      const res = await fetch(apiUrl('/api/master-crypto/company/test-exchange'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           exchange: exchange,
           api_key: apiKey,
-          api_secret: apiSecret
+          api_secret: apiSecret,
+          empresa_id: window._iahubEmpresa?.id || window._iahubEmpresa?.empresa_id || undefined
         })
       });
 
       const data = await res.json();
-      if (data.success) {
-        feedback.className = 'test-feedback success';
-        feedback.innerHTML = `✅ <strong>Conexão Sucesso!</strong> ${data.message}`;
-      } else {
-        feedback.className = 'test-feedback error';
-        feedback.innerHTML = `❌ <strong>Erro no Teste:</strong> ${data.message}`;
-      }
+      const checks = data.checks || {};
+      const connection = checks.connection || {};
+      const assets = checks.assets || {};
+      feedback.className = data.success ? 'test-feedback success' : 'test-feedback error';
+      feedback.innerHTML = `
+        ${data.success ? '✅' : '⚠️'} <strong>Teste Binance concluído</strong>
+        <div class="test-checks">
+          ${renderTestCheck('Conexão pública / cotação', connection)}
+          ${renderTestCheck('Leitura autenticada dos ativos', assets)}
+        </div>
+      `;
     } catch(err) {
       feedback.className = 'test-feedback error';
       feedback.innerHTML = `❌ <strong>Erro de Comunicação:</strong> Não foi possível testar (${err.message})`;
     }
+  }
+
+  function renderTestCheck(title, check) {
+    const ok = Boolean(check?.success);
+    const message = check?.message || 'Sem retorno.';
+    return `
+      <div class="test-check">
+        <span>${ok ? '✅' : '❌'}</span>
+        <span><strong>${title}</strong>${escapeHtml(message)}</span>
+      </div>
+    `;
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
   }
 
   function setStatus(text) {
