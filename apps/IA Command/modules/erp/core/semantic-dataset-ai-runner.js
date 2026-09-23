@@ -232,6 +232,9 @@ function _buildSystemPrompt(dataset, { campos, metricas, campoData, suboperacaoD
     '- Quando a pergunta pedir agrupamento por cliente/produto/vendedor, mantenha o filtro de periodo solicitado; agrupamento nunca substitui filtro de periodo.',
     '- Quando a pergunta pedir agrupamento por cliente e existir campo de nome/razao social do cliente (ex: empresa_cliente, nome_cliente, A1_NOME, A1_NREDUZ), use esse campo como dimensao principal. Use id/codigo do cliente apenas se nao houver nome ou se a pergunta pedir explicitamente o codigo.',
     '- Quando a pergunta pedir "aguardando retorno", "retorno" ou "por aguardando", use a coluna categórica aguardando_retorno quando existir. Nao transforme em Sim/Nao; preserve valores como RETORNO - CLIENTE, RETORNO - ATENDENTE e RETORNO - FORNECEDOR.',
+    '- Para SoftExpert/Chamados, "consultor", "atendente" e "analista" significam o responsavel atual pelo atendimento. Quando a pergunta mencionar "aguardando retorno do atendente/consultor/analista" ou pedir agrupamento por esses termos, agrupe tambem por nome_analista quando a coluna existir.',
+    '- Para SoftExpert/Chamados, diferencie SLA previsto, situacao do SLA e duracao real: sla_horas_pa_chamado = horas PREVISTAS para primeiro atendimento (PA); sla_padrao_horas_chamado = horas PREVISTAS para o atendimento total do chamado, ja incluindo o primeiro atendimento; sla_situacao_atual_chamado = se o chamado aberto/atual esta Em dia ou Em atraso; sla_situacao_final_chamado = se o chamado encerrado fechou No Prazo/Em Atraso; id_status_sla = status operacional do SLA, como pausado ou em atendimento.',
+    '- Para SoftExpert/Chamados, perguntas de SLA sobre "tempo com" uma area devem usar a metrica de duracao da area, nao o status de SLA nem a duracao total: suporte/empresa IA Command selecionada (ex: J2A/C3I) = dias_duracao_com_suporte; desenvolvimento/FSW/fabrica de software = dias_duracao_com_fsw; fabricante/Protheus/SoftExpert = dias_duracao_com_fabricante; usuario do cliente/testes/retorno do cliente = dias_duracao_com_cliente; TI/tecnologia do cliente = dias_duracao_com_TIcliente; tempo total do chamado = dias_duracao_chamado ou horas_duracao_chamado quando o usuario pedir horas.',
     instrucaoAgrupamentoMes,
     '- Em consultas com UNION ALL, cada SELECT deve estar sintaticamente completo antes do UNION. Feche funcoes no GROUP BY, por exemplo: GROUP BY SUBSTRING(F2_EMISSAO, 1, 6).',
     '- Para metricas somadas, use COALESCE(SUM(campo), 0) para retornar zero quando nao houver movimentos.',
@@ -383,6 +386,8 @@ function _sanitizarSqlSelectDataset(sql, dataset, campoData, camposPermitidos, m
   out = _removerFiltroEmpresaDivergente(out, _empresaFixaSqlBase(dataset?.sql_base));
   out = _normalizarAliasCountQuantidade(out);
   out = _garantirAguardandoRetornoAgrupado(out, mensagem, camposPermitidos);
+  out = _garantirAnalistaAtendenteConsultorAgrupado(out, mensagem, camposPermitidos);
+  out = _corrigirMetricaSlaAreaChamados(out, mensagem, camposPermitidos);
   out = _corrigirGroupBySubstringIncompleto(out);
   return out;
 }
@@ -425,6 +430,100 @@ function _garantirAguardandoRetornoAgrupado(sql, mensagem, camposPermitidos = []
     /\bGROUP\s+BY\s+([\s\S]*?)(\s+ORDER\s+BY\b|$)/i,
     (_m, groupBy, fim) => `GROUP BY aguardando_retorno, ${String(groupBy || '').trim()}${fim || ''}`,
   );
+}
+
+function _mencionaAnalistaAtendenteConsultorComoAgrupamento(mensagem) {
+  const texto = String(mensagem || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const mencionaPapel = /\b(?:analista|atendente|consultor)(?:es)?\b/.test(texto);
+  if (!mencionaPapel) return false;
+  return (
+    /\bagrupad[oa]s?\b|\bagrupar\b|\bpor\b/.test(texto)
+    || /\baguardando\s+retorno\s+d[oa]\s+(?:analista|atendente|consultor)(?:es)?\b/.test(texto)
+  );
+}
+
+function _garantirAnalistaAtendenteConsultorAgrupado(sql, mensagem, camposPermitidos = []) {
+  if (!_mencionaAnalistaAtendenteConsultorComoAgrupamento(mensagem)) return sql;
+  if (!_temCampoPermitido(camposPermitidos, 'nome_analista')) return sql;
+  let out = String(sql || '');
+  if (!/\bGROUP\s+BY\b/i.test(out)) return out;
+
+  const selectsBase = [...out.matchAll(/\bSELECT\s+(?:TOP\s+\d+\s+)?([\s\S]*?)\bFROM\s+base\b/gi)];
+  const selectFinal = selectsBase.length ? String(selectsBase[selectsBase.length - 1][1] || '') : '';
+  if (!/\bnome_analista\b/i.test(selectFinal)) {
+    out = out.replace(
+      /\bSELECT\s+(TOP\s+\d+\s+)?/i,
+      (_m, top) => `SELECT ${top || ''}nome_analista, `,
+    );
+  }
+
+  const groupMatch = out.match(/\bGROUP\s+BY\s+([\s\S]*?)(\s+ORDER\s+BY\b|$)/i);
+  if (!groupMatch) return out;
+  if (/\bnome_analista\b/i.test(groupMatch[1])) return out;
+
+  return out.replace(
+    /\bGROUP\s+BY\s+([\s\S]*?)(\s+ORDER\s+BY\b|$)/i,
+    (_m, groupBy, fim) => `GROUP BY nome_analista, ${String(groupBy || '').trim()}${fim || ''}`,
+  );
+}
+
+function _normalizarTextoBusca(valor) {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function _resolverMetricaSlaAreaChamados(mensagem) {
+  const texto = _normalizarTextoBusca(mensagem);
+  if (!/\b(?:sla|tempo|duracao|dias|horas|ficou|permaneceu|parado)\b/.test(texto)) return null;
+
+  if (/\b(?:ti|tecnologia)\s+d[oa]\s+cliente\b|\barea\s+d[ea]\s+(?:ti|tecnologia)\s+d[oa]\s+cliente\b|\bcliente\s+.*\b(?:ti|tecnologia)\b/.test(texto)) {
+    return 'dias_duracao_com_TIcliente';
+  }
+  if (/\b(?:usuario\s+d[oa]\s+cliente|testes?\s+com\s+(?:o\s+)?(?:usuario\s+d[oa]\s+)?cliente|homologacao\s+(?:d[oa]\s+)?cliente|retorno\s+d[oa]\s+cliente|com\s+(?:o\s+)?cliente)\b/.test(texto)) {
+    return 'dias_duracao_com_cliente';
+  }
+  if (/\b(?:fabricante|distribuidor|protheus|softexpert)\b/.test(texto)) {
+    return 'dias_duracao_com_fabricante';
+  }
+  if (/\b(?:desenvolvimento|fsw|fabrica\s+de\s+software|dev)\b/.test(texto)) {
+    return 'dias_duracao_com_fsw';
+  }
+  if (/\b(?:suporte|j2a|c3i|nossa\s+empresa|empresa\s+do\s+ia\s+command|com\s+a\s+empresa|com\s+empresa)\b/.test(texto)) {
+    return 'dias_duracao_com_suporte';
+  }
+  if (/\bhoras?\b/.test(texto) && /\b(?:total|duracao\s+total|tempo\s+total)\b/.test(texto)) {
+    return 'horas_duracao_chamado';
+  }
+  if (/\b(?:total|duracao\s+total|tempo\s+total)\b/.test(texto)) {
+    return 'dias_duracao_chamado';
+  }
+  return null;
+}
+
+function _corrigirMetricaSlaAreaChamados(sql, mensagem, camposPermitidos = []) {
+  const alvo = _resolverMetricaSlaAreaChamados(mensagem);
+  if (!alvo || !_temCampoPermitido(camposPermitidos, alvo)) return sql;
+
+  const out = String(sql || '');
+  if (new RegExp(`\\b${alvo}\\b`, 'i').test(out)) return out;
+
+  const genericas = [
+    'dias_duracao_chamado',
+    'horas_duracao_chamado',
+    'sla_horas_pa_chamado',
+    'sla_padrao_horas_chamado',
+  ].filter(campo => _temCampoPermitido(camposPermitidos, campo) && campo !== alvo);
+
+  let corrigido = out;
+  for (const campo of genericas) {
+    corrigido = corrigido.replace(new RegExp(`\\b${campo}\\b`, 'gi'), alvo);
+  }
+  return corrigido;
 }
 
 function _normalizarAliasCountQuantidade(sql) {
@@ -1170,7 +1269,7 @@ function _fmtMoeda(v) {
 
 // Busca o tipo documentado na grade de Campos Semanticos do dataset (aba Semantica > Campos).
 // Prioriza sempre essa fonte sobre qualquer heuristica por nome de coluna, ja que e informacao
-// que o proprio cadastrante do dataset validou (ex: sla_horas_chamado = metrica, nao moeda).
+// que o proprio cadastrante do dataset validou (ex: sla_horas_pa_chamado = metrica, nao moeda).
 function _tipoCampoSemantico(col, camposDataset = []) {
   const alvo = String(col || '').trim().toLowerCase();
   if (!alvo) return null;

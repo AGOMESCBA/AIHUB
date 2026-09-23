@@ -12,6 +12,18 @@ const camposChamados = [
   { coluna: 'empresa_cliente', tipo: 'dimensao', descricao: 'Cliente.', agrupavel: 1 },
   { coluna: 'aguardando_retorno', tipo: 'dimensao', descricao: 'Status de aguardando retorno.', agrupavel: 1 },
   { coluna: 'nome_analista', tipo: 'dimensao', descricao: 'Analista.', agrupavel: 1 },
+  { coluna: 'dias_duracao_chamado', tipo: 'metrica', descricao: 'Tempo total em dias.' },
+  { coluna: 'horas_duracao_chamado', tipo: 'metrica', descricao: 'Tempo total em horas.' },
+  { coluna: 'dias_duracao_com_suporte', tipo: 'metrica', descricao: 'Tempo em dias com suporte.' },
+  { coluna: 'dias_duracao_com_fsw', tipo: 'metrica', descricao: 'Tempo em dias com desenvolvimento.' },
+  { coluna: 'dias_duracao_com_fabricante', tipo: 'metrica', descricao: 'Tempo em dias com fabricante.' },
+  { coluna: 'dias_duracao_com_cliente', tipo: 'metrica', descricao: 'Tempo em dias com usuario do cliente.' },
+  { coluna: 'dias_duracao_com_TIcliente', tipo: 'metrica', descricao: 'Tempo em dias com TI do cliente.' },
+  { coluna: 'sla_horas_pa_chamado', tipo: 'metrica', descricao: 'SLA PA em horas.' },
+  { coluna: 'sla_padrao_horas_chamado', tipo: 'metrica', descricao: 'SLA padrao em horas.' },
+  { coluna: 'sla_situacao_atual_chamado', tipo: 'status', descricao: 'Situacao atual do SLA.' },
+  { coluna: 'sla_situacao_final_chamado', tipo: 'status', descricao: 'Situacao final do SLA.' },
+  { coluna: 'id_status_sla', tipo: 'status', descricao: 'Status operacional do SLA.' },
 ];
 
 const sqlModeloUnion = `
@@ -92,6 +104,11 @@ const promptChamados = runner._test._buildSystemPrompt(
 assert(promptChamados.includes('PROIBIDO usar total_* para COUNT'), 'prompt deve proibir total_* em COUNT');
 assert(promptChamados.includes('COUNT(chamado) AS qtd_chamados'), 'prompt deve orientar qtd_* para chamados');
 assert(promptChamados.includes('Nao transforme em Sim/Nao'), 'prompt deve preservar categorias reais de aguardando retorno');
+assert(promptChamados.includes('dias_duracao_com_suporte'), 'prompt deve mapear SLA por area para suporte/empresa IA Command');
+assert(promptChamados.includes('dias_duracao_com_TIcliente'), 'prompt deve mapear SLA por area para TI do cliente');
+assert(promptChamados.includes('sla_horas_pa_chamado = horas PREVISTAS para primeiro atendimento'), 'prompt deve diferenciar SLA previsto de primeiro atendimento');
+assert(promptChamados.includes('sla_padrao_horas_chamado = horas PREVISTAS para o atendimento total'), 'prompt deve diferenciar SLA previsto total');
+assert(promptChamados.includes('id_status_sla = status operacional do SLA'), 'prompt deve orientar SLA pausado/em atendimento');
 
 const sqlCountTotal = `
 SELECT TOP 10000 empresa_cliente, nome_analista, COUNT(chamado) AS total_chamados, COUNT(DISTINCT empresa_cliente) AS total_clientes, COUNT(*) AS total
@@ -129,5 +146,72 @@ const sqlAguardandoForcado = runner._test._sanitizarSqlSelectDataset(
 );
 assert(/SELECT TOP 10000\s+aguardando_retorno,\s+empresa_cliente,\s+nome_analista,\s+COUNT\(\*\) AS qtd_chamados/i.test(sqlAguardandoForcado), sqlAguardandoForcado);
 assert(/GROUP BY\s+aguardando_retorno,\s+empresa_cliente,\s+nome_analista/i.test(sqlAguardandoForcado), sqlAguardandoForcado);
+
+const sqlSemAnalistaNoGroupBy = `
+SELECT TOP 10000 empresa_cliente, aguardando_retorno, COUNT(*) AS qtd_chamados
+FROM base
+WHERE status_chamado IN ('Pendente', 'Andamento')
+  AND sla_situacao_atual_chamado = 'Em atraso'
+  AND aguardando_retorno IS NOT NULL
+GROUP BY empresa_cliente, aguardando_retorno
+`;
+[
+  'me liste apenas os chamados em aberto e em atraso aguardando retorno do atendente',
+  'me liste apenas os chamados em aberto e em atraso aguardando retorno do consultor',
+  'Agora me liste apenas os chamados em aberto e em atraso aguardando retorno do analista',
+  'Agora me liste apenas os chamados em aberto e em atraso aguardando retorno do atendente agrupado por cliente',
+].forEach(mensagem => {
+  const sqlAnalistaForcado = runner._test._sanitizarSqlSelectDataset(
+    sqlSemAnalistaNoGroupBy,
+    { sql_base: '', erp: 'SoftExpert' },
+    'data_abertura_chamado',
+    ['empresa_cliente', 'aguardando_retorno', 'nome_analista', 'chamado', 'status_chamado', 'sla_situacao_atual_chamado'],
+    mensagem,
+    camposChamados,
+  );
+  assert(/\bnome_analista\b/i.test(sqlAnalistaForcado), `${mensagem}\n${sqlAnalistaForcado}`);
+  assert(/SELECT TOP 10000\s+nome_analista,\s+empresa_cliente,\s+aguardando_retorno,\s+COUNT\(\*\) AS qtd_chamados/i.test(sqlAnalistaForcado), sqlAnalistaForcado);
+  assert(/GROUP BY\s+nome_analista,\s+empresa_cliente,\s+aguardando_retorno/i.test(sqlAnalistaForcado), sqlAnalistaForcado);
+});
+
+const camposPermitidosChamadosSla = [
+  'chamado',
+  'empresa_cliente',
+  'dias_duracao_chamado',
+  'horas_duracao_chamado',
+  'dias_duracao_com_suporte',
+  'dias_duracao_com_fsw',
+  'dias_duracao_com_fabricante',
+  'dias_duracao_com_cliente',
+  'dias_duracao_com_TIcliente',
+  'sla_horas_pa_chamado',
+];
+const sqlDuracaoGenerica = `
+SELECT TOP 10000 empresa_cliente, AVG(dias_duracao_chamado) AS media_dias
+FROM base
+GROUP BY empresa_cliente
+`;
+[
+  ['quanto tempo o chamado ficou com o cliente', 'dias_duracao_com_cliente'],
+  ['qual o tempo medio que os chamados ficaram em testes com o usuario do cliente', 'dias_duracao_com_cliente'],
+  ['tempo medio que o chamado ficou com a TI do cliente', 'dias_duracao_com_TIcliente'],
+  ['SLA por tempo com a area de tecnologia do cliente', 'dias_duracao_com_TIcliente'],
+  ['tempo medio dos chamados com o fabricante Protheus', 'dias_duracao_com_fabricante'],
+  ['tempo que o chamado ficou com a Softexpert fabricante', 'dias_duracao_com_fabricante'],
+  ['tempo dos chamados com desenvolvimento FSW', 'dias_duracao_com_fsw'],
+  ['tempo que os chamados ficaram com a empresa J2A', 'dias_duracao_com_suporte'],
+  ['tempo com suporte da C3I', 'dias_duracao_com_suporte'],
+  ['duracao total em horas do chamado', 'horas_duracao_chamado'],
+].forEach(([mensagem, colunaEsperada]) => {
+  const sqlSlaArea = runner._test._sanitizarSqlSelectDataset(
+    sqlDuracaoGenerica,
+    { sql_base: '', erp: 'SoftExpert' },
+    'data_abertura_chamado',
+    camposPermitidosChamadosSla,
+    mensagem,
+    camposChamados,
+  );
+  assert(sqlSlaArea.includes(`AVG(${colunaEsperada}) AS media_dias`), `${mensagem}\n${sqlSlaArea}`);
+});
 
 console.log('faturamento-dataset-semantico.test.js: ok');
