@@ -25,8 +25,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String? _connectionStatusMessage;
   bool? _connectionSuccess;
 
-  bool _obscureApiKey = true;
-  bool _obscureApiSecret = true;
   bool _isTestingExchange = false;
   String? _exchangeTestMessage;
   bool? _exchangeTestSuccess;
