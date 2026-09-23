@@ -136,7 +136,7 @@ async def get_exchange_assets(request: Request, exchange: str = "BINANCE"):
         prices_response = await client.get("https://api.binance.com/api/v3/ticker/price")
 
     if account_response.status_code >= 400:
-        detail = account_response.text[:300]
+        detail = _binance_error_message(account_response.text)
         raise HTTPException(status_code=400, detail=f"Erro ao consultar ativos Binance: {detail}")
 
     if prices_response.status_code >= 400:
@@ -192,3 +192,13 @@ def _company_exchange_settings(request: Request) -> dict:
         return store.get_settings(ctx.company_id)
     except Exception:
         return {}
+
+
+def _binance_error_message(raw_text: str) -> str:
+    text = (raw_text or "").strip()
+    if "-2015" in text or "Invalid API-key" in text:
+        return (
+            "API Key invalida, sem permissao de leitura, ou IP do servidor nao liberado na Binance. "
+            "Confira as chaves em Parametros & Risco e habilite permissao de leitura Spot."
+        )
+    return text[:300]

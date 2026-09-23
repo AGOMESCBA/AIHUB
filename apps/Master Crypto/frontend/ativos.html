@@ -8,113 +8,267 @@
   <link rel="stylesheet" href="./css/master-crypto.css">
   <style>
     body {
-      background: #f8fafc;
+      background: #f5f7fb;
       padding: 16px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #0f172a;
     }
-    .assets-hero {
-      background: linear-gradient(135deg, #0f172a, #111827 58%, #132235);
+    .toast-status {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(24, 26, 32, .96);
+      border: 1px solid #f0b90b;
       color: #f8fafc;
-      border: 1px solid rgba(56, 97, 251, .22);
-      border-radius: 14px;
-      padding: 18px;
-      margin-bottom: 14px;
-      box-shadow: 0 10px 30px rgba(15, 23, 42, .16);
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 800;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, .22);
+      z-index: 9999;
+      animation: fadeIn .25s ease;
     }
-    .assets-hero-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .wallet-shell {
+      display: grid;
       gap: 14px;
-      flex-wrap: wrap;
     }
-    .assets-title {
-      font-size: 22px;
+    .wallet-hero {
+      background: #181a20;
+      border: 1px solid #252a34;
+      border-radius: 10px;
+      color: #f5f5f5;
+      overflow: hidden;
+      box-shadow: 0 14px 34px rgba(15, 23, 42, .16);
+    }
+    .wallet-hero-main {
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(260px, .7fr);
+      gap: 18px;
+      padding: 22px;
+    }
+    .wallet-kicker {
+      color: #f0b90b;
+      font-size: 11px;
       font-weight: 900;
-      margin: 0 0 6px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 8px;
+    }
+    .wallet-title {
+      margin: 0;
+      font-size: 25px;
+      font-weight: 950;
       letter-spacing: 0;
     }
-    .assets-subtitle {
-      color: #cbd5e1;
+    .wallet-subtitle {
+      color: #a3a8b8;
       font-size: 13px;
-      line-height: 1.5;
+      line-height: 1.55;
+      margin-top: 8px;
       max-width: 760px;
     }
-    .assets-total {
+    .wallet-total {
+      align-self: stretch;
+      background: #1f232d;
+      border: 1px solid #2b313d;
+      border-radius: 8px;
+      padding: 18px;
       display: grid;
-      gap: 4px;
-      min-width: 220px;
-      text-align: right;
+      align-content: center;
+      gap: 7px;
     }
-    .assets-total span {
-      color: #94a3b8;
+    .wallet-total span,
+    .wallet-stat span {
+      color: #848e9c;
       font-size: 11px;
+      font-weight: 900;
       text-transform: uppercase;
-      font-weight: 800;
-      letter-spacing: .04em;
+      letter-spacing: .06em;
     }
-    .assets-total strong {
-      color: #0ecb81;
-      font-size: 24px;
+    .wallet-total strong {
+      color: #f0b90b;
+      font-size: 30px;
       font-weight: 950;
+      line-height: 1;
     }
-    .assets-metrics {
+    .wallet-stats {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 16px;
+      border-top: 1px solid #252a34;
+      background: #111318;
     }
-    .metric-box {
-      background: rgba(255, 255, 255, .07);
-      border: 1px solid rgba(255, 255, 255, .08);
-      border-radius: 10px;
-      padding: 12px;
+    .wallet-stat {
+      padding: 14px 18px;
+      border-right: 1px solid #252a34;
+      display: grid;
+      gap: 5px;
     }
-    .metric-box span {
-      display: block;
-      color: #94a3b8;
-      font-size: 11px;
-      font-weight: 800;
-      text-transform: uppercase;
-      margin-bottom: 5px;
-    }
-    .metric-box strong {
-      color: #fff;
+    .wallet-stat:last-child { border-right: 0; }
+    .wallet-stat strong {
+      color: #f5f5f5;
       font-size: 15px;
+      font-weight: 900;
     }
-    .assets-toolbar {
-      display: flex;
+    .wallet-controls {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
       align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
     }
     .asset-search {
-      flex: 1;
-      min-width: 240px;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px 12px;
+      border: 1px solid #d8e0eb;
+      border-radius: 8px;
+      padding: 11px 13px;
       font-size: 13px;
       outline: none;
       background: #fff;
-      color: var(--text-hi);
+      color: #111827;
+      width: 100%;
     }
     .asset-search:focus {
-      border-color: #3861fb;
-      box-shadow: 0 0 0 3px rgba(56, 97, 251, .12);
+      border-color: #f0b90b;
+      box-shadow: 0 0 0 3px rgba(240, 185, 11, .14);
     }
-    .assets-status {
-      color: var(--text-lo);
+    .btn-refresh {
+      height: 42px;
+      border: 1px solid #f0b90b;
+      background: #f0b90b;
+      color: #181a20;
+      border-radius: 8px;
+      padding: 0 18px;
+      font-weight: 900;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-width: 154px;
+      transition: transform .2s ease, opacity .2s ease;
+    }
+    .btn-refresh:hover { transform: translateY(-1px); }
+    .btn-refresh.loading {
+      opacity: .78;
+      cursor: wait;
+      transform: none;
+    }
+    .wallet-status {
+      color: #64748b;
       font-size: 12px;
+      font-weight: 800;
+      margin-top: -4px;
+    }
+    .wallet-alert {
+      display: none;
+      border: 1px solid #f5c2c7;
+      background: #fff5f5;
+      color: #842029;
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 13px;
+      line-height: 1.5;
       font-weight: 700;
+    }
+    .wallet-alert strong {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 4px;
+      color: #58151c;
+    }
+    .portfolio-card {
+      background: #fff;
+      border: 1px solid #dfe6f0;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, .06);
+    }
+    .portfolio-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid #edf1f7;
+      flex-wrap: wrap;
+    }
+    .portfolio-head strong {
+      font-size: 15px;
+      font-weight: 950;
+    }
+    .portfolio-head span {
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .portfolio-table-wrap {
+      min-height: 390px;
+      overflow: auto;
+    }
+    .portfolio-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 780px;
+    }
+    .portfolio-table th {
+      text-align: right;
+      padding: 12px 14px;
+      background: #fafafa;
+      color: #848e9c;
+      font-size: 11px;
+      font-weight: 950;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      border-bottom: 1px solid #edf1f7;
+    }
+    .portfolio-table th:first-child,
+    .portfolio-table td:first-child { text-align: left; }
+    .portfolio-table td {
+      text-align: right;
+      padding: 13px 14px;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 13px;
+      color: #1e293b;
+      vertical-align: middle;
+    }
+    .portfolio-table tr:hover td { background: #fffdf4; }
+    .assets-loading-state {
+      display: none;
+      min-height: 300px;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: #64748b;
+      font-size: 13px;
+      font-weight: 900;
+      text-align: center;
+      padding: 28px;
+    }
+    .assets-loading-state.show { display: flex; }
+    .assets-loading-pulse {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #f0b90b;
+      box-shadow: 0 0 0 0 rgba(240, 185, 11, .6);
+      animation: pulseRing 1.35s infinite;
+      flex: 0 0 auto;
+    }
+    @keyframes pulseRing {
+      0% { box-shadow: 0 0 0 0 rgba(240, 185, 11, .55); }
+      70% { box-shadow: 0 0 0 12px rgba(240, 185, 11, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(240, 185, 11, 0); }
     }
     .asset-symbol {
       display: flex;
       align-items: center;
       gap: 10px;
-      font-weight: 900;
+      font-weight: 950;
     }
     .asset-avatar {
       width: 34px;
@@ -123,86 +277,120 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      background: #eef2ff;
-      color: #2555eb;
-      font-size: 12px;
+      background: #181a20;
+      color: #f0b90b;
+      font-size: 11px;
       font-weight: 950;
       flex: 0 0 auto;
     }
+    .asset-name small {
+      display: block;
+      color: #848e9c;
+      font-weight: 800;
+      margin-top: 2px;
+    }
+    .value-usdt {
+      color: #0ecb81;
+      font-weight: 950;
+    }
     .empty-state {
-      height: 260px;
-      display: flex;
+      display: none;
+      min-height: 300px;
       align-items: center;
       justify-content: center;
-      color: var(--text-lo);
-      font-weight: 800;
       text-align: center;
-      padding: 24px;
+      color: #848e9c;
+      font-size: 13px;
+      font-weight: 850;
+      padding: 28px;
     }
-    @media (max-width: 760px) {
+    @media (max-width: 780px) {
       body { padding: 12px; }
-      .assets-total { text-align: left; }
-      .assets-metrics { grid-template-columns: 1fr; }
-      .assets-toolbar { align-items: stretch; }
-      .asset-search, .assets-toolbar .btn { width: 100%; }
-      .table-wrap { overflow-x: auto; }
-      .history-table { min-width: 760px; }
+      .wallet-hero-main { grid-template-columns: 1fr; padding: 18px; }
+      .wallet-stats { grid-template-columns: 1fr; }
+      .wallet-stat { border-right: 0; border-bottom: 1px solid #252a34; }
+      .wallet-stat:last-child { border-bottom: 0; }
+      .wallet-controls { grid-template-columns: 1fr; }
+      .btn-refresh { width: 100%; }
     }
   </style>
 </head>
 <body>
+<div id="toastStatus" class="toast-status">
+  <span id="toastIcon">🔄</span>
+  <span id="toastText">Atualizando carteira Binance...</span>
+</div>
+
 <div class="page-kicker">OPERACAO / ATIVOS</div>
 
-<div class="assets-hero">
-  <div class="assets-hero-top">
-    <div>
-      <h1 class="assets-title">Ativos da Exchange</h1>
-      <div class="assets-subtitle">
-        Carteira real da corretora configurada para a empresa ativa no IAHub. Nesta versao a consulta esta integrada com a Binance.
+<main class="wallet-shell">
+  <section class="wallet-hero">
+    <div class="wallet-hero-main">
+      <div>
+        <div class="wallet-kicker">Spot Wallet / Binance</div>
+        <h1 class="wallet-title">Ativos da Exchange</h1>
+        <div class="wallet-subtitle">
+          Saldos reais da corretora configurada para a empresa ativa no IAHub. A consulta usa a API Key cadastrada em Parametros & Risco.
+        </div>
+      </div>
+      <div class="wallet-total">
+        <span>Total estimado</span>
+        <strong id="totalEstimated">-</strong>
+        <span>Convertido para USDT</span>
       </div>
     </div>
-    <div class="assets-total">
-      <span>Total estimado</span>
-      <strong id="totalEstimated">-</strong>
+    <div class="wallet-stats">
+      <div class="wallet-stat"><span>Exchange</span><strong id="exchangeName">BINANCE</strong></div>
+      <div class="wallet-stat"><span>Ativos com saldo</span><strong id="assetCount">-</strong></div>
+      <div class="wallet-stat"><span>Atualizacao</span><strong id="updatedAt">-</strong></div>
     </div>
-  </div>
-  <div class="assets-metrics">
-    <div class="metric-box"><span>Exchange</span><strong id="exchangeName">BINANCE</strong></div>
-    <div class="metric-box"><span>Ativos com saldo</span><strong id="assetCount">-</strong></div>
-    <div class="metric-box"><span>Atualizacao</span><strong id="updatedAt">-</strong></div>
-  </div>
-</div>
+  </section>
 
-<div class="assets-toolbar">
-  <input class="asset-search" id="assetSearch" type="search" placeholder="Buscar ativo, exemplo BTC, ETH, USDT..." oninput="renderAssets()">
-  <button class="btn btn-secondary" type="button" onclick="loadAssets()">Atualizar Ativos</button>
-  <span class="assets-status" id="statusLine">Carregando saldos da Binance...</span>
-</div>
+  <section class="wallet-controls">
+    <input class="asset-search" id="assetSearch" type="search" placeholder="Buscar ativo, exemplo BTC, ETH, USDT..." oninput="renderAssets()">
+    <button class="btn-refresh" id="btnRefreshAssets" type="button" onclick="loadAssets(true)">
+      <span id="btnRefreshSpinner">🔄</span>
+      <span id="btnRefreshText">Atualizar Ativos</span>
+    </button>
+  </section>
+  <div class="wallet-status" id="statusLine">Carregando saldos da Binance...</div>
+  <div class="wallet-alert" id="errorBox"></div>
 
-<div class="table-card">
-  <div class="table-wrap" style="min-height:360px">
-    <table class="history-table">
-      <thead>
-        <tr>
-          <th>Ativo</th>
-          <th>Disponivel</th>
-          <th>Bloqueado</th>
-          <th>Total</th>
-          <th>Preco USDT</th>
-          <th>Valor Estimado</th>
-        </tr>
-      </thead>
-      <tbody id="assetsBody"></tbody>
-    </table>
-    <div class="empty-state" id="emptyState" style="display:none">Nenhum ativo com saldo foi retornado pela Binance.</div>
-  </div>
-</div>
+  <section class="portfolio-card">
+    <div class="portfolio-head">
+      <strong>Portfolio Spot</strong>
+      <span id="portfolioHint">Somente ativos com saldo livre ou bloqueado.</span>
+    </div>
+    <div class="portfolio-table-wrap">
+      <table class="portfolio-table">
+        <thead>
+          <tr>
+            <th>Ativo</th>
+            <th>Disponivel</th>
+            <th>Bloqueado</th>
+            <th>Total</th>
+            <th>Preco USDT</th>
+            <th>Valor estimado</th>
+          </tr>
+        </thead>
+        <tbody id="assetsBody"></tbody>
+      </table>
+      <div class="assets-loading-state" id="assetsLoadingState">
+        <span class="assets-loading-pulse"></span>
+        <span id="assetsLoadingText">Consultando carteira Spot na Binance...</span>
+      </div>
+      <div class="empty-state" id="emptyState">Nenhum ativo com saldo foi retornado pela Binance.</div>
+    </div>
+  </section>
+</main>
 
 <script src="/js/auth.js"></script>
 <script>
   const fmtUsd = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'USD' });
   const fmtQty = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 10 });
   let allAssets = [];
+  let lastError = '';
+  let isLoadingAssets = false;
 
   function esc(value) {
     return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
@@ -216,9 +404,67 @@
     document.getElementById('statusLine').textContent = text;
   }
 
-  async function loadAssets() {
+  function showToast(text, isError = false) {
+    const toast = document.getElementById('toastStatus');
+    document.getElementById('toastIcon').textContent = isError ? '⚠️' : '🔄';
+    document.getElementById('toastText').textContent = text;
+    toast.style.display = 'flex';
+    if (!text.includes('Consultando') && !text.includes('Atualizando')) {
+      setTimeout(() => { toast.style.display = 'none'; }, 3800);
+    }
+  }
+
+  function hideToast() {
+    document.getElementById('toastStatus').style.display = 'none';
+  }
+
+  function setAssetsLoading(active, text = 'Consultando carteira Spot na Binance...') {
+    const loading = document.getElementById('assetsLoadingState');
+    const loadingText = document.getElementById('assetsLoadingText');
+    const empty = document.getElementById('emptyState');
+    const btn = document.getElementById('btnRefreshAssets');
+    const btnText = document.getElementById('btnRefreshText');
+    const btnSpinner = document.getElementById('btnRefreshSpinner');
+    isLoadingAssets = Boolean(active);
+    if (loadingText) loadingText.textContent = text;
+    loading.classList.toggle('show', Boolean(active));
+    if (empty && active) empty.style.display = 'none';
+    if (btn) {
+      btn.classList.toggle('loading', Boolean(active));
+      btn.disabled = Boolean(active);
+    }
+    if (btnText) btnText.textContent = active ? 'Atualizando...' : 'Atualizar Ativos';
+    if (btnSpinner) btnSpinner.textContent = active ? '⏳' : '🔄';
+  }
+
+  function setError(message = '') {
+    lastError = message;
+    const box = document.getElementById('errorBox');
+    if (!message) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      return;
+    }
+    box.style.display = 'block';
+    box.innerHTML = `<strong>Conexao Binance nao autorizada</strong>${esc(message)}`;
+  }
+
+  function resetSummary() {
+    document.getElementById('assetCount').textContent = '-';
+    document.getElementById('totalEstimated').textContent = '-';
+    document.getElementById('updatedAt').textContent = '-';
+  }
+
+  async function loadAssets(userClicked = false) {
+    if (isLoadingAssets) return;
     await (window._iahubAuthReady || Promise.resolve());
+    const loadingMessage = userClicked
+      ? 'Atualizando Ativos: consultando carteira Spot na Binance...'
+      : 'Abrindo Ativos: consultando carteira Spot na Binance...';
     setStatus('Consultando saldos reais da Binance...');
+    setError('');
+    setAssetsLoading(true, loadingMessage);
+    showToast(`📡 ${loadingMessage}`);
     try {
       const res = await fetch('/api/master-crypto/orders/assets?exchange=BINANCE');
       const data = await res.json().catch(() => ({}));
@@ -228,14 +474,18 @@
       document.getElementById('assetCount').textContent = String(data.assets_count ?? allAssets.length);
       document.getElementById('totalEstimated').textContent = fmtUsd.format(Number(data.total_estimated_usdt || 0));
       document.getElementById('updatedAt').textContent = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      setStatus('Saldos carregados com sucesso.');
+      setStatus(allAssets.length ? 'Saldos carregados com sucesso.' : 'Consulta concluida, mas a Binance nao retornou ativos com saldo.');
+      setAssetsLoading(false);
       renderAssets();
+      showToast(allAssets.length ? '✅ Ativos da Binance atualizados.' : '⚠️ Binance respondeu sem ativos com saldo.', !allAssets.length);
     } catch (err) {
       allAssets = [];
-      document.getElementById('assetCount').textContent = '-';
-      document.getElementById('totalEstimated').textContent = '-';
-      setStatus(err.message || 'Nao foi possivel carregar os ativos.');
+      resetSummary();
+      setStatus('Nao foi possivel carregar os ativos.');
+      setError(err.message || 'Verifique a API Key, Secret, permissoes e whitelist de IP na Binance.');
+      setAssetsLoading(false);
       renderAssets();
+      showToast('⚠️ Não foi possível consultar a carteira Binance.', true);
     }
   }
 
@@ -246,6 +496,9 @@
     const empty = document.getElementById('emptyState');
     tbody.innerHTML = '';
     empty.style.display = rows.length ? 'none' : 'flex';
+    empty.textContent = lastError
+      ? 'A carteira nao pode ser exibida enquanto a Binance recusar a chave configurada.'
+      : 'Nenhum ativo com saldo foi retornado pela Binance.';
     rows.forEach(item => {
       const tr = document.createElement('tr');
       const asset = String(item.asset || '-').toUpperCase();
@@ -253,14 +506,14 @@
         <td>
           <div class="asset-symbol">
             <span class="asset-avatar">${esc(asset.slice(0, 4))}</span>
-            <span>${esc(asset)}</span>
+            <span class="asset-name">${esc(asset)}<small>Spot</small></span>
           </div>
         </td>
         <td>${formatNumber(item.free)}</td>
         <td>${formatNumber(item.locked)}</td>
         <td><strong>${formatNumber(item.total)}</strong></td>
         <td>${Number(item.price_usdt || 0) ? fmtUsd.format(Number(item.price_usdt)) : '-'}</td>
-        <td><strong class="text-positive">${fmtUsd.format(Number(item.estimated_usdt || 0))}</strong></td>
+        <td><strong class="value-usdt">${fmtUsd.format(Number(item.estimated_usdt || 0))}</strong></td>
       `;
       tbody.appendChild(tr);
     });

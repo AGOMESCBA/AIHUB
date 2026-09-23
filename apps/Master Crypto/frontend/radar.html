@@ -554,7 +554,7 @@
   <span class="scanner-loading-pulse"></span>
   <span id="scannerLoadingText">Consultando Binance em tempo real e montando o radar...</span>
 </div>
-<div class="empty-state" id="emptyState" style="display:none; color:#64748b; font-weight:700; text-align:center; padding:40px;">Nenhuma cotação real foi carregada agora. Clique em Atualizar Radar e verifique a conexão com a Binance.</div>
+<div class="empty-state" id="emptyState" style="display:none; color:#64748b; font-weight:700; text-align:center; padding:40px;">Nenhum ativo atingiu os critérios do radar neste momento. As cotações foram consultadas, mas o algoritmo não encontrou entrada qualificada agora.</div>
 
 <!-- MODAL DE EXECUÇÃO DE OPERAÇÃO -->
 <div class="modal-backdrop" id="execModal">
@@ -749,6 +749,7 @@
       allOpportunities = fetched.map(normalizeOpportunity);
       const sourceLabel = data.universe_source === 'BINANCE_24H_VOLUME' ? 'Binance volume 24h' : 'Baseline';
       document.getElementById('scannerDepthValue').textContent = `Top ${topLimit} - ${String(settings.scanner_timeframe || '4h').toUpperCase()} ${sourceLabel}`;
+      document.getElementById('emptyState').textContent = 'Nenhum ativo atingiu os critérios do radar neste momento. As cotações foram consultadas, mas o algoritmo não encontrou entrada qualificada agora.';
       setScannerLoading(false);
       renderOpportunities();
 
@@ -761,6 +762,7 @@
       allOpportunities = [];
       setScannerLoading(false);
       renderOpportunities();
+      document.getElementById('emptyState').textContent = 'Não foi possível carregar cotações reais da Binance agora. Verifique conexão, permissões e tente atualizar o Radar.';
       document.getElementById('btcContextValue').textContent = '-';
       showToast('⚠️ Não foi possível carregar cotações reais da Binance.', true);
     } finally {

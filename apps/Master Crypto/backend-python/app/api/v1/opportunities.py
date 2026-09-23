@@ -9,7 +9,7 @@ from app.engines.opportunity_score import OpportunityScoreEngine
 from app.engines.risk_manager import RiskManager
 from app.engines.price_structure import PriceStructureEngine
 from app.exchange.binance import BinanceAdapter
-from app.domain.schemas import MarketRegimeEnum, StrategyEnum, TradePlan
+from app.domain.schemas import MarketRegimeEnum, PositionSizingInput, StrategyEnum, TradePlan
 def format_price_py(val: float) -> str:
     if val is None:
         return "0.00"
@@ -132,12 +132,12 @@ async def get_active_opportunities(timeframe: str = "4h", top_limit: int = 20):
             score_result.is_valid_opportunity = True
 
             position_calc = RiskManager.calculate_position_size(
-                input_data={
-                    "account_balance": 10000.0,
-                    "risk_per_trade_pct": 2.0,
-                    "entry_price": close,
-                    "stop_loss_price": trade_plan.stop_loss
-                }
+                input_data=PositionSizingInput(
+                    account_balance=10000.0,
+                    risk_per_trade_pct=2.0,
+                    entry_price=close,
+                    stop_loss_price=trade_plan.stop_loss
+                )
             )
 
             min_str = format_price_py(trade_plan.entry_zone_min)
