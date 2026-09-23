@@ -13,6 +13,7 @@ DEFAULT_SETTINGS = {
     "risk_per_trade_pct": 2.0,
     "scanner_top_limit": 20,
     "scanner_timeframe": "4h",
+    "radar_auto_refresh_seconds": 0,
     "min_risk_reward_ratio": 2.0,
     "mode": "demo",
     "selected_exchange": "BINANCE",

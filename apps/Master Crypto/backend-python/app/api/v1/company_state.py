@@ -20,6 +20,7 @@ class CompanySettingsUpdate(BaseModel):
     risk_per_trade_pct: float | None = Field(default=None, gt=0, le=100)
     scanner_top_limit: int | None = Field(default=None, ge=1, le=100)
     scanner_timeframe: str | None = None
+    radar_auto_refresh_seconds: int | None = Field(default=None, ge=0, le=86400)
     min_risk_reward_ratio: float | None = Field(default=None, gt=0)
     mode: str | None = None
     selected_exchange: str | None = None

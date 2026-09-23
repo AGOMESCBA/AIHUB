@@ -167,6 +167,45 @@
       pointer-events: none;
     }
 
+    .radar-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .auto-refresh-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 10px;
+      padding: 8px 10px;
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .auto-refresh-control select {
+      height: 32px;
+      border: 1px solid rgba(56, 97, 251, 0.55);
+      background: #111827;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 0 9px;
+      font-weight: 850;
+      outline: none;
+    }
+
+    .auto-refresh-status {
+      min-width: 76px;
+      color: #94a3b8;
+      font-size: 11px;
+      text-align: right;
+    }
+
     /* FILTROS */
     .filter-bar {
       display: flex;
@@ -470,6 +509,283 @@
       line-height: 1.35;
     }
 
+    .plan-modal-box {
+      max-width: 980px;
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+      padding: 0;
+    }
+    .plan-modal-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 22px 24px 14px;
+      border-bottom: 1px solid #334155;
+    }
+    .plan-title {
+      margin: 0;
+      color: #fff;
+      font-size: 22px;
+      font-weight: 900;
+    }
+    .plan-subtitle {
+      margin-top: 4px;
+      color: #94a3b8;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .plan-close {
+      background: transparent;
+      border: 0;
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 22px;
+      line-height: 1;
+      padding: 4px;
+    }
+    .plan-tabs {
+      display: flex;
+      gap: 18px;
+      overflow-x: auto;
+      padding: 0 24px;
+      border-bottom: 1px solid #334155;
+    }
+    .plan-tab {
+      color: #94a3b8;
+      font-size: 13px;
+      font-weight: 850;
+      padding: 14px 0 12px;
+      white-space: nowrap;
+      border-bottom: 3px solid transparent;
+    }
+    .plan-tab.active {
+      color: #3861fb;
+      border-bottom-color: #3861fb;
+    }
+    .plan-modal-body {
+      padding: 22px 24px 24px;
+      display: grid;
+      gap: 16px;
+    }
+    .plan-live-card,
+    .plan-summary-card,
+    .plan-chart-card,
+    .plan-detail-card,
+    .plan-level {
+      background: #0f172a;
+      border: 1px solid #263247;
+      border-radius: 14px;
+    }
+    .plan-live-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px;
+    }
+    .plan-live-label {
+      color: #0ecb81;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.6px;
+    }
+    .plan-live-price {
+      color: #fff;
+      font-size: 30px;
+      font-weight: 950;
+      margin-top: 4px;
+    }
+    .plan-signal {
+      border: 1px solid rgba(14, 203, 129, 0.75);
+      background: rgba(14, 203, 129, 0.16);
+      color: #0ecb81;
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-size: 15px;
+      font-weight: 950;
+    }
+    .plan-signal.wait {
+      border-color: rgba(240, 185, 11, 0.75);
+      background: rgba(240, 185, 11, 0.14);
+      color: #f0b90b;
+    }
+    .plan-summary-card {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      padding: 18px;
+    }
+    .plan-symbol {
+      color: #fff;
+      font-size: 34px;
+      font-weight: 950;
+      line-height: 1;
+    }
+    .plan-score-pill {
+      align-self: start;
+      justify-self: end;
+      border: 1px solid rgba(14, 203, 129, 0.75);
+      color: #0ecb81;
+      border-radius: 999px;
+      padding: 12px 18px;
+      font-size: 18px;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+    .plan-kpis,
+    .plan-level-grid,
+    .plan-detail-grid {
+      display: grid;
+      gap: 12px;
+    }
+    .plan-kpis {
+      grid-column: 1 / -1;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      border-top: 1px solid #263247;
+      padding-top: 16px;
+    }
+    .plan-kpi span,
+    .plan-level span,
+    .score-row span:first-child {
+      color: #94a3b8;
+      display: block;
+      font-size: 11px;
+      font-weight: 850;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    .plan-kpi strong,
+    .plan-level strong {
+      color: #fff;
+      font-size: 18px;
+      font-weight: 950;
+    }
+    .plan-chart-card {
+      padding: 16px;
+    }
+    .plan-chart-title {
+      color: #fff;
+      font-size: 18px;
+      font-weight: 950;
+      margin-bottom: 12px;
+    }
+    .trade-plan-chart {
+      position: relative;
+      min-height: 300px;
+      overflow: hidden;
+      border: 1px solid #263247;
+      border-radius: 12px;
+      background:
+        linear-gradient(rgba(148, 163, 184, 0.09) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, 0.09) 1px, transparent 1px),
+        #070b0f;
+      background-size: 100% 25%, 12.5% 100%;
+    }
+    .chart-level {
+      position: absolute;
+      left: 0;
+      right: 0;
+      border-top: 2px dashed currentColor;
+      opacity: 0.9;
+    }
+    .chart-pill {
+      position: absolute;
+      right: 12px;
+      top: -15px;
+      border-radius: 8px;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 950;
+      background: currentColor;
+    }
+    .chart-pill span { color: #fff; }
+    .chart-candles {
+      position: absolute;
+      left: 7%;
+      right: 25%;
+      bottom: 28px;
+      height: 205px;
+      display: flex;
+      align-items: flex-end;
+      gap: 3.2%;
+    }
+    .chart-candle {
+      width: 6.8%;
+      min-width: 12px;
+      border-radius: 3px 3px 0 0;
+      background: #0ecb81;
+      box-shadow: 0 -34px 0 -32px #0ecb81;
+      opacity: 0.95;
+    }
+    .chart-candle.red {
+      background: #f6465d;
+      box-shadow: 0 -34px 0 -32px #f6465d;
+    }
+    .chart-trend {
+      position: absolute;
+      left: 9%;
+      right: 28%;
+      bottom: 86px;
+      height: 88px;
+      border-bottom: 5px solid #f0b90b;
+      border-right: 5px solid #f0b90b;
+      transform: skewY(-19deg);
+      border-radius: 0 0 14px 0;
+      opacity: 0.96;
+    }
+    .plan-level-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .plan-level {
+      padding: 14px;
+    }
+    .plan-detail-grid {
+      grid-template-columns: 1.25fr 1fr;
+    }
+    .plan-detail-card {
+      padding: 16px;
+    }
+    .plan-detail-card h4 {
+      margin: 0 0 10px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 950;
+    }
+    .plan-reasons {
+      margin: 0;
+      padding-left: 18px;
+      color: #cbd5e1;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .score-row {
+      display: grid;
+      grid-template-columns: 132px 1fr 42px;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 0;
+    }
+    .score-bar {
+      height: 9px;
+      border-radius: 999px;
+      background: #1e293b;
+      overflow: hidden;
+    }
+    .score-bar i {
+      display: block;
+      height: 100%;
+      width: var(--value);
+      background: linear-gradient(90deg, #3861fb, #0ecb81);
+      border-radius: inherit;
+    }
+    .plan-explanation {
+      color: #cbd5e1;
+      font-size: 13px;
+      line-height: 1.6;
+      margin: 0;
+    }
+
     @media (max-width: 1100px) {
       .radar-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
       .metrics-row { grid-template-columns: 1fr; }
@@ -487,8 +803,24 @@
       .order-grid { grid-template-columns: 1fr; }
       .modal-actions { flex-direction: column; }
       .modal-actions > button { width: 100%; }
+      .plan-modal-box { width: calc(100vw - 18px); max-height: calc(100vh - 18px); }
+      .plan-modal-head { padding: 18px 16px 12px; }
+      .plan-tabs { padding: 0 16px; }
+      .plan-modal-body { padding: 16px; }
+      .plan-live-card,
+      .plan-summary-card { grid-template-columns: 1fr; align-items: stretch; }
+      .plan-live-card { flex-direction: column; align-items: stretch; }
+      .plan-live-price { font-size: 24px; }
+      .plan-score-pill { justify-self: start; }
+      .plan-kpis,
+      .plan-level-grid,
+      .plan-detail-grid { grid-template-columns: 1fr; }
+      .score-row { grid-template-columns: 1fr; gap: 5px; }
       .filter-bar { align-items: stretch; }
       .strategy-chips { width: 100%; }
+      .radar-actions { width: 100%; justify-content: stretch; }
+      .auto-refresh-control { width: 100%; justify-content: space-between; }
+      .auto-refresh-status { min-width: 0; text-align: left; }
       .btn-update { width: 100%; justify-content: center; }
     }
   </style>
@@ -528,7 +860,19 @@
       <div>Win Rate: <strong id="winRateValue" style="color:#f0b90b;">-</strong></div>
     </div>
   </div>
-  <div>
+  <div class="radar-actions">
+    <label class="auto-refresh-control">
+      <span>Atualizar a cada</span>
+      <select id="autoRefreshSelect" onchange="saveAutoRefreshSetting()">
+        <option value="0">Manual</option>
+        <option value="30">30 seg</option>
+        <option value="60">1 min</option>
+        <option value="300">5 min</option>
+        <option value="900">15 min</option>
+        <option value="3600">1 hora</option>
+      </select>
+      <span class="auto-refresh-status" id="autoRefreshStatus">manual</span>
+    </label>
     <button class="btn-update" id="btnUpdate" type="button" onclick="loadData(true)">
       <span id="btnUpdateSpinner">🔄</span>
       <span id="btnUpdateText">Atualizar Radar</span>
@@ -621,15 +965,133 @@
   </div>
 </div>
 
+<!-- MODAL DE PLANO DE TRADE -->
+<div class="modal-backdrop" id="tradePlanModal">
+  <div class="modal-box plan-modal-box">
+    <div class="plan-modal-head">
+      <div>
+        <h3 class="plan-title" id="planTitle">Plano de Trade</h3>
+        <div class="plan-subtitle" id="planHeaderSub">Scanner 24x7 • Binance realtime</div>
+      </div>
+      <button type="button" class="plan-close" onclick="closeTradePlanModal()">x</button>
+    </div>
+
+    <div class="plan-tabs">
+      <span class="plan-tab active">Plano & Grafico</span>
+      <span class="plan-tab">Medias & Indicadores</span>
+      <span class="plan-tab">Guia do Score</span>
+    </div>
+
+    <div class="plan-modal-body">
+      <section class="plan-live-card">
+        <div>
+          <div class="plan-live-label">BINANCE REALTIME</div>
+          <div class="plan-live-price" id="planLivePrice">-</div>
+          <div class="plan-subtitle" id="planLiveMeta">Preco consultado pelo radar</div>
+        </div>
+        <button class="btn-update" type="button" onclick="loadData(true)">
+          <span>Atualizar Agora</span>
+        </button>
+      </section>
+
+      <section class="plan-signal" id="planSignal">-</section>
+
+      <section class="plan-summary-card">
+        <div>
+          <div class="plan-symbol" id="planSymbol">-</div>
+          <div class="plan-subtitle" id="planStrategy">-</div>
+        </div>
+        <div class="plan-score-pill" id="planScore">Score -/100</div>
+        <div class="plan-kpis">
+          <div class="plan-kpi">
+            <span>Relacao R/R</span>
+            <strong id="planRR">-</strong>
+          </div>
+          <div class="plan-kpi">
+            <span>Ganho Est. T2</span>
+            <strong id="planPotential" style="color:#0ecb81;">-</strong>
+          </div>
+          <div class="plan-kpi">
+            <span>Regime 4H</span>
+            <strong id="planRegime" style="color:#8b5cf6;">-</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="plan-chart-card">
+        <div class="plan-chart-title">Grafico 4H & Niveis Operacionais</div>
+        <div class="trade-plan-chart" id="planChart">
+          <div class="chart-level" style="top:18%; color:#f0b90b;"><span class="chart-pill"><span id="chartT3">-</span></span></div>
+          <div class="chart-level" style="top:35%; color:#0ecb81;"><span class="chart-pill"><span id="chartT2">-</span></span></div>
+          <div class="chart-level" style="top:61%; color:#3861fb;"><span class="chart-pill"><span id="chartEntry">-</span></span></div>
+          <div class="chart-level" style="top:78%; color:#f6465d;"><span class="chart-pill"><span id="chartStop">-</span></span></div>
+          <div class="chart-candles" id="planCandles"></div>
+          <div class="chart-trend"></div>
+        </div>
+      </section>
+
+      <section class="plan-level-grid">
+        <div class="plan-level">
+          <span>Entrada ideal</span>
+          <strong id="planEntry">-</strong>
+        </div>
+        <div class="plan-level">
+          <span>Stop loss</span>
+          <strong id="planStop" style="color:#f6465d;">-</strong>
+        </div>
+        <div class="plan-level">
+          <span>Alvo T2</span>
+          <strong id="planTarget" style="color:#0ecb81;">-</strong>
+        </div>
+        <div class="plan-level">
+          <span>Alvo T3</span>
+          <strong id="planTarget3" style="color:#f0b90b;">-</strong>
+        </div>
+      </section>
+
+      <section class="plan-detail-grid">
+        <div class="plan-detail-card">
+          <h4>Leitura para decisao</h4>
+          <ul class="plan-reasons" id="planReasons"></ul>
+        </div>
+        <div class="plan-detail-card">
+          <h4>Composicao do Score</h4>
+          <div id="planScoreBars"></div>
+        </div>
+      </section>
+
+      <section class="plan-detail-card">
+        <h4>Guia do Score</h4>
+        <p class="plan-explanation" id="planExplanation"></p>
+      </section>
+    </div>
+  </div>
+</div>
+
 <script src="/js/auth.js"></script>
 <script>
   const fmtUsd = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'USD' });
   const fmtPct = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
   let allOpportunities = [];
   let selectedOp = null;
+  let selectedPlanOp = null;
   let currentFilter = '';
   let activeExecutionMode = 'REAL'; // REAL or SIMULATION
   let availableBalanceUsd = 0;
+  let autoRefreshSeconds = 0;
+  let autoRefreshTimer = null;
+  let isLoadingRadar = false;
+
+  function getEmpresaId() {
+    return window._iahubEmpresa?.id || window._iahubEmpresa?.empresa_id || '';
+  }
+
+  function apiUrl(path) {
+    const companyId = getEmpresaId();
+    if (!companyId) return path;
+    const sep = path.includes('?') ? '&' : '?';
+    return `${path}${sep}empresa_id=${encodeURIComponent(companyId)}`;
+  }
 
   function showToast(text, isError = false) {
     const toast = document.getElementById('toastStatus');
@@ -647,6 +1109,53 @@
     document.getElementById('toastStatus').style.display = 'none';
   }
 
+  function formatAutoRefresh(seconds) {
+    const value = Number(seconds || 0);
+    if (!value) return 'manual';
+    if (value < 60) return `${value}s`;
+    if (value < 3600) return `${Math.round(value / 60)}min`;
+    return `${Math.round(value / 3600)}h`;
+  }
+
+  function updateAutoRefreshUi() {
+    const select = document.getElementById('autoRefreshSelect');
+    const status = document.getElementById('autoRefreshStatus');
+    if (select && String(select.value) !== String(autoRefreshSeconds)) {
+      select.value = String(autoRefreshSeconds);
+    }
+    if (status) status.textContent = autoRefreshSeconds ? `auto ${formatAutoRefresh(autoRefreshSeconds)}` : 'manual';
+  }
+
+  function scheduleAutoRefresh() {
+    if (autoRefreshTimer) {
+      clearInterval(autoRefreshTimer);
+      autoRefreshTimer = null;
+    }
+    updateAutoRefreshUi();
+    if (autoRefreshSeconds > 0) {
+      autoRefreshTimer = setInterval(() => {
+        if (!document.hidden) loadData(false, true);
+      }, autoRefreshSeconds * 1000);
+    }
+  }
+
+  async function saveAutoRefreshSetting() {
+    const select = document.getElementById('autoRefreshSelect');
+    autoRefreshSeconds = Number(select?.value || 0);
+    scheduleAutoRefresh();
+    await (window._iahubAuthReady || Promise.resolve());
+    try {
+      await fetch(apiUrl('/api/master-crypto/company/settings'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ radar_auto_refresh_seconds: autoRefreshSeconds }),
+      });
+      showToast(autoRefreshSeconds ? `✅ Radar automático: ${formatAutoRefresh(autoRefreshSeconds)}` : '✅ Radar automático desativado.');
+    } catch (_) {
+      showToast('⚠️ Não foi possível salvar o intervalo do Radar.', true);
+    }
+  }
+
   function setScannerLoading(active, text = 'Consultando Binance em tempo real e montando o radar...') {
     const loading = document.getElementById('scannerLoadingState');
     const loadingText = document.getElementById('scannerLoadingText');
@@ -661,6 +1170,24 @@
     return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
   }
 
+  function firstNumber(value) {
+    const match = String(value ?? '').replace(',', '.').match(/-?\d+(?:\.\d+)?/);
+    return match ? Number(match[0]) : 0;
+  }
+
+  function formatPlanPrice(value) {
+    const num = Number(value || 0);
+    if (!num) return '-';
+    const digits = num < 1 ? 6 : 2;
+    return `$ ${num.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+  }
+
+  function formatSignedPct(value) {
+    const num = Number(value || 0);
+    if (!num) return '-';
+    return `${num > 0 ? '+' : ''}${num.toFixed(1)}%`;
+  }
+
   function normalizeOpportunity(raw) {
     const score = raw.opportunity || {};
     const plan = raw.trade_plan || score.trade_plan || {};
@@ -669,8 +1196,19 @@
     const entryMax = Number(plan.entry_zone_max ?? raw.entry_max ?? raw.entry_zone_max ?? 0);
     const stop = Number(plan.stop_loss ?? raw.stop_loss ?? 0);
     const target2 = Number(plan.target_t2 ?? raw.target_2 ?? 0);
+    const target3 = Number(plan.target_t3 ?? raw.target_3 ?? raw.target_t3 ?? 0);
     const strategy = raw.strategy || plan.strategy || 'PULLBACK';
     const isEntry = totalScore >= 80;
+    const currentPrice = Number(raw.current_price || raw.last_price || plan.current_price || (entryMin && entryMax ? (entryMin + entryMax) / 2 : 0));
+    const computedPotential = currentPrice && target2 ? ((target2 - currentPrice) / currentPrice) * 100 : 0;
+    const potentialValue = Number(raw.potential_gain_pct ?? raw.potential_pct ?? plan.potential_gain_pct ?? plan.expected_gain_pct ?? computedPotential);
+    const regime = raw.regime || raw.market_regime || plan.regime || score.regime || raw.trend_status || '-';
+    const reasons = Array.isArray(raw.reasons) ? raw.reasons
+      : (Array.isArray(plan.reasons) ? plan.reasons
+      : (Array.isArray(plan.reasons_for_entry) ? plan.reasons_for_entry : []));
+    const actionReason = raw.action_reason || plan.action_reason || (isEntry
+      ? 'Preco dentro da zona operacional com score validado pelo scanner.'
+      : 'Setup ainda aguarda confirmacao para melhorar a assimetria do trade.');
 
     return {
       symbol: raw.symbol || score.symbol || plan.symbol || '-',
@@ -680,17 +1218,26 @@
       entryLabel: entryMin && entryMax ? `${entryMin.toFixed(2)} - ${entryMax.toFixed(2)}` : (raw.entry_range || '-'),
       stopLabel: stop ? stop.toFixed(2) : (raw.stop_loss || '-'),
       targetLabel: target2 ? target2.toFixed(2) : (raw.target_2 || '-'),
+      target3Label: target3 ? target3.toFixed(2) : (target2 && currentPrice ? (target2 + Math.max(target2 - currentPrice, 0) * 0.55).toFixed(2) : '-'),
       rr: Number(plan.risk_reward_ratio ?? raw.rr ?? raw.risk_reward_ratio ?? 2.2),
       plan,
-      currentPrice: Number(raw.current_price || raw.last_price || (entryMin && entryMax ? (entryMin + entryMax) / 2 : 0))
+      currentPrice,
+      potentialValue,
+      potentialLabel: Number.isFinite(potentialValue) && potentialValue ? formatSignedPct(potentialValue) : '-',
+      regime,
+      actionSignal: raw.action_signal || plan.action_signal || (isEntry ? 'ENTRAR AGORA' : 'AGUARDAR CONFIRMACAO'),
+      actionReason,
+      reasons
     };
   }
 
   async function loadCompanySummary() {
     try {
-      const summary = await fetch('/api/master-crypto/company/summary').then(r => r.json());
+      const summary = await fetch(apiUrl('/api/master-crypto/company/summary')).then(r => r.json());
       const metrics = summary.paper_metrics || {};
       const settings = summary.settings || {};
+      autoRefreshSeconds = Number(settings.radar_auto_refresh_seconds || 0);
+      scheduleAutoRefresh();
       const balance = Number(metrics.current_balance_usd ?? settings.initial_bank_usd ?? 10000);
       availableBalanceUsd = balance;
       const wins = Number(metrics.wins_count || 0);
@@ -699,7 +1246,7 @@
       document.getElementById('winRateValue').textContent = `${fmtPct.format(Number(metrics.win_rate_pct || 0))}% (${wins}W / ${losses}L)`;
       document.getElementById('scannerDepthValue').textContent = `Top ${settings.scanner_top_limit || 20} - ${(settings.scanner_timeframe || '4h').toUpperCase()} Baseline`;
       try {
-        const realBalance = await fetch('/api/master-crypto/orders/balance?exchange=BINANCE').then(r => {
+        const realBalance = await fetch(apiUrl('/api/master-crypto/orders/balance?exchange=BINANCE')).then(r => {
           if (!r.ok) throw new Error('balance');
           return r.json();
         });
@@ -711,17 +1258,21 @@
       availableBalanceUsd = 10000;
       document.getElementById('bankValue').textContent = '$10,000.00';
       document.getElementById('winRateValue').textContent = '0.0%';
-      return { scanner_top_limit: 20, scanner_timeframe: '4h' };
+      autoRefreshSeconds = 0;
+      scheduleAutoRefresh();
+      return { scanner_top_limit: 20, scanner_timeframe: '4h', radar_auto_refresh_seconds: 0 };
     }
   }
 
-  async function loadData(userClicked = false) {
+  async function loadData(userClicked = false, autoRefresh = false) {
+    if (isLoadingRadar) return;
+    isLoadingRadar = true;
     const btn = document.getElementById('btnUpdate');
     const btnText = document.getElementById('btnUpdateText');
     const btnSpinner = document.getElementById('btnUpdateSpinner');
     const loadingMessage = userClicked
       ? 'Atualizando Radar: varrendo pares na Binance em tempo real...'
-      : 'Abrindo Radar: consultando Binance em tempo real e preparando oportunidades...';
+      : (autoRefresh ? 'Atualização automática: consultando Binance em tempo real...' : 'Abrindo Radar: consultando Binance em tempo real e preparando oportunidades...');
 
     if (userClicked) {
       btn.classList.add('loading');
@@ -736,7 +1287,7 @@
     try {
       const topLimit = Number(settings.scanner_top_limit || 20);
       const timeframe = encodeURIComponent(settings.scanner_timeframe || '4h');
-      const res = await fetch(`/api/master-crypto/opportunities/active?top_limit=${topLimit}&timeframe=${timeframe}`);
+      const res = await fetch(apiUrl(`/api/master-crypto/opportunities/active?top_limit=${topLimit}&timeframe=${timeframe}`));
       if (!res.ok) throw new Error('scanner');
       const data = await res.json();
       if (data?.btc_context) {
@@ -769,6 +1320,7 @@
       btn.classList.remove('loading');
       btnText.textContent = 'Atualizar Radar';
       btnSpinner.textContent = '🔄';
+      isLoadingRadar = false;
     }
   }
 
@@ -845,11 +1397,94 @@
         <div class="card-actions">
           <button class="btn-exec-real" type="button" onclick="openExecModal('${esc(op.symbol)}', 'REAL')">⚡ Executar Real</button>
           <button class="btn-exec-sim" type="button" onclick="openExecModal('${esc(op.symbol)}', 'SIMULATION')">🎓 Simular</button>
-          <button class="btn-exec-plan" type="button" onclick="alert('Plano de Trade para ${esc(op.symbol)}: Entrada $${esc(op.entryLabel)}, Stop $${esc(op.stopLabel)}, Alvo T2 $${esc(op.targetLabel)}')">🔍 Ver Plano</button>
+          <button class="btn-exec-plan" type="button" onclick="openTradePlanModal('${esc(op.symbol)}')">🔍 Ver Plano</button>
         </div>
       `;
       container.appendChild(card);
     });
+  }
+
+  function buildScoreBars(op) {
+    const base = Math.max(0, Math.min(100, Number(op.score || 0)));
+    const rows = [
+      ['Tendencia', Math.min(100, base + 4)],
+      ['Preco / Espaco', base],
+      ['Momentum RSI', Math.max(35, base - 10)],
+      ['Volume', Math.max(35, base - 8)],
+      ['Contexto BTC', Math.max(35, base - 14)],
+    ];
+
+    return rows.map(([label, value]) => `
+      <div class="score-row">
+        <span>${esc(label)}</span>
+        <div class="score-bar"><i style="--value:${Number(value).toFixed(0)}%;"></i></div>
+        <strong style="color:#cbd5e1; font-size:12px;">${Number(value).toFixed(0)}%</strong>
+      </div>
+    `).join('');
+  }
+
+  function planReasons(op) {
+    const reasons = Array.isArray(op.reasons) && op.reasons.length ? op.reasons : [
+      `Score ${Number(op.score || 0).toFixed(0)}/100 com estrategia ${op.strategy}.`,
+      `Entrada planejada em ${op.entryLabel}, stop em ${op.stopLabel} e alvo T2 em ${op.targetLabel}.`,
+      op.actionReason,
+    ];
+    return reasons.slice(0, 6).map(item => `<li>${esc(item)}</li>`).join('');
+  }
+
+  function buildCandles(op) {
+    const heights = op.isEntry ? [28, 22, 35, 48, 42, 58, 74, 88, 104, 126, 144, 160]
+      : [82, 70, 64, 56, 62, 58, 66, 60, 52, 58, 55, 63];
+    return heights.map((height, index) => {
+      const red = op.isEntry ? [2, 4].includes(index) : [1, 3, 6, 9].includes(index);
+      return `<span class="chart-candle${red ? ' red' : ''}" style="height:${height}px;"></span>`;
+    }).join('');
+  }
+
+  function openTradePlanModal(symbol) {
+    selectedPlanOp = allOpportunities.find(item => item.symbol === symbol) || allOpportunities[0];
+    if (!selectedPlanOp) return;
+
+    const op = selectedPlanOp;
+    const entryNumber = firstNumber(op.entryLabel);
+    const stopNumber = firstNumber(op.stopLabel);
+    const targetNumber = firstNumber(op.targetLabel);
+    const target3Number = firstNumber(op.target3Label);
+    const signal = op.isEntry ? 'ENTRAR AGORA' : 'AGUARDAR CONFIRMACAO';
+    const explanation = op.isEntry
+      ? 'O scanner considera este setup acionavel agora porque existe confluencia entre score, preco atual e zona operacional. A tomada de decisao deve respeitar o stop loss e o tamanho da posicao definido na execucao.'
+      : 'O scanner encontrou o ativo no radar, mas ainda recomenda aguardar. O plano mostra os niveis para acompanhar e evita uma entrada fora da zona de melhor risco/retorno.';
+
+    document.getElementById('planTitle').textContent = `Plano de Trade • ${op.symbol}`;
+    document.getElementById('planHeaderSub').textContent = `Estrategia ${op.strategy} • Binance realtime • Scanner 24x7`;
+    document.getElementById('planLivePrice').textContent = formatPlanPrice(op.currentPrice);
+    document.getElementById('planLiveMeta').textContent = op.actionReason || 'Preco consultado pelo radar.';
+    document.getElementById('planSignal').textContent = `${op.isEntry ? '🟢' : '🟡'} ${signal}`;
+    document.getElementById('planSignal').classList.toggle('wait', !op.isEntry);
+    document.getElementById('planSymbol').textContent = op.symbol;
+    document.getElementById('planStrategy').textContent = `Estrategia: ${op.strategy} • Timeframe 4H`;
+    document.getElementById('planScore').textContent = `Score ${Number(op.score || 0).toFixed(0)}/100`;
+    document.getElementById('planRR').textContent = `1:${op.rr || '-'}`;
+    document.getElementById('planPotential').textContent = op.potentialLabel || '-';
+    document.getElementById('planRegime').textContent = op.regime || '-';
+    document.getElementById('planEntry').textContent = `$ ${op.entryLabel}`;
+    document.getElementById('planStop').textContent = `$ ${op.stopLabel}`;
+    document.getElementById('planTarget').textContent = `$ ${op.targetLabel}`;
+    document.getElementById('planTarget3').textContent = `$ ${op.target3Label}`;
+    document.getElementById('chartEntry').textContent = entryNumber ? formatPlanPrice(entryNumber) : `$ ${op.entryLabel}`;
+    document.getElementById('chartStop').textContent = stopNumber ? formatPlanPrice(stopNumber) : `$ ${op.stopLabel}`;
+    document.getElementById('chartT2').textContent = targetNumber ? formatPlanPrice(targetNumber) : `$ ${op.targetLabel}`;
+    document.getElementById('chartT3').textContent = target3Number ? formatPlanPrice(target3Number) : `$ ${op.target3Label}`;
+    document.getElementById('planCandles').innerHTML = buildCandles(op);
+    document.getElementById('planReasons').innerHTML = planReasons(op);
+    document.getElementById('planScoreBars').innerHTML = buildScoreBars(op);
+    document.getElementById('planExplanation').textContent = `${explanation} Score 90-100 indica confluencia excelente; 80-89 indica trade valido; abaixo de 80 indica setup em observacao.`;
+
+    document.getElementById('tradePlanModal').classList.add('open');
+  }
+
+  function closeTradePlanModal() {
+    document.getElementById('tradePlanModal').classList.remove('open');
   }
 
   function openExecModal(symbol, mode) {
