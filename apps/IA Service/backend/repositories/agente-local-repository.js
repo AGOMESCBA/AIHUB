@@ -70,6 +70,14 @@ function registrarTeste(empresaId, ok) {
 
 // ── Fontes históricas ──────────────────────────────────────────────────────
 
+// db_host/db_port/db_name/db_user/db_pass_enc/db_driver/sincronizada_agente_em
+// continuam existindo na TABELA (dados legados de quando a fonte tentava
+// reenviar credencial ao agente — removido em 2026-09) mas não são mais
+// lidos/gravados por este repository: connectionKey já é suficiente, a
+// conexão real fica cadastrada manualmente no Agente Local (mesmo padrão do
+// IA Command, ver comentário em agente-local-service.criarFonte). Sem
+// DROP COLUMN de propósito — evita perder dado já gravado em produção sem
+// necessidade, e uma coluna não lida não tem custo funcional.
 function _fonteParaDominio(row) {
   if (!row) return null;
   return {
@@ -79,14 +87,7 @@ function _fonteParaDominio(row) {
     nome: row.nome,
     sistemaOrigem: row.sistema_origem,
     adapter: row.adapter,
-    dbHost: row.db_host,
-    dbPort: row.db_port,
-    dbName: row.db_name,
-    dbUser: row.db_user,
-    dbPassEnc: row.db_pass_enc,
-    dbDriver: row.db_driver,
     ativo: !!row.ativo,
-    sincronizadaAgenteEm: row.sincronizada_agente_em,
     criadoEm: row.criado_em,
     atualizadoEm: row.atualizado_em,
   };
@@ -100,14 +101,12 @@ function criarFonte(empresaId, dados) {
 
   db.prepare(`
     INSERT INTO fontes_historicas (
-      id, empresa_id, connection_key, nome, sistema_origem, adapter,
-      db_host, db_port, db_name, db_user, db_pass_enc, db_driver, ativo,
+      id, empresa_id, connection_key, nome, sistema_origem, adapter, ativo,
       criado_em, atualizado_em
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, Number(empresaId), dados.connectionKey, dados.nome, dados.sistemaOrigem, dados.adapter,
-    dados.dbHost ?? null, dados.dbPort != null ? String(dados.dbPort) : null, dados.dbName ?? null, dados.dbUser ?? null,
-    dados.dbPassEnc ?? null, dados.dbDriver ?? null, dados.ativo === false ? 0 : 1,
+    dados.ativo === false ? 0 : 1,
     agora, agora
   );
 
@@ -123,32 +122,16 @@ function atualizarFonte(empresaId, fonteId, patch) {
 
   db.prepare(`
     UPDATE fontes_historicas
-       SET nome = ?, db_host = ?, db_port = ?, db_name = ?, db_user = ?,
-           db_pass_enc = COALESCE(?, db_pass_enc), db_driver = ?, ativo = ?, atualizado_em = ?
+       SET nome = ?, ativo = ?, atualizado_em = ?
      WHERE id = ? AND empresa_id = ?
   `).run(
     patch.nome ?? atual.nome,
-    patch.dbHost ?? atual.dbHost,
-    patch.dbPort != null ? String(patch.dbPort) : atual.dbPort,
-    patch.dbName ?? atual.dbName,
-    patch.dbUser ?? atual.dbUser,
-    patch.dbPassEnc ?? null,
-    patch.dbDriver ?? atual.dbDriver,
     patch.ativo === undefined ? (atual.ativo ? 1 : 0) : (patch.ativo ? 1 : 0),
     agora,
     fonteId,
     Number(empresaId)
   );
 
-  return getFonte(empresaId, fonteId);
-}
-
-function marcarSincronizadaNoAgente(empresaId, fonteId) {
-  if (!empresaId) throw new Error('empresaId é obrigatório.');
-  const db = getDB();
-  const agora = new Date().toISOString();
-  db.prepare(`UPDATE fontes_historicas SET sincronizada_agente_em = ? WHERE id = ? AND empresa_id = ?`)
-    .run(agora, fonteId, Number(empresaId));
   return getFonte(empresaId, fonteId);
 }
 
@@ -177,7 +160,6 @@ module.exports = {
   registrarTeste,
   criarFonte,
   atualizarFonte,
-  marcarSincronizadaNoAgente,
   getFonte,
   listarFontes,
 };

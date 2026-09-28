@@ -375,8 +375,8 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
 
   app.post('/api/ia-service/base-historica/fontes', (req, res) => {
     try {
-      const { connectionKey, nome, sistemaOrigem, adapter, dbHost, dbPort, dbName, dbUser, senha, dbDriver } = req.body || {};
-      const fonte = agenteLocalService.criarFonte(req.svcEmpresaId, { connectionKey, nome, sistemaOrigem, adapter, dbHost, dbPort, dbName, dbUser, senha, dbDriver });
+      const { connectionKey, nome, sistemaOrigem, adapter } = req.body || {};
+      const fonte = agenteLocalService.criarFonte(req.svcEmpresaId, { connectionKey, nome, sistemaOrigem, adapter });
       res.status(201).json(fonte);
     } catch (err) {
       _handleErro(res, err);
@@ -385,18 +385,10 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
 
   app.put('/api/ia-service/base-historica/fontes/:id', (req, res) => {
     try {
-      const fonte = agenteLocalService.atualizarFonte(req.svcEmpresaId, req.params.id, req.body || {});
+      const { nome, ativo } = req.body || {};
+      const fonte = agenteLocalService.atualizarFonte(req.svcEmpresaId, req.params.id, { nome, ativo });
       if (!fonte) return res.status(404).json({ error: 'Fonte não encontrada.' });
       res.json(fonte);
-    } catch (err) {
-      _handleErro(res, err);
-    }
-  });
-
-  app.post('/api/ia-service/base-historica/fontes/:id/sincronizar', async (req, res) => {
-    try {
-      const { empresaNome } = req.body || {};
-      res.json(await agenteLocalService.sincronizarESincronizarFonte(req.svcEmpresaId, req.params.id, { empresaNome }));
     } catch (err) {
       _handleErro(res, err);
     }

@@ -60,69 +60,42 @@ async function testarConexao(empresaId) {
   }
 }
 
-function criarFonte(empresaId, { connectionKey, nome, sistemaOrigem, adapter, dbHost, dbPort, dbName, dbUser, senha, dbDriver }) {
+/**
+ * Fonte histórica no IA Service é SÓ uma referência a uma conexão que já
+ * existe no Agente Local — mesmo padrão do IA Command (connections-routes.js/
+ * connection-factory.js: connection_key aponta para uma conexão cadastrada
+ * manualmente no agente, o consumidor nunca cadastra/reenvia credencial).
+ * 2026-09, correção de design a pedido do usuário: antes, esta tela pedia
+ * host/porta/usuário/senha e os REENVIAVA para o agente via
+ * /api/empresas/sync (sincronizarESincronizarFonte, removida) — duas fontes
+ * de verdade da mesma credencial, podendo divergir. Agora, se o
+ * connectionKey não existir no Agente Local, testarFonte/executarSelectNaFonte
+ * simplesmente falham com o erro que o agente já retorna (conexão
+ * desconhecida) — sem lógica de sincronização aqui.
+ */
+function criarFonte(empresaId, { connectionKey, nome, sistemaOrigem, adapter }) {
   if (!connectionKey) throw new Error('connectionKey é obrigatório.');
   if (!sistemaOrigem) throw new Error('sistemaOrigem é obrigatório.');
   if (!adapter) throw new Error('adapter é obrigatório.');
 
-  const fonte = agenteRepo.criarFonte(empresaId, {
+  return agenteRepo.criarFonte(empresaId, {
     connectionKey,
     nome: nome || connectionKey,
     sistemaOrigem,
     adapter,
-    dbHost,
-    dbPort,
-    dbName,
-    dbUser,
-    dbPassEnc: senha ? cryptoEnvelope.encryptSecret(senha) : null,
-    dbDriver: dbDriver || 'ODBC Driver 17 for SQL Server',
   });
-  return _semSegredo(fonte);
 }
 
 function atualizarFonte(empresaId, fonteId, patch) {
-  const dados = { ...patch };
-  if (patch.senha) {
-    dados.dbPassEnc = cryptoEnvelope.encryptSecret(patch.senha);
-  }
-  delete dados.senha;
-  const fonte = agenteRepo.atualizarFonte(empresaId, fonteId, dados);
-  return _semSegredo(fonte);
-}
-
-function _semSegredo(fonte) {
-  if (!fonte) return null;
-  const { dbPassEnc, ...resto } = fonte;
-  return { ...resto, senhaConfigurada: !!dbPassEnc };
+  return agenteRepo.atualizarFonte(empresaId, fonteId, patch);
 }
 
 function getFonte(empresaId, fonteId) {
-  return _semSegredo(agenteRepo.getFonte(empresaId, fonteId));
+  return agenteRepo.getFonte(empresaId, fonteId);
 }
 
 function listarFontes(empresaId, filtros) {
-  return agenteRepo.listarFontes(empresaId, filtros).map(_semSegredo);
-}
-
-/**
- * Sincroniza a fonte com o Agente Local (registra a connection_key lá) e
- * testa a conexão real ao SQL Server através do agente. A senha só é
- * descriptografada em memória durante esta chamada — nunca persistida em
- * claro, nunca logada.
- */
-async function sincronizarESincronizarFonte(empresaId, fonteId, { empresaNome } = {}) {
-  const config = agenteRepo.getConfig(empresaId);
-  if (!config?.url || !config?.tokenEnc) throw new Error('Configure o Agente Local (URL + token) antes de sincronizar fontes.');
-
-  const fonte = agenteRepo.getFonte(empresaId, fonteId);
-  if (!fonte) throw new Error('Fonte histórica não encontrada.');
-
-  const token = cryptoEnvelope.decryptSecret(config.tokenEnc);
-  const senhaPlana = fonte.dbPassEnc ? cryptoEnvelope.decryptSecret(fonte.dbPassEnc) : '';
-
-  await provider.sincronizarFonte(config.url, token, { empresaId, empresaNome, fonte, senhaPlana });
-  agenteRepo.marcarSincronizadaNoAgente(empresaId, fonteId);
-  return getFonte(empresaId, fonteId);
+  return agenteRepo.listarFontes(empresaId, filtros);
 }
 
 async function testarFonte(empresaId, fonteId) {
@@ -178,7 +151,6 @@ module.exports = {
   atualizarFonte,
   getFonte,
   listarFontes,
-  sincronizarESincronizarFonte,
   testarFonte,
   executarSelectNaFonte,
 };

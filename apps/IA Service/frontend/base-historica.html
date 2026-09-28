@@ -118,16 +118,12 @@
       </div>
 
       <div id="tab-fontes" class="tab-panel">
-        <div class="form-row">
-          <div class="form-field"><label>Nome</label><input type="text" id="fonte-nome" class="form-control" placeholder="SoftExpert - Chamados"></div>
-          <div class="form-field"><label>connection_key</label><input type="text" id="fonte-key" class="form-control" placeholder="ia-service-softexpert"></div>
-          <div class="form-field"><label>Host</label><input type="text" id="fonte-host" class="form-control" placeholder="10.0.0.5"></div>
-          <div class="form-field"><label>Porta</label><input type="text" id="fonte-porta" class="form-control" placeholder="1433" value="1433"></div>
+        <div class="callout" style="margin-bottom:12px;padding:10px 12px;border-radius:8px;background:var(--bg-base);border:1px solid var(--border);font-size:12.5px;color:var(--text-lo)">
+          A fonte aqui é só uma REFERÊNCIA — a conexão real (host, porta, usuário, senha do SQL Server) já deve estar cadastrada diretamente no Agente Local, sob esta mesma connection_key. O IA Service nunca cadastra nem envia credencial para o agente.
         </div>
         <div class="form-row">
-          <div class="form-field"><label>Database</label><input type="text" id="fonte-database" class="form-control" placeholder="SOFTEXPERT_DB"></div>
-          <div class="form-field"><label>Usuário</label><input type="text" id="fonte-usuario" class="form-control" placeholder="sa_readonly"></div>
-          <div class="form-field"><label>Senha</label><input type="password" id="fonte-senha" class="form-control" placeholder="••••••••"></div>
+          <div class="form-field"><label>Nome</label><input type="text" id="fonte-nome" class="form-control" placeholder="SoftExpert - Chamados"></div>
+          <div class="form-field"><label>connection_key</label><input type="text" id="fonte-key" class="form-control" placeholder="mesma chave já cadastrada no Agente Local"></div>
           <button class="btn btn-primary" type="button" onclick="criarFonte()">Criar fonte</button>
         </div>
         <div id="fontes-lista" style="margin-top:14px"><div class="empty-state">Carregando…</div></div>
@@ -280,9 +276,8 @@
     lista.innerHTML = fontes.map(f => `
       <div class="fonte-card">
         <div class="fonte-card-nome">${escapeHtml(f.nome)}</div>
-        <div class="fonte-card-meta">${escapeHtml(f.connectionKey)} · ${escapeHtml(f.sistemaOrigem)} · <span class="status-badge">${f.senhaConfigurada ? 'senha configurada' : 'sem senha'}</span></div>
+        <div class="fonte-card-meta">${escapeHtml(f.connectionKey)} · ${escapeHtml(f.sistemaOrigem)}</div>
         <div class="fonte-card-actions">
-          <button class="btn btn-ghost" type="button" onclick="sincronizarFonte('${f.id}')">Sincronizar com agente</button>
           <button class="btn btn-ghost" type="button" onclick="testarFonte('${f.id}')">Testar SELECT 1</button>
         </div>
       </div>
@@ -290,6 +285,10 @@
     select.innerHTML = fontes.map(f => `<option value="${f.id}">${escapeHtml(f.nome)}</option>`).join('');
   }
 
+  // A fonte aqui é só uma REFERÊNCIA (connection_key) — a conexão real com
+  // o SQL Server já precisa estar cadastrada manualmente no Agente Local sob
+  // essa mesma chave (mesmo padrão do IA Command, ver connection-factory.js).
+  // Nunca envia host/porta/usuário/senha — isso não existe mais nesta tela.
   async function criarFonte() {
     hideError();
     const empresaId = empresaIdAtual();
@@ -301,26 +300,10 @@
           connectionKey: document.getElementById('fonte-key').value,
           sistemaOrigem: 'softexpert',
           adapter: 'SoftExpertSqlServerAdapter',
-          dbHost: document.getElementById('fonte-host').value,
-          dbPort: document.getElementById('fonte-porta').value,
-          dbName: document.getElementById('fonte-database').value,
-          dbUser: document.getElementById('fonte-usuario').value,
-          senha: document.getElementById('fonte-senha').value,
         }),
       });
-      document.getElementById('fonte-senha').value = '';
       carregarFontes();
     } catch (err) { showError('Não foi possível criar a fonte: ' + err.message); }
-  }
-
-  async function sincronizarFonte(fonteId) {
-    hideError();
-    const empresaId = empresaIdAtual();
-    try {
-      await api(`/api/ia-service/base-historica/fontes/${fonteId}/sincronizar?empresa_id=${empresaId}`, { method: 'POST', body: JSON.stringify({}) });
-      alert('Fonte sincronizada com o Agente Local.');
-      carregarFontes();
-    } catch (err) { showError('Não foi possível sincronizar a fonte: ' + err.message); }
   }
 
   async function testarFonte(fonteId) {
