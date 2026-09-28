@@ -44,6 +44,18 @@ function getTokenRevelado(empresaId) {
   return cryptoEnvelope.decryptSecret(config.tokenEnc);
 }
 
+/**
+ * Mesma lógica de getTokenRevelado, para a CRYPTO_KEY (AES-256-GCM) usada
+ * quando o Agente Local está com "Exigir criptografia" ativo — precisa ser
+ * IDÊNTICA à chave configurada na tela local do agente (painel "Criptografia
+ * AES-256-GCM"), copiada manualmente pelo usuário.
+ */
+function getCryptoKeyRevelada(empresaId) {
+  const config = agenteRepo.getConfig(empresaId);
+  if (!config?.cryptoKeyEnc) return null;
+  return cryptoEnvelope.decryptSecret(config.cryptoKeyEnc);
+}
+
 async function testarConexao(empresaId) {
   const config = agenteRepo.getConfig(empresaId);
   if (!config?.url) throw new Error('URL do Agente Local não configurada.');
@@ -146,6 +158,7 @@ module.exports = {
   getConfig,
   salvarConfig,
   getTokenRevelado,
+  getCryptoKeyRevelada,
   testarConexao,
   criarFonte,
   atualizarFonte,

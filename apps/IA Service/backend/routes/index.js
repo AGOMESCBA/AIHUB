@@ -356,6 +356,15 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
+  // Mesmo padrão da rota de token acima, para a CRYPTO_KEY.
+  app.get('/api/ia-service/base-historica/agente-local/crypto-key', (req, res) => {
+    try {
+      res.json({ cryptoKey: agenteLocalService.getCryptoKeyRevelada(req.svcEmpresaId) });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   app.post('/api/ia-service/base-historica/agente-local/testar', async (req, res) => {
     try {
       res.json(await agenteLocalService.testarConexao(req.svcEmpresaId));

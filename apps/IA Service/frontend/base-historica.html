@@ -111,6 +111,21 @@
               </button>
             </div>
           </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field" style="flex:0 0 auto">
+            <label><input type="checkbox" id="agente-crypto-ativo"> Exigir criptografia (AES-256-GCM)</label>
+          </div>
+          <div class="form-field">
+            <label>Chave de criptografia (crypto_key)</label>
+            <div style="position:relative">
+              <input type="password" id="agente-crypto-key" class="form-control" placeholder="Mesma CRYPTO_KEY da tela local do agente" style="padding-right:36px">
+              <button type="button" onclick="toggleAgenteCryptoKeyVisivel()" title="Mostrar/ocultar chave" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--text-lo,#888)">
+                <svg id="agente-crypto-key-icon-mostrar" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg id="agente-crypto-key-icon-ocultar" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+          </div>
           <button class="btn btn-primary" type="button" onclick="salvarAgente()">Salvar</button>
           <button class="btn btn-ghost" type="button" onclick="testarAgente()">Testar conexão</button>
         </div>
@@ -200,6 +215,7 @@
     const empresaId = empresaIdAtual();
     const cfg = await api(`/api/ia-service/base-historica/agente-local?empresa_id=${empresaId}`);
     document.getElementById('agente-url').value = cfg.url || '';
+    document.getElementById('agente-crypto-ativo').checked = !!cfg.cryptoAtivo;
     document.getElementById('agente-status').textContent = cfg.configurado
       ? `Configurado — último teste: ${cfg.ultimoTesteEm ? (cfg.ultimoTesteOk ? 'OK' : 'falhou') + ' em ' + new Date(cfg.ultimoTesteEm).toLocaleString('pt-BR') : 'nunca testado'}`
       : 'Não configurado.';
@@ -240,15 +256,55 @@
     }
   }
 
+  // Mesmo padrão do olhinho do Token, para a crypto_key — precisa bater
+  // EXATAMENTE com a CRYPTO_KEY já gerada na tela local do agente (painel
+  // "Criptografia AES-256-GCM"). Sem essa chave e "Criptografia ativa"
+  // marcada, /execute falha com "Criptografia obrigatoria" quando o agente
+  // estiver com CRYPTO_REQUIRED=true.
+  let agenteCryptoKeyRevelada = false;
+  async function toggleAgenteCryptoKeyVisivel() {
+    const input = document.getElementById('agente-crypto-key');
+    const mostrar = document.getElementById('agente-crypto-key-icon-mostrar');
+    const ocultar = document.getElementById('agente-crypto-key-icon-ocultar');
+
+    if (!agenteCryptoKeyRevelada) {
+      if (!input.value) {
+        try {
+          const empresaId = empresaIdAtual();
+          const resp = await api(`/api/ia-service/base-historica/agente-local/crypto-key?empresa_id=${empresaId}`);
+          if (resp.cryptoKey) input.value = resp.cryptoKey;
+        } catch (err) {
+          showError('Não foi possível carregar a chave salva: ' + err.message);
+          return;
+        }
+      }
+      input.type = 'text';
+      mostrar.style.display = 'none';
+      ocultar.style.display = 'block';
+      agenteCryptoKeyRevelada = true;
+    } else {
+      input.type = 'password';
+      mostrar.style.display = 'block';
+      ocultar.style.display = 'none';
+      agenteCryptoKeyRevelada = false;
+    }
+  }
+
   async function salvarAgente() {
     hideError();
     const empresaId = empresaIdAtual();
     try {
       await api(`/api/ia-service/base-historica/agente-local?empresa_id=${empresaId}`, {
         method: 'PUT',
-        body: JSON.stringify({ url: document.getElementById('agente-url').value, token: document.getElementById('agente-token').value || undefined }),
+        body: JSON.stringify({
+          url: document.getElementById('agente-url').value,
+          token: document.getElementById('agente-token').value || undefined,
+          cryptoAtivo: document.getElementById('agente-crypto-ativo').checked,
+          cryptoKey: document.getElementById('agente-crypto-key').value || undefined,
+        }),
       });
       document.getElementById('agente-token').value = '';
+      document.getElementById('agente-crypto-key').value = '';
       carregarAgente();
     } catch (err) { showError('Não foi possível salvar a config do agente: ' + err.message); }
   }
