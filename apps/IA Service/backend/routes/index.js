@@ -416,6 +416,65 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
+  // Diagnóstico TEMPORÁRIO (2026-09) para investigar importação retornando
+  // 0 registros mesmo com conexão testada OK — isola cada camada do filtro
+  // (data, JOIN WFPROCESS, CDPROCESSMODEL) com SELECT COUNT(*) separados,
+  // pra achar exatamente onde o resultado zera. Remover depois de resolvido.
+  app.get('/api/ia-service/base-historica/fontes/:id/diagnostico', async (req, res) => {
+    try {
+      const { periodoInicio, periodoFim } = req.query || {};
+      if (!periodoInicio || !periodoFim) {
+        return res.status(400).json({ error: 'periodoInicio e periodoFim são obrigatórios (formato YYYYMMDD).' });
+      }
+      const params = { inicio: periodoInicio, fim: periodoFim };
+      const empresaId = req.svcEmpresaId;
+      const fonteId = req.params.id;
+
+      const rodar = async (label, sql) => {
+        try {
+          const rows = await agenteLocalService.executarSelectNaFonte(empresaId, fonteId, { sql, params, limit: 5 });
+          return { label, ok: true, total: rows?.[0]?.total ?? null, amostra: rows?.slice(0, 3) ?? [] };
+        } catch (err) {
+          return { label, ok: false, erro: err.message };
+        }
+      };
+
+      const resultados = [];
+      resultados.push(await rodar(
+        '1. Total DYNITSM no período (sem JOIN nenhum)',
+        `SELECT COUNT(*) AS total FROM DYNITSM D WHERE D.DT >= CONVERT(datetime, @inicio, 112) AND D.DT < CONVERT(datetime, @fim, 112)`
+      ));
+      resultados.push(await rodar(
+        '2. Com JOIN WFPROCESS básico (só IDPROCESS)',
+        `SELECT COUNT(*) AS total FROM DYNITSM D INNER JOIN WFPROCESS W ON D.IDPROCESS = W.IDPROCESS WHERE D.DT >= CONVERT(datetime, @inicio, 112) AND D.DT < CONVERT(datetime, @fim, 112)`
+      ));
+      resultados.push(await rodar(
+        '3. + D.FGENABLED = 1',
+        `SELECT COUNT(*) AS total FROM DYNITSM D INNER JOIN WFPROCESS W ON D.FGENABLED = 1 AND D.IDPROCESS = W.IDPROCESS WHERE D.DT >= CONVERT(datetime, @inicio, 112) AND D.DT < CONVERT(datetime, @fim, 112)`
+      ));
+      resultados.push(await rodar(
+        '4. + CDPRODAUTOMATION NOT NULL / NOT IN (160,202,275)',
+        `SELECT COUNT(*) AS total FROM DYNITSM D INNER JOIN WFPROCESS W ON D.FGENABLED = 1 AND D.IDPROCESS = W.IDPROCESS AND W.CDPRODAUTOMATION IS NOT NULL AND W.CDPRODAUTOMATION NOT IN (160, 202, 275) WHERE D.DT >= CONVERT(datetime, @inicio, 112) AND D.DT < CONVERT(datetime, @fim, 112)`
+      ));
+      resultados.push(await rodar(
+        '5. + CDPROCESSMODEL = 1759 (candidato a causa)',
+        `SELECT COUNT(*) AS total FROM DYNITSM D INNER JOIN WFPROCESS W ON D.FGENABLED = 1 AND D.IDPROCESS = W.IDPROCESS AND W.CDPRODAUTOMATION IS NOT NULL AND W.CDPRODAUTOMATION NOT IN (160, 202, 275) AND W.CDPROCESSMODEL = 1759 WHERE D.DT >= CONVERT(datetime, @inicio, 112) AND D.DT < CONVERT(datetime, @fim, 112)`
+      ));
+      resultados.push(await rodar(
+        '6. Query COMPLETA (igual à importação real hoje)',
+        `SELECT COUNT(*) AS total FROM DYNITSM D INNER JOIN WFPROCESS W ON D.FGENABLED = 1 AND D.IDPROCESS = W.IDPROCESS AND W.CDPRODAUTOMATION IS NOT NULL AND W.CDPRODAUTOMATION NOT IN (160, 202, 275) AND W.CDPROCESSMODEL = 1759 AND W.FGWFGROUP = 1 AND W.FGSTATUS NOT IN (3) WHERE D.DT >= CONVERT(datetime, @inicio, 112) AND D.DT < CONVERT(datetime, @fim, 112)`
+      ));
+      resultados.push(await rodar(
+        '7. Distinct CDPROCESSMODEL usados por DYNITSM no período (top 10)',
+        `SELECT TOP 10 W.CDPROCESSMODEL AS total, COUNT(*) AS qtd FROM DYNITSM D INNER JOIN WFPROCESS W ON D.IDPROCESS = W.IDPROCESS WHERE D.DT >= CONVERT(datetime, @inicio, 112) AND D.DT < CONVERT(datetime, @fim, 112) GROUP BY W.CDPROCESSMODEL ORDER BY COUNT(*) DESC`
+      ));
+
+      res.json({ periodoInicio, periodoFim, resultados });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   app.post('/api/ia-service/base-historica/fontes/:id/testar', async (req, res) => {
     try {
       res.json(await agenteLocalService.testarFonte(req.svcEmpresaId, req.params.id));
