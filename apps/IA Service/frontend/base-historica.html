@@ -139,7 +139,8 @@
         <div class="form-row">
           <div class="form-field"><label>Nome</label><input type="text" id="fonte-nome" class="form-control" placeholder="SoftExpert - Chamados"></div>
           <div class="form-field"><label>connection_key</label><input type="text" id="fonte-key" class="form-control" placeholder="mesma chave já cadastrada no Agente Local"></div>
-          <button class="btn btn-primary" type="button" onclick="criarFonte()">Criar fonte</button>
+          <button class="btn btn-primary" type="button" id="fonte-form-btn" onclick="salvarFonte()">Criar fonte</button>
+          <button class="btn btn-ghost" type="button" id="fonte-form-cancelar" style="display:none" onclick="cancelarEdicaoFonte()">Cancelar</button>
         </div>
         <div id="fontes-lista" style="margin-top:14px"><div class="empty-state">Carregando…</div></div>
       </div>
@@ -335,6 +336,8 @@
         <div class="fonte-card-meta">${escapeHtml(f.connectionKey)} · ${escapeHtml(f.sistemaOrigem)}</div>
         <div class="fonte-card-actions">
           <button class="btn btn-ghost" type="button" onclick="testarFonte('${f.id}')">Testar SELECT 1</button>
+          <button class="btn btn-ghost" type="button" onclick="editarFonte('${f.id}', ${JSON.stringify(f.nome)}, ${JSON.stringify(f.connectionKey)})">Editar</button>
+          <button class="btn btn-ghost" type="button" onclick="excluirFonte('${f.id}', ${JSON.stringify(f.nome)})">Excluir</button>
         </div>
       </div>
     `).join('');
@@ -345,21 +348,53 @@
   // o SQL Server já precisa estar cadastrada manualmente no Agente Local sob
   // essa mesma chave (mesmo padrão do IA Command, ver connection-factory.js).
   // Nunca envia host/porta/usuário/senha — isso não existe mais nesta tela.
-  async function criarFonte() {
+  // Digitar o connection_key manualmente (copiado da tela local do agente)
+  // é decisão explícita do usuário — a rota que listaria as conexões do
+  // agente (GET /api/conexoes) exige sessão de admin do agente, incompatível
+  // com o Bearer Token já usado aqui (2026-09, avaliado e adiado).
+  let fonteEmEdicaoId = null;
+
+  async function salvarFonte() {
     hideError();
     const empresaId = empresaIdAtual();
+    const dados = {
+      nome: document.getElementById('fonte-nome').value,
+      connectionKey: document.getElementById('fonte-key').value,
+      sistemaOrigem: 'softexpert',
+      adapter: 'SoftExpertSqlServerAdapter',
+    };
     try {
-      await api(`/api/ia-service/base-historica/fontes?empresa_id=${empresaId}`, {
-        method: 'POST',
-        body: JSON.stringify({
-          nome: document.getElementById('fonte-nome').value,
-          connectionKey: document.getElementById('fonte-key').value,
-          sistemaOrigem: 'softexpert',
-          adapter: 'SoftExpertSqlServerAdapter',
-        }),
-      });
+      if (fonteEmEdicaoId) {
+        await api(`/api/ia-service/base-historica/fontes/${fonteEmEdicaoId}?empresa_id=${empresaId}`, {
+          method: 'PUT',
+          body: JSON.stringify(dados),
+        });
+      } else {
+        await api(`/api/ia-service/base-historica/fontes?empresa_id=${empresaId}`, {
+          method: 'POST',
+          body: JSON.stringify(dados),
+        });
+      }
+      cancelarEdicaoFonte();
       carregarFontes();
-    } catch (err) { showError('Não foi possível criar a fonte: ' + err.message); }
+    } catch (err) { showError(`Não foi possível ${fonteEmEdicaoId ? 'salvar a edição' : 'criar'} a fonte: ` + err.message); }
+  }
+
+  function editarFonte(fonteId, nome, connectionKey) {
+    fonteEmEdicaoId = fonteId;
+    document.getElementById('fonte-nome').value = nome;
+    document.getElementById('fonte-key').value = connectionKey;
+    document.getElementById('fonte-form-btn').textContent = 'Salvar edição';
+    document.getElementById('fonte-form-cancelar').style.display = 'inline-block';
+    document.getElementById('fonte-nome').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function cancelarEdicaoFonte() {
+    fonteEmEdicaoId = null;
+    document.getElementById('fonte-nome').value = '';
+    document.getElementById('fonte-key').value = '';
+    document.getElementById('fonte-form-btn').textContent = 'Criar fonte';
+    document.getElementById('fonte-form-cancelar').style.display = 'none';
   }
 
   async function testarFonte(fonteId) {
@@ -369,6 +404,22 @@
       await api(`/api/ia-service/base-historica/fontes/${fonteId}/testar?empresa_id=${empresaId}`, { method: 'POST' });
       alert('SELECT 1 executado com sucesso via agente.');
     } catch (err) { showError('Teste da fonte falhou: ' + err.message); }
+  }
+
+  // Exclusão SEMPRE apaga em cascata (ON DELETE CASCADE) todo o histórico
+  // de importações/chamados/posicionamentos já trazidos por esta fonte —
+  // decisão explícita do usuário (2026-09): depois de importado, a fonte só
+  // serve pra reimportar, sem valor de rastreabilidade. Aviso deixa isso
+  // claro antes de confirmar.
+  async function excluirFonte(fonteId, nome) {
+    hideError();
+    if (!confirm(`Excluir a fonte "${nome}"?\n\nISSO APAGA TAMBÉM todo o histórico de chamados e posicionamentos já importados por ela (as importações registradas na aba Importações também somem). Se quiser só corrigir o connection_key, use "Editar" em vez de excluir.`)) return;
+    const empresaId = empresaIdAtual();
+    try {
+      await api(`/api/ia-service/base-historica/fontes/${fonteId}?empresa_id=${empresaId}`, { method: 'DELETE' });
+      if (fonteEmEdicaoId === fonteId) cancelarEdicaoFonte();
+      carregarFontes();
+    } catch (err) { showError('Não foi possível excluir a fonte: ' + err.message); }
   }
 
   async function iniciarImportacao() {

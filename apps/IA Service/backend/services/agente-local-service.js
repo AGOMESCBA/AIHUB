@@ -106,6 +106,19 @@ function getFonte(empresaId, fonteId) {
   return agenteRepo.getFonte(empresaId, fonteId);
 }
 
+/**
+ * Exclusão SEMPRE apaga em cascata (ON DELETE CASCADE) todo o histórico de
+ * importações/chamados/posicionamentos vinculado — decisão explícita do
+ * usuário (2026-09): depois de importado, o vínculo com a fonte não tem
+ * valor, só serve pra reimportar. Sem trava aqui — a confirmação/aviso fica
+ * na UI (base-historica.html), não no backend.
+ */
+function excluirFonte(empresaId, fonteId) {
+  const fonte = agenteRepo.getFonte(empresaId, fonteId);
+  if (!fonte) throw new Error('Fonte histórica não encontrada.');
+  return agenteRepo.excluirFonte(empresaId, fonteId);
+}
+
 function listarFontes(empresaId, filtros) {
   return agenteRepo.listarFontes(empresaId, filtros);
 }
@@ -164,6 +177,7 @@ module.exports = {
   atualizarFonte,
   getFonte,
   listarFontes,
+  excluirFonte,
   testarFonte,
   executarSelectNaFonte,
 };

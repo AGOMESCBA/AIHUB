@@ -122,10 +122,11 @@ function atualizarFonte(empresaId, fonteId, patch) {
 
   db.prepare(`
     UPDATE fontes_historicas
-       SET nome = ?, ativo = ?, atualizado_em = ?
+       SET nome = ?, connection_key = ?, ativo = ?, atualizado_em = ?
      WHERE id = ? AND empresa_id = ?
   `).run(
     patch.nome ?? atual.nome,
+    patch.connectionKey ?? atual.connectionKey,
     patch.ativo === undefined ? (atual.ativo ? 1 : 0) : (patch.ativo ? 1 : 0),
     agora,
     fonteId,
@@ -154,6 +155,21 @@ function listarFontes(empresaId, filtros = {}) {
   return rows.map(_fonteParaDominio);
 }
 
+/**
+ * Exclusão SEMPRE apaga em cascata (ON DELETE CASCADE, migrations.js) todo o
+ * histórico de importações/chamados/posicionamentos vinculado a esta fonte —
+ * decisão explícita do usuário (2026-09): depois de importar, a fonte não
+ * tem mais valor de rastreabilidade, só serve para reimportar; se o usuário
+ * pediu para excluir, ele já sabe que o histórico vai junto. A UI confirma
+ * isso claramente antes de chamar esta rota (ver base-historica.html).
+ */
+function excluirFonte(empresaId, fonteId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const db = getDB();
+  const resultado = db.prepare(`DELETE FROM fontes_historicas WHERE id = ? AND empresa_id = ?`).run(fonteId, Number(empresaId));
+  return resultado.changes > 0;
+}
+
 module.exports = {
   getConfig,
   salvarConfig,
@@ -162,4 +178,5 @@ module.exports = {
   atualizarFonte,
   getFonte,
   listarFontes,
+  excluirFonte,
 };

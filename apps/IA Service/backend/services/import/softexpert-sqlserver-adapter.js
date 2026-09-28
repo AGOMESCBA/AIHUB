@@ -112,12 +112,13 @@ const COLUNAS_POSICIONAMENTO = [
  * comparação sargable (conversão aplicada no literal/parâmetro, não na
  * coluna DT).
  *
- * Exclui chamados já 'Encerrado' (decisão do usuário, 2026-09): a base
- * histórica do radar só precisa de chamados ainda ativos — chamados
- * encerrados nunca aparecem na fila (radar-repository.js já os exclui) e
- * não têm valor para pré-análise automática. Repete a expressão
- * SQL_STATUS_CHAMADO no WHERE (não dá pra referenciar o alias do SELECT
- * no WHERE do SQL Server).
+ * TRAZ chamados de qualquer status, inclusive 'Encerrado' (2026-09,
+ * decisão explícita do usuário: revertida a exclusão anterior, que
+ * impedia o histórico de chamados já resolvidos — com solução aplicada —
+ * de virar base de conhecimento para correlação/pesquisa técnica. Seguro
+ * fazer isso porque a fila do Radar tem seu PRÓPRIO filtro independente
+ * em radar-repository.js:56 (`status_encerramento != 'Encerrado'`) —
+ * trazer o dado pra cá não faz chamado encerrado aparecer na fila.
  */
 async function listarChamadosPeriodo(empresaId, fonte, { inicio, fim }, { offset = 0, limit = 500 } = {}) {
   const colunasD = COLUNAS_DYNITSM.map(c => `D.${c}`).join(', ');
@@ -126,7 +127,6 @@ async function listarChamadosPeriodo(empresaId, fonte, { inicio, fim }, { offset
     FROM DYNITSM D
     ${JOIN_WFPROCESS}
     WHERE D.DT >= CONVERT(datetime, @inicio, 112) AND D.DT < CONVERT(datetime, @fim, 112)
-      AND (${SQL_STATUS_CHAMADO}) != 'Encerrado'
     ORDER BY D.OID
     OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
   `;
@@ -144,7 +144,6 @@ async function contarChamadosPeriodo(empresaId, fonte, { inicio, fim }) {
     FROM DYNITSM D
     ${JOIN_WFPROCESS}
     WHERE D.DT >= CONVERT(datetime, @inicio, 112) AND D.DT < CONVERT(datetime, @fim, 112)
-      AND (${SQL_STATUS_CHAMADO}) != 'Encerrado'
   `;
   const rows = await agenteLocalService.executarSelectNaFonte(empresaId, fonte.id, {
     sql, params: { inicio, fim }, limit: 1,
