@@ -20,6 +20,9 @@ const armazenamento = require('../services/armazenamento-anexos');
 const radarService = require('../services/radar-service');
 const anexosSoftExpertService = require('../services/anexos-softexpert-service');
 const consultorService = require('../services/consultor-service');
+const loginExternoService = require('../services/login-externo-service');
+const technicalResearchService = require('../services/technical-research-service');
+const radarRefreshService = require('../services/radar-refresh-service');
 const crud = require('../../../IAHUB/backend/crud');
 const usuariosDb = require('../../../IAHUB/backend/usuarios/database');
 
@@ -37,32 +40,57 @@ function _handleErro(res, err) {
 module.exports = function registrarRotasExterno(app) {
   app.use('/api/ia-service-externo', requireSessaoExterna);
 
-  // Identidade da sessão externa — usado só para exibir o badge fixo de
-  // empresa/consultor no cabeçalho do chat (ver radar.html), nunca para
-  // decisão de autorização (isso já é feito por requireSessaoExterna a cada
-  // request via req.svcEmpresaId).
+  // Identidade da sessão externa — usado para exibir o badge fixo de
+  // empresa/consultor no cabeçalho do chat (ver radar.html) e, agora, para
+  // saber se o telefone tem OUTRAS empresas disponíveis (2026-09, troca de
+  // empresa dentro do chat sem novo OTP — outrasEmpresas nunca inclui a
+  // empresa atual). Não é usado para decisão de autorização (isso já é
+  // feito por requireSessaoExterna a cada request via req.svcEmpresaId).
   app.get('/api/ia-service-externo/whoami', (req, res) => {
     try {
       const empresa = crud.buscarPorId('empresas', req.svcEmpresaId);
       const consultor = consultorService.getConsultor(req.svcEmpresaId, req.svcConsultorExterno);
       const usuario = consultor?.usuarioIdIahub ? usuariosDb.buscarPorId(consultor.usuarioIdIahub) : null;
+      const outrasEmpresas = consultor?.telefone
+        ? loginExternoService.listarEmpresasDoTelefone(consultor.telefone)
+            .filter(e => Number(e.id) !== Number(req.svcEmpresaId))
+            .map(e => ({ id: e.id, nome: e.nome }))
+        : [];
       res.json({
         empresaNome: empresa?.razao_social || empresa?.nome || null,
         consultorNome: usuario?.nome || null,
+        outrasEmpresas,
       });
     } catch (err) {
       _handleErro(res, err);
     }
   });
 
-  app.get('/api/ia-service-externo/radar/fila', (req, res) => {
+  // Troca a empresa ativa da sessão SEM novo OTP — o telefone já foi
+  // validado uma vez no login; trocar de empresa só reconfirma (dentro de
+  // login-externo-service.trocarEmpresa) que aquele telefone tem consultor
+  // ativo na empresa de destino antes de emitir um token novo.
+  app.post('/api/ia-service-externo/trocar-empresa', (req, res) => {
     try {
-      const { filtro_sla, limite } = req.query || {};
+      const tokenAtual = req.headers['x-sessao-externa'];
+      const resultado = loginExternoService.trocarEmpresa(String(tokenAtual), req.body?.empresaId);
+      res.json({ ok: true, token: resultado.token, expiraEm: resultado.expiraEm });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/ia-service-externo/radar/fila', async (req, res) => {
+    try {
+      const { filtro_sla, limite, force_sync } = req.query || {};
+      const sincronizacao = await radarRefreshService.sincronizarAntesDaFila(req.svcEmpresaId, {
+        force: force_sync === 'true',
+      });
       const resultado = radarService.getFilaPorConsultorId(req.svcEmpresaId, req.svcConsultorExterno, {
         filtroSla: filtro_sla || 'todos',
         limite: limite ? Number(limite) : undefined,
       });
-      res.json(resultado);
+      res.json({ ...resultado, sincronizacao });
     } catch (err) {
       _handleErro(res, err);
     }
@@ -88,12 +116,36 @@ module.exports = function registrarRotasExterno(app) {
     }
   });
 
-  app.post('/api/ia-service-externo/radar/chamados/:chamadoId/abrir-atendimento', (req, res) => {
+  function iniciarAnaliseRadarExterno(req, res) {
     try {
-      const { atendimento, reaberto } = radarService.abrirOuCriarAtendimento(req.svcEmpresaId, req.params.chamadoId, {
+      const { atendimento, reaberto } = radarService.iniciarAnalise(req.svcEmpresaId, req.params.chamadoId, {
         consultorId: req.svcConsultorExterno,
       });
       res.status(reaberto ? 200 : 201).json({ atendimentoId: atendimento.id, reaberto });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  }
+
+  app.post('/api/ia-service-externo/radar/chamados/:chamadoId/iniciar-analise', iniciarAnaliseRadarExterno);
+  app.post('/api/ia-service-externo/radar/chamados/:chamadoId/abrir-atendimento', iniciarAnaliseRadarExterno);
+
+  app.get('/api/ia-service-externo/radar/chamados/:chamadoId/relacionados', (req, res) => {
+    try {
+      const { limite } = req.query || {};
+      res.json(radarService.buscarRelacionados(req.svcEmpresaId, req.params.chamadoId, {
+        limite: limite ? Number(limite) : undefined,
+      }));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service-externo/radar/chamados/:chamadoId/pesquisa-tecnica', async (req, res) => {
+    try {
+      res.json(await technicalResearchService.pesquisarParaChamado(req.svcEmpresaId, req.params.chamadoId, {
+        limiteRelacionados: req.query?.limiteRelacionados ? Number(req.query.limiteRelacionados) : undefined,
+      }));
     } catch (err) {
       _handleErro(res, err);
     }
@@ -180,6 +232,39 @@ module.exports = function registrarRotasExterno(app) {
         anexoIds: Array.isArray(anexoIds) ? anexoIds : [],
       });
       res.status(201).json(mensagemAssistente);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service-externo/radar/minhas-preferencias', (req, res) => {
+    try {
+      const consultor = consultorService.getConsultor(req.svcEmpresaId, req.svcConsultorExterno);
+      if (!consultor) return res.status(404).json({ error: 'Consultor não encontrado nesta empresa.' });
+      res.json({
+        consultorEncontrado: true,
+        consultorId: consultor.id,
+        preAnaliseAutomatica: consultor.preAnaliseAutomatica !== false,
+      });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.put('/api/ia-service-externo/radar/minhas-preferencias', (req, res) => {
+    try {
+      const consultor = consultorService.getConsultor(req.svcEmpresaId, req.svcConsultorExterno);
+      if (!consultor) return res.status(404).json({ error: 'Consultor não encontrado nesta empresa.' });
+
+      const { preAnaliseAutomatica } = req.body || {};
+      const atualizado = consultorService.atualizarConsultor(req.svcEmpresaId, consultor.id, {
+        preAnaliseAutomatica: !!preAnaliseAutomatica,
+      });
+      res.json({
+        consultorEncontrado: true,
+        consultorId: atualizado.id,
+        preAnaliseAutomatica: atualizado.preAnaliseAutomatica !== false,
+      });
     } catch (err) {
       _handleErro(res, err);
     }

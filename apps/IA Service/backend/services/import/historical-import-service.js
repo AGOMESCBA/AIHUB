@@ -313,11 +313,10 @@ async function _processarChamado(empresaId, fonte, adapter, importacaoId, rowBru
  * Best-effort: qualquer falha (IA fora do ar, sem chave configurada, etc.)
  * é logada e NUNCA propaga — a importação não pode falhar por causa disso.
  *
- * NOTA (2026-09): abrirOuCriarAtendimento já dispara sincronização de
- * anexos + pré-análise automática internamente sempre que CRIA um
- * atendimento novo (sem consultor resolvido aqui, cai no default
- * preAnaliseAutomatica=true) — não repetir a chamada aqui evita disparar a
- * IA duas vezes para o mesmo chamado.
+ * NOTA (2026-09): iniciarAnalise já dispara sincronização de anexos quando
+ * cria um atendimento novo. A pré-análise da IA fica controlada pela
+ * preferência do consultor ao abrir a análise no Radar; a importação não deve
+ * gerar resposta automática sem um consultor associado.
  */
 async function _dispararPreAnaliseSePrimeiroContato(empresaId, chamado) {
   try {
@@ -333,8 +332,8 @@ async function _dispararPreAnaliseSePrimeiroContato(empresaId, chamado) {
     if (!ultimo.aguardandoRetorno) return; // só quando o chamado está de fato aguardando o atendente agora
 
     // Cria o atendimento — sincronização de anexos + pré-análise já disparam
-    // sozinhas dentro de abrirOuCriarAtendimento (ambas em background).
-    radarService.abrirOuCriarAtendimento(empresaId, chamado.id, {});
+    // sozinhas dentro de iniciarAnalise (ambas em background).
+    radarService.iniciarAnalise(empresaId, chamado.id, { preAnaliseAutomatica: false });
   } catch (err) {
     console.error(`[IA Service] Falha ao avaliar pré-análise automática (chamado ${chamado.numero}):`, err.message);
   }

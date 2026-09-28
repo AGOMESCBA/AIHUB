@@ -588,6 +588,28 @@ const MIGRATIONS = [
       ALTER TABLE consultores ADD COLUMN pre_analise_automatica INTEGER NOT NULL DEFAULT 1;
     `,
   },
+  {
+    version: 24,
+    descricao: 'Login externo por TELEFONE puro (pedido do usuario, 2026-09): remove a exigencia de escolher a empresa antes de digitar o telefone (URL /entrar-servico/:empresaSlug) — mesmo telefone pode ter consultor cadastrado em mais de uma empresa (ex. J2A e C3I), e o sistema passa a descobrir isso sozinho e permitir trocar de empresa dentro do chat ja logado, igual ja funciona no IA Command (resolverEmpresaDoCanal). svc_login_challenges recriada com empresa_id NULLABLE (challenge agora e por telefone, a empresa so e definida na escolha apos verificar o codigo) — seguro derrubar a tabela antiga: guarda so codigos de OTP com TTL de minutos, nenhum challenge sobrevive a um deploy.',
+    sql: `
+      DROP TABLE IF EXISTS svc_login_challenges;
+
+      CREATE TABLE svc_login_challenges (
+        id            TEXT PRIMARY KEY,
+        telefone      TEXT NOT NULL,
+        codigo_hash   TEXT NOT NULL,
+        tentativas    INTEGER NOT NULL DEFAULT 0,
+        expira_em     TEXT NOT NULL,
+        usado_em      TEXT DEFAULT NULL,
+        ip            TEXT DEFAULT NULL,
+        user_agent    TEXT DEFAULT NULL,
+        criado_em     TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_svc_login_challenges_telefone
+        ON svc_login_challenges (telefone, expira_em);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

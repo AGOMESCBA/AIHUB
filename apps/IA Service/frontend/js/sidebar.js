@@ -1,17 +1,6 @@
 (function () {
   const PIN_KEY = 'iasvc_sidebar_pinned';
 
-  // Mesma normalização de apps/IA Service/backend/routes/login-externo-routes.js
-  // (_slugify) — precisa ser IDÊNTICA nos dois lados: o backend resolve o
-  // slug de volta para a empresa via /entrar-servico/:empresaSlug.
-  function _slugify(nome) {
-    return String(nome || '')
-      .normalize('NFD').replace(/[̀-ͯ]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-  }
-
   // Radar SEMPRE abre pela tela de login externo por WhatsApp (2026-09,
   // decisão explícita do usuário) — mesmo para quem já está logado no
   // IAHub. Motivo: o cookie de sessão do Hub não é confiavelmente enviado
@@ -21,10 +10,14 @@
   // do IA Service, já validado ponta a ponta) não depende de cookie
   // cruzando abas — sempre funciona, ao custo de pedir o código do
   // WhatsApp mais uma vez ao abrir o Radar numa aba nova.
+  //
+  // 2026-09 (2ª mudança): a URL deixou de levar a empresa no path
+  // (/entrar-servico/:slug) — login é só por telefone agora, o próprio
+  // sistema descobre a(s) empresa(s) daquele número (ver
+  // login-externo-service.listarEmpresasDoTelefone) e permite trocar dentro
+  // do chat. Não depende mais de window._iahubEmpresa para montar o link.
   function radarHref() {
-    const nomeEmpresa = window._iahubEmpresa?.nome || window._iahubEmpresa?.razao_social;
-    if (!nomeEmpresa) return '/app/ia-service/chat'; // fallback: empresa ainda não carregada
-    return `/entrar-servico/${_slugify(nomeEmpresa)}`;
+    return '/entrar-servico';
   }
 
   const MENU = [
@@ -49,6 +42,7 @@
       id: 'configuracao', label: 'Configuração', icon: '⚙', defaultOpen: false,
       items: [
         { id: 'svc-consultores', label: 'Consultores', href: '/app/ia-service/consultores.html', icon: '👤' },
+        { id: 'svc-config-ia',   label: 'Configuração de IA', href: '/app/ia-service/config-ia.html', icon: '🤖' },
       ],
     },
   ];

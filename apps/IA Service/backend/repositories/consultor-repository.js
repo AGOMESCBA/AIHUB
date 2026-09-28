@@ -93,6 +93,22 @@ function listarConsultores(empresaId, filtros = {}) {
   return rows.map(_rowParaDominio);
 }
 
+/**
+ * Busca consultores ativos por telefone em TODAS as empresas (sem filtro de
+ * empresaId) — usado só pelo login externo por telefone (login-externo-service.js)
+ * para descobrir a quais empresas um número de WhatsApp está vinculado antes
+ * de qualquer sessão existir. Comparação de telefone feita em JS (não em
+ * SQL) porque a coluna guarda o valor como veio do cadastro, sem normalização
+ * — mesmo padrão já usado em iniciarLogin antes desta função existir.
+ */
+function listarConsultoresPorTelefoneNormalizado(telefoneNormalizado, normalizarFn) {
+  const db = getDB();
+  const rows = db.prepare(`SELECT * FROM consultores WHERE ativo = 1 AND telefone IS NOT NULL`).all();
+  return rows
+    .map(_rowParaDominio)
+    .filter(c => normalizarFn(c.telefone) === telefoneNormalizado);
+}
+
 function atualizarConsultor(empresaId, consultorId, patch) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
@@ -134,6 +150,7 @@ module.exports = {
   getConsultor,
   getConsultorPorUsuario,
   listarConsultores,
+  listarConsultoresPorTelefoneNormalizado,
   atualizarConsultor,
   excluirConsultor,
 };

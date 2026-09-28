@@ -30,22 +30,38 @@
     .fila-head-top { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
     .fila-titulo { font-size:15px; font-weight:800; color:var(--wa-text); }
 
-    /* Indicador fixo da empresa (tenant IAHub) ativa nesta sessão — mesmo
-       papel visual do escopo-select-btn do protheus-chat.html (IA Command),
-       mas SOMENTE informativo (sem modal de troca): no IA Service a empresa
-       é escolhida antes de entrar no chat (no Hub, ou no slug do login
-       externo /entrar-servico/:empresaSlug), nunca trocada de dentro do
-       chat — por isso não há necessidade de interação aqui, só de deixar
-       claro em qual tenant o analista está mexendo. */
+    /* Indicador da empresa (tenant IAHub) ativa nesta sessão — mesmo papel
+       visual do escopo-select-btn do protheus-chat.html (IA Command). Em
+       modo logado (dentro do Hub) continua só informativo. Em modo externo
+       (login por telefone) vira clicável quando o telefone tem consultor em
+       mais de uma empresa — abre dropdown de troca sem pedir novo OTP
+       (2026-09, mesma mecânica do IA Command). */
     .empresa-badge {
       flex:none; display:flex; align-items:center; gap:6px;
       border:1px solid var(--wa-border); border-radius:8px;
       background:rgba(0,217,163,.1); color:var(--wa-accent);
       font-size:11.5px; font-weight:700; padding:5px 10px;
-      max-width:60%;
+      max-width:60%; position:relative;
+      font-family:inherit; cursor:default;
     }
+    .empresa-badge.trocavel { cursor:pointer; }
+    .empresa-badge.trocavel:hover { background:rgba(0,217,163,.18); }
     .empresa-badge .icon { width:13px; height:13px; flex:none; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
     .empresa-badge .label { min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .empresa-badge .caret { width:10px; height:10px; flex:none; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; display:none; }
+    .empresa-badge.trocavel .caret { display:block; }
+    .empresa-dropdown {
+      display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:20;
+      min-width:200px; background:var(--wa-header); border:1px solid var(--wa-border);
+      border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.4); overflow:hidden;
+    }
+    .empresa-dropdown.open { display:block; }
+    .empresa-dropdown button {
+      display:block; width:100%; text-align:left; padding:9px 12px; border:none;
+      background:transparent; color:var(--wa-text); font-size:12.5px; font-weight:600;
+      cursor:pointer;
+    }
+    .empresa-dropdown button:hover { background:var(--wa-sidebar-hover); color:var(--wa-accent); }
     .fila-tabs { display:flex; gap:4px; background:rgba(0,0,0,.2); border:1px solid var(--wa-border); border-radius:8px; padding:3px; margin-bottom:8px; }
     .fila-tab { flex:1; border:none; background:transparent; padding:6px 8px; border-radius:6px; font-size:11.5px; font-weight:700; color:var(--wa-text-secondary); cursor:pointer; text-align:center; }
     .fila-tab.ativo { background:var(--wa-accent); color:#04140f; }
@@ -56,6 +72,17 @@
     .fila-refresh-row select { font-size:11px; border:1px solid var(--wa-border); border-radius:6px; padding:4px 6px; background:var(--wa-panel); color:var(--wa-text); }
     .fila-contador { font-size:11px; color:var(--wa-text-tertiary); }
     .fila-proxima-atualizacao { font-size:10.5px; color:var(--wa-text-tertiary); font-variant-numeric:tabular-nums; }
+    .fila-preferencia-ia { display:none; align-items:center; justify-content:space-between; gap:10px; margin-top:9px; padding:8px 9px; border:1px solid var(--wa-border); border-radius:8px; background:rgba(255,255,255,.03); }
+    .fila-preferencia-ia.visivel { display:flex; }
+    .fila-preferencia-ia-texto { min-width:0; }
+    .fila-preferencia-ia-titulo { font-size:11.5px; font-weight:800; color:var(--wa-text); }
+    .fila-preferencia-ia-sub { font-size:10.5px; color:var(--wa-text-tertiary); margin-top:2px; }
+    .switch-ia { position:relative; width:38px; height:22px; flex:none; }
+    .switch-ia input { opacity:0; width:0; height:0; }
+    .switch-ia span { position:absolute; inset:0; border-radius:999px; background:rgba(255,255,255,.16); border:1px solid var(--wa-border); cursor:pointer; transition:.18s ease; }
+    .switch-ia span::before { content:""; position:absolute; width:16px; height:16px; left:2px; top:2px; border-radius:50%; background:var(--wa-text-secondary); transition:.18s ease; }
+    .switch-ia input:checked + span { background:rgba(0,217,163,.24); border-color:var(--wa-accent); }
+    .switch-ia input:checked + span::before { transform:translateX(16px); background:var(--wa-accent); }
 
     .fila-atualizar-btn {
       width:100%; margin-top:8px; padding:7px 10px; border-radius:8px;
@@ -177,13 +204,48 @@
     .composer-btn.enviar { background:var(--wa-accent); border-color:var(--wa-accent); color:#04140f; }
     .composer-hint { font-size:11px; color:var(--wa-text-tertiary); margin-top:5px; }
 
+    .radar-shell.pesquisa-aberta { grid-template-columns:360px minmax(0,1fr) 390px; }
+    .chat-header-actions { display:flex; align-items:center; gap:6px; }
+    .chat-header-action {
+      flex:none; height:26px; border-radius:7px; border:1px solid var(--wa-border);
+      background:rgba(255,255,255,.03); color:var(--wa-text-secondary); cursor:pointer;
+      display:flex; align-items:center; gap:6px; justify-content:center; font-size:12px; font-weight:700;
+      padding:0 9px; transition:background .15s ease, color .15s ease;
+    }
+    .chat-header-action:hover, .chat-header-action.ativo { background:rgba(0,217,163,.12); color:var(--wa-accent); }
+    .pesquisa-col { display:none; min-width:0; min-height:0; border-left:1px solid var(--wa-border); background:#0f191f; flex-direction:column; }
+    .radar-shell.pesquisa-aberta .pesquisa-col { display:flex; }
+    .pesquisa-head { flex:none; padding:12px 14px; border-bottom:1px solid var(--wa-border); background:var(--wa-header); display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .pesquisa-title { font-size:13px; font-weight:800; color:var(--wa-text); }
+    .pesquisa-subtitle { font-size:10.5px; color:var(--wa-text-tertiary); margin-top:2px; }
+    .pesquisa-close { width:26px; height:26px; border-radius:7px; border:1px solid var(--wa-border); background:rgba(255,255,255,.03); color:var(--wa-text-secondary); cursor:pointer; }
+    .pesquisa-tabs { flex:none; display:flex; gap:4px; padding:8px 12px; border-bottom:1px solid var(--wa-border); background:rgba(0,0,0,.12); }
+    .pesquisa-tab { flex:1; border:1px solid var(--wa-border); border-radius:7px; background:rgba(255,255,255,.03); color:var(--wa-text-secondary); font-size:11.5px; font-weight:800; padding:7px 8px; cursor:pointer; }
+    .pesquisa-tab.ativo { background:rgba(0,217,163,.13); color:var(--wa-accent); border-color:rgba(0,217,163,.32); }
+    .pesquisa-body { flex:1; min-height:0; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px; }
+    .pesquisa-empty { color:var(--wa-text-tertiary); font-size:12.5px; line-height:1.45; padding:14px; border:1px dashed var(--wa-border); border-radius:8px; }
+    .pesquisa-loading { color:var(--wa-text-tertiary); font-size:12.5px; padding:14px; }
+    .pesquisa-card { border:1px solid var(--wa-border); border-radius:8px; background:rgba(255,255,255,.035); padding:10px; }
+    .pesquisa-card-title { font-size:12px; font-weight:800; color:var(--wa-text); margin-bottom:6px; }
+    .pesquisa-meta { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:7px; }
+    .pesquisa-pill { font-size:10px; font-weight:800; padding:2px 7px; border-radius:99px; background:rgba(0,217,163,.11); color:var(--wa-accent); border:1px solid rgba(0,217,163,.25); }
+    .pesquisa-text { font-size:11.5px; color:var(--wa-text-secondary); line-height:1.45; white-space:pre-wrap; }
+    .pesquisa-link { display:block; color:var(--wa-accent); font-size:11.5px; font-weight:700; text-decoration:none; line-height:1.35; margin-top:6px; word-break:break-word; }
+    .pesquisa-link:hover { text-decoration:underline; }
+    .pesquisa-pos { border-top:1px solid var(--wa-border); margin-top:8px; padding-top:8px; display:flex; flex-direction:column; gap:6px; }
+    .pesquisa-pos-item { font-size:11px; color:var(--wa-text-secondary); line-height:1.35; background:rgba(0,0,0,.16); border-radius:7px; padding:7px; }
+    .pesquisa-pos-data { color:var(--wa-text-tertiary); font-weight:800; font-size:10px; }
+
     .error-banner { display:none; position:fixed; top:16px; right:16px; background:#fee2e2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:10px 14px; font-size:13px; z-index:200; max-width:360px; box-shadow:var(--shadow-sm); }
     .toast-status { position:fixed; top:16px; right:16px; background:var(--wa-header); color:var(--wa-text); border:1px solid var(--wa-border); border-radius:8px; padding:8px 14px; font-size:12px; box-shadow:0 4px 12px rgba(0,0,0,.4); display:none; z-index:200; }
 
     @media (max-width: 900px) {
       .radar-shell { grid-template-columns:1fr; }
+      .radar-shell.pesquisa-aberta { grid-template-columns:1fr; }
       .fila-col.chat-aberto { display:none; }
       .chat-col.chat-fechado { display:none; }
+      .radar-shell.pesquisa-aberta .chat-col { display:none; }
+      .radar-shell.pesquisa-aberta .pesquisa-col { display:flex; }
     }
 
     /* Modo tela cheia (chat puro, sem moldura do IAHub) — padrão
@@ -223,17 +285,19 @@
     </div>
 
     <div class="page-content radar-content">
-      <div class="radar-shell">
+      <div class="radar-shell" id="radar-shell">
 
         <!-- Coluna esquerda: fila (= lista de conversas) -->
         <aside class="fila-col" id="fila-col">
           <div class="fila-head">
             <div class="fila-head-top">
               <div class="fila-titulo">Fila de Chamados</div>
-              <div class="empresa-badge" id="empresa-badge" style="display:none">
+              <button type="button" class="empresa-badge" id="empresa-badge" style="display:none" onclick="toggleEmpresaDropdown()">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>
                 <span class="label" id="empresa-badge-label"></span>
-              </div>
+                <svg class="caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                <div class="empresa-dropdown" id="empresa-dropdown"></div>
+              </button>
             </div>
             <div class="fila-tabs">
               <button class="fila-tab" id="tab-geral" onclick="setModoFila(false)">Fila geral</button>
@@ -258,6 +322,16 @@
                 <option value="900">15 min</option>
               </select>
             </div>
+            <div class="fila-preferencia-ia" id="pre-analise-preferencia">
+              <div class="fila-preferencia-ia-texto">
+                <div class="fila-preferencia-ia-titulo">Pré-análise IA</div>
+                <div class="fila-preferencia-ia-sub" id="pre-analise-preferencia-sub">Ao iniciar análise</div>
+              </div>
+              <label class="switch-ia" title="Gerar resposta automática da IA ao iniciar uma análise">
+                <input type="checkbox" id="preAnaliseAutomaticaToggle" onchange="salvarPreferenciaPreAnalise()">
+                <span></span>
+              </label>
+            </div>
           </div>
           <div id="fila-aviso"></div>
           <div class="fila-lista" id="fila-lista"><div class="fila-empty">Carregando…</div></div>
@@ -276,7 +350,10 @@
                 <div class="chat-header-numero" id="chat-header-numero">—</div>
                 <div class="chat-header-titulo" id="chat-header-titulo">—</div>
               </div>
-              <button class="chat-header-toggle" id="chat-header-toggle" type="button" title="Recolher detalhes" onclick="toggleChatHeader()">▾</button>
+              <div class="chat-header-actions">
+                <button class="chat-header-action" id="pesquisa-toggle-btn" type="button" title="Abrir pesquisa técnica" onclick="togglePesquisaTecnica()">Pesquisa</button>
+                <button class="chat-header-toggle" id="chat-header-toggle" type="button" title="Recolher detalhes" onclick="toggleChatHeader()">▾</button>
+              </div>
             </div>
             <div class="chat-header-detalhes" id="chat-header-detalhes">
               <div class="chat-header-linha" id="chat-header-linha"></div>
@@ -298,6 +375,23 @@
             <div class="composer-hint">Ctrl+Enter para enviar · anexe prints, logs e fonte relacionados ao problema</div>
           </div>
         </section>
+
+        <aside class="pesquisa-col" id="pesquisa-col">
+          <div class="pesquisa-head">
+            <div>
+              <div class="pesquisa-title">Pesquisa do Analista</div>
+              <div class="pesquisa-subtitle" id="pesquisa-subtitle">Base interna e trilhas técnicas</div>
+            </div>
+            <button class="pesquisa-close" type="button" title="Fechar pesquisa" onclick="fecharPesquisaTecnica()">x</button>
+          </div>
+          <div class="pesquisa-tabs">
+            <button class="pesquisa-tab ativo" id="pesquisa-tab-interna" type="button" onclick="setPesquisaAba('interna')">Base interna</button>
+            <button class="pesquisa-tab" id="pesquisa-tab-web" type="button" onclick="setPesquisaAba('web')">Pesquisa técnica</button>
+          </div>
+          <div class="pesquisa-body" id="pesquisa-body">
+            <div class="pesquisa-empty">Selecione um chamado e abra a pesquisa para ver chamados semelhantes, posicionamentos e fontes técnicas sugeridas.</div>
+          </div>
+        </aside>
 
       </div>
     </div>
@@ -353,6 +447,9 @@
     let enviando = false;
     let filaCache = [];
     let ultimaPerguntaPendente = null; // contexto da pergunta associada à próxima resposta da IA (card "Pergunta")
+    let pesquisaAberta = false;
+    let pesquisaAbaAtual = 'interna';
+    const pesquisaCachePorChamado = new Map();
 
     function showError(msg) {
       const el = document.getElementById('error-banner');
@@ -436,15 +533,19 @@
       carregarFila();
     }
 
-    async function carregarFila() {
+    async function carregarFila({ forceSync = false } = {}) {
       const empresaId = empresaIdAtual();
       if (!empresaId) return;
       try {
         const params = { apenas_minha: modoMinhaFila ? 'true' : 'false', filtro_sla: filtroSlaAtual };
         if (!modoExterno) params.empresa_id = empresaId;
+        if (forceSync) params.force_sync = 'true';
         const qs = new URLSearchParams(params);
         const resultado = await api(`/radar/fila?${qs.toString()}`);
         filaCache = resultado.chamados;
+        if (resultado.sincronizacao?.status === 'em_andamento') {
+          showToast('Sincronizando SoftExpert em segundo plano...');
+        }
 
         const avisoEl = document.getElementById('fila-aviso');
         avisoEl.innerHTML = resultado.avisoSemVinculo
@@ -483,7 +584,7 @@
       btn.disabled = true;
       btn.classList.add('carregando');
       try {
-        await carregarFila();
+        await carregarFila({ forceSync: true });
       } finally {
         btn.disabled = false;
         btn.classList.remove('carregando');
@@ -495,7 +596,7 @@
       }
     }
 
-    // ── Seleção de chamado → abre/reabre atendimento e carrega o chat ──────
+    // ── Seleção de chamado → inicia/reabre análise assistida e carrega o chat ──────
     async function selecionarChamado(chamadoId) {
       chamadoSelecionadoId = chamadoId;
       document.querySelectorAll('.fila-item').forEach(el => el.classList.remove('selecionado'));
@@ -513,11 +614,12 @@
 
       try {
         const qs = qsEmpresa(empresaId);
-        const resultado = await api(`/radar/chamados/${chamadoId}/abrir-atendimento${qs ? '?' + qs : ''}`, { method: 'POST' });
+        const resultado = await api(`/radar/chamados/${chamadoId}/iniciar-analise${qs ? '?' + qs : ''}`, { method: 'POST' });
         atendimentoAtualId = resultado.atendimentoId;
         await carregarMensagens();
+        if (pesquisaAberta) carregarPesquisaTecnica(chamadoId);
       } catch (err) {
-        showError('Não foi possível abrir o atendimento: ' + err.message);
+        showError('Não foi possível iniciar a análise: ' + err.message);
       }
     }
 
@@ -619,6 +721,126 @@
       } else {
         descricaoEl.style.display = 'none';
       }
+    }
+
+    function togglePesquisaTecnica() {
+      pesquisaAberta ? fecharPesquisaTecnica() : abrirPesquisaTecnica();
+    }
+
+    function abrirPesquisaTecnica() {
+      pesquisaAberta = true;
+      document.getElementById('radar-shell').classList.add('pesquisa-aberta');
+      document.getElementById('pesquisa-toggle-btn')?.classList.add('ativo');
+      if (chamadoSelecionadoId) carregarPesquisaTecnica(chamadoSelecionadoId);
+    }
+
+    function fecharPesquisaTecnica() {
+      pesquisaAberta = false;
+      document.getElementById('radar-shell').classList.remove('pesquisa-aberta');
+      document.getElementById('pesquisa-toggle-btn')?.classList.remove('ativo');
+    }
+
+    function setPesquisaAba(aba) {
+      pesquisaAbaAtual = aba === 'web' ? 'web' : 'interna';
+      document.getElementById('pesquisa-tab-interna').classList.toggle('ativo', pesquisaAbaAtual === 'interna');
+      document.getElementById('pesquisa-tab-web').classList.toggle('ativo', pesquisaAbaAtual === 'web');
+      if (chamadoSelecionadoId && pesquisaCachePorChamado.has(chamadoSelecionadoId)) {
+        renderizarPesquisaTecnica(pesquisaCachePorChamado.get(chamadoSelecionadoId));
+      }
+    }
+
+    async function carregarPesquisaTecnica(chamadoId) {
+      const empresaId = empresaIdAtual();
+      if (!empresaId || !chamadoId) return;
+      if (pesquisaCachePorChamado.has(chamadoId)) {
+        renderizarPesquisaTecnica(pesquisaCachePorChamado.get(chamadoId));
+        return;
+      }
+      document.getElementById('pesquisa-body').innerHTML = '<div class="pesquisa-loading">Buscando chamados parecidos e trilhas técnicas...</div>';
+      try {
+        const qs = qsEmpresa(empresaId);
+        const resultado = await api(`/radar/chamados/${chamadoId}/pesquisa-tecnica${qs ? '?' + qs : ''}`);
+        pesquisaCachePorChamado.set(chamadoId, resultado);
+        renderizarPesquisaTecnica(resultado);
+      } catch (err) {
+        document.getElementById('pesquisa-body').innerHTML = `<div class="pesquisa-empty">Não foi possível carregar a pesquisa: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderizarPesquisaTecnica(resultado) {
+      const pesquisa = resultado?.pesquisa || {};
+      const relacionados = resultado?.relacionados || [];
+      const body = document.getElementById('pesquisa-body');
+      const subtitulo = document.getElementById('pesquisa-subtitle');
+      subtitulo.textContent = pesquisa.perfil?.nome
+        ? `${pesquisa.perfil.nome} · confiança ${pesquisa.confianca || 'baixa'}`
+        : 'Base interna e trilhas técnicas';
+
+      body.innerHTML = pesquisaAbaAtual === 'web'
+        ? renderizarAbaPesquisaWeb(pesquisa)
+        : renderizarAbaBaseInterna(relacionados);
+    }
+
+    function renderizarAbaBaseInterna(relacionados) {
+      if (!relacionados.length) {
+        return '<div class="pesquisa-empty">Nenhum chamado semelhante encontrado na base interna para este contexto.</div>';
+      }
+      return relacionados.map((r) => {
+        const c = r.chamado || r;
+        const titulo = c.titulo || c.assunto || c.breveDescricao || '(sem título)';
+        const meta = [
+          c.numero ? `#${escapeHtml(c.numero)}` : null,
+          r.score != null ? `score ${escapeHtml(r.score)}` : null,
+          c.produto || c.familia || c.modulo ? escapeHtml([c.produto, c.familia, c.modulo].filter(Boolean).join(' / ')) : null,
+        ].filter(Boolean).map(v => `<span class="pesquisa-pill">${v}</span>`).join('');
+        const descricao = c.solucaoAplicada || c.descricao || c.breveDescricao || c.assunto || '';
+        const motivos = r.motivos?.length ? `<div class="pesquisa-text"><strong>Similaridade:</strong> ${escapeHtml(r.motivos.join('; '))}</div>` : '';
+        const pos = (r.posicionamentos || []).slice(0, 4).map(p => `
+          <div class="pesquisa-pos-item">
+            <div class="pesquisa-pos-data">${escapeHtml(formatarData(p.dataPosicionamento))} · ${escapeHtml(p.tecnicoNomeOrigem || p.autorNome || 'sem autor')}</div>
+            ${escapeHtml(p.descricao || p.resultado || p.assunto || 'sem texto')}
+          </div>
+        `).join('');
+        return `
+          <div class="pesquisa-card">
+            <div class="pesquisa-card-title">${escapeHtml(titulo)}</div>
+            <div class="pesquisa-meta">${meta}</div>
+            ${descricao ? `<div class="pesquisa-text">${escapeHtml(descricao)}</div>` : ''}
+            ${motivos}
+            ${pos ? `<div class="pesquisa-pos">${pos}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderizarAbaPesquisaWeb(pesquisa) {
+      const header = `
+        <div class="pesquisa-card">
+          <div class="pesquisa-card-title">${escapeHtml(pesquisa.perfil?.nome || 'Pesquisa técnica')}</div>
+          <div class="pesquisa-meta">
+            <span class="pesquisa-pill">${escapeHtml(pesquisa.modo === 'web' ? 'web automática' : 'links sugeridos')}</span>
+            <span class="pesquisa-pill">confiança ${escapeHtml(pesquisa.confianca || 'baixa')}</span>
+          </div>
+          <div class="pesquisa-text">${escapeHtml(pesquisa.perfil?.instrucao || 'Use as fontes abaixo como trilha de investigação e valide antes de aplicar.')}</div>
+          ${pesquisa.erroBusca ? `<div class="pesquisa-text">Busca automática indisponível: ${escapeHtml(pesquisa.erroBusca)}</div>` : ''}
+        </div>
+      `;
+      const resultados = (pesquisa.resultados || []).map(r => `
+        <div class="pesquisa-card">
+          <div class="pesquisa-card-title">${escapeHtml(r.titulo || r.url || 'Resultado')}</div>
+          <div class="pesquisa-meta"><span class="pesquisa-pill">${escapeHtml(r.fonte || 'fonte')}</span></div>
+          ${r.trecho ? `<div class="pesquisa-text">${escapeHtml(r.trecho)}</div>` : ''}
+          ${r.url ? `<a class="pesquisa-link" href="${escapeHtml(r.url)}" target="_blank" rel="noopener">Abrir fonte</a>` : ''}
+        </div>
+      `).join('');
+      const links = (pesquisa.links || []).slice(0, 10).map(l => `
+        <div class="pesquisa-card">
+          <div class="pesquisa-card-title">${escapeHtml(l.fonte || 'Consulta')}</div>
+          <div class="pesquisa-text">${escapeHtml(l.consulta || '')}</div>
+          <a class="pesquisa-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener">Abrir pesquisa</a>
+        </div>
+      `).join('');
+      return header + (resultados || links || '<div class="pesquisa-empty">Nenhuma trilha técnica foi gerada para este chamado.</div>');
     }
 
     // ── Chat (coluna direita) ────────────────────────────────────────────
@@ -867,11 +1089,55 @@
       scheduleAutoRefresh();
     }
 
-    // Badge fixo de empresa (tenant) — só informativo, sem troca (ver CSS
-    // .empresa-badge). Em modo logado o nome já está em window._iahubEmpresa
-    // (populado por auth.js); em modo externo não há esse objeto, então
-    // busca via /whoami (a sessão externa já resolve a empresa pelo token,
-    // isto só traduz o id em nome para exibição).
+    async function restaurarPreferenciaPreAnalise() {
+      const empresaId = empresaIdAtual();
+      const box = document.getElementById('pre-analise-preferencia');
+      const toggle = document.getElementById('preAnaliseAutomaticaToggle');
+      const sub = document.getElementById('pre-analise-preferencia-sub');
+      if (!empresaId || !box || !toggle) return;
+      try {
+        const qs = qsEmpresa(empresaId);
+        const pref = await api(`/radar/minhas-preferencias${qs ? '?' + qs : ''}`);
+        if (!pref.consultorEncontrado) {
+          box.classList.remove('visivel');
+          return;
+        }
+        toggle.checked = pref.preAnaliseAutomatica !== false;
+        sub.textContent = toggle.checked ? 'Ao iniciar análise' : 'Somente quando eu perguntar';
+        box.classList.add('visivel');
+      } catch (_) {
+        box.classList.remove('visivel');
+      }
+    }
+
+    async function salvarPreferenciaPreAnalise() {
+      const empresaId = empresaIdAtual();
+      const toggle = document.getElementById('preAnaliseAutomaticaToggle');
+      const sub = document.getElementById('pre-analise-preferencia-sub');
+      if (!empresaId || !toggle) return;
+      const valorAnterior = !toggle.checked;
+      sub.textContent = toggle.checked ? 'Ao iniciar análise' : 'Somente quando eu perguntar';
+      try {
+        const qs = qsEmpresa(empresaId);
+        const pref = await api(`/radar/minhas-preferencias${qs ? '?' + qs : ''}`, {
+          method: 'PUT',
+          body: JSON.stringify({ preAnaliseAutomatica: toggle.checked }),
+        });
+        toggle.checked = pref.preAnaliseAutomatica !== false;
+        sub.textContent = toggle.checked ? 'Ao iniciar análise' : 'Somente quando eu perguntar';
+        showToast(toggle.checked ? 'Pré-análise automática ligada.' : 'Pré-análise automática desligada.');
+      } catch (err) {
+        toggle.checked = valorAnterior;
+        sub.textContent = toggle.checked ? 'Ao iniciar análise' : 'Somente quando eu perguntar';
+        showError('Não foi possível salvar a preferência da IA: ' + err.message);
+      }
+    }
+
+    // Badge de empresa (tenant). Em modo logado (dentro do Hub) continua só
+    // informativo — a empresa é a do Hub, sem troca aqui. Em modo externo
+    // (login por telefone) vira clicável quando /whoami retorna
+    // outrasEmpresas não-vazio (telefone com consultor em mais de uma
+    // empresa) — 2026-09, mesma mecânica de troca do IA Command.
     async function preencherBadgeEmpresa() {
       const badge = document.getElementById('empresa-badge');
       const label = document.getElementById('empresa-badge-label');
@@ -880,6 +1146,10 @@
         if (modoExterno) {
           const info = await api('/whoami');
           nome = info.empresaNome;
+          if (Array.isArray(info.outrasEmpresas) && info.outrasEmpresas.length > 0) {
+            badge.classList.add('trocavel');
+            montarEmpresaDropdown(info.outrasEmpresas);
+          }
         } else {
           nome = window._iahubEmpresa?.nome || window._iahubEmpresa?.razao_social || null;
         }
@@ -889,6 +1159,50 @@
       if (!nome) return;
       label.textContent = nome;
       badge.style.display = 'flex';
+    }
+
+    function montarEmpresaDropdown(outrasEmpresas) {
+      const dropdown = document.getElementById('empresa-dropdown');
+      dropdown.innerHTML = '';
+      outrasEmpresas.forEach(emp => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = emp.nome;
+        btn.onclick = (e) => { e.stopPropagation(); trocarEmpresaExterna(emp.id); };
+        dropdown.appendChild(btn);
+      });
+    }
+
+    function toggleEmpresaDropdown() {
+      if (!modoExterno) return;
+      const badge = document.getElementById('empresa-badge');
+      if (!badge.classList.contains('trocavel')) return;
+      document.getElementById('empresa-dropdown').classList.toggle('open');
+    }
+    document.addEventListener('click', (e) => {
+      const badge = document.getElementById('empresa-badge');
+      if (badge && !badge.contains(e.target)) {
+        document.getElementById('empresa-dropdown')?.classList.remove('open');
+      }
+    });
+
+    // Troca a empresa ativa da sessão externa SEM pedir novo código — o
+    // backend (login-externo-service.trocarEmpresa) reconfirma que o
+    // telefone já validado tem consultor ativo na empresa de destino antes
+    // de emitir o token novo. Recarrega a tela inteira com o novo token para
+    // repartir de um estado limpo (fila/análise aberta são de outra
+    // empresa, não faz sentido tentar preservar seleção atual).
+    async function trocarEmpresaExterna(empresaId) {
+      try {
+        const body = await api('/trocar-empresa', {
+          method: 'POST',
+          body: JSON.stringify({ empresaId }),
+        });
+        localStorage.setItem('svc_token_externo', body.token);
+        location.reload();
+      } catch (err) {
+        showError('Não foi possível trocar de empresa: ' + err.message);
+      }
     }
 
     async function iniciar() {
@@ -907,6 +1221,7 @@
       }
       preencherBadgeEmpresa();
       await restaurarPreferenciaAutoRefresh();
+      await restaurarPreferenciaPreAnalise();
       carregarFila();
     }
 

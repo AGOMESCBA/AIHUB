@@ -1,4 +1,4 @@
-// Orquestra a fila do analista ("radar") e a abertura de diálogo com a IA a
+// Orquestra a fila do analista ("radar") e a análise assistida com IA a
 // partir de um chamado da fila — ponte entre a base histórica importada
 // (chamados/posicionamentos) e o chat existente (atendimentos/mensagens).
 
@@ -99,9 +99,20 @@ function getFilaPorConsultorId(empresaId, consultorId, { filtroSla = 'todos', li
 function _formatarConteudoBruto(chamado, posicionamentos) {
   const linhas = [
     `Chamado SoftExpert #${chamado.numero}`,
+    chamado.produto ? `Produto: ${chamado.produto}` : null,
+    chamado.familia ? `Família: ${chamado.familia}` : null,
+    chamado.modulo ? `Módulo: ${chamado.modulo}` : null,
+    chamado.servico ? `Serviço: ${chamado.servico}` : null,
+    chamado.tipoChamadoFinal || chamado.tipoChamado ? `Tipo: ${chamado.tipoChamadoFinal || chamado.tipoChamado}` : null,
+    chamado.natureza ? `Natureza: ${chamado.natureza}` : null,
+    chamado.nivel ? `Nível: ${chamado.nivel}` : null,
     chamado.titulo ? `Título: ${chamado.titulo}` : null,
     chamado.assunto ? `Assunto: ${chamado.assunto}` : null,
-    chamado.breveDescricao ? `Descrição: ${chamado.breveDescricao}` : null,
+    chamado.breveDescricao ? `Resumo: ${chamado.breveDescricao}` : null,
+    chamado.descricao ? `Descrição completa: ${chamado.descricao}` : null,
+    chamado.informacoesAdicionais ? `Informações adicionais: ${chamado.informacoesAdicionais}` : null,
+    chamado.observacoes ? `Observações: ${chamado.observacoes}` : null,
+    chamado.solucaoAplicada ? `Solução aplicada registrada: ${chamado.solucaoAplicada}` : null,
     chamado.slaPrazo ? `Prazo (SLA): ${chamado.slaPrazo}` : null,
     chamado.statusEncerramento ? `Status: ${chamado.statusEncerramento}` : null,
     '',
@@ -118,13 +129,21 @@ function _formatarConteudoBruto(chamado, posicionamentos) {
   return linhas.join('\n');
 }
 
+function buscarRelacionados(empresaId, chamadoId, { limite = 8 } = {}) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!chamadoId) throw new Error('chamadoId é obrigatório.');
+  return {
+    chamados: chamadoRepo.listarChamadosRelacionados(empresaId, chamadoId, { limite }),
+  };
+}
+
 /**
- * Reabre o atendimento existente para este chamado (mesma referência
- * externa) ou cria um novo já com o conteúdo do chamado + posicionamentos
- * formatado como primeira mensagem — o analista não precisa copiar/colar
- * nada, o diálogo com a IA já começa com todo o histórico em mãos.
+ * Inicia/reabre a análise assistida por IA para um chamado já existente no
+ * SoftExpert. Não abre chamado na origem: cria apenas a sessão interna de
+ * conversa/investigação do Radar, com conteúdo do chamado + posicionamentos
+ * formatados como primeira mensagem.
  */
-function abrirOuCriarAtendimento(empresaId, chamadoId, { usuarioIdIahub, consultorId } = {}) {
+function iniciarAnalise(empresaId, chamadoId, { usuarioIdIahub, consultorId, preAnaliseAutomatica } = {}) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   if (!chamadoId) throw new Error('chamadoId é obrigatório.');
 
@@ -167,27 +186,31 @@ function abrirOuCriarAtendimento(empresaId, chamadoId, { usuarioIdIahub, consult
   // chamado na origem) para o armazenamento local ANTES da pré-análise —
   // pedido do usuário, 2026-09: a IA deve ter acesso ao mesmo material que
   // o analista vê, não só ao texto do chamado. Roda em background (nunca
-  // atrasa a resposta HTTP de "abrir atendimento"); a pré-análise só começa
+  // atrasa a resposta HTTP de "iniciar análise"); a pré-análise só começa
   // depois de tentar sincronizar, para já poder correlacionar os anexos
   // desde a primeira resposta da IA.
-  const preAnaliseHabilitada = consultor?.preAnaliseAutomatica !== false;
+  const preAnaliseHabilitada = preAnaliseAutomatica !== undefined
+    ? !!preAnaliseAutomatica
+    : !!consultor && consultor.preAnaliseAutomatica !== false;
   anexosSoftExpertService.sincronizarAnexosParaAtendimento(empresaId, chamadoId, atendimento.id)
     .catch(err => {
       console.error(`[IA Service] Sincronização de anexos do SoftExpert falhou (chamado ${chamado.numero}):`, err.message);
+      return [];
     })
-    .finally(() => {
-      // Pré-análise automática ao ABRIR o chamado (pedido do usuário,
+    .then((anexosSincronizados = []) => {
+      // Pré-análise automática ao iniciar análise do chamado (pedido do usuário,
       // 2026-09): configurável por consultor (consultores.pre_analise_automatica,
       // default true) — se ligada, a IA já analisa sozinha assim que o
-      // consultor seleciona um chamado que ainda não tinha atendimento; se
+      // consultor seleciona um chamado que ainda não tinha sessão interna; se
       // desligada, o chat abre só com o conteúdo bruto do chamado, esperando
       // o consultor perguntar manualmente. Distinto (e adicional) do gatilho
       // já existente na IMPORTAÇÃO (historical-import-service.js), que
       // dispara independente dessa config — os dois pontos de entrada
       // continuam coexistindo. Best-effort: erro aqui nunca derruba a
-      // abertura do atendimento, só fica registrado em log.
+      // abertura da sessão interna, só fica registrado em log.
       if (!preAnaliseHabilitada) return;
-      investigacaoService.processarPreAnalise(empresaId, atendimento.id).catch(err => {
+      const anexoIds = anexosSincronizados.map(a => a.id).filter(Boolean);
+      investigacaoService.processarPreAnalise(empresaId, atendimento.id, { anexoIds }).catch(err => {
         console.error(`[IA Service] Pré-análise automática (abertura no radar) falhou (chamado ${chamado.numero}):`, err.message);
       });
     });
@@ -195,4 +218,12 @@ function abrirOuCriarAtendimento(empresaId, chamadoId, { usuarioIdIahub, consult
   return { atendimento, reaberto: false };
 }
 
-module.exports = { getFila, getFilaPorConsultorId, abrirOuCriarAtendimento, getConfig, salvarConfig };
+module.exports = {
+  getFila,
+  getFilaPorConsultorId,
+  iniciarAnalise,
+  abrirOuCriarAtendimento: iniciarAnalise,
+  buscarRelacionados,
+  getConfig,
+  salvarConfig,
+};

@@ -8,6 +8,13 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+// SVC_DATA_CRYPTO_KEY (criptografia em repouso das chaves de IA, ver
+// ai-config-repository.js) precisa estar disponível para o teste de
+// isolamento multiempresa de ai_config mais abaixo — carrega o .env real do
+// projeto, igual ao restante do sistema faz via require('dotenv').config()
+// no bootstrap do servidor (este script standalone não passa por lá).
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '..', '.env') });
+
 const dbTmpPath = path.join(os.tmpdir(), `ia-service-etapa2-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
 
 const database = require('../backend/database');

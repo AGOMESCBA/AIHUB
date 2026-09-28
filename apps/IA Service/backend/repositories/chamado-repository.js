@@ -129,6 +129,25 @@ function getChamado(empresaId, chamadoId) {
   return _chamadoParaDominio(db.prepare(`SELECT * FROM chamados WHERE id = ? AND empresa_id = ?`).get(chamadoId, Number(empresaId)));
 }
 
+function getChamadoPorNumero(empresaId, numero, sistemaOrigem) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!numero) return null;
+  const db = getDB();
+  const params = [Number(empresaId), String(numero)];
+  const condicoes = ['empresa_id = ?', 'numero = ?'];
+  if (sistemaOrigem) {
+    condicoes.push('sistema_origem = ?');
+    params.push(sistemaOrigem);
+  }
+  const row = db.prepare(`
+    SELECT * FROM chamados
+     WHERE ${condicoes.join(' AND ')}
+     ORDER BY data_abertura DESC
+     LIMIT 1
+  `).get(...params);
+  return _chamadoParaDominio(row);
+}
+
 function listarChamados(empresaId, filtros = {}) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
@@ -243,6 +262,90 @@ function listarPosicionamentosDoChamado(empresaId, chamadoId) {
   return rows.map(_posicionamentoParaDominio);
 }
 
+function _textoBuscaChamado(chamado, posicionamentos = []) {
+  return [
+    chamado.numero, chamado.produto, chamado.familia, chamado.modulo, chamado.servico,
+    chamado.tipoChamado, chamado.tipoChamadoSe, chamado.tipoChamadoFinal, chamado.natureza, chamado.nivel,
+    chamado.titulo, chamado.assunto, chamado.breveDescricao, chamado.descricao,
+    chamado.informacoesAdicionais, chamado.observacoes, chamado.solucaoAplicada,
+    ...posicionamentos.flatMap(p => [p.assunto, p.descricao, p.resultado, p.situacao, p.tipo, p.motivo]),
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function _tokensDeBusca(chamado) {
+  const texto = [
+    chamado.produto, chamado.familia, chamado.modulo, chamado.servico,
+    chamado.tipoChamado, chamado.tipoChamadoFinal, chamado.natureza,
+    chamado.titulo, chamado.assunto, chamado.breveDescricao, chamado.descricao,
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  return [...new Set(texto
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(/\s+/)
+    .filter(t => t.length >= 4)
+    .filter(t => !new Set(['para', 'com', 'sem', 'erro', 'chamado', 'problema', 'sistema', 'cliente', 'usuario', 'usuarios', 'tela', 'processo']).has(t))
+  )].slice(0, 16);
+}
+
+function listarChamadosRelacionados(empresaId, chamadoId, { limite = 8 } = {}) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!chamadoId) throw new Error('chamadoId é obrigatório.');
+
+  const atual = getChamado(empresaId, chamadoId);
+  if (!atual) throw new Error('Chamado não encontrado.');
+
+  const db = getDB();
+  const rows = db.prepare(`
+    SELECT * FROM chamados
+     WHERE empresa_id = ? AND id != ?
+     ORDER BY data_abertura DESC
+     LIMIT 1200
+  `).all(Number(empresaId), chamadoId).map(_chamadoParaDominio);
+
+  const tokens = _tokensDeBusca(atual);
+  const limiteSeguro = Math.min(Number(limite) || 8, 20);
+  const pontuados = [];
+
+  for (const candidato of rows) {
+    const posicionamentos = listarPosicionamentosDoChamado(empresaId, candidato.id);
+    const texto = _textoBuscaChamado(candidato, posicionamentos)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    let score = 0;
+    const motivos = [];
+
+    if (atual.produto && candidato.produto === atual.produto) { score += 18; motivos.push(`Produto: ${candidato.produto}`); }
+    if (atual.familia && candidato.familia === atual.familia) { score += 14; motivos.push(`Família: ${candidato.familia}`); }
+    if (atual.modulo && candidato.modulo === atual.modulo) { score += 22; motivos.push(`Módulo: ${candidato.modulo}`); }
+    if (atual.servico && candidato.servico === atual.servico) { score += 10; motivos.push(`Serviço: ${candidato.servico}`); }
+    if (atual.tipoChamadoFinal && candidato.tipoChamadoFinal === atual.tipoChamadoFinal) { score += 6; motivos.push(`Tipo: ${candidato.tipoChamadoFinal}`); }
+    if (candidato.solucaoAplicada) { score += 8; motivos.push('Possui solução aplicada'); }
+    if (candidato.statusEncerramento === 'Encerrado') { score += 6; motivos.push('Chamado encerrado'); }
+
+    let tokensEncontrados = 0;
+    for (const token of tokens) {
+      if (texto.includes(token)) tokensEncontrados++;
+    }
+    if (tokensEncontrados) {
+      score += Math.min(tokensEncontrados * 3, 30);
+      motivos.push(`${tokensEncontrados} termo(s) em comum`);
+    }
+
+    if (score <= 0) continue;
+    pontuados.push({
+      chamado: candidato,
+      score,
+      motivos: motivos.slice(0, 5),
+      posicionamentos: posicionamentos.slice(-8),
+    });
+  }
+
+  return pontuados
+    .sort((a, b) => b.score - a.score || String(b.chamado.dataAbertura || '').localeCompare(String(a.chamado.dataAbertura || '')))
+    .slice(0, limiteSeguro);
+}
+
 function contarPosicionamentos(empresaId, filtros = {}) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
@@ -254,6 +357,6 @@ function contarPosicionamentos(empresaId, filtros = {}) {
 
 module.exports = {
   hashConteudo,
-  upsertChamado, getChamadoPorOid, getChamado, listarChamados, contarChamados,
-  upsertPosicionamento, listarPosicionamentosDoChamado, contarPosicionamentos,
+  upsertChamado, getChamadoPorOid, getChamado, getChamadoPorNumero, listarChamados, contarChamados,
+  upsertPosicionamento, listarPosicionamentosDoChamado, listarChamadosRelacionados, contarPosicionamentos,
 };

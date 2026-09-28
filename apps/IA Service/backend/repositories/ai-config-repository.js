@@ -1,8 +1,18 @@
 // Unico ponto de acesso SQL a tabela `ai_config` (chaves de provider de IA,
 // uma linha por empresa). Proprio do IA Service — nao compartilha com o
 // ai_config do IA Command (bancos fisicamente separados, ver database/index.js).
+//
+// Chaves de API gravadas CRIPTOGRAFADAS em repouso (AES-256-GCM via
+// crypto-envelope.js, mesma SVC_DATA_CRYPTO_KEY já usada para credenciais de
+// fontes históricas) — 2026-09, correção de segurança: até aqui eram gravadas
+// em texto plano no SQLite, único segredo do IA Service sem essa proteção
+// (config do Agente Local, senha de SQL Server etc. já usavam esse padrão).
+// decryptSecret nunca lança para valor ausente (encryptSecret já retorna null
+// para string vazia/null), então getConfig funciona igual antes de qualquer
+// chave existir.
 
 const { getDB } = require('../database');
+const cryptoEnvelope = require('../services/crypto-envelope');
 
 function _rowParaDominio(row) {
   if (!row) return null;
@@ -11,10 +21,10 @@ function _rowParaDominio(row) {
     empresaId: row.empresa_id,
     provedorPrimario: row.provedor_primario,
     fallbackOrdem: row.fallback_ordem,
-    groqApiKey: row.groq_api_key,
-    openaiApiKey: row.openai_api_key,
-    claudeApiKey: row.claude_api_key,
-    geminiApiKey: row.gemini_api_key,
+    groqApiKey: cryptoEnvelope.decryptSecret(row.groq_api_key),
+    openaiApiKey: cryptoEnvelope.decryptSecret(row.openai_api_key),
+    claudeApiKey: cryptoEnvelope.decryptSecret(row.claude_api_key),
+    geminiApiKey: cryptoEnvelope.decryptSecret(row.gemini_api_key),
     criadoEm: row.criado_em,
     atualizadoEm: row.atualizado_em,
   };
@@ -33,6 +43,15 @@ function salvarConfig(empresaId, dados) {
   const agora = new Date().toISOString();
   const existente = getConfig(empresaId);
 
+  // Criptografa ANTES de gravar — o COALESCE abaixo compara com a coluna
+  // crua do banco (já cifrada), então o valor novo também precisa estar
+  // cifrado para a comparação/substituição fazer sentido byte a byte (senão
+  // o COALESCE sempre "substituiria", pois um texto plano nunca é NULL).
+  const groqCifrado = cryptoEnvelope.encryptSecret(dados.groqApiKey);
+  const openaiCifrado = cryptoEnvelope.encryptSecret(dados.openaiApiKey);
+  const claudeCifrado = cryptoEnvelope.encryptSecret(dados.claudeApiKey);
+  const geminiCifrado = cryptoEnvelope.encryptSecret(dados.geminiApiKey);
+
   if (existente) {
     db.prepare(`
       UPDATE ai_config
@@ -46,10 +65,10 @@ function salvarConfig(empresaId, dados) {
     `).run(
       dados.provedorPrimario || existente.provedorPrimario,
       dados.fallbackOrdem || existente.fallbackOrdem,
-      dados.groqApiKey ?? null,
-      dados.openaiApiKey ?? null,
-      dados.claudeApiKey ?? null,
-      dados.geminiApiKey ?? null,
+      groqCifrado,
+      openaiCifrado,
+      claudeCifrado,
+      geminiCifrado,
       agora,
       Number(empresaId)
     );
@@ -64,10 +83,10 @@ function salvarConfig(empresaId, dados) {
       Number(empresaId),
       dados.provedorPrimario || 'groq',
       dados.fallbackOrdem || 'groq,openai,claude,gemini',
-      dados.groqApiKey ?? null,
-      dados.openaiApiKey ?? null,
-      dados.claudeApiKey ?? null,
-      dados.geminiApiKey ?? null,
+      groqCifrado,
+      openaiCifrado,
+      claudeCifrado,
+      geminiCifrado,
       agora,
       agora
     );

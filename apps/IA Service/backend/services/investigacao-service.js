@@ -12,6 +12,8 @@ const aiConfigService = require('./ai-config-service');
 const aiProviderClient = require('./ai-provider-client');
 const promptBuilder = require('./prompt-builder');
 const versaoFonteService = require('./versao-fonte-service');
+const chamadoRepo = require('../repositories/chamado-repository');
+const technicalResearchService = require('./technical-research-service');
 
 const MAX_TENTATIVAS_TIMEOUT = 2;
 
@@ -60,7 +62,7 @@ function _extrairFonteCorrigido(secoes) {
  * `automatico: true` (usado pela pré-análise automática do radar, ver
  * processarPreAnalise abaixo): NÃO grava uma mensagem de usuário nova — o
  * conteúdo do chamado já é a primeira mensagem do atendimento (gravada por
- * radar-service.abrirOuCriarAtendimento), então o "turno" aqui é só pedir à
+ * radar-service.iniciarAnalise), então o "turno" aqui é só pedir à
  * IA que analise o que já está no histórico. `texto` vira uma instrução
  * fixa, não uma mensagem do analista.
  */
@@ -69,6 +71,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
   if (!atendimento) throw new Error('Atendimento não encontrado nesta empresa.');
 
   let historico;
+  let mensagemUsuario = null;
   if (automatico) {
     // Nenhuma mensagem nova de usuário — analisa o histórico já existente
     // (conteúdo do chamado + posicionamentos, gravado na abertura do
@@ -77,7 +80,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
   } else {
     // Persiste a mensagem do usuário primeiro — mesmo que a IA falhe depois,
     // o turno do usuário (texto + anexos) fica registrado no histórico.
-    const mensagemUsuario = mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
+    mensagemUsuario = mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
       papel: 'user',
       conteudo: texto,
       usuarioId,
@@ -92,14 +95,45 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     .map(id => anexoRepo.getAnexo(empresaId, id))
     .filter(Boolean);
 
+  if (mensagemUsuario) {
+    for (const anexo of anexosDoTurno) {
+      anexoRepo.vincularMensagem(empresaId, anexo.id, mensagemUsuario.id);
+    }
+  }
+
   const anexosTextoDoTurno = anexosDoTurno.filter(a => a.conteudoExtraido);
   const anexosImagemDoTurno = anexosDoTurno.filter(a => a.mimeType?.startsWith('image/'));
+
+  let pesquisaTecnicaTexto = '';
+  try {
+    const chamado = atendimento.referenciaExterna
+      ? chamadoRepo.getChamadoPorNumero(empresaId, atendimento.referenciaExterna, atendimento.origem)
+      : null;
+    const relacionados = chamado
+      ? chamadoRepo.listarChamadosRelacionados(empresaId, chamado.id, { limite: 5 })
+      : [];
+    const pesquisa = await technicalResearchService.pesquisar({
+      chamado,
+      atendimento,
+      mensagens: historico,
+      anexos: anexosTextoDoTurno,
+      texto,
+    });
+    pesquisaTecnicaTexto = technicalResearchService.formatarContextoParaPrompt(pesquisa, relacionados);
+  } catch (err) {
+    pesquisaTecnicaTexto = [
+      '## Pesquisa técnica assistida',
+      `Pesquisa técnica indisponível nesta tentativa: ${err.message}`,
+      'Siga com as evidências locais do chamado e peça confirmação humana quando necessário.',
+    ].join('\n');
+  }
 
   const userPrompt = promptBuilder.buildUserPrompt({
     atendimento,
     mensagens: historico,
     anexosTextoDoTurno,
     mensagemAtual: texto,
+    pesquisaTecnicaTexto,
   });
 
   const imagens = [];
@@ -166,7 +200,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
   return mensagemAssistente;
 }
 
-const TEXTO_PRE_ANALISE = 'Este chamado acabou de ser alocado a um analista (primeiro posicionamento com retorno esperado do atendente, sem interação humana ainda além do texto original do chamado). Faça uma pré-análise inicial com base apenas no que está descrito acima — identifique o problema relatado, hipóteses prováveis de causa e uma sugestão de próximo passo. Deixe claro no nível de confiança que esta é uma análise preliminar, sem confirmação humana e sem anexos/prints do chamado (não disponíveis nesta etapa).';
+const TEXTO_PRE_ANALISE = 'Este chamado acabou de ser alocado a um analista (primeiro posicionamento com retorno esperado do atendente, sem interação humana ainda além do texto original do chamado). Faça uma pré-análise inicial com base no que está descrito acima e nos anexos sincronizados, quando existirem — identifique o problema relatado, hipóteses prováveis de causa e uma sugestão de próximo passo. Deixe claro no nível de confiança que esta é uma análise preliminar, sem confirmação humana.';
 
 /**
  * Pré-análise automática — disparada pela importação (ver
@@ -178,8 +212,13 @@ const TEXTO_PRE_ANALISE = 'Este chamado acabou de ser alocado a um analista (pri
  * o primeiro contato. Erros aqui NUNCA devem interromper a importação —
  * quem chama trata a falha como best-effort (log, sem propagar).
  */
-async function processarPreAnalise(empresaId, atendimentoId) {
-  return processarTurno(empresaId, atendimentoId, { texto: TEXTO_PRE_ANALISE, usuarioId: null, automatico: true });
+async function processarPreAnalise(empresaId, atendimentoId, { anexoIds = [] } = {}) {
+  return processarTurno(empresaId, atendimentoId, {
+    texto: TEXTO_PRE_ANALISE,
+    usuarioId: null,
+    anexoIds,
+    automatico: true,
+  });
 }
 
 module.exports = { processarTurno, processarPreAnalise, _extrairSecoes, _extrairNivelConfianca, _extrairFonteCorrigido };

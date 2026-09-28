@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Configuração de IA - IA Service</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#1d4ed8; --accent-light:#3b82f6; --accent-glow:rgba(29,78,216,.1); }
+    .sidebar-logo .logo-icon { background:var(--accent) !important; }
+
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:3px; }
+    .head-row { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px; }
+    .head-title { font-size:20px;font-weight:800;color:var(--text-hi);line-height:1.2; }
+    .head-sub { font-size:13px;color:var(--text-md);margin-top:4px;max-width:640px;line-height:1.5; }
+
+    .card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:22px;max-width:720px;margin-bottom:16px; }
+    .card-title { font-size:14px;font-weight:800;color:var(--text-hi);margin-bottom:4px; }
+    .card-desc { font-size:12.5px;color:var(--text-lo);margin-bottom:18px;line-height:1.5; }
+
+    .provider-row { display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 0;border-bottom:1px solid var(--border); }
+    .provider-row:last-child { border-bottom:none; }
+    .provider-name { font-size:13.5px;font-weight:700;color:var(--text-hi);display:flex;align-items:center;gap:8px; }
+    .provider-key-input { width:340px;max-width:100%; }
+    .provider-status { font-size:11px;font-weight:800;padding:2px 8px;border-radius:99px;white-space:nowrap; }
+    .provider-status.ok { background:#dcfce7;color:#15803d; }
+    .provider-status.env { background:#fef3c7;color:#92400e; }
+    .provider-status.off { background:var(--bg-base);color:var(--text-lo);border:1px solid var(--border); }
+
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+    .form-actions { display:flex; justify-content:flex-end; align-items:center; gap:10px; border-top:1px solid var(--border); padding-top:16px; margin-top:6px; }
+    .save-feedback { font-size:13px; color:var(--text-lo); margin-right:auto; }
+    .save-feedback.ok { color:#15803d; }
+    .save-feedback.fail { color:#b91c1c; }
+
+    .callout { background:rgba(29,78,216,.06);border:1px solid rgba(29,78,216,.2);border-radius:8px;padding:12px 14px;font-size:12.5px;color:var(--text-md);line-height:1.55;margin-bottom:16px; }
+
+    @media (max-width: 900px) {
+      .provider-row { flex-direction:column;align-items:flex-start; }
+      .provider-key-input { width:100%; }
+      .form-row { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Service</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Service ›</span> Configuração de IA</span>
+    </div>
+
+    <div class="page-content">
+      <div class="head-row">
+        <div>
+          <div class="page-kicker">Configuração</div>
+          <div class="head-title">Configuração de IA</div>
+          <div class="head-sub">Chaves de API dos provedores de IA usados na investigação de chamados (pré-análise automática e chat). Ficam criptografadas em repouso — nunca é possível recuperar o valor já salvo, só substituir.</div>
+        </div>
+      </div>
+
+      <div class="callout">
+        Sem nenhuma chave configurada aqui, o sistema usa as variáveis de ambiente globais do servidor como reserva — útil em ambiente de teste, mas cada empresa cliente deve ter sua própria chave em produção.
+      </div>
+
+      <div class="card">
+        <div class="card-title">Provedores</div>
+        <div class="card-desc">Preencha ao menos uma chave. Deixe em branco para manter a chave já salva sem alterá-la.</div>
+
+        <div class="provider-row">
+          <div class="provider-name">Groq <span class="provider-status" id="status-groq">—</span></div>
+          <input type="password" class="form-control provider-key-input" id="f-groq" placeholder="gsk_..." autocomplete="off">
+        </div>
+        <div class="provider-row">
+          <div class="provider-name">OpenAI <span class="provider-status" id="status-openai">—</span></div>
+          <input type="password" class="form-control provider-key-input" id="f-openai" placeholder="sk-..." autocomplete="off">
+        </div>
+        <div class="provider-row">
+          <div class="provider-name">Claude (Anthropic) <span class="provider-status" id="status-claude">—</span></div>
+          <input type="password" class="form-control provider-key-input" id="f-claude" placeholder="sk-ant-..." autocomplete="off">
+        </div>
+        <div class="provider-row">
+          <div class="provider-name">Gemini <span class="provider-status" id="status-gemini">—</span></div>
+          <input type="password" class="form-control provider-key-input" id="f-gemini" placeholder="AQ...." autocomplete="off">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Ordem de uso</div>
+        <div class="card-desc">Qual provedor tentar primeiro, e a ordem de fallback se ele falhar/estiver sem chave.</div>
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Provedor primário</label>
+            <select id="f-provedor-primario" class="form-control">
+              <option value="groq">Groq</option>
+              <option value="openai">OpenAI</option>
+              <option value="claude">Claude</option>
+              <option value="gemini">Gemini</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Ordem de fallback</label>
+            <input type="text" class="form-control" id="f-fallback-ordem" placeholder="groq,openai,claude,gemini">
+            <div class="form-hint">Separado por vírgula, sem espaços.</div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <span class="save-feedback" id="save-feedback"></span>
+          <button class="btn btn-primary" type="button" id="salvar-btn">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-service/js/sidebar.js"></script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+
+  function empresaIdAtual() {
+    return window._iahubEmpresa?.id || null;
+  }
+
+  async function api(path, opts = {}) {
+    const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
+    return body;
+  }
+
+  function renderStatus(id, temChave) {
+    const el = $(id);
+    if (temChave) {
+      el.textContent = 'Configurada';
+      el.className = 'provider-status ok';
+    } else {
+      el.textContent = 'Usando .env / não configurada';
+      el.className = 'provider-status env';
+    }
+  }
+
+  function feedback(msg, ok) {
+    const el = $('save-feedback');
+    el.textContent = msg;
+    el.className = 'save-feedback' + (ok === true ? ' ok' : ok === false ? ' fail' : '');
+  }
+
+  async function carregar() {
+    const empresaId = empresaIdAtual();
+    if (!empresaId) return;
+    try {
+      const config = await api(`/api/ia-service/config/ia?empresa_id=${empresaId}`);
+      renderStatus('status-groq', !!config.temGroq);
+      renderStatus('status-openai', !!config.temOpenai);
+      renderStatus('status-claude', !!config.temClaude);
+      renderStatus('status-gemini', !!config.temGemini);
+      $('f-provedor-primario').value = config.provedorPrimario || 'groq';
+      $('f-fallback-ordem').value = config.fallbackOrdem || 'groq,openai,claude,gemini';
+    } catch (err) {
+      feedback('Não foi possível carregar a configuração: ' + err.message, false);
+    }
+  }
+
+  async function salvar() {
+    const empresaId = empresaIdAtual();
+    if (!empresaId) return;
+    const dados = {
+      empresa_id: empresaId,
+      provedorPrimario: $('f-provedor-primario').value,
+      fallbackOrdem: $('f-fallback-ordem').value.trim() || null,
+      groqApiKey: $('f-groq').value.trim() || null,
+      openaiApiKey: $('f-openai').value.trim() || null,
+      claudeApiKey: $('f-claude').value.trim() || null,
+      geminiApiKey: $('f-gemini').value.trim() || null,
+    };
+    try {
+      await api('/api/ia-service/config/ia', { method: 'PUT', body: JSON.stringify(dados) });
+      feedback('Salvo com sucesso!', true);
+      // Limpa os campos de senha após salvar — nunca reexibe a chave já
+      // gravada (mesma cautela de qualquer segredo criptografado em repouso).
+      ['f-groq', 'f-openai', 'f-claude', 'f-gemini'].forEach(id => { $(id).value = ''; });
+      await carregar();
+    } catch (err) {
+      feedback(err.message, false);
+    }
+  }
+
+  $('salvar-btn').addEventListener('click', salvar);
+
+  window._iahubAuthReady?.then(carregar) ?? carregar();
+})();
+</script>
+</body>
+</html>

@@ -98,6 +98,27 @@ function getAnexo(empresaId, anexoId) {
   return _rowParaDominio(row);
 }
 
+function vincularMensagem(empresaId, anexoId, mensagemId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!anexoId) throw new Error('anexoId é obrigatório.');
+  if (!mensagemId) throw new Error('mensagemId é obrigatório.');
+  const db = getDB();
+  const info = db.prepare(`
+    UPDATE anexos
+       SET mensagem_id = ?
+     WHERE id = ?
+       AND empresa_id = ?
+       AND atendimento_id = (
+         SELECT atendimento_id
+           FROM mensagens
+          WHERE id = ?
+            AND empresa_id = ?
+       )
+  `).run(mensagemId, anexoId, Number(empresaId), mensagemId, Number(empresaId));
+  if (info.changes === 0) return null;
+  return getAnexo(empresaId, anexoId);
+}
+
 /**
  * Grava o resultado da extração de conteúdo (texto, linguagem, encoding) sem
  * criar uma nova versão — é um complemento de metadados do MESMO anexo, não
@@ -140,4 +161,4 @@ function listarVersoes(empresaId, anexoOriginalId) {
   return [original, ...correcoes.map(_rowParaDominio)];
 }
 
-module.exports = { salvarMetadadosAnexo, listarAnexos, getAnexo, atualizarExtracao, listarVersoes };
+module.exports = { salvarMetadadosAnexo, listarAnexos, getAnexo, vincularMensagem, atualizarExtracao, listarVersoes };

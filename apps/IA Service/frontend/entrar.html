@@ -48,6 +48,8 @@
     button.btn-entrar:disabled { opacity:.5; cursor:not-allowed; }
 
     .nota { margin-top:16px; padding:12px 14px; border-radius:8px; background:rgba(255,255,255,.04); border:1px solid var(--wa-border); font-size:12px; color:var(--wa-text-tertiary); line-height:1.5; }
+    .btn-empresa { width:100%; text-align:left; padding:13px 14px; border-radius:10px; border:1px solid var(--wa-border); background:var(--wa-panel); color:var(--wa-text); font-size:14px; font-weight:700; cursor:pointer; margin-bottom:10px; }
+    .btn-empresa:hover { border-color:var(--wa-accent); color:var(--wa-accent); }
     .erro { display:none; margin-top:14px; padding:10px 12px; border-radius:8px; background:rgba(248,113,113,.12); border:1px solid rgba(248,113,113,.3); color:#fca5a5; font-size:12.5px; }
     .destino { font-size:12.5px; color:var(--wa-text-secondary); margin-bottom:16px; }
 
@@ -111,6 +113,12 @@
           <div class="nota">Nunca compartilhe este código fora desta tela.</div>
         </div>
 
+        <div id="passo-empresa" style="display:none">
+          <div class="form-titulo">Qual empresa você quer acessar?</div>
+          <div class="form-sub">Este telefone está vinculado a mais de uma empresa.</div>
+          <div id="lista-empresas"></div>
+        </div>
+
         <div class="erro" id="erro"></div>
         <div class="rodape">IA Service — J2A Consultoria. Todos os direitos reservados.</div>
       </div>
@@ -118,31 +126,11 @@
   </div>
 
   <script>
-    const empresaSlug = location.pathname.split('/').pop();
+    // 2026-09: login passou a ser só por telefone (sem :empresaSlug na URL)
+    // — a empresa é descoberta depois do OTP, então não há mais logomarca
+    // fixa nesta tela (a empresa só é conhecida ao final do login).
     let challengeId = null;
-
-    // Logomarca real da empresa (mesmo campo login_logo_url usado na tela
-    // de login principal do IAHub) — fallback silencioso pro ícone "IA"
-    // caso a empresa não tenha logo cadastrado ou a chamada falhe; nunca
-    // deve travar a tela de login por causa disso.
-    async function carregarIdentidadeEmpresa() {
-      try {
-        const r = await fetch(`/api/ia-service-publico/empresa/${encodeURIComponent(empresaSlug)}`);
-        if (!r.ok) return;
-        const info = await r.json();
-        if (info.nome) {
-          document.getElementById('brand-nome').textContent = info.nome;
-          document.querySelector('.rodape').textContent = `IA Service — ${info.nome}. Todos os direitos reservados.`;
-        }
-        if (info.logoUrl) {
-          const icon = document.getElementById('brand-icon');
-          icon.innerHTML = `<img src="${info.logoUrl}" alt="${info.nome || 'Logomarca'}">`;
-        }
-      } catch (_) {
-        // Silencioso — sem logo/nome customizado, fica o padrão "IA Service".
-      }
-    }
-    carregarIdentidadeEmpresa();
+    let telefoneValidado = null;
 
     function mostrarErro(msg) {
       const el = document.getElementById('erro');
@@ -164,7 +152,7 @@
         const r = await fetch('/api/ia-service-publico/login/iniciar', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ empresaSlug, telefone }),
+          body: JSON.stringify({ telefone }),
         });
         const body = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
@@ -181,6 +169,45 @@
       }
     }
 
+    function entrarComToken(token) {
+      localStorage.setItem('svc_token_externo', token);
+      location.href = '/radar-externo';
+    }
+
+    // Mostra a lista de empresas quando o telefone está vinculado a mais de
+    // uma — mesma mecânica do menu numerado do IA Command
+    // (resolverEmpresaDoCanal), mas sem pedir novo código: o telefone já
+    // foi validado no passo anterior.
+    function mostrarEscolhaEmpresa(empresas) {
+      document.getElementById('passo-codigo').style.display = 'none';
+      document.getElementById('passo-empresa').style.display = 'block';
+      const lista = document.getElementById('lista-empresas');
+      lista.innerHTML = '';
+      empresas.forEach(emp => {
+        const btn = document.createElement('button');
+        btn.className = 'btn-empresa';
+        btn.textContent = emp.nome;
+        btn.onclick = () => escolherEmpresa(emp.id);
+        lista.appendChild(btn);
+      });
+    }
+
+    async function escolherEmpresa(empresaId) {
+      esconderErro();
+      try {
+        const r = await fetch('/api/ia-service-publico/login/escolher-empresa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ telefone: telefoneValidado, empresaId }),
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
+        entrarComToken(body.token);
+      } catch (err) {
+        mostrarErro(err.message);
+      }
+    }
+
     async function confirmarCodigo() {
       esconderErro();
       const telefone = document.getElementById('f-telefone').value.trim();
@@ -193,12 +220,16 @@
         const r = await fetch('/api/ia-service-publico/login/verificar', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ empresaSlug, telefone, challengeId, codigo }),
+          body: JSON.stringify({ telefone, challengeId, codigo }),
         });
         const body = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
-        localStorage.setItem('svc_token_externo', body.token);
-        location.href = '/radar-externo';
+        if (body.escolhaEmpresa) {
+          telefoneValidado = telefone;
+          mostrarEscolhaEmpresa(body.empresas);
+          return;
+        }
+        entrarComToken(body.token);
       } catch (err) {
         mostrarErro(err.message);
       } finally {

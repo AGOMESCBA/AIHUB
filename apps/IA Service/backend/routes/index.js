@@ -24,6 +24,8 @@ const chamadoRepo = require('../repositories/chamado-repository');
 const clienteRepo = require('../repositories/cliente-repository');
 const radarService = require('../services/radar-service');
 const anexosSoftExpertService = require('../services/anexos-softexpert-service');
+const technicalResearchService = require('../services/technical-research-service');
+const radarRefreshService = require('../services/radar-refresh-service');
 
 // multer com storage em memória — o binário só vai para disco depois da
 // validação (armazenamento.validarAnexo), nunca antes. Limite de tamanho
@@ -513,28 +515,57 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   });
 
   // ── Radar de chamados (fila do analista) ────────────────────────────────
-  app.get('/api/ia-service/radar/fila', (req, res) => {
+  app.get('/api/ia-service/radar/fila', async (req, res) => {
     try {
       const empresaId = req.svcEmpresaId;
-      const { apenas_minha, filtro_sla, limite } = req.query || {};
+      const { apenas_minha, filtro_sla, limite, force_sync } = req.query || {};
+      const sincronizacao = await radarRefreshService.sincronizarAntesDaFila(empresaId, {
+        force: force_sync === 'true',
+      });
       const resultado = radarService.getFila(empresaId, req.session?.user_id || null, {
         apenasMinha: apenas_minha === 'true',
         filtroSla: filtro_sla || 'todos',
         limite: limite ? Number(limite) : undefined,
       });
-      res.json(resultado);
+      res.json({ ...resultado, sincronizacao });
     } catch (err) {
       _handleErro(res, err);
     }
   });
 
-  app.post('/api/ia-service/radar/chamados/:chamadoId/abrir-atendimento', (req, res) => {
+  function iniciarAnaliseRadar(req, res) {
     try {
       const empresaId = req.svcEmpresaId;
-      const { atendimento, reaberto } = radarService.abrirOuCriarAtendimento(empresaId, req.params.chamadoId, {
+      const { atendimento, reaberto } = radarService.iniciarAnalise(empresaId, req.params.chamadoId, {
         usuarioIdIahub: req.session?.user_id || null,
       });
       res.status(reaberto ? 200 : 201).json({ atendimentoId: atendimento.id, reaberto });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  }
+
+  app.post('/api/ia-service/radar/chamados/:chamadoId/iniciar-analise', iniciarAnaliseRadar);
+  app.post('/api/ia-service/radar/chamados/:chamadoId/abrir-atendimento', iniciarAnaliseRadar);
+
+  app.get('/api/ia-service/radar/chamados/:chamadoId/relacionados', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const { limite } = req.query || {};
+      res.json(radarService.buscarRelacionados(empresaId, req.params.chamadoId, {
+        limite: limite ? Number(limite) : undefined,
+      }));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service/radar/chamados/:chamadoId/pesquisa-tecnica', async (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      res.json(await technicalResearchService.pesquisarParaChamado(empresaId, req.params.chamadoId, {
+        limiteRelacionados: req.query?.limiteRelacionados ? Number(req.query.limiteRelacionados) : undefined,
+      }));
     } catch (err) {
       _handleErro(res, err);
     }
@@ -579,6 +610,45 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       const empresaId = req.svcEmpresaId;
       const { autoRefreshSegundos } = req.body || {};
       res.json(radarService.salvarConfig(empresaId, { autoRefreshSegundos }));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service/radar/minhas-preferencias', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const usuarioId = req.session?.user_id;
+      const consultor = usuarioId ? consultorService.getConsultorPorUsuario(empresaId, usuarioId) : null;
+      if (!consultor) {
+        return res.json({ consultorEncontrado: false, preAnaliseAutomatica: false });
+      }
+      res.json({
+        consultorEncontrado: true,
+        consultorId: consultor.id,
+        preAnaliseAutomatica: consultor.preAnaliseAutomatica !== false,
+      });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.put('/api/ia-service/radar/minhas-preferencias', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const usuarioId = req.session?.user_id;
+      const consultor = usuarioId ? consultorService.getConsultorPorUsuario(empresaId, usuarioId) : null;
+      if (!consultor) return res.status(404).json({ error: 'Consultor não encontrado para este usuário nesta empresa.' });
+
+      const { preAnaliseAutomatica } = req.body || {};
+      const atualizado = consultorService.atualizarConsultor(empresaId, consultor.id, {
+        preAnaliseAutomatica: !!preAnaliseAutomatica,
+      });
+      res.json({
+        consultorEncontrado: true,
+        consultorId: atualizado.id,
+        preAnaliseAutomatica: atualizado.preAnaliseAutomatica !== false,
+      });
     } catch (err) {
       _handleErro(res, err);
     }

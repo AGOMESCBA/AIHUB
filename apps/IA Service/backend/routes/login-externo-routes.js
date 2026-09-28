@@ -6,9 +6,13 @@
 // com o IA Command é uma chamada HTTP para a rota isolada
 // POST /api/ia-command/whatsapp/enviar-servico-externo (ver Frente A do
 // plano), autenticada por segredo compartilhado.
+//
+// 2026-09: login deixou de exigir a empresa na URL (/entrar-servico/:slug)
+// — agora é só telefone (/entrar-servico), igual à mecânica de
+// resolverEmpresaDoCanal() do IA Command: o telefone pode estar vinculado a
+// mais de uma empresa, resolvido em login-externo-service.js.
 
 const rateLimit = require('express-rate-limit');
-const crud = require('../../../IAHUB/backend/crud');
 const loginExternoService = require('../services/login-externo-service');
 
 // Mesmo padrão de rate-limit reforçado já usado em /api/login (index.js) —
@@ -21,19 +25,6 @@ const rateLimitLoginExterno = rateLimit({
   legacyHeaders: false,
   message: { error: 'Muitas tentativas. Tente novamente mais tarde.' },
 });
-
-function _slugify(nome) {
-  return String(nome || '')
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-function _resolverEmpresaPorSlug(slug) {
-  const empresas = crud.listar('empresas');
-  return empresas.find(e => _slugify(e.razao_social || e.nome) === String(slug || '').toLowerCase()) || null;
-}
 
 async function _enviarCodigoViaWhatsApp({ empresaId, numero, codigo }) {
   const secret = process.env.SVC_WHATSAPP_OTP_SECRET;
@@ -73,26 +64,15 @@ module.exports = function registrarRotasLoginExterno(app) {
   // do IAHub) — colisão real confirmada em teste (a rota do IA Command
   // intercepta primeiro e responde 404 antes de chegar aqui). Usa um
   // namespace próprio para nunca colidir com rotas públicas de outro app.
-  app.get('/entrar-servico/:empresaSlug', (req, res) => {
+  //
+  // 2026-09: sem mais :empresaSlug — login é só por telefone (a empresa é
+  // descoberta depois do OTP, ver login-externo-service.listarEmpresasDoTelefone).
+  // Sem empresa conhecida de antemão, não há mais logomarca fixa nesta tela
+  // (removida a rota /api/ia-service-publico/empresa/:slug — sem uso).
+  app.get('/entrar-servico', (req, res) => {
     res.setHeader('Cache-Control', 'no-store, max-age=0');
     res.setHeader('Referrer-Policy', 'no-referrer');
-    const empresa = _resolverEmpresaPorSlug(req.params.empresaSlug);
-    if (!empresa) return res.status(404).send('Not found');
     res.sendFile(require('path').join(__dirname, '..', '..', 'frontend', 'entrar.html'));
-  });
-
-  // Identidade visual pública (nome + logomarca) para a tela de login
-  // externo — reaproveita empresas.login_logo_url, o mesmo campo já usado
-  // na tela de login principal do IAHub (apps/IAHUB/frontend/login.html).
-  // Só expõe o estritamente necessário para render (nunca dados de
-  // usuário/CNPJ/etc.) — rota pública por natureza, sem sessão.
-  app.get('/api/ia-service-publico/empresa/:empresaSlug', (req, res) => {
-    const empresa = _resolverEmpresaPorSlug(req.params.empresaSlug);
-    if (!empresa) return res.status(404).json({ error: 'Empresa não encontrada.' });
-    res.json({
-      nome: empresa.razao_social || empresa.nome || null,
-      logoUrl: empresa.login_logo_url || null,
-    });
   });
 
   // Serve radar.html FORA de mountStaticDirs('/app/ia-service', requireIaService, ...)
@@ -110,27 +90,28 @@ module.exports = function registrarRotasLoginExterno(app) {
   app.post('/api/ia-service-publico/login/iniciar', rateLimitLoginExterno, async (req, res) => {
     let resultado;
     try {
-      const empresa = _resolverEmpresaPorSlug(req.body?.empresaSlug);
-      if (!empresa) return res.status(404).json({ error: 'Número não encontrado ou sem permissão sincronizada.' });
-
-      // Passo 1 — localizar o consultor pelo telefone: erro aqui SEMPRE
-      // genérico (nunca revela se o número existe, mesma cautela do IA
-      // Command). Passo 2 (envio do WhatsApp) é tratado em bloco separado
-      // abaixo, com mensagem distinta — falha de infraestrutura (ex.:
-      // WhatsApp do IA Command desconectado) não é a mesma coisa que
-      // "telefone não cadastrado", e confundir as duas mensagens (bug
-      // encontrado em 2026-09) faz o consultor achar que digitou o número
-      // errado quando na verdade é o WhatsApp do IA Command que está fora
-      // do ar — nada que ele possa corrigir sozinho.
+      // Passo 1 — localizar o(s) consultor(es) pelo telefone, em QUALQUER
+      // empresa: erro aqui SEMPRE genérico (nunca revela se o número
+      // existe, mesma cautela do IA Command). Passo 2 (envio do WhatsApp) é
+      // tratado em bloco separado abaixo, com mensagem distinta — falha de
+      // infraestrutura (ex.: WhatsApp do IA Command desconectado) não é a
+      // mesma coisa que "telefone não cadastrado", e confundir as duas
+      // mensagens (bug encontrado em 2026-09) faz o consultor achar que
+      // digitou o número errado quando na verdade é o WhatsApp do IA
+      // Command que está fora do ar — nada que ele possa corrigir sozinho.
       try {
-        resultado = loginExternoService.iniciarLogin(empresa.id, req.body?.telefone);
+        resultado = loginExternoService.iniciarLogin(req.body?.telefone);
       } catch (err) {
         console.error('[IA Service][login-externo] telefone não localizado:', err.message);
         return res.status(404).json({ error: 'Número não encontrado ou sem permissão sincronizada.' });
       }
 
+      // Qualquer empresa candidata serve para resolver o CANAL remetente do
+      // WhatsApp — o destinatário (resultado.telefone) é sempre o mesmo,
+      // independente de qual empresa dispara o envio.
+      const empresas = loginExternoService.listarEmpresasDoTelefone(resultado.telefone);
       try {
-        await _enviarCodigoViaWhatsApp({ empresaId: empresa.id, numero: resultado.telefone, codigo: resultado.codigo });
+        await _enviarCodigoViaWhatsApp({ empresaId: empresas[0].id, numero: resultado.telefone, codigo: resultado.codigo });
       } catch (err) {
         console.error('[IA Service][login-externo] envio do código falhou:', err.message);
         return res.status(503).json({ error: 'Não foi possível enviar o código agora — o WhatsApp de atendimento está indisponível. Tente novamente em instantes ou contate o administrador.' });
@@ -150,10 +131,22 @@ module.exports = function registrarRotasLoginExterno(app) {
 
   app.post('/api/ia-service-publico/login/verificar', rateLimitLoginExterno, (req, res) => {
     try {
-      const empresa = _resolverEmpresaPorSlug(req.body?.empresaSlug);
-      if (!empresa) return res.status(404).json({ error: 'Número não encontrado ou sem permissão sincronizada.' });
+      const resultado = loginExternoService.verificarLogin(req.body?.challengeId, req.body?.telefone, req.body?.codigo);
+      if (resultado.escolhaEmpresa) {
+        return res.json({ ok: true, escolhaEmpresa: true, empresas: resultado.empresas });
+      }
+      res.json({ ok: true, escolhaEmpresa: false, token: resultado.token, expiraEm: resultado.expiraEm });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
 
-      const resultado = loginExternoService.verificarLogin(empresa.id, req.body?.challengeId, req.body?.telefone, req.body?.codigo);
+  // Terceiro passo, só quando /verificar retornou escolhaEmpresa:true — o
+  // telefone já foi validado pelo OTP, aqui só falta saber qual das N
+  // empresas o consultor quer acessar agora (sem pedir novo código).
+  app.post('/api/ia-service-publico/login/escolher-empresa', rateLimitLoginExterno, (req, res) => {
+    try {
+      const resultado = loginExternoService.escolherEmpresa(req.body?.telefone, req.body?.empresaId);
       res.json({ ok: true, token: resultado.token, expiraEm: resultado.expiraEm });
     } catch (err) {
       res.status(400).json({ error: err.message });
