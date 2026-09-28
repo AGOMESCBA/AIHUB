@@ -65,6 +65,39 @@ def health():
     return {"status": "ok", "sistema": "IA Command — Agente Local", "versao": "1.0.0"}
 
 
+# ── Listar conexões (autenticado por Bearer token, SÓ LEITURA) ────────────────
+# 2026-09: rota nova e isolada, aditiva — NUNCA altera listar_conexoes_erp()
+# nem a rota web /api/conexoes (essa continua exigindo sessão de admin, sem
+# mudança). Motivo: sistemas consumidores (ex. IA Service) autenticam por
+# Bearer Token — o mesmo já usado em /execute — e precisam listar as
+# connection_key já cadastradas aqui para o usuário escolher num dropdown,
+# em vez de digitar de cor (risco real de digitar nome diferente do
+# cadastrado e a importação falhar silenciosamente). Mesmo mascaramento de
+# segredo já usado em /api/conexoes: nunca retorna db_pass_enc nem qualquer
+# derivado da senha, só um booleano "senha_configurada".
+@app.get("/api/conexoes-listar")
+def api_listar_conexoes_bearer(authorization: str = Header(default=None), empresa_id: str = ""):
+    raw_token = (authorization or "").removeprefix("Bearer ").strip()
+    if not verificar_token_api(raw_token):
+        raise HTTPException(status_code=401, detail="Token inválido.")
+
+    eid = str(empresa_id or "").strip()
+    rows = listar_conexoes_erp()
+    if eid:
+        rows = [r for r in rows if str(r.get("empresa_id") or "") == eid]
+    return [
+        {
+            "empresa_id": r.get("empresa_id"),
+            "connection_key": r.get("connection_key") or "default",
+            "nome": r.get("nome") or "",
+            "sistema_origem": r.get("sistema_origem") or "",
+            "ativo": r.get("ativo") if r.get("ativo") is not None else 1,
+            "senha_configurada": bool(r.get("db_pass_enc")),
+        }
+        for r in rows
+    ]
+
+
 # ── Execute SQL (autenticado por Bearer token) ────────────────────────────────
 @app.post("/execute")
 async def execute(request: Request, authorization: str = Header(default=None)):

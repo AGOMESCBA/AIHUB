@@ -77,6 +77,20 @@ async function testarAgente(url, token) {
 }
 
 /**
+ * Lista as conexões já cadastradas no Agente Local (GET /api/conexoes-listar,
+ * autenticado pelo mesmo Bearer Token de /execute — 2026-09) — usado pela
+ * tela de Fontes Históricas para o usuário ESCOLHER a connection_key num
+ * dropdown em vez de digitar de cor, evitando digitar um nome diferente do
+ * que está de fato cadastrado no agente (causa real de fonte "configurada"
+ * mas nunca funcionar). Nunca retorna senha — o agente já mascara isso.
+ */
+async function listarConexoes(url, token, { empresaId } = {}) {
+  const parsed = new URL('/api/conexoes-listar', url);
+  if (empresaId) parsed.searchParams.set('empresa_id', String(empresaId));
+  return _request(parsed.toString(), 'GET', null, token);
+}
+
+/**
  * Executa um SELECT via /execute. `params` são substituídos como @chave no
  * SQL antes do envio (mesmo padrão do ApiProxyProvider) — nunca concatenação
  * direta de string do chamador dentro desta função.
@@ -130,4 +144,4 @@ async function executarSelect(url, token, { sql, params, limit, connectionKey, c
   throw new Error('Resposta do agente não contém "rows". Verifique o endpoint/connection_key configurados.');
 }
 
-module.exports = { testarAgente, executarSelect };
+module.exports = { testarAgente, listarConexoes, executarSelect };

@@ -73,6 +73,22 @@ async function testarConexao(empresaId) {
 }
 
 /**
+ * Lista as conexões já cadastradas no Agente Local — usado pela tela de
+ * Fontes Históricas para o usuário ESCOLHER a connection_key num dropdown
+ * (2026-09, pedido do usuário: evitar risco de digitar um nome diferente
+ * do que está de fato cadastrado no agente). Requer GET /api/conexoes-listar
+ * do agente (rota nova, Bearer Token) — se o agente ainda não tiver essa
+ * rota (versão antiga não atualizada), o erro sobe para a UI cair no
+ * fallback de digitar manualmente.
+ */
+async function listarConexoesDoAgente(empresaId) {
+  const config = agenteRepo.getConfig(empresaId);
+  if (!config?.url || !config?.tokenEnc) throw new Error('Configure o Agente Local (URL + token) antes de listar conexões.');
+  const token = cryptoEnvelope.decryptSecret(config.tokenEnc);
+  return provider.listarConexoes(config.url, token, { empresaId });
+}
+
+/**
  * Fonte histórica no IA Service é SÓ uma referência a uma conexão que já
  * existe no Agente Local — mesmo padrão do IA Command (connections-routes.js/
  * connection-factory.js: connection_key aponta para uma conexão cadastrada
@@ -173,6 +189,7 @@ module.exports = {
   getTokenRevelado,
   getCryptoKeyRevelada,
   testarConexao,
+  listarConexoesDoAgente,
   criarFonte,
   atualizarFonte,
   getFonte,

@@ -138,7 +138,12 @@
         </div>
         <div class="form-row">
           <div class="form-field"><label>Nome</label><input type="text" id="fonte-nome" class="form-control" placeholder="SoftExpert - Chamados"></div>
-          <div class="form-field"><label>connection_key</label><input type="text" id="fonte-key" class="form-control" placeholder="mesma chave já cadastrada no Agente Local"></div>
+          <div class="form-field">
+            <label>connection_key</label>
+            <select id="fonte-key-select" class="form-control" style="display:none" onchange="onFonteKeySelectChange()"></select>
+            <input type="text" id="fonte-key" class="form-control" placeholder="mesma chave já cadastrada no Agente Local">
+            <div class="form-hint" id="fonte-key-hint"></div>
+          </div>
           <button class="btn btn-primary" type="button" id="fonte-form-btn" onclick="salvarFonte()">Criar fonte</button>
           <button class="btn btn-ghost" type="button" id="fonte-form-cancelar" style="display:none" onclick="cancelarEdicaoFonte()">Cancelar</button>
         </div>
@@ -320,6 +325,53 @@
     } catch (err) { showError('Teste de conexão falhou: ' + err.message); }
   }
 
+  // Busca as connection_key já cadastradas no Agente Local para popular um
+  // <select> (evita o usuário digitar de cor e errar o nome — causa real de
+  // fonte "configurada" mas a importação nunca funcionar). Se a rota falhar
+  // (agente numa versão antiga sem /api/conexoes-listar, ou indisponível),
+  // cai em silêncio para o campo de texto manual — nunca bloqueia a tela.
+  let conexoesDoAgenteDisponiveis = [];
+  async function carregarConexoesDoAgente() {
+    const empresaId = empresaIdAtual();
+    const selectEl = document.getElementById('fonte-key-select');
+    const inputEl = document.getElementById('fonte-key');
+    const hintEl = document.getElementById('fonte-key-hint');
+    try {
+      const conexoes = await api(`/api/ia-service/base-historica/agente-local/conexoes?empresa_id=${empresaId}`);
+      if (!Array.isArray(conexoes) || !conexoes.length) throw new Error('nenhuma conexão cadastrada no agente');
+      conexoesDoAgenteDisponiveis = conexoes;
+      selectEl.innerHTML = '<option value="">Selecione…</option>' +
+        conexoes.map(c => `<option value="${escapeHtml(c.connection_key)}">${escapeHtml(c.nome || c.connection_key)} (${escapeHtml(c.connection_key)})</option>`).join('') +
+        '<option value="__manual__">Digitar manualmente…</option>';
+      selectEl.style.display = 'block';
+      inputEl.style.display = 'none';
+      hintEl.textContent = 'Lista carregada do Agente Local — escolha a conexão já cadastrada lá.';
+    } catch (err) {
+      // Fallback: mantém o campo de texto manual, sem erro visível (não é
+      // uma falha bloqueante, é só a ausência de uma conveniência).
+      selectEl.style.display = 'none';
+      inputEl.style.display = 'block';
+      hintEl.textContent = 'Não foi possível listar as conexões do Agente Local — digite a connection_key manualmente.';
+    }
+  }
+
+  function onFonteKeySelectChange() {
+    const selectEl = document.getElementById('fonte-key-select');
+    const inputEl = document.getElementById('fonte-key');
+    if (selectEl.value === '__manual__') {
+      selectEl.style.display = 'none';
+      inputEl.style.display = 'block';
+      inputEl.value = '';
+      inputEl.focus();
+      return;
+    }
+    inputEl.value = selectEl.value;
+    const conexao = conexoesDoAgenteDisponiveis.find(c => c.connection_key === selectEl.value);
+    if (conexao && !document.getElementById('fonte-nome').value) {
+      document.getElementById('fonte-nome').value = conexao.nome || conexao.connection_key;
+    }
+  }
+
   async function carregarFontes() {
     const empresaId = empresaIdAtual();
     const fontes = await api(`/api/ia-service/base-historica/fontes?empresa_id=${empresaId}`);
@@ -383,7 +435,25 @@
   function editarFonte(fonteId, nome, connectionKey) {
     fonteEmEdicaoId = fonteId;
     document.getElementById('fonte-nome').value = nome;
-    document.getElementById('fonte-key').value = connectionKey;
+
+    const selectEl = document.getElementById('fonte-key-select');
+    const inputEl = document.getElementById('fonte-key');
+    const existeNaLista = conexoesDoAgenteDisponiveis.some(c => c.connection_key === connectionKey);
+    if (selectEl.style.display !== 'none' && existeNaLista) {
+      selectEl.value = connectionKey;
+      inputEl.value = connectionKey;
+    } else if (selectEl.style.display !== 'none') {
+      // Valor salvo não está (mais) na lista do agente — mostra o texto
+      // manual pra não esconder um connection_key que pode estar errado
+      // (exatamente o cenário que esta tela existe para evitar).
+      selectEl.value = '__manual__';
+      selectEl.style.display = 'none';
+      inputEl.style.display = 'block';
+      inputEl.value = connectionKey;
+    } else {
+      inputEl.value = connectionKey;
+    }
+
     document.getElementById('fonte-form-btn').textContent = 'Salvar edição';
     document.getElementById('fonte-form-cancelar').style.display = 'inline-block';
     document.getElementById('fonte-nome').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -393,6 +463,12 @@
     fonteEmEdicaoId = null;
     document.getElementById('fonte-nome').value = '';
     document.getElementById('fonte-key').value = '';
+    const selectEl = document.getElementById('fonte-key-select');
+    if (selectEl.options.length > 0) {
+      selectEl.value = '';
+      selectEl.style.display = 'block';
+      document.getElementById('fonte-key').style.display = 'none';
+    }
     document.getElementById('fonte-form-btn').textContent = 'Criar fonte';
     document.getElementById('fonte-form-cancelar').style.display = 'none';
   }
@@ -498,7 +574,7 @@
 
   async function carregarTudo() {
     try {
-      await Promise.all([carregarResumo(), carregarAgente(), carregarFontes(), carregarImportacoes()]);
+      await Promise.all([carregarResumo(), carregarAgente(), carregarConexoesDoAgente(), carregarFontes(), carregarImportacoes()]);
     } catch (err) { showError('Falha ao carregar a página: ' + err.message); }
   }
 

@@ -365,6 +365,17 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
+  // Lista connection_key já cadastradas no Agente Local — para o dropdown
+  // de Fontes Históricas. Se o agente estiver numa versão sem essa rota
+  // (404/erro), a UI cai no fallback de digitar manualmente.
+  app.get('/api/ia-service/base-historica/agente-local/conexoes', async (req, res) => {
+    try {
+      res.json(await agenteLocalService.listarConexoesDoAgente(req.svcEmpresaId));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   app.post('/api/ia-service/base-historica/agente-local/testar', async (req, res) => {
     try {
       res.json(await agenteLocalService.testarConexao(req.svcEmpresaId));
