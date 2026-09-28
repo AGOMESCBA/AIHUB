@@ -293,7 +293,8 @@
             <div class="fila-head-top">
               <div class="fila-titulo">Fila de Chamados</div>
               <button type="button" class="empresa-badge" id="empresa-badge" style="display:none" onclick="toggleEmpresaDropdown()">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>
+                <svg class="icon" id="empresa-badge-icon-fallback" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>
+                <img class="icon" id="empresa-badge-logo" alt="" style="display:none;border-radius:3px;object-fit:cover">
                 <span class="label" id="empresa-badge-label"></span>
                 <svg class="caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
                 <div class="empresa-dropdown" id="empresa-dropdown"></div>
@@ -1141,23 +1142,36 @@
     async function preencherBadgeEmpresa() {
       const badge = document.getElementById('empresa-badge');
       const label = document.getElementById('empresa-badge-label');
+      const logoImg = document.getElementById('empresa-badge-logo');
+      const iconFallback = document.getElementById('empresa-badge-icon-fallback');
       let nome = null;
+      let logoUrl = null;
       try {
         if (modoExterno) {
           const info = await api('/whoami');
           nome = info.empresaNome;
+          logoUrl = info.empresaLogoUrl || null;
           if (Array.isArray(info.outrasEmpresas) && info.outrasEmpresas.length > 0) {
             badge.classList.add('trocavel');
             montarEmpresaDropdown(info.outrasEmpresas);
           }
         } else {
           nome = window._iahubEmpresa?.nome || window._iahubEmpresa?.razao_social || null;
+          logoUrl = window._iahubEmpresa?.login_logo_url || null;
         }
       } catch (_) {
         // Falha ao resolver nome não deve travar a tela — badge só some.
       }
       if (!nome) return;
       label.textContent = nome;
+      // Logomarca real da empresa (mesmo campo login_logo_url da tela de
+      // login principal do IAHub) — quando ausente, mantém o ícone genérico
+      // já usado, nunca quebra o layout por falta de imagem.
+      if (logoUrl) {
+        logoImg.src = logoUrl;
+        logoImg.style.display = 'block';
+        iconFallback.style.display = 'none';
+      }
       badge.style.display = 'flex';
     }
 

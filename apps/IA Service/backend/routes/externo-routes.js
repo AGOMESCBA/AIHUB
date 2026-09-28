@@ -46,6 +46,11 @@ module.exports = function registrarRotasExterno(app) {
   // empresa dentro do chat sem novo OTP — outrasEmpresas nunca inclui a
   // empresa atual). Não é usado para decisão de autorização (isso já é
   // feito por requireSessaoExterna a cada request via req.svcEmpresaId).
+  //
+  // logoUrl (2026-09): reaproveita empresas.login_logo_url, mesmo campo já
+  // usado na tela de login principal do IAHub — a logomarca real só pode
+  // ser mostrada AQUI (pós-login), não na tela de entrada por telefone
+  // (entrar.html), porque a empresa só é conhecida depois do OTP.
   app.get('/api/ia-service-externo/whoami', (req, res) => {
     try {
       const empresa = crud.buscarPorId('empresas', req.svcEmpresaId);
@@ -58,6 +63,7 @@ module.exports = function registrarRotasExterno(app) {
         : [];
       res.json({
         empresaNome: empresa?.razao_social || empresa?.nome || null,
+        empresaLogoUrl: empresa?.login_logo_url || null,
         consultorNome: usuario?.nome || null,
         outrasEmpresas,
       });

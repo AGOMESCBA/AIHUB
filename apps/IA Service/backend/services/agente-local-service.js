@@ -29,6 +29,21 @@ function salvarConfig(empresaId, { url, token, cryptoKey, cryptoAtivo }) {
   return getConfig(empresaId);
 }
 
+/**
+ * Decifra e devolve o token JÁ SALVO em texto puro — pedido explícito do
+ * usuário (2026-09) para o botão "olhinho" da tela poder revelar o valor
+ * salvo, não só o que foi digitado na sessão atual. Muda o padrão de
+ * segurança usado no resto do IA Service (nenhum outro segredo é reexibido
+ * assim, ver ai-config-repository.js/config-ia.html) — decisão explícita e
+ * restrita a esta rota, chamada só sob clique do usuário, nunca junto do
+ * carregamento normal da tela (getConfig acima nunca inclui o valor cru).
+ */
+function getTokenRevelado(empresaId) {
+  const config = agenteRepo.getConfig(empresaId);
+  if (!config?.tokenEnc) return null;
+  return cryptoEnvelope.decryptSecret(config.tokenEnc);
+}
+
 async function testarConexao(empresaId) {
   const config = agenteRepo.getConfig(empresaId);
   if (!config?.url) throw new Error('URL do Agente Local não configurada.');
@@ -157,6 +172,7 @@ async function executarSelectNaFonte(empresaId, fonteId, { sql, params, limit })
 module.exports = {
   getConfig,
   salvarConfig,
+  getTokenRevelado,
   testarConexao,
   criarFonte,
   atualizarFonte,

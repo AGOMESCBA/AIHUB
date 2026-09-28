@@ -344,6 +344,18 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
+  // Revela o token JÁ SALVO em texto puro — só sob clique explícito do
+  // usuário no "olhinho" (nunca chamada junto do carregamento normal da
+  // tela). Exige a mesma sessão autenticada de empresa que todo o resto do
+  // IA Service (req.svcEmpresaId já populado pelo middleware do router).
+  app.get('/api/ia-service/base-historica/agente-local/token', (req, res) => {
+    try {
+      res.json({ token: agenteLocalService.getTokenRevelado(req.svcEmpresaId) });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   app.post('/api/ia-service/base-historica/agente-local/testar', async (req, res) => {
     try {
       res.json(await agenteLocalService.testarConexao(req.svcEmpresaId));
