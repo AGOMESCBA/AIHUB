@@ -1,15 +1,38 @@
 // Registro central de rotas do IA Service — mesmo padrão de
 // apps/IA Command/modules/routes.js: recebe (app, deps) e monta os
-// sub-routers. Escopo da Etapa 1: CRUD de fundação (atendimento, mensagem,
-// anexo-metadados, consultor) — sem motor de IA, sem chat completo.
+// sub-routers. Etapa 1: CRUD de fundação. Etapa 2: upload de anexos,
+// investigação com IA (texto+imagem+código correlacionados), versionamento
+// de fonte corrigido, configuração de providers de IA.
 
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
 const { requireEmpresaContext } = require('../services/empresa-context');
 const atendimentoService = require('../services/atendimento-service');
 const consultorService = require('../services/consultor-service');
+const armazenamento = require('../services/armazenamento-anexos');
+const extracaoConteudo = require('../services/extracao-conteudo');
+const anexoRepo = require('../repositories/anexo-repository');
+const investigacaoService = require('../services/investigacao-service');
+const versaoFonteService = require('../services/versao-fonte-service');
+const aiConfigService = require('../services/ai-config-service');
+const agenteLocalService = require('../services/agente-local-service');
+const historicalImportService = require('../services/import/historical-import-service');
+const historicalSyncService = require('../services/import/historical-sync-service');
+const importacaoRepo = require('../repositories/importacao-repository');
+const chamadoRepo = require('../repositories/chamado-repository');
+const clienteRepo = require('../repositories/cliente-repository');
+const radarService = require('../services/radar-service');
+const anexosSoftExpertService = require('../services/anexos-softexpert-service');
+
+// multer com storage em memória — o binário só vai para disco depois da
+// validação (armazenamento.validarAnexo), nunca antes. Limite de tamanho
+// aplicado aqui também (defesa em profundidade, além da validação do service).
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: armazenamento.TAMANHO_MAXIMO_BYTES } });
 
 function _erroParaStatus(err) {
   if (/não encontrado|not found/i.test(err.message)) return 404;
-  if (/obrigatóri|inválid|Já existe/i.test(err.message)) return 400;
+  if (/obrigatóri|inválid|Já existe|não permitid|excede o limite|vazio/i.test(err.message)) return 400;
   return 500;
 }
 
@@ -77,6 +100,9 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   });
 
   // ── Mensagens ───────────────────────────────────────────────────────────
+  // Envio simples (sem acionar a IA) — usado internamente/testes. O fluxo
+  // real do chat usa POST .../investigar (abaixo), que persiste a mensagem
+  // do usuário E aciona a análise, na mesma chamada.
   app.post('/api/ia-service/atendimentos/:id/mensagens', (req, res) => {
     try {
       const empresaId = req.svcEmpresaId;
@@ -102,7 +128,29 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
-  // ── Anexos (fundação de metadados — upload completo fica para a Etapa 2) ──
+  // ── Investigação (Etapa 2) — o fluxo principal do chat técnico ──────────
+  // Recebe texto + IDs de anexos já enviados (via /anexos abaixo), persiste o
+  // turno do usuário, monta contexto (histórico + anexos), chama a IA,
+  // persiste e devolve a resposta estruturada.
+  app.post('/api/ia-service/atendimentos/:id/investigar', async (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const { texto, anexoIds } = req.body || {};
+      if (!texto || !String(texto).trim()) {
+        return res.status(400).json({ error: 'texto é obrigatório.' });
+      }
+      const mensagemAssistente = await investigacaoService.processarTurno(empresaId, req.params.id, {
+        texto: String(texto).trim(),
+        usuarioId: req.session?.user_id || null,
+        anexoIds: Array.isArray(anexoIds) ? anexoIds : [],
+      });
+      res.status(201).json(mensagemAssistente);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // ── Anexos ───────────────────────────────────────────────────────────────
   app.get('/api/ia-service/atendimentos/:id/anexos', (req, res) => {
     try {
       const empresaId = req.svcEmpresaId;
@@ -113,12 +161,117 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
+  // Upload real (multipart/form-data, campo "arquivo"). Valida, extrai
+  // conteúdo (texto/linguagem/encoding — nunca confia só na extensão), salva
+  // em disco (fora do SQLite) e grava metadados. Anexo fica "solto" (sem
+  // mensagem_id) até ser referenciado em POST .../investigar.
+  app.post('/api/ia-service/atendimentos/:id/anexos', upload.single('arquivo'), (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const atendimentoId = req.params.id;
+      if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado (campo "arquivo").' });
+
+      const atendimento = atendimentoService.getAtendimento(empresaId, atendimentoId);
+      if (!atendimento) return res.status(404).json({ error: 'Atendimento não encontrado.' });
+
+      const extraido = extracaoConteudo.extrairConteudo({
+        buffer: req.file.buffer,
+        nomeOriginal: req.file.originalname,
+        mimeDeclarado: req.file.mimetype,
+      });
+
+      const anexo = armazenamento.salvarAnexo(empresaId, atendimentoId, {
+        nomeOriginal: req.file.originalname,
+        mimeType: extraido.mimeReal,
+        tamanho: req.file.size,
+        conteudo: req.file.buffer,
+        usuarioId: req.session?.user_id || null,
+      });
+
+      const anexoAtualizado = anexoRepo.atualizarExtracao(empresaId, anexo.id, {
+        conteudoExtraido: extraido.conteudoExtraido,
+        linguagemDetectada: extraido.linguagemDetectada,
+        encodingDetectado: extraido.encodingDetectado,
+        eCodigo: extraido.eCodigo,
+      });
+
+      res.status(201).json(anexoAtualizado);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // ── Versionamento de fonte (Etapa 2, seção 9/10 do prompt) ───────────────
+  app.get('/api/ia-service/anexos/:id/versoes', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const versoes = versaoFonteService.listarVersoes(empresaId, req.params.id);
+      res.json(versoes);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service/anexos/:id/diff/:versaoId', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const original = anexoRepo.getAnexo(empresaId, req.params.id);
+      const versao = anexoRepo.getAnexo(empresaId, req.params.versaoId);
+      if (!original || !versao) return res.status(404).json({ error: 'Anexo ou versão não encontrados.' });
+      const diff = versaoFonteService.calcularDiff(original.conteudoExtraido, versao.conteudoExtraido);
+      res.json({ diff });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // Download do binário do anexo (original ou versão corrigida) — o caminho
+  // em disco nunca é exposto ao cliente, só resolvido internamente a partir
+  // do nome_interno já validado no momento do upload.
+  app.get('/api/ia-service/anexos/:id/download', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const anexo = anexoRepo.getAnexo(empresaId, req.params.id);
+      if (!anexo) return res.status(404).json({ error: 'Anexo não encontrado.' });
+
+      const caminhoAbsoluto = path.join(armazenamento.ANEXOS_DIR, anexo.caminhoRelativo);
+      if (!fs.existsSync(caminhoAbsoluto)) return res.status(404).json({ error: 'Arquivo não encontrado em disco.' });
+
+      res.setHeader('Content-Type', anexo.mimeType || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(anexo.nomeOriginal)}"`);
+      fs.createReadStream(caminhoAbsoluto).pipe(res);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // ── Configuração de IA por empresa ────────────────────────────────────────
+  app.get('/api/ia-service/config/ia', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      res.json(aiConfigService.getConfig(empresaId) || { empresaId, configurado: false });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.put('/api/ia-service/config/ia', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const { provedorPrimario, fallbackOrdem, groqApiKey, openaiApiKey, claudeApiKey, geminiApiKey } = req.body || {};
+      aiConfigService.salvarConfig(empresaId, { provedorPrimario, fallbackOrdem, groqApiKey, openaiApiKey, claudeApiKey, geminiApiKey });
+      res.json(aiConfigService.getConfig(empresaId));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   // ── Consultores/Técnicos ───────────────────────────────────────────────
   app.post('/api/ia-service/consultores', (req, res) => {
     try {
       const empresaId = req.svcEmpresaId;
-      const { usuarioIdIahub, idSoftexpert } = req.body || {};
-      const consultor = consultorService.criarConsultor(empresaId, { usuarioIdIahub, idSoftexpert });
+      const { usuarioIdIahub, idSoftexpert, telefone, preAnaliseAutomatica } = req.body || {};
+      const consultor = consultorService.criarConsultor(empresaId, { usuarioIdIahub, idSoftexpert, telefone, preAnaliseAutomatica });
       res.status(201).json(consultor);
     } catch (err) {
       _handleErro(res, err);
@@ -151,10 +304,281 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   app.put('/api/ia-service/consultores/:id', (req, res) => {
     try {
       const empresaId = req.svcEmpresaId;
-      const { idSoftexpert, ativo } = req.body || {};
-      const consultor = consultorService.atualizarConsultor(empresaId, req.params.id, { idSoftexpert, ativo });
+      const { idSoftexpert, telefone, ativo, preAnaliseAutomatica } = req.body || {};
+      const consultor = consultorService.atualizarConsultor(empresaId, req.params.id, { idSoftexpert, telefone, ativo, preAnaliseAutomatica });
       if (!consultor) return res.status(404).json({ error: 'Consultor não encontrado.' });
       res.json(consultor);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.delete('/api/ia-service/consultores/:id', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const excluido = consultorService.excluirConsultor(empresaId, req.params.id);
+      if (!excluido) return res.status(404).json({ error: 'Consultor não encontrado.' });
+      res.status(204).end();
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // ── Base histórica: Agente Local ─────────────────────────────────────────
+  app.get('/api/ia-service/base-historica/agente-local', (req, res) => {
+    try {
+      res.json(agenteLocalService.getConfig(req.svcEmpresaId));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.put('/api/ia-service/base-historica/agente-local', (req, res) => {
+    try {
+      const { url, token, cryptoKey, cryptoAtivo } = req.body || {};
+      res.json(agenteLocalService.salvarConfig(req.svcEmpresaId, { url, token, cryptoKey, cryptoAtivo }));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.post('/api/ia-service/base-historica/agente-local/testar', async (req, res) => {
+    try {
+      res.json(await agenteLocalService.testarConexao(req.svcEmpresaId));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // ── Base histórica: Fontes ────────────────────────────────────────────────
+  app.get('/api/ia-service/base-historica/fontes', (req, res) => {
+    try {
+      res.json(agenteLocalService.listarFontes(req.svcEmpresaId));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.post('/api/ia-service/base-historica/fontes', (req, res) => {
+    try {
+      const { connectionKey, nome, sistemaOrigem, adapter, dbHost, dbPort, dbName, dbUser, senha, dbDriver } = req.body || {};
+      const fonte = agenteLocalService.criarFonte(req.svcEmpresaId, { connectionKey, nome, sistemaOrigem, adapter, dbHost, dbPort, dbName, dbUser, senha, dbDriver });
+      res.status(201).json(fonte);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.put('/api/ia-service/base-historica/fontes/:id', (req, res) => {
+    try {
+      const fonte = agenteLocalService.atualizarFonte(req.svcEmpresaId, req.params.id, req.body || {});
+      if (!fonte) return res.status(404).json({ error: 'Fonte não encontrada.' });
+      res.json(fonte);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.post('/api/ia-service/base-historica/fontes/:id/sincronizar', async (req, res) => {
+    try {
+      const { empresaNome } = req.body || {};
+      res.json(await agenteLocalService.sincronizarESincronizarFonte(req.svcEmpresaId, req.params.id, { empresaNome }));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.post('/api/ia-service/base-historica/fontes/:id/testar', async (req, res) => {
+    try {
+      res.json(await agenteLocalService.testarFonte(req.svcEmpresaId, req.params.id));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // ── Base histórica: Importação (Checkpoints 4-6) ─────────────────────────
+  // Disparo em background — a requisição HTTP não fica presa esperando a
+  // importação inteira (pode levar minutos/horas em bases grandes). O
+  // cliente consulta progresso via GET /importacoes/:id (polling).
+  app.post('/api/ia-service/base-historica/fontes/:id/importar', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const { periodoInicio, periodoFim, tamanhoLote } = req.body || {};
+      if (!periodoInicio || !periodoFim) {
+        return res.status(400).json({ error: 'periodoInicio e periodoFim são obrigatórios (formato YYYYMMDD).' });
+      }
+
+      const importacaoInicial = importacaoRepo.criarImportacao(empresaId, {
+        fonteId: req.params.id, tipo: 'full', periodoInicio, periodoFim,
+      });
+
+      // Dispara em background — erros são persistidos na própria importação
+      // (status='falhou', mensagemErro), não precisam propagar para cá.
+      historicalImportService.executarFullLoad(empresaId, req.params.id, {
+        periodoInicio, periodoFim, tamanhoLote: tamanhoLote || historicalImportService.TAMANHO_LOTE_PADRAO,
+        importacaoExistenteId: importacaoInicial.id,
+      }).catch(err => {
+        console.error('[IA Service] Importação histórica falhou:', err.message);
+      });
+
+      res.status(202).json(importacaoInicial);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.post('/api/ia-service/base-historica/fontes/:id/importar/retomar/:importacaoId', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const importacao = importacaoRepo.getImportacao(empresaId, req.params.importacaoId);
+      if (!importacao) return res.status(404).json({ error: 'Importação não encontrada.' });
+
+      historicalImportService.executarFullLoad(empresaId, req.params.id, {
+        periodoInicio: importacao.periodoInicio, periodoFim: importacao.periodoFim,
+        importacaoExistenteId: importacao.id,
+      }).catch(err => {
+        console.error('[IA Service] Retomada de importação falhou:', err.message);
+      });
+
+      res.status(202).json(importacao);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.post('/api/ia-service/base-historica/fontes/:id/sincronizar-incremental', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const { janelaDias } = req.body || {};
+
+      historicalSyncService.executarIncremental(empresaId, req.params.id, { janelaDias }).catch(err => {
+        console.error('[IA Service] Sincronização incremental falhou:', err.message);
+      });
+
+      res.status(202).json({ ok: true, mensagem: 'Sincronização incremental iniciada.' });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service/base-historica/importacoes', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const { fonteId, limite } = req.query || {};
+      res.json(importacaoRepo.listarImportacoes(empresaId, { fonteId, limite }));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service/base-historica/importacoes/:id', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const importacao = importacaoRepo.getImportacao(empresaId, req.params.id);
+      if (!importacao) return res.status(404).json({ error: 'Importação não encontrada.' });
+      res.json(importacao);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service/base-historica/importacoes/:id/inconsistencias', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      res.json(importacaoRepo.listarInconsistencias(empresaId, req.params.id));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // ── Base histórica: consulta (painel) ─────────────────────────────────────
+  // "Aguardando indexação" aqui é só a contagem de chamados.precisa_indexacao=1
+  // (marcado pelo importador, ver migration v15) — a FILA de indexação real
+  // (Checkpoint 8+: conhecimento/chunks/FTS5/embeddings) não existe ainda
+  // nesta etapa, então este número reflete apenas o que o importador marcou.
+  app.get('/api/ia-service/base-historica/resumo', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      res.json({
+        clientes: clienteRepo.contarClientes(empresaId),
+        usuariosCliente: clienteRepo.contarUsuariosCliente(empresaId),
+        tecnicos: clienteRepo.contarTecnicos(empresaId),
+        chamados: chamadoRepo.contarChamados(empresaId),
+        posicionamentos: chamadoRepo.contarPosicionamentos(empresaId),
+        chamadosAguardandoIndexacao: chamadoRepo.listarChamados(empresaId, { precisaIndexacao: true, limite: 5000 }).length,
+      });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // ── Radar de chamados (fila do analista) ────────────────────────────────
+  app.get('/api/ia-service/radar/fila', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const { apenas_minha, filtro_sla, limite } = req.query || {};
+      const resultado = radarService.getFila(empresaId, req.session?.user_id || null, {
+        apenasMinha: apenas_minha === 'true',
+        filtroSla: filtro_sla || 'todos',
+        limite: limite ? Number(limite) : undefined,
+      });
+      res.json(resultado);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.post('/api/ia-service/radar/chamados/:chamadoId/abrir-atendimento', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const { atendimento, reaberto } = radarService.abrirOuCriarAtendimento(empresaId, req.params.chamadoId, {
+        usuarioIdIahub: req.session?.user_id || null,
+      });
+      res.status(reaberto ? 200 : 201).json({ atendimentoId: atendimento.id, reaberto });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service/radar/config', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      res.json(radarService.getConfig(empresaId));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // ── Anexos REAIS do SoftExpert (distintos dos uploads do analista, ver
+  // /atendimentos/:id/anexos acima) — buscados ao vivo via Agente Local, sem
+  // cache local do binário (ver anexos-softexpert-service.js).
+  app.get('/api/ia-service/radar/chamados/:chamadoId/anexos-softexpert', async (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const anexos = await anexosSoftExpertService.listarAnexosDoChamado(empresaId, req.params.chamadoId);
+      res.json({ anexos });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service/radar/chamados/:chamadoId/anexos-softexpert/:oid', async (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const anexo = await anexosSoftExpertService.baixarAnexo(empresaId, req.params.chamadoId, req.params.oid);
+      res.setHeader('Content-Type', anexo.mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(anexo.nome)}"`);
+      res.send(anexo.buffer);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.put('/api/ia-service/radar/config', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const { autoRefreshSegundos } = req.body || {};
+      res.json(radarService.salvarConfig(empresaId, { autoRefreshSegundos }));
     } catch (err) {
       _handleErro(res, err);
     }

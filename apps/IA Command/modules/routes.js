@@ -40,6 +40,15 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, i
   // de token) e token de sessao (demais rotas) — ver modules/protheus_whatsapp/routes.js.
   require('./protheus_whatsapp/routes')(app);
 
+  // IMPORTANTE: enviar-servico-externo é chamado por outros apps do IAHub
+  // (ex.: IA Service, login externo por telefone) — servidor-a-servidor, sem
+  // sessão de usuário. Deve ser registrado ANTES do app.use que aplica
+  // requireAuth a todo /api/ia-command/*. Autenticação própria via segredo
+  // compartilhado (IAC_WHATSAPP_SERVICO_EXTERNO_SECRET) — ver
+  // modules/whatsapp/servico-externo-routes.js. Arquivo isolado, não altera
+  // whatsapp/routes.js nem nenhuma rota existente.
+  require('./whatsapp/servico-externo-routes')(app);
+
   app.use('/api/ia-command', requireAuth, requireIaCommand, requireEmpresaContext);
 
   // Rotas do WhatsApp

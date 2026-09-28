@@ -1,4 +1,4 @@
-// ── Tema claro/escuro — restrito a IA Command + launcher por enquanto ──────
+// ── Tema claro/escuro — restrito aos modulos habilitados abaixo ────────────
 // Aplicado o mais cedo possivel dentro deste script (fora de qualquer
 // await/fetch) para MINIMIZAR o flash de tela clara antes do dark aplicar.
 // LIMITACAO CONHECIDA E ACEITA: auth.js e' carregado no fim do <body> em
@@ -8,15 +8,15 @@
 // de nao fazer isso agora por simplicidade e menor superficie de erro (ver
 // historico de bugs desta sessao ao editar varios HTMLs parecidos).
 //
-// Duas "zonas" com preferencia INDEPENDENTE uma da outra (decisao explicita
-// do usuario — nao e' o mesmo interruptor): o launcher de sistemas
-// (iahub.html) e o IA Command. Escolher dark num nao afeta o outro. Os
-// demais modulos (IA Recruit, IA Administracao, etc.) continuam sempre no
-// tema claro, sem toggle — quando decidirem expandir, e' so adicionar uma
-// nova zona em _ZONAS_TEMA (o CSS compartilhado ja suporta).
+// Cada zona tem preferencia INDEPENDENTE das outras (decisao explicita do
+// usuario — nao e' o mesmo interruptor): escolher dark num modulo nao afeta
+// os demais. Modulos ainda fora desta lista (IA Recruit, IA Administracao)
+// continuam sempre no tema claro, sem toggle — para habilitar, e' so
+// adicionar uma nova zona aqui (o CSS compartilhado ja suporta).
 const _ZONAS_TEMA = [
   { chave: 'iac_theme',     dentro: () => location.pathname.includes('/app/ia-command/') },
   { chave: 'mc_theme',      dentro: () => location.pathname.includes('/app/master-crypto/') },
+  { chave: 'ias_theme',     dentro: () => location.pathname.includes('/app/ia-service/') },
   { chave: 'launcher_theme', dentro: () => location.pathname === '/iahub.html' || location.pathname.endsWith('/iahub.html') },
 ];
 function _zonaTemaAtual() {
@@ -197,6 +197,8 @@ const _PAGINA_ROTINA = {
   '/app/ia-service/atendimentos.html':      'svc-atendimentos',
   '/app/ia-service/atendimento.html':       'svc-atendimentos',
   '/app/ia-service/consultores.html':       'svc-consultores',
+  '/app/ia-service/base-historica.html':    'svc-base-historica',
+  '/app/ia-service/radar.html':             'svc-radar',
   // ── IAHub / IA Recruit
   '/dashboard.html':        'dashboard',
   '/monitores.html':        'monitores',
@@ -275,6 +277,8 @@ const _ROTINA_LABELS = {
   // IA Service
   'svc-atendimentos': 'IA Service - Atendimentos',
   'svc-consultores':  'IA Service - Consultores',
+  'svc-base-historica': 'IA Service - Base Histórica',
+  'svc-radar': 'IA Service - Radar de Chamados',
   // ── IAHub / IA Recruit
   'dashboard': 'Dashboard',
   'monitores': 'Monitores',
@@ -420,7 +424,12 @@ function _mostrarOverlaySemAcesso(rotinaNome = 'esta rotina') {
   }
 
   // 1. Verificar autenticação e obter dados do usuário
-  const meRes = await fetch('/api/me').catch(() => null);
+  // credentials:'same-origin' explícito (2026-09) — investigando relato de
+  // nova aba (target="_blank" a partir do menu do IA Service) caindo em
+  // /login.html mesmo com sessão válida e cookie sameSite:'lax'. O padrão
+  // do fetch já é 'same-origin', mas tornar explícito elimina qualquer
+  // ambiguidade de comportamento do navegador nessa aba recém-aberta.
+  const meRes = await fetch('/api/me', { credentials: 'same-origin' }).catch(() => null);
   if (!meRes?.ok) {
     if (!location.pathname.endsWith('/login.html')) location.href = '/login.html';
     return;
@@ -662,20 +671,58 @@ async function _injetarEmpresaTopbar() {
       box-shadow:0 8px 32px rgba(0,0,0,.35);min-width:220px;padding:6px;
     "></div>`;
 
-  // Botão Guia de Uso — injetado apenas em páginas sem #_guia-btn próprio.
+  // Botões "Voltar ao IAHub" + "Guia de Uso" — injetados apenas em páginas
+  // sem #_guia-btn próprio. Mesmo padrão visual do shell.html do IA Command
+  // (.shell-nav-btn), mas usando var(--accent) do sistema atual em vez de
+  // roxo fixo — cada módulo já define sua própria --accent no <style>
+  // (2026-09: IA Service não tinha NENHUM dos dois botões, cabeçalho ficava
+  // visualmente diferente do IA Command — corrigido aqui, injeção única
+  // para não duplicar HTML em cada página do IA Service).
   const isAdminApp    = location.pathname.includes('/app/ia-administracao/')
     || location.pathname === '/administracao.html'
     || location.pathname.endsWith('/administracao.html');
   const isIaCommand   = location.pathname.includes('/app/ia-command/');
+  const isIaService   = location.pathname.includes('/app/ia-service/');
   if (!isAdminApp && !isIaCommand && !topbar.querySelector('#_guia-btn')) {
+    if (!document.getElementById('_shell-nav-btn-style')) {
+      const style = document.createElement('style');
+      style.id = '_shell-nav-btn-style';
+      style.textContent = `
+        .shell-nav-btn {
+          height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+          padding: 0 12px; border-radius: 8px; border: 1px solid var(--border);
+          background: var(--bg-card); color: var(--text-hi); font-size: 13px; font-weight: 800;
+          text-decoration: none; transition: border-color .15s, background .15s, color .15s, transform .15s;
+          white-space: nowrap;
+        }
+        .shell-nav-btn:hover { border-color: var(--accent); background: var(--accent-glow); color: var(--accent); transform: translateY(-1px); }
+        .shell-nav-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .shell-nav-btn.primary:hover { color: #fff; filter: brightness(0.92); }
+        @media (max-width: 760px) { .shell-nav-btn span { display: none; } }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // Sem margin-left:auto aqui de propósito — o badge de empresa (mais
+    // abaixo neste arquivo) já tem seu próprio margin-left:auto, que empurra
+    // o GRUPO inteiro (IAHub + Guia + badge) para a direita, ficando colado
+    // como no shell.html do IA Command. Dois auto concorrentes deixavam um
+    // vão estranho entre o botão IAHub e o badge de empresa.
+    const homeBtn = document.createElement('a');
+    homeBtn.className = 'shell-nav-btn';
+    homeBtn.href = '/iahub.html';
+    homeBtn.title = 'Voltar ao IAHub';
+    homeBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>IAHub</span>`;
+    topbar.appendChild(homeBtn);
+
+    const guiaHref = isIaService ? '/app/ia-service/guia/index.html' : '/guia/';
     const guiaBtn = document.createElement('a');
     guiaBtn.id        = '_guia-btn';
-    guiaBtn.href      = '/guia/';
+    guiaBtn.href      = guiaHref;
     guiaBtn.target    = '_blank';
     guiaBtn.title     = 'Guia de uso do sistema';
-    guiaBtn.className = 'btn btn-primary';
-    guiaBtn.style.cssText = 'margin-left:auto;gap:6px;font-size:13px;white-space:nowrap;color:#fff;';
-    guiaBtn.innerHTML = `<span style="font-size:15px">❓</span><span>Guia de Uso</span>`;
+    guiaBtn.className = 'shell-nav-btn primary';
+    guiaBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"/></svg><span>Guia</span>`;
     topbar.appendChild(guiaBtn);
   }
 

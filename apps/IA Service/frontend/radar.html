@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Radar de Chamados - IA Service</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#1d4ed8; --accent-light:#3b82f6; --accent-glow:rgba(29,78,216,.1); }
+    .sidebar-logo .logo-icon { background:var(--accent) !important; }
+
+    /* Tema escuro tipo WhatsApp (protheus-chat.html do IA Command), aplicado
+       só dentro desta página — o menu lateral do IAHub continua no tema claro
+       padrão, só a área de trabalho do radar vira escura. */
+    .radar-content {
+      --wa-bg:#0b141a; --wa-header:#202c33; --wa-panel:#111b21;
+      --wa-sidebar:#111b21; --wa-sidebar-hover:#182229; --wa-sidebar-active:#202c33;
+      --wa-text:#e9edef; --wa-text-secondary:#aebac1; --wa-text-tertiary:#8696a0;
+      --wa-accent:#00d9a3; --wa-border:rgba(255,255,255,.07);
+      --wa-bubble-in:#202c33; --wa-bubble-out:#005c4b;
+      flex:1; overflow:hidden; padding:0; display:flex;
+      background:var(--wa-bg); color:var(--wa-text);
+    }
+
+    .radar-shell { display:grid; grid-template-columns:360px 1fr; width:100%; height:100%; min-height:0; }
+
+    /* ── Coluna esquerda: fila de chamados (= lista de "conversas") ──────── */
+    .fila-col { display:flex; flex-direction:column; min-height:0; border-right:1px solid var(--wa-border); background:var(--wa-sidebar); }
+    .fila-head { flex:none; padding:14px 16px 10px; border-bottom:1px solid var(--wa-border); background:var(--wa-header); }
+    .fila-head-top { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
+    .fila-titulo { font-size:15px; font-weight:800; color:var(--wa-text); }
+
+    /* Indicador fixo da empresa (tenant IAHub) ativa nesta sessão — mesmo
+       papel visual do escopo-select-btn do protheus-chat.html (IA Command),
+       mas SOMENTE informativo (sem modal de troca): no IA Service a empresa
+       é escolhida antes de entrar no chat (no Hub, ou no slug do login
+       externo /entrar-servico/:empresaSlug), nunca trocada de dentro do
+       chat — por isso não há necessidade de interação aqui, só de deixar
+       claro em qual tenant o analista está mexendo. */
+    .empresa-badge {
+      flex:none; display:flex; align-items:center; gap:6px;
+      border:1px solid var(--wa-border); border-radius:8px;
+      background:rgba(0,217,163,.1); color:var(--wa-accent);
+      font-size:11.5px; font-weight:700; padding:5px 10px;
+      max-width:60%;
+    }
+    .empresa-badge .icon { width:13px; height:13px; flex:none; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+    .empresa-badge .label { min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .fila-tabs { display:flex; gap:4px; background:rgba(0,0,0,.2); border:1px solid var(--wa-border); border-radius:8px; padding:3px; margin-bottom:8px; }
+    .fila-tab { flex:1; border:none; background:transparent; padding:6px 8px; border-radius:6px; font-size:11.5px; font-weight:700; color:var(--wa-text-secondary); cursor:pointer; text-align:center; }
+    .fila-tab.ativo { background:var(--wa-accent); color:#04140f; }
+    .fila-filtros { display:flex; gap:4px; flex-wrap:wrap; }
+    .fila-filtro { border:1px solid var(--wa-border); background:rgba(255,255,255,.03); padding:4px 9px; border-radius:99px; font-size:11px; font-weight:700; color:var(--wa-text-secondary); cursor:pointer; }
+    .fila-filtro.ativo { background:rgba(0,217,163,.14); border-color:var(--wa-accent); color:var(--wa-accent); }
+    .fila-refresh-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:10px; }
+    .fila-refresh-row select { font-size:11px; border:1px solid var(--wa-border); border-radius:6px; padding:4px 6px; background:var(--wa-panel); color:var(--wa-text); }
+    .fila-contador { font-size:11px; color:var(--wa-text-tertiary); }
+    .fila-proxima-atualizacao { font-size:10.5px; color:var(--wa-text-tertiary); font-variant-numeric:tabular-nums; }
+
+    .fila-atualizar-btn {
+      width:100%; margin-top:8px; padding:7px 10px; border-radius:8px;
+      border:1px solid var(--wa-border); background:rgba(0,217,163,.08); color:var(--wa-accent);
+      font-size:12px; font-weight:700; cursor:pointer;
+      display:flex; align-items:center; justify-content:center; gap:6px;
+      transition:background .15s ease;
+    }
+    .fila-atualizar-btn:hover { background:rgba(0,217,163,.16); }
+    .fila-atualizar-btn:disabled { opacity:.6; cursor:default; }
+    .fila-atualizar-icon { display:inline-block; font-size:13px; line-height:1; }
+    .fila-atualizar-btn.carregando .fila-atualizar-icon { animation:girar .7s linear infinite; }
+    @keyframes girar { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+
+    .fila-lista { flex:1; overflow-y:auto; }
+    .fila-item { padding:12px 16px; border-bottom:1px solid var(--wa-border); cursor:pointer; display:flex; flex-direction:column; gap:4px; }
+    .fila-item:hover { background:var(--wa-sidebar-hover); }
+    .fila-item.selecionado { background:var(--wa-sidebar-active); border-left:3px solid var(--wa-accent); padding-left:13px; }
+    .fila-item-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .fila-item-numero { font-size:11.5px; font-weight:800; color:var(--wa-accent); }
+    .fila-item-titulo { font-size:13px; font-weight:700; color:var(--wa-text); line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+    .fila-item-meta { font-size:11px; color:var(--wa-text-tertiary); display:flex; align-items:center; gap:6px; }
+    .badge { font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; padding:2px 7px; border-radius:99px; flex-shrink:0; }
+    .badge-em-atraso { background:rgba(248,113,113,.18); color:#fca5a5; }
+    .badge-em-dia { background:rgba(74,222,128,.15); color:#86efac; }
+    .badge-proxima { background:rgba(250,204,21,.16); color:#fde047; }
+
+    .fila-empty { padding:32px 16px; text-align:center; color:var(--wa-text-tertiary); font-size:13px; }
+    .fila-aviso { margin:10px 16px; background:rgba(0,217,163,.1); color:var(--wa-accent); border:1px solid rgba(0,217,163,.3); border-radius:8px; padding:8px 10px; font-size:11.5px; line-height:1.4; }
+
+    /* ── Coluna direita: chat ───────────────────────────────────────────── */
+    .chat-col { display:flex; flex-direction:column; min-height:0; min-width:0; background:var(--wa-panel); }
+    .chat-vazio { flex:1; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px; color:var(--wa-text-tertiary); }
+    .chat-vazio-icon { font-size:40px; opacity:.5; }
+
+    .chat-header { flex:none; border-bottom:1px solid var(--wa-border); background:var(--wa-header); padding:12px 20px; display:none; }
+    .chat-header.ativo { display:block; }
+    .chat-header-top { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .chat-header-toggle {
+      flex:none; width:26px; height:26px; border-radius:7px; border:1px solid var(--wa-border);
+      background:rgba(255,255,255,.03); color:var(--wa-text-secondary); cursor:pointer;
+      display:flex; align-items:center; justify-content:center; font-size:13px;
+      transition:transform .15s ease, background .15s ease;
+    }
+    .chat-header-toggle:hover { background:rgba(255,255,255,.08); }
+    .chat-header-detalhes { overflow:hidden; max-height:300px; transition:max-height .2s ease, opacity .15s ease, margin-top .2s ease; opacity:1; }
+    .chat-header.recolhido .chat-header-detalhes { max-height:0; opacity:0; }
+    .chat-header.recolhido .chat-header-toggle { transform:rotate(-90deg); }
+    .chat-header-numero { font-size:13px; font-weight:800; color:var(--wa-accent); }
+    .chat-header-titulo { font-size:14px; font-weight:700; color:var(--wa-text); margin-top:2px; }
+    /* Uma única linha compacta reunindo TUDO que antes eram 3 blocos
+       empilhados (meta + tags sistema + tags pessoas) — SLA/data/status são
+       pílulas de "meta" (fundo neutro), sistema/módulo/solicitante/consultor
+       são pílulas de "tag" (mesmo visual, cores levemente diferentes só por
+       semântica). flex-wrap cuida de quebrar linha só quando a tela é
+       estreita, não por design. */
+    .chat-header-linha { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+    .chat-header-pill { font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:99px; background:rgba(255,255,255,.06); color:var(--wa-text-secondary); border:1px solid var(--wa-border); white-space:nowrap; }
+    .chat-header-pill strong { color:var(--wa-text); font-weight:700; }
+    .chat-header-tag { font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:99px; background:rgba(255,255,255,.06); color:var(--wa-text-secondary); border:1px solid var(--wa-border); white-space:nowrap; }
+    .chat-header-situacao-retorno { font-size:10.5px; font-weight:800; color:#f87171; white-space:nowrap; }
+    .chat-header-descricao { margin-top:8px; padding:8px 12px; background:rgba(255,255,255,.03); border:1px solid var(--wa-border); border-radius:8px; font-size:12.5px; color:var(--wa-text-secondary); line-height:1.5; max-height:64px; overflow-y:auto; }
+    .chat-header-descricao-label { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--wa-text-tertiary); margin-bottom:4px; }
+
+    .chat-header-anexos { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
+    .chat-header-anexo-chip {
+      display:flex; align-items:center; gap:5px; text-decoration:none;
+      background:rgba(255,255,255,.04); border:1px solid var(--wa-border); border-radius:8px;
+      padding:5px 10px; font-size:11.5px; color:var(--wa-text-secondary); cursor:pointer;
+      transition:background .15s ease;
+    }
+    .chat-header-anexo-chip:hover { background:rgba(255,255,255,.09); color:var(--wa-text); }
+    .chat-header-anexo-chip .tamanho { color:var(--wa-text-tertiary); font-size:10.5px; }
+
+    .chat-body {
+      flex:1; overflow-y:auto; padding:16px 20px; display:flex; flex-direction:column; gap:12px;
+      background-image: radial-gradient(rgba(255,255,255,.02) 1px, transparent 1px);
+      background-size: 18px 18px;
+    }
+    .row { display:flex; }
+    .row.out { justify-content:flex-end; }
+    .row.in { justify-content:flex-start; }
+
+    /* Card de mensagem no padrão "Pergunta → Resposta" do protheus-chat.html
+       (addBubble): rótulo em destaque, texto, rodapé com metadados/ação. */
+    .bubble { max-width:74%; border-radius:10px; padding:10px 14px; font-size:13.5px; line-height:1.5; white-space:pre-wrap; word-break:break-word; box-shadow:0 1px 2px rgba(0,0,0,.25); }
+    .row.out .bubble { background:var(--wa-bubble-out); color:var(--wa-text); border-bottom-right-radius:3px; }
+    .row.in .bubble { background:var(--wa-bubble-in); color:var(--wa-text); border-bottom-left-radius:3px; }
+    .bubble code, .bubble pre { font-family:ui-monospace,Consolas,monospace; font-size:12.5px; }
+    .bubble pre { background:rgba(0,0,0,.25); border-radius:8px; padding:10px; overflow-x:auto; white-space:pre; }
+
+    .bubble-question-context { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--wa-accent); margin-bottom:6px; opacity:.9; }
+
+    .anexos-do-turno { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+    .anexo-chip { display:flex; align-items:center; gap:5px; background:rgba(0,0,0,.2); border:1px solid var(--wa-border); border-radius:8px; padding:4px 8px; font-size:11.5px; color:var(--wa-text-secondary); }
+
+    .diagnostico-card { margin-top:8px; border-top:1px solid rgba(255,255,255,.08); padding-top:8px; }
+    .diagnostico-secao { margin-bottom:8px; }
+    .diagnostico-secao-titulo { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--wa-accent); margin-bottom:3px; }
+    .nivel-confianca-badge { display:inline-block; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:20px; background:rgba(255,255,255,.08); color:var(--wa-text-secondary); margin-bottom:6px; }
+
+    /* Rodapé de card: contagem + ação, equivalente a "N registros · Ver na aba Dados →" */
+    .bubble-rodape { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,.08); font-size:11px; color:var(--wa-text-tertiary); }
+    .bubble-rodape button { border:none; background:none; color:var(--wa-accent); font-weight:700; font-size:11px; cursor:pointer; padding:0; }
+
+    .typing-row .bubble { display:flex; align-items:center; gap:6px; color:var(--wa-text-tertiary); font-size:13px; }
+    .typing-dot { width:6px; height:6px; border-radius:50%; background:var(--wa-text-tertiary); animation:pulse 1.2s infinite ease-in-out; }
+    @keyframes pulse { 0%,100%{opacity:.3} 50%{opacity:1} }
+
+    .composer { flex:none; border-top:1px solid var(--wa-border); background:var(--wa-header); padding:12px 20px; display:none; }
+    .composer.ativo { display:block; }
+    .anexos-pendentes { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+    .anexo-pendente { display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.06); border:1px solid var(--wa-border); border-radius:8px; padding:5px 8px; font-size:12px; color:var(--wa-text-secondary); }
+    .anexo-pendente button { border:none; background:none; cursor:pointer; color:var(--wa-text-tertiary); font-size:14px; line-height:1; padding:0; }
+    .composer-row { display:flex; align-items:flex-end; gap:8px; }
+    .composer-row textarea { flex:1; box-sizing:border-box; min-height:44px; max-height:160px; resize:none; border:1px solid var(--wa-border); border-radius:10px; padding:10px 12px; font-size:13.5px; font-family:inherit; background:var(--wa-panel); color:var(--wa-text); }
+    .composer-row textarea::placeholder { color:var(--wa-text-tertiary); }
+    .composer-btn { width:40px; height:40px; border-radius:10px; border:1px solid var(--wa-border); background:var(--wa-panel); color:var(--wa-text-secondary); cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .composer-btn.enviar { background:var(--wa-accent); border-color:var(--wa-accent); color:#04140f; }
+    .composer-hint { font-size:11px; color:var(--wa-text-tertiary); margin-top:5px; }
+
+    .error-banner { display:none; position:fixed; top:16px; right:16px; background:#fee2e2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:10px 14px; font-size:13px; z-index:200; max-width:360px; box-shadow:var(--shadow-sm); }
+    .toast-status { position:fixed; top:16px; right:16px; background:var(--wa-header); color:var(--wa-text); border:1px solid var(--wa-border); border-radius:8px; padding:8px 14px; font-size:12px; box-shadow:0 4px 12px rgba(0,0,0,.4); display:none; z-index:200; }
+
+    @media (max-width: 900px) {
+      .radar-shell { grid-template-columns:1fr; }
+      .fila-col.chat-aberto { display:none; }
+      .chat-col.chat-fechado { display:none; }
+    }
+
+    /* Modo tela cheia (chat puro, sem moldura do IAHub) — padrão
+       protheus-chat.html do IA Command: sidebar/topbar somem por completo
+       (não só escondidos, para não reservar espaço/flash de layout) e o
+       chat ocupa 100% da viewport. Classe aplicada no <body> ANTES do
+       primeiro paint (ver script síncrono logo após <body>), então nunca
+       há flash do layout padrão antes de sumir. */
+    body.tela-cheia .sidebar,
+    body.tela-cheia .topbar { display:none !important; }
+    body.tela-cheia .main { margin-left:0 !important; }
+    body.tela-cheia .page-content.radar-content { height:100vh; }
+  </style>
+</head>
+<body>
+  <script>
+    if (location.pathname === '/radar-externo' || location.pathname === '/app/ia-service/chat') {
+      document.body.classList.add('tela-cheia');
+    }
+  </script>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="window.toggleSidebar?.()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Service</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="window.toggleSidebar?.()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Service ›</span> Radar de Chamados</span>
+    </div>
+
+    <div class="page-content radar-content">
+      <div class="radar-shell">
+
+        <!-- Coluna esquerda: fila (= lista de conversas) -->
+        <aside class="fila-col" id="fila-col">
+          <div class="fila-head">
+            <div class="fila-head-top">
+              <div class="fila-titulo">Fila de Chamados</div>
+              <div class="empresa-badge" id="empresa-badge" style="display:none">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>
+                <span class="label" id="empresa-badge-label"></span>
+              </div>
+            </div>
+            <div class="fila-tabs">
+              <button class="fila-tab" id="tab-geral" onclick="setModoFila(false)">Fila geral</button>
+              <button class="fila-tab ativo" id="tab-minha" onclick="setModoFila(true)">Minha fila</button>
+            </div>
+            <div class="fila-filtros">
+              <button class="fila-filtro ativo" id="filtro-todos" onclick="setFiltroSla('todos')">Todos</button>
+              <button class="fila-filtro" id="filtro-atraso" onclick="setFiltroSla('em_atraso')">Em atraso</button>
+              <button class="fila-filtro" id="filtro-dia" onclick="setFiltroSla('em_dia')">Em dia</button>
+            </div>
+            <button class="fila-atualizar-btn" id="fila-atualizar-btn" type="button" onclick="atualizarFilaManual()">
+              <span class="fila-atualizar-icon">↻</span> Atualizar agora
+            </button>
+            <div class="fila-refresh-row">
+              <span class="fila-contador" id="fila-contador">—</span>
+              <span class="fila-proxima-atualizacao" id="fila-proxima-atualizacao"></span>
+              <select id="autoRefreshSelect" onchange="salvarPreferenciaAutoRefresh()">
+                <option value="0">Manual</option>
+                <option value="30">30s</option>
+                <option value="60" selected>1 min</option>
+                <option value="300">5 min</option>
+                <option value="900">15 min</option>
+              </select>
+            </div>
+          </div>
+          <div id="fila-aviso"></div>
+          <div class="fila-lista" id="fila-lista"><div class="fila-empty">Carregando…</div></div>
+        </aside>
+
+        <!-- Coluna direita: chat -->
+        <section class="chat-col" id="chat-col">
+          <div class="chat-vazio" id="chat-vazio">
+            <div class="chat-vazio-icon">💬</div>
+            <div>Selecione um chamado na fila para iniciar ou continuar a conversa com a IA.</div>
+          </div>
+
+          <div class="chat-header" id="chat-header">
+            <div class="chat-header-top">
+              <div>
+                <div class="chat-header-numero" id="chat-header-numero">—</div>
+                <div class="chat-header-titulo" id="chat-header-titulo">—</div>
+              </div>
+              <button class="chat-header-toggle" id="chat-header-toggle" type="button" title="Recolher detalhes" onclick="toggleChatHeader()">▾</button>
+            </div>
+            <div class="chat-header-detalhes" id="chat-header-detalhes">
+              <div class="chat-header-linha" id="chat-header-linha"></div>
+              <div class="chat-header-descricao" id="chat-header-descricao" style="display:none"></div>
+              <div class="chat-header-anexos" id="chat-header-anexos" style="display:none"></div>
+            </div>
+          </div>
+
+          <div class="chat-body" id="chat-body"></div>
+
+          <div class="composer" id="composer">
+            <div class="anexos-pendentes" id="anexos-pendentes"></div>
+            <div class="composer-row">
+              <input type="file" id="anexo-input" multiple style="display:none" accept=".txt,.log,.xml,.json,.sql,.csv,.prw,.tlpp,.png,.jpg,.jpeg,.webp,.pdf">
+              <button class="composer-btn" type="button" title="Anexar arquivo" onclick="document.getElementById('anexo-input').click()">📎</button>
+              <textarea id="composer-texto" placeholder="Descreva o problema, cole a mensagem de erro, ou responda à investigação..."></textarea>
+              <button class="composer-btn enviar" type="button" title="Enviar" onclick="enviarMensagem()">➤</button>
+            </div>
+            <div class="composer-hint">Ctrl+Enter para enviar · anexe prints, logs e fonte relacionados ao problema</div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+  <div id="error-banner" class="error-banner"></div>
+  <div id="toast-status" class="toast-status"></div>
+
+  <script>
+    // ── Modo de acesso: sessão normal do IA HUB (cookie) vs. sessão externa
+    // (login por telefone/WhatsApp, token em localStorage) — e, ortogonal a
+    // isso, modo de EXIBIÇÃO: dentro do sistema (sidebar/topbar do IAHub) ou
+    // tela cheia tipo chat puro (padrão protheus-chat.html do IA Command,
+    // que serve o chat como página isolada, sem moldura de sistema). O MESMO
+    // arquivo físico é servido em três paths diferentes:
+    //   /app/ia-service/radar.html → dentro do sistema, sessão de cookie
+    //   /app/ia-service/chat       → tela cheia, sessão de cookie (rota
+    //                                 protegida por requireIaService, ver
+    //                                 routes/index.js)
+    //   /radar-externo             → tela cheia, sessão externa por token
+    //                                 (rota pública, login-externo-routes.js)
+    // O path de acesso é o sinal confiável de qual modo usar, não uma query
+    // string fácil de forjar/esquecer. Detectado ANTES de qualquer outro
+    // script — auth.js redireciona para /login.html se não houver cookie de
+    // sessão, então em modo externo ele NUNCA é carregado (senão o usuário
+    // seria expulso da tela antes do JS abaixo rodar).
+    const TOKEN_EXTERNO_KEY = 'svc_token_externo';
+    const modoExterno = location.pathname === '/radar-externo';
+    const modoTelaCheia = modoExterno || location.pathname === '/app/ia-service/chat';
+    const tokenExterno = modoExterno ? localStorage.getItem(TOKEN_EXTERNO_KEY) : null;
+
+    if (modoExterno && !tokenExterno) {
+      // Sem token gravado (nunca logou, ou limpou o navegador) não há como
+      // prosseguir nem saber de qual empresa era a sessão — mostra a própria
+      // tela com um aviso, sem tentar adivinhar um slug de empresa.
+      document.write('<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0b141a;color:#e9edef;font-family:sans-serif;text-align:center;padding:24px"><div>Sessão não encontrada. Peça o link de acesso novamente ao administrador.</div></div>');
+      throw new Error('Sessão externa ausente.');
+    }
+
+    if (!modoExterno) {
+      document.write('<script src="/js/auth.js"><\/script>');
+      if (!modoTelaCheia) document.write('<script src="/app/ia-service/js/sidebar.js"><\/script>');
+    }
+  </script>
+  <script>
+    let modoMinhaFila = true; // padrão: analista abre já na própria fila, não na fila geral de todos
+    let filtroSlaAtual = 'todos';
+    let timerAutoRefresh = null;
+    let chamadoSelecionadoId = null;
+    let atendimentoAtualId = null;
+    let anexosPendentes = [];
+    let enviando = false;
+    let filaCache = [];
+    let ultimaPerguntaPendente = null; // contexto da pergunta associada à próxima resposta da IA (card "Pergunta")
+
+    function showError(msg) {
+      const el = document.getElementById('error-banner');
+      el.textContent = msg;
+      el.style.display = 'block';
+      clearTimeout(showError._t);
+      showError._t = setTimeout(() => { el.style.display = 'none'; }, 6000);
+    }
+    function showToast(msg) {
+      const el = document.getElementById('toast-status');
+      el.textContent = msg;
+      el.style.display = 'block';
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => { el.style.display = 'none'; }, 2000);
+    }
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+    }
+    // Prefixo de rota + header de auth mudam conforme o modo. Em modo externo
+    // não há empresa_id explícito na query (o token já resolve a empresa no
+    // backend) e a identidade vai no header x-sessao-externa, não em cookie.
+    function apiPath(pathSemPrefixo) {
+      const base = modoExterno ? '/api/ia-service-externo' : '/api/ia-service';
+      return base + pathSemPrefixo;
+    }
+    async function api(pathSemPrefixo, opts = {}) {
+      const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+      if (modoExterno) headers['x-sessao-externa'] = tokenExterno;
+      const r = await fetch(apiPath(pathSemPrefixo), { ...opts, headers });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
+      return body;
+    }
+    function empresaIdAtual() {
+      if (modoExterno) return 'externo'; // placeholder não-vazio — empresa real já resolvida pelo token no backend
+      return window._iahubEmpresa?.id || null;
+    }
+    function qsEmpresa(empresaId) {
+      // Em modo externo a empresa não vai na query (o header já resolve) —
+      // evita mandar um valor sem sentido tipo "empresa_id=externo" ao backend.
+      return modoExterno ? '' : `empresa_id=${empresaId}`;
+    }
+    function formatarData(iso) {
+      if (!iso) return '—';
+      try { return new Date(iso).toLocaleDateString('pt-BR'); } catch (_) { return iso; }
+    }
+    function badgeSla(slaPrazo) {
+      if (slaPrazo === 'Em atraso') return `<span class="badge badge-em-atraso">Em atraso</span>`;
+      if (slaPrazo === 'Proxima do vencimento') return `<span class="badge badge-proxima">Próx. vencimento</span>`;
+      if (slaPrazo === 'Em dia') return `<span class="badge badge-em-dia">Em dia</span>`;
+      return '';
+    }
+
+    // Texto categórico REAL do último posicionamento (AGUARDANRETORNO da
+    // origem, preservado em posicionamentos.situacao_retorno — migration
+    // v22) — quem exatamente o chamado está aguardando agora, não só o
+    // booleano "aguardando o atendente" usado pela regra da fila. Valores
+    // reais confirmados nos dados desta empresa: 'RETORNO - ATENDENTE' e
+    // 'RETORNO - CLIENTE' (+ variante de grafia 'Retorno do Cliente').
+    function labelSituacaoRetorno(situacaoRetorno) {
+      if (!situacaoRetorno) return null;
+      const v = situacaoRetorno.toUpperCase();
+      if (v.includes('ATENDENTE')) return 'Aguardando Atendente';
+      if (v.includes('CLIENTE')) return 'Aguardando Cliente';
+      if (v.includes('FORNECEDOR')) return 'Aguardando Fornecedor';
+      return `Aguardando: ${situacaoRetorno}`;
+    }
+
+    // ── Fila (coluna esquerda) ──────────────────────────────────────────────
+    function setModoFila(minhaFila) {
+      modoMinhaFila = minhaFila;
+      document.getElementById('tab-geral').classList.toggle('ativo', !minhaFila);
+      document.getElementById('tab-minha').classList.toggle('ativo', minhaFila);
+      carregarFila();
+    }
+    function setFiltroSla(filtro) {
+      filtroSlaAtual = filtro;
+      document.getElementById('filtro-todos').classList.toggle('ativo', filtro === 'todos');
+      document.getElementById('filtro-atraso').classList.toggle('ativo', filtro === 'em_atraso');
+      document.getElementById('filtro-dia').classList.toggle('ativo', filtro === 'em_dia');
+      carregarFila();
+    }
+
+    async function carregarFila() {
+      const empresaId = empresaIdAtual();
+      if (!empresaId) return;
+      try {
+        const params = { apenas_minha: modoMinhaFila ? 'true' : 'false', filtro_sla: filtroSlaAtual };
+        if (!modoExterno) params.empresa_id = empresaId;
+        const qs = new URLSearchParams(params);
+        const resultado = await api(`/radar/fila?${qs.toString()}`);
+        filaCache = resultado.chamados;
+
+        const avisoEl = document.getElementById('fila-aviso');
+        avisoEl.innerHTML = resultado.avisoSemVinculo
+          ? '<div class="fila-aviso">Seu usuário não tem ID SoftExpert vinculado — cadastre em Consultores para ver sua fila pessoal.</div>'
+          : '';
+
+        document.getElementById('fila-contador').textContent = `${resultado.chamados.length} chamado(s)`;
+
+        const lista = document.getElementById('fila-lista');
+        if (!resultado.chamados.length) {
+          lista.innerHTML = '<div class="fila-empty">Nenhum chamado aguardando retorno do atendente no momento.</div>';
+          return;
+        }
+
+        lista.innerHTML = resultado.chamados.map(c => `
+          <div class="fila-item ${c.id === chamadoSelecionadoId ? 'selecionado' : ''}" onclick="selecionarChamado('${c.id}')">
+            <div class="fila-item-top">
+              <span class="fila-item-numero">#${escapeHtml(c.numero)}</span>
+              ${badgeSla(c.slaPrazo)}
+            </div>
+            <div class="fila-item-titulo">${escapeHtml(c.titulo || c.assunto || c.breveDescricao || '(sem título)')}</div>
+            <div class="fila-item-meta">Aberto em ${formatarData(c.dataAbertura)}</div>
+          </div>
+        `).join('');
+      } catch (err) {
+        showError('Não foi possível carregar a fila: ' + err.message);
+      }
+    }
+
+    // Atualização manual (botão "Atualizar agora") — mesma carga que o
+    // auto-refresh, mas disparada pelo clique do analista. Reseta a
+    // contagem regressiva do auto-refresh (evita atualizar de novo poucos
+    // segundos depois só porque o timer também ia disparar).
+    async function atualizarFilaManual() {
+      const btn = document.getElementById('fila-atualizar-btn');
+      btn.disabled = true;
+      btn.classList.add('carregando');
+      try {
+        await carregarFila();
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove('carregando');
+      }
+      const segundos = Number(document.getElementById('autoRefreshSelect').value);
+      if (segundos) {
+        segundosRestantes = segundos;
+        atualizarLabelContagem();
+      }
+    }
+
+    // ── Seleção de chamado → abre/reabre atendimento e carrega o chat ──────
+    async function selecionarChamado(chamadoId) {
+      chamadoSelecionadoId = chamadoId;
+      document.querySelectorAll('.fila-item').forEach(el => el.classList.remove('selecionado'));
+      renderizarSelecaoNaLista();
+
+      const empresaId = empresaIdAtual();
+      document.getElementById('chat-vazio').style.display = 'none';
+      document.getElementById('chat-header').classList.add('ativo');
+      document.getElementById('composer').classList.add('ativo');
+      document.getElementById('chat-body').innerHTML = '<div style="text-align:center;color:var(--wa-text-tertiary);font-size:13px;padding:20px;">Carregando…</div>';
+
+      const chamado = filaCache.find(c => c.id === chamadoId);
+      if (chamado) preencherCabecalho(chamado);
+      carregarAnexosSoftExpert(chamadoId);
+
+      try {
+        const qs = qsEmpresa(empresaId);
+        const resultado = await api(`/radar/chamados/${chamadoId}/abrir-atendimento${qs ? '?' + qs : ''}`, { method: 'POST' });
+        atendimentoAtualId = resultado.atendimentoId;
+        await carregarMensagens();
+      } catch (err) {
+        showError('Não foi possível abrir o atendimento: ' + err.message);
+      }
+    }
+
+    // Anexos REAIS do SoftExpert (prints/planilhas/logs já anexados ao
+    // chamado na origem) — distintos dos uploads que o analista faz no
+    // composer. Busca ao vivo via Agente Local a cada seleção de chamado
+    // (sem cache local do binário). Falha aqui nunca trava o chat — só
+    // esconde a seção de anexos, silenciosamente.
+    async function carregarAnexosSoftExpert(chamadoId) {
+      const container = document.getElementById('chat-header-anexos');
+      container.style.display = 'none';
+      container.innerHTML = '';
+      try {
+        const resultado = await api(`/radar/chamados/${chamadoId}/anexos-softexpert`);
+        if (!resultado.anexos?.length) return;
+        container.innerHTML = resultado.anexos.map((a, i) => {
+          const tamanhoKb = a.tamanho ? `${Math.round(a.tamanho / 1024)}KB` : '';
+          return `<button type="button" class="chat-header-anexo-chip" onclick="abrirAnexoSoftExpert('${chamadoId}', '${encodeURIComponent(a.oid)}')">📎 ${escapeHtml(a.nome)} <span class="tamanho">${tamanhoKb}</span></button>`;
+        }).join('');
+        container.style.display = 'flex';
+      } catch (_) {
+        // Silencioso — anexo é complemento, não deve gerar erro visível no chat.
+      }
+    }
+
+    // Download via fetch (não <a href> direto) porque em modo externo a
+    // autenticação vai no header x-sessao-externa, que um link puro do
+    // navegador não envia — precisa passar pela mesma função `api()`.
+    async function abrirAnexoSoftExpert(chamadoId, oidCodificado) {
+      try {
+        const headers = modoExterno ? { 'x-sessao-externa': tokenExterno } : {};
+        const r = await fetch(apiPath(`/radar/chamados/${chamadoId}/anexos-softexpert/${oidCodificado}`), { headers });
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(body.error || `Erro ${r.status}`);
+        }
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank', 'noopener');
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } catch (err) {
+        showError('Não foi possível abrir o anexo: ' + err.message);
+      }
+    }
+
+    function renderizarSelecaoNaLista() {
+      document.querySelectorAll('.fila-item').forEach((el, i) => {
+        const chamado = filaCache[i];
+        if (chamado && chamado.id === chamadoSelecionadoId) el.classList.add('selecionado');
+      });
+    }
+
+    const CHAT_HEADER_RECOLHIDO_KEY = 'iasvc_chat_header_recolhido';
+    function toggleChatHeader() {
+      const header = document.getElementById('chat-header');
+      const recolhido = header.classList.toggle('recolhido');
+      localStorage.setItem(CHAT_HEADER_RECOLHIDO_KEY, recolhido ? '1' : '0');
+    }
+
+    function preencherCabecalho(c) {
+      document.getElementById('chat-header').classList.toggle('recolhido', localStorage.getItem(CHAT_HEADER_RECOLHIDO_KEY) === '1');
+      document.getElementById('chat-header-numero').textContent = `#${c.numero}`;
+      document.getElementById('chat-header-titulo').textContent = c.titulo || c.assunto || c.breveDescricao || '(sem título)';
+
+      // Tudo numa única linha compacta que quebra por flex-wrap (não por
+      // design) — SLA/data/status/último posicionamento (pílulas de "meta")
+      // e sistema/módulo/cliente/solicitante/consultor (pílulas de "tag")
+      // misturados na mesma linha, na ordem de prioridade de leitura rápida.
+      // Dados de pessoa vêm de chamados.solicitante_id/tecnico_responsavel_id,
+      // resolvidos via JOIN em radar-repository.js (100% coberto para
+      // solicitante, ~97% para técnico — chamados sem alocação simplesmente
+      // omitem essa pílula).
+      const linha = [];
+      if (c.slaPrazo) linha.push(badgeSla(c.slaPrazo));
+      linha.push(`<span class="chat-header-pill">Aberto em <strong>${formatarData(c.dataAbertura)}</strong></span>`);
+      if (c.statusEncerramento) linha.push(`<span class="chat-header-pill">Status: <strong>${escapeHtml(c.statusEncerramento)}</strong></span>`);
+      if (c.ultimoPosicionamentoEm) linha.push(`<span class="chat-header-pill">Últ. posicionamento: <strong>${formatarData(c.ultimoPosicionamentoEm)}</strong></span>`);
+      if (c.clienteNome) linha.push(`<span class="chat-header-tag">🏢 ${escapeHtml(c.clienteNome)}</span>`);
+      if (c.produto) linha.push(`<span class="chat-header-tag">💻 ${escapeHtml(c.produto)}</span>`);
+      if (c.familia) linha.push(`<span class="chat-header-tag">📦 ${escapeHtml(c.familia)}</span>`);
+      if (c.modulo) linha.push(`<span class="chat-header-tag">🧩 ${escapeHtml(c.modulo)}</span>`);
+      if (c.solicitanteNome) {
+        const comEmail = c.solicitanteEmail ? ` — ${escapeHtml(c.solicitanteEmail)}` : '';
+        linha.push(`<span class="chat-header-tag">👤 ${escapeHtml(c.solicitanteNome)}${comEmail}</span>`);
+      }
+      if (c.tecnicoResponsavelNome) linha.push(`<span class="chat-header-tag">🧑‍💻 Consultor: ${escapeHtml(c.tecnicoResponsavelNome)}</span>`);
+      const situacaoLabel = labelSituacaoRetorno(c.situacaoRetorno);
+      if (situacaoLabel) linha.push(`<span class="chat-header-situacao-retorno">${escapeHtml(situacaoLabel)}</span>`);
+      document.getElementById('chat-header-linha').innerHTML = linha.join('');
+
+      // Descrição do problema — fonte real que a IA usa para investigar (ver
+      // chamados.descricao, mapeado de PARAGRAFO3 na importação; TEXTO31/
+      // assunto é só um resumo curto, insuficiente sozinho).
+      const descricaoTexto = c.descricao || c.breveDescricao || c.assunto;
+      const descricaoEl = document.getElementById('chat-header-descricao');
+      if (descricaoTexto) {
+        descricaoEl.style.display = 'block';
+        descricaoEl.innerHTML = `<div class="chat-header-descricao-label">Descrição do problema</div>${escapeHtml(descricaoTexto)}`;
+      } else {
+        descricaoEl.style.display = 'none';
+      }
+    }
+
+    // ── Chat (coluna direita) ────────────────────────────────────────────
+    function renderizarTextoComCodigo(texto) {
+      const partes = String(texto ?? '').split(/```[a-zA-Z]*\n?/);
+      return partes.map((parte, i) => {
+        const escapado = escapeHtml(parte);
+        return i % 2 === 1 ? `<pre><code>${escapado}</code></pre>` : escapado;
+      }).join('');
+    }
+
+    function renderizarDiagnostico(diagnostico, nivelConfianca) {
+      if (!diagnostico) return '';
+      const ORDEM = ['Diagnóstico', 'Causa provável', 'Evidências', 'Correção proposta', 'Fonte corrigido', 'Alterações realizadas', 'Validação'];
+      let html = '<div class="diagnostico-card">';
+      if (nivelConfianca) html += `<span class="nivel-confianca-badge">${escapeHtml(nivelConfianca)}</span>`;
+      for (const secao of ORDEM) {
+        if (!diagnostico[secao]) continue;
+        html += `<div class="diagnostico-secao"><div class="diagnostico-secao-titulo">${secao}</div>${renderizarTextoComCodigo(diagnostico[secao])}</div>`;
+      }
+      html += '</div>';
+      return html;
+    }
+
+    /**
+     * Card de mensagem no padrão "Pergunta → Resposta" do protheus-chat.html
+     * (função addBubble original) — respostas da IA (direcao='in') trazem um
+     * rótulo com a pergunta que originou aquela resposta em destaque, e um
+     * rodapé com nível de confiança quando houver diagnóstico estruturado.
+     */
+    function addBubble({ direcao, texto, anexos, diagnostico, nivelConfianca, perguntaContexto }) {
+      const chatBody = document.getElementById('chat-body');
+      const row = document.createElement('div');
+      row.className = `row ${direcao}`;
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+
+      const cabecalhoPergunta = (direcao === 'in' && perguntaContexto)
+        ? `<div class="bubble-question-context">Pergunta: ${escapeHtml(perguntaContexto).slice(0, 140)}</div>`
+        : '';
+
+      const corpo = diagnostico
+        ? renderizarDiagnostico(diagnostico, nivelConfianca)
+        : renderizarTextoComCodigo(texto);
+
+      bubble.innerHTML = cabecalhoPergunta + corpo;
+
+      if (anexos && anexos.length) {
+        const anexosDiv = document.createElement('div');
+        anexosDiv.className = 'anexos-do-turno';
+        anexosDiv.innerHTML = anexos.map(a => `<span class="anexo-chip">📄 ${escapeHtml(a.nomeOriginal)}</span>`).join('');
+        bubble.appendChild(anexosDiv);
+      }
+
+      row.appendChild(bubble);
+      chatBody.appendChild(row);
+      chatBody.scrollTop = chatBody.scrollHeight;
+      return row;
+    }
+
+    function showTyping() {
+      hideTyping();
+      const chatBody = document.getElementById('chat-body');
+      const row = document.createElement('div');
+      row.className = 'row in typing-row';
+      row.id = 'typing-row';
+      row.innerHTML = `<div class="bubble"><span class="typing-dot"></span> Analisando…</div>`;
+      chatBody.appendChild(row);
+      chatBody.scrollTop = chatBody.scrollHeight;
+    }
+    function hideTyping() {
+      document.getElementById('typing-row')?.remove();
+    }
+
+    async function carregarMensagens() {
+      const empresaId = empresaIdAtual();
+      if (!empresaId || !atendimentoAtualId) return;
+      try {
+        const qs = qsEmpresa(empresaId);
+        const sufixo = qs ? '?' + qs : '';
+        const [mensagens, anexosDoAtendimento] = await Promise.all([
+          api(`/atendimentos/${atendimentoAtualId}/mensagens${sufixo}`),
+          api(`/atendimentos/${atendimentoAtualId}/anexos${sufixo}`),
+        ]);
+        const chatBody = document.getElementById('chat-body');
+        chatBody.innerHTML = '';
+        const anexosPorMensagem = {};
+        for (const a of anexosDoAtendimento) {
+          if (!a.mensagemId) continue;
+          (anexosPorMensagem[a.mensagemId] ||= []).push(a);
+        }
+        let perguntaAnterior = null;
+        for (const m of mensagens) {
+          if (m.papel === 'system') continue;
+          const direcao = m.papel === 'user' ? 'out' : 'in';
+          addBubble({
+            direcao,
+            texto: m.conteudo,
+            anexos: anexosPorMensagem[m.id],
+            diagnostico: m.diagnostico,
+            nivelConfianca: m.nivelConfianca,
+            perguntaContexto: direcao === 'in' ? perguntaAnterior : null,
+          });
+          if (direcao === 'out') perguntaAnterior = m.conteudo;
+        }
+      } catch (err) {
+        showError('Não foi possível carregar as mensagens: ' + err.message);
+      }
+    }
+
+    document.getElementById('anexo-input').addEventListener('change', async (e) => {
+      const empresaId = empresaIdAtual();
+      const arquivos = [...e.target.files];
+      e.target.value = '';
+      for (const arquivo of arquivos) {
+        const formData = new FormData();
+        formData.append('arquivo', arquivo);
+        try {
+          const qs = qsEmpresa(empresaId);
+          const headers = modoExterno ? { 'x-sessao-externa': tokenExterno } : {};
+          const r = await fetch(apiPath(`/atendimentos/${atendimentoAtualId}/anexos${qs ? '?' + qs : ''}`), { method: 'POST', body: formData, headers });
+          const anexo = await r.json();
+          if (!r.ok) throw new Error(anexo.error || `Erro ${r.status}`);
+          anexosPendentes.push(anexo);
+          renderizarAnexosPendentes();
+        } catch (err) {
+          showError(`Não foi possível anexar "${arquivo.name}": ` + err.message);
+        }
+      }
+    });
+
+    function renderizarAnexosPendentes() {
+      const container = document.getElementById('anexos-pendentes');
+      container.innerHTML = anexosPendentes.map((a, i) => `
+        <span class="anexo-pendente">📄 ${escapeHtml(a.nomeOriginal)} <button onclick="removerAnexoPendente(${i})" title="Remover">✕</button></span>
+      `).join('');
+    }
+    function removerAnexoPendente(i) {
+      anexosPendentes.splice(i, 1);
+      renderizarAnexosPendentes();
+    }
+
+    async function enviarMensagem() {
+      if (enviando || !atendimentoAtualId) return;
+      const empresaId = empresaIdAtual();
+      const textarea = document.getElementById('composer-texto');
+      const texto = textarea.value.trim();
+      if (!texto) return showError('Digite uma mensagem antes de enviar.');
+
+      const anexosDoTurno = anexosPendentes.slice();
+      addBubble({ direcao: 'out', texto, anexos: anexosDoTurno });
+      textarea.value = '';
+      anexosPendentes = [];
+      renderizarAnexosPendentes();
+      showTyping();
+      enviando = true;
+
+      try {
+        const qs = qsEmpresa(empresaId);
+        const resposta = await api(`/atendimentos/${atendimentoAtualId}/investigar${qs ? '?' + qs : ''}`, {
+          method: 'POST',
+          body: JSON.stringify({ texto, anexoIds: anexosDoTurno.map(a => a.id) }),
+        });
+        hideTyping();
+        addBubble({ direcao: 'in', texto: resposta.conteudo, diagnostico: resposta.diagnostico, nivelConfianca: resposta.nivelConfianca, perguntaContexto: texto });
+      } catch (err) {
+        hideTyping();
+        addBubble({ direcao: 'in', texto: 'Não foi possível concluir a análise: ' + err.message });
+      } finally {
+        enviando = false;
+      }
+    }
+
+    document.getElementById('composer-texto').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.ctrlKey) {
+        e.preventDefault();
+        enviarMensagem();
+      }
+    });
+
+    // ── Auto-refresh da fila (persistido por empresa) ──────────────────────
+    let timerContagemRegressiva = null;
+    let segundosRestantes = 0;
+
+    function formatarContagem(segundos) {
+      if (segundos >= 60) {
+        const min = Math.floor(segundos / 60);
+        const seg = segundos % 60;
+        return seg ? `${min}min ${seg}s` : `${min}min`;
+      }
+      return `${segundos}s`;
+    }
+
+    function atualizarLabelContagem() {
+      const el = document.getElementById('fila-proxima-atualizacao');
+      if (!el) return;
+      el.textContent = segundosRestantes > 0 ? `próxima em ${formatarContagem(segundosRestantes)}` : '';
+    }
+
+    function scheduleAutoRefresh() {
+      if (timerAutoRefresh) { clearInterval(timerAutoRefresh); timerAutoRefresh = null; }
+      if (timerContagemRegressiva) { clearInterval(timerContagemRegressiva); timerContagemRegressiva = null; }
+      const segundos = Number(document.getElementById('autoRefreshSelect').value);
+      if (!segundos) { segundosRestantes = 0; atualizarLabelContagem(); return; }
+
+      segundosRestantes = segundos;
+      atualizarLabelContagem();
+
+      timerContagemRegressiva = setInterval(() => {
+        if (document.hidden) return; // evita contagem incorreta com a aba em background
+        segundosRestantes = Math.max(0, segundosRestantes - 1);
+        atualizarLabelContagem();
+      }, 1000);
+
+      timerAutoRefresh = setInterval(() => {
+        if (document.hidden) return;
+        showToast('Atualizando fila…');
+        carregarFila();
+        segundosRestantes = segundos;
+        atualizarLabelContagem();
+      }, segundos * 1000);
+    }
+    async function salvarPreferenciaAutoRefresh() {
+      const empresaId = empresaIdAtual();
+      if (!empresaId) return;
+      const segundos = Number(document.getElementById('autoRefreshSelect').value);
+      scheduleAutoRefresh();
+      try {
+        const qs = qsEmpresa(empresaId);
+        await api(`/radar/config${qs ? '?' + qs : ''}`, {
+          method: 'PUT',
+          body: JSON.stringify({ autoRefreshSegundos: segundos }),
+        });
+      } catch (err) {
+        showError('Não foi possível salvar a preferência de atualização: ' + err.message);
+      }
+    }
+    async function restaurarPreferenciaAutoRefresh() {
+      const empresaId = empresaIdAtual();
+      if (!empresaId) return;
+      try {
+        const qs = qsEmpresa(empresaId);
+        const config = await api(`/radar/config${qs ? '?' + qs : ''}`);
+        document.getElementById('autoRefreshSelect').value = String(config.autoRefreshSegundos);
+      } catch (_) {}
+      scheduleAutoRefresh();
+    }
+
+    // Badge fixo de empresa (tenant) — só informativo, sem troca (ver CSS
+    // .empresa-badge). Em modo logado o nome já está em window._iahubEmpresa
+    // (populado por auth.js); em modo externo não há esse objeto, então
+    // busca via /whoami (a sessão externa já resolve a empresa pelo token,
+    // isto só traduz o id em nome para exibição).
+    async function preencherBadgeEmpresa() {
+      const badge = document.getElementById('empresa-badge');
+      const label = document.getElementById('empresa-badge-label');
+      let nome = null;
+      try {
+        if (modoExterno) {
+          const info = await api('/whoami');
+          nome = info.empresaNome;
+        } else {
+          nome = window._iahubEmpresa?.nome || window._iahubEmpresa?.razao_social || null;
+        }
+      } catch (_) {
+        // Falha ao resolver nome não deve travar a tela — badge só some.
+      }
+      if (!nome) return;
+      label.textContent = nome;
+      badge.style.display = 'flex';
+    }
+
+    async function iniciar() {
+      // Moldura do IAHub (sidebar/topbar) some via CSS (classe .tela-cheia
+      // no <body>, aplicada de forma síncrona logo no <head> — ver script
+      // antes de #sidebar) tanto em /radar-externo quanto em
+      // /app/ia-service/chat. Aqui só resta a regra de NEGÓCIO específica
+      // da sessão externa.
+      if (modoExterno) {
+        // Sessão externa é sempre "minha fila" (o token já resolve o
+        // consultor específico) — esconde o toggle "Fila geral", que exige
+        // sessão do IA HUB para fazer sentido (ver escopo do plano).
+        modoMinhaFila = true;
+        document.getElementById('tab-geral').style.display = 'none';
+        document.getElementById('tab-minha').classList.add('ativo');
+      }
+      preencherBadgeEmpresa();
+      await restaurarPreferenciaAutoRefresh();
+      carregarFila();
+    }
+
+    window._iahubAuthReady?.then(iniciar) ?? iniciar();
+  </script>
+</body>
+</html>

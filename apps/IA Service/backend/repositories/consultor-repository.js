@@ -18,7 +18,9 @@ function _rowParaDominio(row) {
     usuarioIdIahub: row.usuario_id_iahub,
     empresaId: row.empresa_id,
     idSoftexpert: row.id_softexpert,
+    telefone: row.telefone,
     ativo: !!row.ativo,
+    preAnaliseAutomatica: !!row.pre_analise_automatica,
     criadoEm: row.criado_em,
     atualizadoEm: row.atualizado_em,
   };
@@ -38,14 +40,16 @@ function criarConsultor(empresaId, dados) {
   const agora = new Date().toISOString();
 
   db.prepare(`
-    INSERT INTO consultores (id, usuario_id_iahub, empresa_id, id_softexpert, ativo, criado_em, atualizado_em)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO consultores (id, usuario_id_iahub, empresa_id, id_softexpert, telefone, ativo, pre_analise_automatica, criado_em, atualizado_em)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     Number(dados.usuarioIdIahub),
     Number(empresaId),
     dados.idSoftexpert ?? null,
+    dados.telefone ?? null,
     dados.ativo === false ? 0 : 1,
+    dados.preAnaliseAutomatica === false ? 0 : 1,
     agora,
     agora
   );
@@ -97,11 +101,13 @@ function atualizarConsultor(empresaId, consultorId, patch) {
 
   const agora = new Date().toISOString();
   db.prepare(`
-    UPDATE consultores SET id_softexpert = ?, ativo = ?, atualizado_em = ?
+    UPDATE consultores SET id_softexpert = ?, telefone = ?, ativo = ?, pre_analise_automatica = ?, atualizado_em = ?
     WHERE id = ? AND empresa_id = ?
   `).run(
     patch.idSoftexpert !== undefined ? patch.idSoftexpert : atual.idSoftexpert,
+    patch.telefone !== undefined ? patch.telefone : atual.telefone,
     patch.ativo !== undefined ? (patch.ativo ? 1 : 0) : (atual.ativo ? 1 : 0),
+    patch.preAnaliseAutomatica !== undefined ? (patch.preAnaliseAutomatica ? 1 : 0) : (atual.preAnaliseAutomatica ? 1 : 0),
     agora,
     consultorId,
     Number(empresaId)
@@ -110,10 +116,24 @@ function atualizarConsultor(empresaId, consultorId, patch) {
   return getConsultor(empresaId, consultorId);
 }
 
+/**
+ * Exclusão física — seguro porque atendimentos.consultor_id é
+ * ON DELETE SET NULL (migration v2): apagar um consultor nunca deixa
+ * atendimento órfão quebrado, só perde a referência de "quem atendeu"
+ * nos atendimentos já vinculados a ele.
+ */
+function excluirConsultor(empresaId, consultorId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const db = getDB();
+  const resultado = db.prepare(`DELETE FROM consultores WHERE id = ? AND empresa_id = ?`).run(consultorId, Number(empresaId));
+  return resultado.changes > 0;
+}
+
 module.exports = {
   criarConsultor,
   getConsultor,
   getConsultorPorUsuario,
   listarConsultores,
   atualizarConsultor,
+  excluirConsultor,
 };

@@ -141,6 +141,27 @@ function getAtendimentoPorCodigo(empresaId, codigo) {
   return _rowParaDominio(row);
 }
 
+/**
+ * Localiza o atendimento mais recente para uma referência externa (ex.:
+ * numero de chamado do SoftExpert) — usado pelo radar para decidir se reabre
+ * um diálogo já existente ou cria um novo. A unicidade de
+ * (empresa, origem, referencia_externa) foi removida na migration v5 (entrada
+ * manual pode gerar mais de um atendimento para a mesma referência); aqui
+ * pegamos sempre o mais recente.
+ */
+function getAtendimentoPorReferencia(empresaId, { origem, referenciaExterna }) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!referenciaExterna) return null;
+  const db = getDB();
+  const row = db.prepare(`
+    SELECT * FROM atendimentos
+    WHERE empresa_id = ? AND origem = ? AND referencia_externa = ?
+    ORDER BY criado_em DESC
+    LIMIT 1
+  `).get(Number(empresaId), origem, referenciaExterna);
+  return _rowParaDominio(row);
+}
+
 function listarAtendimentos(empresaId, filtros = {}) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
@@ -205,6 +226,7 @@ module.exports = {
   criarAtendimentoComPrimeiraMensagem,
   getAtendimento,
   getAtendimentoPorCodigo,
+  getAtendimentoPorReferencia,
   listarAtendimentos,
   atualizarStatus,
   atualizarContexto,

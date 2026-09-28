@@ -624,7 +624,7 @@ a { text-decoration: none; color: inherit; }
   background: var(--bg-sidebar);
 }
 
-.topbar-title { font-size: 15px; font-weight: 600; color: var(--text-hi); min-width:0; }
+.topbar-title { font-size: 15px; font-weight: 600; color: var(--text-hi); min-width:0; flex: 1; }
 .topbar-user {
   margin-left: 4px;
   color: var(--text-md);

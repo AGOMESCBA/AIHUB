@@ -45,7 +45,8 @@ try {
 
   const db = database2.getDB();
   const versoes = db.prepare('SELECT COUNT(*) as total FROM schema_migrations').get();
-  assert.strictEqual(versoes.total, 6, 'migrations nao devem ser reaplicadas (schema_migrations continua com 6 linhas — v1 a v6)');
+  const totalMigrationsAtuais = require('../backend/database/migrations').length;
+  assert.strictEqual(versoes.total, totalMigrationsAtuais, 'migrations nao devem ser reaplicadas apos restart');
 
   database2.fecharDB();
 

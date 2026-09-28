@@ -1,5 +1,6 @@
 import time
 import asyncio
+import base64
 from config import get_config
 from database import get_conexao_erp
 from crypto_envelope import decrypt_text
@@ -9,6 +10,18 @@ _BLOCKED_KEYWORDS = [
     "CREATE ", "EXEC ", "EXECUTE ", "SP_", "XP_", "OPENROWSET",
 ]
 MAX_ROWS_HARD = 50_000
+
+
+def _valor_serializavel(v):
+    """Colunas SQL Server do tipo image/varbinary voltam do pyodbc como
+    bytes/bytearray, que o encoder JSON do FastAPI não sabe serializar
+    (a resposta quebraria com erro 500 antes de sair do agente). Converte
+    para base64 (string ASCII) — quem consome do outro lado decodifica
+    explicitamente sabendo que é binário (ver SEBLOB.FLDATA, usado pelo
+    IA Service para anexos do SoftExpert)."""
+    if isinstance(v, (bytes, bytearray)):
+        return base64.b64encode(bytes(v)).decode("ascii")
+    return v
 
 
 def _resolver_credenciais(empresa_id: str = "", connection_key: str = "") -> dict:
@@ -130,7 +143,7 @@ async def executar_sql(sql: str, limit: int = 10_000, empresa_id: str = "", conn
             cursor = conn.cursor()
             cursor.execute(sql_final)
             cols = [d[0] for d in cursor.description]
-            rows = [dict(zip(cols, row)) for row in cursor.fetchmany(limit_eff)]
+            rows = [dict(zip(cols, (_valor_serializavel(v) for v in row))) for row in cursor.fetchmany(limit_eff)]
             cursor.close()
             return rows
         finally:

@@ -39,10 +39,15 @@ function atualizarConsultor(empresaId, consultorId, patch) {
   return consultorRepo.atualizarConsultor(empresaId, consultorId, patch);
 }
 
+function excluirConsultor(empresaId, consultorId) {
+  return consultorRepo.excluirConsultor(empresaId, consultorId);
+}
+
 module.exports = {
   criarConsultor,
   getConsultor,
   getConsultorPorUsuario,
   listarConsultores,
   atualizarConsultor,
+  excluirConsultor,
 };

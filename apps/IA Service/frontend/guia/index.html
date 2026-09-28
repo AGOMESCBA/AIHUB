@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Guia de Uso - IA Service</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent: #1d4ed8; --accent-2: #3b82f6; --accent-light: #3b82f6; --accent-glow: rgba(29,78,216,.10); --shadow-sm: 0 1px 2px rgba(17,12,34,.04), 0 1px 1px rgba(17,12,34,.03); --shadow-md: 0 4px 14px rgba(29,78,216,.08), 0 1px 3px rgba(17,12,34,.04); --shadow-lg: 0 12px 32px rgba(29,78,216,.14), 0 2px 6px rgba(17,12,34,.06); }
+    body { overflow: hidden; -webkit-font-smoothing: antialiased; }
+    .guia-layout { display: flex; height: 100vh; overflow: hidden; }
+    .guia-nav { width: 264px; min-width: 264px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+    .guia-nav-header { padding: 22px 20px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .guia-nav-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+    .logo-icon { width: 32px; height: 32px; min-width: 32px; background: linear-gradient(145deg, var(--accent), var(--accent-2)); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+    .guia-nav-logo span { font-size: 15.5px; font-weight: 800; letter-spacing: -.01em; background: linear-gradient(135deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .guia-nav-subtitle { font-size: 11px; color: var(--text-lo); margin-top: 2px; padding-left: 42px; }
+    .guia-nav-body { overflow-y: auto; flex: 1; padding: 14px 0; }
+    .guia-nav-body::-webkit-scrollbar { width: 4px; }
+    .guia-nav-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .nav-fase-hdr { display: flex; align-items: center; gap: 8px; padding: 12px 16px 6px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--text-lo); cursor: pointer; user-select: none; }
+    .nav-fase-hdr:hover { color: var(--text-md); }
+    .nav-fase-num { width: 20px; height: 20px; border-radius: 50%; background: var(--bg-hover); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: var(--text-md); flex-shrink: 0; }
+    .nav-etapa { display: flex; align-items: center; gap: 10px; padding: 7px 16px 7px 44px; font-size: 12.5px; color: var(--text-md); cursor: pointer; transition: background .15s ease, color .15s ease; text-decoration: none; border-radius: 0 20px 20px 0; margin-right: 8px; }
+    .nav-etapa:hover { background: var(--bg-hover); color: var(--text-hi); }
+    .nav-etapa.active { background: var(--accent-glow); color: var(--accent); font-weight: 700; }
+    .nav-etapa-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-hi); flex-shrink: 0; transition: background .15s ease, transform .15s ease; }
+    .nav-etapa.active .nav-etapa-dot { background: var(--accent); transform: scale(1.3); }
+    .guia-nav-footer { padding: 14px 16px; border-top: 1px solid var(--border); flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+    .nav-back-btn, .nav-pdf-btn { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 8px; font-size: 12px; cursor: pointer; transition: background .15s ease, color .15s ease, border-color .15s ease, transform .1s ease; width: 100%; text-decoration: none; }
+    .nav-back-btn { color: var(--text-md); border: none; background: none; }
+    .nav-back-btn:hover { background: var(--bg-hover); color: var(--text-hi); }
+    .nav-pdf-btn { font-weight: 800; color: #fff; border: none; background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: var(--shadow-sm); }
+    .nav-pdf-btn:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+    .guia-content { flex: 1; overflow-y: auto; background: var(--bg-base); padding: 32px 44px 60px; }
+    .guia-content::-webkit-scrollbar { width: 6px; }
+    .guia-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .guia-hero { position: relative; background: linear-gradient(135deg, #1e40af 0%, #1d4ed8 55%, #3b82f6 100%); border-radius: 18px; padding: 36px 40px; margin-bottom: 40px; color: #fff; overflow: hidden; box-shadow: var(--shadow-lg); }
+    .guia-hero::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(circle at 88% 12%, rgba(255,255,255,.16) 0%, transparent 45%), radial-gradient(circle at 8% 92%, rgba(255,255,255,.10) 0%, transparent 40%); pointer-events: none; }
+    .guia-hero h1 { position: relative; font-size: 24px; font-weight: 800; letter-spacing: -.01em; margin-bottom: 9px; }
+    .guia-hero p { position: relative; font-size: 14px; opacity: .92; max-width: 760px; line-height: 1.75; }
+    .guia-hero-meta { position: relative; display: flex; gap: 10px; margin-top: 22px; flex-wrap: wrap; }
+    .guia-hero-badge { background: rgba(255,255,255,.16); backdrop-filter: blur(2px); border: 1px solid rgba(255,255,255,.22); border-radius: 20px; padding: 5px 14px; font-size: 12px; font-weight: 700; }
+    .fase-section { margin-bottom: 52px; scroll-margin-top: 24px; }
+    .fase-header { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; padding-bottom: 14px; border-bottom: 2px solid var(--border); }
+    .fase-badge { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 12px; font-size: 14px; font-weight: 900; color: #fff; flex-shrink: 0; box-shadow: var(--shadow-sm); }
+    .f1 { background: linear-gradient(135deg, #1d4ed8, #3b82f6); }
+    .f2 { background: linear-gradient(135deg, #0891b2, #0e7490); }
+    .f3 { background: linear-gradient(135deg, #059669, #15803d); }
+    .f4 { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
+    .fase-titulo h2 { font-size: 17.5px; font-weight: 800; letter-spacing: -.005em; color: var(--text-hi); margin-bottom: 2px; }
+    .fase-titulo p { font-size: 12px; color: var(--text-lo); }
+    .etapa-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 16px; overflow: hidden; scroll-margin-top: 24px; box-shadow: var(--shadow-sm); transition: box-shadow .2s ease; }
+    .etapa-card.open { box-shadow: var(--shadow-md); }
+    .etapa-card-header { display: flex; align-items: center; gap: 12px; padding: 17px 20px; border-bottom: 1px solid var(--border); background: var(--bg-hover); cursor: pointer; user-select: none; }
+    .etapa-num { font-size: 11px; font-weight: 800; color: var(--accent); background: var(--accent-glow); padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+    .etapa-titulo { flex: 1; font-size: 14px; font-weight: 800; letter-spacing: -.003em; color: var(--text-hi); }
+    .etapa-arrow { font-size: 12px; color: var(--text-lo); transition: transform .25s ease; }
+    .etapa-card.open .etapa-arrow { transform: rotate(180deg); }
+    .etapa-body { max-height: 0; overflow: hidden; transition: max-height .35s cubic-bezier(.4,0,.2,1); }
+    .etapa-card.open .etapa-body { max-height: 8000px; }
+    .etapa-body-inner { padding: 24px 24px 28px; }
+    .etapa-desc { font-size: 13.5px; color: var(--text-md); line-height: 1.75; margin-bottom: 16px; }
+    .campo-secao { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: var(--text-lo); margin: 18px 0 7px; }
+    .campo-lista { display: flex; flex-direction: column; gap: 2px; margin-bottom: 16px; }
+    .campo-item { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 6px; background: var(--bg-card); transition: border-color .15s ease; }
+    .campo-item:hover { border-color: var(--border-hi); }
+    .campo-obrigatorio { border-left: 3px solid var(--accent); }
+    .campo-nome { font-size: 13px; font-weight: 800; color: var(--text-hi); margin-bottom: 3px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .campo-req { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); background: var(--accent-glow); padding: 1px 7px; border-radius: 10px; }
+    .campo-desc { font-size: 12.5px; color: var(--text-md); line-height: 1.62; }
+    .step-list { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+    .step-item { display: flex; gap: 14px; align-items: flex-start; }
+    .step-num { width: 24px; height: 24px; min-width: 24px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+    .step-body { font-size: 13px; color: var(--text-md); line-height: 1.65; flex: 1; }
+    .step-body strong { color: var(--text-hi); }
+    .callout { display: flex; gap: 12px; border-radius: 10px; padding: 14px 16px; margin: 14px 0; font-size: 13px; line-height: 1.6; color: var(--text-md); box-shadow: var(--shadow-sm); }
+    .callout-icon { font-weight: 900; flex-shrink: 0; margin-top: 1px; }
+    .callout.info { background: rgba(29,78,216,.08); border-left: 3px solid var(--accent); }
+    .callout.warning { background: rgba(217,119,6,.08); border-left: 3px solid #d97706; }
+    .callout.success { background: rgba(5,150,105,.08); border-left: 3px solid #059669; }
+    .callout.danger { background: rgba(220,38,38,.08); border-left: 3px solid #dc2626; }
+    .guia-table-wrap { overflow-x: auto; margin: 14px 0; border-radius: 12px; box-shadow: var(--shadow-sm); }
+    .guia-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .guia-table th { text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--text-lo); border-bottom: 2px solid var(--border); background: var(--bg-hover); }
+    .guia-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text-md); vertical-align: top; }
+    .tag { display: inline-block; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 10px; background: var(--accent-glow); color: var(--accent); }
+    @media (max-width: 900px) { body { overflow: auto; } .guia-layout { display: block; height: auto; overflow: visible; } .guia-nav { width: 100%; min-width: 0; height: auto; } .guia-nav-body { display: none; } .guia-content { padding: 22px 16px; overflow: visible; } }
+    @media print { @page { size: A4; margin: 16mm 14mm; } body { overflow: visible !important; } .guia-layout { display: block !important; height: auto !important; overflow: visible !important; } .guia-nav { display: none !important; } .guia-content { overflow: visible !important; padding: 0 !important; height: auto !important; } .guia-hero { print-color-adjust: exact; -webkit-print-color-adjust: exact; } .etapa-body { max-height: none !important; overflow: visible !important; } .etapa-card { page-break-inside: auto; } .etapa-card-header { page-break-after: avoid; } .campo-item, .callout, .step-item, .guia-table-wrap tr { page-break-inside: avoid; } .fase-section { margin-bottom: 20px !important; } .fase-header { page-break-after: avoid; } .etapa-arrow, .nav-pdf-btn, .nav-back-btn { display: none !important; } }
+  </style>
+</head>
+<body>
+<div class="guia-layout">
+  <nav class="guia-nav">
+    <div class="guia-nav-header">
+      <div class="guia-nav-logo"><div class="logo-icon">⚡</div><span>IA Service</span></div>
+      <div class="guia-nav-subtitle">Guia de Uso do Sistema</div>
+    </div>
+    <div class="guia-nav-body">
+      <div class="nav-fase-hdr" onclick="scrollFase('f1')"><div class="nav-fase-num">1</div>Visão Geral</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-1',event)"><div class="nav-etapa-dot"></div>O que é o IA Service</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-2',event)"><div class="nav-etapa-dot"></div>De onde vêm os dados</a>
+
+      <div class="nav-fase-hdr" onclick="scrollFase('f2')"><div class="nav-fase-num">2</div>Operação</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e2-1',event)"><div class="nav-etapa-dot"></div>Radar de Chamados</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e2-2',event)"><div class="nav-etapa-dot"></div>Pré-análise automática da IA</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e2-3',event)"><div class="nav-etapa-dot"></div>Anexos do chamado</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e2-4',event)"><div class="nav-etapa-dot"></div>Atendimentos (entrada manual)</a>
+
+      <div class="nav-fase-hdr" onclick="scrollFase('f3')"><div class="nav-fase-num">3</div>Base de Conhecimento</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e3-1',event)"><div class="nav-etapa-dot"></div>Base Histórica</a>
+
+      <div class="nav-fase-hdr" onclick="scrollFase('f4')"><div class="nav-fase-num">4</div>Configuração</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e4-1',event)"><div class="nav-etapa-dot"></div>Cadastro de Consultores</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e4-2',event)"><div class="nav-etapa-dot"></div>Login externo por WhatsApp</a>
+    </div>
+    <div class="guia-nav-footer">
+      <a class="nav-back-btn" href="/app/ia-service/home.html">← Voltar ao sistema</a>
+      <a class="nav-pdf-btn" onclick="exportarPDF()">📄 Exportar PDF</a>
+    </div>
+  </nav>
+
+  <main class="guia-content" id="guia-content">
+    <div class="guia-hero">
+      <h1>Guia de Uso — IA Service</h1>
+      <p>Plataforma de apoio aos analistas de sustentação: fila de chamados aguardando retorno do atendente (Radar), investigação técnica assistida por IA, e base histórica importada do sistema de chamados (SoftExpert).</p>
+      <div class="guia-hero-meta">
+        <span class="guia-hero-badge">📡 Radar de Chamados</span>
+        <span class="guia-hero-badge">🧠 Investigação com IA</span>
+        <span class="guia-hero-badge">🗂 Base Histórica</span>
+        <span class="guia-hero-badge">👤 Consultores</span>
+      </div>
+    </div>
+
+    <section class="fase-section" id="f1">
+      <div class="fase-header"><div class="fase-badge f1">1</div><div class="fase-titulo"><h2>Visão Geral</h2><p>O que o sistema faz e de onde vêm os dados</p></div></div>
+
+      <article class="etapa-card" id="e1-1"><div class="etapa-card-header" onclick="toggleEtapa('e1-1')"><span class="etapa-num">1.1</span><span class="etapa-titulo">O que é o IA Service</span><span class="etapa-arrow">▾</span></div><div class="etapa-body"><div class="etapa-body-inner">
+        <p class="etapa-desc">O IA Service ajuda o analista de sustentação a investigar chamados técnicos com apoio de IA. A tela principal de trabalho é o <strong>Radar de Chamados</strong>: uma fila dos chamados que estão aguardando retorno do atendente, com um chat ao lado onde a IA analisa a descrição do problema, os posicionamentos já trocados e os anexos do chamado — correlacionando tudo para sugerir diagnóstico e correção.</p>
+        <div class="callout info"><span class="callout-icon">ℹ</span><span>O IA Service não substitui o SoftExpert — ele importa os dados do SoftExpert (só leitura) para dar contexto à IA, mas o registro oficial do chamado continua no SoftExpert.</span></div>
+      </div></div></article>
+
+      <article class="etapa-card" id="e1-2"><div class="etapa-card-header" onclick="toggleEtapa('e1-2')"><span class="etapa-num">1.2</span><span class="etapa-titulo">De onde vêm os dados</span><span class="etapa-arrow">▾</span></div><div class="etapa-body"><div class="etapa-body-inner">
+        <p class="etapa-desc">Os chamados, posicionamentos e anexos são importados periodicamente do SQL Server do SoftExpert, através do mesmo Agente Local já usado pelo IA Command (conexão SELECT-only, nunca escreve na origem). Cada chamado importado guarda: título, descrição, SLA, status, solicitante, técnico responsável, histórico de posicionamentos e anexos reais anexados no SoftExpert.</p>
+      </div></div></article>
+    </section>
+
+    <section class="fase-section" id="f2">
+      <div class="fase-header"><div class="fase-badge f2">2</div><div class="fase-titulo"><h2>Operação</h2><p>Uso do dia a dia — Radar e investigação com IA</p></div></div>
+
+      <article class="etapa-card" id="e2-1"><div class="etapa-card-header" onclick="toggleEtapa('e2-1')"><span class="etapa-num">2.1</span><span class="etapa-titulo">Radar de Chamados</span><span class="etapa-arrow">▾</span></div><div class="etapa-body"><div class="etapa-body-inner">
+        <p class="etapa-desc">Tela principal de trabalho, aberta em nova guia a partir do menu lateral. Mostra a fila de chamados aguardando retorno do atendente, com filtros de SLA (Todos / Em atraso / Em dia) e alternância entre <strong>Fila geral</strong> (todos os chamados da empresa) e <strong>Minha fila</strong> (só os chamados atribuídos ao técnico vinculado ao seu usuário).</p>
+        <div class="step-list">
+          <div class="step-item"><div class="step-num">1</div><div class="step-body">Clique em um chamado da lista à esquerda.</div></div>
+          <div class="step-item"><div class="step-num">2</div><div class="step-body">O cabeçalho mostra número, título, SLA, status, solicitante, consultor responsável e situação de retorno (aguardando atendente/cliente).</div></div>
+          <div class="step-item"><div class="step-num">3</div><div class="step-body">O chat abaixo mostra o conteúdo do chamado e o histórico de posicionamentos — digite uma pergunta no composer para a IA investigar, ou aguarde a <a href="#" onclick="abrirEtapa('e2-2',event)">pré-análise automática</a>, se estiver ativada para o seu usuário.</div></div>
+        </div>
+        <div class="callout info"><span class="callout-icon">ℹ</span><span>O botão "↻ Atualizar agora" e o seletor de auto-refresh (acima do contador de chamados) permitem recarregar a fila manualmente ou automaticamente a cada 30s/1min/5min/15min.</span></div>
+      </div></div></article>
+
+      <article class="etapa-card" id="e2-2"><div class="etapa-card-header" onclick="toggleEtapa('e2-2')"><span class="etapa-num">2.2</span><span class="etapa-titulo">Pré-análise automática da IA</span><span class="etapa-arrow">▾</span></div><div class="etapa-body"><div class="etapa-body-inner">
+        <p class="etapa-desc">A IA pode investigar um chamado sozinha, sem esperar uma pergunta do consultor, em dois momentos distintos:</p>
+        <div class="guia-table-wrap"><table class="guia-table"><thead><tr><th>Gatilho</th><th>Quando dispara</th></tr></thead><tbody>
+          <tr><td>Na importação</td><td>Quando um chamado entra na fila pela primeira vez (recebe seu primeiro posicionamento aguardando retorno do atendente) durante a sincronização com o SoftExpert.</td></tr>
+          <tr><td>Ao abrir no Radar</td><td>Quando o consultor seleciona, no Radar, um chamado que ainda não tinha atendimento — configurável por consultor em <a href="#" onclick="abrirEtapa('e4-1',event)">Cadastro de Consultores</a>.</td></tr>
+        </tbody></table></div>
+        <div class="callout info"><span class="callout-icon">ℹ</span><span>Se a pré-análise automática estiver desligada para o consultor, o chat abre só com o conteúdo do chamado — a IA responde normalmente quando o consultor perguntar algo no composer.</span></div>
+      </div></div></article>
+
+      <article class="etapa-card" id="e2-3"><div class="etapa-card-header" onclick="toggleEtapa('e2-3')"><span class="etapa-num">2.3</span><span class="etapa-titulo">Anexos do chamado</span><span class="etapa-arrow">▾</span></div><div class="etapa-body"><div class="etapa-body-inner">
+        <p class="etapa-desc">Prints, planilhas e logs já anexados ao chamado no SoftExpert aparecem como chips no cabeçalho do chat (ex.: "📎 print-erro.png"). Clique para abrir/baixar o arquivo. Esses são os anexos reais da origem — distintos do botão de clipe (📎) no composer, que serve para o consultor anexar novas evidências durante a investigação.</p>
+      </div></div></article>
+
+      <article class="etapa-card" id="e2-4"><div class="etapa-card-header" onclick="toggleEtapa('e2-4')"><span class="etapa-num">2.4</span><span class="etapa-titulo">Atendimentos (entrada manual)</span><span class="etapa-arrow">▾</span></div><div class="etapa-body"><div class="etapa-body-inner">
+        <p class="etapa-desc">Tela alternativa ao Radar, para investigar um chamado que não veio do SoftExpert (ex.: cole o texto de um chamado de outro sistema). Cole o conteúdo, anexe evidências e a IA investiga do mesmo jeito. Útil para casos avulsos — o fluxo do dia a dia é o Radar.</p>
+      </div></div></article>
+    </section>
+
+    <section class="fase-section" id="f3">
+      <div class="fase-header"><div class="fase-badge f3">3</div><div class="fase-titulo"><h2>Base de Conhecimento</h2><p>Acompanhamento da importação de dados</p></div></div>
+
+      <article class="etapa-card" id="e3-1"><div class="etapa-card-header" onclick="toggleEtapa('e3-1')"><span class="etapa-num">3.1</span><span class="etapa-titulo">Base Histórica</span><span class="etapa-arrow">▾</span></div><div class="etapa-body"><div class="etapa-body-inner">
+        <p class="etapa-desc">Tela de administração da importação — mostra a configuração do Agente Local, as fontes de dados conectadas (ex.: SQL Server SoftExpert) e o histórico de importações (quantos chamados/posicionamentos foram lidos, inseridos, atualizados ou geraram inconsistência a cada sincronização).</p>
+      </div></div></article>
+    </section>
+
+    <section class="fase-section" id="f4">
+      <div class="fase-header"><div class="fase-badge f4">4</div><div class="fase-titulo"><h2>Configuração</h2><p>Cadastro dos consultores que usam o sistema</p></div></div>
+
+      <article class="etapa-card" id="e4-1"><div class="etapa-card-header" onclick="toggleEtapa('e4-1')"><span class="etapa-num">4.1</span><span class="etapa-titulo">Cadastro de Consultores</span><span class="etapa-arrow">▾</span></div><div class="etapa-body"><div class="etapa-body-inner">
+        <p class="etapa-desc">Vincula um usuário já existente do IA HUB (login normal) a um técnico do SoftExpert e, opcionalmente, a um WhatsApp para acesso externo. Não cria login novo.</p>
+        <div class="campo-secao">Campos do cadastro</div>
+        <div class="campo-lista">
+          <div class="campo-item campo-obrigatorio"><div class="campo-nome">ID do usuário IA HUB <span class="campo-req">Obrigatório</span></div><div class="campo-desc">ID numérico de um usuário já cadastrado no IA HUB.</div></div>
+          <div class="campo-item"><div class="campo-nome">ID SoftExpert</div><div class="campo-desc">Código do técnico (CDUSERANA) na origem SoftExpert — sem esse vínculo, "Minha fila" no Radar fica vazia mesmo com chamados atribuídos ao analista.</div></div>
+          <div class="campo-item"><div class="campo-nome">Telefone</div><div class="campo-desc">WhatsApp com DDI+DDD, sem espaços/símbolos (ex.: <code>5565999998888</code>) — habilita o <a href="#" onclick="abrirEtapa('e4-2',event)">login externo</a>.</div></div>
+          <div class="campo-item"><div class="campo-nome">Pré-análise automática</div><div class="campo-desc">Liga/desliga o gatilho automático da IA ao abrir um chamado sem atendimento no Radar — ver <a href="#" onclick="abrirEtapa('e2-2',event)">2.2</a>.</div></div>
+        </div>
+      </div></div></article>
+
+      <article class="etapa-card" id="e4-2"><div class="etapa-card-header" onclick="toggleEtapa('e4-2')"><span class="etapa-num">4.2</span><span class="etapa-titulo">Login externo por WhatsApp</span><span class="etapa-arrow">▾</span></div><div class="etapa-body"><div class="etapa-body-inner">
+        <p class="etapa-desc">Consultores sem login no IA HUB podem acessar o Radar direto pelo telefone cadastrado, sem senha.</p>
+        <div class="step-list">
+          <div class="step-item"><div class="step-num">1</div><div class="step-body">Acessar <code>/entrar-servico/:slug-da-empresa</code>.</div></div>
+          <div class="step-item"><div class="step-num">2</div><div class="step-body">Informar o WhatsApp cadastrado como consultor.</div></div>
+          <div class="step-item"><div class="step-num">3</div><div class="step-body">Confirmar o código de 6 dígitos recebido por WhatsApp.</div></div>
+          <div class="step-item"><div class="step-num">4</div><div class="step-body">Entra direto na própria fila de chamados, já filtrada por técnico.</div></div>
+        </div>
+        <div class="callout warning"><span class="callout-icon">⚠</span><span>O código expira em poucos minutos e tem número máximo de tentativas — se falhar, solicite um novo código.</span></div>
+      </div></div></article>
+    </section>
+  </main>
+</div>
+<script>
+function toggleEtapa(id){const c=document.getElementById(id);if(c)c.classList.toggle('open');}
+function abrirEtapa(id,e){if(e)e.preventDefault();const c=document.getElementById(id);if(!c)return;if(!c.classList.contains('open'))c.classList.add('open');c.scrollIntoView({behavior:'smooth',block:'start'});document.querySelectorAll('.nav-etapa').forEach(a=>a.classList.remove('active'));if(e&&e.currentTarget)e.currentTarget.classList.add('active');}
+function scrollFase(id){const el=document.getElementById(id);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}
+function exportarPDF(){window.print();}
+const gc=document.getElementById('guia-content');
+const etapas=document.querySelectorAll('.etapa-card');
+const navLinks=document.querySelectorAll('.nav-etapa');
+if(gc){gc.addEventListener('scroll',()=>{let cur='';etapas.forEach(s=>{if(s.offsetTop-gc.scrollTop<180)cur=s.id;});navLinks.forEach(a=>{const fn=a.getAttribute('onclick')||'';const m=fn.match(/'([^']+)'/);a.classList.toggle('active',m&&m[1]===cur);});});}
+</script>
+</body>
+</html>

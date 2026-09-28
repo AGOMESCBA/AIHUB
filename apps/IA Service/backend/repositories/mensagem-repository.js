@@ -17,6 +17,10 @@ function _rowParaDominio(row) {
     conteudo: row.conteudo,
     usuarioId: row.usuario_id,
     criadoEm: row.criado_em,
+    diagnostico: row.diagnostico_json ? JSON.parse(row.diagnostico_json) : null,
+    nivelConfianca: row.nivel_confianca,
+    provider: row.provider,
+    model: row.model,
   };
 }
 
@@ -39,9 +43,23 @@ function salvarMensagem(empresaId, atendimentoId, dados) {
   if (!pertence) throw new Error('Atendimento não encontrado nesta empresa.');
 
   db.prepare(`
-    INSERT INTO mensagens (id, empresa_id, atendimento_id, papel, conteudo, usuario_id, criado_em)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, Number(empresaId), atendimentoId, dados.papel, dados.conteudo, dados.usuarioId ?? null, agora);
+    INSERT INTO mensagens (
+      id, empresa_id, atendimento_id, papel, conteudo, usuario_id, criado_em,
+      diagnostico_json, nivel_confianca, provider, model
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    Number(empresaId),
+    atendimentoId,
+    dados.papel,
+    dados.conteudo,
+    dados.usuarioId ?? null,
+    agora,
+    dados.diagnostico ? JSON.stringify(dados.diagnostico) : null,
+    dados.nivelConfianca ?? null,
+    dados.provider ?? null,
+    dados.model ?? null
+  );
 
   return _rowParaDominio(db.prepare('SELECT * FROM mensagens WHERE id = ?').get(id));
 }
@@ -63,4 +81,11 @@ function listarMensagens(empresaId, atendimentoId, filtros = {}) {
   return rows.map(_rowParaDominio);
 }
 
-module.exports = { salvarMensagem, listarMensagens, PAPEIS_VALIDOS };
+function getMensagem(empresaId, mensagemId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const db = getDB();
+  const row = db.prepare(`SELECT * FROM mensagens WHERE id = ? AND empresa_id = ?`).get(mensagemId, Number(empresaId));
+  return _rowParaDominio(row);
+}
+
+module.exports = { salvarMensagem, listarMensagens, getMensagem, PAPEIS_VALIDOS };

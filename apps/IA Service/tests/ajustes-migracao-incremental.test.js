@@ -95,19 +95,26 @@ try {
   database.inicializarDB(dbTmpPath);
   const db = database.getDB();
 
-  // Item 1: migrations anteriores (v1-v4) continuam registradas
-  const versoesAplicadas = db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(r => r.version);
-  assert.deepStrictEqual(versoesAplicadas, [1, 2, 3, 4, 5, 6], 'todas as versoes de v1 a v6 devem estar registradas apos o upgrade');
+  // Item 1: migrations anteriores (v1-v4) continuam registradas, mais as
+  // adicionadas depois (v5-v9 na versao atual do codigo — nao hardcoded aqui
+  // para nao quebrar a cada nova migration futura; comparamos contra o total
+  // real de MIGRATIONS exportado pelo modulo).
+  const MIGRATIONS_ATUAIS = require('../backend/database/migrations');
+  const versaoMaxima = Math.max(...MIGRATIONS_ATUAIS.map(m => m.version));
+  const versoesEsperadas = Array.from({ length: versaoMaxima }, (_, i) => i + 1);
 
-  // Item 2: novas migrations (v5, v6) executam uma unica vez — reabrir de novo
-  // nao deve duplicar linhas em schema_migrations nem reaplicar SQL.
+  const versoesAplicadas = db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(r => r.version);
+  assert.deepStrictEqual(versoesAplicadas, versoesEsperadas, `todas as versoes de v1 a v${versaoMaxima} devem estar registradas apos o upgrade`);
+
+  // Item 2: novas migrations executam uma unica vez — reabrir de novo nao
+  // deve duplicar linhas em schema_migrations nem reaplicar SQL.
   database.fecharDB();
   delete require.cache[require.resolve('../backend/database')];
   const databaseReaberto = require('../backend/database');
   databaseReaberto.inicializarDB(dbTmpPath);
   const dbReaberto = databaseReaberto.getDB();
   const totalAposReabrir = dbReaberto.prepare('SELECT COUNT(*) AS total FROM schema_migrations').get().total;
-  assert.strictEqual(totalAposReabrir, 6, 'reabrir o banco nao deve reaplicar nem duplicar migrations');
+  assert.strictEqual(totalAposReabrir, versaoMaxima, 'reabrir o banco nao deve reaplicar nem duplicar migrations');
 
   // Item 3: dados existentes (gravados sob o schema legado v1-v4) permanecem validos
   const legadoPreservado = dbReaberto.prepare('SELECT * FROM atendimentos WHERE id = ?').get('id-legado-1');

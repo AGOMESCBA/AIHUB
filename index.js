@@ -151,7 +151,13 @@ const sessionMiddleware = session({
   rolling:           true,
   cookie: {
     httpOnly: true,
-    sameSite: 'strict',
+    // 'lax' (não 'strict', 2026-09): 'strict' bloqueava o cookie de sessão
+    // ao abrir uma tela em nova aba (ex.: Radar de Chamados do IA Service),
+    // forçando login de novo mesmo já autenticado. 'lax' é o padrão usado
+    // pela maioria dos sites (inclusive bancos) — ainda bloqueia POST/PUT/
+    // DELETE vindos de outro domínio (proteção CSRF real preservada), só
+    // libera navegação GET normal entre abas do MESMO site.
+    sameSite: 'lax',
     maxAge:   30 * 24 * 60 * 60 * 1000, // 30 dias — monitores precisam sobreviver a restart do browser
   },
 });
@@ -289,7 +295,22 @@ app.get('/app/master-crypto', requireMasterCrypto, (req, res) => {
 });
 
 app.get('/app/ia-service', requireIaService, (req, res) => {
-  res.redirect('/app/ia-service/atendimentos.html');
+  // Entrada neutra (pedido do usuário, 2026-09): não força nenhuma rotina
+  // específica — o menu lateral já carrega, o usuário escolhe onde ir. Antes
+  // redirecionava direto para atendimentos.html, dando a falsa impressão de
+  // que essa era "a" tela do sistema.
+  res.redirect('/app/ia-service/home.html');
+});
+
+// Chat em tela cheia (sem sidebar/topbar do IAHub) — mesmo arquivo físico de
+// radar.html, que detecta este path e se renderiza em modo "tela cheia"
+// (ver script no <head> de radar.html). Padrão replicado do IA Command
+// (protheus-chat.html, servido como página isolada fora do menu do
+// sistema) — mas aqui, diferente do IA Command, exige sessão normal do
+// IAHub (requireIaService), pois não é a rota de sessão externa por token
+// (essa é /radar-externo, pública, em login-externo-routes.js).
+app.get('/app/ia-service/chat', requireIaService, (req, res) => {
+  res.sendFile(require('path').join(APPS.iaService.frontendDir, 'radar.html'));
 });
 
 mountStaticDirs('/app/ia-recruit', requireRecrutamento, APPS.iaRecruit.legacyStaticDirs);
@@ -561,6 +582,8 @@ require('./apps/IA Command/modules/routes')(app, { requireAuth, requireIaCommand
 // IA Command. Ver IA_SERVICE_ANALISE_IAHUB_COMMAND.md e IA_SERVICE_ETAPA1_IMPLEMENTACAO.md.
 require('./apps/IA Service/backend/database').inicializarDB();
 require('./apps/IA Service/backend/routes')(app, { requireAuth, requireIaService });
+require('./apps/IA Service/backend/routes/login-externo-routes')(app);
+require('./apps/IA Service/backend/routes/externo-routes')(app);
 
 // ── Master Crypto AI ─────────────────────────────────────────────────────────
 const masterCryptoService = require('./apps/Master Crypto/backend/service-manager');

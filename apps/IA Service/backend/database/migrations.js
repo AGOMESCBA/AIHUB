@@ -141,6 +141,453 @@ const MIGRATIONS = [
         ON atendimentos (empresa_id, canal_entrada);
     `,
   },
+  {
+    version: 7,
+    descricao: 'ai_config: chaves de provider de IA por empresa, proprio do IA Service (nao compartilha com ai_config do IA Command)',
+    sql: `
+      CREATE TABLE IF NOT EXISTS ai_config (
+        id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id         INTEGER NOT NULL UNIQUE,
+        provedor_primario  TEXT NOT NULL DEFAULT 'groq',
+        fallback_ordem     TEXT NOT NULL DEFAULT 'groq,openai,claude,gemini',
+        groq_api_key       TEXT DEFAULT NULL,
+        openai_api_key     TEXT DEFAULT NULL,
+        claude_api_key     TEXT DEFAULT NULL,
+        gemini_api_key     TEXT DEFAULT NULL,
+        criado_em          TEXT NOT NULL,
+        atualizado_em      TEXT NOT NULL
+      );
+    `,
+  },
+  {
+    version: 8,
+    descricao: 'Diagnostico estruturado nas mensagens (diagnostico/causa/evidencias/correcao/validacao/nivel_confianca) e vinculo de anexos que fundamentaram a analise',
+    sql: `
+      ALTER TABLE mensagens ADD COLUMN diagnostico_json TEXT DEFAULT NULL;
+      ALTER TABLE mensagens ADD COLUMN nivel_confianca TEXT DEFAULT NULL;
+      ALTER TABLE mensagens ADD COLUMN provider TEXT DEFAULT NULL;
+      ALTER TABLE mensagens ADD COLUMN model TEXT DEFAULT NULL;
+    `,
+  },
+  {
+    version: 9,
+    descricao: 'Extracao de conteudo dos anexos (texto extraido, linguagem detectada, encoding) e versionamento de fonte corrigido',
+    sql: `
+      ALTER TABLE anexos ADD COLUMN conteudo_extraido TEXT DEFAULT NULL;
+      ALTER TABLE anexos ADD COLUMN linguagem_detectada TEXT DEFAULT NULL;
+      ALTER TABLE anexos ADD COLUMN encoding_detectado TEXT DEFAULT NULL;
+      ALTER TABLE anexos ADD COLUMN e_codigo INTEGER NOT NULL DEFAULT 0;
+
+      -- Versionamento: original (anexo enviado pelo usuario, nunca sobrescrito) ->
+      -- corrigido (novo artefato gerado pela IA). anexo_original_id sempre aponta
+      -- para um anexo com e_codigo=1; cada correcao gera uma NOVA linha em anexos
+      -- (nunca sobrescreve), entao o historico de versoes e' a lista ordenada por
+      -- criado_em de todos os anexos com o mesmo anexo_original_id.
+      ALTER TABLE anexos ADD COLUMN anexo_original_id TEXT DEFAULT NULL REFERENCES anexos(id) ON DELETE SET NULL;
+      ALTER TABLE anexos ADD COLUMN mensagem_origem_id TEXT DEFAULT NULL REFERENCES mensagens(id) ON DELETE SET NULL;
+      ALTER TABLE anexos ADD COLUMN explicacao_alteracao TEXT DEFAULT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_svc_anexos_versao_original
+        ON anexos (anexo_original_id, criado_em);
+    `,
+  },
+  {
+    version: 10,
+    descricao: 'Configuracao do Agente Local proprio do IA Service (URL/token/chave de criptografia) para acesso a fontes historicas via SQL SELECT-only. Nao le a config do agente do IA Command — mesmo servidor fisico do cliente, config logicamente separada (Etapa 0/1: bancos desacoplados).',
+    sql: `
+      CREATE TABLE IF NOT EXISTS agente_local_config (
+        id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id         INTEGER NOT NULL UNIQUE,
+        url                TEXT DEFAULT NULL,
+        token_enc          TEXT DEFAULT NULL,
+        crypto_key_enc     TEXT DEFAULT NULL,
+        crypto_ativo       INTEGER NOT NULL DEFAULT 0,
+        ultimo_teste_em    TEXT DEFAULT NULL,
+        ultimo_teste_ok    INTEGER DEFAULT NULL,
+        criado_em          TEXT NOT NULL,
+        atualizado_em      TEXT NOT NULL
+      );
+    `,
+  },
+  {
+    version: 11,
+    descricao: 'Fontes historicas configuradas (conexoes de dados externas, ex. SQL Server SoftExpert) — uma empresa pode ter mais de uma fonte no futuro (ProtheusAdapter, ServiceNowAdapter etc), por isso tabela propria em vez de campo unico em agente_local_config.',
+    sql: `
+      CREATE TABLE IF NOT EXISTS fontes_historicas (
+        id                 TEXT PRIMARY KEY,
+        empresa_id         INTEGER NOT NULL,
+        connection_key     TEXT NOT NULL,
+        nome               TEXT NOT NULL,
+        sistema_origem     TEXT NOT NULL,
+        adapter            TEXT NOT NULL,
+        db_host            TEXT DEFAULT NULL,
+        db_port            TEXT DEFAULT NULL,
+        db_name            TEXT DEFAULT NULL,
+        db_user            TEXT DEFAULT NULL,
+        db_pass_enc        TEXT DEFAULT NULL,
+        db_driver          TEXT DEFAULT NULL,
+        ativo              INTEGER NOT NULL DEFAULT 1,
+        sincronizada_agente_em TEXT DEFAULT NULL,
+        criado_em          TEXT NOT NULL,
+        atualizado_em      TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_svc_fontes_historicas_empresa_key
+        ON fontes_historicas (empresa_id, connection_key);
+    `,
+  },
+  {
+    version: 12,
+    descricao: 'Controle de importacoes historicas (full/incremental) — progresso, checkpoint para retomada, contadores.',
+    sql: `
+      CREATE TABLE IF NOT EXISTS importacoes (
+        id                     TEXT PRIMARY KEY,
+        empresa_id             INTEGER NOT NULL,
+        fonte_id               TEXT NOT NULL REFERENCES fontes_historicas(id) ON DELETE CASCADE,
+        tipo                   TEXT NOT NULL DEFAULT 'full',
+        status                 TEXT NOT NULL DEFAULT 'pendente',
+        periodo_inicio         TEXT DEFAULT NULL,
+        periodo_fim            TEXT DEFAULT NULL,
+        checkpoint_json        TEXT DEFAULT NULL,
+        registros_lidos        INTEGER NOT NULL DEFAULT 0,
+        registros_inseridos    INTEGER NOT NULL DEFAULT 0,
+        registros_atualizados  INTEGER NOT NULL DEFAULT 0,
+        registros_ignorados    INTEGER NOT NULL DEFAULT 0,
+        registros_erro         INTEGER NOT NULL DEFAULT 0,
+        posicionamentos_lidos  INTEGER NOT NULL DEFAULT 0,
+        posicionamentos_inseridos INTEGER NOT NULL DEFAULT 0,
+        posicionamentos_atualizados INTEGER NOT NULL DEFAULT 0,
+        mensagem_erro          TEXT DEFAULT NULL,
+        inicio_em              TEXT DEFAULT NULL,
+        termino_em             TEXT DEFAULT NULL,
+        criado_em              TEXT NOT NULL,
+        atualizado_em          TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_svc_importacoes_empresa
+        ON importacoes (empresa_id, criado_em);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_importacoes_fonte_status
+        ON importacoes (fonte_id, status);
+    `,
+  },
+  {
+    version: 13,
+    descricao: 'RAW da importacao: preserva o registro COMPLETO recebido da origem (SQL Server), antes de qualquer normalizacao/selecao de campos. Nunca descartado.',
+    sql: `
+      CREATE TABLE IF NOT EXISTS raw_import (
+        id                 TEXT PRIMARY KEY,
+        empresa_id         INTEGER NOT NULL,
+        fonte_id           TEXT NOT NULL REFERENCES fontes_historicas(id) ON DELETE CASCADE,
+        sistema_origem     TEXT NOT NULL,
+        tabela_origem      TEXT NOT NULL,
+        oid_origem         TEXT NOT NULL,
+        dados_json         TEXT NOT NULL,
+        hash_conteudo      TEXT NOT NULL,
+        importacao_id      TEXT DEFAULT NULL REFERENCES importacoes(id) ON DELETE SET NULL,
+        importado_em       TEXT NOT NULL
+      );
+
+      -- Idempotencia do RAW: mesmo registro de origem (empresa+fonte+tabela+oid)
+      -- nunca duplica — reimportar so grava se o hash mudou (ver services).
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_svc_raw_import_origem
+        ON raw_import (empresa_id, fonte_id, tabela_origem, oid_origem);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_raw_import_hash
+        ON raw_import (empresa_id, tabela_origem, hash_conteudo);
+    `,
+  },
+  {
+    version: 14,
+    descricao: 'Clientes, usuarios de clientes e tecnicos — entidades normalizadas da base historica. CNPJ normalizado (so digitos) e UNIQUE por empresa (tenant do IA Service), nao globalmente — dois tenants diferentes nunca compartilham o mesmo registro de cliente mesmo com CNPJ identico.',
+    sql: `
+      CREATE TABLE IF NOT EXISTS clientes (
+        id                 TEXT PRIMARY KEY,
+        empresa_id         INTEGER NOT NULL,
+        cnpj               TEXT NOT NULL,
+        nome               TEXT DEFAULT NULL,
+        nome_fantasia      TEXT DEFAULT NULL,
+        ativo              INTEGER NOT NULL DEFAULT 1,
+        criado_em          TEXT NOT NULL,
+        atualizado_em      TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_svc_clientes_empresa_cnpj
+        ON clientes (empresa_id, cnpj);
+
+      CREATE TABLE IF NOT EXISTS usuarios_cliente (
+        id                 TEXT PRIMARY KEY,
+        empresa_id         INTEGER NOT NULL,
+        cliente_id         TEXT NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+        sistema_origem     TEXT NOT NULL,
+        id_origem          TEXT DEFAULT NULL,
+        identificador      TEXT DEFAULT NULL,
+        nome               TEXT DEFAULT NULL,
+        email              TEXT DEFAULT NULL,
+        telefone           TEXT DEFAULT NULL,
+        ativo              INTEGER NOT NULL DEFAULT 1,
+        criado_em          TEXT NOT NULL,
+        atualizado_em      TEXT NOT NULL
+      );
+
+      -- Chave natural do usuario de cliente: (empresa, sistema_origem, id_origem) —
+      -- evita colisao entre usuarios de clientes diferentes ou origens diferentes
+      -- que reutilizem numeracao interna (CDUSER do SoftExpert nao e globalmente unico).
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_svc_usuarios_cliente_origem
+        ON usuarios_cliente (empresa_id, sistema_origem, id_origem)
+        WHERE id_origem IS NOT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_svc_usuarios_cliente_cliente
+        ON usuarios_cliente (cliente_id);
+
+      CREATE TABLE IF NOT EXISTS tecnicos (
+        id                 TEXT PRIMARY KEY,
+        empresa_id         INTEGER NOT NULL,
+        sistema_origem     TEXT NOT NULL,
+        id_origem          TEXT NOT NULL,
+        nome               TEXT DEFAULT NULL,
+        email              TEXT DEFAULT NULL,
+        ativo              INTEGER NOT NULL DEFAULT 1,
+        criado_em          TEXT NOT NULL,
+        atualizado_em      TEXT NOT NULL
+      );
+
+      -- Tecnico e identificado por (empresa, sistema_origem, id_origem) — CDUSERANA
+      -- do SoftExpert, escopado por empresa/origem para evitar colisao entre fontes.
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_svc_tecnicos_origem
+        ON tecnicos (empresa_id, sistema_origem, id_origem);
+    `,
+  },
+  {
+    version: 15,
+    descricao: 'Chamados e posicionamentos — entidades centrais da base historica, normalizadas a partir do RAW (DYNITSM/DYNITSMGRIDREGISTR). Responsavel ATUAL do chamado (tecnico_responsavel_id) e tecnico que fez um posicionamento especifico (posicionamentos.tecnico_id) sao conceitos distintos e nunca fundidos.',
+    sql: `
+      CREATE TABLE IF NOT EXISTS chamados (
+        id                     TEXT PRIMARY KEY,
+        empresa_id             INTEGER NOT NULL,
+        fonte_id               TEXT NOT NULL REFERENCES fontes_historicas(id) ON DELETE CASCADE,
+        sistema_origem         TEXT NOT NULL,
+        oid_origem             TEXT NOT NULL,
+        numero                 TEXT NOT NULL,
+        cliente_id             TEXT DEFAULT NULL REFERENCES clientes(id) ON DELETE SET NULL,
+        solicitante_id         TEXT DEFAULT NULL REFERENCES usuarios_cliente(id) ON DELETE SET NULL,
+        tecnico_responsavel_id TEXT DEFAULT NULL REFERENCES tecnicos(id) ON DELETE SET NULL,
+        data_abertura          TEXT DEFAULT NULL,
+
+        produto                TEXT DEFAULT NULL,
+        familia                TEXT DEFAULT NULL,
+        modulo                 TEXT DEFAULT NULL,
+        servico                TEXT DEFAULT NULL,
+        tipo_chamado           TEXT DEFAULT NULL,
+        tipo_chamado_se        TEXT DEFAULT NULL,
+        tipo_chamado_final     TEXT DEFAULT NULL,
+        natureza               TEXT DEFAULT NULL,
+        nivel                  TEXT DEFAULT NULL,
+
+        titulo                 TEXT DEFAULT NULL,
+        assunto                TEXT DEFAULT NULL,
+        breve_descricao        TEXT DEFAULT NULL,
+        descricao              TEXT DEFAULT NULL,
+        informacoes_adicionais TEXT DEFAULT NULL,
+        observacoes            TEXT DEFAULT NULL,
+
+        sla                    TEXT DEFAULT NULL,
+        sla_horas              REAL DEFAULT NULL,
+        sla_status             TEXT DEFAULT NULL,
+        sla_status_final       TEXT DEFAULT NULL,
+        sla_inicial            TEXT DEFAULT NULL,
+        sla_anterior           TEXT DEFAULT NULL,
+
+        solucao_aplicada       TEXT DEFAULT NULL,
+        avaliacao              TEXT DEFAULT NULL,
+        total_horas            REAL DEFAULT NULL,
+
+        chamado_referencia     TEXT DEFAULT NULL,
+
+        hash_conteudo          TEXT DEFAULT NULL,
+        precisa_indexacao      INTEGER NOT NULL DEFAULT 1,
+        indexado_em            TEXT DEFAULT NULL,
+
+        atualizado_origem_em   TEXT DEFAULT NULL,
+        criado_em              TEXT NOT NULL,
+        atualizado_em          TEXT NOT NULL
+      );
+
+      -- Idempotencia do chamado: (empresa, fonte, oid_origem) — OID e o identificador
+      -- tecnico estavel da origem (nunca IDPROCESS sozinho, que e so o numero funcional).
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_svc_chamados_origem
+        ON chamados (empresa_id, fonte_id, oid_origem);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_chamados_numero
+        ON chamados (empresa_id, numero);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_chamados_cliente
+        ON chamados (cliente_id, data_abertura);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_chamados_classificacao
+        ON chamados (empresa_id, produto, familia, modulo);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_chamados_precisa_indexacao
+        ON chamados (empresa_id, precisa_indexacao);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_chamados_data_abertura
+        ON chamados (empresa_id, data_abertura);
+
+      CREATE TABLE IF NOT EXISTS posicionamentos (
+        id                     TEXT PRIMARY KEY,
+        empresa_id             INTEGER NOT NULL,
+        fonte_id               TEXT NOT NULL REFERENCES fontes_historicas(id) ON DELETE CASCADE,
+        oid_origem             TEXT NOT NULL,
+        chamado_id             TEXT NOT NULL REFERENCES chamados(id) ON DELETE CASCADE,
+        data_posicionamento    TEXT DEFAULT NULL,
+
+        tecnico_id             TEXT DEFAULT NULL REFERENCES tecnicos(id) ON DELETE SET NULL,
+        tecnico_nome_origem    TEXT DEFAULT NULL,
+        usuario_cliente_id     TEXT DEFAULT NULL REFERENCES usuarios_cliente(id) ON DELETE SET NULL,
+
+        situacao               TEXT DEFAULT NULL,
+        tipo                   TEXT DEFAULT NULL,
+        motivo                 TEXT DEFAULT NULL,
+
+        assunto                TEXT DEFAULT NULL,
+        descricao              TEXT DEFAULT NULL,
+        resultado              TEXT DEFAULT NULL,
+
+        hora_inicio            TEXT DEFAULT NULL,
+        hora_fim               TEXT DEFAULT NULL,
+        hora_intervalo         TEXT DEFAULT NULL,
+        total_horas            REAL DEFAULT NULL,
+
+        aguardando_retorno     INTEGER DEFAULT NULL,
+
+        oid_arquivo1           TEXT DEFAULT NULL,
+        oid_arquivo2           TEXT DEFAULT NULL,
+
+        hash_conteudo          TEXT DEFAULT NULL,
+
+        criado_em              TEXT NOT NULL,
+        atualizado_em          TEXT NOT NULL
+      );
+
+      -- Idempotencia do posicionamento: (empresa, fonte, oid_origem) — OID de
+      -- DYNITSMGRIDREGISTR e estavel e unico por origem.
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_svc_posicionamentos_origem
+        ON posicionamentos (empresa_id, fonte_id, oid_origem);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_posicionamentos_chamado
+        ON posicionamentos (chamado_id, data_posicionamento);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_posicionamentos_tecnico
+        ON posicionamentos (tecnico_id, data_posicionamento);
+    `,
+  },
+  {
+    version: 16,
+    descricao: 'Inconsistencias de importacao (dados suspeitos identificados sem alterar o RAW original) — ex. CNPJ invalido/ausente, chamado sem solicitante, posicionamento sem tecnico.',
+    sql: `
+      CREATE TABLE IF NOT EXISTS importacao_inconsistencias (
+        id                 TEXT PRIMARY KEY,
+        empresa_id         INTEGER NOT NULL,
+        importacao_id      TEXT NOT NULL REFERENCES importacoes(id) ON DELETE CASCADE,
+        tipo_entidade      TEXT NOT NULL,
+        oid_origem         TEXT DEFAULT NULL,
+        tipo_inconsistencia TEXT NOT NULL,
+        detalhe            TEXT DEFAULT NULL,
+        criado_em          TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_svc_importacao_inconsistencias_importacao
+        ON importacao_inconsistencias (importacao_id, tipo_inconsistencia);
+    `,
+  },
+  {
+    version: 17,
+    descricao: 'Telefone em consultores — dado de identificacao cruzada (ex.: futuro canal WhatsApp), NAO mecanismo de login. Login continua exclusivamente via IA HUB (window._iahubUser), conforme decisao ja registrada em consultor-service.js.',
+    sql: `
+      ALTER TABLE consultores ADD COLUMN telefone TEXT DEFAULT NULL;
+    `,
+  },
+  {
+    version: 18,
+    descricao: 'Status de encerramento do chamado (Pendente/Andamento/Encerrado) — calculado na origem via JOIN com WFPROCESS (formula e tabela fornecidas pelo usuario, validadas contra dados reais em 2026-09). Usado pela fila do radar para excluir chamados ja encerrados.',
+    sql: `
+      ALTER TABLE chamados ADD COLUMN status_encerramento TEXT DEFAULT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_svc_chamados_status_encerramento
+        ON chamados (empresa_id, status_encerramento);
+    `,
+  },
+  {
+    version: 19,
+    descricao: 'SLA_PRAZO do chamado (Em dia/Proxima do vencimento/Em atraso) — calculo DINAMICO via WFPROCESS (formula fornecida pelo usuario, validada contra dados reais em 2026-09). Distinto de sla_status_final (que e o desfecho historico de como o chamado foi encerrado, nao seu prazo atual). Usado pela fila do radar para filtrar em_atraso/em_dia/todos.',
+    sql: `
+      ALTER TABLE chamados ADD COLUMN sla_prazo TEXT DEFAULT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_svc_chamados_sla_prazo
+        ON chamados (empresa_id, sla_prazo);
+    `,
+  },
+  {
+    version: 20,
+    descricao: 'Preferencias da tela Radar de Chamados por empresa (ex.: intervalo de auto-refresh) — antes so em localStorage do navegador (por dispositivo), agora compartilhado entre qualquer analista que abrir a tela.',
+    sql: `
+      CREATE TABLE IF NOT EXISTS radar_config (
+        id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id                INTEGER NOT NULL UNIQUE,
+        auto_refresh_segundos     INTEGER NOT NULL DEFAULT 60,
+        criado_em                 TEXT NOT NULL,
+        atualizado_em             TEXT NOT NULL
+      );
+    `,
+  },
+  {
+    version: 21,
+    descricao: 'Login externo por telefone/WhatsApp (canal alternativo ao login do IA HUB) — challenge de OTP e sessao externa, mesmo padrao de protheus_web_login_challenges/protheus_chat_tokens do IA Command (codigo/token nunca em texto plano, so hash). O envio do codigo reaproveita o WhatsApp ja configurado no IA Command via rota server-to-server protegida por segredo compartilhado (env var, sem tabela nova em nenhum dos dois sistemas).',
+    sql: `
+      CREATE TABLE IF NOT EXISTS svc_login_challenges (
+        id            TEXT PRIMARY KEY,
+        empresa_id    INTEGER NOT NULL,
+        telefone      TEXT NOT NULL,
+        codigo_hash   TEXT NOT NULL,
+        tentativas    INTEGER NOT NULL DEFAULT 0,
+        expira_em     TEXT NOT NULL,
+        usado_em      TEXT DEFAULT NULL,
+        ip            TEXT DEFAULT NULL,
+        user_agent    TEXT DEFAULT NULL,
+        criado_em     TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_svc_login_challenges_telefone
+        ON svc_login_challenges (empresa_id, telefone, expira_em);
+
+      CREATE TABLE IF NOT EXISTS svc_sessoes_externas (
+        id                TEXT PRIMARY KEY,
+        empresa_id        INTEGER NOT NULL,
+        consultor_id      TEXT NOT NULL REFERENCES consultores(id) ON DELETE CASCADE,
+        token_hash        TEXT NOT NULL UNIQUE,
+        expira_em         TEXT NOT NULL,
+        criado_em         TEXT NOT NULL,
+        ultimo_acesso_em  TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_svc_sessoes_externas_expira
+        ON svc_sessoes_externas (expira_em);
+    `,
+  },
+  {
+    version: 22,
+    descricao: 'Preserva o texto categorico real de AGUARDANRETORNO (DYNITSMGRIDREGISTR) em posicionamentos.situacao_retorno — o campo aguardando_retorno (booleano, so distingue ATENDENTE de "nao ATENDENTE") colapsava valores distintos como RETORNO - CLIENTE em false, perdendo a informacao de quem exatamente o chamado esta aguardando (pedido do usuario, 2026-09: exibir isso no cabecalho do chat).',
+    sql: `
+      ALTER TABLE posicionamentos ADD COLUMN situacao_retorno TEXT DEFAULT NULL;
+    `,
+  },
+  {
+    version: 23,
+    descricao: 'Preferencia por consultor: pre-analise automatica da IA ao abrir um chamado no Radar (pedido do usuario, 2026-09) — ate aqui a pre-analise so disparava no momento da IMPORTACAO (primeiro posicionamento com aguardando_retorno=true). Agora cada consultor escolhe se, ao SELECIONAR um chamado ainda sem atendimento, a IA ja analisa sozinha ou so responde quando ele perguntar. Default 1 (automatica) preserva o comportamento que ja existia para quem nao mexer na config.',
+    sql: `
+      ALTER TABLE consultores ADD COLUMN pre_analise_automatica INTEGER NOT NULL DEFAULT 1;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

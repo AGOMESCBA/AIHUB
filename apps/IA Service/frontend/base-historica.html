@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Base Histórica - IA Service</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#1d4ed8; --accent-light:#3b82f6; --accent-glow:rgba(29,78,216,.1); }
+    .sidebar-logo .logo-icon { background:var(--accent) !important; }
+
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:3px; }
+    .head-row { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px; }
+    .head-title { font-size:20px;font-weight:800;color:var(--text-hi);line-height:1.2; }
+    .head-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+
+    .metric-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; margin-bottom:16px; }
+    .metric { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; box-shadow:var(--shadow-sm); }
+    .metric span { display:block; font-size:10.5px; color:var(--text-lo); font-weight:800; text-transform:uppercase; margin-bottom:3px; }
+    .metric strong { display:block; font-size:20px; color:var(--text-hi); }
+
+    .tabs { display:flex;gap:2px;border-bottom:1px solid var(--border);background:var(--bg-card);padding:0 16px;border-radius:var(--radius) var(--radius) 0 0; }
+    .tab-btn { padding:10px 16px;border:none;background:transparent;color:var(--text-lo);font-size:13px;font-weight:800;border-bottom:2px solid transparent;cursor:pointer;margin-bottom:-1px; }
+    .tab-btn.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .tab-panel { display:none; background:var(--bg-card); border:1px solid var(--border); border-top:none; border-radius:0 0 var(--radius) var(--radius); box-shadow:var(--shadow-sm); padding:18px; }
+    .tab-panel.active { display:block; }
+
+    .form-row { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px; }
+    .form-field { display:flex; flex-direction:column; gap:4px; flex:1; min-width:150px; }
+    .form-field label { font-size:11px; color:var(--text-lo); font-weight:700; }
+
+    .status-badge { font-size:10.5px; font-weight:700; text-transform:uppercase; padding:2px 8px; border-radius:20px; background:var(--bg-hover); color:var(--text-md); }
+    .status-badge.concluido { background:#dcfce7; color:#166534; }
+    .status-badge.executando, .status-badge.pendente { background:#fef9c3; color:#854d0e; }
+    .status-badge.falhou, .status-badge.interrompido { background:#fee2e2; color:#991b1b; }
+
+    .fonte-card { border:1px solid var(--border); border-radius:8px; padding:12px 14px; margin-bottom:10px; background:var(--bg-base); }
+    .fonte-card:last-child { margin-bottom:0; }
+    .fonte-card-nome { font-weight:700; color:var(--text-hi); font-size:13.5px; }
+    .fonte-card-meta { font-size:12px; color:var(--text-lo); margin-top:2px; }
+    .fonte-card-actions { display:flex; gap:8px; margin-top:8px; }
+
+    .table-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden;margin-top:16px; }
+    .table-wrap { max-height:520px; overflow:auto; background:var(--bg-card); }
+    .grid-table { width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:12.5px; }
+    .grid-table thead th { position:sticky;top:0;z-index:2;background:var(--bg-card);border-bottom:1px solid var(--border);color:var(--text-lo);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 10px;white-space:nowrap; }
+    .grid-table thead th.sortable { cursor:pointer;user-select:none; }
+    .grid-table thead th.sortable:hover { color:var(--accent);background:var(--bg-hover); }
+    .grid-table tbody td { border-bottom:1px solid var(--border);color:var(--text-md);padding:9px 10px;vertical-align:top;background:var(--bg-card); }
+    .grid-table tbody tr:hover td { background:var(--bg-hover); }
+    .col-tipo { width:90px; } .col-status { width:100px; } .col-periodo { width:170px; }
+    .col-contadores { width:auto; }
+    .empty-state { padding:20px; text-align:center; color:var(--text-lo); font-size:13px; }
+    .error-banner { display:none; background:#fee2e2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:10px 12px; font-size:13px; margin-bottom:14px; }
+
+    @media (max-width: 900px) {
+      .head-row { align-items:flex-start;flex-direction:column; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Service</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Service ›</span> Base Histórica</span>
+    </div>
+
+    <div class="page-content">
+      <div class="head-row">
+        <div>
+          <div class="page-kicker">Base de Conhecimento</div>
+          <div class="head-title">Base Histórica</div>
+          <div class="head-subtitle">Configuração do Agente Local, fontes de dados externas e importação de atendimentos históricos.</div>
+        </div>
+      </div>
+
+      <div id="error-banner" class="error-banner"></div>
+
+      <div class="metric-grid" id="resumo-grid">
+        <div class="metric"><span>Clientes</span><strong>—</strong></div>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button class="tab-btn active" data-tab="tab-agente" type="button">Agente Local</button>
+        <button class="tab-btn" data-tab="tab-fontes" type="button">Fontes Históricas</button>
+        <button class="tab-btn" data-tab="tab-importacoes" type="button">Importações</button>
+      </div>
+
+      <div id="tab-agente" class="tab-panel active">
+        <div class="form-row">
+          <div class="form-field"><label>URL</label><input type="text" id="agente-url" class="form-control" placeholder="http://192.168.1.50:8765"></div>
+          <div class="form-field"><label>Token</label><input type="password" id="agente-token" class="form-control" placeholder="Token de API do agente"></div>
+          <button class="btn btn-primary" type="button" onclick="salvarAgente()">Salvar</button>
+          <button class="btn btn-ghost" type="button" onclick="testarAgente()">Testar conexão</button>
+        </div>
+        <div id="agente-status" class="empty-state" style="text-align:left;padding:8px 0">Carregando…</div>
+      </div>
+
+      <div id="tab-fontes" class="tab-panel">
+        <div class="form-row">
+          <div class="form-field"><label>Nome</label><input type="text" id="fonte-nome" class="form-control" placeholder="SoftExpert - Chamados"></div>
+          <div class="form-field"><label>connection_key</label><input type="text" id="fonte-key" class="form-control" placeholder="ia-service-softexpert"></div>
+          <div class="form-field"><label>Host</label><input type="text" id="fonte-host" class="form-control" placeholder="10.0.0.5"></div>
+          <div class="form-field"><label>Porta</label><input type="text" id="fonte-porta" class="form-control" placeholder="1433" value="1433"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-field"><label>Database</label><input type="text" id="fonte-database" class="form-control" placeholder="SOFTEXPERT_DB"></div>
+          <div class="form-field"><label>Usuário</label><input type="text" id="fonte-usuario" class="form-control" placeholder="sa_readonly"></div>
+          <div class="form-field"><label>Senha</label><input type="password" id="fonte-senha" class="form-control" placeholder="••••••••"></div>
+          <button class="btn btn-primary" type="button" onclick="criarFonte()">Criar fonte</button>
+        </div>
+        <div id="fontes-lista" style="margin-top:14px"><div class="empty-state">Carregando…</div></div>
+      </div>
+
+      <div id="tab-importacoes" class="tab-panel">
+        <div class="form-row">
+          <div class="form-field"><label>Fonte</label><select id="importar-fonte" class="form-control"></select></div>
+          <div class="form-field"><label>Data inicial</label><input type="date" id="importar-inicio" class="form-control" value="2026-01-01"></div>
+          <div class="form-field"><label>Data final</label><input type="date" id="importar-fim" class="form-control" value="2026-12-31"></div>
+          <button class="btn btn-primary" type="button" onclick="iniciarImportacao()">Importação inicial</button>
+          <button class="btn btn-ghost" type="button" onclick="sincronizarIncremental()">Sincronizar agora</button>
+        </div>
+
+        <div class="table-card">
+          <div class="table-wrap">
+            <table class="grid-table">
+              <thead>
+                <tr>
+                  <th class="col-tipo sortable" data-sort="tipo">Tipo</th>
+                  <th class="col-status sortable" data-sort="status">Status</th>
+                  <th class="col-periodo sortable" data-sort="periodoInicio">Período</th>
+                  <th class="col-contadores">Contadores</th>
+                </tr>
+              </thead>
+              <tbody id="importacoes-tbody"></tbody>
+            </table>
+            <div class="empty-state" id="importacoes-empty" style="display:none">Nenhuma importação executada ainda.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-service/js/sidebar.js"></script>
+<script>
+  const impState = { rows: [], sortField: 'periodoInicio', sortDir: 'desc' };
+
+  function showError(msg) { const el = document.getElementById('error-banner'); el.textContent = msg; el.style.display = 'block'; }
+  function hideError() { document.getElementById('error-banner').style.display = 'none'; }
+  function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
+
+  async function api(path, opts = {}) {
+    const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
+    return body;
+  }
+  function empresaIdAtual() { return window._iahubEmpresa?.id || null; }
+  function dataParaYyyymmdd(dataIso) { return dataIso.replaceAll('-', ''); }
+
+  function activateTab(id) {
+    document.querySelectorAll('.tab-panel').forEach(el => el.classList.toggle('active', el.id === id));
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === id));
+  }
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => activateTab(btn.dataset.tab)));
+
+  async function carregarResumo() {
+    const empresaId = empresaIdAtual();
+    const resumo = await api(`/api/ia-service/base-historica/resumo?empresa_id=${empresaId}`);
+    document.getElementById('resumo-grid').innerHTML = `
+      <div class="metric"><span>Clientes</span><strong>${resumo.clientes}</strong></div>
+      <div class="metric"><span>Usuários</span><strong>${resumo.usuariosCliente}</strong></div>
+      <div class="metric"><span>Técnicos</span><strong>${resumo.tecnicos}</strong></div>
+      <div class="metric"><span>Chamados</span><strong>${resumo.chamados}</strong></div>
+      <div class="metric"><span>Posicionamentos</span><strong>${resumo.posicionamentos}</strong></div>
+      <div class="metric"><span>Aguard. indexação</span><strong>${resumo.chamadosAguardandoIndexacao}</strong></div>
+    `;
+  }
+
+  async function carregarAgente() {
+    const empresaId = empresaIdAtual();
+    const cfg = await api(`/api/ia-service/base-historica/agente-local?empresa_id=${empresaId}`);
+    document.getElementById('agente-url').value = cfg.url || '';
+    document.getElementById('agente-status').textContent = cfg.configurado
+      ? `Configurado — último teste: ${cfg.ultimoTesteEm ? (cfg.ultimoTesteOk ? 'OK' : 'falhou') + ' em ' + new Date(cfg.ultimoTesteEm).toLocaleString('pt-BR') : 'nunca testado'}`
+      : 'Não configurado.';
+  }
+
+  async function salvarAgente() {
+    hideError();
+    const empresaId = empresaIdAtual();
+    try {
+      await api(`/api/ia-service/base-historica/agente-local?empresa_id=${empresaId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ url: document.getElementById('agente-url').value, token: document.getElementById('agente-token').value || undefined }),
+      });
+      document.getElementById('agente-token').value = '';
+      carregarAgente();
+    } catch (err) { showError('Não foi possível salvar a config do agente: ' + err.message); }
+  }
+
+  async function testarAgente() {
+    hideError();
+    const empresaId = empresaIdAtual();
+    try {
+      const r = await api(`/api/ia-service/base-historica/agente-local/testar?empresa_id=${empresaId}`, { method: 'POST' });
+      alert(r.mensagem || 'Conexão OK.');
+      carregarAgente();
+    } catch (err) { showError('Teste de conexão falhou: ' + err.message); }
+  }
+
+  async function carregarFontes() {
+    const empresaId = empresaIdAtual();
+    const fontes = await api(`/api/ia-service/base-historica/fontes?empresa_id=${empresaId}`);
+    const lista = document.getElementById('fontes-lista');
+    const select = document.getElementById('importar-fonte');
+    if (!fontes.length) {
+      lista.innerHTML = '<div class="empty-state">Nenhuma fonte cadastrada ainda.</div>';
+      select.innerHTML = '<option value="">Nenhuma fonte disponível</option>';
+      return;
+    }
+    lista.innerHTML = fontes.map(f => `
+      <div class="fonte-card">
+        <div class="fonte-card-nome">${escapeHtml(f.nome)}</div>
+        <div class="fonte-card-meta">${escapeHtml(f.connectionKey)} · ${escapeHtml(f.sistemaOrigem)} · <span class="status-badge">${f.senhaConfigurada ? 'senha configurada' : 'sem senha'}</span></div>
+        <div class="fonte-card-actions">
+          <button class="btn btn-ghost" type="button" onclick="sincronizarFonte('${f.id}')">Sincronizar com agente</button>
+          <button class="btn btn-ghost" type="button" onclick="testarFonte('${f.id}')">Testar SELECT 1</button>
+        </div>
+      </div>
+    `).join('');
+    select.innerHTML = fontes.map(f => `<option value="${f.id}">${escapeHtml(f.nome)}</option>`).join('');
+  }
+
+  async function criarFonte() {
+    hideError();
+    const empresaId = empresaIdAtual();
+    try {
+      await api(`/api/ia-service/base-historica/fontes?empresa_id=${empresaId}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          nome: document.getElementById('fonte-nome').value,
+          connectionKey: document.getElementById('fonte-key').value,
+          sistemaOrigem: 'softexpert',
+          adapter: 'SoftExpertSqlServerAdapter',
+          dbHost: document.getElementById('fonte-host').value,
+          dbPort: document.getElementById('fonte-porta').value,
+          dbName: document.getElementById('fonte-database').value,
+          dbUser: document.getElementById('fonte-usuario').value,
+          senha: document.getElementById('fonte-senha').value,
+        }),
+      });
+      document.getElementById('fonte-senha').value = '';
+      carregarFontes();
+    } catch (err) { showError('Não foi possível criar a fonte: ' + err.message); }
+  }
+
+  async function sincronizarFonte(fonteId) {
+    hideError();
+    const empresaId = empresaIdAtual();
+    try {
+      await api(`/api/ia-service/base-historica/fontes/${fonteId}/sincronizar?empresa_id=${empresaId}`, { method: 'POST', body: JSON.stringify({}) });
+      alert('Fonte sincronizada com o Agente Local.');
+      carregarFontes();
+    } catch (err) { showError('Não foi possível sincronizar a fonte: ' + err.message); }
+  }
+
+  async function testarFonte(fonteId) {
+    hideError();
+    const empresaId = empresaIdAtual();
+    try {
+      await api(`/api/ia-service/base-historica/fontes/${fonteId}/testar?empresa_id=${empresaId}`, { method: 'POST' });
+      alert('SELECT 1 executado com sucesso via agente.');
+    } catch (err) { showError('Teste da fonte falhou: ' + err.message); }
+  }
+
+  async function iniciarImportacao() {
+    hideError();
+    const empresaId = empresaIdAtual();
+    const fonteId = document.getElementById('importar-fonte').value;
+    if (!fonteId) return showError('Cadastre e selecione uma fonte antes de importar.');
+    try {
+      await api(`/api/ia-service/base-historica/fontes/${fonteId}/importar?empresa_id=${empresaId}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          periodoInicio: dataParaYyyymmdd(document.getElementById('importar-inicio').value),
+          periodoFim: dataParaYyyymmdd(document.getElementById('importar-fim').value),
+        }),
+      });
+      carregarImportacoes();
+    } catch (err) { showError('Não foi possível iniciar a importação: ' + err.message); }
+  }
+
+  async function sincronizarIncremental() {
+    hideError();
+    const empresaId = empresaIdAtual();
+    const fonteId = document.getElementById('importar-fonte').value;
+    if (!fonteId) return showError('Selecione uma fonte.');
+    try {
+      await api(`/api/ia-service/base-historica/fontes/${fonteId}/sincronizar-incremental?empresa_id=${empresaId}`, { method: 'POST', body: JSON.stringify({}) });
+      carregarImportacoes();
+    } catch (err) { showError('Não foi possível iniciar a sincronização: ' + err.message); }
+  }
+
+  function renderImportacoesTable() {
+    const rows = [...impState.rows].sort((a, b) => {
+      const dir = impState.sortDir === 'asc' ? 1 : -1;
+      const av = String(a[impState.sortField] ?? '').toLowerCase();
+      const bv = String(b[impState.sortField] ?? '').toLowerCase();
+      return av.localeCompare(bv, 'pt-BR') * dir;
+    });
+    document.getElementById('importacoes-empty').style.display = rows.length ? 'none' : 'block';
+    document.getElementById('importacoes-tbody').innerHTML = rows.map(i => `
+      <tr>
+        <td>${escapeHtml(i.tipo)}</td>
+        <td><span class="status-badge ${i.status}">${escapeHtml(i.status)}</span></td>
+        <td>${i.periodoInicio || '?'} a ${i.periodoFim || '?'}</td>
+        <td>
+          Lidos: ${i.registrosLidos} · Inseridos: ${i.registrosInseridos} · Atualizados: ${i.registrosAtualizados} ·
+          Sem alteração: ${i.registrosIgnorados} · Erros: ${i.registrosErro}<br>
+          Posicionamentos — Lidos: ${i.posicionamentosLidos} · Inseridos: ${i.posicionamentosInseridos} · Atualizados: ${i.posicionamentosAtualizados}
+          ${i.mensagemErro ? `<br><span style="color:#991b1b">${escapeHtml(i.mensagemErro)}</span>` : ''}
+          ${i.status === 'falhou' || i.status === 'interrompido' ? `<div style="margin-top:6px"><button class="btn btn-ghost" type="button" onclick="retomarImportacao('${i.fonteId}','${i.id}')">Retomar</button></div>` : ''}
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  async function carregarImportacoes() {
+    const empresaId = empresaIdAtual();
+    impState.rows = await api(`/api/ia-service/base-historica/importacoes?empresa_id=${empresaId}&limite=50`);
+    renderImportacoesTable();
+  }
+
+  document.querySelectorAll('#tab-importacoes th.sortable').forEach(th => th.addEventListener('click', () => {
+    const field = th.dataset.sort;
+    if (impState.sortField === field) impState.sortDir = impState.sortDir === 'asc' ? 'desc' : 'asc';
+    else { impState.sortField = field; impState.sortDir = 'asc'; }
+    renderImportacoesTable();
+  }));
+
+  async function retomarImportacao(fonteId, importacaoId) {
+    hideError();
+    const empresaId = empresaIdAtual();
+    try {
+      await api(`/api/ia-service/base-historica/fontes/${fonteId}/importar/retomar/${importacaoId}?empresa_id=${empresaId}`, { method: 'POST' });
+      carregarImportacoes();
+    } catch (err) { showError('Não foi possível retomar a importação: ' + err.message); }
+  }
+
+  async function carregarTudo() {
+    try {
+      await Promise.all([carregarResumo(), carregarAgente(), carregarFontes(), carregarImportacoes()]);
+    } catch (err) { showError('Falha ao carregar a página: ' + err.message); }
+  }
+
+  window._iahubAuthReady?.then(carregarTudo) ?? carregarTudo();
+  setInterval(() => { carregarResumo(); carregarImportacoes(); }, 10000);
+</script>
+</body>
+</html>

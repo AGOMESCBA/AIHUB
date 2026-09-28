@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entrar - IA Service</title>
+  <style>
+    :root {
+      --wa-bg:#0b141a; --wa-header:#202c33; --wa-panel:#111b21;
+      --wa-text:#e9edef; --wa-text-secondary:#aebac1; --wa-text-tertiary:#8696a0;
+      --wa-accent:#00d9a3; --wa-border:rgba(255,255,255,.08);
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:var(--wa-bg); color:var(--wa-text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+    .shell { display:grid; grid-template-columns:1fr 1fr; min-height:100vh; }
+    @media (max-width:900px) { .shell { grid-template-columns:1fr; } }
+
+    .painel-info { padding:56px; display:flex; flex-direction:column; justify-content:center; background:linear-gradient(180deg, var(--wa-panel), var(--wa-bg)); }
+    .brand { display:flex; align-items:center; gap:12px; margin-bottom:28px; }
+    .brand-icon { width:44px; height:44px; border-radius:50%; background:var(--wa-accent); display:flex; align-items:center; justify-content:center; font-weight:900; color:#04140f; overflow:hidden; flex-shrink:0; }
+    .brand-icon img { width:100%; height:100%; object-fit:cover; }
+    .brand-nome { font-size:16px; font-weight:800; }
+    .brand-sub { font-size:11.5px; color:var(--wa-text-tertiary); text-transform:uppercase; letter-spacing:.05em; }
+    .titulo { font-size:32px; font-weight:800; line-height:1.2; margin-bottom:16px; }
+    .descricao { font-size:14px; color:var(--wa-text-secondary); line-height:1.6; max-width:440px; margin-bottom:32px; }
+    .passo { display:flex; gap:14px; margin-bottom:20px; max-width:440px; }
+    .passo-num { width:28px; height:28px; border-radius:50%; background:var(--wa-panel); border:1px solid var(--wa-border); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; color:var(--wa-accent); flex-shrink:0; }
+    .passo-titulo { font-weight:700; font-size:13.5px; }
+    .passo-desc { font-size:12.5px; color:var(--wa-text-tertiary); margin-top:2px; }
+
+    .painel-form { display:flex; align-items:center; justify-content:center; padding:32px; background:var(--wa-bg); }
+    .card { width:100%; max-width:400px; }
+    .abas { display:flex; gap:8px; margin-bottom:20px; }
+    .aba { flex:1; text-align:center; padding:10px; border-radius:8px; font-size:12px; font-weight:700; background:var(--wa-panel); color:var(--wa-text-tertiary); border:1px solid var(--wa-border); }
+    .aba.ativa { color:var(--wa-accent); border-color:var(--wa-accent); }
+
+    .rotulo-secao { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--wa-accent); margin-bottom:8px; }
+    .form-titulo { font-size:20px; font-weight:800; margin-bottom:6px; }
+    .form-sub { font-size:13px; color:var(--wa-text-secondary); margin-bottom:20px; }
+
+    label { display:block; font-size:11.5px; font-weight:700; color:var(--wa-text-tertiary); text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px; }
+    input { width:100%; padding:13px 14px; border-radius:10px; border:1px solid var(--wa-border); background:var(--wa-panel); color:var(--wa-text); font-size:15px; margin-bottom:16px; }
+    input:focus { outline:none; border-color:var(--wa-accent); }
+    input::placeholder { color:var(--wa-text-tertiary); }
+
+    button.btn-entrar { width:100%; padding:13px; border:none; border-radius:10px; background:var(--wa-accent); color:#04140f; font-weight:800; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; }
+    button.btn-entrar:hover { opacity:.92; }
+    button.btn-entrar:disabled { opacity:.5; cursor:not-allowed; }
+
+    .nota { margin-top:16px; padding:12px 14px; border-radius:8px; background:rgba(255,255,255,.04); border:1px solid var(--wa-border); font-size:12px; color:var(--wa-text-tertiary); line-height:1.5; }
+    .erro { display:none; margin-top:14px; padding:10px 12px; border-radius:8px; background:rgba(248,113,113,.12); border:1px solid rgba(248,113,113,.3); color:#fca5a5; font-size:12.5px; }
+    .destino { font-size:12.5px; color:var(--wa-text-secondary); margin-bottom:16px; }
+
+    .rodape { text-align:center; margin-top:24px; font-size:11px; color:var(--wa-text-tertiary); }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="painel-info">
+      <div class="brand">
+        <div class="brand-icon" id="brand-icon">IA</div>
+        <div>
+          <div class="brand-nome" id="brand-nome">IA Service</div>
+          <div class="brand-sub">Chat de chamados via WhatsApp</div>
+        </div>
+      </div>
+      <div class="titulo">Acesso direto ao chat, sem senha.</div>
+      <div class="descricao">Entre pelo telefone cadastrado como consultor. O IA Service valida o número por WhatsApp e abre o radar de chamados já com sua fila pessoal.</div>
+
+      <div class="passo">
+        <div class="passo-num">1</div>
+        <div>
+          <div class="passo-titulo">Telefone cadastrado</div>
+          <div class="passo-desc">Use o mesmo número cadastrado no seu perfil de consultor.</div>
+        </div>
+      </div>
+      <div class="passo">
+        <div class="passo-num">2</div>
+        <div>
+          <div class="passo-titulo">Código no WhatsApp</div>
+          <div class="passo-desc">O código é temporário e confirma que o telefone pertence a você.</div>
+        </div>
+      </div>
+      <div class="passo">
+        <div class="passo-num">3</div>
+        <div>
+          <div class="passo-titulo">Radar liberado</div>
+          <div class="passo-desc">A sessão abre já na sua fila de chamados.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="painel-form">
+      <div class="card">
+        <div class="rotulo-secao">Acesso externo</div>
+        <div id="passo-telefone">
+          <div class="form-titulo">Identifique seu WhatsApp</div>
+          <div class="form-sub">Informe o número com DDI e DDD para receber o código de entrada.</div>
+          <label for="f-telefone">Número do WhatsApp</label>
+          <input type="tel" id="f-telefone" placeholder="+55 11 91234-5678" autocomplete="tel">
+          <button class="btn-entrar" id="btn-enviar-codigo" onclick="enviarCodigo()">Enviar código →</button>
+          <div class="nota">Este acesso não cria uma nova senha. A identidade vem do telefone validado e as permissões continuam sendo as do seu cadastro de consultor.</div>
+        </div>
+
+        <div id="passo-codigo" style="display:none">
+          <div class="form-titulo">Digite o código</div>
+          <div class="destino" id="destino-texto"></div>
+          <label for="f-codigo">Código recebido no WhatsApp</label>
+          <input type="text" id="f-codigo" placeholder="000000" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+          <button class="btn-entrar" id="btn-confirmar-codigo" onclick="confirmarCodigo()">Confirmar e entrar →</button>
+          <div class="nota">Nunca compartilhe este código fora desta tela.</div>
+        </div>
+
+        <div class="erro" id="erro"></div>
+        <div class="rodape">IA Service — J2A Consultoria. Todos os direitos reservados.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const empresaSlug = location.pathname.split('/').pop();
+    let challengeId = null;
+
+    // Logomarca real da empresa (mesmo campo login_logo_url usado na tela
+    // de login principal do IAHub) — fallback silencioso pro ícone "IA"
+    // caso a empresa não tenha logo cadastrado ou a chamada falhe; nunca
+    // deve travar a tela de login por causa disso.
+    async function carregarIdentidadeEmpresa() {
+      try {
+        const r = await fetch(`/api/ia-service-publico/empresa/${encodeURIComponent(empresaSlug)}`);
+        if (!r.ok) return;
+        const info = await r.json();
+        if (info.nome) {
+          document.getElementById('brand-nome').textContent = info.nome;
+          document.querySelector('.rodape').textContent = `IA Service — ${info.nome}. Todos os direitos reservados.`;
+        }
+        if (info.logoUrl) {
+          const icon = document.getElementById('brand-icon');
+          icon.innerHTML = `<img src="${info.logoUrl}" alt="${info.nome || 'Logomarca'}">`;
+        }
+      } catch (_) {
+        // Silencioso — sem logo/nome customizado, fica o padrão "IA Service".
+      }
+    }
+    carregarIdentidadeEmpresa();
+
+    function mostrarErro(msg) {
+      const el = document.getElementById('erro');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+    function esconderErro() {
+      document.getElementById('erro').style.display = 'none';
+    }
+
+    async function enviarCodigo() {
+      esconderErro();
+      const telefone = document.getElementById('f-telefone').value.trim();
+      if (!telefone) return mostrarErro('Informe o número do WhatsApp.');
+      const btn = document.getElementById('btn-enviar-codigo');
+      btn.disabled = true;
+      btn.textContent = 'Enviando…';
+      try {
+        const r = await fetch('/api/ia-service-publico/login/iniciar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ empresaSlug, telefone }),
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
+        challengeId = body.challengeId;
+        document.getElementById('destino-texto').textContent = `Código enviado para ${body.destino}`;
+        document.getElementById('passo-telefone').style.display = 'none';
+        document.getElementById('passo-codigo').style.display = 'block';
+        document.getElementById('f-codigo').focus();
+      } catch (err) {
+        mostrarErro(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enviar código →';
+      }
+    }
+
+    async function confirmarCodigo() {
+      esconderErro();
+      const telefone = document.getElementById('f-telefone').value.trim();
+      const codigo = document.getElementById('f-codigo').value.trim();
+      if (!codigo) return mostrarErro('Informe o código recebido.');
+      const btn = document.getElementById('btn-confirmar-codigo');
+      btn.disabled = true;
+      btn.textContent = 'Verificando…';
+      try {
+        const r = await fetch('/api/ia-service-publico/login/verificar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ empresaSlug, telefone, challengeId, codigo }),
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
+        localStorage.setItem('svc_token_externo', body.token);
+        location.href = '/radar-externo';
+      } catch (err) {
+        mostrarErro(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Confirmar e entrar →';
+      }
+    }
+
+    document.getElementById('f-codigo').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') confirmarCodigo();
+    });
+    document.getElementById('f-telefone').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') enviarCodigo();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IA Service</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#1d4ed8; --accent-light:#3b82f6; --accent-glow:rgba(29,78,216,.1); }
+    .sidebar-logo .logo-icon { background:var(--accent) !important; }
+    .home-empty {
+      height:calc(100vh - 120px); display:flex; flex-direction:column;
+      align-items:center; justify-content:center; text-align:center; gap:8px;
+      color:var(--text-lo);
+    }
+    .home-empty-icon { font-size:40px; opacity:.6; margin-bottom:4px; }
+    .home-empty-title { font-size:18px; font-weight:800; color:var(--text-hi); }
+    .home-empty-sub { font-size:13px; max-width:360px; line-height:1.5; }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Service</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title">IA Service</span>
+    </div>
+
+    <div class="page-content">
+      <div class="home-empty">
+        <div class="home-empty-icon">⚡</div>
+        <div class="home-empty-title">Selecione uma opção no menu</div>
+        <div class="home-empty-sub">Escolha Radar de Chamados, Atendimentos, Base Histórica ou Consultores no menu lateral para começar.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-service/js/sidebar.js"></script>
+</body>
+</html>

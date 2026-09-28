@@ -6,124 +6,485 @@
   <title>Consultores - IA Service</title>
   <link rel="stylesheet" href="/css/iahub.css">
   <style>
-    :root { --accent:#f59e0b; --accent-light:#fbbf24; --accent-glow:rgba(245,158,11,.1); }
-    body { margin:0; background:var(--bg-app); font-family:inherit; }
-    .page-content { max-width:720px; margin:0 auto; padding:24px 16px; }
-    .head-title { font-size:20px; font-weight:800; color:var(--text-hi); }
-    .head-subtitle { font-size:13px; color:var(--text-md); margin-top:4px; margin-bottom:20px; }
-    .form-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); padding:16px; margin-bottom:20px; }
-    .form-row { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
-    .form-field { display:flex; flex-direction:column; gap:4px; flex:1; min-width:160px; }
-    .form-field label { font-size:12px; color:var(--text-lo); font-weight:700; }
-    .form-field input { border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:13px; background:var(--bg-app); color:var(--text-hi); }
-    .lista-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); overflow:hidden; }
-    .lista-header { padding:12px 16px; border-bottom:1px solid var(--border); font-size:13px; font-weight:800; color:var(--text-hi); }
-    .consultor-item { padding:10px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; font-size:13px; }
-    .consultor-item:last-child { border-bottom:none; }
-    .consultor-usuario { font-weight:700; color:var(--text-hi); }
-    .consultor-softexpert { color:var(--text-md); }
-    .consultor-status { margin-left:auto; font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-lo); }
-    .empty-state { padding:24px 16px; text-align:center; color:var(--text-lo); font-size:13px; }
-    .error-banner { display:none; background:#fee2e2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:10px 12px; font-size:13px; margin-bottom:14px; }
+    :root { --accent:#1d4ed8; --accent-light:#3b82f6; --accent-glow:rgba(29,78,216,.1); }
+    .sidebar-logo .logo-icon { background:var(--accent) !important; }
+
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:3px; }
+    .head-row { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px; }
+    .head-title { font-size:20px;font-weight:800;color:var(--text-hi);display:flex;align-items:baseline;gap:8px;line-height:1.2; }
+    .head-count { font-size:12px;color:var(--text-lo);font-weight:500; }
+    .head-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+
+    .table-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden; }
+    .table-wrap { height:calc(100vh - 175px);min-height:320px;overflow:auto;background:var(--bg-card); }
+    .grid-table { width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:13px; }
+    .grid-table thead th { position:sticky;top:0;z-index:2;background:var(--bg-card);border-bottom:1px solid var(--border);color:var(--text-lo);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 10px;white-space:nowrap; }
+    .grid-table thead th.sortable { cursor:pointer;user-select:none; }
+    .grid-table thead th.sortable:hover { color:var(--accent);background:var(--bg-hover); }
+    .grid-table thead .filter-cell th { top:34px;padding:6px 10px;background:var(--bg-card); }
+    .grid-table thead input, .grid-table thead select { width:100%;height:26px;border:1px solid var(--border);border-radius:5px;background:var(--bg-base);color:var(--text-hi);font-size:11px;padding:3px 6px;box-sizing:border-box; }
+    .grid-table tbody td { border-bottom:1px solid var(--border);color:var(--text-md);padding:10px;vertical-align:middle;background:var(--bg-card); }
+    .grid-table tbody tr.data-row { cursor:pointer; }
+    .grid-table tbody tr.data-row:hover td { background:var(--bg-hover); }
+    .grid-table tbody tr.data-row.selected td { background:rgba(29,78,216,.07); }
+    .col-check { width:38px;text-align:center; }
+    .col-usuario { width:140px; }
+    .col-softexpert { width:150px; }
+    .col-telefone { width:190px; }
+    .col-status { width:100px; }
+    .col-action { width:42px;text-align:center; }
+    input.row-cb { width:15px;height:15px;cursor:pointer;accent-color:var(--accent); }
+
+    .badge { display:inline-flex;align-items:center;justify-content:center;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:800;white-space:nowrap; }
+    .badge-ok { background:#dcfce7;color:#15803d; }
+    .badge-muted { background:var(--bg-base);color:var(--text-md);border:1px solid var(--border); }
+    .empty-state { height:280px;display:flex;align-items:center;justify-content:center;color:var(--text-lo);font-size:16px;font-weight:700; }
+
+    .detail-shell { display:none; }
+    .detail-shell.open { display:block; }
+    .editor-bar { display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;box-shadow:var(--shadow-sm); }
+    .editor-title strong { display:block;color:var(--text-hi);font-size:16px; }
+    .editor-title span { color:var(--text-lo);font-size:12px; }
+    .detail-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:20px; }
+    .form-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin-bottom:16px; }
+    .form-actions { display:flex; justify-content:flex-end; gap:8px; border-top:1px solid var(--border); padding-top:16px; margin-top:4px; }
+    .save-feedback { font-size:13px; color:var(--text-lo); margin-right:auto; align-self:center; }
+    .save-feedback.ok { color:#15803d; }
+    .save-feedback.fail { color:#b91c1c; }
+
+    /* ── Modal de confirmação de exclusão (mesmo padrão do Histórico de
+       Interpretações do IA Command) ────────────────────────────────────── */
+    .modal-backdrop { position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,.48);z-index:500;padding:18px; }
+    .modal-backdrop.open { display:flex; }
+    .modal { width:min(480px,96vw);background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md);padding:22px; }
+    .modal-head { display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px; }
+    .modal-title { color:var(--text-hi);font-size:16px;font-weight:800; }
+    .modal-close { border:none;background:transparent;color:var(--text-lo);font-size:22px;line-height:1;cursor:pointer; }
+    .modal-actions { display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border);padding-top:14px;margin-top:16px; }
+    .danger-note { background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;line-height:1.5;margin-top:12px; }
+
+    /* ── Drawer de Ajuda (mesmo padrão do Histórico de Interpretações) ──── */
+    .help-drawer { position:fixed;top:0;right:0;bottom:0;width:min(480px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:510;transform:translateX(100%);transition:transform .24s;display:flex;flex-direction:column; }
+    .help-drawer.open { transform:translateX(0); }
+    .help-head { display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border); }
+    .help-body { padding:20px;overflow:auto;color:var(--text-md);font-size:13px;line-height:1.65; }
+    .help-body h3 { color:var(--accent);font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px; }
+    .help-body h3:first-child { margin-top:0; }
+    .help-body code { background:var(--bg-base);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:12px; }
+
+    @media (max-width: 900px) {
+      .head-row { align-items:flex-start;flex-direction:column; }
+      .head-actions { width:100%; }
+      .table-wrap { height:calc(100vh - 260px); }
+    }
   </style>
 </head>
 <body>
-  <div class="page-content">
-    <div class="head-title">IA Service — Consultores</div>
-    <div class="head-subtitle">Cadastro complementar: vincula um usuário já existente do IA HUB a um id de técnico do SoftExpert. Não cria login novo.</div>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Service</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
 
-    <div id="error-banner" class="error-banner"></div>
-
-    <div class="form-card">
-      <div class="form-row">
-        <div class="form-field">
-          <label for="usuario-id">ID do usuário IA HUB</label>
-          <input type="number" id="usuario-id" placeholder="Ex.: 17">
-        </div>
-        <div class="form-field">
-          <label for="id-softexpert">ID SoftExpert (opcional)</label>
-          <input type="text" id="id-softexpert" placeholder="Ex.: 784">
-        </div>
-        <button class="btn btn-primary" type="button" onclick="criarConsultor()">Vincular</button>
-      </div>
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Service ›</span> Consultores</span>
     </div>
 
-    <div class="lista-card">
-      <div class="lista-header">Consultores desta empresa</div>
-      <div id="lista-consultores"><div class="empty-state">Carregando…</div></div>
+    <div class="page-content">
+      <section id="list-view">
+        <div class="head-row">
+          <div>
+            <div class="page-kicker">Configuração</div>
+            <div class="head-title">Consultores <span class="head-count" id="count">carregando...</span></div>
+          </div>
+          <div class="head-actions">
+            <button class="btn btn-ghost" id="help-btn" type="button" title="Ajuda" style="display:inline-flex;align-items:center;gap:6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Ajuda</button>
+            <button class="btn btn-ghost" id="sel-del-btn" type="button" style="display:none;font-weight:700;color:#fff;background:#dc2626;padding:5px 14px;border-radius:6px">Excluir selecionados</button>
+            <button class="btn btn-ghost" id="refresh-btn" type="button">↻ Atualizar</button>
+            <button class="btn btn-primary" id="novo-btn" type="button">+ Novo Consultor</button>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-wrap">
+            <table class="grid-table">
+              <thead>
+                <tr>
+                  <th class="col-check"><input type="checkbox" class="row-cb" id="cb-all" title="Selecionar todos"></th>
+                  <th class="col-action"></th>
+                  <th class="col-usuario sortable" data-sort="usuarioIdIahub">Usuário IA HUB</th>
+                  <th class="col-softexpert sortable" data-sort="idSoftexpert">ID SoftExpert</th>
+                  <th class="col-telefone sortable" data-sort="telefone">Telefone</th>
+                  <th class="col-status sortable" data-sort="ativo">Status</th>
+                </tr>
+                <tr class="filter-cell">
+                  <th></th>
+                  <th></th>
+                  <th><input data-filter="usuarioIdIahub" autocomplete="off" spellcheck="false"></th>
+                  <th><input data-filter="idSoftexpert" autocomplete="off" spellcheck="false"></th>
+                  <th><input data-filter="telefone" autocomplete="off" spellcheck="false"></th>
+                  <th><select data-filter="ativo"><option value="">Todos</option><option value="1">Ativo</option><option value="0">Inativo</option></select></th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+            <div class="empty-state" id="empty-state" style="display:none">Nenhum consultor cadastrado</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="detail-view" class="detail-shell">
+        <div class="editor-bar">
+          <div class="editor-title">
+            <strong id="detail-title">Novo Consultor</strong>
+            <span id="detail-subtitle">Preencha os campos e salve.</span>
+          </div>
+          <button class="btn btn-ghost" id="back-btn" type="button">← Voltar à lista</button>
+        </div>
+
+        <div class="detail-card">
+          <div class="form-row">
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label">ID do usuário IA HUB <span style="color:#dc2626">*</span></label>
+              <input type="number" id="f-usuario-id" class="form-control" placeholder="Ex.: 1">
+              <div class="form-hint">Vincula um usuário já existente do login do IA HUB — não cria login novo.</div>
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label">ID SoftExpert</label>
+              <input type="text" id="f-id-softexpert" class="form-control" placeholder="Ex.: 784">
+              <div class="form-hint">Código do técnico (CDUSERANA) no SoftExpert — usado para saber "meus chamados" no radar.</div>
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label">Telefone (DDI + DDD)</label>
+              <input type="text" id="f-telefone" class="form-control" placeholder="Ex.: 5565999998888">
+              <div class="form-hint">WhatsApp completo, com código do país (DDI) e DDD, sem espaços/símbolos — ex.: Brasil (55) + Cuiabá (65) + número = <code>5565999998888</code>. Usado no login externo: o consultor acessa /entrar-servico/:slug-da-empresa, informa este número e recebe um código de confirmação por WhatsApp.</div>
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label">Status</label>
+              <select id="f-ativo" class="form-control">
+                <option value="1">Ativo</option>
+                <option value="0">Inativo</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label">Pré-análise automática da IA</label>
+              <select id="f-pre-analise" class="form-control">
+                <option value="1">Automática — IA analisa ao abrir o chamado</option>
+                <option value="0">Manual — só quando o consultor perguntar</option>
+              </select>
+              <div class="form-hint">Ao selecionar um chamado sem atendimento ainda no Radar: se automática, a IA já investiga sozinha; se manual, o chat abre vazio esperando a pergunta do consultor.</div>
+            </div>
+          </div>
+          <div class="form-actions">
+            <span class="save-feedback" id="save-feedback"></span>
+            <button class="btn btn-ghost" type="button" id="excluir-btn" style="display:none;color:#dc2626">Excluir</button>
+            <button class="btn btn-ghost" type="button" id="cancelar-btn">Cancelar</button>
+            <button class="btn btn-primary" type="button" id="salvar-btn">Salvar</button>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
+</div>
 
-  <script src="/js/auth.js"></script>
-  <script>
-    function showError(msg) {
-      const el = document.getElementById('error-banner');
-      el.textContent = msg;
-      el.style.display = 'block';
-    }
-    function hideError() {
-      document.getElementById('error-banner').style.display = 'none';
-    }
+<div class="modal-backdrop" id="delete-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="delete-modal-title">Excluir consultor</div>
+      <button class="modal-close" id="close-delete" type="button">&times;</button>
+    </div>
+    <div id="delete-modal-body">Tem certeza que deseja excluir este consultor?</div>
+    <div class="danger-note">Esta ação remove o cadastro definitivamente. Atendimentos já vinculados a este consultor permanecem no histórico, apenas sem essa referência.</div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="cancel-delete" type="button">Cancelar</button>
+      <button class="btn btn-primary" id="confirm-delete" type="button" style="background:#dc2626;border-color:#dc2626">Excluir</button>
+    </div>
+  </div>
+</div>
 
-    async function api(path, opts = {}) {
-      const r = await fetch(path, {
-        headers: { 'Content-Type': 'application/json' },
-        ...opts,
-      });
-      const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
-      return body;
-    }
+<div class="help-drawer" id="help-drawer">
+  <div class="help-head">
+    <strong>Ajuda — Consultores</strong>
+    <button class="modal-close" id="close-help" type="button">&times;</button>
+  </div>
+  <div class="help-body">
+    <h3>O que é esta tela</h3>
+    <p>Cadastro dos consultores que atendem chamados pelo IA Service — vincula um usuário já existente do IA HUB (login normal) ao seu código de técnico no SoftExpert e, opcionalmente, ao WhatsApp usado para acesso externo.</p>
 
-    function empresaIdAtual() {
-      return window._iahubEmpresa?.id || null;
-    }
+    <h3>ID do usuário IA HUB</h3>
+    <p>ID numérico de um usuário já cadastrado no IA HUB. Não cria login novo — só vincula um consultor a uma conta que já existe.</p>
 
-    async function carregarConsultores() {
-      const empresaId = empresaIdAtual();
-      if (!empresaId) return;
-      try {
-        const lista = await api(`/api/ia-service/consultores?empresa_id=${empresaId}`);
-        const container = document.getElementById('lista-consultores');
-        if (!lista.length) {
-          container.innerHTML = '<div class="empty-state">Nenhum consultor cadastrado ainda.</div>';
-          return;
-        }
-        container.innerHTML = lista.map(c => `
-          <div class="consultor-item">
-            <span class="consultor-usuario">Usuário #${c.usuarioIdIahub}</span>
-            <span class="consultor-softexpert">${c.idSoftexpert ? 'SoftExpert #' + c.idSoftexpert : 'sem vínculo SoftExpert'}</span>
-            <span class="consultor-status">${c.ativo ? 'Ativo' : 'Inativo'}</span>
-          </div>
-        `).join('');
-      } catch (err) {
-        showError('Não foi possível carregar os consultores: ' + err.message);
+    <h3>ID SoftExpert</h3>
+    <p>Código do técnico (<code>CDUSERANA</code>) na origem SoftExpert. Sem esse vínculo, "Minha fila" no Radar de Chamados fica vazia mesmo que existam chamados atribuídos a este analista.</p>
+
+    <h3>Telefone</h3>
+    <p>WhatsApp completo, com DDI (código do país) e DDD, sem espaços ou símbolos — ex.: <code>5565999998888</code>. Habilita o login externo: o consultor acessa <code>/entrar-servico/:slug-da-empresa</code>, informa este número e recebe um código de confirmação por WhatsApp, entrando direto no chat sem senha do IA HUB.</p>
+
+    <h3>Pré-análise automática da IA</h3>
+    <p>Controla o que acontece quando este consultor abre, no Radar, um chamado que ainda não tem atendimento. Com <strong>Automática</strong>, a IA já investiga sozinha nesse instante. Com <strong>Manual</strong>, o chat abre só com o conteúdo do chamado, e a IA só responde quando o consultor perguntar algo. Não afeta a pré-análise que já roda no momento da importação/sincronização dos chamados — são dois gatilhos independentes.</p>
+
+    <h3>Exclusão em massa</h3>
+    <p>Marque os checkboxes das linhas desejadas na tabela para liberar o botão "Excluir selecionados" no topo. A exclusão é definitiva — atendimentos já registrados permanecem no histórico, só perdem a referência de qual consultor atendeu.</p>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-service/js/sidebar.js"></script>
+<script>
+(function () {
+  const state = { rows: [], view: [], sortField: 'criadoEm', sortDir: 'desc', filters: {}, editId: null, selecionados: new Set() };
+  const $ = id => document.getElementById(id);
+
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+  }
+
+  function empresaIdAtual() {
+    return window._iahubEmpresa?.id || null;
+  }
+
+  async function api(path, opts = {}) {
+    const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+    if (r.status === 204) return null;
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
+    return body;
+  }
+
+  function badge(ativo) {
+    return ativo ? `<span class="badge badge-ok">Ativo</span>` : `<span class="badge badge-muted">Inativo</span>`;
+  }
+
+  function rowValue(row, field) {
+    if (field === 'ativo') return row.ativo ? '1' : '0';
+    return row[field] ?? '';
+  }
+
+  function applyFilters() {
+    const filters = state.filters;
+    state.view = state.rows.filter(row => {
+      for (const [field, raw] of Object.entries(filters)) {
+        const needle = String(raw || '').trim().toLowerCase();
+        if (!needle) continue;
+        const value = String(rowValue(row, field) || '').toLowerCase();
+        if (field === 'ativo') { if (value !== needle) return false; continue; }
+        if (!value.includes(needle)) return false;
       }
+      return true;
+    });
+    sortRows();
+    renderTable();
+  }
+
+  function sortRows() {
+    const field = state.sortField;
+    const dir = state.sortDir === 'asc' ? 1 : -1;
+    state.view.sort((a, b) => {
+      const av = String(rowValue(a, field) || '').toLowerCase();
+      const bv = String(rowValue(b, field) || '').toLowerCase();
+      return av.localeCompare(bv, 'pt-BR', { numeric: true }) * dir;
+    });
+  }
+
+  function renderDataRow(row) {
+    const checked = state.selecionados.has(row.id) ? 'checked' : '';
+    return `
+      <tr class="data-row ${checked ? 'selected' : ''}" data-id="${esc(row.id)}">
+        <td class="col-check"><input type="checkbox" class="row-cb" data-row-cb ${checked}></td>
+        <td class="col-action">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </td>
+        <td>#${esc(row.usuarioIdIahub)}</td>
+        <td>${row.idSoftexpert ? esc(row.idSoftexpert) : '<span style="color:var(--text-lo)">sem vínculo</span>'}</td>
+        <td>${row.telefone ? esc(row.telefone) : '<span style="color:var(--text-lo)">—</span>'}</td>
+        <td>${badge(row.ativo)}</td>
+      </tr>`;
+  }
+
+  function renderTable() {
+    const tbody = $('tbody');
+    const rows = state.view;
+    $('empty-state').style.display = rows.length ? 'none' : 'flex';
+    $('count').textContent = `${rows.length} de ${state.rows.length} registro(s)`;
+    tbody.innerHTML = rows.map(renderDataRow).join('');
+    atualizarBarraSelecao();
+  }
+
+  async function loadRows() {
+    const empresaId = empresaIdAtual();
+    if (!empresaId) return;
+    $('count').textContent = 'carregando...';
+    try {
+      state.rows = await api(`/api/ia-service/consultores?empresa_id=${empresaId}`);
+      state.selecionados.clear();
+      applyFilters();
+    } catch (err) {
+      $('count').textContent = 'erro ao carregar';
+      alert('Não foi possível carregar os consultores: ' + err.message);
     }
+  }
 
-    async function criarConsultor() {
-      hideError();
-      const empresaId = empresaIdAtual();
-      if (!empresaId) return showError('Selecione uma empresa antes de vincular um consultor.');
+  function feedback(msg, ok) {
+    const el = $('save-feedback');
+    el.textContent = msg;
+    el.className = 'save-feedback' + (ok === true ? ' ok' : ok === false ? ' fail' : '');
+  }
 
-      const usuarioIdIahub = document.getElementById('usuario-id').value.trim();
-      const idSoftexpert = document.getElementById('id-softexpert').value.trim();
-      if (!usuarioIdIahub) return showError('Informe o ID do usuário IA HUB.');
+  function abrirFormulario(id) {
+    state.editId = id || null;
+    const row = id ? state.rows.find(r => r.id === id) : null;
+    $('detail-title').textContent = row ? `Usuário #${row.usuarioIdIahub}` : 'Novo Consultor';
+    $('detail-subtitle').textContent = row ? 'Revise os campos e salve.' : 'Preencha os campos e salve.';
+    $('f-usuario-id').value = row ? row.usuarioIdIahub : '';
+    $('f-usuario-id').disabled = !!row;
+    $('f-id-softexpert').value = row ? (row.idSoftexpert || '') : '';
+    $('f-telefone').value = row ? (row.telefone || '') : '';
+    $('f-ativo').value = row ? (row.ativo ? '1' : '0') : '1';
+    $('f-pre-analise').value = row ? (row.preAnaliseAutomatica ? '1' : '0') : '1';
+    $('excluir-btn').style.display = row ? '' : 'none';
+    feedback('', null);
+    $('list-view').style.display = 'none';
+    $('detail-view').classList.add('open');
+  }
 
-      try {
+  function fecharFormulario() {
+    $('detail-view').classList.remove('open');
+    $('list-view').style.display = '';
+    state.editId = null;
+  }
+
+  async function salvar() {
+    const empresaId = empresaIdAtual();
+    const usuarioIdIahub = $('f-usuario-id').value.trim();
+    const idSoftexpert = $('f-id-softexpert').value.trim();
+    const telefone = $('f-telefone').value.trim();
+    const ativo = $('f-ativo').value === '1';
+    const preAnaliseAutomatica = $('f-pre-analise').value === '1';
+
+    if (!state.editId && !usuarioIdIahub) return feedback('Informe o ID do usuário IA HUB.', false);
+
+    try {
+      if (state.editId) {
+        await api(`/api/ia-service/consultores/${state.editId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ empresa_id: empresaId, idSoftexpert: idSoftexpert || null, telefone: telefone || null, ativo, preAnaliseAutomatica }),
+        });
+      } else {
         await api('/api/ia-service/consultores', {
           method: 'POST',
-          body: JSON.stringify({ empresa_id: empresaId, usuarioIdIahub: Number(usuarioIdIahub), idSoftexpert: idSoftexpert || null }),
+          body: JSON.stringify({ empresa_id: empresaId, usuarioIdIahub: Number(usuarioIdIahub), idSoftexpert: idSoftexpert || null, telefone: telefone || null, preAnaliseAutomatica }),
         });
-        document.getElementById('usuario-id').value = '';
-        document.getElementById('id-softexpert').value = '';
-        carregarConsultores();
-      } catch (err) {
-        showError('Não foi possível vincular o consultor: ' + err.message);
       }
+      feedback('Salvo com sucesso!', true);
+      await loadRows();
+      setTimeout(fecharFormulario, 500);
+    } catch (err) {
+      feedback(err.message, false);
     }
+  }
 
-    window._iahubAuthReady?.then(carregarConsultores) ?? carregarConsultores();
-  </script>
+  // ── Exclusão (individual, via formulário, e em massa, via seleção) ──────
+  let idsParaExcluir = [];
+
+  function abrirModalExclusao(ids) {
+    idsParaExcluir = ids;
+    const plural = ids.length > 1;
+    $('delete-modal-title').textContent = plural ? `Excluir ${ids.length} consultores` : 'Excluir consultor';
+    $('delete-modal-body').textContent = plural
+      ? `Tem certeza que deseja excluir os ${ids.length} consultores selecionados?`
+      : 'Tem certeza que deseja excluir este consultor?';
+    $('delete-modal').classList.add('open');
+  }
+
+  function fecharModalExclusao() {
+    $('delete-modal').classList.remove('open');
+    idsParaExcluir = [];
+  }
+
+  async function confirmarExclusao() {
+    const ids = idsParaExcluir;
+    fecharModalExclusao();
+    try {
+      for (const id of ids) {
+        await api(`/api/ia-service/consultores/${id}`, { method: 'DELETE' });
+      }
+      state.selecionados.clear();
+      if (state.editId && ids.includes(state.editId)) fecharFormulario();
+      await loadRows();
+    } catch (err) {
+      alert('Não foi possível excluir: ' + err.message);
+    }
+  }
+
+  // ── Seleção múltipla (checkbox por linha + "selecionar todos") ─────────
+  function atualizarBarraSelecao() {
+    const btn = $('sel-del-btn');
+    const total = state.selecionados.size;
+    btn.style.display = total ? '' : 'none';
+    btn.textContent = total > 1 ? `Excluir selecionados (${total})` : 'Excluir selecionado';
+    $('cb-all').checked = state.view.length > 0 && state.view.every(r => state.selecionados.has(r.id));
+  }
+
+  function bindEvents() {
+    $('novo-btn').addEventListener('click', () => abrirFormulario(null));
+    $('refresh-btn').addEventListener('click', () => loadRows());
+    $('back-btn').addEventListener('click', fecharFormulario);
+    $('cancelar-btn').addEventListener('click', fecharFormulario);
+    $('salvar-btn').addEventListener('click', salvar);
+    $('excluir-btn').addEventListener('click', () => abrirModalExclusao([state.editId]));
+
+    $('tbody').addEventListener('click', event => {
+      if (event.target.closest('[data-row-cb]')) return; // checkbox tem handler próprio abaixo
+      const tr = event.target.closest('tr.data-row');
+      if (tr) abrirFormulario(tr.dataset.id);
+    });
+    $('tbody').addEventListener('change', event => {
+      const cb = event.target.closest('[data-row-cb]');
+      if (!cb) return;
+      const tr = cb.closest('tr.data-row');
+      const id = tr.dataset.id;
+      if (cb.checked) state.selecionados.add(id); else state.selecionados.delete(id);
+      tr.classList.toggle('selected', cb.checked);
+      atualizarBarraSelecao();
+    });
+    $('cb-all').addEventListener('change', event => {
+      if (event.target.checked) state.view.forEach(r => state.selecionados.add(r.id));
+      else state.view.forEach(r => state.selecionados.delete(r.id));
+      renderTable();
+    });
+    $('sel-del-btn').addEventListener('click', () => abrirModalExclusao([...state.selecionados]));
+
+    $('close-delete').addEventListener('click', fecharModalExclusao);
+    $('cancel-delete').addEventListener('click', fecharModalExclusao);
+    $('confirm-delete').addEventListener('click', confirmarExclusao);
+    $('delete-modal').addEventListener('click', event => { if (event.target.id === 'delete-modal') fecharModalExclusao(); });
+
+    $('help-btn').addEventListener('click', () => $('help-drawer').classList.add('open'));
+    $('close-help').addEventListener('click', () => $('help-drawer').classList.remove('open'));
+
+    document.querySelectorAll('[data-filter]').forEach(el => {
+      el.addEventListener('input', () => { state.filters[el.dataset.filter] = el.value; applyFilters(); });
+      el.addEventListener('change', () => { state.filters[el.dataset.filter] = el.value; applyFilters(); });
+    });
+    document.querySelectorAll('th.sortable').forEach(th => th.addEventListener('click', () => {
+      const field = th.dataset.sort;
+      if (state.sortField === field) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+      else { state.sortField = field; state.sortDir = 'asc'; }
+      applyFilters();
+    }));
+  }
+
+  bindEvents();
+  window._iahubAuthReady?.then(loadRows) ?? loadRows();
+})();
+</script>
 </body>
 </html>
