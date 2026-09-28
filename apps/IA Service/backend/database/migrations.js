@@ -610,6 +610,46 @@ const MIGRATIONS = [
         ON svc_login_challenges (telefone, expira_em);
     `,
   },
+  {
+    version: 25,
+    descricao: 'usuario_id_iahub em consultores deixa de ser obrigatorio (pedido explicito do usuario, 2026-09, reverte a decisao documentada na migration v17): o unico caminho de acesso ao Radar hoje e por telefone (login externo, resolve tudo via consultores.id/telefone, nunca usuario_id_iahub) — a intencao e cadastrar consultores como "analista com telefone", sem precisar criar/vincular um usuario de login do IA HUB para cada um. usuario_id_iahub continua existindo (usuarios ja vinculados nao perdem o vinculo) mas vira opcional — SQLite nao suporta ALTER COLUMN DROP NOT NULL, entao recria a tabela preservando id (nunca muda, FKs de atendimentos/svc_sessoes_externas continuam integras) e todos os dados existentes.',
+    sql: `
+      CREATE TABLE consultores_novo (
+        id                       TEXT PRIMARY KEY,
+        usuario_id_iahub         INTEGER DEFAULT NULL,
+        empresa_id               INTEGER NOT NULL,
+        id_softexpert            TEXT DEFAULT NULL,
+        telefone                 TEXT DEFAULT NULL,
+        ativo                    INTEGER NOT NULL DEFAULT 1,
+        pre_analise_automatica   INTEGER NOT NULL DEFAULT 1,
+        criado_em                TEXT NOT NULL,
+        atualizado_em            TEXT NOT NULL
+      );
+
+      INSERT INTO consultores_novo (id, usuario_id_iahub, empresa_id, id_softexpert, telefone, ativo, pre_analise_automatica, criado_em, atualizado_em)
+        SELECT id, usuario_id_iahub, empresa_id, id_softexpert, telefone, ativo, pre_analise_automatica, criado_em, atualizado_em FROM consultores;
+
+      DROP TABLE consultores;
+      ALTER TABLE consultores_novo RENAME TO consultores;
+
+      -- Antes era UNIQUE(usuario_id_iahub, empresa_id) — com o campo agora
+      -- opcional, um indice unico normal trataria multiplos NULL como
+      -- nao-colidentes (comportamento correto: N consultores sem usuario
+      -- vinculado na mesma empresa devem poder coexistir), mas o filtro
+      -- WHERE explicito deixa essa intencao inequivoca e evita qualquer
+      -- ambiguidade de comportamento entre versoes do SQLite.
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_svc_consultores_usuario_empresa
+        ON consultores (usuario_id_iahub, empresa_id)
+        WHERE usuario_id_iahub IS NOT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_svc_consultores_empresa_ativo
+        ON consultores (empresa_id, ativo);
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_svc_consultores_softexpert
+        ON consultores (empresa_id, id_softexpert)
+        WHERE id_softexpert IS NOT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

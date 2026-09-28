@@ -136,7 +136,7 @@
         <div class="callout" style="margin-bottom:12px;padding:10px 12px;border-radius:8px;background:var(--bg-base);border:1px solid var(--border);font-size:12.5px;color:var(--text-lo)">
           A fonte aqui é só uma REFERÊNCIA — a conexão real (host, porta, usuário, senha do SQL Server) já deve estar cadastrada diretamente no Agente Local, sob esta mesma connection_key. O IA Service nunca cadastra nem envia credencial para o agente.
         </div>
-        <div class="form-row">
+        <div class="form-row" style="flex-direction:column;align-items:stretch;max-width:420px">
           <div class="form-field"><label>Nome</label><input type="text" id="fonte-nome" class="form-control" placeholder="SoftExpert - Chamados"></div>
           <div class="form-field">
             <label>connection_key</label>
@@ -144,8 +144,10 @@
             <input type="text" id="fonte-key" class="form-control" placeholder="mesma chave já cadastrada no Agente Local">
             <div class="form-hint" id="fonte-key-hint"></div>
           </div>
-          <button class="btn btn-primary" type="button" id="fonte-form-btn" onclick="salvarFonte()">Criar fonte</button>
-          <button class="btn btn-ghost" type="button" id="fonte-form-cancelar" style="display:none" onclick="cancelarEdicaoFonte()">Cancelar</button>
+          <div class="form-field" style="display:flex;gap:8px">
+            <button class="btn btn-primary" type="button" id="fonte-form-btn" onclick="salvarFonte()">Criar fonte</button>
+            <button class="btn btn-ghost" type="button" id="fonte-form-cancelar" style="display:none" onclick="cancelarEdicaoFonte()">Cancelar</button>
+          </div>
         </div>
         <div id="fontes-lista" style="margin-top:14px"><div class="empty-state">Carregando…</div></div>
       </div>
@@ -382,17 +384,31 @@
       select.innerHTML = '<option value="">Nenhuma fonte disponível</option>';
       return;
     }
+    // data-* attributes em vez de serializar nome/connectionKey dentro do
+    // onclick inline — nome de fonte com aspas (ex. 'Softexpert - "ITSM"')
+    // quebrava o HTML do atributo e travava TODOS os botões do card
+    // silenciosamente (bug real encontrado em 2026-09: clique não fazia nada).
     lista.innerHTML = fontes.map(f => `
       <div class="fonte-card">
         <div class="fonte-card-nome">${escapeHtml(f.nome)}</div>
         <div class="fonte-card-meta">${escapeHtml(f.connectionKey)} · ${escapeHtml(f.sistemaOrigem)}</div>
         <div class="fonte-card-actions">
           <button class="btn btn-ghost" type="button" onclick="testarFonte('${f.id}')">Testar SELECT 1</button>
-          <button class="btn btn-ghost" type="button" onclick="editarFonte('${f.id}', ${JSON.stringify(f.nome)}, ${JSON.stringify(f.connectionKey)})">Editar</button>
-          <button class="btn btn-ghost" type="button" onclick="excluirFonte('${f.id}', ${JSON.stringify(f.nome)})">Excluir</button>
+          <button class="btn btn-ghost fonte-btn-editar" type="button" data-id="${f.id}" data-nome="${escapeHtml(f.nome)}" data-key="${escapeHtml(f.connectionKey)}">Editar</button>
+          <button class="btn btn-ghost fonte-btn-limpar" type="button" data-id="${f.id}" data-nome="${escapeHtml(f.nome)}">Limpar histórico</button>
+          <button class="btn btn-ghost fonte-btn-excluir" type="button" data-id="${f.id}" data-nome="${escapeHtml(f.nome)}">Excluir</button>
         </div>
       </div>
     `).join('');
+    lista.querySelectorAll('.fonte-btn-editar').forEach(btn => {
+      btn.addEventListener('click', () => editarFonte(btn.dataset.id, btn.dataset.nome, btn.dataset.key));
+    });
+    lista.querySelectorAll('.fonte-btn-limpar').forEach(btn => {
+      btn.addEventListener('click', () => limparHistoricoFonte(btn.dataset.id, btn.dataset.nome));
+    });
+    lista.querySelectorAll('.fonte-btn-excluir').forEach(btn => {
+      btn.addEventListener('click', () => excluirFonte(btn.dataset.id, btn.dataset.nome));
+    });
     select.innerHTML = fontes.map(f => `<option value="${f.id}">${escapeHtml(f.nome)}</option>`).join('');
   }
 
@@ -496,6 +512,24 @@
       if (fonteEmEdicaoId === fonteId) cancelarEdicaoFonte();
       carregarFontes();
     } catch (err) { showError('Não foi possível excluir a fonte: ' + err.message); }
+  }
+
+  // "Reset" da fonte SEM excluí-la — mantém nome/connection_key (útil
+  // depois de corrigir o cadastro via dropdown), apaga só as importações e,
+  // em cascata, os chamados/posicionamentos que vieram delas. Se houver uma
+  // importação EXECUTANDO no momento, ela pode falhar no meio (o processo em
+  // background vai tentar atualizar um registro que sumiu) — decisão
+  // explícita do usuário (2026-09): não bloquear por causa disso, o aviso já
+  // deixa isso claro antes de confirmar.
+  async function limparHistoricoFonte(fonteId, nome) {
+    hideError();
+    if (!confirm(`Limpar todo o histórico de importações da fonte "${nome}"?\n\nIsso apaga as importações registradas e, em cascata, os chamados/posicionamentos já trazidos por ela — a fonte continua cadastrada (nome/connection_key preservados) para reimportar depois. Se houver uma importação em andamento agora, ela pode falhar no meio.`)) return;
+    const empresaId = empresaIdAtual();
+    try {
+      await api(`/api/ia-service/base-historica/fontes/${fonteId}/historico?empresa_id=${empresaId}`, { method: 'DELETE' });
+      carregarResumo();
+      carregarImportacoes();
+    } catch (err) { showError('Não foi possível limpar o histórico da fonte: ' + err.message); }
   }
 
   async function iniciarImportacao() {

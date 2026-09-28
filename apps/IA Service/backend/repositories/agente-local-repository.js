@@ -170,6 +170,24 @@ function excluirFonte(empresaId, fonteId) {
   return resultado.changes > 0;
 }
 
+/**
+ * "Reset" de uma fonte SEM excluí-la (connection_key/nome continuam iguais,
+ * prontos para reimportar) — apaga as importações (e em cascata,
+ * raw_import/chamados/posicionamentos vinculados a esta fonte, mesmo
+ * ON DELETE CASCADE de excluirFonte, ver migrations.js). Decisão explícita
+ * do usuário (2026-09): limpar tentativas anteriores (algumas zeradas por
+ * connection_key errado, antes do dropdown existir) sem perder o cadastro
+ * da fonte já corrigido.
+ */
+function limparHistoricoFonte(empresaId, fonteId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const db = getDB();
+  const fonte = getFonte(empresaId, fonteId);
+  if (!fonte) return false;
+  db.prepare(`DELETE FROM importacoes WHERE empresa_id = ? AND fonte_id = ?`).run(Number(empresaId), fonteId);
+  return true;
+}
+
 module.exports = {
   getConfig,
   salvarConfig,
@@ -179,4 +197,5 @@ module.exports = {
   getFonte,
   listarFontes,
   excluirFonte,
+  limparHistoricoFonte,
 };

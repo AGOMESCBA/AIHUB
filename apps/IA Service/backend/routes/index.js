@@ -427,6 +427,19 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
+  // "Reset" da fonte SEM excluí-la — apaga só o histórico de importações
+  // (e em cascata chamados/posicionamentos vinculados), mantém o cadastro
+  // (nome/connection_key) intacto para reimportar. Ver
+  // agenteLocalService.limparHistoricoFonte.
+  app.delete('/api/ia-service/base-historica/fontes/:id/historico', (req, res) => {
+    try {
+      agenteLocalService.limparHistoricoFonte(req.svcEmpresaId, req.params.id);
+      res.status(204).end();
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   // Diagnóstico TEMPORÁRIO (2026-09) para investigar importação retornando
   // 0 registros mesmo com conexão testada OK — isola cada camada do filtro
   // (data, JOIN WFPROCESS, CDPROCESSMODEL) com SELECT COUNT(*) separados,

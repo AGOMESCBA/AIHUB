@@ -1,12 +1,17 @@
 // Unico ponto de acesso SQL a tabela `consultores`.
 //
-// Modelo escolhido (ver decisao documentada em IA_SERVICE_ETAPA1_IMPLEMENTACAO.md,
+// Modelo original (ver decisao documentada em IA_SERVICE_ETAPA1_IMPLEMENTACAO.md,
 // secao "Multiempresa no cadastro de Consultores"): usuario_id_iahub + empresa_id,
-// NAO usuario_id_iahub global. Um mesmo usuario do IA HUB pode ter empresas=[...]
-// com acesso a mais de uma empresa cliente (confirmado em
-// apps/IAHUB/backend/usuarios/database.js), e id_softexpert e especifico da
-// instancia SoftExpert de cada empresa cliente — um consultor global colidiria
-// dois id_softexpert diferentes no mesmo registro.
+// NAO usuario_id_iahub global. id_softexpert e especifico da instancia
+// SoftExpert de cada empresa cliente — um consultor global colidiria dois
+// id_softexpert diferentes no mesmo registro.
+//
+// 2026-09 (migration v25, decisao explicita do usuario, reverte v17):
+// usuario_id_iahub deixou de ser obrigatorio — o unico caminho de acesso ao
+// Radar hoje e por telefone (login externo), que nunca depende de
+// usuario_id_iahub. A intencao e cadastrar consultores como "analista com
+// telefone", sem exigir vincular/criar um usuario de login do IA HUB para
+// cada um. Quando informado, o vinculo continua validado (consultor-service.js).
 
 const crypto = require('crypto');
 const { getDB } = require('../database');
@@ -28,13 +33,14 @@ function _rowParaDominio(row) {
 
 function criarConsultor(empresaId, dados) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
-  if (!dados.usuarioIdIahub) throw new Error('usuarioIdIahub é obrigatório.');
 
   const db = getDB();
-  const existente = db.prepare(`
-    SELECT * FROM consultores WHERE usuario_id_iahub = ? AND empresa_id = ?
-  `).get(Number(dados.usuarioIdIahub), Number(empresaId));
-  if (existente) throw new Error('Já existe um consultor para este usuário nesta empresa.');
+  if (dados.usuarioIdIahub) {
+    const existente = db.prepare(`
+      SELECT * FROM consultores WHERE usuario_id_iahub = ? AND empresa_id = ?
+    `).get(Number(dados.usuarioIdIahub), Number(empresaId));
+    if (existente) throw new Error('Já existe um consultor para este usuário nesta empresa.');
+  }
 
   const id = crypto.randomUUID();
   const agora = new Date().toISOString();
@@ -44,7 +50,7 @@ function criarConsultor(empresaId, dados) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
-    Number(dados.usuarioIdIahub),
+    dados.usuarioIdIahub ? Number(dados.usuarioIdIahub) : null,
     Number(empresaId),
     dados.idSoftexpert ?? null,
     dados.telefone ?? null,

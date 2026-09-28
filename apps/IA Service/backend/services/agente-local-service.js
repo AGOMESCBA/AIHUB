@@ -135,6 +135,12 @@ function excluirFonte(empresaId, fonteId) {
   return agenteRepo.excluirFonte(empresaId, fonteId);
 }
 
+function limparHistoricoFonte(empresaId, fonteId) {
+  const fonte = agenteRepo.getFonte(empresaId, fonteId);
+  if (!fonte) throw new Error('Fonte histórica não encontrada.');
+  return agenteRepo.limparHistoricoFonte(empresaId, fonteId);
+}
+
 function listarFontes(empresaId, filtros) {
   return agenteRepo.listarFontes(empresaId, filtros);
 }
@@ -195,6 +201,7 @@ module.exports = {
   getFonte,
   listarFontes,
   excluirFonte,
+  limparHistoricoFonte,
   testarFonte,
   executarSelectNaFonte,
 };

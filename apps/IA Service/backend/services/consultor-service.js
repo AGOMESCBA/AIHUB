@@ -1,23 +1,29 @@
 // Camada de orquestracao do cadastro de Consultores/Tecnicos do IA Service.
 //
 // IMPORTANTE (seção 14/15 do prompt da Etapa 1): este NÃO é um novo sistema de
-// login. O consultor é um perfil complementar a um usuário JÁ existente do
-// IA HUB (apps/IAHUB/backend/usuarios) — nunca duplicar autenticação, nunca
-// criar usuário/senha próprios aqui.
+// login. Login continua sendo por telefone (login-externo-service.js), nunca
+// senha própria aqui.
+//
+// 2026-09 (decisão explícita do usuário, reverte a exigência original):
+// usuarioIdIahub deixou de ser obrigatório — a intenção é cadastrar
+// consultores como "analista com telefone", sem precisar vincular/criar um
+// usuário de login do IA HUB para cada um (o único caminho de acesso ao
+// Radar hoje é por telefone, que nunca depende desse vínculo). Quando
+// usuarioIdIahub É informado, continua validado contra o cadastro real do
+// IAHub — nunca vincula um ID inexistente silenciosamente.
 
 const consultorRepo = require('../repositories/consultor-repository');
 const usuariosDb = require('../../../IAHUB/backend/usuarios/database');
 
 function criarConsultor(empresaId, dados) {
-  const usuario = usuariosDb.buscarPorId(dados.usuarioIdIahub);
-  // Seção 17 do prompt: "usuário IA HUB inexistente não pode ser vinculado
-  // silenciosamente" — falha explícita, nunca cria o vínculo sem confirmar
-  // que o usuário existe de fato no cadastro real da plataforma.
-  if (!usuario) {
-    throw new Error(`Usuário IA HUB não encontrado: ${dados.usuarioIdIahub}`);
-  }
-  if (!usuario.ativo) {
-    throw new Error(`Usuário IA HUB inativo: ${dados.usuarioIdIahub}`);
+  if (dados.usuarioIdIahub) {
+    const usuario = usuariosDb.buscarPorId(dados.usuarioIdIahub);
+    if (!usuario) {
+      throw new Error(`Usuário IA HUB não encontrado: ${dados.usuarioIdIahub}`);
+    }
+    if (!usuario.ativo) {
+      throw new Error(`Usuário IA HUB inativo: ${dados.usuarioIdIahub}`);
+    }
   }
 
   return consultorRepo.criarConsultor(empresaId, dados);

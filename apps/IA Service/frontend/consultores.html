@@ -153,9 +153,9 @@
         <div class="detail-card">
           <div class="form-row">
             <div class="form-group" style="margin-bottom:0">
-              <label class="form-label">ID do usuário IA HUB <span style="color:#dc2626">*</span></label>
+              <label class="form-label">ID do usuário IA HUB (opcional)</label>
               <input type="number" id="f-usuario-id" class="form-control" placeholder="Ex.: 1">
-              <div class="form-hint">Vincula um usuário já existente do login do IA HUB — não cria login novo.</div>
+              <div class="form-hint">Só necessário se este consultor também vai acessar sistemas do IA HUB com login próprio. Para acessar só o Radar (login externo por telefone), deixe em branco — não é preciso criar/vincular usuário.</div>
             </div>
             <div class="form-group" style="margin-bottom:0">
               <label class="form-label">ID SoftExpert</label>
@@ -165,7 +165,7 @@
             <div class="form-group" style="margin-bottom:0">
               <label class="form-label">Telefone (DDI + DDD)</label>
               <input type="text" id="f-telefone" class="form-control" placeholder="Ex.: 5565999998888">
-              <div class="form-hint">WhatsApp completo, com código do país (DDI) e DDD, sem espaços/símbolos — ex.: Brasil (55) + Cuiabá (65) + número = <code>5565999998888</code>. Usado no login externo: o consultor acessa /entrar-servico/:slug-da-empresa, informa este número e recebe um código de confirmação por WhatsApp.</div>
+              <div class="form-hint">WhatsApp completo, com código do país (DDI) e DDD, sem espaços/símbolos — ex.: Brasil (55) + Cuiabá (65) + número = <code>5565999998888</code>. Usado no login externo: o consultor acessa /entrar-servico, informa este número e recebe um código de confirmação por WhatsApp.</div>
             </div>
             <div class="form-group" style="margin-bottom:0">
               <label class="form-label">Status</label>
@@ -302,7 +302,7 @@
         <td class="col-action">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
         </td>
-        <td>#${esc(row.usuarioIdIahub)}</td>
+        <td>${row.usuarioIdIahub ? '#' + esc(row.usuarioIdIahub) : '<span style="color:var(--text-lo)">sem usuário</span>'}</td>
         <td>${row.idSoftexpert ? esc(row.idSoftexpert) : '<span style="color:var(--text-lo)">sem vínculo</span>'}</td>
         <td>${row.telefone ? esc(row.telefone) : '<span style="color:var(--text-lo)">—</span>'}</td>
         <td>${badge(row.ativo)}</td>
@@ -341,9 +341,9 @@
   function abrirFormulario(id) {
     state.editId = id || null;
     const row = id ? state.rows.find(r => r.id === id) : null;
-    $('detail-title').textContent = row ? `Usuário #${row.usuarioIdIahub}` : 'Novo Consultor';
+    $('detail-title').textContent = row ? (row.usuarioIdIahub ? `Usuário #${row.usuarioIdIahub}` : (row.telefone || 'Consultor')) : 'Novo Consultor';
     $('detail-subtitle').textContent = row ? 'Revise os campos e salve.' : 'Preencha os campos e salve.';
-    $('f-usuario-id').value = row ? row.usuarioIdIahub : '';
+    $('f-usuario-id').value = row && row.usuarioIdIahub ? row.usuarioIdIahub : '';
     $('f-usuario-id').disabled = !!row;
     $('f-id-softexpert').value = row ? (row.idSoftexpert || '') : '';
     $('f-telefone').value = row ? (row.telefone || '') : '';
@@ -369,7 +369,9 @@
     const ativo = $('f-ativo').value === '1';
     const preAnaliseAutomatica = $('f-pre-analise').value === '1';
 
-    if (!state.editId && !usuarioIdIahub) return feedback('Informe o ID do usuário IA HUB.', false);
+    // usuarioIdIahub é opcional (2026-09) — único caminho de acesso ao
+    // Radar hoje é por telefone (login externo), que não depende disso.
+    if (!state.editId && !usuarioIdIahub && !telefone) return feedback('Informe ao menos o telefone (login externo) ou o ID do usuário IA HUB.', false);
 
     try {
       if (state.editId) {
@@ -380,7 +382,7 @@
       } else {
         await api('/api/ia-service/consultores', {
           method: 'POST',
-          body: JSON.stringify({ empresa_id: empresaId, usuarioIdIahub: Number(usuarioIdIahub), idSoftexpert: idSoftexpert || null, telefone: telefone || null, preAnaliseAutomatica }),
+          body: JSON.stringify({ empresa_id: empresaId, usuarioIdIahub: usuarioIdIahub ? Number(usuarioIdIahub) : null, idSoftexpert: idSoftexpert || null, telefone: telefone || null, preAnaliseAutomatica }),
         });
       }
       feedback('Salvo com sucesso!', true);
