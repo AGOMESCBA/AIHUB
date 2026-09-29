@@ -650,6 +650,16 @@ const MIGRATIONS = [
         WHERE id_softexpert IS NOT NULL;
     `,
   },
+  {
+    version: 26,
+    descricao: 'Apelido de URL configuravel por empresa para o login externo (/entrar-servico/:apelido) — pedido explicito do usuario, 2026-09, mesmo padrao ja usado no IA Command (protheus_web_login_path em ai_config, configurado na propria tela de Configuracao de IA). O login continua funcionando SEM apelido (so por telefone, /entrar-servico) — o apelido e so um atalho de conveniencia/identidade visual por empresa (ex. /entrar-servico/j2a), nunca restringe nem substitui a resolucao por telefone que ja existe (um consultor multiempresa continua podendo trocar de empresa dentro do chat independente de qual apelido usou para entrar).',
+    sql: `
+      ALTER TABLE ai_config ADD COLUMN login_externo_apelido TEXT DEFAULT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_svc_ai_config_login_externo_apelido
+        ON ai_config (login_externo_apelido)
+        WHERE login_externo_apelido IS NOT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

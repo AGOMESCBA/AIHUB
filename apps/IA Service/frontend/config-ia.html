@@ -145,6 +145,22 @@
       </div>
 
       <div class="card">
+        <div class="card-title">Link de acesso ao chat</div>
+        <div class="card-desc">O login externo (/entrar-servico) já funciona só com telefone, sem precisar de apelido — o sistema descobre a empresa sozinha. O apelido abaixo é opcional, só um atalho de identidade visual (mostra o nome/logo desta empresa na tela de entrada), mesmo padrão do IA Command.</div>
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Apelido da URL (opcional)</label>
+            <input type="text" class="form-control" id="f-login-apelido" placeholder="ex.: j2a">
+            <div class="form-hint">Só letras minúsculas, números e hífen.</div>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Link para compartilhar</label>
+            <input type="text" class="form-control" id="f-login-link" readonly style="cursor:text">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
         <div class="card-title">Agente Local</div>
         <div class="card-desc">Credenciais de conexão com o Agente Local instalado na rede do cliente — usado para consultar o SoftExpert (Base Histórica) via SELECT-only. Movido para cá (2026-09): mesmo nível de sensibilidade das chaves de IA acima.</div>
         <div class="form-row">
@@ -222,6 +238,13 @@
     el.className = 'save-feedback' + (ok === true ? ' ok' : ok === false ? ' fail' : '');
   }
 
+  function atualizarLinkApelido() {
+    const apelido = $('f-login-apelido').value.trim().toLowerCase();
+    $('f-login-link').value = apelido
+      ? `${location.origin}/entrar-servico/${apelido}`
+      : `${location.origin}/entrar-servico`;
+  }
+
   async function carregar() {
     const empresaId = empresaIdAtual();
     if (!empresaId) return;
@@ -233,6 +256,8 @@
       renderStatus('status-gemini', !!config.temGemini);
       $('f-provedor-primario').value = config.provedorPrimario || 'groq';
       $('f-fallback-ordem').value = config.fallbackOrdem || 'groq,openai,claude,gemini';
+      $('f-login-apelido').value = config.loginExternoApelido || '';
+      atualizarLinkApelido();
     } catch (err) {
       feedback('Não foi possível carregar a configuração: ' + err.message, false);
     }
@@ -249,6 +274,7 @@
       openaiApiKey: $('f-openai').value.trim() || null,
       claudeApiKey: $('f-claude').value.trim() || null,
       geminiApiKey: $('f-gemini').value.trim() || null,
+      loginExternoApelido: $('f-login-apelido').value.trim() || null,
     };
     try {
       await api('/api/ia-service/config/ia', { method: 'PUT', body: JSON.stringify(dados) });
@@ -263,6 +289,8 @@
   }
 
   $('salvar-btn').addEventListener('click', salvar);
+  $('f-login-apelido').addEventListener('input', atualizarLinkApelido);
+  $('f-login-link').addEventListener('click', (e) => e.target.select());
 
   // ── Agente Local — movido para cá (2026-09, pedido do usuário): mesmo
   // nível de sensibilidade das chaves de IA acima, fica mais seguro ter só

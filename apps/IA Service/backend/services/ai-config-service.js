@@ -32,6 +32,8 @@ function getConfig(empresaId) {
   const config = aiConfigRepo.getConfig(empresaId);
   if (!config) return null;
   // Nunca retorna as chaves para o frontend — só indica se estão configuradas.
+  // loginExternoApelido não é segredo (é a própria URL pública de acesso),
+  // volta em claro.
   return {
     empresaId: config.empresaId,
     provedorPrimario: config.provedorPrimario,
@@ -40,6 +42,7 @@ function getConfig(empresaId) {
     temOpenai: !!config.openaiApiKey,
     temClaude: !!config.claudeApiKey,
     temGemini: !!config.geminiApiKey,
+    loginExternoApelido: config.loginExternoApelido,
     atualizadoEm: config.atualizadoEm,
   };
 }

@@ -25,6 +25,7 @@ function _rowParaDominio(row) {
     openaiApiKey: cryptoEnvelope.decryptSecret(row.openai_api_key),
     claudeApiKey: cryptoEnvelope.decryptSecret(row.claude_api_key),
     geminiApiKey: cryptoEnvelope.decryptSecret(row.gemini_api_key),
+    loginExternoApelido: row.login_externo_apelido,
     criadoEm: row.criado_em,
     atualizadoEm: row.atualizado_em,
   };
@@ -35,6 +36,30 @@ function getConfig(empresaId) {
   const db = getDB();
   const row = db.prepare(`SELECT * FROM ai_config WHERE empresa_id = ?`).get(Number(empresaId));
   return _rowParaDominio(row);
+}
+
+/**
+ * Resolve a empresa a partir do apelido configurável (/entrar-servico/:apelido)
+ * — mesmo padrão do IA Command (protheus_web_login_path em ai_config). Só
+ * conveniência/identidade visual: o login continua funcionando por telefone
+ * mesmo sem apelido nenhum (login-externo-service.js nunca depende disto).
+ */
+function getConfigPorApelido(apelido) {
+  if (!apelido) return null;
+  const db = getDB();
+  const row = db.prepare(`SELECT * FROM ai_config WHERE login_externo_apelido = ?`).get(String(apelido).toLowerCase());
+  return _rowParaDominio(row);
+}
+
+// Mesma normalização usada no login externo (login-externo-routes.js já
+// removida de lá, mas o formato de slug continua o mesmo padrão do resto
+// do projeto): minúsculas, só [a-z0-9-], sem hífen duplicado/nas pontas.
+function _normalizarApelido(valor) {
+  const limpo = String(valor || '').trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return limpo || null;
 }
 
 function salvarConfig(empresaId, dados) {
@@ -52,6 +77,16 @@ function salvarConfig(empresaId, dados) {
   const claudeCifrado = cryptoEnvelope.encryptSecret(dados.claudeApiKey);
   const geminiCifrado = cryptoEnvelope.encryptSecret(dados.geminiApiKey);
 
+  let apelido = existente?.loginExternoApelido ?? null;
+  if (dados.loginExternoApelido !== undefined) {
+    apelido = _normalizarApelido(dados.loginExternoApelido);
+    if (apelido) {
+      const emUso = db.prepare(`SELECT empresa_id FROM ai_config WHERE login_externo_apelido = ? AND empresa_id != ?`)
+        .get(apelido, Number(empresaId));
+      if (emUso) throw new Error(`O apelido "${apelido}" já está em uso por outra empresa.`);
+    }
+  }
+
   if (existente) {
     db.prepare(`
       UPDATE ai_config
@@ -60,6 +95,7 @@ function salvarConfig(empresaId, dados) {
              openai_api_key = COALESCE(?, openai_api_key),
              claude_api_key = COALESCE(?, claude_api_key),
              gemini_api_key = COALESCE(?, gemini_api_key),
+             login_externo_apelido = ?,
              atualizado_em = ?
        WHERE empresa_id = ?
     `).run(
@@ -69,6 +105,7 @@ function salvarConfig(empresaId, dados) {
       openaiCifrado,
       claudeCifrado,
       geminiCifrado,
+      apelido,
       agora,
       Number(empresaId)
     );
@@ -77,8 +114,8 @@ function salvarConfig(empresaId, dados) {
       INSERT INTO ai_config (
         empresa_id, provedor_primario, fallback_ordem,
         groq_api_key, openai_api_key, claude_api_key, gemini_api_key,
-        criado_em, atualizado_em
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        login_externo_apelido, criado_em, atualizado_em
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       Number(empresaId),
       dados.provedorPrimario || 'groq',
@@ -87,6 +124,7 @@ function salvarConfig(empresaId, dados) {
       openaiCifrado,
       claudeCifrado,
       geminiCifrado,
+      apelido,
       agora,
       agora
     );
@@ -95,4 +133,4 @@ function salvarConfig(empresaId, dados) {
   return getConfig(empresaId);
 }
 
-module.exports = { getConfig, salvarConfig };
+module.exports = { getConfig, getConfigPorApelido, salvarConfig };

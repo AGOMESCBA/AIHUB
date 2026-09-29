@@ -260,8 +260,8 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   app.put('/api/ia-service/config/ia', (req, res) => {
     try {
       const empresaId = req.svcEmpresaId;
-      const { provedorPrimario, fallbackOrdem, groqApiKey, openaiApiKey, claudeApiKey, geminiApiKey } = req.body || {};
-      aiConfigService.salvarConfig(empresaId, { provedorPrimario, fallbackOrdem, groqApiKey, openaiApiKey, claudeApiKey, geminiApiKey });
+      const { provedorPrimario, fallbackOrdem, groqApiKey, openaiApiKey, claudeApiKey, geminiApiKey, loginExternoApelido } = req.body || {};
+      aiConfigService.salvarConfig(empresaId, { provedorPrimario, fallbackOrdem, groqApiKey, openaiApiKey, claudeApiKey, geminiApiKey, loginExternoApelido });
       res.json(aiConfigService.getConfig(empresaId));
     } catch (err) {
       _handleErro(res, err);

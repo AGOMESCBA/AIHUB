@@ -120,17 +120,39 @@
         </div>
 
         <div class="erro" id="erro"></div>
-        <div class="rodape">IA Service — J2A Consultoria. Todos os direitos reservados.</div>
+        <div class="rodape">IA Service. Todos os direitos reservados.</div>
       </div>
     </div>
   </div>
 
   <script>
-    // 2026-09: login passou a ser só por telefone (sem :empresaSlug na URL)
-    // — a empresa é descoberta depois do OTP, então não há mais logomarca
-    // fixa nesta tela (a empresa só é conhecida ao final do login).
+    // 2026-09: login é por telefone (a empresa é descoberta depois do OTP,
+    // /entrar-servico sozinho nunca sabe qual empresa é). O apelido
+    // opcional na URL (/entrar-servico/:apelido, configurável por empresa
+    // em Configuração de IA) é só identidade visual — busca nome/logo pra
+    // mostrar aqui, mas o login continua 100% por telefone, nunca trava
+    // nem pré-seleciona a empresa de fato.
     let challengeId = null;
     let telefoneValidado = null;
+
+    (function carregarIdentidadePorApelido() {
+      const partes = location.pathname.split('/').filter(Boolean);
+      const apelido = partes.length > 1 ? partes[partes.length - 1] : null;
+      if (!apelido) return;
+      fetch(`/api/ia-service-publico/empresa-por-apelido/${encodeURIComponent(apelido)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(info => {
+          if (!info) return;
+          if (info.nome) {
+            document.getElementById('brand-nome').textContent = info.nome;
+            document.querySelector('.rodape').textContent = `IA Service — ${info.nome}. Todos os direitos reservados.`;
+          }
+          if (info.logoUrl) {
+            document.getElementById('brand-icon').innerHTML = `<img src="${info.logoUrl}" alt="${info.nome || 'Logomarca'}">`;
+          }
+        })
+        .catch(() => {}); // silencioso — sem apelido válido, fica o padrão "IA Service"
+    })();
 
     function mostrarErro(msg) {
       const el = document.getElementById('erro');
