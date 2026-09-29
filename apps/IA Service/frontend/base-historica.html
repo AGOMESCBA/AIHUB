@@ -82,7 +82,7 @@
         <div>
           <div class="page-kicker">Base de Conhecimento</div>
           <div class="head-title">Base Histórica</div>
-          <div class="head-subtitle">Configuração do Agente Local, fontes de dados externas e importação de atendimentos históricos.</div>
+          <div class="head-subtitle">Fontes de dados externas e importação de atendimentos históricos.</div>
         </div>
       </div>
 
@@ -92,47 +92,16 @@
         <div class="metric"><span>Clientes</span><strong>—</strong></div>
       </div>
 
+      <div class="callout" style="margin-bottom:12px;padding:10px 12px;border-radius:8px;background:var(--bg-base);border:1px solid var(--border);font-size:12.5px;color:var(--text-lo)">
+        A conexão com o Agente Local (URL, Token, criptografia) é configurada em <a href="/app/ia-service/config-ia.html">Configuração de IA</a>, junto com as demais credenciais sensíveis.
+      </div>
+
       <div class="tabs" role="tablist">
-        <button class="tab-btn active" data-tab="tab-agente" type="button">Agente Local</button>
-        <button class="tab-btn" data-tab="tab-fontes" type="button">Fontes Históricas</button>
+        <button class="tab-btn active" data-tab="tab-fontes" type="button">Fontes Históricas</button>
         <button class="tab-btn" data-tab="tab-importacoes" type="button">Importações</button>
       </div>
 
-      <div id="tab-agente" class="tab-panel active">
-        <div class="form-row">
-          <div class="form-field"><label>URL</label><input type="text" id="agente-url" class="form-control" placeholder="http://192.168.1.50:8765"></div>
-          <div class="form-field">
-            <label>Token</label>
-            <div style="position:relative">
-              <input type="password" id="agente-token" class="form-control" placeholder="Token de API do agente" style="padding-right:36px">
-              <button type="button" onclick="toggleAgenteTokenVisivel()" title="Mostrar/ocultar token" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--text-lo,#888)">
-                <svg id="agente-token-icon-mostrar" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                <svg id="agente-token-icon-ocultar" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-              </button>
-            </div>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-field" style="flex:0 0 auto">
-            <label><input type="checkbox" id="agente-crypto-ativo"> Exigir criptografia (AES-256-GCM)</label>
-          </div>
-          <div class="form-field">
-            <label>Chave de criptografia (crypto_key)</label>
-            <div style="position:relative">
-              <input type="password" id="agente-crypto-key" class="form-control" placeholder="Mesma CRYPTO_KEY da tela local do agente" style="padding-right:36px">
-              <button type="button" onclick="toggleAgenteCryptoKeyVisivel()" title="Mostrar/ocultar chave" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--text-lo,#888)">
-                <svg id="agente-crypto-key-icon-mostrar" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                <svg id="agente-crypto-key-icon-ocultar" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-              </button>
-            </div>
-          </div>
-          <button class="btn btn-primary" type="button" onclick="salvarAgente()">Salvar</button>
-          <button class="btn btn-ghost" type="button" onclick="testarAgente()">Testar conexão</button>
-        </div>
-        <div id="agente-status" class="empty-state" style="text-align:left;padding:8px 0">Carregando…</div>
-      </div>
-
-      <div id="tab-fontes" class="tab-panel">
+      <div id="tab-fontes" class="tab-panel active">
         <div class="callout" style="margin-bottom:12px;padding:10px 12px;border-radius:8px;background:var(--bg-base);border:1px solid var(--border);font-size:12.5px;color:var(--text-lo)">
           A fonte aqui é só uma REFERÊNCIA — a conexão real (host, porta, usuário, senha do SQL Server) já deve estar cadastrada diretamente no Agente Local, sob esta mesma connection_key. O IA Service nunca cadastra nem envia credencial para o agente.
         </div>
@@ -217,114 +186,6 @@
       <div class="metric"><span>Posicionamentos</span><strong>${resumo.posicionamentos}</strong></div>
       <div class="metric"><span>Aguard. indexação</span><strong>${resumo.chamadosAguardandoIndexacao}</strong></div>
     `;
-  }
-
-  async function carregarAgente() {
-    const empresaId = empresaIdAtual();
-    const cfg = await api(`/api/ia-service/base-historica/agente-local?empresa_id=${empresaId}`);
-    document.getElementById('agente-url').value = cfg.url || '';
-    document.getElementById('agente-crypto-ativo').checked = !!cfg.cryptoAtivo;
-    document.getElementById('agente-status').textContent = cfg.configurado
-      ? `Configurado — último teste: ${cfg.ultimoTesteEm ? (cfg.ultimoTesteOk ? 'OK' : 'falhou') + ' em ' + new Date(cfg.ultimoTesteEm).toLocaleString('pt-BR') : 'nunca testado'}`
-      : 'Não configurado.';
-  }
-
-  // Olhinho revela o token JÁ SALVO (não só o que foi digitado agora) —
-  // pedido explícito do usuário (2026-09). Busca do backend sob demanda, só
-  // no clique (nunca junto do carregamento normal da tela em carregarAgente),
-  // e só quando o campo ainda está com o placeholder original (o usuário não
-  // começou a digitar um valor novo) — evita substituir por engano um token
-  // novo que o usuário já estava digitando para trocar o antigo.
-  let agenteTokenRevelado = false;
-  async function toggleAgenteTokenVisivel() {
-    const input = document.getElementById('agente-token');
-    const mostrar = document.getElementById('agente-token-icon-mostrar');
-    const ocultar = document.getElementById('agente-token-icon-ocultar');
-
-    if (!agenteTokenRevelado) {
-      if (!input.value) {
-        try {
-          const empresaId = empresaIdAtual();
-          const resp = await api(`/api/ia-service/base-historica/agente-local/token?empresa_id=${empresaId}`);
-          if (resp.token) input.value = resp.token;
-        } catch (err) {
-          showError('Não foi possível carregar o token salvo: ' + err.message);
-          return;
-        }
-      }
-      input.type = 'text';
-      mostrar.style.display = 'none';
-      ocultar.style.display = 'block';
-      agenteTokenRevelado = true;
-    } else {
-      input.type = 'password';
-      mostrar.style.display = 'block';
-      ocultar.style.display = 'none';
-      agenteTokenRevelado = false;
-    }
-  }
-
-  // Mesmo padrão do olhinho do Token, para a crypto_key — precisa bater
-  // EXATAMENTE com a CRYPTO_KEY já gerada na tela local do agente (painel
-  // "Criptografia AES-256-GCM"). Sem essa chave e "Criptografia ativa"
-  // marcada, /execute falha com "Criptografia obrigatoria" quando o agente
-  // estiver com CRYPTO_REQUIRED=true.
-  let agenteCryptoKeyRevelada = false;
-  async function toggleAgenteCryptoKeyVisivel() {
-    const input = document.getElementById('agente-crypto-key');
-    const mostrar = document.getElementById('agente-crypto-key-icon-mostrar');
-    const ocultar = document.getElementById('agente-crypto-key-icon-ocultar');
-
-    if (!agenteCryptoKeyRevelada) {
-      if (!input.value) {
-        try {
-          const empresaId = empresaIdAtual();
-          const resp = await api(`/api/ia-service/base-historica/agente-local/crypto-key?empresa_id=${empresaId}`);
-          if (resp.cryptoKey) input.value = resp.cryptoKey;
-        } catch (err) {
-          showError('Não foi possível carregar a chave salva: ' + err.message);
-          return;
-        }
-      }
-      input.type = 'text';
-      mostrar.style.display = 'none';
-      ocultar.style.display = 'block';
-      agenteCryptoKeyRevelada = true;
-    } else {
-      input.type = 'password';
-      mostrar.style.display = 'block';
-      ocultar.style.display = 'none';
-      agenteCryptoKeyRevelada = false;
-    }
-  }
-
-  async function salvarAgente() {
-    hideError();
-    const empresaId = empresaIdAtual();
-    try {
-      await api(`/api/ia-service/base-historica/agente-local?empresa_id=${empresaId}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          url: document.getElementById('agente-url').value,
-          token: document.getElementById('agente-token').value || undefined,
-          cryptoAtivo: document.getElementById('agente-crypto-ativo').checked,
-          cryptoKey: document.getElementById('agente-crypto-key').value || undefined,
-        }),
-      });
-      document.getElementById('agente-token').value = '';
-      document.getElementById('agente-crypto-key').value = '';
-      carregarAgente();
-    } catch (err) { showError('Não foi possível salvar a config do agente: ' + err.message); }
-  }
-
-  async function testarAgente() {
-    hideError();
-    const empresaId = empresaIdAtual();
-    try {
-      const r = await api(`/api/ia-service/base-historica/agente-local/testar?empresa_id=${empresaId}`, { method: 'POST' });
-      alert(r.mensagem || 'Conexão OK.');
-      carregarAgente();
-    } catch (err) { showError('Teste de conexão falhou: ' + err.message); }
   }
 
   // Busca as connection_key já cadastradas no Agente Local para popular um
@@ -608,7 +469,7 @@
 
   async function carregarTudo() {
     try {
-      await Promise.all([carregarResumo(), carregarAgente(), carregarConexoesDoAgente(), carregarFontes(), carregarImportacoes()]);
+      await Promise.all([carregarResumo(), carregarConexoesDoAgente(), carregarFontes(), carregarImportacoes()]);
     } catch (err) { showError('Falha ao carregar a página: ' + err.message); }
   }
 

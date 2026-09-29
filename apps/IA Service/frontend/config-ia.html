@@ -143,6 +143,47 @@
           <button class="btn btn-primary" type="button" id="salvar-btn">Salvar</button>
         </div>
       </div>
+
+      <div class="card">
+        <div class="card-title">Agente Local</div>
+        <div class="card-desc">Credenciais de conexão com o Agente Local instalado na rede do cliente — usado para consultar o SoftExpert (Base Histórica) via SELECT-only. Movido para cá (2026-09): mesmo nível de sensibilidade das chaves de IA acima.</div>
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">URL</label>
+            <input type="text" id="agente-url" class="form-control" placeholder="http://192.168.1.50:8765">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Token</label>
+            <div style="position:relative">
+              <input type="password" id="agente-token" class="form-control" placeholder="Token de API do agente" style="padding-right:36px">
+              <button type="button" onclick="toggleAgenteTokenVisivel()" title="Mostrar/ocultar token" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--wa-text-tertiary)">
+                <svg id="agente-token-icon-mostrar" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg id="agente-token-icon-ocultar" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label"><input type="checkbox" id="agente-crypto-ativo"> Exigir criptografia (AES-256-GCM)</label>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Chave de criptografia (crypto_key)</label>
+            <div style="position:relative">
+              <input type="password" id="agente-crypto-key" class="form-control" placeholder="Mesma CRYPTO_KEY da tela local do agente" style="padding-right:36px">
+              <button type="button" onclick="toggleAgenteCryptoKeyVisivel()" title="Mostrar/ocultar chave" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--wa-text-tertiary)">
+                <svg id="agente-crypto-key-icon-mostrar" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg id="agente-crypto-key-icon-ocultar" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <span class="save-feedback" id="agente-status"></span>
+          <button class="btn btn-ghost" type="button" id="testar-agente-btn">Testar conexão</button>
+          <button class="btn btn-primary" type="button" id="salvar-agente-btn">Salvar</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -223,7 +264,130 @@
 
   $('salvar-btn').addEventListener('click', salvar);
 
-  window._iahubAuthReady?.then(carregar) ?? carregar();
+  // ── Agente Local — movido para cá (2026-09, pedido do usuário): mesmo
+  // nível de sensibilidade das chaves de IA acima, fica mais seguro ter só
+  // um lugar com credenciais críticas. Lógica idêntica à que existia em
+  // base-historica.html, só adaptada para usar o feedback() já padrão desta
+  // tela em vez de showError/hideError (que não existem aqui).
+  function feedbackAgente(msg, ok) {
+    const el = $('agente-status');
+    el.textContent = msg;
+    el.className = 'save-feedback' + (ok === true ? ' ok' : ok === false ? ' fail' : '');
+  }
+
+  async function carregarAgente() {
+    const empresaId = empresaIdAtual();
+    if (!empresaId) return;
+    try {
+      const cfg = await api(`/api/ia-service/base-historica/agente-local?empresa_id=${empresaId}`);
+      $('agente-url').value = cfg.url || '';
+      $('agente-crypto-ativo').checked = !!cfg.cryptoAtivo;
+      feedbackAgente(cfg.configurado
+        ? `Configurado — último teste: ${cfg.ultimoTesteEm ? (cfg.ultimoTesteOk ? 'OK' : 'falhou') + ' em ' + new Date(cfg.ultimoTesteEm).toLocaleString('pt-BR') : 'nunca testado'}`
+        : 'Não configurado.');
+    } catch (err) {
+      feedbackAgente('Não foi possível carregar a configuração do agente: ' + err.message, false);
+    }
+  }
+
+  // Olhinho revela o token JÁ SALVO (não só o que foi digitado agora) —
+  // busca do backend sob demanda, só no clique, e só quando o campo ainda
+  // está vazio (não sobrescreve um valor novo que o usuário já digitou).
+  let agenteTokenRevelado = false;
+  async function toggleAgenteTokenVisivel() {
+    const input = $('agente-token');
+    const mostrar = $('agente-token-icon-mostrar');
+    const ocultar = $('agente-token-icon-ocultar');
+    if (!agenteTokenRevelado) {
+      if (!input.value) {
+        try {
+          const empresaId = empresaIdAtual();
+          const resp = await api(`/api/ia-service/base-historica/agente-local/token?empresa_id=${empresaId}`);
+          if (resp.token) input.value = resp.token;
+        } catch (err) {
+          feedbackAgente('Não foi possível carregar o token salvo: ' + err.message, false);
+          return;
+        }
+      }
+      input.type = 'text';
+      mostrar.style.display = 'none';
+      ocultar.style.display = 'block';
+      agenteTokenRevelado = true;
+    } else {
+      input.type = 'password';
+      mostrar.style.display = 'block';
+      ocultar.style.display = 'none';
+      agenteTokenRevelado = false;
+    }
+  }
+
+  // Mesmo padrão para a crypto_key — precisa bater EXATAMENTE com a
+  // CRYPTO_KEY já gerada na tela local do agente.
+  let agenteCryptoKeyRevelada = false;
+  async function toggleAgenteCryptoKeyVisivel() {
+    const input = $('agente-crypto-key');
+    const mostrar = $('agente-crypto-key-icon-mostrar');
+    const ocultar = $('agente-crypto-key-icon-ocultar');
+    if (!agenteCryptoKeyRevelada) {
+      if (!input.value) {
+        try {
+          const empresaId = empresaIdAtual();
+          const resp = await api(`/api/ia-service/base-historica/agente-local/crypto-key?empresa_id=${empresaId}`);
+          if (resp.cryptoKey) input.value = resp.cryptoKey;
+        } catch (err) {
+          feedbackAgente('Não foi possível carregar a chave salva: ' + err.message, false);
+          return;
+        }
+      }
+      input.type = 'text';
+      mostrar.style.display = 'none';
+      ocultar.style.display = 'block';
+      agenteCryptoKeyRevelada = true;
+    } else {
+      input.type = 'password';
+      mostrar.style.display = 'block';
+      ocultar.style.display = 'none';
+      agenteCryptoKeyRevelada = false;
+    }
+  }
+
+  async function salvarAgente() {
+    const empresaId = empresaIdAtual();
+    if (!empresaId) return;
+    try {
+      await api(`/api/ia-service/base-historica/agente-local?empresa_id=${empresaId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          url: $('agente-url').value,
+          token: $('agente-token').value || undefined,
+          cryptoAtivo: $('agente-crypto-ativo').checked,
+          cryptoKey: $('agente-crypto-key').value || undefined,
+        }),
+      });
+      $('agente-token').value = '';
+      $('agente-crypto-key').value = '';
+      await carregarAgente();
+    } catch (err) {
+      feedbackAgente('Não foi possível salvar: ' + err.message, false);
+    }
+  }
+
+  async function testarAgente() {
+    const empresaId = empresaIdAtual();
+    if (!empresaId) return;
+    try {
+      const r = await api(`/api/ia-service/base-historica/agente-local/testar?empresa_id=${empresaId}`, { method: 'POST' });
+      feedbackAgente(r.mensagem || 'Conexão OK.', true);
+      await carregarAgente();
+    } catch (err) {
+      feedbackAgente('Teste de conexão falhou: ' + err.message, false);
+    }
+  }
+
+  $('testar-agente-btn').addEventListener('click', testarAgente);
+  $('salvar-agente-btn').addEventListener('click', salvarAgente);
+
+  window._iahubAuthReady?.then(() => { carregar(); carregarAgente(); }) ?? (carregar(), carregarAgente());
 })();
 </script>
 </body>
