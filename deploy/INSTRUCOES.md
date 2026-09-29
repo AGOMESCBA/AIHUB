@@ -62,8 +62,47 @@ Preencha no mínimo:
 | `ADMIN_USER` | Login do admin (padrão: `admin`) |
 | `ADMIN_PASS` | Senha do admin (mude para algo forte) |
 | `SESSION_SECRET` | Qualquer string longa e aleatória |
+| `SVC_DATA_CRYPTO_KEY` | Gerar uma vez nesta instalação — ver abaixo |
+| `SVC_WHATSAPP_OTP_SECRET` | Gerar uma vez nesta instalação — ver abaixo |
 
 > A linha `CHROME_PATH` será adicionada automaticamente pelo script seguinte.
+
+#### Segredos de infraestrutura: por SERVIDOR, não por empresa/cliente
+
+`SESSION_SECRET`, `SVC_DATA_CRYPTO_KEY`, `SVC_WHATSAPP_OTP_SECRET`,
+`IAC_HUB_INTERNAL_TOKEN`, `IAC_PROTHEUS_CHAT_SECRET` — nenhum desses é
+configurado por empresa. Um servidor pode hospedar várias empresas
+cadastradas no mesmo IAHub, e todas compartilham o mesmo conjunto desses
+segredos, porque eles protegem a **instalação** (o processo Node, o banco
+SQLite inteiro), não um cliente específico.
+
+**Gere um valor novo para cada instalação/servidor** (nunca reaproveite o
+valor de um servidor em outro — um vazamento num cliente não pode
+comprometer os demais):
+
+```powershell
+[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+```
+
+Rode o comando uma vez para cada variável (`SVC_DATA_CRYPTO_KEY`,
+`SVC_WHATSAPP_OTP_SECRET` etc.) e cole o resultado no `.env`.
+
+`SVC_DATA_CRYPTO_KEY` deve ser definida **antes** do primeiro uso real do
+IA Service (antes de salvar qualquer chave de API de IA ou credencial do
+Agente Local pela tela Config de IA) — trocar essa chave depois torna
+ilegível tudo que já foi cifrado com a chave anterior.
+
+Sem `SVC_WHATSAPP_OTP_SECRET` configurada, o login externo por telefone do
+IA Service (`/entrar-servico`) falha com "WhatsApp de atendimento está
+indisponível" — o envio do código OTP é abortado antes de tentar, de
+propósito.
+
+O que **é** por empresa (configurado na própria tela do sistema, uma vez
+por empresa cliente cadastrada): chave de API de IA (Groq/OpenAI/Claude/
+Gemini), credenciais do Agente Local (URL/token/`crypto_key`) e apelido de
+URL de login. A `crypto_key` do Agente Local em si é gerada na tela local
+do próprio agente Python (botão "Gerar nova chave") — não tem relação
+com `SVC_DATA_CRYPTO_KEY`.
 
 ### Passo 6 — Instalar dependências (como Administrador)
 
