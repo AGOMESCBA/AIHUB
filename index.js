@@ -295,11 +295,12 @@ app.get('/app/master-crypto', requireMasterCrypto, (req, res) => {
 });
 
 app.get('/app/ia-service', requireIaService, (req, res) => {
-  // Entrada neutra (pedido do usuário, 2026-09): não força nenhuma rotina
-  // específica — o menu lateral já carrega, o usuário escolhe onde ir. Antes
-  // redirecionava direto para atendimentos.html, dando a falsa impressão de
-  // que essa era "a" tela do sistema.
-  res.redirect('/app/ia-service/home.html');
+  // Shell MDI (2026-09, mesmo padrão de /app/master-crypto): abre o sistema
+  // com barra de abas — cada rotina do menu vira uma aba interna (iframe),
+  // sem recarregar a janela. Antes redirecionava direto para home.html
+  // (página cheia); a entrada "neutra" agora é o shell vazio ("Nenhuma
+  // rotina aberta"), o usuário escolhe onde ir pelo menu lateral.
+  res.redirect('/app/ia-service/shell.html');
 });
 
 // Chat em tela cheia (sem sidebar/topbar do IAHub) — mesmo arquivo físico de
