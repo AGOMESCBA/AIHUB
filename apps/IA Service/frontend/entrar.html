@@ -16,14 +16,13 @@
     @media (max-width:900px) { .shell { grid-template-columns:1fr; } }
 
     .painel-info { padding:56px; display:flex; flex-direction:column; justify-content:center; background:linear-gradient(180deg, var(--wa-panel), var(--wa-bg)); }
-    .brand { display:flex; flex-direction:column; align-items:flex-start; gap:14px; margin-bottom:28px; }
+    .brand { display:flex; flex-direction:column; align-items:center; text-align:center; gap:14px; margin-bottom:28px; }
     .brand-icon {
-      width:100%; max-width:280px; height:120px; border-radius:16px;
-      background:rgba(255,255,255,.04); border:1px solid var(--wa-border);
+      width:100%; max-width:220px; height:140px;
       display:flex; align-items:center; justify-content:center;
-      font-weight:900; font-size:30px; color:var(--wa-accent); overflow:hidden; flex-shrink:0;
+      font-weight:900; font-size:30px; color:var(--wa-accent); flex-shrink:0;
     }
-    .brand-icon img { width:100%; height:100%; object-fit:contain; }
+    .brand-icon img { max-width:100%; max-height:100%; object-fit:contain; }
     .brand-nome { font-size:18px; font-weight:800; }
     .brand-sub { font-size:11.5px; color:var(--wa-text-tertiary); text-transform:uppercase; letter-spacing:.05em; }
     .titulo { font-size:32px; font-weight:800; line-height:1.2; margin-bottom:16px; }

@@ -9,118 +9,73 @@
     :root { --accent:#1d4ed8; --accent-light:#3b82f6; --accent-glow:rgba(29,78,216,.1); }
     .sidebar-logo .logo-icon { background:var(--accent) !important; }
 
-    /* Mesmo tema escuro do Radar/protheus-chat.html — só a área de
-       trabalho desta página vira escura, o menu lateral do IAHub continua
-       no tema claro padrão. */
-    .config-ia-content {
-      --wa-bg:#0b141a; --wa-header:#202c33; --wa-panel:#111b21;
-      --wa-text:#e9edef; --wa-text-secondary:#aebac1; --wa-text-tertiary:#8696a0;
-      --wa-accent:#00d9a3; --wa-border:rgba(255,255,255,.07);
-      flex:1; overflow-y:auto; padding:28px 32px;
-      background:var(--wa-bg); color:var(--wa-text);
+    /* Provider tab header — mesmo padrão de
+       apps/IA Command/frontend/config-ia.html (.prov-*), reaproveitando as
+       variáveis do design system global (packages/ui/frontend/css/iahub.css)
+       para respeitar o toggle de tema claro/escuro do IAHub. */
+    .prov-header  { display:flex;align-items:center;gap:12px;margin-bottom:20px; }
+    .prov-icon    { width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0; }
+    .prov-icon-groq   { background:rgba(249,115,22,.12); }
+    .prov-icon-openai { background:rgba(16,163,127,.12); }
+    .prov-icon-claude { background:rgba(168,85,247,.12); }
+    .prov-icon-gemini { background:rgba(59,130,246,.12); }
+    .prov-icon-ordem  { background:rgba(29,78,216,.12); }
+    .prov-icon-agente { background:rgba(14,165,233,.12); font-size:20px; }
+    .prov-icon-link   { background:rgba(16,185,129,.12); font-size:20px; }
+    .prov-meta { flex:1;min-width:0; }
+    .prov-name { font-size:16px;font-weight:700;color:var(--text-hi);display:flex;align-items:center;gap:8px; }
+    .prov-desc { font-size:13px;color:var(--text-md);margin-top:2px; }
+
+    .provider-badge { display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600; }
+    .badge-groq     { background:rgba(249,115,22,.12);color:#ea580c; }
+    .badge-openai   { background:rgba(16,163,127,.12);color:#047857; }
+    .badge-claude   { background:rgba(168,85,247,.12);color:#7e22ce; }
+    .badge-gemini   { background:rgba(59,130,246,.12);color:#2563eb; }
+    .badge-primario { background:var(--accent-glow);color:var(--accent); }
+
+    /* Password / API key toggle — mesmo padrão do IA Command (.pass-wrap) */
+    .pass-wrap { position:relative;display:flex;align-items:center; }
+    .pass-wrap .form-control { padding-right:42px; }
+    .btn-pass-toggle {
+      position:absolute;right:1px;top:1px;bottom:1px;width:38px;border:none;background:transparent;
+      color:var(--text-lo);cursor:pointer;border-radius:0 7px 7px 0;
+      display:flex;align-items:center;justify-content:center;
+      transition:color var(--transition),background var(--transition);
     }
+    .btn-pass-toggle:hover { color:var(--text-hi);background:var(--bg-hover); }
+    .key-action { display:flex;align-items:center;gap:8px;margin-top:8px; }
+    .test-result { margin-top:10px;padding:9px 14px;border-radius:var(--radius-sm,8px);font-size:13px; }
+    .test-result.ok   { background:#dcfce7;color:#15803d; }
+    .test-result.fail { background:#fee2e2;color:#b91c1c; }
+    :root[data-theme="dark"] .test-result.ok   { background:rgba(74,222,128,.16);color:#a3ecc0; }
+    :root[data-theme="dark"] .test-result.fail { background:rgba(248,113,113,.16);color:#f3b0b0; }
 
-    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--wa-text-tertiary);font-weight:700;margin-bottom:3px; }
-    .head-row { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px; }
-    .head-title { font-size:20px;font-weight:800;color:var(--wa-text);line-height:1.2; }
-    .head-sub { font-size:13px;color:var(--wa-text-secondary);margin-top:4px;max-width:640px;line-height:1.5; }
+    /* Summary sidebar */
+    .summary-grid  { display:flex;flex-direction:column;gap:10px; }
+    .summary-item  { display:flex;flex-direction:column;gap:2px; }
+    .summary-label { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo); }
+    .summary-value { font-size:13px;color:var(--text-hi);word-break:break-word; }
 
-    .card { background:var(--wa-header);border:1px solid var(--wa-border);border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.2);padding:22px;max-width:720px;margin-bottom:16px; }
-    .card-title { font-size:14px;font-weight:800;color:var(--wa-text);margin-bottom:4px; }
-    .card-desc { font-size:12.5px;color:var(--wa-text-tertiary);margin-bottom:18px;line-height:1.5; }
-
-    /* Abas por provedor (mesmo padrão de apps/IA Command/frontend/config-ia.html,
-       .iac-tab/.iac-tab-panel), adaptado ao tema escuro desta página — só
-       organização visual, sem campo novo (seleção de modelo por provedor
-       fica fora do escopo por ora, decisão explícita do usuário 2026-09). */
-    .provider-tabs { display:flex; border-bottom:1px solid var(--wa-border); margin-bottom:16px; gap:0; flex-wrap:wrap; }
-    .provider-tab { padding:9px 16px; font-size:13px; font-weight:600; color:var(--wa-text-secondary); background:none; border:none; border-bottom:2px solid transparent; cursor:pointer; transition:color .15s; white-space:nowrap; }
-    .provider-tab:hover { color:var(--wa-text); }
-    .provider-tab.active { color:var(--wa-accent); border-bottom-color:var(--wa-accent); }
-    .provider-panel { display:none; }
-    .provider-panel.active { display:block; }
-
-    .provider-row { display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 0; }
-    .provider-name { font-size:13.5px;font-weight:700;color:var(--wa-text);display:flex;align-items:center;gap:8px; }
-    .provider-key-input { width:340px;max-width:100%; }
-    .provider-status { font-size:11px;font-weight:800;padding:2px 8px;border-radius:99px;white-space:nowrap; }
-    .provider-status.ok { background:rgba(0,217,163,.14);color:var(--wa-accent); }
-    .provider-status.env { background:rgba(250,204,21,.14);color:#fde047; }
-    .provider-status.off { background:rgba(255,255,255,.04);color:var(--wa-text-tertiary);border:1px solid var(--wa-border); }
-
-    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
-    .form-actions { display:flex; justify-content:flex-end; align-items:center; gap:10px; border-top:1px solid var(--wa-border); padding-top:16px; margin-top:6px; }
-    .save-feedback { font-size:13px; color:var(--wa-text-tertiary); margin-right:auto; }
-    .save-feedback.ok { color:var(--wa-accent); }
-    .save-feedback.fail { color:#fca5a5; }
-
-    .callout { background:rgba(0,217,163,.08);border:1px solid rgba(0,217,163,.25);border-radius:8px;padding:12px 14px;font-size:12.5px;color:var(--wa-text-secondary);line-height:1.55;margin-bottom:16px; }
-
-    .config-ia-content label,
-    .config-ia-content .form-label { color:var(--wa-text-secondary); }
-    .config-ia-content .form-control {
-      background:var(--wa-bg); border:1px solid var(--wa-border); color:var(--wa-text);
-    }
-    .config-ia-content .form-control::placeholder { color:var(--wa-text-tertiary); }
-    .config-ia-content .form-control:focus { border-color:var(--wa-accent); outline:none; }
-    .config-ia-content .form-hint { color:var(--wa-text-tertiary); }
-
-    .config-ia-content .btn-primary { background:var(--wa-accent); color:#04140f; border:none; font-weight:800; }
-    .config-ia-content .btn-primary:hover { opacity:.9; }
-
-    /* Layout de duas colunas: cards principais à esquerda, Resumo fixo à
-       direita (mesmo padrão do IA Command — cliente-side puro, sem fetch
-       próprio, ver atualizarResumo()). */
-    .config-ia-grid { display:grid; grid-template-columns:1fr 280px; gap:20px; align-items:start; }
-    .resumo-card { background:var(--wa-header); border:1px solid var(--wa-border); border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.2); padding:18px; position:sticky; top:20px; }
-    .resumo-title { font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--wa-text-tertiary); margin-bottom:14px; }
-    .resumo-item { margin-bottom:12px; }
-    .resumo-item:last-child { margin-bottom:0; }
-    .resumo-label { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--wa-text-tertiary); margin-bottom:2px; }
-    .resumo-value { font-size:12.5px; color:var(--wa-text); font-weight:600; word-break:break-word; }
-
-    .provider-icon { width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; background:rgba(0,217,163,.14); }
-    .provider-badge-primario { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; padding:2px 7px; border-radius:99px; background:rgba(0,217,163,.14); color:var(--wa-accent); }
-    .provider-test-result { font-size:12px; margin-top:8px; }
-    .provider-test-result.ok { color:var(--wa-accent); }
-    .provider-test-result.fail { color:#fca5a5; }
-    .provider-header { display:flex; align-items:flex-start; gap:12px; margin-bottom:14px; }
-    .provider-header-text { flex:1; min-width:0; }
-    .provider-header-name { font-size:14px; font-weight:800; color:var(--wa-text); display:flex; align-items:center; gap:8px; }
-    .provider-header-desc { font-size:12px; color:var(--wa-text-tertiary); margin-top:2px; }
-    .provider-key-row { display:flex; align-items:center; gap:10px; margin-bottom:4px; }
-    .provider-key-row .provider-key-input { flex:1; padding-right:36px; }
-    .provider-key-wrap { position:relative; flex:1; }
-    .provider-key-wrap .eye-btn { position:absolute; right:4px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; padding:4px; color:var(--wa-text-tertiary); }
-    .modelo-recomendado { color:var(--wa-text-tertiary); font-weight:600; }
-
-    /* Presets de ordem de fallback — mesmo padrão visual de
-       apps/IA Command/frontend/config-ia.html (.fallback-card/.provider-chip),
-       adaptado ao tema escuro desta página. */
-    .fallback-presets { display:flex; flex-direction:column; gap:8px; }
-    .fallback-card { border:1px solid var(--wa-border); border-radius:10px; padding:12px 14px; cursor:pointer; transition:.15s; background:var(--wa-bg); }
-    .fallback-card:hover { border-color:var(--wa-accent); background:rgba(255,255,255,.03); }
-    .fallback-card-selected { border-color:var(--wa-accent); background:rgba(0,217,163,.06); }
+    /* Fallback presets — mesmo padrão visual do IA Command (.fallback-card),
+       cor de seleção usa --accent-glow em vez do roxo fixo do IA Command. */
+    .fallback-presets { display:flex;flex-direction:column;gap:8px; }
+    .fallback-card { border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;cursor:pointer;transition:var(--transition);background:var(--bg-base); }
+    .fallback-card:hover { border-color:var(--accent);background:var(--bg-hover); }
+    .fallback-card-selected { border-color:var(--accent);background:var(--accent-glow); }
     .fallback-card-header { margin-bottom:4px; }
-    .fallback-card-badge { font-size:.7rem; padding:2px 7px; border-radius:999px; font-weight:600; display:inline-block; }
-    .badge-groq { background:rgba(249,115,22,.14); color:#fb923c; }
-    .badge-openai { background:rgba(16,163,127,.14); color:#34d399; }
-    .fallback-card-title { font-weight:700; font-size:.9rem; margin-bottom:6px; color:var(--wa-text); }
-    .fallback-card-seq { display:flex; align-items:center; flex-wrap:wrap; gap:4px; margin-bottom:6px; }
-    .fallback-card-desc { font-size:.78rem; color:var(--wa-text-tertiary); line-height:1.4; }
-    .provider-chip { font-size:.72rem; font-weight:700; padding:2px 8px; border-radius:999px; }
-    .chip-groq { background:rgba(249,115,22,.14); color:#fb923c; }
-    .chip-gemini { background:rgba(59,130,246,.14); color:#60a5fa; }
-    .chip-claude { background:rgba(168,85,247,.14); color:#c084fc; }
-    .chip-openai { background:rgba(16,163,127,.14); color:#34d399; }
-    .chain-arrow { color:var(--wa-text-tertiary); font-size:.75rem; }
+    .fallback-card-badge { font-size:.7rem;padding:2px 7px;border-radius:999px;font-weight:600;display:inline-block; }
+    .fallback-card-title { font-weight:600;font-size:.9rem;margin-bottom:6px;color:var(--text-hi); }
+    .fallback-card-seq { display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:6px; }
+    .fallback-card-desc { font-size:.78rem;color:var(--text-lo);line-height:1.4; }
+    .provider-chip { font-size:.72rem;font-weight:600;padding:2px 8px;border-radius:999px; }
+    .chip-groq   { background:rgba(249,115,22,.12);color:#ea580c; }
+    .chip-openai { background:rgba(16,163,127,.12);color:#047857; }
+    .chip-claude { background:rgba(168,85,247,.12);color:#7e22ce; }
+    .chip-gemini { background:rgba(59,130,246,.12);color:#2563eb; }
+    .chain-arrow { color:var(--text-lo);font-size:.75rem; }
 
-    @media (max-width: 900px) {
-      .provider-row { flex-direction:column;align-items:flex-start; }
-      .provider-key-input { width:100%; }
-      .form-row { grid-template-columns:1fr; }
-      .config-ia-grid { grid-template-columns:1fr; }
-      .resumo-card { position:static; }
+    @media (max-width:600px) {
+      .prov-header { flex-direction:column;align-items:flex-start; }
     }
   </style>
 </head>
@@ -143,312 +98,362 @@
       <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Service ›</span> Configuração de IA</span>
     </div>
 
-    <div class="page-content config-ia-content">
-      <div class="head-row">
-        <div>
-          <div class="page-kicker">Configuração</div>
-          <div class="head-title">Configuração de IA</div>
-          <div class="head-sub">Chaves de API dos provedores de IA usados na investigação de chamados (pré-análise automática e chat). Ficam criptografadas em repouso — nunca é possível recuperar o valor já salvo, só substituir.</div>
+    <div class="page-content">
+      <div class="editor-shell">
+
+        <div class="editor-actionbar">
+          <div class="editor-actionbar-title">
+            <strong>Configuração de IA</strong>
+            <span>Chaves de API, modelo por provedor, Agente Local e link de acesso.</span>
+          </div>
+          <div class="editor-actions">
+            <button class="btn btn-ghost" type="button" id="ajuda-btn">Ajuda</button>
+            <button class="btn btn-ghost" type="button" id="descartar-btn">↺ Descartar</button>
+            <button class="btn btn-primary" type="button" id="salvar-topo-btn">Salvar configurações</button>
+          </div>
         </div>
-        <div style="display:flex;gap:10px;flex-shrink:0">
-          <button class="btn btn-ghost" type="button" id="ajuda-btn" title="Ajuda sobre esta tela">Ajuda</button>
-          <button class="btn btn-ghost" type="button" id="descartar-btn">Descartar</button>
-          <button class="btn btn-primary" type="button" id="salvar-topo-btn">Salvar configurações</button>
+
+        <div class="callout" style="background:var(--accent-glow);border:1px solid var(--accent);border-radius:var(--radius);padding:12px 14px;font-size:12.5px;color:var(--text-md);line-height:1.55">
+          Sem nenhuma chave configurada aqui, o sistema usa as variáveis de ambiente globais do servidor como reserva — útil em ambiente de teste, mas cada empresa cliente deve ter sua própria chave em produção.
         </div>
-      </div>
 
-      <div class="callout">
-        Sem nenhuma chave configurada aqui, o sistema usa as variáveis de ambiente globais do servidor como reserva — útil em ambiente de teste, mas cada empresa cliente deve ter sua própria chave em produção.
-      </div>
+        <div class="iac-tabs">
+          <button type="button" class="iac-tab active" onclick="mudarAba(this,'aba-groq')">⚡ Groq</button>
+          <button type="button" class="iac-tab" onclick="mudarAba(this,'aba-openai')">✦ OpenAI</button>
+          <button type="button" class="iac-tab" onclick="mudarAba(this,'aba-claude')">◆ Claude</button>
+          <button type="button" class="iac-tab" onclick="mudarAba(this,'aba-gemini')">✦ Gemini</button>
+          <button type="button" class="iac-tab" onclick="mudarAba(this,'aba-ordem')">⇄ Ordem de uso</button>
+          <button type="button" class="iac-tab" onclick="mudarAba(this,'aba-agente')">🔌 Agente Local</button>
+          <button type="button" class="iac-tab" onclick="mudarAba(this,'aba-link')">🔗 Link de acesso</button>
+        </div>
 
-      <div class="config-ia-grid">
-        <div>
-          <div class="card">
-            <div class="card-title">Provedores</div>
-            <div class="card-desc">Preencha ao menos uma chave. Deixe em branco para manter a chave já salva sem alterá-la.</div>
+        <div class="editor-grid editor-grid-wide">
+          <div class="editor-main">
 
-            <div class="provider-tabs">
-              <button type="button" class="provider-tab active" data-panel="painel-groq" data-provedor="groq">⚡ Groq</button>
-              <button type="button" class="provider-tab" data-panel="painel-openai" data-provedor="openai">✦ OpenAI</button>
-              <button type="button" class="provider-tab" data-panel="painel-claude" data-provedor="claude">◆ Claude</button>
-              <button type="button" class="provider-tab" data-panel="painel-gemini" data-provedor="gemini">✦ Gemini</button>
-              <button type="button" class="provider-tab" data-panel="painel-ordem">⇄ Ordem de uso</button>
-              <button type="button" class="provider-tab" data-panel="painel-agente">🔌 Agente Local</button>
-              <button type="button" class="provider-tab" data-panel="painel-link">🔗 Link de acesso</button>
-            </div>
-
-            <div class="provider-panel active" id="painel-groq" data-provedor="groq">
-              <div class="provider-header">
-                <span class="provider-icon">⚡</span>
-                <div class="provider-header-text">
-                  <div class="provider-header-name">Groq <span class="provider-status" id="status-groq">—</span><span class="provider-badge-primario" id="primario-groq" style="display:none">Primário</span></div>
-                  <div class="provider-header-desc">Provedor principal para classificação de intenções.</div>
-                </div>
-              </div>
-              <label class="form-label">Chave de API (Groq)</label>
-              <div class="provider-key-row">
-                <div class="provider-key-wrap">
-                  <input type="password" class="form-control provider-key-input" id="f-groq" placeholder="gsk_..." autocomplete="off">
-                  <button type="button" class="eye-btn" data-eye="groq" title="Mostrar/ocultar chave">👁</button>
-                </div>
-              </div>
-              <div class="form-hint" style="margin-bottom:14px">Obtida em console.groq.com → API Keys. Deixe em branco para manter a chave atual.</div>
-              <div class="form-group" style="margin-bottom:0">
-                <label class="form-label">Modelo</label>
-                <select class="form-control" id="f-groq-modelo">
-                  <option value="openai/gpt-oss-20b">openai/gpt-oss-20b — ⭐ Recomendado (menor custo)</option>
-                </select>
-                <div class="form-hint">Modelo usado quando Groq for acionado (principal ou fallback).</div>
-              </div>
-              <div class="form-actions" style="border-top:none;padding-top:10px;justify-content:flex-start">
-                <button class="btn btn-ghost" type="button" data-testar="groq">Testar conexão</button>
-                <span class="provider-test-result" id="teste-groq"></span>
-              </div>
-            </div>
-            <div class="provider-panel" id="painel-openai" data-provedor="openai">
-              <div class="provider-header">
-                <span class="provider-icon">✦</span>
-                <div class="provider-header-text">
-                  <div class="provider-header-name">OpenAI <span class="provider-status" id="status-openai">—</span><span class="provider-badge-primario" id="primario-openai" style="display:none">Primário</span></div>
-                  <div class="provider-header-desc">Fallback com suporte a análise de imagem (anexos).</div>
-                </div>
-              </div>
-              <label class="form-label">Chave de API (OpenAI)</label>
-              <div class="provider-key-row">
-                <div class="provider-key-wrap">
-                  <input type="password" class="form-control provider-key-input" id="f-openai" placeholder="sk-..." autocomplete="off">
-                  <button type="button" class="eye-btn" data-eye="openai" title="Mostrar/ocultar chave">👁</button>
-                </div>
-              </div>
-              <div class="form-hint" style="margin-bottom:14px">Obtida em platform.openai.com → API Keys. Deixe em branco para manter a chave atual.</div>
-              <div class="form-group" style="margin-bottom:0">
-                <label class="form-label">Modelo</label>
-                <select class="form-control" id="f-openai-modelo">
-                  <option value="gpt-4o-mini">gpt-4o-mini — ⭐ Recomendado (menor custo)</option>
-                </select>
-                <div class="form-hint">Modelo usado quando OpenAI for acionado (principal ou fallback).</div>
-              </div>
-              <div class="form-actions" style="border-top:none;padding-top:10px;justify-content:flex-start">
-                <button class="btn btn-ghost" type="button" data-testar="openai">Testar conexão</button>
-                <span class="provider-test-result" id="teste-openai"></span>
-              </div>
-            </div>
-            <div class="provider-panel" id="painel-claude" data-provedor="claude">
-              <div class="provider-header">
-                <span class="provider-icon">◆</span>
-                <div class="provider-header-text">
-                  <div class="provider-header-name">Claude (Anthropic) <span class="provider-status" id="status-claude">—</span><span class="provider-badge-primario" id="primario-claude" style="display:none">Primário</span></div>
-                  <div class="provider-header-desc">Fallback com suporte a análise de imagem (anexos).</div>
-                </div>
-              </div>
-              <label class="form-label">Chave de API (Claude)</label>
-              <div class="provider-key-row">
-                <div class="provider-key-wrap">
-                  <input type="password" class="form-control provider-key-input" id="f-claude" placeholder="sk-ant-..." autocomplete="off">
-                  <button type="button" class="eye-btn" data-eye="claude" title="Mostrar/ocultar chave">👁</button>
-                </div>
-              </div>
-              <div class="form-hint" style="margin-bottom:14px">Obtida em console.anthropic.com → API Keys. Deixe em branco para manter a chave atual.</div>
-              <div class="form-group" style="margin-bottom:0">
-                <label class="form-label">Modelo</label>
-                <select class="form-control" id="f-claude-modelo">
-                  <option value="claude-haiku-4-5-20251001">claude-haiku-4-5-20251001 — ⭐ Recomendado (menor custo)</option>
-                </select>
-                <div class="form-hint">Modelo usado quando Claude for acionado (principal ou fallback).</div>
-              </div>
-              <div class="form-actions" style="border-top:none;padding-top:10px;justify-content:flex-start">
-                <button class="btn btn-ghost" type="button" data-testar="claude">Testar conexão</button>
-                <span class="provider-test-result" id="teste-claude"></span>
-              </div>
-            </div>
-            <div class="provider-panel" id="painel-gemini" data-provedor="gemini">
-              <div class="provider-header">
-                <span class="provider-icon">✦</span>
-                <div class="provider-header-text">
-                  <div class="provider-header-name">Gemini <span class="provider-status" id="status-gemini">—</span><span class="provider-badge-primario" id="primario-gemini" style="display:none">Primário</span></div>
-                  <div class="provider-header-desc">Fallback com suporte a análise de imagem (anexos).</div>
-                </div>
-              </div>
-              <label class="form-label">Chave de API (Gemini)</label>
-              <div class="provider-key-row">
-                <div class="provider-key-wrap">
-                  <input type="password" class="form-control provider-key-input" id="f-gemini" placeholder="AQ...." autocomplete="off">
-                  <button type="button" class="eye-btn" data-eye="gemini" title="Mostrar/ocultar chave">👁</button>
-                </div>
-              </div>
-              <div class="form-hint" style="margin-bottom:14px">Obtida em aistudio.google.com → API Keys. Deixe em branco para manter a chave atual.</div>
-              <div class="form-group" style="margin-bottom:0">
-                <label class="form-label">Modelo</label>
-                <select class="form-control" id="f-gemini-modelo">
-                  <option value="gemini-3.5-flash">gemini-3.5-flash — ⭐ Recomendado (menor custo)</option>
-                </select>
-                <div class="form-hint">Modelo usado quando Gemini for acionado (principal ou fallback).</div>
-              </div>
-              <div class="form-actions" style="border-top:none;padding-top:10px;justify-content:flex-start">
-                <button class="btn btn-ghost" type="button" data-testar="gemini">Testar conexão</button>
-                <span class="provider-test-result" id="teste-gemini"></span>
-              </div>
-            </div>
-
-            <div class="provider-panel" id="painel-ordem" data-provedor="">
-              <div class="provider-header">
-                <span class="provider-icon">⇄</span>
-                <div class="provider-header-text">
-                  <div class="provider-header-name">Ordem de uso</div>
-                  <div class="provider-header-desc">Qual provedor tentar primeiro, e a ordem de fallback se ele falhar ou estiver sem chave.</div>
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Provedor primário</label>
-                <select id="f-provedor-primario" class="form-control" style="max-width:420px">
-                  <option value="groq">Groq — ⭐ Recomendado (mais rápido, menor custo)</option>
-                  <option value="openai">OpenAI — Alta qualidade, custo elevado</option>
-                  <option value="claude">Claude — Anthropic, raciocínio complexo</option>
-                  <option value="gemini">Gemini — Google, contexto amplo</option>
-                </select>
-                <div class="form-hint">O provedor primário é tentado primeiro; depois entra a ordem de fallback abaixo.</div>
-              </div>
-              <div class="form-group" style="margin-bottom:0">
-                <label class="form-label">Ordem de fallback</label>
-                <input type="hidden" id="f-fallback-ordem" value="groq,openai,claude,gemini">
-                <div class="fallback-presets">
-                  <div class="fallback-card fallback-card-selected" data-ordem="groq,openai,claude,gemini" data-preset="ordem">
-                    <div class="fallback-card-header"><span class="fallback-card-badge badge-groq">⭐ Recomendado</span></div>
-                    <div class="fallback-card-title">Econômico &amp; Rápido</div>
-                    <div class="fallback-card-seq">
-                      <span class="provider-chip chip-groq">Groq</span><span class="chain-arrow">→</span>
-                      <span class="provider-chip chip-openai">OpenAI</span><span class="chain-arrow">→</span>
-                      <span class="provider-chip chip-claude">Claude</span><span class="chain-arrow">→</span>
-                      <span class="provider-chip chip-gemini">Gemini</span>
+            <!-- ABA GROQ -->
+            <div class="iac-tab-panel active" id="aba-groq">
+              <div class="form-section">
+                <div class="form-section-body">
+                  <div class="prov-header">
+                    <div class="prov-icon prov-icon-groq">⚡</div>
+                    <div class="prov-meta">
+                      <div class="prov-name">Groq <span id="pbadge-groq" class="provider-badge badge-groq">⚡ Rápido</span></div>
+                      <div class="prov-desc" id="psub-groq">Alta velocidade, ideal para respostas rápidas em tempo real.</div>
                     </div>
-                    <div class="fallback-card-desc">Groq como principal (rápido, custo baixo). Os demais entram em ordem se ele falhar ou estiver sem chave.</div>
                   </div>
-                  <div class="fallback-card" data-ordem="groq,claude,openai,gemini" data-preset="ordem">
-                    <div class="fallback-card-header"><span class="fallback-card-badge badge-openai">🏆 Alta Qualidade</span></div>
-                    <div class="fallback-card-title">Máxima Qualidade</div>
-                    <div class="fallback-card-seq">
-                      <span class="provider-chip chip-groq">Groq</span><span class="chain-arrow">→</span>
-                      <span class="provider-chip chip-claude">Claude</span><span class="chain-arrow">→</span>
-                      <span class="provider-chip chip-openai">OpenAI</span><span class="chain-arrow">→</span>
-                      <span class="provider-chip chip-gemini">Gemini</span>
+                  <div class="form-group">
+                    <label class="form-label">Chave de API (Groq)</label>
+                    <div class="pass-wrap">
+                      <input type="password" id="f-groq" class="form-control" placeholder="gsk_…" oninput="atualizarResumo()">
+                      <button type="button" class="btn-pass-toggle" id="toggle-groq" onclick="toggleKey('groq')" title="Mostrar/ocultar chave">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
                     </div>
-                    <div class="fallback-card-desc">Groq principal, Claude e OpenAI como fallback de alta qualidade. Ideal quando precisão é prioritária sobre custo.</div>
+                    <div class="form-hint">Obtida em console.groq.com → API Keys. Deixe em branco para manter a chave atual.</div>
+                    <div id="status-groq" style="margin-top:6px;font-size:12px"></div>
+                    <div class="key-action">
+                      <button class="btn btn-ghost" type="button" onclick="testarProvedor('groq')">Testar conexão</button>
+                    </div>
+                    <div class="test-result" id="teste-groq" style="display:none"></div>
                   </div>
-                  <div class="fallback-card fallback-card-custom" data-ordem="" data-preset="ordem">
-                    <div class="fallback-card-header"><span class="fallback-card-badge" style="background:rgba(255,255,255,.06);color:var(--wa-text-tertiary)">⚙️ Personalizado</span></div>
-                    <div class="fallback-card-title">Customizado</div>
-                    <div class="fallback-card-desc">Defina manualmente a ordem digitando os provedores separados por vírgula.</div>
-                    <input id="fallback-custom-input" class="form-control" style="margin-top:8px;display:none" placeholder="groq,openai,claude,gemini">
-                    <div class="form-hint" style="margin-top:4px;display:none" id="fallback-custom-hint">Valores válidos: groq, openai, claude, gemini</div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Modelo</label>
+                    <select id="f-groq-modelo" class="form-control" onchange="atualizarResumo()">
+                      <option value="openai/gpt-oss-20b">openai/gpt-oss-20b — ⭐ Recomendado (menor custo)</option>
+                    </select>
+                    <div class="form-hint">Modelo usado quando Groq for acionado (principal ou fallback).</div>
                   </div>
                 </div>
-              </div>
-              <div class="form-actions">
-                <span class="save-feedback" id="save-feedback"></span>
-                <button class="btn btn-primary" type="button" id="salvar-btn">Salvar</button>
               </div>
             </div>
 
-            <div class="provider-panel" id="painel-agente" data-provedor="">
-              <div class="provider-header">
-                <span class="provider-icon">🔌</span>
-                <div class="provider-header-text">
-                  <div class="provider-header-name">Agente Local</div>
-                  <div class="provider-header-desc">Credenciais de conexão com o Agente Local instalado na rede do cliente — usado para consultar o SoftExpert (Base Histórica) via SELECT-only.</div>
-                </div>
-              </div>
-              <div class="form-row">
-                <div class="form-group" style="margin-bottom:0">
-                  <label class="form-label">URL</label>
-                  <input type="text" id="agente-url" class="form-control" placeholder="http://192.168.1.50:8765">
-                </div>
-                <div class="form-group" style="margin-bottom:0">
-                  <label class="form-label">Token</label>
-                  <div style="position:relative">
-                    <input type="password" id="agente-token" class="form-control" placeholder="Token de API do agente" style="padding-right:36px">
-                    <button type="button" onclick="toggleAgenteTokenVisivel()" title="Mostrar/ocultar token" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--wa-text-tertiary)">
-                      <svg id="agente-token-icon-mostrar" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                      <svg id="agente-token-icon-ocultar" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                    </button>
+            <!-- ABA OPENAI -->
+            <div class="iac-tab-panel" id="aba-openai">
+              <div class="form-section">
+                <div class="form-section-body">
+                  <div class="prov-header">
+                    <div class="prov-icon prov-icon-openai">✦</div>
+                    <div class="prov-meta">
+                      <div class="prov-name">OpenAI <span id="pbadge-openai" class="provider-badge badge-openai">✦ GPT-4o</span></div>
+                      <div class="prov-desc" id="psub-openai">Modelos GPT da OpenAI. Usa gpt-4o-mini por padrão — alto desempenho e custo acessível.</div>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Chave de API (OpenAI)</label>
+                    <div class="pass-wrap">
+                      <input type="password" id="f-openai" class="form-control" placeholder="sk-…" oninput="atualizarResumo()">
+                      <button type="button" class="btn-pass-toggle" id="toggle-openai" onclick="toggleKey('openai')" title="Mostrar/ocultar chave">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
+                    </div>
+                    <div class="form-hint">Obtida em platform.openai.com → API Keys. Deixe em branco para manter a chave atual.</div>
+                    <div id="status-openai" style="margin-top:6px;font-size:12px"></div>
+                    <div class="key-action">
+                      <button class="btn btn-ghost" type="button" onclick="testarProvedor('openai')">Testar conexão</button>
+                    </div>
+                    <div class="test-result" id="teste-openai" style="display:none"></div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Modelo</label>
+                    <select id="f-openai-modelo" class="form-control" onchange="atualizarResumo()">
+                      <option value="gpt-4o-mini">gpt-4o-mini — ⭐ Recomendado (menor custo)</option>
+                    </select>
+                    <div class="form-hint">Modelo usado quando OpenAI for acionado (principal ou fallback).</div>
                   </div>
                 </div>
-              </div>
-              <div class="form-row">
-                <div class="form-group" style="margin-bottom:0">
-                  <label class="form-label"><input type="checkbox" id="agente-crypto-ativo"> Exigir criptografia (AES-256-GCM)</label>
-                </div>
-                <div class="form-group" style="margin-bottom:0">
-                  <label class="form-label">Chave de criptografia (crypto_key)</label>
-                  <div style="position:relative">
-                    <input type="password" id="agente-crypto-key" class="form-control" placeholder="Mesma CRYPTO_KEY da tela local do agente" style="padding-right:36px">
-                    <button type="button" onclick="toggleAgenteCryptoKeyVisivel()" title="Mostrar/ocultar chave" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--wa-text-tertiary)">
-                      <svg id="agente-crypto-key-icon-mostrar" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                      <svg id="agente-crypto-key-icon-ocultar" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div class="form-actions">
-                <span class="save-feedback" id="agente-status"></span>
-                <button class="btn btn-ghost" type="button" id="testar-agente-btn">Testar conexão</button>
-                <button class="btn btn-primary" type="button" id="salvar-agente-btn">Salvar</button>
               </div>
             </div>
 
-            <div class="provider-panel" id="painel-link" data-provedor="">
-              <div class="provider-header">
-                <span class="provider-icon">🔗</span>
-                <div class="provider-header-text">
-                  <div class="provider-header-name">Link de acesso ao chat</div>
-                  <div class="provider-header-desc">O login externo (/entrar-servico) já funciona só com telefone, sem precisar de apelido — o sistema descobre a empresa sozinha. O apelido abaixo é opcional, só um atalho de identidade visual (mostra o nome/logo desta empresa na tela de entrada).</div>
+            <!-- ABA CLAUDE -->
+            <div class="iac-tab-panel" id="aba-claude">
+              <div class="form-section">
+                <div class="form-section-body">
+                  <div class="prov-header">
+                    <div class="prov-icon prov-icon-claude">◆</div>
+                    <div class="prov-meta">
+                      <div class="prov-name">Claude (Anthropic) <span id="pbadge-claude" class="provider-badge badge-claude">◆ Elite</span></div>
+                      <div class="prov-desc" id="psub-claude">Fallback com suporte a análise de imagem (anexos).</div>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Chave de API (Claude)</label>
+                    <div class="pass-wrap">
+                      <input type="password" id="f-claude" class="form-control" placeholder="sk-ant-…" oninput="atualizarResumo()">
+                      <button type="button" class="btn-pass-toggle" id="toggle-claude" onclick="toggleKey('claude')" title="Mostrar/ocultar chave">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
+                    </div>
+                    <div class="form-hint">Obtida em console.anthropic.com → API Keys. Deixe em branco para manter a chave atual.</div>
+                    <div id="status-claude" style="margin-top:6px;font-size:12px"></div>
+                    <div class="key-action">
+                      <button class="btn btn-ghost" type="button" onclick="testarProvedor('claude')">Testar conexão</button>
+                    </div>
+                    <div class="test-result" id="teste-claude" style="display:none"></div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Modelo</label>
+                    <select id="f-claude-modelo" class="form-control" onchange="atualizarResumo()">
+                      <option value="claude-haiku-4-5-20251001">claude-haiku-4-5-20251001 — ⭐ Recomendado (menor custo)</option>
+                    </select>
+                    <div class="form-hint">Modelo usado quando Claude for acionado (principal ou fallback).</div>
+                  </div>
                 </div>
               </div>
-              <div class="form-row">
-                <div class="form-group" style="margin-bottom:0">
-                  <label class="form-label">Apelido da URL (opcional)</label>
-                  <input type="text" class="form-control" id="f-login-apelido" placeholder="ex.: j2a">
-                  <div class="form-hint">Só letras minúsculas, números e hífen.</div>
+            </div>
+
+            <!-- ABA GEMINI -->
+            <div class="iac-tab-panel" id="aba-gemini">
+              <div class="form-section">
+                <div class="form-section-body">
+                  <div class="prov-header">
+                    <div class="prov-icon prov-icon-gemini">✦</div>
+                    <div class="prov-meta">
+                      <div class="prov-name">Gemini <span id="pbadge-gemini" class="provider-badge badge-gemini">✦ Multimodal</span></div>
+                      <div class="prov-desc" id="psub-gemini">Fallback com suporte a análise de imagem (anexos).</div>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Chave de API (Gemini)</label>
+                    <div class="pass-wrap">
+                      <input type="password" id="f-gemini" class="form-control" placeholder="AIzaSy…" oninput="atualizarResumo()">
+                      <button type="button" class="btn-pass-toggle" id="toggle-gemini" onclick="toggleKey('gemini')" title="Mostrar/ocultar chave">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
+                    </div>
+                    <div class="form-hint">Obtida em aistudio.google.com → Get API Key. Deixe em branco para manter a chave atual.</div>
+                    <div id="status-gemini" style="margin-top:6px;font-size:12px"></div>
+                    <div class="key-action">
+                      <button class="btn btn-ghost" type="button" onclick="testarProvedor('gemini')">Testar conexão</button>
+                    </div>
+                    <div class="test-result" id="teste-gemini" style="display:none"></div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Modelo</label>
+                    <select id="f-gemini-modelo" class="form-control" onchange="atualizarResumo()">
+                      <option value="gemini-3.5-flash">gemini-3.5-flash — ⭐ Recomendado (rápido, multimodal)</option>
+                    </select>
+                    <div class="form-hint">Modelo usado quando Gemini for acionado (principal ou fallback).</div>
+                  </div>
                 </div>
-                <div class="form-group" style="margin-bottom:0">
-                  <label class="form-label">Link para compartilhar</label>
-                  <input type="text" class="form-control" id="f-login-link" readonly style="cursor:text">
+              </div>
+            </div>
+
+            <!-- ABA ORDEM DE USO -->
+            <div class="iac-tab-panel" id="aba-ordem">
+              <div class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Ordem de uso</div>
+                  <div class="form-section-subtitle">Qual provedor tentar primeiro, e a ordem de fallback se ele falhar ou estiver sem chave.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-group">
+                    <label class="form-label">Provedor primário</label>
+                    <select id="f-provedor-primario" class="form-control" style="max-width:420px" onchange="atualizarResumo()">
+                      <option value="groq">Groq — ⭐ Recomendado (mais rápido, menor custo)</option>
+                      <option value="openai">OpenAI — Alta qualidade, custo elevado</option>
+                      <option value="claude">Claude — Anthropic, raciocínio complexo</option>
+                      <option value="gemini">Gemini — Google, contexto amplo</option>
+                    </select>
+                    <div class="form-hint">O provedor primário é tentado primeiro; depois entra a ordem de fallback abaixo.</div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Ordem de fallback</label>
+                    <input type="hidden" id="f-fallback-ordem" value="groq,openai,claude,gemini">
+                    <div class="fallback-presets">
+                      <div class="fallback-card fallback-card-selected" data-ordem="groq,openai,claude,gemini" onclick="selecionarPreset(this)">
+                        <div class="fallback-card-header"><span class="fallback-card-badge badge-groq">⭐ Recomendado</span></div>
+                        <div class="fallback-card-title">Econômico &amp; Rápido</div>
+                        <div class="fallback-card-seq">
+                          <span class="provider-chip chip-groq">Groq</span><span class="chain-arrow">→</span>
+                          <span class="provider-chip chip-openai">OpenAI</span><span class="chain-arrow">→</span>
+                          <span class="provider-chip chip-claude">Claude</span><span class="chain-arrow">→</span>
+                          <span class="provider-chip chip-gemini">Gemini</span>
+                        </div>
+                        <div class="fallback-card-desc">Groq como principal (rápido, custo baixo). Os demais entram em ordem se ele falhar ou estiver sem chave.</div>
+                      </div>
+                      <div class="fallback-card" data-ordem="groq,claude,openai,gemini" onclick="selecionarPreset(this)">
+                        <div class="fallback-card-header"><span class="fallback-card-badge badge-openai">🏆 Alta Qualidade</span></div>
+                        <div class="fallback-card-title">Máxima Qualidade</div>
+                        <div class="fallback-card-seq">
+                          <span class="provider-chip chip-groq">Groq</span><span class="chain-arrow">→</span>
+                          <span class="provider-chip chip-claude">Claude</span><span class="chain-arrow">→</span>
+                          <span class="provider-chip chip-openai">OpenAI</span><span class="chain-arrow">→</span>
+                          <span class="provider-chip chip-gemini">Gemini</span>
+                        </div>
+                        <div class="fallback-card-desc">Groq principal, Claude e OpenAI como fallback de alta qualidade. Ideal quando precisão é prioritária sobre custo.</div>
+                      </div>
+                      <div class="fallback-card fallback-card-custom" data-ordem="" onclick="selecionarPreset(this)">
+                        <div class="fallback-card-header"><span class="fallback-card-badge" style="background:var(--bg-hover);color:var(--text-lo)">⚙️ Personalizado</span></div>
+                        <div class="fallback-card-title">Customizado</div>
+                        <div class="fallback-card-desc">Defina manualmente a ordem digitando os provedores separados por vírgula.</div>
+                        <input id="fallback-custom-input" class="form-control" style="margin-top:8px;display:none" placeholder="groq,openai,claude,gemini" oninput="onCustomFallbackInput(this.value)">
+                        <div class="form-hint" style="margin-top:4px;display:none" id="fallback-custom-hint">Valores válidos: groq, openai, claude, gemini</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ABA AGENTE LOCAL -->
+            <div class="iac-tab-panel" id="aba-agente">
+              <div class="form-section">
+                <div class="form-section-body">
+                  <div class="prov-header">
+                    <div class="prov-icon prov-icon-agente">🔌</div>
+                    <div class="prov-meta">
+                      <div class="prov-name">Agente Local</div>
+                      <div class="prov-desc">Credenciais de conexão com o Agente Local instalado na rede do cliente — usado para consultar o SoftExpert (Base Histórica) via SELECT-only.</div>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">URL</label>
+                    <input type="text" id="agente-url" class="form-control" placeholder="http://192.168.1.50:8765">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Token</label>
+                    <div class="pass-wrap">
+                      <input type="password" id="agente-token" class="form-control" placeholder="Token de API do agente">
+                      <button type="button" class="btn-pass-toggle" onclick="toggleAgenteTokenVisivel()" title="Mostrar/ocultar token">
+                        <svg id="agente-token-icon-mostrar" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <svg id="agente-token-icon-ocultar" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label"><input type="checkbox" id="agente-crypto-ativo"> Exigir criptografia (AES-256-GCM)</label>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Chave de criptografia (crypto_key)</label>
+                    <div class="pass-wrap">
+                      <input type="password" id="agente-crypto-key" class="form-control" placeholder="Mesma CRYPTO_KEY da tela local do agente">
+                      <button type="button" class="btn-pass-toggle" onclick="toggleAgenteCryptoKeyVisivel()" title="Mostrar/ocultar chave">
+                        <svg id="agente-crypto-key-icon-mostrar" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <svg id="agente-crypto-key-icon-ocultar" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="key-action">
+                    <span class="form-hint" id="agente-status" style="margin:0"></span>
+                  </div>
+                  <div class="key-action">
+                    <button class="btn btn-ghost" type="button" id="testar-agente-btn">Testar conexão</button>
+                    <button class="btn btn-primary" type="button" id="salvar-agente-btn">Salvar Agente Local</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ABA LINK DE ACESSO -->
+            <div class="iac-tab-panel" id="aba-link">
+              <div class="form-section">
+                <div class="form-section-body">
+                  <div class="prov-header">
+                    <div class="prov-icon prov-icon-link">🔗</div>
+                    <div class="prov-meta">
+                      <div class="prov-name">Link de acesso ao chat</div>
+                      <div class="prov-desc">O login externo (/entrar-servico) já funciona só com telefone, sem precisar de apelido — o sistema descobre a empresa sozinha. O apelido abaixo é opcional, só um atalho de identidade visual (mostra o nome/logo desta empresa na tela de entrada).</div>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Apelido da URL (opcional)</label>
+                    <input type="text" class="form-control" id="f-login-apelido" placeholder="ex.: j2a" oninput="atualizarLinkApelido();atualizarResumo()" style="max-width:360px">
+                    <div class="form-hint">Só letras minúsculas, números e hífen.</div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Link para compartilhar</label>
+                    <input type="text" class="form-control" id="f-login-link" readonly style="cursor:text;max-width:480px" onclick="this.select()">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- SIDEBAR RESUMO -->
+          <div class="editor-side">
+            <div class="form-section" style="position:sticky;top:56px">
+              <div class="form-section-header">
+                <div class="form-section-title">Resumo</div>
+              </div>
+              <div class="form-section-body">
+                <div class="summary-grid">
+                  <div class="summary-item">
+                    <span class="summary-label">Provedor primário</span>
+                    <span class="summary-value" id="rs-primario">—</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Fallback</span>
+                    <span class="summary-value" id="rs-fallback">—</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Groq</span>
+                    <span class="summary-value" id="rs-groq">—</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">OpenAI</span>
+                    <span class="summary-value" id="rs-openai">—</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Claude</span>
+                    <span class="summary-value" id="rs-claude">—</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Gemini</span>
+                    <span class="summary-value" id="rs-gemini">—</span>
+                  </div>
+                  <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
+                    <div class="summary-item">
+                      <span class="summary-label">Link de acesso</span>
+                      <span class="summary-value" id="rs-link" style="font-size:11px">—</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="resumo-card">
-          <div class="resumo-title">Resumo</div>
-          <div class="resumo-item">
-            <div class="resumo-label">Provedor primário</div>
-            <div class="resumo-value" id="rs-primario">—</div>
-          </div>
-          <div class="resumo-item">
-            <div class="resumo-label">Fallback</div>
-            <div class="resumo-value" id="rs-fallback">—</div>
-          </div>
-          <div class="resumo-item">
-            <div class="resumo-label">Groq</div>
-            <div class="resumo-value" id="rs-groq">—</div>
-          </div>
-          <div class="resumo-item">
-            <div class="resumo-label">OpenAI</div>
-            <div class="resumo-value" id="rs-openai">—</div>
-          </div>
-          <div class="resumo-item">
-            <div class="resumo-label">Claude</div>
-            <div class="resumo-value" id="rs-claude">—</div>
-          </div>
-          <div class="resumo-item">
-            <div class="resumo-label">Gemini</div>
-            <div class="resumo-value" id="rs-gemini">—</div>
-          </div>
-          <div class="resumo-item">
-            <div class="resumo-label">Link de acesso</div>
-            <div class="resumo-value" id="rs-link">—</div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -459,6 +464,7 @@
 <script>
 (function () {
   const $ = id => document.getElementById(id);
+  const PROVIDERS = ['groq', 'openai', 'claude', 'gemini'];
 
   function empresaIdAtual() {
     return window._iahubEmpresa?.id || null;
@@ -471,46 +477,55 @@
     return body;
   }
 
-  function renderStatus(id, temChave) {
-    const el = $(id);
-    if (temChave) {
-      el.textContent = '✓ Chave configurada';
-      el.className = 'provider-status ok';
-    } else {
-      el.textContent = 'Usando .env / não configurada';
-      el.className = 'provider-status env';
+  window.mudarAba = function (btn, painel) {
+    document.querySelectorAll('.iac-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.iac-tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    $(painel).classList.add('active');
+  };
+
+  const SVG_EYE     = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
+  const SVG_EYE_OFF = `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`;
+  function _svgEye(show) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${show ? SVG_EYE_OFF : SVG_EYE}</svg>`;
+  }
+
+  // Mostrar/ocultar a chave digitada na sessão — chave de IA nunca é
+  // reexibida depois de salva (diferente do token/crypto_key do Agente
+  // Local, que tem endpoint próprio de revelação).
+  window.toggleKey = function (provedor) {
+    const inp = $(`f-${provedor}`);
+    const btn = $(`toggle-${provedor}`);
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    btn.innerHTML = _svgEye(show);
+  };
+
+  const _PROVIDER_DEFAULTS = {
+    groq:   { badge: 'badge-groq',   icon: '⚡', label: 'Rápido',    sub: 'Alta velocidade, ideal para respostas rápidas em tempo real.' },
+    openai: { badge: 'badge-openai', icon: '✦', label: 'GPT-4o',     sub: 'Modelos GPT da OpenAI. Usa gpt-4o-mini por padrão — alto desempenho e custo acessível.' },
+    claude: { badge: 'badge-claude', icon: '◆', label: 'Elite',      sub: 'Fallback com suporte a análise de imagem (anexos).' },
+    gemini: { badge: 'badge-gemini', icon: '✦', label: 'Multimodal', sub: 'Fallback com suporte a análise de imagem (anexos).' },
+  };
+
+  function _atualizarBadgesProvedores(primario) {
+    for (const [id, info] of Object.entries(_PROVIDER_DEFAULTS)) {
+      const badge = $('pbadge-' + id);
+      const sub = $('psub-' + id);
+      if (!badge) continue;
+      if (id === primario) {
+        badge.className = 'provider-badge badge-primario';
+        badge.textContent = '⚡ Primário';
+        if (sub) sub.textContent = 'Provedor principal para classificação de intenções.';
+      } else {
+        badge.className = `provider-badge ${info.badge}`;
+        badge.textContent = info.icon + ' ' + info.label;
+        if (sub) sub.textContent = info.sub;
+      }
     }
   }
 
-  // Olho de mostrar/ocultar por provedor — mesmo padrão do olho do Agente
-  // Local (toggleAgenteTokenVisivel), mas aqui só alterna o que já está
-  // digitado no campo (não busca a chave salva no backend: chave de IA
-  // nunca é reexibida depois de salva, diferente do token/crypto_key do
-  // Agente Local — ver crypto-envelope.js, decryptSecret só é usado ali).
-  document.querySelectorAll('[data-eye]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const input = $(`f-${btn.dataset.eye}`);
-      input.type = input.type === 'password' ? 'text' : 'password';
-    });
-  });
-
-  function feedback(msg, ok) {
-    const el = $('save-feedback');
-    el.textContent = msg;
-    el.className = 'save-feedback' + (ok === true ? ' ok' : ok === false ? ' fail' : '');
-  }
-
-  function atualizarLinkApelido() {
-    const apelido = $('f-login-apelido').value.trim().toLowerCase();
-    $('f-login-link').value = apelido
-      ? `${location.origin}/entrar-servico/${apelido}`
-      : `${location.origin}/entrar-servico`;
-  }
-
-  // Presets visuais de ordem de fallback — mesmo padrão de
-  // apps/IA Command/frontend/config-ia.html:selecionarPreset(). O card
-  // "Customizado" revela um input livre; os demais aplicam data-ordem direto.
-  function selecionarPreset(card) {
+  window.selecionarPreset = function (card) {
     const jaSelecionado = card.classList.contains('fallback-card-selected');
     document.querySelectorAll('.fallback-card').forEach(c => c.classList.remove('fallback-card-selected'));
     card.classList.add('fallback-card-selected');
@@ -526,25 +541,44 @@
       if (!jaSelecionado) customInput.value = '';
       customInput.focus();
     }
-  }
+  };
 
-  // Ao carregar do backend, marca visualmente o card cujo data-ordem bate
-  // com o valor salvo — se nenhum bater, cai no card "Customizado".
-  function sincronizarPresetSelecionado() {
-    const valor = $('f-fallback-ordem').value;
-    const cardMatch = document.querySelector(`.fallback-card[data-ordem="${valor}"]`);
-    document.querySelectorAll('.fallback-card').forEach(c => c.classList.remove('fallback-card-selected'));
-    const customInput = $('fallback-custom-input');
-    const customHint = $('fallback-custom-hint');
-    if (cardMatch) {
-      cardMatch.classList.add('fallback-card-selected');
-      customInput.style.display = 'none';
-      customHint.style.display = 'none';
+  window.onCustomFallbackInput = function (val) {
+    $('f-fallback-ordem').value = val.trim();
+    atualizarResumo();
+  };
+
+  function atualizarLinkApelido() {
+    const apelido = $('f-login-apelido').value.trim().toLowerCase();
+    $('f-login-link').value = apelido
+      ? `${location.origin}/entrar-servico/${apelido}`
+      : `${location.origin}/entrar-servico`;
+  }
+  window.atualizarLinkApelido = atualizarLinkApelido;
+
+  function atualizarResumo() {
+    const labels = { groq: 'Groq', openai: 'OpenAI', claude: 'Claude', gemini: 'Gemini' };
+    const prim = $('f-provedor-primario').value;
+    _atualizarBadgesProvedores(prim);
+    $('rs-primario').textContent = labels[prim] || '—';
+    $('rs-fallback').textContent = $('f-fallback-ordem').value.trim() || '—';
+    PROVIDERS.forEach(p => {
+      const configurada = $(`status-${p}`).classList.contains('key-ok');
+      const modelo = $(`f-${p}-modelo`).value;
+      $(`rs-${p}`).textContent = `${configurada ? '✓ configurada' : 'usando .env'} — ${modelo}`;
+    });
+    $('rs-link').textContent = $('f-login-link').value || '—';
+  }
+  window.atualizarResumo = atualizarResumo;
+
+  function renderStatus(id, temChave) {
+    const el = $(id);
+    if (temChave) {
+      el.innerHTML = '<span style="color:var(--success)">✓ Chave configurada</span>';
+      el.classList.add('key-ok');
     } else {
-      document.querySelector('.fallback-card-custom').classList.add('fallback-card-selected');
-      customInput.style.display = '';
-      customHint.style.display = '';
-      customInput.value = valor;
+      el.innerHTML = '<span style="color:var(--text-lo)">Usando .env / não configurada</span>';
+      el.classList.remove('key-ok');
     }
   }
 
@@ -559,7 +593,20 @@
       renderStatus('status-gemini', !!config.temGemini);
       $('f-provedor-primario').value = config.provedorPrimario || 'groq';
       $('f-fallback-ordem').value = config.fallbackOrdem || 'groq,openai,claude,gemini';
-      sincronizarPresetSelecionado();
+
+      const cardMatch = document.querySelector(`.fallback-card[data-ordem="${$('f-fallback-ordem').value}"]`);
+      document.querySelectorAll('.fallback-card').forEach(c => c.classList.remove('fallback-card-selected'));
+      if (cardMatch) {
+        cardMatch.classList.add('fallback-card-selected');
+        $('fallback-custom-input').style.display = 'none';
+        $('fallback-custom-hint').style.display = 'none';
+      } else {
+        document.querySelector('.fallback-card-custom').classList.add('fallback-card-selected');
+        $('fallback-custom-input').style.display = '';
+        $('fallback-custom-hint').style.display = '';
+        $('fallback-custom-input').value = $('f-fallback-ordem').value;
+      }
+
       if (config.groqModelo) $('f-groq-modelo').value = config.groqModelo;
       if (config.openaiModelo) $('f-openai-modelo').value = config.openaiModelo;
       if (config.claudeModelo) $('f-claude-modelo').value = config.claudeModelo;
@@ -568,7 +615,7 @@
       atualizarLinkApelido();
       atualizarResumo();
     } catch (err) {
-      feedback('Não foi possível carregar a configuração: ' + err.message, false);
+      console.error('Não foi possível carregar a configuração:', err.message);
     }
   }
 
@@ -591,39 +638,19 @@
     };
     try {
       await api('/api/ia-service/config/ia', { method: 'PUT', body: JSON.stringify(dados) });
-      feedback('Salvo com sucesso!', true);
-      // Limpa os campos de senha após salvar — nunca reexibe a chave já
-      // gravada (mesma cautela de qualquer segredo criptografado em repouso).
-      ['f-groq', 'f-openai', 'f-claude', 'f-gemini'].forEach(id => { $(id).value = ''; });
+      PROVIDERS.forEach(p => { $(`f-${p}`).value = ''; });
       await carregar();
+      mostrarToast('✅ Configurações salvas!');
     } catch (err) {
-      feedback(err.message, false);
+      mostrarToast('✗ ' + err.message, true);
     }
   }
 
-  // Painel de Resumo — client-side puro (sem fetch próprio), mesmo padrão
-  // de apps/IA Command/frontend/config-ia.html:atualizarResumo(). Lê só o
-  // que já está no DOM, chamado após carregar()/salvar() e em input/change
-  // dos campos relevantes.
-  function atualizarResumo() {
-    const nomes = { groq: 'Groq', openai: 'OpenAI', claude: 'Claude', gemini: 'Gemini' };
-    const primario = $('f-provedor-primario').value;
-    $('rs-primario').textContent = nomes[primario] || '—';
-    $('rs-fallback').textContent = $('f-fallback-ordem').value.trim() || '—';
-    ['groq', 'openai', 'claude', 'gemini'].forEach(p => {
-      const configurada = $(`status-${p}`).classList.contains('ok');
-      $(`rs-${p}`).textContent = `${configurada ? '✓ configurada' : 'usando .env'} — ${$(`f-${p}-modelo`).value}`;
-      $(`primario-${p}`).style.display = p === primario ? 'inline-block' : 'none';
-    });
-    $('rs-link').textContent = $('f-login-link').value || '—';
-  }
-
-  // Testa UM provedor — usa a chave recém-digitada no campo daquela aba, ou
-  // (se vazio) a já salva no backend. Nunca persiste nada.
   async function testarProvedor(provedor) {
     const el = $(`teste-${provedor}`);
+    el.style.display = 'block';
+    el.className = 'test-result';
     el.textContent = 'Testando…';
-    el.className = 'provider-test-result';
     try {
       const apiKey = $(`f-${provedor}`).value.trim() || undefined;
       const r = await api('/api/ia-service/config/ia/testar', {
@@ -632,63 +659,46 @@
       });
       if (r.ok) {
         el.textContent = '✓ Chave válida.';
-        el.className = 'provider-test-result ok';
+        el.classList.add('ok');
       } else {
         el.textContent = '✗ ' + (r.erro || 'Falha no teste.');
-        el.className = 'provider-test-result fail';
+        el.classList.add('fail');
       }
     } catch (err) {
       el.textContent = '✗ ' + err.message;
-      el.className = 'provider-test-result fail';
+      el.classList.add('fail');
     }
   }
+  window.testarProvedor = testarProvedor;
 
-  $('salvar-btn').addEventListener('click', salvar);
+  function mostrarToast(msg, isErro) {
+    let toast = $('toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'toast';
+      toast.style.cssText = 'position:fixed;bottom:24px;right:24px;padding:11px 18px;border-radius:var(--radius);font-size:13px;font-weight:500;transform:translateY(80px);opacity:0;transition:.2s cubic-bezier(.4,0,.2,1);z-index:999;color:#fff';
+      document.body.appendChild(toast);
+    }
+    toast.style.background = isErro ? '#dc2626' : '#10b981';
+    toast.textContent = msg;
+    requestAnimationFrame(() => { toast.style.transform = 'translateY(0)'; toast.style.opacity = '1'; });
+    setTimeout(() => { toast.style.transform = 'translateY(80px)'; toast.style.opacity = '0'; }, 2500);
+  }
+
   $('salvar-topo-btn').addEventListener('click', salvar);
   $('descartar-btn').addEventListener('click', () => {
-    ['f-groq', 'f-openai', 'f-claude', 'f-gemini'].forEach(id => { $(id).value = ''; });
+    PROVIDERS.forEach(p => { $(`f-${p}`).value = ''; });
     carregar();
-    feedback('Alterações não salvas foram descartadas.', null);
   });
   $('ajuda-btn').addEventListener('click', () => {
     (window.openTab || ((url) => window.open(url, '_blank')))('/app/ia-service/guia/index.html', 'Guia', '📘');
   });
 
-  document.querySelectorAll('.provider-tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.provider-tab').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.provider-panel').forEach(p => p.classList.remove('active'));
-      btn.classList.add('active');
-      $(btn.dataset.panel).classList.add('active');
-    });
-  });
-  document.querySelectorAll('[data-testar]').forEach(btn => {
-    btn.addEventListener('click', () => testarProvedor(btn.dataset.testar));
-  });
-  document.querySelectorAll('.fallback-card').forEach(card => {
-    card.addEventListener('click', () => selecionarPreset(card));
-  });
-  $('fallback-custom-input').addEventListener('input', (e) => {
-    $('f-fallback-ordem').value = e.target.value.trim();
-    atualizarResumo();
-  });
-  $('f-login-apelido').addEventListener('input', atualizarLinkApelido);
-  $('f-login-link').addEventListener('click', (e) => e.target.select());
-  ['f-provedor-primario', 'f-fallback-ordem'].forEach(id => {
-    $(id).addEventListener('input', atualizarResumo);
-    $(id).addEventListener('change', atualizarResumo);
-  });
-  $('f-login-apelido').addEventListener('input', atualizarResumo);
-
-  // ── Agente Local — movido para cá (2026-09, pedido do usuário): mesmo
-  // nível de sensibilidade das chaves de IA acima, fica mais seguro ter só
-  // um lugar com credenciais críticas. Lógica idêntica à que existia em
-  // base-historica.html, só adaptada para usar o feedback() já padrão desta
-  // tela em vez de showError/hideError (que não existem aqui).
+  // ── Agente Local ──────────────────────────────────────────────────────
   function feedbackAgente(msg, ok) {
     const el = $('agente-status');
     el.textContent = msg;
-    el.className = 'save-feedback' + (ok === true ? ' ok' : ok === false ? ' fail' : '');
+    el.style.color = ok === true ? 'var(--success)' : ok === false ? 'var(--error)' : 'var(--text-lo)';
   }
 
   async function carregarAgente() {
@@ -706,11 +716,8 @@
     }
   }
 
-  // Olhinho revela o token JÁ SALVO (não só o que foi digitado agora) —
-  // busca do backend sob demanda, só no clique, e só quando o campo ainda
-  // está vazio (não sobrescreve um valor novo que o usuário já digitou).
   let agenteTokenRevelado = false;
-  async function toggleAgenteTokenVisivel() {
+  window.toggleAgenteTokenVisivel = async function () {
     const input = $('agente-token');
     const mostrar = $('agente-token-icon-mostrar');
     const ocultar = $('agente-token-icon-ocultar');
@@ -735,12 +742,10 @@
       ocultar.style.display = 'none';
       agenteTokenRevelado = false;
     }
-  }
+  };
 
-  // Mesmo padrão para a crypto_key — precisa bater EXATAMENTE com a
-  // CRYPTO_KEY já gerada na tela local do agente.
   let agenteCryptoKeyRevelada = false;
-  async function toggleAgenteCryptoKeyVisivel() {
+  window.toggleAgenteCryptoKeyVisivel = async function () {
     const input = $('agente-crypto-key');
     const mostrar = $('agente-crypto-key-icon-mostrar');
     const ocultar = $('agente-crypto-key-icon-ocultar');
@@ -765,7 +770,7 @@
       ocultar.style.display = 'none';
       agenteCryptoKeyRevelada = false;
     }
-  }
+  };
 
   async function salvarAgente() {
     const empresaId = empresaIdAtual();
@@ -783,6 +788,7 @@
       $('agente-token').value = '';
       $('agente-crypto-key').value = '';
       await carregarAgente();
+      mostrarToast('✅ Agente Local salvo!');
     } catch (err) {
       feedbackAgente('Não foi possível salvar: ' + err.message, false);
     }
