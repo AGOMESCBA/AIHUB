@@ -41,12 +41,15 @@ async def fetch_dynamic_top_by_volume_with_source(top_limit: int = 20) -> Tuple[
     url = "https://api.binance.com/api/v3/ticker/24hr"
     excluded_keywords = ["USDC", "DAI", "FDUSD", "TUSD", "USDS", "WBTC", "WETH", "EUR", "BUSD", "PYUSD", "USD1", "RLUSD"]
     
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-        if response.status_code != 200:
-            return TOP_20_BASELINE[:top_limit], "BASELINE"
-            
-        data = response.json()
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            response = await client.get(url)
+            if response.status_code != 200:
+                return TOP_20_BASELINE[:top_limit], "BASELINE"
+
+            data = response.json()
+    except Exception:
+        return TOP_20_BASELINE[:top_limit], "BASELINE"
         
     usdt_pairs = []
     for item in data:

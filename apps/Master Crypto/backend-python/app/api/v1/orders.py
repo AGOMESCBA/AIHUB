@@ -7,7 +7,6 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
-from app.exchange.factory import ExchangeFactory
 from app.core.config import settings
 from app.core.iahub_context import get_iahub_context
 from app.persistence.company_store import store
@@ -31,38 +30,14 @@ async def execute_real_order(req: RealOrderRequest, request: Request):
     """
     Envia a ordem real de Compra/Venda com Stop Loss e Alvo Take Profit para a Exchange configurada (Binance, Bybit, OKX, KuCoin).
     """
-    clean_sym = req.symbol.replace("/", "").upper()
-    company_settings = _company_exchange_settings(request)
-    api_key = _clean_credential(req.api_key or company_settings.get("exchange_api_key") or settings.BINANCE_API_KEY)
-    api_secret = _clean_credential(req.api_secret or company_settings.get("exchange_api_secret") or settings.BINANCE_API_SECRET)
-
-    adapter = ExchangeFactory.get_adapter(
-        exchange_name=req.exchange,
-        api_key=api_key,
-        api_secret=api_secret
+    get_iahub_context(request)
+    raise HTTPException(
+        status_code=501,
+        detail=(
+            "Execucao real de ordens ainda nao esta habilitada neste backend. "
+            "Use Paper Trading ate a chamada assinada da exchange ser implementada e homologada."
+        ),
     )
-
-    try:
-        order_res = await adapter.place_order(
-            symbol=clean_sym,
-            side=req.side,
-            order_type=req.order_type,
-            quantity=req.quantity,
-            price=req.entry_price
-        )
-
-        return {
-            "status": "SUCCESS",
-            "exchange": req.exchange.upper(),
-            "symbol": req.symbol,
-            "order_id": order_res.get("order_id", f"{req.exchange.lower()}_order_{int(time.time())}"),
-            "executed_price": req.entry_price,
-            "stop_loss": req.stop_loss,
-            "target_t2": req.target_t2,
-            "message": f"Ordem {req.side} enviada com sucesso para a {req.exchange.upper()}!"
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Erro ao enviar ordem para {req.exchange}: {str(e)}")
 
 
 @router.get("/balance")
@@ -187,11 +162,8 @@ async def get_exchange_assets(request: Request, exchange: str = "BINANCE"):
 
 
 def _company_exchange_settings(request: Request) -> dict:
-    try:
-        ctx = get_iahub_context(request)
-        return store.get_settings(ctx.company_id)
-    except Exception:
-        return {}
+    ctx = get_iahub_context(request)
+    return store.get_settings(ctx.company_id, include_secrets=True)
 
 
 def _clean_credential(value: str | None) -> str:

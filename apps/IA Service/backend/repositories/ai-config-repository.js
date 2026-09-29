@@ -25,6 +25,10 @@ function _rowParaDominio(row) {
     openaiApiKey: cryptoEnvelope.decryptSecret(row.openai_api_key),
     claudeApiKey: cryptoEnvelope.decryptSecret(row.claude_api_key),
     geminiApiKey: cryptoEnvelope.decryptSecret(row.gemini_api_key),
+    groqModelo: row.groq_modelo,
+    openaiModelo: row.openai_modelo,
+    claudeModelo: row.claude_modelo,
+    geminiModelo: row.gemini_modelo,
     loginExternoApelido: row.login_externo_apelido,
     criadoEm: row.criado_em,
     atualizadoEm: row.atualizado_em,
@@ -95,6 +99,10 @@ function salvarConfig(empresaId, dados) {
              openai_api_key = COALESCE(?, openai_api_key),
              claude_api_key = COALESCE(?, claude_api_key),
              gemini_api_key = COALESCE(?, gemini_api_key),
+             groq_modelo = COALESCE(?, groq_modelo),
+             openai_modelo = COALESCE(?, openai_modelo),
+             claude_modelo = COALESCE(?, claude_modelo),
+             gemini_modelo = COALESCE(?, gemini_modelo),
              login_externo_apelido = ?,
              atualizado_em = ?
        WHERE empresa_id = ?
@@ -105,6 +113,10 @@ function salvarConfig(empresaId, dados) {
       openaiCifrado,
       claudeCifrado,
       geminiCifrado,
+      dados.groqModelo || null,
+      dados.openaiModelo || null,
+      dados.claudeModelo || null,
+      dados.geminiModelo || null,
       apelido,
       agora,
       Number(empresaId)
@@ -114,8 +126,9 @@ function salvarConfig(empresaId, dados) {
       INSERT INTO ai_config (
         empresa_id, provedor_primario, fallback_ordem,
         groq_api_key, openai_api_key, claude_api_key, gemini_api_key,
+        groq_modelo, openai_modelo, claude_modelo, gemini_modelo,
         login_externo_apelido, criado_em, atualizado_em
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       Number(empresaId),
       dados.provedorPrimario || 'groq',
@@ -124,6 +137,10 @@ function salvarConfig(empresaId, dados) {
       openaiCifrado,
       claudeCifrado,
       geminiCifrado,
+      dados.groqModelo || 'openai/gpt-oss-20b',
+      dados.openaiModelo || 'gpt-4o-mini',
+      dados.claudeModelo || 'claude-haiku-4-5-20251001',
+      dados.geminiModelo || 'gemini-3.5-flash',
       apelido,
       agora,
       agora

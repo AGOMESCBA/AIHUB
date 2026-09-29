@@ -7,21 +7,11 @@ import 'package:crypto_swing_app/src/ui/crypto_logo_avatar.dart';
 import 'package:crypto_swing_app/src/features/settings/settings_provider.dart';
 
 final realActiveOrdersProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
-  final exchange = ref.watch(selectedExchangeProvider);
-  final apiKey = ref.watch(exchangeApiKeyProvider);
-  final apiSecret = ref.watch(exchangeApiSecretProvider);
-  
-  return ApiClient.executeRealOrder(
-    symbol: "SOL/USDT",
-    exchange: exchange,
-    side: "BUY",
-    entryPrice: 118.94,
-    stopLoss: 114.50,
-    targetT2: 125.80,
-    quantity: 1.0,
-    apiKey: apiKey,
-    apiSecret: apiSecret,
-  );
+  return {
+    "status": "DISABLED",
+    "message": "Execucao real em homologacao. Use Paper Trading nesta versao.",
+    "orders": [],
+  };
 });
 
 final realWalletBalancesProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {

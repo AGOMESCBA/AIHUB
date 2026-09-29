@@ -158,6 +158,14 @@ function _erroCotaOuCredito(msg) {
  * Chama o motor de IA com fallback entre providers, na ordem configurada pela
  * empresa (ai_config). `imagens` (pode ser []) restringe a ordem aos
  * providers com suporte a visão quando não vazia — Groq é pulado nesse caso.
+ *
+ * Modelo por provedor (2026-09): `cfg.modelos` (vindo de
+ * ai-config-service.resolverKeysEOrdem) tem prioridade sobre `opts.model` —
+ * cada provedor tem seu próprio nome de modelo, então um `opts.model` único
+ * aplicado ao vencedor do fallback estaria errado na maioria dos casos
+ * (ex.: "gpt-4o-mini" não existe na API do Groq). `opts.model` continua
+ * funcionando como override GLOBAL para quem não tiver `cfg.modelos` (ex.:
+ * chamadas de teste avulsas, ver rota /config/ia/testar).
  */
 async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts = {}) {
   const ordem = _normalizarOrdem(cfg);
@@ -167,9 +175,10 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
     if (!keys?.[provedor]) continue;
     if (imagens.length && !PROVIDER_CONFIGS[provedor].suportaImagem) continue;
 
+    const modeloDoProvedor = cfg?.modelos?.[provedor] || opts.model || PROVIDER_CONFIGS[provedor].model;
     try {
-      const resultado = await chamarProvedor(provedor, keys[provedor], systemPrompt, userPrompt, imagens, opts);
-      return { ...resultado, provider: provedor, model: opts.model || PROVIDER_CONFIGS[provedor].model };
+      const resultado = await chamarProvedor(provedor, keys[provedor], systemPrompt, userPrompt, imagens, { ...opts, model: modeloDoProvedor });
+      return { ...resultado, provider: provedor, model: modeloDoProvedor };
     } catch (erro) {
       erros.push({ provedor, msg: erro.message });
     }

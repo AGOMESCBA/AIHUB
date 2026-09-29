@@ -1,11 +1,12 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
+from app.core.request_validation import Timeframe
 from app.workers.market_scanner import MarketScanner
 from app.domain.assets import TOP_20_BASELINE, fetch_dynamic_top_by_volume_with_source
 
 router = APIRouter(prefix="/scanner", tags=["Market Scanner"])
 
 @router.get("/symbols")
-async def get_top_symbols(top_limit: int = 20, dynamic: bool = True):
+async def get_top_symbols(top_limit: int = Query(20, ge=1, le=100), dynamic: bool = True):
     if dynamic:
         symbols, source = await fetch_dynamic_top_by_volume_with_source(top_limit=top_limit)
     else:
@@ -14,7 +15,11 @@ async def get_top_symbols(top_limit: int = 20, dynamic: bool = True):
     return {"dynamic": dynamic, "source": source, "top_limit": top_limit, "count": len(symbols), "symbols": symbols}
 
 @router.get("/run")
-async def run_market_scan(timeframe: str = "4h", top_limit: int = 20, dynamic: bool = True):
+async def run_market_scan(
+    timeframe: Timeframe = "4h",
+    top_limit: int = Query(20, ge=1, le=100),
+    dynamic: bool = True,
+):
     scanner = MarketScanner()
     btc_context = await scanner.get_btc_context()
     scanned_assets = await scanner.scan_all_top(timeframe=timeframe, top_limit=top_limit, use_dynamic=dynamic)

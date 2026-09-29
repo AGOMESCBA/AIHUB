@@ -86,7 +86,7 @@ async def test_exchange_connection(req: ExchangeConnectionTest, request: Request
     api_key = str(req.api_key or "").strip()
     api_secret = str(req.api_secret or "").strip()
     if not api_key or not api_secret:
-        current = store.get_settings(ctx.company_id)
+        current = store.get_settings(ctx.company_id, include_secrets=True)
         api_key = api_key or str(current.get("exchange_api_key", "")).strip()
         api_secret = api_secret or str(current.get("exchange_api_secret", "")).strip()
 
@@ -120,7 +120,7 @@ async def test_exchange_assets_read(req: ExchangeConnectionTest, request: Reques
     api_key = str(req.api_key or "").strip()
     api_secret = str(req.api_secret or "").strip()
     if not api_key or not api_secret:
-        current = store.get_settings(ctx.company_id)
+        current = store.get_settings(ctx.company_id, include_secrets=True)
         api_key = api_key or str(current.get("exchange_api_key", "")).strip()
         api_secret = api_secret or str(current.get("exchange_api_secret", "")).strip()
     return await _test_assets_read(exchange, api_key, api_secret)

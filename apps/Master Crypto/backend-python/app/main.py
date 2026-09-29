@@ -1,7 +1,8 @@
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from app.core.config import settings
+from app.core.request_validation import Timeframe, normalize_symbol
 from app.exchange.binance import BinanceAdapter
 from app.api.v1.scanner import router as scanner_router
 from app.api.v1.opportunities import router as opportunities_router
@@ -87,14 +88,19 @@ async def websocket_market_endpoint(websocket: WebSocket):
         ws_manager.disconnect(websocket)
 
 @app.get(f"{settings.API_V1_STR}/market/candles")
-async def get_market_candles(symbol: str = "SOLUSDT", interval: str = "4h", limit: int = 50):
+async def get_market_candles(
+    symbol: str = "SOLUSDT",
+    interval: Timeframe = "4h",
+    limit: int = Query(50, ge=1, le=1000),
+):
+    symbol = normalize_symbol(symbol)
     adapter = BinanceAdapter()
     candles = await adapter.get_candles(symbol=symbol, interval=interval, limit=limit)
     return {"symbol": symbol, "interval": interval, "count": len(candles), "candles": candles}
 
 @app.get(f"{settings.API_V1_STR}/market/price")
 async def get_market_price(symbol: str = "BTCUSDT"):
-    clean_symbol = symbol.replace("/", "").upper()
+    clean_symbol = normalize_symbol(symbol)
     adapter = BinanceAdapter()
     price = await adapter.get_ticker_price(clean_symbol)
     return {"symbol": clean_symbol, "exchange": "BINANCE", "price": price}

@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from typing import List, Dict
+from app.core.request_validation import Timeframe
 from app.workers.market_scanner import MarketScanner
 from app.domain.assets import fetch_dynamic_top_by_volume_with_source, TOP_20_BASELINE
 from app.engines.indicators import IndicatorEngine
@@ -28,7 +29,10 @@ def format_price_py(val: float) -> str:
 router = APIRouter(prefix="/opportunities", tags=["Trade Opportunities"])
 
 @router.get("/active")
-async def get_active_opportunities(timeframe: str = "4h", top_limit: int = 20):
+async def get_active_opportunities(
+    timeframe: Timeframe = "4h",
+    top_limit: int = Query(20, ge=1, le=100),
+):
     """
     Varre os Top 'top_limit' ativos da Binance em tempo real, calcula os indicadores (EMA, RSI, RVOL),
     determina o regime de mercado, gera os Trade Plans completos e o Opportunity Score V1.

@@ -985,7 +985,7 @@
     </div>
 
     <div class="modal-actions" style="display:flex; gap:10px; margin-top:20px;">
-      <button id="btnModalConfirm" type="button" class="btn-exec-real" style="flex:1; padding:12px; font-size:13px;" onclick="confirmOrderExecution()">🟢 Confirmar Ordem na Binance</button>
+      <button id="btnModalConfirm" type="button" class="btn-exec-real" style="flex:1; padding:12px; font-size:13px;" onclick="confirmOrderExecution()">Confirmar</button>
       <button type="button" class="btn-exec-plan" style="padding:12px 18px;" onclick="closeExecModal()">Cancelar</button>
     </div>
     <div id="modalStatus" style="font-size:12px; margin-top:10px; font-weight:700; text-align:center;"></div>
@@ -1250,6 +1250,10 @@
       target3Label: target3 ? target3.toFixed(2) : (target2 && currentPrice ? (target2 + Math.max(target2 - currentPrice, 0) * 0.55).toFixed(2) : '-'),
       rr: Number(plan.risk_reward_ratio ?? raw.rr ?? raw.risk_reward_ratio ?? 2.2),
       plan,
+      entryMin,
+      entryMax,
+      stop,
+      target: target2,
       currentPrice,
       periodChange,
       periodLabel,
@@ -1432,7 +1436,7 @@
         </div>
 
         <div class="card-actions">
-          <button class="btn-exec-real" type="button" onclick="openExecModal('${esc(op.symbol)}', 'REAL')">⚡ Executar Real</button>
+          <button class="btn-exec-real" type="button" disabled title="Execucao real sera liberada apos homologacao da integracao assinada com a exchange">⚡ Real em homologacao</button>
           <button class="btn-exec-sim" type="button" onclick="openExecModal('${esc(op.symbol)}', 'SIMULATION')">🎓 Simular</button>
           <button class="btn-exec-plan" type="button" onclick="openTradePlanModal('${esc(op.symbol)}')">🔍 Ver Plano</button>
         </div>
@@ -1545,7 +1549,8 @@
     
     const confirmBtn = document.getElementById('btnModalConfirm');
     confirmBtn.className = mode === 'REAL' ? 'btn-exec-real' : 'btn-exec-sim';
-    confirmBtn.textContent = mode === 'REAL' ? '🟢 Enviar Ordem Direta na Binance' : '🎓 Confirmar Compra Simulada ($200 USD)';
+    confirmBtn.textContent = mode === 'REAL' ? 'Modo real indisponivel nesta versao' : '🎓 Confirmar Compra Simulada ($200 USD)';
+    confirmBtn.disabled = mode === 'REAL';
 
     document.getElementById('execModal').classList.add('open');
   }
@@ -1588,6 +1593,12 @@
     const status = document.getElementById('modalStatus');
     if (!selectedOp) return;
 
+    if (activeExecutionMode === 'REAL') {
+      status.style.color = '#f6465d';
+      status.textContent = 'Execucao real ainda nao esta habilitada. Use Paper Trading por enquanto.';
+      return;
+    }
+
     status.style.color = '#3861fb';
     status.textContent = activeExecutionMode === 'REAL' ? 'Enviando ordem para a Binance...' : 'Registrando compra simulada...';
     const investUsd = Number(document.getElementById('modalInvestUsd')?.value || 0);
@@ -1609,7 +1620,7 @@
     if (activeExecutionMode === 'SIMULATION') {
       const tradeId = `${selectedOp.symbol}-${Date.now()}`.replace(/[^A-Za-z0-9_-]/g, '_');
       try {
-        await fetch('/api/master-crypto/paper/start', {
+        const res = await fetch('/api/master-crypto/paper/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1617,43 +1628,34 @@
             symbol: selectedOp.symbol,
             current_market_price: entryPrice,
             position_size_usd: investUsd,
+            trade_plan: {
+              symbol: selectedOp.symbol,
+              timeframe: selectedOp.periodLabel || '4H',
+              strategy: selectedOp.strategy || 'PULLBACK',
+              entry_zone_min: Number(selectedOp.entryMin || entryPrice * 0.997),
+              entry_zone_max: Number(selectedOp.entryMax || entryPrice * 1.003),
+              stop_loss: Number(selectedOp.stop || entryPrice * 0.965),
+              target_t1: Number(entryPrice * 1.025),
+              target_t2: Number(selectedOp.target || entryPrice * 1.055),
+              target_t3: Number(entryPrice * 1.085),
+              risk_reward_ratio: Number(selectedOp.rr || 2.5),
+              potential_gain_pct: Number(selectedOp.potentialPct || 5.5),
+              invalidation_reason: 'Preco perdeu a zona tecnica definida pelo radar.',
+              reasons_for_entry: selectedOp.reasons?.length ? selectedOp.reasons : ['Setup validado pelo radar de oportunidades.'],
+            },
           }),
         });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.detail || 'Nao foi possivel iniciar a simulacao.');
+        }
         status.style.color = '#0ecb81';
         status.textContent = '✅ Compra Simulada iniciada com sucesso!';
         await loadCompanySummary();
         setTimeout(closeExecModal, 1500);
       } catch (_) {
-        status.style.color = '#0ecb81';
-        status.textContent = '✅ Compra Simulada iniciada com sucesso!';
-        setTimeout(closeExecModal, 1500);
-      }
-    } else {
-      try {
-        const res = await fetch('/api/master-crypto/orders/real', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            symbol: selectedOp.symbol,
-            exchange: 'BINANCE',
-            side: 'BUY',
-            order_type: 'LIMIT',
-            quantity,
-            entry_price: entryPrice,
-            stop_loss: Number(String(selectedOp.stopLabel).replace(/[^0-9.]/g, '')) || null,
-            target_t2: Number(String(selectedOp.targetLabel).replace(/[^0-9.]/g, '')) || null,
-          }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || data.status === 'REJECTED') {
-          throw new Error(data.detail || data.reason || 'Nao foi possivel enviar a ordem.');
-        }
-        status.style.color = '#0ecb81';
-        status.textContent = `✅ Ordem enviada. Quantidade: ${quantity.toFixed(8)} ${selectedOp.symbol.split('/')[0]}`;
-        setTimeout(closeExecModal, 2000);
-      } catch (err) {
         status.style.color = '#f6465d';
-        status.textContent = err.message || 'Nao foi possivel enviar a ordem real.';
+        status.textContent = 'Nao foi possivel iniciar a compra simulada.';
       }
     }
   }

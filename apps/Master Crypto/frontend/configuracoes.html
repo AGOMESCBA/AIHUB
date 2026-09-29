@@ -423,6 +423,16 @@
         const el = document.getElementById(id);
         if (el && data[id] !== undefined) el.value = data[id];
       });
+      const keyInput = document.getElementById('exchange_api_key');
+      const secretInput = document.getElementById('exchange_api_secret');
+      if (keyInput && data.exchange_api_key_configured) {
+        keyInput.value = '';
+        keyInput.placeholder = `Configurada (${data.exchange_api_key_masked || 'protegida'}) - preencha apenas para trocar`;
+      }
+      if (secretInput && data.exchange_api_secret_configured) {
+        secretInput.value = '';
+        secretInput.placeholder = `Configurada (${data.exchange_api_secret_masked || 'protegida'}) - preencha apenas para trocar`;
+      }
       setStatus(`Parâmetros carregados para ${companyName}.`);
     } catch (err) {
       setStatus('Não foi possível carregar os parâmetros desta empresa.');
@@ -438,9 +448,11 @@
       scanner_timeframe: document.getElementById('scanner_timeframe').value,
       mode: document.getElementById('mode').value,
       selected_exchange: document.getElementById('selected_exchange').value,
-      exchange_api_key: document.getElementById('exchange_api_key').value,
-      exchange_api_secret: document.getElementById('exchange_api_secret').value,
     };
+    const apiKey = document.getElementById('exchange_api_key').value.trim();
+    const apiSecret = document.getElementById('exchange_api_secret').value.trim();
+    if (apiKey) body.exchange_api_key = apiKey;
+    if (apiSecret) body.exchange_api_secret = apiSecret;
     setStatus('Salvando parâmetros...');
     const res = await fetch(apiUrl('/api/master-crypto/company/settings'), {
       method: 'PUT',

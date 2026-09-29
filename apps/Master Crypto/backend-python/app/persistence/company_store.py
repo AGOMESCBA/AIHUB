@@ -5,6 +5,7 @@ from pathlib import Path
 from threading import RLock
 from typing import Any, Dict, List
 
+from app.core.crypto_envelope import decrypt_secret, encrypt_secret, mask_secret
 from app.paper_trading.paper_engine import PaperTrade
 
 
@@ -73,11 +74,40 @@ class CompanyStore:
         company["paper"].setdefault("trade_history", [])
         return company
 
-    def get_settings(self, company_id: int) -> Dict[str, Any]:
+    def _prepare_settings_for_save(self, current: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, Any]:
+        prepared = deepcopy(patch)
+        for key in ("exchange_api_key", "exchange_api_secret"):
+            if key not in prepared:
+                continue
+            value = str(prepared.get(key) or "").strip()
+            if not value:
+                prepared.pop(key, None)
+                continue
+            prepared[key] = encrypt_secret(value)
+        return {**deepcopy(DEFAULT_SETTINGS), **current, **prepared}
+
+    def _public_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
+        public = {**deepcopy(DEFAULT_SETTINGS), **deepcopy(settings)}
+        for key in ("exchange_api_key", "exchange_api_secret"):
+            secret = decrypt_secret(public.get(key))
+            public[key] = ""
+            public[f"{key}_configured"] = bool(secret)
+            public[f"{key}_masked"] = mask_secret(secret)
+        return public
+
+    def _private_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
+        private = {**deepcopy(DEFAULT_SETTINGS), **deepcopy(settings)}
+        for key in ("exchange_api_key", "exchange_api_secret"):
+            private[key] = decrypt_secret(private.get(key))
+        return private
+
+    def get_settings(self, company_id: int, *, include_secrets: bool = False) -> Dict[str, Any]:
         with self._lock:
             data = self._load()
             settings = self._company(data, company_id)["settings"]
-            return {**deepcopy(DEFAULT_SETTINGS), **deepcopy(settings)}
+            if include_secrets:
+                return self._private_settings(settings)
+            return self._public_settings(settings)
 
     def update_settings(self, company_id: int, patch: Dict[str, Any]) -> Dict[str, Any]:
         allowed = set(DEFAULT_SETTINGS.keys())
@@ -85,9 +115,9 @@ class CompanyStore:
         with self._lock:
             data = self._load()
             company = self._company(data, company_id)
-            company["settings"] = {**deepcopy(DEFAULT_SETTINGS), **company.get("settings", {}), **clean}
+            company["settings"] = self._prepare_settings_for_save(company.get("settings", {}), clean)
             self._save(data)
-            return deepcopy(company["settings"])
+            return self._public_settings(company["settings"])
 
     def get_mobile_token(self, company_id: int) -> Dict[str, str]:
         with self._lock:
@@ -104,6 +134,15 @@ class CompanyStore:
             company["mobile_token"] = _new_mobile_token(company_id)
             self._save(data)
             return {"mobile_token": company["mobile_token"]}
+
+    def validate_mobile_token(self, company_id: int, token: str | None) -> bool:
+        if company_id <= 0 or not token:
+            return False
+        with self._lock:
+            data = self._load()
+            company = self._company(data, company_id)
+            expected = str(company.get("mobile_token") or "")
+            return secrets.compare_digest(expected, str(token).strip())
 
     def get_paper_state(self, company_id: int) -> Dict[str, Any]:
         with self._lock:

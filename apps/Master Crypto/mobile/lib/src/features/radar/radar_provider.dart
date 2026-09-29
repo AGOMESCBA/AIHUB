@@ -7,7 +7,7 @@ import 'package:crypto_swing_app/src/local_db/app_database.dart';
 final topLimitProvider = StateProvider<int>((ref) => 20);
 
 enum RadarExecutionMode { real, simulation }
-final radarExecutionModeProvider = StateProvider<RadarExecutionMode>((ref) => RadarExecutionMode.real);
+final radarExecutionModeProvider = StateProvider<RadarExecutionMode>((ref) => RadarExecutionMode.simulation);
 
 class RadarStateNotifier extends StateNotifier<AsyncValue<Map<String, dynamic>>> {
   final Ref ref;

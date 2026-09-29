@@ -52,3 +52,42 @@ def test_company_store_keeps_settings_by_company(tmp_path):
     assert store.get_settings(101)["risk_per_trade_pct"] == 1.5
     assert store.get_settings(202)["initial_bank_usd"] == 5000.0
     assert store.get_settings(202)["risk_per_trade_pct"] == 2.0
+
+
+def test_company_store_encrypts_exchange_credentials_and_masks_public_settings(tmp_path, monkeypatch):
+    monkeypatch.setenv("MASTER_CRYPTO_DATA_CRYPTO_KEY", "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+    store = CompanyStore(path=tmp_path / "mc.json")
+
+    public = store.update_settings(101, {
+        "exchange_api_key": "public-key-123456",
+        "exchange_api_secret": "secret-key-abcdef",
+    })
+
+    assert public["exchange_api_key"] == ""
+    assert public["exchange_api_secret"] == ""
+    assert public["exchange_api_key_configured"] is True
+    assert public["exchange_api_secret_configured"] is True
+    assert public["exchange_api_key_masked"].startswith("publ")
+    assert public["exchange_api_key_masked"].endswith("3456")
+    assert public["exchange_api_secret_masked"].startswith("secr")
+    assert public["exchange_api_secret_masked"].endswith("cdef")
+
+    raw_text = (tmp_path / "mc.json").read_text(encoding="utf-8")
+    assert "secret-key-abcdef" not in raw_text
+    assert "public-key-123456" not in raw_text
+
+    private = store.get_settings(101, include_secrets=True)
+    assert private["exchange_api_key"] == "public-key-123456"
+    assert private["exchange_api_secret"] == "secret-key-abcdef"
+
+
+def test_company_store_validates_mobile_token_by_company(tmp_path):
+    store = CompanyStore(path=tmp_path / "mc.json")
+
+    token_a = store.get_mobile_token(101)["mobile_token"]
+    token_b = store.get_mobile_token(202)["mobile_token"]
+
+    assert store.validate_mobile_token(101, token_a)
+    assert store.validate_mobile_token(202, token_b)
+    assert not store.validate_mobile_token(101, token_b)
+    assert not store.validate_mobile_token(101, "")

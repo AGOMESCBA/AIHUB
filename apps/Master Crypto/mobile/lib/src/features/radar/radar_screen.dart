@@ -69,7 +69,12 @@ class RadarScreen extends ConsumerWidget {
                       Expanded(
                         child: GestureDetector(
                           onTap: () {
-                            ref.read(radarExecutionModeProvider.notifier).state = RadarExecutionMode.real;
+                            NotificationService.showInAppFloatingBanner(
+                              context,
+                              title: "Modo real em homologacao",
+                              message: "Use Paper Trading ate a execucao assinada da exchange ser liberada.",
+                            );
+                            ref.read(radarExecutionModeProvider.notifier).state = RadarExecutionMode.simulation;
                           },
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
@@ -84,7 +89,7 @@ class RadarScreen extends ConsumerWidget {
                                 AppIcon(AppIconType.bolt, size: 14, color: isReal ? Colors.white : AppTheme.textSecondary),
                                 const SizedBox(width: 6),
                                 Text(
-                                  "⚡ OPERAÇÃO REAL",
+                                  "⚡ REAL EM HOMOLOGAÇÃO",
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
@@ -621,21 +626,44 @@ class RadarScreen extends ConsumerWidget {
                                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
                               ),
                               onPressed: () async {
+                                final rrValue = (tradePlan["risk_reward_ratio"] as num?)?.toDouble()
+                                    ?? double.tryParse(rrRatioStr.replaceAll("1:", ""))
+                                    ?? 2.5;
+                                final potentialValue = double.tryParse(
+                                      potentialStr.toString().replaceAll("+", "").replaceAll("%", ""),
+                                    )
+                                    ?? (((tTarget - currentPriceVal) / currentPriceVal) * 100.0);
                                 final res = await ApiClient.startPaperTrade({
+                                  "trade_id": "$symbol-${DateTime.now().millisecondsSinceEpoch}".replaceAll(RegExp(r"[^A-Za-z0-9_-]"), "_"),
                                   "symbol": symbol,
-                                  "entry_price": entryMinVal ?? 145.50,
-                                  "stop_loss_price": stopLossVal ?? 142.70,
-                                  "target_t2_price": targetT2Val ?? 153.30,
+                                  "current_market_price": currentPriceVal,
+                                  "trade_plan": {
+                                    "symbol": symbol,
+                                    "timeframe": periodLabel,
+                                    "strategy": strategy,
+                                    "entry_zone_min": eMin,
+                                    "entry_zone_max": eMax,
+                                    "stop_loss": sLoss,
+                                    "target_t1": currentPriceVal * 1.025,
+                                    "target_t2": tTarget,
+                                    "target_t3": currentPriceVal * 1.085,
+                                    "risk_reward_ratio": rrValue,
+                                    "potential_gain_pct": potentialValue,
+                                    "invalidation_reason": "Preco perdeu a zona tecnica definida pelo radar.",
+                                    "reasons_for_entry": [
+                                      actionReason,
+                                      "Score $score/100 em regime $regime",
+                                    ],
+                                  },
                                   "position_size_usd": 200.0,
-                                  "leverage": 1.0,
-                                  "strategy": strategy
                                 });
 
                                 if (context.mounted) {
+                                  final ok = res["status"] == "SUCCESS";
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text(res['message'] ?? "Trade Virtual iniciado com sucesso para $symbol!"),
-                                      backgroundColor: AppTheme.accentGreen,
+                                      content: Text(res['message'] ?? (ok ? "Trade Virtual iniciado com sucesso para $symbol!" : "Nao foi possivel iniciar o Trade Virtual.")),
+                                      backgroundColor: ok ? AppTheme.accentGreen : AppTheme.accentRed,
                                     ),
                                   );
                                 }
@@ -861,35 +889,11 @@ class RadarScreen extends ConsumerWidget {
                   onPressed: () async {
                     Navigator.pop(modalContext);
 
-                    final entryNum = double.tryParse(entryPriceStr.split("-").first.trim()) ?? 145.50;
-                    final stopNum = double.tryParse(stopLossStr) ?? 142.70;
-                    final targetNum = double.tryParse(targetT2Str) ?? 153.30;
-
-                    final userApiKey = ref.read(exchangeApiKeyProvider);
-                    final userApiSecret = ref.read(exchangeApiSecretProvider);
-
-                    final result = await ApiClient.executeRealOrder(
-                      symbol: symbol,
-                      exchange: selectedExchange,
-                      side: "BUY",
-                      entryPrice: entryNum,
-                      stopLoss: stopNum,
-                      targetT2: targetNum,
-                      quantity: 1.0,
-                      apiKey: userApiKey,
-                      apiSecret: userApiSecret,
-                    );
-
-                    NotificationService.showFloatingNotification(
-                      title: "ORDEM EXECUTADA NA $selectedExchange!",
-                      body: "Ordem de $symbol enviada com sucesso! Stop Loss em \$$stopLossStr e Alvo T2 em \$$targetT2Str.",
-                    );
-
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text("${result['message'] ?? 'Ordem enviada para a $selectedExchange!'}"),
-                          backgroundColor: AppTheme.accentGreen,
+                        const SnackBar(
+                          content: Text("Execucao real ainda nao esta habilitada. Use Paper Trading por enquanto."),
+                          backgroundColor: AppTheme.accentGold,
                         ),
                       );
                     }

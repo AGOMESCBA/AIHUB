@@ -5,6 +5,7 @@
 // que a Etapa 0 já sinalizou como "fail-open" a não repetir sem necessidade.
 
 const aiConfigRepo = require('../repositories/ai-config-repository');
+const { PROVIDER_CONFIGS } = require('./ai-provider-client');
 
 function resolverKeysEOrdem(empresaId) {
   const config = aiConfigRepo.getConfig(empresaId);
@@ -16,9 +17,21 @@ function resolverKeysEOrdem(empresaId) {
     gemini: config?.geminiApiKey || process.env.SVC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || null,
   };
 
+  // Modelo específico por provedor (2026-09) — diferente do IA Command
+  // (onde 3 dos 5 provedores nunca aplicam o modelo salvo em produção,
+  // falha real confirmada em intent-service.js), aqui os 4 SEMPRE resolvem
+  // para um valor: coluna salva → default de PROVIDER_CONFIGS (nunca null).
+  const modelos = {
+    groq: config?.groqModelo || PROVIDER_CONFIGS.groq.model,
+    openai: config?.openaiModelo || PROVIDER_CONFIGS.openai.model,
+    claude: config?.claudeModelo || PROVIDER_CONFIGS.claude.model,
+    gemini: config?.geminiModelo || PROVIDER_CONFIGS.gemini.model,
+  };
+
   const cfg = {
     provedorPrimario: config?.provedorPrimario || 'groq',
     fallbackOrdem: config?.fallbackOrdem || 'groq,openai,claude,gemini',
+    modelos,
   };
 
   return { keys, cfg };
@@ -42,6 +55,10 @@ function getConfig(empresaId) {
     temOpenai: !!config.openaiApiKey,
     temClaude: !!config.claudeApiKey,
     temGemini: !!config.geminiApiKey,
+    groqModelo: config.groqModelo || PROVIDER_CONFIGS.groq.model,
+    openaiModelo: config.openaiModelo || PROVIDER_CONFIGS.openai.model,
+    claudeModelo: config.claudeModelo || PROVIDER_CONFIGS.claude.model,
+    geminiModelo: config.geminiModelo || PROVIDER_CONFIGS.gemini.model,
     loginExternoApelido: config.loginExternoApelido,
     atualizadoEm: config.atualizadoEm,
   };

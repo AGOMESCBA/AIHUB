@@ -11,7 +11,7 @@ final serverIpProvider = StateProvider<String>((ref) => '137.131.212.29');
 final selectedExchangeProvider = StateProvider<String>((ref) => 'BINANCE');
 final exchangeApiKeyProvider = StateProvider<String>((ref) => '');
 final exchangeApiSecretProvider = StateProvider<String>((ref) => '');
-final companyTokenProvider = StateProvider<String>((ref) => '1001');
+final companyTokenProvider = StateProvider<String>((ref) => '');
 final companyNameProvider = StateProvider<String>((ref) => '');
 
 class SettingsStorageService {
@@ -41,7 +41,7 @@ class SettingsStorageService {
         ref.read(companyTokenProvider.notifier).state = token;
         ApiClient.setCompanyToken(token);
       } else {
-        ApiClient.setCompanyToken('1001');
+        ApiClient.setCompanyToken('');
       }
 
       final name = prefs.getString(_kCompanyName);
@@ -120,4 +120,3 @@ class SettingsStorageService {
     } catch (_) {}
   }
 }
-

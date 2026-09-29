@@ -16,6 +16,8 @@ const anexoRepo = require('../repositories/anexo-repository');
 const investigacaoService = require('../services/investigacao-service');
 const versaoFonteService = require('../services/versao-fonte-service');
 const aiConfigService = require('../services/ai-config-service');
+const aiConfigRepo = require('../repositories/ai-config-repository');
+const aiProviderClient = require('../services/ai-provider-client');
 const agenteLocalService = require('../services/agente-local-service');
 const historicalImportService = require('../services/import/historical-import-service');
 const historicalSyncService = require('../services/import/historical-sync-service');
@@ -260,11 +262,42 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   app.put('/api/ia-service/config/ia', (req, res) => {
     try {
       const empresaId = req.svcEmpresaId;
-      const { provedorPrimario, fallbackOrdem, groqApiKey, openaiApiKey, claudeApiKey, geminiApiKey, loginExternoApelido } = req.body || {};
-      aiConfigService.salvarConfig(empresaId, { provedorPrimario, fallbackOrdem, groqApiKey, openaiApiKey, claudeApiKey, geminiApiKey, loginExternoApelido });
+      const {
+        provedorPrimario, fallbackOrdem, groqApiKey, openaiApiKey, claudeApiKey, geminiApiKey, loginExternoApelido,
+        groqModelo, openaiModelo, claudeModelo, geminiModelo,
+      } = req.body || {};
+      aiConfigService.salvarConfig(empresaId, {
+        provedorPrimario, fallbackOrdem, groqApiKey, openaiApiKey, claudeApiKey, geminiApiKey, loginExternoApelido,
+        groqModelo, openaiModelo, claudeModelo, geminiModelo,
+      });
       res.json(aiConfigService.getConfig(empresaId));
     } catch (err) {
       _handleErro(res, err);
+    }
+  });
+
+  // Testa UM provedor com a chave do body (ou a já salva, se vazio) —
+  // chamada real e mínima ao provedor, reaproveitando o motor já existente
+  // (aiProviderClient.chamarProvedor). Nunca persiste nada.
+  app.post('/api/ia-service/config/ia/testar', async (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const { provedor, apiKey } = req.body || {};
+      if (!provedor || !aiProviderClient.PROVIDER_CONFIGS[provedor]) {
+        return res.status(400).json({ error: 'Provedor inválido.' });
+      }
+      let chave = apiKey && String(apiKey).trim();
+      if (!chave) {
+        const config = aiConfigRepo.getConfig(empresaId);
+        const campo = { groq: 'groqApiKey', openai: 'openaiApiKey', claude: 'claudeApiKey', gemini: 'geminiApiKey' }[provedor];
+        chave = config?.[campo];
+      }
+      if (!chave) return res.status(400).json({ ok: false, erro: 'Nenhuma chave informada nem salva para este provedor.' });
+
+      await aiProviderClient.chamarProvedor(provedor, chave, 'Você é um assistente de teste.', 'Responda apenas OK.', [], { maxTokens: 10, timeoutMs: 15000 });
+      res.json({ ok: true });
+    } catch (err) {
+      res.json({ ok: false, erro: err.message });
     }
   });
 

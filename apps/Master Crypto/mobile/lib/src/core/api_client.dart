@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 class ApiClient {
   static String activeServerIp = "137.131.212.29";
   static String activeResolvedBaseUrl = "http://137.131.212.29:8000/api/v1";
-  static String companyToken = "1001";
+  static String companyToken = "";
 
   static String get activeBaseUrl => activeResolvedBaseUrl;
 
@@ -26,11 +26,16 @@ class ApiClient {
     return raw;
   }
 
-  static Map<String, String> get defaultHeaders => {
-    "Content-Type": "application/json",
-    "x-iahub-company-id": numericCompanyId,
-    "x-company-token": companyToken,
-  };
+  static Map<String, String> get defaultHeaders {
+    final headers = {
+      "Content-Type": "application/json",
+      "x-iahub-company-id": numericCompanyId,
+    };
+    if (companyToken.trim().isNotEmpty) {
+      headers["x-company-token"] = companyToken.trim();
+    }
+    return headers;
+  }
 
   static void setServerIp(String ip) {
     if (ip.trim().isNotEmpty) {
@@ -270,7 +275,7 @@ class ApiClient {
   static Future<Map<String, dynamic>> getBTCCycleComparison() async {
     try {
       final url = Uri.parse("$activeBaseUrl/btc-cycle/compare?current_year=2026&year_a=2020&year_b=2016");
-      final response = await http.get(url).timeout(const Duration(seconds: 10));
+      final response = await http.get(url, headers: defaultHeaders).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         return json.decode(response.body) as Map<String, dynamic>;
       }
@@ -296,7 +301,7 @@ class ApiClient {
   static Future<Map<String, dynamic>> getActivePaperTrades() async {
     try {
       final url = Uri.parse("$activeBaseUrl/paper/active");
-      final response = await http.get(url).timeout(const Duration(seconds: 8));
+      final response = await http.get(url, headers: defaultHeaders).timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
         return json.decode(response.body) as Map<String, dynamic>;
       }
@@ -309,7 +314,7 @@ class ApiClient {
   static Future<Map<String, dynamic>> getPaperTradeHistory() async {
     try {
       final url = Uri.parse("$activeBaseUrl/paper/history");
-      final response = await http.get(url).timeout(const Duration(seconds: 8));
+      final response = await http.get(url, headers: defaultHeaders).timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
         return json.decode(response.body) as Map<String, dynamic>;
       }
@@ -332,9 +337,9 @@ class ApiClient {
         data["status"] = "SUCCESS";
         return data;
       }
-      return {"status": "SUCCESS", "message": "Trade Virtual iniciado para ${tradeReq['symbol']}!"};
+      return {"status": "ERROR", "message": "Nao foi possivel iniciar o Trade Virtual (${response.statusCode})."};
     } catch (e) {
-      return {"status": "SUCCESS", "message": "Trade Virtual iniciado em modo local para ${tradeReq['symbol']}!"};
+      return {"status": "ERROR", "message": "Erro ao iniciar o Trade Virtual: $e"};
     }
   }
 
@@ -343,7 +348,7 @@ class ApiClient {
       final url = Uri.parse("$activeBaseUrl/paper/close");
       final response = await http.post(
         url,
-        headers: {"Content-Type": "application/json"},
+        headers: defaultHeaders,
         body: json.encode({"trade_id": tradeId, "current_market_price": currentPrice}),
       ).timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
@@ -420,7 +425,7 @@ class ApiClient {
 
       final response = await http.post(
         url,
-        headers: {"Content-Type": "application/json"},
+        headers: defaultHeaders,
         body: body,
       ).timeout(const Duration(seconds: 10));
 

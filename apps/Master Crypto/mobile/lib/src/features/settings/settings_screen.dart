@@ -204,7 +204,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               padding: EdgeInsets.all(10),
                               child: AppIcon(AppIconType.info, color: AppTheme.accentGold, size: 18),
                             ),
-                            hintText: "Ex: 1001",
+                            hintText: "Ex: MC-EMP-123-...",
                             isDense: true,
                           ),
                           onChanged: (val) {

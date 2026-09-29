@@ -7,6 +7,7 @@ const { requireSystemAccess } = require('../../../modules/sistemas/access');
 const serviceManager = require('./service-manager');
 
 const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL || serviceManager.getInternalApiBaseUrl();
+const INTERNAL_SECRET = String(process.env.MASTER_CRYPTO_INTERNAL_SECRET || '').trim();
 
 function resolveCompanyId(req) {
   return req.system?.company_id
@@ -35,17 +36,23 @@ router.all('/*', (req, res) => {
   const queryString = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
   const targetUrl = new URL(`${FASTAPI_BASE_URL}/${targetPath}${queryString}`);
 
+  const proxyHeaders = {
+    ...req.headers,
+    host: targetUrl.host,
+    'x-iahub-company-id': resolveCompanyId(req),
+    'x-iahub-user-id': req.session?.user_id || req.session?.usuarioId || '',
+  };
+  delete proxyHeaders['x-company-token'];
+  if (INTERNAL_SECRET) {
+    proxyHeaders['x-master-crypto-internal-secret'] = INTERNAL_SECRET;
+  }
+
   const options = {
     hostname: targetUrl.hostname,
     port: targetUrl.port || 8000,
     path: targetUrl.pathname + targetUrl.search,
     method: req.method,
-    headers: {
-      ...req.headers,
-      host: targetUrl.host,
-      'x-iahub-company-id': resolveCompanyId(req),
-      'x-iahub-user-id': req.session?.user_id || req.session?.usuarioId || '',
-    },
+    headers: proxyHeaders,
   };
 
   const proxyReq = http.request(options, (proxyRes) => {

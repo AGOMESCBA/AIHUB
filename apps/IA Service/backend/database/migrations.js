@@ -660,6 +660,16 @@ const MIGRATIONS = [
         WHERE login_externo_apelido IS NOT NULL;
     `,
   },
+  {
+    version: 27,
+    descricao: 'Modelo especifico por provedor de IA (pedido do usuario, 2026-09, mesmo padrao do IA Command) — defaults iguais aos ja hardcoded em ai-provider-client.js/PROVIDER_CONFIGS, entao quem nunca mexer no campo continua com o comportamento identico ao de hoje. IMPORTANTE: diferente do IA Command (onde o campo e salvo mas 3 dos 5 provedores nunca sao de fato aplicados nas chamadas de producao, falha real encontrada em intent-service.js), aqui os 4 provedores respeitam o modelo escolhido — ver ai-config-service.resolverKeysEOrdem e ai-provider-client.chamarIA.',
+    sql: `
+      ALTER TABLE ai_config ADD COLUMN groq_modelo TEXT DEFAULT 'openai/gpt-oss-20b';
+      ALTER TABLE ai_config ADD COLUMN openai_modelo TEXT DEFAULT 'gpt-4o-mini';
+      ALTER TABLE ai_config ADD COLUMN claude_modelo TEXT DEFAULT 'claude-haiku-4-5-20251001';
+      ALTER TABLE ai_config ADD COLUMN gemini_modelo TEXT DEFAULT 'gemini-3.5-flash';
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;
