@@ -9,6 +9,18 @@
     :root { --accent:#1d4ed8; --accent-light:#3b82f6; --accent-glow:rgba(29,78,216,.1); }
     .sidebar-logo .logo-icon { background:var(--accent) !important; }
 
+    /* Abas — mesmo padrão de apps/IA Command/frontend/config-ia.html
+       (.iac-tabs/.iac-tab/.iac-tab-panel). Essas classes NÃO existem no
+       design system global (packages/ui/frontend/css/iahub.css), são
+       locais a cada página que usa esse padrão de abas — precisam ser
+       definidas aqui também. */
+    .iac-tabs { display:flex;border-bottom:1px solid var(--border);margin-bottom:18px;gap:0;flex-wrap:wrap; }
+    .iac-tab  { padding:9px 16px;font-size:13px;font-weight:500;color:var(--text-md);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:color var(--transition);white-space:nowrap; }
+    .iac-tab:hover { color:var(--accent); }
+    .iac-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .iac-tab-panel { display:none; }
+    .iac-tab-panel.active { display:block; }
+
     /* Provider tab header — mesmo padrão de
        apps/IA Command/frontend/config-ia.html (.prov-*), reaproveitando as
        variáveis do design system global (packages/ui/frontend/css/iahub.css)
