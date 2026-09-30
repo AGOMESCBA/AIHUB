@@ -670,6 +670,19 @@ const MIGRATIONS = [
       ALTER TABLE ai_config ADD COLUMN gemini_modelo TEXT DEFAULT 'gemini-3.5-flash';
     `,
   },
+  {
+    version: 28,
+    descricao: 'Metadados de origem nas mensagens do Radar para reconstruir o historico importado do SoftExpert como conversa WhatsApp (abertura + um posicionamento por mensagem), sem apagar mensagens manuais do analista nem respostas da IA.',
+    sql: `
+      ALTER TABLE mensagens ADD COLUMN origem_sistema TEXT DEFAULT NULL;
+      ALTER TABLE mensagens ADD COLUMN origem_referencia TEXT DEFAULT NULL;
+      ALTER TABLE mensagens ADD COLUMN origem_data TEXT DEFAULT NULL;
+      ALTER TABLE mensagens ADD COLUMN origem_autor TEXT DEFAULT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_svc_mensagens_origem
+        ON mensagens (empresa_id, atendimento_id, origem_sistema, origem_referencia);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

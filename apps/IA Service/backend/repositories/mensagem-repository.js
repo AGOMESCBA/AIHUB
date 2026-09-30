@@ -21,6 +21,10 @@ function _rowParaDominio(row) {
     nivelConfianca: row.nivel_confianca,
     provider: row.provider,
     model: row.model,
+    origemSistema: row.origem_sistema,
+    origemReferencia: row.origem_referencia,
+    origemData: row.origem_data,
+    origemAutor: row.origem_autor,
   };
 }
 
@@ -33,7 +37,7 @@ function salvarMensagem(empresaId, atendimentoId, dados) {
 
   const db = getDB();
   const id = crypto.randomUUID();
-  const agora = new Date().toISOString();
+  const agora = dados.criadoEm || new Date().toISOString();
 
   // FK garante que atendimento_id existe, mas nao garante que pertence a empresaId
   // informado — checagem explicita evita gravar mensagem em atendimento de outra empresa.
@@ -46,7 +50,8 @@ function salvarMensagem(empresaId, atendimentoId, dados) {
     INSERT INTO mensagens (
       id, empresa_id, atendimento_id, papel, conteudo, usuario_id, criado_em,
       diagnostico_json, nivel_confianca, provider, model
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      , origem_sistema, origem_referencia, origem_data, origem_autor
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     Number(empresaId),
@@ -58,10 +63,39 @@ function salvarMensagem(empresaId, atendimentoId, dados) {
     dados.diagnostico ? JSON.stringify(dados.diagnostico) : null,
     dados.nivelConfianca ?? null,
     dados.provider ?? null,
-    dados.model ?? null
+    dados.model ?? null,
+    dados.origemSistema ?? null,
+    dados.origemReferencia ?? null,
+    dados.origemData ?? null,
+    dados.origemAutor ?? null
   );
 
   return _rowParaDominio(db.prepare('SELECT * FROM mensagens WHERE id = ?').get(id));
+}
+
+function removerHistoricoImportado(empresaId, atendimentoId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!atendimentoId) throw new Error('atendimentoId é obrigatório.');
+  const db = getDB();
+  return db.prepare(`
+    DELETE FROM mensagens
+     WHERE empresa_id = ?
+       AND atendimento_id = ?
+       AND (
+         origem_sistema = 'softexpert'
+         OR (
+           papel IN ('user', 'customer')
+           AND diagnostico_json IS NULL
+           AND provider IS NULL
+           AND (
+             conteudo LIKE 'Chamado SoftExpert #%'
+             OR conteudo LIKE 'Abertura do chamado SoftExpert #%'
+             OR conteudo LIKE '[%] %:%'
+             OR conteudo LIKE '[____-__-__] %'
+           )
+         )
+       )
+  `).run(Number(empresaId), atendimentoId);
 }
 
 function listarMensagens(empresaId, atendimentoId, filtros = {}) {
@@ -88,4 +122,4 @@ function getMensagem(empresaId, mensagemId) {
   return _rowParaDominio(row);
 }
 
-module.exports = { salvarMensagem, listarMensagens, getMensagem, PAPEIS_VALIDOS };
+module.exports = { salvarMensagem, listarMensagens, getMensagem, removerHistoricoImportado, PAPEIS_VALIDOS };

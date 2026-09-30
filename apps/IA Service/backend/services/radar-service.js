@@ -175,7 +175,11 @@ function _textoAberturaChamado(chamado) {
 }
 
 function _textoPosicionamento(p) {
-  return [p.assunto, p.descricao, p.resultado].filter(Boolean).join('\n\n') || '(sem texto)';
+  const partes = [];
+  if (p.assunto) partes.push(p.assunto);
+  if (p.descricao && p.descricao !== p.assunto) partes.push(p.descricao);
+  if (p.resultado && p.resultado !== p.descricao && p.resultado !== p.assunto) partes.push(p.resultado);
+  return partes.filter(Boolean).join('\n\n') || '(sem texto)';
 }
 
 function _autorPosicionamento(p) {
@@ -183,19 +187,34 @@ function _autorPosicionamento(p) {
 }
 
 function _papelPosicionamento(chamado, p) {
+  if (p.tecnicoId) return 'user';
+  if (p.usuarioClienteId) return 'customer';
   if (p.tecnicoId && chamado.tecnicoResponsavelId && p.tecnicoId === chamado.tecnicoResponsavelId) return 'user';
   const autor = _normalizarNome(_autorPosicionamento(p));
   const responsavel = _normalizarNome(chamado.tecnicoResponsavelNome);
   return responsavel && autor === responsavel ? 'user' : 'customer';
 }
 
+function _dataMensagemOrigem(dataOrigem, indice) {
+  const base = dataOrigem ? new Date(dataOrigem) : new Date();
+  const dataValida = Number.isNaN(base.getTime()) ? new Date() : base;
+  dataValida.setSeconds(dataValida.getSeconds() + indice);
+  return dataValida.toISOString();
+}
+
 function _gravarHistoricoComoMensagens(empresaId, atendimentoId, chamado, posicionamentos, usuarioIdIahub) {
+  let indice = 0;
   const abertura = _textoAberturaChamado(chamado);
   if (abertura) {
     mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
       papel: 'customer',
       conteudo: `Abertura do chamado por ${chamado.solicitanteNome || 'solicitante não identificado'}\n\n${abertura}`,
       usuarioId: null,
+      criadoEm: _dataMensagemOrigem(chamado.dataAbertura, indice++),
+      origemSistema: 'softexpert',
+      origemReferencia: `chamado:${chamado.id}`,
+      origemData: chamado.dataAbertura ?? null,
+      origemAutor: chamado.solicitanteNome || null,
     });
   }
 
@@ -207,8 +226,18 @@ function _gravarHistoricoComoMensagens(empresaId, atendimentoId, chamado, posici
       papel,
       conteudo: `[${data}] ${autor}\n\n${_textoPosicionamento(p)}`,
       usuarioId: papel === 'user' ? (usuarioIdIahub ?? null) : null,
+      criadoEm: _dataMensagemOrigem(p.dataPosicionamento, indice++),
+      origemSistema: 'softexpert',
+      origemReferencia: `posicionamento:${p.id}`,
+      origemData: p.dataPosicionamento ?? null,
+      origemAutor: autor,
     });
   }
+}
+
+function _sincronizarHistoricoImportado(empresaId, atendimentoId, chamado, posicionamentos, usuarioIdIahub) {
+  mensagemRepo.removerHistoricoImportado(empresaId, atendimentoId);
+  _gravarHistoricoComoMensagens(empresaId, atendimentoId, chamado, posicionamentos, usuarioIdIahub);
 }
 
 function buscarRelacionados(empresaId, chamadoId, { limite = 8 } = {}) {
@@ -275,6 +304,8 @@ function iniciarAnalise(empresaId, chamadoId, { usuarioIdIahub, consultorId, pre
   const preAnaliseLigada = _preAnaliseHabilitada(consultor, preAnaliseAutomatica);
 
   if (existente) {
+    const posicionamentos = chamadoRepo.listarPosicionamentosDoChamado(empresaId, chamadoId);
+    _sincronizarHistoricoImportado(empresaId, existente.id, chamado, posicionamentos, usuarioIdIahub);
     const mensagens = mensagemRepo.listarMensagens(empresaId, existente.id, { limite: 500 });
     const jaTemRespostaIa = mensagens.some(m => m.papel === 'assistant');
     if (preAnaliseLigada && !jaTemRespostaIa) {
