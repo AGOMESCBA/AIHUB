@@ -62,9 +62,12 @@
       cursor:pointer;
     }
     .empresa-dropdown button:hover { background:var(--wa-sidebar-hover); color:var(--wa-accent); }
-    .fila-tabs { display:flex; gap:4px; background:rgba(0,0,0,.2); border:1px solid var(--wa-border); border-radius:8px; padding:3px; margin-bottom:8px; }
-    .fila-tab { flex:1; border:none; background:transparent; padding:6px 8px; border-radius:6px; font-size:11.5px; font-weight:700; color:var(--wa-text-secondary); cursor:pointer; text-align:center; }
-    .fila-tab.ativo { background:var(--wa-accent); color:#04140f; }
+    .fila-tabs { display:flex; gap:10px; padding:0 2px; margin-bottom:10px; border-bottom:1px solid var(--wa-border); background:transparent; }
+    .fila-tab { flex:none; border:none; border-bottom:3px solid transparent; background:transparent; padding:9px 8px 8px; border-radius:0; font-size:12.5px; font-weight:700; color:var(--wa-text-secondary); cursor:pointer; text-align:center; display:flex; align-items:center; gap:6px; }
+    .fila-tab:hover { color:var(--wa-text); border-color:var(--wa-border); }
+    .fila-tab.ativo { background:transparent; color:var(--wa-text); border-color:var(--wa-accent); }
+    .fila-tab-dot { display:none; width:6px; height:6px; border-radius:50%; background:var(--wa-accent); flex:none; }
+    .fila-tab.ativo .fila-tab-dot { display:inline-block; }
     .fila-filtros { display:flex; gap:4px; flex-wrap:wrap; }
     .fila-filtro { border:1px solid var(--wa-border); background:rgba(255,255,255,.03); padding:4px 9px; border-radius:99px; font-size:11px; font-weight:700; color:var(--wa-text-secondary); cursor:pointer; }
     .fila-filtro.ativo { background:rgba(0,217,163,.14); border-color:var(--wa-accent); color:var(--wa-accent); }
@@ -294,6 +297,10 @@
     .anexo-status { display:inline-flex; padding:3px 7px; border-radius:99px; background:rgba(0,217,163,.1); color:var(--wa-accent); border:1px solid rgba(0,217,163,.24); font-size:10.5px; font-weight:800; white-space:nowrap; }
     .anexo-acao { border:1px solid var(--wa-border); border-radius:7px; background:rgba(255,255,255,.04); color:var(--wa-text-secondary); font-size:11px; font-weight:800; padding:6px 8px; cursor:pointer; white-space:nowrap; }
     .anexo-acao:hover { color:var(--wa-accent); border-color:rgba(0,217,163,.32); }
+    .info-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:8px; }
+    .info-item { border:1px solid var(--wa-border); border-radius:8px; background:#16232a; padding:10px 12px; min-width:0; }
+    .info-label { display:block; font-size:10px; font-weight:900; text-transform:uppercase; color:var(--wa-accent); margin-bottom:4px; }
+    .info-value { color:var(--wa-text); font-size:12.5px; line-height:1.35; overflow-wrap:anywhere; }
 
     @media (max-width: 900px) {
       .radar-shell { grid-template-columns:1fr; }
@@ -357,9 +364,9 @@
               </button>
             </div>
             <div class="fila-tabs">
-              <button class="fila-tab" id="tab-geral" onclick="setModoFila(false)">Fila geral</button>
-              <button class="fila-tab ativo" id="tab-minha" onclick="setModoFila(true)">Minha fila</button>
-              <button class="fila-tab" id="tab-risco" onclick="setPainelFila('risco')">Risco SLA</button>
+              <button class="fila-tab" id="tab-geral" onclick="setModoFila(false)"><span class="fila-tab-dot"></span>Fila geral</button>
+              <button class="fila-tab ativo" id="tab-minha" onclick="setModoFila(true)"><span class="fila-tab-dot"></span>Minha fila</button>
+              <button class="fila-tab" id="tab-risco" onclick="setPainelFila('risco')"><span class="fila-tab-dot"></span>Risco SLA</button>
             </div>
             <div class="fila-filtros" id="fila-filtros">
               <button class="fila-filtro ativo" id="filtro-todos" onclick="setFiltroSla('todos')">Todos</button>
@@ -543,6 +550,7 @@
     const pesquisaCachePorChamado = new Map();
     let anexosSoftExpertCache = [];
     let anexosAtendimentoCache = [];
+    let anexosSoftExpertErro = null;
     const anexosPorBubble = new Map();
 
     function showError(msg, opts = {}) {
@@ -867,13 +875,14 @@
       resumo.style.display = 'none';
       resumo.innerHTML = '';
       anexosSoftExpertCache = [];
+      anexosSoftExpertErro = null;
       try {
         const resultado = await api(`/radar/chamados/${chamadoId}/anexos-softexpert`);
         anexosSoftExpertCache = resultado.anexos || [];
-        if (!resultado.anexos?.length) return;
         renderizarResumoAnexos();
-      } catch (_) {
-        // Silencioso — anexo é complemento, não deve gerar erro visível no chat.
+      } catch (err) {
+        anexosSoftExpertErro = err.message || 'Falha ao consultar anexos do SoftExpert.';
+        renderizarResumoAnexos();
       }
     }
 
@@ -883,14 +892,10 @@
       const totalOrigem = anexosSoftExpertCache.length;
       const totalBaixados = anexosAtendimentoCache.length;
       const total = totalOrigem + totalBaixados;
-      if (!total) {
-        resumo.style.display = 'none';
-        resumo.innerHTML = '';
-        return;
-      }
       resumo.style.display = 'block';
-      const abertura = anexosSoftExpertCache.filter(a => a.origem === 'chamado').length;
-      resumo.innerHTML = `<button class="anexos-abrir-btn" type="button" onclick="abrirGradeAnexosChamado()">📎 Anexos abertura ${abertura || totalOrigem || total}${totalBaixados ? ` · IA ${totalBaixados}` : ''}</button>`;
+      const abertura = anexosSoftExpertCache.filter(a => a.origem === 'chamado' || a.origem === 'anexo').length;
+      const label = anexosSoftExpertErro ? 'Anexos indisponíveis' : `Anexos abertura ${abertura}`;
+      resumo.innerHTML = `<button class="anexos-abrir-btn" type="button" onclick="abrirGradeAnexosChamado()">📎 ${label}${totalOrigem && !abertura ? ` · outros ${totalOrigem}` : ''}${totalBaixados ? ` · IA ${totalBaixados}` : ''}</button>`;
     }
 
     function origemAnexoLabel(origem) {
@@ -949,15 +954,19 @@
     }
 
     function abrirGradeAnexosChamado() {
-      const abertura = anexosSoftExpertCache.filter(a => a.origem === 'chamado');
-      const outros = anexosSoftExpertCache.filter(a => a.origem !== 'chamado');
+      const abertura = anexosSoftExpertCache.filter(a => a.origem === 'chamado' || a.origem === 'anexo');
+      const outros = anexosSoftExpertCache.filter(a => a.origem !== 'chamado' && a.origem !== 'anexo');
       const origem = montarLinhasAnexos(abertura.length ? abertura : anexosSoftExpertCache, { fonte: 'softexpert' });
       const posicionamentos = montarLinhasAnexos(outros, { fonte: 'softexpert' });
       const baixados = montarLinhasAnexos(anexosAtendimentoCache, { fonte: 'local' });
+      const avisoErro = anexosSoftExpertErro
+        ? `<div class="pesquisa-empty">Não foi possível consultar os anexos do SoftExpert: ${escapeHtml(anexosSoftExpertErro)}</div>`
+        : '';
       abrirModalAnexos({
         titulo: 'Anexos do chamado',
         subtitulo: 'Abertura do SoftExpert, posicionamentos e arquivos baixados para análise da IA',
         html: `
+          ${avisoErro}
           <div class="pesquisa-card">
             <div class="pesquisa-card-title">Abertura do chamado</div>
             ${origem}
@@ -1039,7 +1048,8 @@
 
     function preencherCabecalho(c) {
       document.getElementById('chat-header').classList.toggle('recolhido', localStorage.getItem(CHAT_HEADER_RECOLHIDO_KEY) === '1');
-      document.getElementById('chat-header-numero').textContent = `#${c.numero}`;
+      const cabecalhoIdentificacao = [`#${c.numero}`, c.clienteNome, c.solicitanteNome].filter(Boolean).join(' · ');
+      document.getElementById('chat-header-numero').textContent = cabecalhoIdentificacao;
       document.getElementById('chat-header-titulo').textContent = c.titulo || c.assunto || c.breveDescricao || '(sem título)';
       const situacaoLabel = labelSituacaoRetorno(c.situacaoRetorno);
       document.getElementById('chat-header-status').innerHTML = situacaoLabel
@@ -1059,7 +1069,6 @@
       linha.push(`<span class="chat-header-pill">Aberto em <strong>${formatarData(c.dataAbertura)}</strong></span>`);
       if (c.statusEncerramento) linha.push(`<span class="chat-header-pill">Status: <strong>${escapeHtml(c.statusEncerramento)}</strong></span>`);
       if (c.ultimoPosicionamentoEm) linha.push(`<span class="chat-header-pill">Últ. posicionamento: <strong>${formatarData(c.ultimoPosicionamentoEm)}</strong></span>`);
-      if (c.clienteNome) linha.push(`<span class="chat-header-tag">🏢 ${escapeHtml(c.clienteNome)}</span>`);
       if (c.produto) linha.push(`<span class="chat-header-tag">💻 ${escapeHtml(c.produto)}</span>`);
       if (c.tecnicoResponsavelNome) linha.push(`<span class="chat-header-tag">🧑‍💻 Consultor: ${escapeHtml(c.tecnicoResponsavelNome)}</span>`);
       document.getElementById('chat-header-linha').innerHTML = linha.join('');
@@ -1104,13 +1113,12 @@
         ['Total de horas', c.totalHoras || '—'],
         ['Avaliação', c.avaliacao || '—'],
       ];
-      const html = `
-        <table class="anexos-grid">
-          <thead><tr><th>Informação</th><th>Valor</th></tr></thead>
-          <tbody>${campos.map(([k, v]) => `
-            <tr><td><div class="anexo-nome">${escapeHtml(k)}</div></td><td>${escapeHtml(String(v))}</td></tr>
-          `).join('')}</tbody>
-        </table>`;
+      const html = `<div class="info-grid">${campos.map(([k, v]) => `
+        <div class="info-item">
+          <span class="info-label">${escapeHtml(k)}</span>
+          <div class="info-value">${escapeHtml(String(v))}</div>
+        </div>
+      `).join('')}</div>`;
       abrirModalAnexos({
         titulo: 'Informações do chamado',
         subtitulo: 'Dados completos para análise operacional',
@@ -1128,7 +1136,7 @@
       if (!dataMsg && !autorMsg) return [];
 
       return anexosSoftExpertCache
-        .filter(a => a.origem !== 'chamado')
+        .filter(a => a.origem !== 'chamado' && a.origem !== 'anexo')
         .filter(a => {
           const dataAnexo = a.referenciaData ? String(a.referenciaData).slice(0, 10) : null;
           const autorAnexo = a.referenciaAutor ? String(a.referenciaAutor).trim().toLowerCase() : null;
