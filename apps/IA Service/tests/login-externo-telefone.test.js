@@ -14,6 +14,13 @@ const os = require('os');
 const path = require('path');
 
 process.env.SVC_WHATSAPP_OTP_SECRET = process.env.SVC_WHATSAPP_OTP_SECRET || 'teste-secret-nao-usado-neste-teste';
+// Este teste cobre o fluxo LEGADO (consultorRepo.criarConsultor direto no
+// banco do IA Service) — desde a introdução do IAHub Platform
+// (platform-store.listarIaServicePorTelefone), login-externo-service.js
+// tenta a Platform primeiro e só cai no legado com esta flag explícita.
+// Sem ela, o teste consultaria o banco REAL da Platform (iahub-platform.db,
+// fora do banco temporário deste teste) e falharia de forma confusa.
+process.env.SVC_ALLOW_LEGACY_CONSULTORES = '1';
 
 const dbTmpPath = path.join(os.tmpdir(), `ia-service-login-tel-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
 

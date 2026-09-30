@@ -116,6 +116,8 @@
 
     .adm-tab-content { display:none; }
     .adm-tab-content.active { display:block; }
+    .platform-frame-wrap { height:calc(100vh - 166px);min-height:680px;background:var(--bg-base); }
+    .platform-frame { width:100%;height:100%;border:0;display:block;background:transparent; }
 
     .emp-modal-tabs { display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:18px; }
     .emp-modal-tab { background:none;border:none;color:var(--text-md);cursor:pointer;font-size:13px;font-weight:600;padding:10px 14px;border-bottom:2px solid transparent; }
@@ -388,7 +390,7 @@
           <button class="tab-btn"        id="adm-btn-seguranca" onclick="mudarAbaAdmin('seguranca', this)">🔒 Segurança</button>
           <button class="tab-btn"        id="adm-btn-auditoria" onclick="mudarAbaAdmin('auditoria', this)">📋 Auditoria</button>
           <button class="tab-btn"        id="adm-btn-sistemas"  onclick="mudarAbaAdmin('sistemas',  this)">▦ Sistemas</button>
-          <a class="tab-btn" href="/app/ia-administracao/platform-config.html" style="text-decoration:none">IAHub Platform</a>
+          <button class="tab-btn"        id="adm-btn-platform" onclick="mudarAbaAdmin('platform', this)">⚙ IAHub Platform</button>
           <button class="tab-btn"        id="adm-btn-reset"     onclick="mudarAbaAdmin('reset',     this)">🗑 Reset de Dados</button>
         </div>
 
@@ -1092,6 +1094,18 @@
           </div>
         </div>
 
+        <!-- ── Aba: IAHub Platform ───────────────────────────────────────────── -->
+        <div id="adm-tab-platform" class="adm-tab-content">
+          <div class="platform-frame-wrap">
+            <iframe
+              id="adm-platform-frame"
+              class="platform-frame"
+              title="IAHub Platform"
+              data-src="/app/ia-administracao/platform-config.html?embedded=1">
+            </iframe>
+          </div>
+        </div>
+
         <!-- ── Aba: Reset de Dados ───────────────────────────────────────────── -->
         <div id="adm-tab-reset" class="adm-tab-content">
           <div class="reset-layout">
@@ -1412,6 +1426,7 @@ function montarMenuAdmin() {
     ['empresas', 'Empresas', '🏢'],
     ['usuarios', 'Usuarios', '👤'],
     ['sistemas', 'Sistemas', '▦'],
+    ['platform', 'IAHub Platform', '⚙'],
     ['seguranca', 'Seguranca', '🔒'],
     ['auditoria', 'Auditoria', '📋'],
     ['reset', 'Reset de Dados', '🗑'],
@@ -1463,9 +1478,15 @@ function mudarAbaAdmin(aba, btn) {
     else if (aba === 'seguranca') segCarregarConfig();
     else if (aba === 'auditoria') audCarregar();
     else if (aba === 'sistemas')  admSisCarregar();
+    else if (aba === 'platform')  admPlatformCarregar();
     else if (aba === 'sistema')   sisCarregarConfig();
     else if (aba === 'reset')     rstInicializar();
   }
+}
+
+function admPlatformCarregar() {
+  const frame = document.getElementById('adm-platform-frame');
+  if (frame && !frame.src) frame.src = frame.dataset.src;
 }
 
 function admSisRestaurarHubConfigNaAba() {

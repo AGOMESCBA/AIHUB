@@ -1,6 +1,8 @@
 const path = require('path');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
+const { ensurePlatformSchema } = require('./platform-schema');
+const { importarNumerosJ2A } = require('./platform-import-ia-command');
 
 const DB_PATH = path.join(__dirname, '..', 'data', 'iahub-platform.db');
 const PREFIX = 'iahub-aes-gcm:';
@@ -14,6 +16,7 @@ function getDB() {
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
     db.pragma('busy_timeout = 5000');
+    ensurePlatformSchema(db);
   }
   return db;
 }
@@ -305,5 +308,13 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
       iniciadoEm: r.iniciado_em,
       finalizadoEm: r.finalizado_em,
     })));
+  });
+
+  app.post('/api/iahub/platform/import/ia-command-j2a', requireAuth, requireAdmin, (req, res) => {
+    try {
+      res.json(importarNumerosJ2A());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: err.message || 'Falha ao importar numeros da J2A.' });
+    }
   });
 };

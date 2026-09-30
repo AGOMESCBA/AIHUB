@@ -1,6 +1,7 @@
 const path = require('path');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
+const { ensurePlatformSchema } = require('./platform-schema');
 
 const DB_PATH = path.join(__dirname, '..', 'data', 'iahub-platform.db');
 const PREFIX = 'iahub-aes-gcm:';
@@ -13,6 +14,7 @@ function getDB() {
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
     db.pragma('busy_timeout = 5000');
+    ensurePlatformSchema(db);
   }
   return db;
 }
@@ -83,6 +85,13 @@ function listarIaServicePorTelefone(telefoneNormalizado) {
   const telefone = String(telefoneNormalizado || '').replace(/\D/g, '');
   if (!telefone) return [];
 
+  // Aceita tanto o vínculo explícito 'ia-service/chat-web' (criado na tela
+  // Platform) quanto o role 'softexpert/chamados' já trazido pela
+  // importação automática do IA Command — o IA Service é sobre chamados
+  // SoftExpert, então um consultor com acesso ao SoftExpert já tem base
+  // suficiente para logar, sem depender de configuração manual extra por
+  // empresa. Quando a mesma identidade tem os dois roles, prioriza
+  // 'ia-service' (mais específico, pode ter sido ajustado manualmente).
   const rows = safeAll(`
     SELECT
       i.id,
@@ -94,7 +103,8 @@ function listarIaServicePorTelefone(telefoneNormalizado) {
       i.metadata_json,
       r.codigo_identidade,
       r.papel,
-      r.metadata_json AS role_metadata_json
+      r.metadata_json AS role_metadata_json,
+      r.sistema
     FROM platform_whatsapp_identities i
     JOIN platform_identity_roles r
       ON r.identity_id = i.id
@@ -102,12 +112,19 @@ function listarIaServicePorTelefone(telefoneNormalizado) {
     WHERE i.numero_normalizado = ?
       AND i.ativo = 1
       AND r.liberado = 1
-      AND lower(r.sistema) = 'ia-service'
-      AND lower(r.modulo) = 'chat-web'
-    ORDER BY i.empresa_id ASC
+      AND (
+        (lower(r.sistema) = 'ia-service' AND lower(r.modulo) = 'chat-web')
+        OR (lower(r.sistema) = 'softexpert' AND lower(r.modulo) = 'chamados')
+      )
+    ORDER BY i.empresa_id ASC, CASE WHEN lower(r.sistema) = 'ia-service' THEN 0 ELSE 1 END ASC
   `, [telefone]);
 
-  return rows.map(row => {
+  const porEmpresa = new Map();
+  for (const row of rows) {
+    if (!porEmpresa.has(row.empresa_id)) porEmpresa.set(row.empresa_id, row);
+  }
+
+  return [...porEmpresa.values()].map(row => {
     const metadata = parseJson(row.metadata_json, {});
     const roleMetadata = parseJson(row.role_metadata_json, {});
     const iaService = metadata.iaService || {};
