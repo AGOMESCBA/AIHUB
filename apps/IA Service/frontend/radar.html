@@ -115,16 +115,19 @@
 
     .fila-empty { padding:32px 16px; text-align:center; color:var(--wa-text-tertiary); font-size:13px; }
     .fila-aviso { margin:10px 16px; background:rgba(0,217,163,.1); color:var(--wa-accent); border:1px solid rgba(0,217,163,.3); border-radius:8px; padding:8px 10px; font-size:11.5px; line-height:1.4; }
-    .risco-panel { display:none; flex:1; min-height:0; overflow:hidden; flex-direction:column; border-top:1px solid var(--wa-border); }
-    .risco-panel.ativo { display:flex; }
-    .radar-shell.risco-aberto { grid-template-columns:560px 1fr; }
     .risco-filtros { flex:none; display:flex; gap:5px; padding:10px 12px 8px; border-bottom:1px solid var(--wa-border); background:rgba(0,0,0,.12); }
     .risco-filtro { border:1px solid var(--wa-border); background:rgba(255,255,255,.03); padding:5px 9px; border-radius:7px; font-size:11px; font-weight:800; color:var(--wa-text-secondary); cursor:pointer; }
     .risco-filtro.ativo { background:rgba(0,217,163,.13); color:var(--wa-accent); border-color:rgba(0,217,163,.32); }
-    .risco-layout { flex:1; min-height:0; display:grid; grid-template-columns:190px 1fr; }
+    .risco-layout { flex:1; min-height:0; display:grid; grid-template-columns:240px 1fr; }
     .risco-consultores { min-height:0; overflow-y:auto; border-right:1px solid var(--wa-border); }
-    .risco-consultor { width:100%; border:none; border-bottom:1px solid var(--wa-border); background:transparent; color:var(--wa-text); text-align:left; padding:10px 12px; cursor:pointer; }
-    .risco-consultor:hover, .risco-consultor.ativo { background:var(--wa-sidebar-active); }
+    /* .ativo (selecionado de fato) precisa ser claramente distinto de
+       :hover (só passando o mouse) — antes os dois usavam o mesmo
+       background, impossível saber qual consultor está realmente
+       selecionado sem tirar o mouse de cima. */
+    .risco-consultor { width:100%; border:none; border-left:3px solid transparent; border-bottom:1px solid var(--wa-border); background:transparent; color:var(--wa-text); text-align:left; padding:10px 12px; cursor:pointer; transition:background .12s ease, border-color .12s ease; }
+    .risco-consultor:hover { background:rgba(255,255,255,.04); }
+    .risco-consultor.ativo { background:rgba(0,217,163,.1); border-left-color:var(--wa-accent); }
+    .risco-consultor.ativo .risco-consultor-nome { color:var(--wa-accent); }
     .risco-consultor-nome { font-size:12px; font-weight:900; line-height:1.25; }
     .risco-consultor-meta { display:flex; gap:5px; flex-wrap:wrap; margin-top:5px; color:var(--wa-text-tertiary); font-size:10.5px; }
     .risco-empty { color:var(--wa-text-tertiary); padding:18px; font-size:12.5px; line-height:1.45; }
@@ -199,15 +202,10 @@
     .chat-header.recolhido .chat-header-detalhes { max-height:0; opacity:0; }
     .chat-header.recolhido .chat-header-toggle { transform:rotate(-90deg); }
     .chat-header-titulo { font-size:14px; font-weight:700; color:var(--wa-text); }
-    .chat-header-status { margin-top:6px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
     .chat-header-status-main { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:900; color:#fde68a; background:rgba(250,204,21,.12); border:1px solid rgba(250,204,21,.24); border-radius:8px; padding:4px 8px; }
-    /* Uma única linha compacta reunindo TUDO que antes eram 3 blocos
-       empilhados (meta + tags sistema + tags pessoas) — SLA/data/status são
-       pílulas de "meta" (fundo neutro), sistema/módulo/solicitante/consultor
-       são pílulas de "tag" (mesmo visual, cores levemente diferentes só por
-       semântica). flex-wrap cuida de quebrar linha só quando a tela é
-       estreita, não por design. */
-    .chat-header-linha { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+    /* Uma única linha compacta: status de espera + SLA + consultor — junto
+       do título, sempre visível mesmo com o cabeçalho recolhido. */
+    .chat-header-linha { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:6px; }
     .chat-header-pill { font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:99px; background:rgba(255,255,255,.06); color:var(--wa-text-secondary); border:1px solid var(--wa-border); white-space:nowrap; }
     .chat-header-pill strong { color:var(--wa-text); font-weight:700; }
     .chat-header-tag { font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:99px; background:rgba(255,255,255,.06); color:var(--wa-text-secondary); border:1px solid var(--wa-border); white-space:nowrap; }
@@ -321,10 +319,17 @@
     .anexo-status { display:inline-flex; padding:3px 7px; border-radius:99px; background:rgba(0,217,163,.1); color:var(--wa-accent); border:1px solid rgba(0,217,163,.24); font-size:10.5px; font-weight:800; white-space:nowrap; }
     .anexo-acao { border:1px solid var(--wa-border); border-radius:7px; background:rgba(255,255,255,.04); color:var(--wa-text-secondary); font-size:11px; font-weight:800; padding:6px 8px; cursor:pointer; white-space:nowrap; }
     .anexo-acao:hover { color:var(--wa-accent); border-color:rgba(0,217,163,.32); }
-    .info-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:8px; }
-    .info-item { border:1px solid var(--wa-border); border-radius:8px; background:#16232a; padding:10px 12px; min-width:0; }
-    .info-label { display:block; font-size:10px; font-weight:900; text-transform:uppercase; color:var(--wa-accent); margin-bottom:4px; }
-    .info-value { color:var(--wa-text); font-size:12.5px; line-height:1.35; overflow-wrap:anywhere; }
+    /* Aba Detalhes do Chamado — agrupada em seções temáticas (antes era uma
+       grade única de ~20 cards com o mesmo peso visual, sem hierarquia).
+       Cada seção é uma faixa com título + grid compacta só dos campos
+       daquele tema. */
+    .info-secao { margin-bottom:18px; }
+    .info-secao:last-child { margin-bottom:0; }
+    .info-secao-titulo { font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.05em; color:var(--wa-text-tertiary); margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid var(--wa-border); }
+    .info-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:6px; }
+    .info-item { border:1px solid var(--wa-border); border-radius:7px; background:#16232a; padding:8px 10px; min-width:0; }
+    .info-label { display:block; font-size:9.5px; font-weight:800; text-transform:uppercase; color:var(--wa-accent); margin-bottom:3px; }
+    .info-value { color:var(--wa-text); font-size:12px; line-height:1.3; overflow-wrap:anywhere; }
 
     /* Destaque no topo da aba Detalhes — há quanto tempo o chamado aguarda
        a parte atual (Atendente/Cliente/Fornecedor). Resume no cabeçalho de
@@ -399,7 +404,6 @@
             <div class="fila-tabs">
               <button class="fila-tab" id="tab-geral" onclick="setModoFila(false)"><span class="fila-tab-dot"></span>Fila geral</button>
               <button class="fila-tab ativo" id="tab-minha" onclick="setModoFila(true)"><span class="fila-tab-dot"></span>Minha fila</button>
-              <button class="fila-tab" id="tab-risco" onclick="setPainelFila('risco')"><span class="fila-tab-dot"></span>Risco SLA</button>
             </div>
             <div class="fila-filtros" id="fila-filtros">
               <button class="fila-filtro ativo" id="filtro-todos" onclick="setFiltroSla('todos')">Todos</button>
@@ -433,62 +437,47 @@
           </div>
           <div id="fila-aviso"></div>
           <div class="fila-lista" id="fila-lista"><div class="fila-empty">Carregando…</div></div>
-          <div class="risco-panel" id="risco-panel">
-            <div class="risco-filtros">
-              <button class="risco-filtro ativo" id="risco-filtro-todos" onclick="setFiltroRisco('todos')">Todos</button>
-              <button class="risco-filtro" id="risco-filtro-atraso" onclick="setFiltroRisco('em_atraso')">Em atraso</button>
-              <button class="risco-filtro" id="risco-filtro-proximo" onclick="setFiltroRisco('proximo')">Próx. vencimento</button>
-            </div>
-            <div class="risco-layout">
-              <div class="risco-consultores" id="risco-consultores"></div>
-              <div class="risco-grid-col">
-                <div class="risco-grid-busca">
-                  <input type="text" id="risco-busca" placeholder="Buscar por número, cliente, usuário..." oninput="filtrarGridRisco()">
-                </div>
-                <div class="risco-grid-wrap" id="risco-grid-wrap"><div class="risco-empty">Carregando chamados em risco…</div></div>
-                <div class="risco-totais" id="risco-totais"></div>
-              </div>
-            </div>
-          </div>
         </aside>
 
         <!-- Coluna direita: chat -->
         <section class="chat-col" id="chat-col">
-          <div class="chat-vazio" id="chat-vazio">
-            <div class="chat-vazio-icon">💬</div>
-            <div>Selecione um chamado na fila para iniciar ou continuar a conversa com a IA.</div>
-          </div>
-
-          <div class="chat-header" id="chat-header">
-            <div class="chat-header-top">
-              <div>
-                <div class="chat-header-titulo" id="chat-header-titulo">—</div>
-                <div class="chat-header-status" id="chat-header-status"></div>
-              </div>
-              <button class="chat-header-toggle" id="chat-header-toggle" type="button" title="Recolher detalhes" onclick="toggleChatHeader()">▾</button>
-            </div>
-            <div class="chat-header-detalhes" id="chat-header-detalhes">
-              <div class="chat-header-linha" id="chat-header-linha"></div>
-              <div class="chat-header-descricao" id="chat-header-descricao" style="display:none"></div>
-              <div class="chat-header-anexos-resumo" id="chat-header-anexos-resumo"></div>
-              <div class="chat-header-anexos" id="chat-header-anexos" style="display:none"></div>
-            </div>
-          </div>
-
           <div class="view-tabs" id="chat-view-tabs" role="tablist">
             <button class="view-tab active" id="tab-conversa" type="button" role="tab" aria-selected="true" onclick="trocarAbaChat('conversa')">
               <span class="badge-dot"></span> Conversa
             </button>
             <button class="view-tab" id="tab-informacoes" type="button" role="tab" aria-selected="false" onclick="trocarAbaChat('informacoes')">
-              <span class="badge-dot"></span> Detalhes
+              <span class="badge-dot"></span> Detalhes do Chamado
             </button>
             <button class="view-tab" id="tab-banco-conhecimento" type="button" role="tab" aria-selected="false" onclick="trocarAbaChat('banco-conhecimento')">
               <span class="badge-dot"></span> Banco de Conhecimento
+            </button>
+            <button class="view-tab" id="tab-risco" type="button" role="tab" aria-selected="false" onclick="trocarAbaChat('risco')">
+              <span class="badge-dot"></span> Risco SLA
             </button>
           </div>
 
           <div class="view-stack">
             <div class="view-panel active" id="painel-conversa">
+              <div class="chat-vazio" id="chat-vazio">
+                <div class="chat-vazio-icon">💬</div>
+                <div>Selecione um chamado na fila (ou na aba Risco SLA) para iniciar ou continuar a conversa com a IA.</div>
+              </div>
+
+              <div class="chat-header" id="chat-header">
+                <div class="chat-header-top">
+                  <div>
+                    <div class="chat-header-titulo" id="chat-header-titulo">—</div>
+                    <div class="chat-header-linha" id="chat-header-linha"></div>
+                  </div>
+                  <button class="chat-header-toggle" id="chat-header-toggle" type="button" title="Recolher detalhes" onclick="toggleChatHeader()">▾</button>
+                </div>
+                <div class="chat-header-detalhes" id="chat-header-detalhes">
+                  <div class="chat-header-descricao" id="chat-header-descricao" style="display:none"></div>
+                  <div class="chat-header-anexos-resumo" id="chat-header-anexos-resumo"></div>
+                  <div class="chat-header-anexos" id="chat-header-anexos" style="display:none"></div>
+                </div>
+              </div>
+
               <div class="chat-body" id="chat-body"></div>
 
               <div class="composer" id="composer">
@@ -514,6 +503,24 @@
               </div>
               <div class="pesquisa-body" id="pesquisa-body">
                 <div class="pesquisa-empty">Selecione um chamado para ver chamados semelhantes, posicionamentos e fontes técnicas sugeridas.</div>
+              </div>
+            </div>
+
+            <div class="view-panel" id="painel-risco">
+              <div class="risco-filtros">
+                <button class="risco-filtro ativo" id="risco-filtro-todos" onclick="setFiltroRisco('todos')">Todos</button>
+                <button class="risco-filtro" id="risco-filtro-atraso" onclick="setFiltroRisco('em_atraso')">Em atraso</button>
+                <button class="risco-filtro" id="risco-filtro-proximo" onclick="setFiltroRisco('proximo')">Próx. vencimento</button>
+              </div>
+              <div class="risco-layout">
+                <div class="risco-consultores" id="risco-consultores"></div>
+                <div class="risco-grid-col">
+                  <div class="risco-grid-busca">
+                    <input type="text" id="risco-busca" placeholder="Buscar por número, cliente, usuário..." oninput="filtrarGridRisco()">
+                  </div>
+                  <div class="risco-grid-wrap" id="risco-grid-wrap"><div class="risco-empty">Carregando chamados em risco…</div></div>
+                  <div class="risco-totais" id="risco-totais"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -579,7 +586,6 @@
   <script>
     let modoMinhaFila = true; // padrão: analista abre já na própria fila, não na fila geral de todos
     let filtroSlaAtual = 'todos';
-    let painelFilaAtual = 'fila';
     let filtroRiscoAtual = 'todos';
     let riscoConsultorSelecionado = 'todos';
     let riscoCache = { consultores: [], chamados: [] };
@@ -697,30 +703,10 @@
     }
 
     // ── Fila (coluna esquerda) ──────────────────────────────────────────────
-    function setPainelFila(painel) {
-      painelFilaAtual = painel === 'risco' ? 'risco' : 'fila';
-      const risco = painelFilaAtual === 'risco';
-      document.getElementById('tab-risco').classList.toggle('ativo', risco);
-      document.getElementById('tab-geral').classList.toggle('ativo', !risco && !modoMinhaFila);
-      document.getElementById('tab-minha').classList.toggle('ativo', !risco && modoMinhaFila);
-      document.getElementById('fila-filtros').style.display = risco ? 'none' : 'flex';
-      document.getElementById('fila-lista').style.display = risco ? 'none' : 'block';
-      document.getElementById('risco-panel').classList.toggle('ativo', risco);
-      document.getElementById('radar-shell').classList.toggle('risco-aberto', risco);
-      if (risco) carregarRiscoSla();
-      else carregarFila();
-    }
-
     function setModoFila(minhaFila) {
       modoMinhaFila = minhaFila;
-      painelFilaAtual = 'fila';
-      document.getElementById('tab-risco').classList.remove('ativo');
       document.getElementById('tab-geral').classList.toggle('ativo', !minhaFila);
       document.getElementById('tab-minha').classList.toggle('ativo', minhaFila);
-      document.getElementById('fila-filtros').style.display = 'flex';
-      document.getElementById('fila-lista').style.display = 'block';
-      document.getElementById('risco-panel').classList.remove('ativo');
-      document.getElementById('radar-shell').classList.remove('risco-aberto');
       carregarFila();
     }
     function setFiltroSla(filtro) {
@@ -743,10 +729,6 @@
     async function carregarFila({ forceSync = false } = {}) {
       const empresaId = empresaIdAtual();
       if (!empresaId) return;
-      if (painelFilaAtual === 'risco') {
-        await carregarRiscoSla({ forceSync });
-        return;
-      }
       try {
         const params = { apenas_minha: modoMinhaFila ? 'true' : 'false', filtro_sla: filtroSlaAtual };
         if (!modoExterno) params.empresa_id = empresaId;
@@ -998,7 +980,11 @@
       document.getElementById('composer').classList.add('ativo');
       document.getElementById('chat-body').innerHTML = '<div style="text-align:center;color:var(--wa-text-tertiary);font-size:13px;padding:20px;">Carregando…</div>';
 
-      const chamado = filaCache.find(c => c.id === chamadoId);
+      // Risco SLA (visão de todos os consultores) usa riscoCache, não
+      // filaCache (que só tem os chamados da fila do usuário logado) — um
+      // chamado de outro analista clicado ali nunca estaria em filaCache,
+      // deixando o cabeçalho vazio mesmo com a conversa carregando certo.
+      const chamado = filaCache.find(c => c.id === chamadoId) || riscoCache.chamados.find(c => c.id === chamadoId);
       chamadoAtual = chamado || null;
       if (chamado) preencherCabecalho(chamado);
       await carregarAnexosSoftExpert(chamadoId);
@@ -1209,7 +1195,7 @@
     // de apps/IA Command/modules/protheus_whatsapp/public/protheus-chat.html
     // (trocarAba). Cada aba já carrega seu conteúdo sob demanda, só na
     // primeira vez que é aberta (abrirInformacoesChamado/carregarPesquisaTecnica).
-    const ABAS_CHAT = ['conversa', 'informacoes', 'banco-conhecimento'];
+    const ABAS_CHAT = ['conversa', 'informacoes', 'banco-conhecimento', 'risco'];
     function trocarAbaChat(aba) {
       if (!ABAS_CHAT.includes(aba)) return;
       ABAS_CHAT.forEach(id => {
@@ -1219,6 +1205,13 @@
       });
       if (aba === 'informacoes') abrirInformacoesChamado();
       if (aba === 'banco-conhecimento' && chamadoSelecionadoId) carregarPesquisaTecnica(chamadoSelecionadoId);
+      // Risco SLA é visão geral (todos os consultores/chamados em risco),
+      // não depende de chamado selecionado — mesma aba, agora na barra do
+      // chat em vez de uma sub-aba da coluna de fila (pedido do usuário:
+      // "um radar completo de tudo e de todos"). Clicar num chamado dentro
+      // dela chama selecionarChamado() normalmente, que troca de volta para
+      // a aba Conversa.
+      if (aba === 'risco') carregarRiscoSla();
     }
 
     function preencherCabecalho(c) {
@@ -1226,16 +1219,15 @@
       const titulo = c.titulo || c.assunto || c.breveDescricao || '(sem título)';
       const cabecalhoUnificado = [`#${c.numero}`, c.clienteNome, c.solicitanteNome, c.produto, titulo].filter(Boolean).join(' | ');
       document.getElementById('chat-header-titulo').textContent = cabecalhoUnificado;
+      // Uma única linha compacta: status de espera + SLA + consultor —
+      // antes eram 2 linhas separadas (chat-header-status sozinho, depois
+      // chat-header-linha com SLA/consultor), economiza espaço vertical.
+      // Continua FORA de .chat-header-detalhes (bloco recolhível): mesmo
+      // com o cabeçalho recolhido, essa linha precisa continuar visível —
+      // é a informação mínima para identificar o chamado sem expandir.
       const situacaoLabel = labelSituacaoRetorno(c.situacaoRetorno);
-      document.getElementById('chat-header-status').innerHTML = situacaoLabel
-        ? `<span class="chat-header-status-main">⏳ ${escapeHtml(situacaoLabel)}</span>`
-        : '<span class="chat-header-status-main">⏳ Aguardando retorno</span>';
-
-      // Linha reduzida ao essencial para leitura rápida na lista — o resto
-      // (data de abertura, status de encerramento, último posicionamento,
-      // SLA detalhado etc.) fica na aba Detalhes, que já reúne esses campos
-      // na grade + no destaque de "há quanto tempo aguarda" no topo.
       const linha = [];
+      linha.push(`<span class="chat-header-status-main">⏳ ${escapeHtml(situacaoLabel || 'Aguardando retorno')}</span>`);
       if (c.slaPrazo) linha.push(badgeSla(c.slaPrazo));
       if (c.tecnicoResponsavelNome) linha.push(`<span class="chat-header-tag">🧑‍💻 Consultor: ${escapeHtml(c.tecnicoResponsavelNome)}</span>`);
       document.getElementById('chat-header-linha').innerHTML = linha.join('');
@@ -1253,39 +1245,70 @@
       }
     }
 
+    // Agrupado por tema em vez de uma grade única de ~20 cards idênticos
+    // (ilegível — tudo com o mesmo peso visual, sem hierarquia). Cada seção
+    // tem um título e só os campos relevantes àquele tema.
     function abrirInformacoesChamado() {
       const c = chamadoAtual || filaCache.find(item => item.id === chamadoSelecionadoId);
       if (!c) return;
-      const campos = [
-        ['Número', `#${c.numero || '—'}`],
-        ['Título', c.titulo || c.assunto || c.breveDescricao || '—'],
-        ['Cliente', c.clienteNome || '—'],
-        ['Usuário', [c.solicitanteNome, c.solicitanteEmail].filter(Boolean).join(' — ') || '—'],
-        ['Consultor', c.tecnicoResponsavelNome || 'Sem consultor'],
-        ['SLA', c.slaPrazo || c.slaStatus || '—'],
-        ['SLA horas', c.slaHoras || '—'],
-        ['SLA inicial', c.slaInicial || '—'],
-        ['SLA anterior', c.slaAnterior || '—'],
-        ['Status', c.statusEncerramento || '—'],
-        ['Aberto em', formatarData(c.dataAbertura)],
-        ['Último posicionamento', formatarData(c.ultimoPosicionamentoEm)],
-        ['Produto', c.produto || '—'],
-        ['Família', c.familia || '—'],
-        ['Módulo', c.modulo || '—'],
-        ['Serviço', c.servico || '—'],
-        ['Tipo', c.tipoChamadoFinal || c.tipoChamado || '—'],
-        ['Natureza', c.natureza || '—'],
-        ['Nível', c.nivel || '—'],
-        ['Total de horas', c.totalHoras || '—'],
-        ['Avaliação', c.avaliacao || '—'],
+
+      const secoes = [
+        {
+          titulo: 'Identificação',
+          campos: [
+            ['Número', `#${c.numero || '—'}`],
+            ['Título', c.titulo || c.assunto || c.breveDescricao || '—'],
+            ['Cliente', c.clienteNome || '—'],
+            ['Usuário', [c.solicitanteNome, c.solicitanteEmail].filter(Boolean).join(' — ') || '—'],
+            ['Consultor', c.tecnicoResponsavelNome || 'Sem consultor'],
+          ],
+        },
+        {
+          titulo: 'SLA & prazos',
+          campos: [
+            ['SLA', c.slaPrazo || c.slaStatus || '—'],
+            ['SLA horas', c.slaHoras || '—'],
+            ['SLA inicial', c.slaInicial || '—'],
+            ['SLA anterior', c.slaAnterior || '—'],
+            ['Status', c.statusEncerramento || '—'],
+            ['Aberto em', formatarData(c.dataAbertura)],
+            ['Último posicionamento', formatarData(c.ultimoPosicionamentoEm)],
+          ],
+        },
+        {
+          titulo: 'Classificação',
+          campos: [
+            ['Produto', c.produto || '—'],
+            ['Família', c.familia || '—'],
+            ['Módulo', c.modulo || '—'],
+            ['Serviço', c.servico || '—'],
+            ['Tipo', c.tipoChamadoFinal || c.tipoChamado || '—'],
+            ['Natureza', c.natureza || '—'],
+            ['Nível', c.nivel || '—'],
+          ],
+        },
+        {
+          titulo: 'Encerramento',
+          campos: [
+            ['Total de horas', c.totalHoras || '—'],
+            ['Avaliação', c.avaliacao || '—'],
+          ],
+        },
       ];
-      const grid = `<div class="info-grid">${campos.map(([k, v]) => `
-        <div class="info-item">
-          <span class="info-label">${escapeHtml(k)}</span>
-          <div class="info-value">${escapeHtml(String(v))}</div>
+
+      const html = secoes.map(secao => `
+        <div class="info-secao">
+          <div class="info-secao-titulo">${escapeHtml(secao.titulo)}</div>
+          <div class="info-grid">${secao.campos.map(([k, v]) => `
+            <div class="info-item">
+              <span class="info-label">${escapeHtml(k)}</span>
+              <div class="info-value">${escapeHtml(String(v))}</div>
+            </div>
+          `).join('')}</div>
         </div>
-      `).join('')}</div>`;
-      document.getElementById('informacoes-body').innerHTML = renderizarDestaqueAguardando(c) + grid;
+      `).join('');
+
+      document.getElementById('informacoes-body').innerHTML = renderizarDestaqueAguardando(c) + html;
     }
 
     // Há quanto tempo o chamado aguarda a parte atual (categoria real vinda
