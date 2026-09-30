@@ -3,143 +3,685 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Entrar - IA Service</title>
+  <title>IA Service - Acesso Web</title>
   <style>
     :root {
-      --wa-bg:#0b141a; --wa-header:#202c33; --wa-panel:#111b21;
-      --wa-text:#e9edef; --wa-text-secondary:#aebac1; --wa-text-tertiary:#8696a0;
-      --wa-accent:#00d9a3; --wa-border:rgba(255,255,255,.08);
+      --bg: #071014;
+      --bg-2: #0d1b20;
+      --panel: #102027;
+      --panel-2: #162b33;
+      --panel-3: #203740;
+      --text: #edf7f5;
+      --muted: #9fb4bb;
+      --soft: #c9d9dd;
+      --border: rgba(179, 215, 221, .18);
+      --accent: #00a884;
+      --accent-2: #25d366;
+      --accent-dark: #07382f;
+      --danger: #ff8a8a;
+      --warning: #ffd166;
+      --shadow: 0 28px 90px rgba(0, 0, 0, .42);
+      --radius: 8px;
+      --focus-ring: 0 0 0 3px rgba(37, 211, 102, .18);
     }
-    * { box-sizing:border-box; }
-    body { margin:0; min-height:100vh; background:var(--wa-bg); color:var(--wa-text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
-    .shell { display:grid; grid-template-columns:1fr 1fr; min-height:100vh; }
-    @media (max-width:900px) { .shell { grid-template-columns:1fr; } }
-
-    .painel-info { padding:56px; display:flex; flex-direction:column; justify-content:center; background:linear-gradient(180deg, var(--wa-panel), var(--wa-bg)); }
-    .brand { display:flex; flex-direction:column; align-items:center; text-align:center; gap:14px; margin-bottom:28px; }
-    .brand-icon {
-      width:100%; max-width:220px; height:140px;
-      display:flex; align-items:center; justify-content:center;
-      font-weight:900; font-size:30px; color:var(--wa-accent); flex-shrink:0;
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      height: 100vh;
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+      color: var(--text);
+      background:
+        linear-gradient(135deg, rgba(0, 168, 132, .18), transparent 28%),
+        radial-gradient(circle at 82% 22%, rgba(37, 211, 102, .16), transparent 30%),
+        linear-gradient(180deg, var(--bg), var(--bg-2));
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      overflow: hidden;
     }
-    .brand-icon img { max-width:100%; max-height:100%; object-fit:contain; }
-    .brand-nome { font-size:18px; font-weight:800; }
-    .brand-sub { font-size:11.5px; color:var(--wa-text-tertiary); text-transform:uppercase; letter-spacing:.05em; }
-    .titulo { font-size:32px; font-weight:800; line-height:1.2; margin-bottom:16px; }
-    .descricao { font-size:14px; color:var(--wa-text-secondary); line-height:1.6; max-width:440px; margin-bottom:32px; }
-    .passo { display:flex; gap:14px; margin-bottom:20px; max-width:440px; }
-    .passo-num { width:28px; height:28px; border-radius:50%; background:var(--wa-panel); border:1px solid var(--wa-border); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; color:var(--wa-accent); flex-shrink:0; }
-    .passo-titulo { font-weight:700; font-size:13.5px; }
-    .passo-desc { font-size:12.5px; color:var(--wa-text-tertiary); margin-top:2px; }
+    button, input { font: inherit; }
+    .shell {
+      width: min(1080px, 100%);
+      height: min(760px, calc(100vh - 32px));
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, .82fr) minmax(430px, 1fr);
+      background: rgba(16, 32, 39, .92);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      backdrop-filter: blur(18px);
+    }
+    .hero {
+      position: relative;
+      padding: 26px 30px;
+      border-right: 1px solid var(--border);
+      background:
+        linear-gradient(160deg, rgba(0, 168, 132, .22), transparent 46%),
+        linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .01));
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .logo {
+      width: 64px;
+      height: 64px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      background: rgba(255, 255, 255, .04);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .logo-fallback {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #03251d;
+      font-weight: 900;
+      font-size: 22px;
+    }
+    .logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    h1, h2, p { margin: 0; }
+    h1 {
+      font-size: 23px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+    .brand-sub {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .hero-copy h2 {
+      max-width: 420px;
+      font-size: clamp(25px, 3vw, 36px);
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+    .hero-copy p {
+      max-width: 440px;
+      margin-top: 10px;
+      color: var(--soft);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .access-flow {
+      display: grid;
+      gap: 8px;
+      max-width: 430px;
+    }
+    .flow-item {
+      display: grid;
+      grid-template-columns: 30px 1fr;
+      gap: 10px;
+      align-items: start;
+      padding: 8px 10px;
+      border: 1px solid rgba(179, 215, 221, .14);
+      border-radius: var(--radius);
+      background: rgba(7, 16, 20, .24);
+    }
+    .flow-num {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: rgba(0, 168, 132, .16);
+      color: var(--accent-2);
+      font-weight: 900;
+    }
+    .flow-title {
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .flow-text {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .visual {
+      align-self: center;
+      width: min(300px, 100%);
+      border: 1px solid rgba(179, 215, 221, .16);
+      border-radius: var(--radius);
+      background: rgba(7, 16, 20, .34);
+      padding: 12px;
+    }
+    .visual-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .phone-mock {
+      display: grid;
+      gap: 8px;
+    }
+    .bubble {
+      width: fit-content;
+      max-width: 86%;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #0b2e27;
+      color: #dff7ec;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .bubble.out {
+      justify-self: end;
+      background: #005c4b;
+    }
+    .otp-preview {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .otp-preview span {
+      width: 30px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      background: rgba(255, 255, 255, .1);
+      font-weight: 900;
+      color: #fff;
+    }
+    .card-wrap {
+      display: grid;
+      place-items: center;
+      padding: 34px 42px;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(37, 211, 102, .07), transparent 32%),
+        rgba(7, 16, 20, .08);
+    }
+    .card {
+      width: min(460px, 100%);
+    }
+    .stepper {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+    .step-pill {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--muted);
+      background: rgba(255, 255, 255, .03);
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .step-pill.active {
+      color: var(--text);
+      border-color: rgba(0, 168, 132, .62);
+      background: rgba(0, 168, 132, .14);
+    }
+    .step-dot {
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .08);
+      font-size: 12px;
+    }
+    .step-pill.active .step-dot {
+      background: var(--accent);
+      color: #03251d;
+    }
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: rgba(7, 16, 20, .52);
+      overflow: hidden;
+      box-shadow: 0 18px 52px rgba(0, 0, 0, .22);
+    }
+    .panel-head {
+      padding: 22px 22px 18px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .02));
+      border-bottom: 1px solid var(--border);
+    }
+    .eyebrow {
+      color: var(--accent-2);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .panel-head h2 {
+      margin-top: 8px;
+      font-size: 24px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+    .panel-head p {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .panel-body {
+      padding: 22px;
+    }
+    .step { display: none; }
+    .step.active { display: block; }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--soft);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .input-wrap {
+      position: relative;
+    }
+    .input-wrap:focus-within .prefix {
+      background: rgba(37, 211, 102, .22);
+      color: #fff;
+    }
+    .prefix {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: rgba(37, 211, 102, .15);
+      color: var(--accent-2);
+      pointer-events: none;
+      transition: background .16s ease, color .16s ease;
+    }
+    .prefix svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+    input {
+      width: 100%;
+      height: 54px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, .06);
+      color: var(--text);
+      font-size: 17px;
+      padding: 0 15px;
+      outline: none;
+      letter-spacing: 0;
+    }
+    .input-wrap input { padding-left: 54px; }
+    .input-wrap input:focus,
+    .code-row input:focus {
+      border-color: rgba(37, 211, 102, .58);
+      box-shadow: var(--focus-ring);
+    }
+    input::placeholder { color: rgba(201, 217, 221, .48); }
+    input:focus {
+      border-color: rgba(0, 168, 132, .9);
+      box-shadow: 0 0 0 4px rgba(0, 168, 132, .16);
+      background: rgba(255, 255, 255, .08);
+    }
+    .hint {
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding: 12px;
+      border: 1px solid rgba(179, 215, 221, .14);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, .04);
+    }
+    .summary-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .summary-value {
+      margin-top: 3px;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 900;
+      word-break: break-word;
+    }
+    .code-row {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+    }
+    .code-row input {
+      height: 58px;
+      padding: 0;
+      text-align: center;
+      font-size: 24px;
+      font-weight: 900;
+    }
+    .actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .actions.right { justify-content: flex-end; }
+    button {
+      min-height: 46px;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      padding: 0 17px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 900;
+      cursor: pointer;
+      color: #03251d;
+      background: var(--accent);
+      transition: transform .12s ease, background .16s ease, border-color .16s ease;
+    }
+    button:hover { background: var(--accent-2); transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+    button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+    button.ghost {
+      background: transparent;
+      border-color: var(--border);
+      color: var(--text);
+    }
+    button.ghost:hover {
+      background: rgba(255, 255, 255, .06);
+      border-color: rgba(179, 215, 221, .32);
+    }
+    button svg {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .status {
+      min-height: 22px;
+      margin-top: 16px;
+      padding: 0 2px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+    .status.error { color: var(--danger); }
+    .status.ok { color: var(--accent-2); }
+    .footnote {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      color: var(--muted);
+      background: rgba(255, 255, 255, .04);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .copyright {
+      margin-top: 14px;
+      color: rgba(201, 217, 221, .64);
+      font-size: 11px;
+      line-height: 1.45;
+      text-align: center;
+    }
+    .loader {
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      border: 2px solid rgba(3, 37, 29, .28);
+      border-top-color: #03251d;
+      animation: spin .8s linear infinite;
+      display: none;
+    }
+    button.loading .loader { display: block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-    .painel-form { display:flex; align-items:center; justify-content:center; padding:32px; background:var(--wa-bg); }
-    .card { width:100%; max-width:400px; }
-    .abas { display:flex; gap:8px; margin-bottom:20px; }
-    .aba { flex:1; text-align:center; padding:10px; border-radius:8px; font-size:12px; font-weight:700; background:var(--wa-panel); color:var(--wa-text-tertiary); border:1px solid var(--wa-border); }
-    .aba.ativa { color:var(--wa-accent); border-color:var(--wa-accent); }
+    /* Passo 3 — escolha de empresa (telefone vinculado a mais de uma),
+       sem equivalente no IA Command (lá o vínculo é sempre único). */
+    .btn-empresa {
+      width: 100%;
+      text-align: left;
+      min-height: 46px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, .04);
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      margin-bottom: 10px;
+      display: block;
+    }
+    .btn-empresa:hover { border-color: rgba(0, 168, 132, .62); background: rgba(0, 168, 132, .1); }
 
-    .rotulo-secao { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--wa-accent); margin-bottom:8px; }
-    .form-titulo { font-size:20px; font-weight:800; margin-bottom:6px; }
-    .form-sub { font-size:13px; color:var(--wa-text-secondary); margin-bottom:20px; }
-
-    label { display:block; font-size:11.5px; font-weight:700; color:var(--wa-text-tertiary); text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px; }
-    input { width:100%; padding:13px 14px; border-radius:10px; border:1px solid var(--wa-border); background:var(--wa-panel); color:var(--wa-text); font-size:15px; margin-bottom:16px; }
-    input:focus { outline:none; border-color:var(--wa-accent); }
-    input::placeholder { color:var(--wa-text-tertiary); }
-
-    button.btn-entrar { width:100%; padding:13px; border:none; border-radius:10px; background:var(--wa-accent); color:#04140f; font-weight:800; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; }
-    button.btn-entrar:hover { opacity:.92; }
-    button.btn-entrar:disabled { opacity:.5; cursor:not-allowed; }
-
-    .nota { margin-top:16px; padding:12px 14px; border-radius:8px; background:rgba(255,255,255,.04); border:1px solid var(--wa-border); font-size:12px; color:var(--wa-text-tertiary); line-height:1.5; }
-    .btn-empresa { width:100%; text-align:left; padding:13px 14px; border-radius:10px; border:1px solid var(--wa-border); background:var(--wa-panel); color:var(--wa-text); font-size:14px; font-weight:700; cursor:pointer; margin-bottom:10px; }
-    .btn-empresa:hover { border-color:var(--wa-accent); color:var(--wa-accent); }
-    .erro { display:none; margin-top:14px; padding:10px 12px; border-radius:8px; background:rgba(248,113,113,.12); border:1px solid rgba(248,113,113,.3); color:#fca5a5; font-size:12.5px; }
-    .destino { font-size:12.5px; color:var(--wa-text-secondary); margin-bottom:16px; }
-
-    .rodape { text-align:center; margin-top:24px; font-size:11px; color:var(--wa-text-tertiary); }
+    @media (max-width: 900px) {
+      body { min-height: 100vh; height: auto; overflow: auto; padding: 18px; }
+      .shell { grid-template-columns: 1fr; height: auto; min-height: 0; }
+      .hero {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        padding: 24px;
+      }
+      .hero-copy h2 { font-size: 28px; }
+      .visual { display: none; }
+      .card-wrap { padding: 24px; }
+    }
+    @media (max-height: 760px) and (min-width: 901px) {
+      .shell { height: calc(100vh - 24px); }
+      .hero { padding: 22px 28px; }
+      .hero-copy h2 { font-size: 30px; }
+      .visual { display: none; }
+    }
+    @media (max-width: 520px) {
+      body { padding: 0; place-items: stretch; }
+      .shell {
+        width: 100%;
+        min-height: 100vh;
+        border: none;
+        border-radius: 0;
+      }
+      .hero { padding: 22px 18px; }
+      .card-wrap { padding: 18px; place-items: start stretch; }
+      .stepper { grid-template-columns: 1fr; }
+      .panel-head, .panel-body { padding: 18px; }
+      .actions { align-items: stretch; flex-direction: column-reverse; }
+      .actions.right { flex-direction: column; }
+      button { width: 100%; }
+      .code-row { gap: 6px; }
+      .code-row input { height: 52px; font-size: 21px; }
+    }
   </style>
 </head>
 <body>
-  <div class="shell">
-    <div class="painel-info">
+  <main class="shell">
+    <section class="hero" aria-label="IA Service">
       <div class="brand">
-        <div class="brand-icon" id="brand-icon">IA</div>
+        <div class="logo" id="logo">
+          <div class="logo-fallback" id="logo-fallback">IA</div>
+        </div>
         <div>
-          <div class="brand-nome" id="brand-nome">IA Service</div>
-          <div class="brand-sub">Chat de chamados via WhatsApp</div>
+          <h1 id="brand-nome">IA Service</h1>
+          <p class="brand-sub">Chat de chamados via WhatsApp</p>
         </div>
       </div>
-      <div class="titulo">Acesso direto ao chat, sem senha.</div>
-      <div class="descricao">Entre pelo telefone cadastrado como consultor. O IA Service valida o número por WhatsApp e abre o radar de chamados já com sua fila pessoal.</div>
 
-      <div class="passo">
-        <div class="passo-num">1</div>
-        <div>
-          <div class="passo-titulo">Telefone cadastrado</div>
-          <div class="passo-desc">Use o mesmo número cadastrado no seu perfil de consultor.</div>
-        </div>
+      <div class="hero-copy">
+        <h2>Acesso direto ao chat, sem senha.</h2>
+        <p>Entre pelo telefone cadastrado como consultor. O IA Service valida o número por WhatsApp e abre o radar de chamados já com sua fila pessoal.</p>
       </div>
-      <div class="passo">
-        <div class="passo-num">2</div>
-        <div>
-          <div class="passo-titulo">Código no WhatsApp</div>
-          <div class="passo-desc">O código é temporário e confirma que o telefone pertence a você.</div>
-        </div>
-      </div>
-      <div class="passo">
-        <div class="passo-num">3</div>
-        <div>
-          <div class="passo-titulo">Radar liberado</div>
-          <div class="passo-desc">A sessão abre já na sua fila de chamados.</div>
-        </div>
-      </div>
-    </div>
 
-    <div class="painel-form">
+      <div class="access-flow" aria-label="Fluxo de acesso">
+        <div class="flow-item">
+          <div class="flow-num">1</div>
+          <div>
+            <div class="flow-title">Telefone cadastrado</div>
+            <div class="flow-text">Use o mesmo número cadastrado no seu perfil de consultor.</div>
+          </div>
+        </div>
+        <div class="flow-item">
+          <div class="flow-num">2</div>
+          <div>
+            <div class="flow-title">Código no WhatsApp</div>
+            <div class="flow-text">O código é temporário e confirma que o telefone pertence a você.</div>
+          </div>
+        </div>
+        <div class="flow-item">
+          <div class="flow-num">3</div>
+          <div>
+            <div class="flow-title">Radar liberado</div>
+            <div class="flow-text">A sessão abre já na sua fila de chamados.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="visual" aria-hidden="true">
+        <div class="visual-top">
+          <span>WhatsApp</span>
+          <span>código seguro</span>
+        </div>
+        <div class="phone-mock">
+          <div class="bubble">Seu código IA Service chegou.</div>
+          <div class="bubble out">
+            Confirmação de acesso
+            <div class="otp-preview">
+              <span>4</span><span>8</span><span>2</span><span>1</span><span>0</span><span>7</span>
+            </div>
+          </div>
+          <div class="bubble">Nunca compartilhe este código fora desta tela.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card-wrap">
       <div class="card">
-        <div class="rotulo-secao">Acesso externo</div>
-        <div id="passo-telefone">
-          <div class="form-titulo">Identifique seu WhatsApp</div>
-          <div class="form-sub">Informe o número com DDI e DDD para receber o código de entrada.</div>
-          <label for="f-telefone">Número do WhatsApp</label>
-          <input type="tel" id="f-telefone" placeholder="+55 11 91234-5678" autocomplete="tel">
-          <button class="btn-entrar" id="btn-enviar-codigo" onclick="enviarCodigo()">Enviar código →</button>
-          <div class="nota">Este acesso não cria uma nova senha. A identidade vem do telefone validado e as permissões continuam sendo as do seu cadastro de consultor.</div>
+        <div class="stepper" aria-hidden="true">
+          <div class="step-pill active" id="pill-phone"><span class="step-dot">1</span>Telefone</div>
+          <div class="step-pill" id="pill-code"><span class="step-dot">2</span>Código</div>
         </div>
 
-        <div id="passo-codigo" style="display:none">
-          <div class="form-titulo">Digite o código</div>
-          <div class="destino" id="destino-texto"></div>
-          <label for="f-codigo">Código recebido no WhatsApp</label>
-          <input type="text" id="f-codigo" placeholder="000000" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
-          <button class="btn-entrar" id="btn-confirmar-codigo" onclick="confirmarCodigo()">Confirmar e entrar →</button>
-          <div class="nota">Nunca compartilhe este código fora desta tela.</div>
-        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <div class="eyebrow">Acesso Web</div>
+            <h2 id="panel-title">Identifique seu WhatsApp</h2>
+            <p id="panel-subtitle">Informe o número com DDI e DDD para receber o código de entrada.</p>
+          </div>
 
-        <div id="passo-empresa" style="display:none">
-          <div class="form-titulo">Qual empresa você quer acessar?</div>
-          <div class="form-sub">Este telefone está vinculado a mais de uma empresa.</div>
-          <div id="lista-empresas"></div>
-        </div>
+          <div class="panel-body">
+            <div class="step active" id="step-phone">
+              <label for="phone">Número do WhatsApp</label>
+              <div class="input-wrap">
+                <span class="prefix" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M20.5 11.7a8.5 8.5 0 0 1-12.4 7.5L4 20l.9-4A8.5 8.5 0 1 1 20.5 11.7z"/><path d="M8.8 8.5c.2-.5.4-.6.7-.6h.5c.2 0 .4 0 .5.4l.8 1.9c.1.2.1.4 0 .6l-.4.6c-.1.2-.2.3 0 .5.4.8 1.2 1.6 2 2 .2.1.4.1.5-.1l.7-.8c.2-.2.4-.2.6-.1l1.9.9c.3.1.4.3.4.6 0 .6-.4 1.5-1 1.8-.5.3-1.2.4-2.3 0-2.1-.7-4.3-2.8-5.2-4.8-.5-1.1-.5-1.9-.2-2.9z"/></svg>
+                </span>
+                <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+55 11 91234-5678">
+              </div>
+              <p class="hint">Use o número cadastrado no seu perfil de consultor. Apenas números ativos conseguem receber o código.</p>
+              <div class="actions right">
+                <button id="send" type="button">
+                  <span class="loader" aria-hidden="true"></span>
+                  <span>Enviar código</span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+                </button>
+              </div>
+            </div>
 
-        <div class="erro" id="erro"></div>
-        <div class="rodape">IA Service. Todos os direitos reservados.</div>
+            <div class="step" id="step-code">
+              <div class="summary">
+                <div>
+                  <div class="summary-label">Enviado para</div>
+                  <div class="summary-value" id="phone-summary">-</div>
+                </div>
+              </div>
+
+              <label for="code-row-first">Código de verificação</label>
+              <div class="code-row" id="code-row" aria-label="Código de verificação">
+                <input id="code-row-first" maxlength="1" inputmode="numeric" aria-label="Dígito 1">
+                <input maxlength="1" inputmode="numeric" aria-label="Dígito 2">
+                <input maxlength="1" inputmode="numeric" aria-label="Dígito 3">
+                <input maxlength="1" inputmode="numeric" aria-label="Dígito 4">
+                <input maxlength="1" inputmode="numeric" aria-label="Dígito 5">
+                <input maxlength="1" inputmode="numeric" aria-label="Dígito 6">
+              </div>
+              <p class="hint">Digite ou cole o código recebido no WhatsApp. Ele expira em poucos minutos.</p>
+
+              <div class="actions">
+                <button class="ghost" id="back" type="button">Trocar número</button>
+                <button id="verify" type="button">
+                  <span class="loader" aria-hidden="true"></span>
+                  <span>Confirmar e entrar</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="step" id="step-empresa">
+              <p class="hint" style="margin-top:0">Este telefone está vinculado a mais de uma empresa. Escolha qual acessar.</p>
+              <div id="lista-empresas"></div>
+              <div class="actions right">
+                <button class="ghost" id="voltar-empresa" type="button">Trocar número</button>
+              </div>
+            </div>
+
+            <div class="status" id="status"></div>
+            <div class="footnote">Este acesso não cria uma nova senha. A identidade vem do telefone validado e as permissões continuam sendo as do seu cadastro de consultor.</div>
+          </div>
+        </div>
+        <p class="copyright" id="copyright">IA Service. Todos os direitos reservados.</p>
       </div>
-    </div>
-  </div>
+    </section>
+  </main>
 
   <script>
-    // 2026-09: login é por telefone (a empresa é descoberta depois do OTP,
-    // /entrar-servico sozinho nunca sabe qual empresa é). O apelido
-    // opcional na URL (/entrar-servico/:apelido, configurável por empresa
-    // em Configuração de IA) é só identidade visual — busca nome/logo pra
-    // mostrar aqui, mas o login continua 100% por telefone, nunca trava
-    // nem pré-seleciona a empresa de fato.
-    const LOGIN_APELIDO_KEY = 'svc_login_apelido';
+    const $ = id => document.getElementById(id);
+    const codeInputs = [...document.querySelectorAll('#code-row input')];
     let challengeId = null;
     let telefoneValidado = null;
 
+    // 2026-09: login é por telefone (a empresa é descoberta depois do OTP,
+    // /entrar-servico sozinho nunca sabe qual empresa é). O apelido opcional
+    // na URL (/entrar-servico/:apelido, configurável por empresa em
+    // Configuração de IA) é só identidade visual — busca nome/logo pra
+    // mostrar aqui, mas o login continua 100% por telefone, nunca trava nem
+    // pré-seleciona a empresa de fato.
+    const LOGIN_APELIDO_KEY = 'svc_login_apelido';
     (function carregarIdentidadePorApelido() {
       const partes = location.pathname.split('/').filter(Boolean);
       const apelido = partes.length > 1 ? partes[partes.length - 1] : null;
@@ -150,32 +692,90 @@
         .then(info => {
           if (!info) return;
           if (info.nome) {
-            document.getElementById('brand-nome').textContent = info.nome;
-            document.querySelector('.rodape').textContent = `IA Service — ${info.nome}. Todos os direitos reservados.`;
+            $('brand-nome').textContent = info.nome;
+            $('copyright').textContent = `IA Service — ${info.nome}. Todos os direitos reservados.`;
           }
           if (info.logoUrl) {
-            document.getElementById('brand-icon').innerHTML = `<img src="${info.logoUrl}" alt="${info.nome || 'Logomarca'}">`;
+            $('logo').innerHTML = `<img src="${info.logoUrl}" alt="${info.nome || 'Logomarca'}">`;
           }
         })
         .catch(() => {}); // silencioso — sem apelido válido, fica o padrão "IA Service"
     })();
 
-    function mostrarErro(msg) {
-      const el = document.getElementById('erro');
-      el.textContent = msg;
-      el.style.display = 'block';
+    function digits(v) { return String(v || '').replace(/\D/g, ''); }
+
+    function formatPhone(v) {
+      const d = digits(v);
+      if (d.length === 13 && d.startsWith('55')) {
+        return `+55 (${d.slice(2, 4)}) ${d.slice(4, 9)}-${d.slice(9)}`;
+      }
+      if (d.length === 12 && d.startsWith('55')) {
+        return `+55 (${d.slice(2, 4)}) ${d.slice(4, 8)}-${d.slice(8)}`;
+      }
+      return d ? `+${d}` : '';
     }
-    function esconderErro() {
-      document.getElementById('erro').style.display = 'none';
+
+    function digitCountBeforeCaret(value, caret) {
+      return digits(String(value || '').slice(0, Math.max(0, caret || 0))).length;
+    }
+
+    function caretAfterDigitIndex(value, digitIndex) {
+      if (digitIndex <= 0) return value.startsWith('+') ? 1 : 0;
+      let seen = 0;
+      for (let i = 0; i < value.length; i += 1) {
+        if (/\d/.test(value[i])) {
+          seen += 1;
+          if (seen >= digitIndex) return i + 1;
+        }
+      }
+      return value.length;
+    }
+
+    function setStatus(msg, type) {
+      const el = $('status');
+      el.textContent = msg || '';
+      el.className = 'status' + (type ? ' ' + type : '');
+    }
+
+    function setLoading(btn, loading) {
+      btn.disabled = !!loading;
+      btn.classList.toggle('loading', !!loading);
+    }
+
+    function show(step) {
+      $('step-phone').classList.toggle('active', step === 'phone');
+      $('step-code').classList.toggle('active', step === 'code');
+      $('step-empresa').classList.toggle('active', step === 'empresa');
+      $('pill-phone').classList.toggle('active', step === 'phone');
+      $('pill-code').classList.toggle('active', step === 'code' || step === 'empresa');
+      $('panel-title').textContent = step === 'phone'
+        ? 'Identifique seu WhatsApp'
+        : step === 'empresa' ? 'Escolha a empresa' : 'Confirme o código';
+      $('panel-subtitle').textContent = step === 'phone'
+        ? 'Informe o número com DDI e DDD para receber o código de entrada.'
+        : step === 'empresa' ? 'Seu telefone está cadastrado em mais de um cliente.'
+        : 'Verifique a mensagem recebida e conclua o acesso ao chat.';
+      setStatus('');
+      if (step === 'code') setTimeout(() => codeInputs[0].focus(), 0);
+      if (step === 'phone') $('phone').focus();
+    }
+
+    function codeValue() { return codeInputs.map(i => i.value).join(''); }
+
+    function entrarComToken(token) {
+      localStorage.setItem('svc_token_externo', token);
+      location.href = '/radar-externo';
     }
 
     async function enviarCodigo() {
-      esconderErro();
-      const telefone = document.getElementById('f-telefone').value.trim();
-      if (!telefone) return mostrarErro('Informe o número do WhatsApp.');
-      const btn = document.getElementById('btn-enviar-codigo');
-      btn.disabled = true;
-      btn.textContent = 'Enviando…';
+      const telefone = digits($('phone').value);
+      if (telefone.length < 10 || telefone.length > 15) {
+        setStatus('Informe o número com DDI e DDD.', 'error');
+        return;
+      }
+      const btn = $('send');
+      setLoading(btn, true);
+      setStatus('Enviando código pelo WhatsApp...');
       try {
         const r = await fetch('/api/ia-service-publico/login/iniciar', {
           method: 'POST',
@@ -185,43 +785,33 @@
         const body = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
         challengeId = body.challengeId;
-        document.getElementById('destino-texto').textContent = `Código enviado para ${body.destino}`;
-        document.getElementById('passo-telefone').style.display = 'none';
-        document.getElementById('passo-codigo').style.display = 'block';
-        document.getElementById('f-codigo').focus();
+        $('phone-summary').textContent = body.destino || formatPhone(telefone);
+        codeInputs.forEach(i => { i.value = ''; });
+        show('code');
+        setStatus('Código enviado. Confira seu WhatsApp.', 'ok');
       } catch (err) {
-        mostrarErro(err.message);
+        setStatus(err.message, 'error');
       } finally {
-        btn.disabled = false;
-        btn.textContent = 'Enviar código →';
+        setLoading(btn, false);
       }
     }
 
-    function entrarComToken(token) {
-      localStorage.setItem('svc_token_externo', token);
-      location.href = '/radar-externo';
-    }
-
-    // Mostra a lista de empresas quando o telefone está vinculado a mais de
-    // uma — mesma mecânica do menu numerado do IA Command
-    // (resolverEmpresaDoCanal), mas sem pedir novo código: o telefone já
-    // foi validado no passo anterior.
     function mostrarEscolhaEmpresa(empresas) {
-      document.getElementById('passo-codigo').style.display = 'none';
-      document.getElementById('passo-empresa').style.display = 'block';
-      const lista = document.getElementById('lista-empresas');
+      const lista = $('lista-empresas');
       lista.innerHTML = '';
       empresas.forEach(emp => {
         const btn = document.createElement('button');
         btn.className = 'btn-empresa';
+        btn.type = 'button';
         btn.textContent = emp.nome;
         btn.onclick = () => escolherEmpresa(emp.id);
         lista.appendChild(btn);
       });
+      show('empresa');
     }
 
     async function escolherEmpresa(empresaId) {
-      esconderErro();
+      setStatus('');
       try {
         const r = await fetch('/api/ia-service-publico/login/escolher-empresa', {
           method: 'POST',
@@ -232,18 +822,20 @@
         if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
         entrarComToken(body.token);
       } catch (err) {
-        mostrarErro(err.message);
+        setStatus(err.message, 'error');
       }
     }
 
     async function confirmarCodigo() {
-      esconderErro();
-      const telefone = document.getElementById('f-telefone').value.trim();
-      const codigo = document.getElementById('f-codigo').value.trim();
-      if (!codigo) return mostrarErro('Informe o código recebido.');
-      const btn = document.getElementById('btn-confirmar-codigo');
-      btn.disabled = true;
-      btn.textContent = 'Verificando…';
+      const telefone = digits($('phone').value);
+      const codigo = codeValue();
+      if (codigo.length !== 6) {
+        setStatus('Digite os 6 dígitos do código.', 'error');
+        return;
+      }
+      const btn = $('verify');
+      setLoading(btn, true);
+      setStatus('Validando código...');
       try {
         const r = await fetch('/api/ia-service-publico/login/verificar', {
           method: 'POST',
@@ -257,21 +849,62 @@
           mostrarEscolhaEmpresa(body.empresas);
           return;
         }
+        setStatus('Acesso liberado. Abrindo chat...', 'ok');
         entrarComToken(body.token);
       } catch (err) {
-        mostrarErro(err.message);
+        setStatus(err.message, 'error');
       } finally {
-        btn.disabled = false;
-        btn.textContent = 'Confirmar e entrar →';
+        setLoading(btn, false);
       }
     }
 
-    document.getElementById('f-codigo').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') confirmarCodigo();
+    $('send').addEventListener('click', enviarCodigo);
+    $('verify').addEventListener('click', confirmarCodigo);
+    $('back').addEventListener('click', () => {
+      challengeId = null;
+      codeInputs.forEach(i => { i.value = ''; });
+      show('phone');
     });
-    document.getElementById('f-telefone').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') enviarCodigo();
+    $('voltar-empresa').addEventListener('click', () => {
+      challengeId = null;
+      telefoneValidado = null;
+      codeInputs.forEach(i => { i.value = ''; });
+      show('phone');
     });
+
+    $('phone').addEventListener('input', () => {
+      const input = $('phone');
+      const digitIndex = digitCountBeforeCaret(input.value, input.selectionStart);
+      input.value = formatPhone(input.value);
+      const pos = caretAfterDigitIndex(input.value, digitIndex);
+      try { input.setSelectionRange(pos, pos); } catch (_err) {}
+    });
+    $('phone').addEventListener('keydown', e => {
+      if (e.key === 'Enter') $('send').click();
+    });
+
+    codeInputs.forEach((input, idx) => {
+      input.addEventListener('input', () => {
+        input.value = digits(input.value).slice(0, 1);
+        if (input.value && idx < codeInputs.length - 1) codeInputs[idx + 1].focus();
+        if (codeValue().length === 6) $('verify').focus();
+      });
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Backspace' && !input.value && idx > 0) codeInputs[idx - 1].focus();
+        if (e.key === 'ArrowLeft' && idx > 0) codeInputs[idx - 1].focus();
+        if (e.key === 'ArrowRight' && idx < codeInputs.length - 1) codeInputs[idx + 1].focus();
+        if (e.key === 'Enter') $('verify').click();
+      });
+      input.addEventListener('paste', e => {
+        e.preventDefault();
+        const chars = digits(e.clipboardData.getData('text')).slice(0, 6).split('');
+        codeInputs.forEach((inp, i) => { inp.value = chars[i] || ''; });
+        const next = Math.min(chars.length, codeInputs.length - 1);
+        codeInputs[next].focus();
+      });
+    });
+
+    show('phone');
   </script>
 </body>
 </html>

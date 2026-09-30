@@ -145,6 +145,26 @@
     .chat-vazio { flex:1; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px; color:var(--wa-text-tertiary); }
     .chat-vazio-icon { font-size:40px; opacity:.5; }
 
+    /* Abas Conversa/Dados/Informações/Banco de Conhecimento — mesmo padrão
+       visual de apps/IA Command/modules/protheus_whatsapp/public/protheus-chat.html
+       (.view-tabs/.view-tab), adaptado ao tema desta página. Substituem o
+       modal de Informações e o drawer lateral de Banco de Conhecimento —
+       agora são painéis internos reais, trocados via classList.toggle('active'). */
+    .view-tabs { flex:none; display:flex; align-items:center; gap:2px; border-bottom:1px solid var(--wa-border); background:var(--wa-header); padding:0 16px; }
+    .view-tab {
+      padding:11px 14px; font-size:12.5px; font-weight:700; color:var(--wa-text-secondary);
+      background:none; border:none; border-bottom:2px solid transparent; cursor:pointer;
+      display:flex; align-items:center; gap:6px; transition:color .15s ease, border-color .15s ease;
+      white-space:nowrap;
+    }
+    .view-tab:hover { color:var(--wa-text); }
+    .view-tab.active { color:var(--wa-accent); border-bottom-color:var(--wa-accent); }
+    .view-tab .badge-dot { display:none; width:6px; height:6px; border-radius:50%; background:var(--wa-accent); }
+    .view-tab.active .badge-dot { display:inline-block; }
+    .view-stack { flex:1; min-height:0; display:flex; flex-direction:column; }
+    .view-panel { flex:1; min-height:0; display:none; flex-direction:column; }
+    .view-panel.active { display:flex; }
+
     .chat-header { flex:none; border-bottom:1px solid var(--wa-border); background:var(--wa-header); padding:12px 20px; display:none; }
     .chat-header.ativo { display:block; }
     .chat-header-top { display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -158,8 +178,7 @@
     .chat-header-detalhes { overflow:hidden; max-height:300px; transition:max-height .2s ease, opacity .15s ease, margin-top .2s ease; opacity:1; }
     .chat-header.recolhido .chat-header-detalhes { max-height:0; opacity:0; }
     .chat-header.recolhido .chat-header-toggle { transform:rotate(-90deg); }
-    .chat-header-numero { font-size:13px; font-weight:800; color:var(--wa-accent); }
-    .chat-header-titulo { font-size:14px; font-weight:700; color:var(--wa-text); margin-top:2px; }
+    .chat-header-titulo { font-size:14px; font-weight:700; color:var(--wa-text); }
     .chat-header-status { margin-top:6px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
     .chat-header-status-main { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:900; color:#fde68a; background:rgba(250,204,21,.12); border:1px solid rgba(250,204,21,.24); border-radius:8px; padding:4px 8px; }
     /* Uma única linha compacta reunindo TUDO que antes eram 3 blocos
@@ -211,10 +230,11 @@
 
     .bubble-question-context { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--wa-accent); margin-bottom:6px; opacity:.9; }
 
-    .anexos-do-turno { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
-    .anexo-chip { display:flex; align-items:center; gap:5px; background:rgba(0,0,0,.2); border:1px solid var(--wa-border); border-radius:8px; padding:4px 8px; font-size:11.5px; color:var(--wa-text-secondary); }
-    .anexo-chip-btn { cursor:pointer; }
-    .anexo-chip-btn:hover { color:var(--wa-accent); border-color:rgba(0,217,163,.32); }
+    .anexos-do-turno { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; padding-top:8px; border-top:1px dashed rgba(255,255,255,.1); }
+    .anexo-chip { display:flex; align-items:center; gap:6px; background:rgba(0,217,163,.1); border:1px solid rgba(0,217,163,.3); border-radius:8px; padding:5px 10px; font-size:12px; font-weight:700; color:var(--wa-accent); }
+    .anexo-chip .anexo-chip-icon { font-size:14px; }
+    .anexo-chip-btn { cursor:pointer; transition:background .15s ease, border-color .15s ease; }
+    .anexo-chip-btn:hover { background:rgba(0,217,163,.18); border-color:rgba(0,217,163,.5); }
 
     .diagnostico-card { margin-top:8px; border-top:1px solid rgba(255,255,255,.08); padding-top:8px; }
     .diagnostico-secao { margin-bottom:8px; }
@@ -241,22 +261,6 @@
     .composer-btn.enviar { background:var(--wa-accent); border-color:var(--wa-accent); color:#04140f; }
     .composer-hint { font-size:11px; color:var(--wa-text-tertiary); margin-top:5px; }
 
-    .radar-shell.pesquisa-aberta { grid-template-columns:360px minmax(0,1fr) 390px; }
-    .radar-shell.risco-aberto.pesquisa-aberta { grid-template-columns:560px minmax(0,1fr) 390px; }
-    .chat-header-actions { display:flex; align-items:center; gap:6px; }
-    .chat-header-action {
-      flex:none; height:26px; border-radius:7px; border:1px solid var(--wa-border);
-      background:rgba(255,255,255,.03); color:var(--wa-text-secondary); cursor:pointer;
-      display:flex; align-items:center; gap:6px; justify-content:center; font-size:12px; font-weight:700;
-      padding:0 9px; transition:background .15s ease, color .15s ease;
-    }
-    .chat-header-action:hover, .chat-header-action.ativo { background:rgba(0,217,163,.12); color:var(--wa-accent); }
-    .pesquisa-col { display:none; min-width:0; min-height:0; border-left:1px solid var(--wa-border); background:#0f191f; flex-direction:column; }
-    .radar-shell.pesquisa-aberta .pesquisa-col { display:flex; }
-    .pesquisa-head { flex:none; padding:12px 14px; border-bottom:1px solid var(--wa-border); background:var(--wa-header); display:flex; align-items:center; justify-content:space-between; gap:8px; }
-    .pesquisa-title { font-size:13px; font-weight:800; color:var(--wa-text); }
-    .pesquisa-subtitle { font-size:10.5px; color:var(--wa-text-tertiary); margin-top:2px; }
-    .pesquisa-close { width:26px; height:26px; border-radius:7px; border:1px solid var(--wa-border); background:rgba(255,255,255,.03); color:var(--wa-text-secondary); cursor:pointer; }
     .pesquisa-tabs { flex:none; display:flex; gap:4px; padding:8px 12px; border-bottom:1px solid var(--wa-border); background:rgba(0,0,0,.12); }
     .pesquisa-tab { flex:1; border:1px solid var(--wa-border); border-radius:7px; background:rgba(255,255,255,.03); color:var(--wa-text-secondary); font-size:11.5px; font-weight:800; padding:7px 8px; cursor:pointer; }
     .pesquisa-tab.ativo { background:rgba(0,217,163,.13); color:var(--wa-accent); border-color:rgba(0,217,163,.32); }
@@ -304,11 +308,9 @@
 
     @media (max-width: 900px) {
       .radar-shell { grid-template-columns:1fr; }
-      .radar-shell.pesquisa-aberta { grid-template-columns:1fr; }
       .fila-col.chat-aberto { display:none; }
       .chat-col.chat-fechado { display:none; }
-      .radar-shell.pesquisa-aberta .chat-col { display:none; }
-      .radar-shell.pesquisa-aberta .pesquisa-col { display:flex; }
+      .view-tabs { overflow-x:auto; }
     }
 
     /* Modo tela cheia (chat puro, sem moldura do IAHub) — padrão
@@ -423,15 +425,10 @@
           <div class="chat-header" id="chat-header">
             <div class="chat-header-top">
               <div>
-                <div class="chat-header-numero" id="chat-header-numero">—</div>
                 <div class="chat-header-titulo" id="chat-header-titulo">—</div>
                 <div class="chat-header-status" id="chat-header-status"></div>
               </div>
-              <div class="chat-header-actions">
-                <button class="chat-header-action" id="info-toggle-btn" type="button" title="Ver informações do chamado" onclick="abrirInformacoesChamado()">Informações</button>
-                <button class="chat-header-action" id="pesquisa-toggle-btn" type="button" title="Abrir banco de conhecimento" onclick="togglePesquisaTecnica()">Banco de Conhecimento</button>
-                <button class="chat-header-toggle" id="chat-header-toggle" type="button" title="Recolher detalhes" onclick="toggleChatHeader()">▾</button>
-              </div>
+              <button class="chat-header-toggle" id="chat-header-toggle" type="button" title="Recolher detalhes" onclick="toggleChatHeader()">▾</button>
             </div>
             <div class="chat-header-detalhes" id="chat-header-detalhes">
               <div class="chat-header-linha" id="chat-header-linha"></div>
@@ -441,36 +438,56 @@
             </div>
           </div>
 
-          <div class="chat-body" id="chat-body"></div>
+          <div class="view-tabs" id="chat-view-tabs" role="tablist">
+            <button class="view-tab active" id="tab-conversa" type="button" role="tab" aria-selected="true" onclick="trocarAbaChat('conversa')">
+              <span class="badge-dot"></span> Conversa
+            </button>
+            <button class="view-tab" id="tab-dados" type="button" role="tab" aria-selected="false" onclick="trocarAbaChat('dados')">
+              <span class="badge-dot"></span> Dados
+            </button>
+            <button class="view-tab" id="tab-informacoes" type="button" role="tab" aria-selected="false" onclick="trocarAbaChat('informacoes')">
+              <span class="badge-dot"></span> Informações
+            </button>
+            <button class="view-tab" id="tab-banco-conhecimento" type="button" role="tab" aria-selected="false" onclick="trocarAbaChat('banco-conhecimento')">
+              <span class="badge-dot"></span> Banco de Conhecimento
+            </button>
+          </div>
 
-          <div class="composer" id="composer">
-            <div class="anexos-pendentes" id="anexos-pendentes"></div>
-            <div class="composer-row">
-              <input type="file" id="anexo-input" multiple style="display:none" accept=".txt,.log,.xml,.json,.sql,.csv,.prw,.tlpp,.png,.jpg,.jpeg,.webp,.pdf">
-              <button class="composer-btn" type="button" title="Anexar arquivo" onclick="document.getElementById('anexo-input').click()">📎</button>
-              <textarea id="composer-texto" placeholder="Descreva o problema, cole a mensagem de erro, ou responda à investigação..."></textarea>
-              <button class="composer-btn enviar" type="button" title="Enviar" onclick="enviarMensagem()">➤</button>
+          <div class="view-stack">
+            <div class="view-panel active" id="painel-conversa">
+              <div class="chat-body" id="chat-body"></div>
+
+              <div class="composer" id="composer">
+                <div class="anexos-pendentes" id="anexos-pendentes"></div>
+                <div class="composer-row">
+                  <input type="file" id="anexo-input" multiple style="display:none" accept=".txt,.log,.xml,.json,.sql,.csv,.prw,.tlpp,.png,.jpg,.jpeg,.webp,.pdf">
+                  <button class="composer-btn" type="button" title="Anexar arquivo" onclick="document.getElementById('anexo-input').click()">📎</button>
+                  <textarea id="composer-texto" placeholder="Descreva o problema, cole a mensagem de erro, ou responda à investigação..."></textarea>
+                  <button class="composer-btn enviar" type="button" title="Enviar" onclick="enviarMensagem()">➤</button>
+                </div>
+                <div class="composer-hint">Ctrl+Enter para enviar · anexe prints, logs e fonte relacionados ao problema</div>
+              </div>
             </div>
-            <div class="composer-hint">Ctrl+Enter para enviar · anexe prints, logs e fonte relacionados ao problema</div>
+
+            <div class="view-panel" id="painel-dados">
+              <div class="pesquisa-empty" style="padding:16px">Ainda não há dados tabulares para este chamado. Faça uma pergunta cuja resposta traga uma listagem — os registros aparecerão aqui.</div>
+            </div>
+
+            <div class="view-panel" id="painel-informacoes">
+              <div id="informacoes-body" style="padding:16px; overflow-y:auto"></div>
+            </div>
+
+            <div class="view-panel" id="painel-banco-conhecimento">
+              <div class="pesquisa-tabs">
+                <button class="pesquisa-tab ativo" id="pesquisa-tab-interna" type="button" onclick="setPesquisaAba('interna')">Base interna</button>
+                <button class="pesquisa-tab" id="pesquisa-tab-web" type="button" onclick="setPesquisaAba('web')">Pesquisa técnica</button>
+              </div>
+              <div class="pesquisa-body" id="pesquisa-body">
+                <div class="pesquisa-empty">Selecione um chamado para ver chamados semelhantes, posicionamentos e fontes técnicas sugeridas.</div>
+              </div>
+            </div>
           </div>
         </section>
-
-        <aside class="pesquisa-col" id="pesquisa-col">
-          <div class="pesquisa-head">
-            <div>
-              <div class="pesquisa-title">Banco de Conhecimento</div>
-              <div class="pesquisa-subtitle" id="pesquisa-subtitle">Base interna e trilhas técnicas</div>
-            </div>
-            <button class="pesquisa-close" type="button" title="Fechar pesquisa" onclick="fecharPesquisaTecnica()">x</button>
-          </div>
-          <div class="pesquisa-tabs">
-            <button class="pesquisa-tab ativo" id="pesquisa-tab-interna" type="button" onclick="setPesquisaAba('interna')">Base interna</button>
-            <button class="pesquisa-tab" id="pesquisa-tab-web" type="button" onclick="setPesquisaAba('web')">Pesquisa técnica</button>
-          </div>
-          <div class="pesquisa-body" id="pesquisa-body">
-            <div class="pesquisa-empty">Selecione um chamado para ver chamados semelhantes, posicionamentos e fontes técnicas sugeridas.</div>
-          </div>
-        </aside>
 
       </div>
     </div>
@@ -544,7 +561,6 @@
     let enviando = false;
     let filaCache = [];
     let ultimaPerguntaPendente = null; // contexto da pergunta associada à próxima resposta da IA (card "Pergunta")
-    let pesquisaAberta = false;
     let pesquisaAbaAtual = 'interna';
     let sessaoExternaInvalida = false;
     const pesquisaCachePorChamado = new Map();
@@ -850,13 +866,14 @@
       chamadoAtual = chamado || null;
       if (chamado) preencherCabecalho(chamado);
       await carregarAnexosSoftExpert(chamadoId);
+      trocarAbaChat('conversa');
 
       try {
         const qs = qsEmpresa(empresaId);
         const resultado = await api(`/radar/chamados/${chamadoId}/iniciar-analise${qs ? '?' + qs : ''}`, { method: 'POST' });
         atendimentoAtualId = resultado.atendimentoId;
         await carregarMensagens();
-        if (pesquisaAberta) carregarPesquisaTecnica(chamadoId);
+        if (document.getElementById('tab-banco-conhecimento').classList.contains('active')) carregarPesquisaTecnica(chamadoId);
       } catch (err) {
         showError('Não foi possível iniciar a análise: ' + err.message);
       }
@@ -1046,11 +1063,27 @@
       localStorage.setItem(CHAT_HEADER_RECOLHIDO_KEY, recolhido ? '1' : '0');
     }
 
+    // Abas Conversa/Dados/Informações/Banco de Conhecimento — mesmo padrão
+    // de apps/IA Command/modules/protheus_whatsapp/public/protheus-chat.html
+    // (trocarAba). Cada aba já carrega seu conteúdo sob demanda, só na
+    // primeira vez que é aberta (abrirInformacoesChamado/carregarPesquisaTecnica).
+    const ABAS_CHAT = ['conversa', 'dados', 'informacoes', 'banco-conhecimento'];
+    function trocarAbaChat(aba) {
+      if (!ABAS_CHAT.includes(aba)) return;
+      ABAS_CHAT.forEach(id => {
+        document.getElementById(`tab-${id}`).classList.toggle('active', id === aba);
+        document.getElementById(`tab-${id}`).setAttribute('aria-selected', String(id === aba));
+        document.getElementById(`painel-${id}`).classList.toggle('active', id === aba);
+      });
+      if (aba === 'informacoes') abrirInformacoesChamado();
+      if (aba === 'banco-conhecimento' && chamadoSelecionadoId) carregarPesquisaTecnica(chamadoSelecionadoId);
+    }
+
     function preencherCabecalho(c) {
       document.getElementById('chat-header').classList.toggle('recolhido', localStorage.getItem(CHAT_HEADER_RECOLHIDO_KEY) === '1');
-      const cabecalhoIdentificacao = [`#${c.numero}`, c.clienteNome, c.solicitanteNome].filter(Boolean).join(' · ');
-      document.getElementById('chat-header-numero').textContent = cabecalhoIdentificacao;
-      document.getElementById('chat-header-titulo').textContent = c.titulo || c.assunto || c.breveDescricao || '(sem título)';
+      const titulo = c.titulo || c.assunto || c.breveDescricao || '(sem título)';
+      const cabecalhoUnificado = [`#${c.numero}`, c.clienteNome, c.solicitanteNome, c.produto, titulo].filter(Boolean).join(' | ');
+      document.getElementById('chat-header-titulo').textContent = cabecalhoUnificado;
       const situacaoLabel = labelSituacaoRetorno(c.situacaoRetorno);
       document.getElementById('chat-header-status').innerHTML = situacaoLabel
         ? `<span class="chat-header-status-main">⏳ ${escapeHtml(situacaoLabel)}</span>`
@@ -1069,7 +1102,6 @@
       linha.push(`<span class="chat-header-pill">Aberto em <strong>${formatarData(c.dataAbertura)}</strong></span>`);
       if (c.statusEncerramento) linha.push(`<span class="chat-header-pill">Status: <strong>${escapeHtml(c.statusEncerramento)}</strong></span>`);
       if (c.ultimoPosicionamentoEm) linha.push(`<span class="chat-header-pill">Últ. posicionamento: <strong>${formatarData(c.ultimoPosicionamentoEm)}</strong></span>`);
-      if (c.produto) linha.push(`<span class="chat-header-tag">💻 ${escapeHtml(c.produto)}</span>`);
       if (c.tecnicoResponsavelNome) linha.push(`<span class="chat-header-tag">🧑‍💻 Consultor: ${escapeHtml(c.tecnicoResponsavelNome)}</span>`);
       document.getElementById('chat-header-linha').innerHTML = linha.join('');
 
@@ -1119,11 +1151,7 @@
           <div class="info-value">${escapeHtml(String(v))}</div>
         </div>
       `).join('')}</div>`;
-      abrirModalAnexos({
-        titulo: 'Informações do chamado',
-        subtitulo: 'Dados completos para análise operacional',
-        html,
-      });
+      document.getElementById('informacoes-body').innerHTML = html;
     }
 
     function anexosSoftExpertDaMensagem(m) {
@@ -1145,23 +1173,6 @@
           return mesmaData && (!autorMsg || !autorAnexo || mesmoAutor);
         })
         .map(a => ({ ...a, _fonte: 'softexpert' }));
-    }
-
-    function togglePesquisaTecnica() {
-      pesquisaAberta ? fecharPesquisaTecnica() : abrirPesquisaTecnica();
-    }
-
-    function abrirPesquisaTecnica() {
-      pesquisaAberta = true;
-      document.getElementById('radar-shell').classList.add('pesquisa-aberta');
-      document.getElementById('pesquisa-toggle-btn')?.classList.add('ativo');
-      if (chamadoSelecionadoId) carregarPesquisaTecnica(chamadoSelecionadoId);
-    }
-
-    function fecharPesquisaTecnica() {
-      pesquisaAberta = false;
-      document.getElementById('radar-shell').classList.remove('pesquisa-aberta');
-      document.getElementById('pesquisa-toggle-btn')?.classList.remove('ativo');
     }
 
     function setPesquisaAba(aba) {
@@ -1317,7 +1328,8 @@
         anexosPorBubble.set(chaveAnexos, anexos);
         const anexosDiv = document.createElement('div');
         anexosDiv.className = 'anexos-do-turno';
-        anexosDiv.innerHTML = `<button class="anexo-chip anexo-chip-btn" type="button" onclick="abrirGradeAnexosBubble('${chaveAnexos}')">📎 ${anexos.length} anexo(s)</button>`;
+        const rotuloAnexos = anexos.length === 1 ? '1 anexo' : `${anexos.length} anexos`;
+        anexosDiv.innerHTML = `<button class="anexo-chip anexo-chip-btn" type="button" onclick="abrirGradeAnexosBubble('${chaveAnexos}')"><span class="anexo-chip-icon">📎</span> Ver ${rotuloAnexos}</button>`;
         bubble.appendChild(anexosDiv);
       }
 
