@@ -400,7 +400,7 @@
               </div>
             </div>
 
-            <!-- ABA LINK DE ACESSO -->
+            <!-- ABA LINK DE ACESSO (somente leitura — edição migrada para a IAHub Platform) -->
             <div class="iac-tab-panel" id="aba-link">
               <div class="form-section">
                 <div class="form-section-body">
@@ -411,10 +411,15 @@
                       <div class="prov-desc">O login externo (/entrar-servico) já funciona só com telefone, sem precisar de apelido — o sistema descobre a empresa sozinha. O apelido abaixo é opcional, só um atalho de identidade visual (mostra o nome/logo desta empresa na tela de entrada).</div>
                     </div>
                   </div>
+                  <div class="callout" style="background:var(--accent-glow);border:1px solid var(--accent);border-radius:var(--radius);padding:12px 14px;font-size:12.5px;color:var(--text-md);line-height:1.55;margin-bottom:16px">
+                    Este campo agora é somente leitura aqui. Para alterar o apelido, use
+                    <strong>IAHub Platform → Configurar IA → Link de acesso</strong>.
+                    <a href="/app/ia-administracao/platform-config.html" style="color:var(--accent);font-weight:700;margin-left:4px">Abrir IAHub Platform ↗</a>
+                  </div>
                   <div class="form-group">
                     <label class="form-label">Apelido da URL (opcional)</label>
-                    <input type="text" class="form-control" id="f-login-apelido" placeholder="ex.: j2a" oninput="atualizarLinkApelido();atualizarResumo()" style="max-width:360px">
-                    <div class="form-hint">Só letras minúsculas, números e hífen.</div>
+                    <input type="text" class="form-control" id="f-login-apelido" placeholder="ex.: j2a" style="max-width:360px" disabled>
+                    <div class="form-hint">Só letras minúsculas, números e hífen. Editável apenas na IAHub Platform.</div>
                   </div>
                   <div class="form-group" style="margin-bottom:0">
                     <label class="form-label">Link para compartilhar</label>
@@ -684,7 +689,6 @@
       openaiModelo: $('f-openai-modelo').value,
       claudeModelo: $('f-claude-modelo').value,
       geminiModelo: $('f-gemini-modelo').value,
-      loginExternoApelido: $('f-login-apelido').value.trim() || null,
     };
     try {
       await api('/api/ia-service/config/ia', { method: 'PUT', body: JSON.stringify(dados) });

@@ -319,17 +319,31 @@
     .anexo-status { display:inline-flex; padding:3px 7px; border-radius:99px; background:rgba(0,217,163,.1); color:var(--wa-accent); border:1px solid rgba(0,217,163,.24); font-size:10.5px; font-weight:800; white-space:nowrap; }
     .anexo-acao { border:1px solid var(--wa-border); border-radius:7px; background:rgba(255,255,255,.04); color:var(--wa-text-secondary); font-size:11px; font-weight:800; padding:6px 8px; cursor:pointer; white-space:nowrap; }
     .anexo-acao:hover { color:var(--wa-accent); border-color:rgba(0,217,163,.32); }
-    /* Aba Detalhes do Chamado — agrupada em seções temáticas (antes era uma
-       grade única de ~20 cards com o mesmo peso visual, sem hierarquia).
-       Cada seção é uma faixa com título + grid compacta só dos campos
-       daquele tema. */
-    .info-secao { margin-bottom:18px; }
-    .info-secao:last-child { margin-bottom:0; }
-    .info-secao-titulo { font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.05em; color:var(--wa-text-tertiary); margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid var(--wa-border); }
-    .info-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:6px; }
-    .info-item { border:1px solid var(--wa-border); border-radius:7px; background:#16232a; padding:8px 10px; min-width:0; }
-    .info-label { display:block; font-size:9.5px; font-weight:800; text-transform:uppercase; color:var(--wa-accent); margin-bottom:3px; }
-    .info-value { color:var(--wa-text); font-size:12px; line-height:1.3; overflow-wrap:anywhere; }
+    /* Aba Detalhes do Chamado — cada categoria é um CARD visual distinto
+       (borda/fundo/sombra próprios, ícone em badge colorido), não uma faixa
+       de título fino em cima de uma grade genérica. Campos sem valor são
+       omitidos pelo JS antes de chegar aqui — nunca um card vazio ocupando
+       espaço. Kanban usa --wa-accent mais forte (info-card-destaque) por
+       ser a informação menos comum/mais acionável (indica trabalho de dev
+       em andamento). */
+    .info-card {
+      background:var(--wa-header); border:1px solid var(--wa-border); border-radius:12px;
+      padding:16px; margin-bottom:12px; box-shadow:0 2px 8px rgba(0,0,0,.18);
+    }
+    .info-card:last-child { margin-bottom:0; }
+    .info-card-destaque { border-color:rgba(0,217,163,.35); background:rgba(0,217,163,.05); }
+    .info-card-titulo {
+      display:flex; align-items:center; gap:9px; font-size:13px; font-weight:800;
+      color:var(--wa-text); margin-bottom:14px;
+    }
+    .info-card-icone {
+      display:flex; align-items:center; justify-content:center; width:28px; height:28px;
+      border-radius:8px; background:rgba(0,217,163,.12); font-size:14px; flex-shrink:0;
+    }
+    .info-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; }
+    .info-item { min-width:0; }
+    .info-label { display:block; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; color:var(--wa-text-tertiary); margin-bottom:4px; }
+    .info-value { color:var(--wa-text); font-size:13.5px; font-weight:600; line-height:1.35; overflow-wrap:anywhere; }
 
     /* Destaque no topo da aba Detalhes — há quanto tempo o chamado aguarda
        a parte atual (Atendente/Cliente/Fornecedor). Resume no cabeçalho de
@@ -680,6 +694,15 @@
       if (!iso) return '—';
       try { return new Date(iso).toLocaleDateString('pt-BR'); } catch (_) { return iso; }
     }
+    // Previsão de conclusão (SLA_DATA_PREV_FIM) tem granularidade de
+    // MINUTO (DATEADD(minute, ...) na origem) — data pura sem hora perderia
+    // informação relevante para o analista saber "até que horas".
+    function formatarDataHora(iso) {
+      if (!iso) return '—';
+      try {
+        return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      } catch (_) { return iso; }
+    }
     function badgeSla(slaPrazo) {
       if (slaPrazo === 'Em atraso') return `<span class="badge badge-em-atraso">Em atraso</span>`;
       if (slaPrazo === 'Proxima do vencimento') return `<span class="badge badge-proxima">Próx. vencimento</span>`;
@@ -787,11 +810,9 @@
           consultores: resultado.consultores || [],
           chamados: resultado.chamados || [],
         };
-        filaCache = resultado.chamados || [];
         if (!riscoCache.consultores.some(c => c.id === riscoConsultorSelecionado)) {
           riscoConsultorSelecionado = 'todos';
         }
-        document.getElementById('fila-contador').textContent = `${riscoCache.chamados.length} em risco`;
         renderizarRiscoSla();
       } catch (err) {
         showError('Não foi possível carregar a aba de risco SLA: ' + err.message);
@@ -898,6 +919,7 @@
         aguardando: labelSituacaoRetorno(c.situacaoRetorno) || '—',
         status: c.slaPrazo || '—',
         consultor: c.tecnicoResponsavelNome || 'Sem consultor',
+        previsao: c.slaDataPrevFim ? formatarDataHora(c.slaDataPrevFim) : '—',
         ultimo: c.ultimoPosicionamentoEm ? formatarData(c.ultimoPosicionamentoEm) : '—',
       }));
 
@@ -918,6 +940,7 @@
             { title: 'Aguardando', field: 'aguardando', widthGrow: 1 },
             { title: 'Status', field: 'status', widthGrow: 1, formatter: (cell) => badgeSla(cell.getValue()) },
             { title: 'Consultor', field: 'consultor', visible: false },
+            { title: 'Previsão conclusão', field: 'previsao', width: 140 },
             { title: 'Último', field: 'ultimo', width: 100 },
           ],
         });
@@ -1248,65 +1271,93 @@
     // Agrupado por tema em vez de uma grade única de ~20 cards idênticos
     // (ilegível — tudo com o mesmo peso visual, sem hierarquia). Cada seção
     // tem um título e só os campos relevantes àquele tema.
+    // Redesenho (2026-09, pedido do usuário: "muito ruim ainda, use mais
+    // criatividade") — cada seção é um CARD com ícone próprio, não uma
+    // grade genérica de campos com o mesmo peso visual. Campos vazios são
+    // OMITIDOS (não mostra rótulo + "—" ocupando espaço à toa) e o grupo
+    // Kanban só aparece quando o chamado de fato tem uma atividade de
+    // desenvolvimento vinculada (kanbanId presente).
     function abrirInformacoesChamado() {
       const c = chamadoAtual || filaCache.find(item => item.id === chamadoSelecionadoId);
       if (!c) return;
 
-      const secoes = [
+      const cards = [
         {
-          titulo: 'Identificação',
+          icone: '📄', titulo: 'Identificação',
           campos: [
-            ['Número', `#${c.numero || '—'}`],
-            ['Título', c.titulo || c.assunto || c.breveDescricao || '—'],
-            ['Cliente', c.clienteNome || '—'],
-            ['Usuário', [c.solicitanteNome, c.solicitanteEmail].filter(Boolean).join(' — ') || '—'],
-            ['Consultor', c.tecnicoResponsavelNome || 'Sem consultor'],
+            ['Número', `#${c.numero}`],
+            ['Título', c.titulo || c.assunto || c.breveDescricao],
+            ['Cliente', c.clienteNome],
+            ['Usuário', [c.solicitanteNome, c.solicitanteEmail].filter(Boolean).join(' — ')],
+            ['Consultor', c.tecnicoResponsavelNome],
+            ['Chamado de referência', c.chamadoReferencia ? `#${c.chamadoReferencia}` : null],
           ],
         },
         {
-          titulo: 'SLA & prazos',
+          icone: '⏱', titulo: 'SLA & prazos',
           campos: [
-            ['SLA', c.slaPrazo || c.slaStatus || '—'],
-            ['SLA horas', c.slaHoras || '—'],
-            ['SLA inicial', c.slaInicial || '—'],
-            ['SLA anterior', c.slaAnterior || '—'],
-            ['Status', c.statusEncerramento || '—'],
-            ['Aberto em', formatarData(c.dataAbertura)],
-            ['Último posicionamento', formatarData(c.ultimoPosicionamentoEm)],
+            ['SLA', c.slaPrazo || c.slaStatus],
+            ['Previsão de conclusão', c.slaDataPrevFim ? formatarDataHora(c.slaDataPrevFim) : null],
+            ['SLA em horas', c.slaHoras],
+            ['SLA inicial', c.slaInicial],
+            ['SLA anterior', c.slaAnterior],
+            ['Status', c.statusEncerramento],
+            ['Aberto em', c.dataAbertura ? formatarData(c.dataAbertura) : null],
+            ['Último posicionamento', c.ultimoPosicionamentoEm ? formatarData(c.ultimoPosicionamentoEm) : null],
           ],
         },
         {
-          titulo: 'Classificação',
+          icone: '🏷', titulo: 'Classificação',
           campos: [
-            ['Produto', c.produto || '—'],
-            ['Família', c.familia || '—'],
-            ['Módulo', c.modulo || '—'],
-            ['Serviço', c.servico || '—'],
-            ['Tipo', c.tipoChamadoFinal || c.tipoChamado || '—'],
-            ['Natureza', c.natureza || '—'],
-            ['Nível', c.nivel || '—'],
+            ['Produto', c.produto],
+            ['Família', c.familia],
+            ['Módulo', c.modulo],
+            ['Serviço', c.servico],
+            ['Tipo', c.tipoChamadoFinal || c.tipoChamado],
+            ['Natureza', c.natureza],
+            ['Nível', c.nivel],
           ],
         },
         {
-          titulo: 'Encerramento',
+          icone: '✅', titulo: 'Encerramento',
           campos: [
-            ['Total de horas', c.totalHoras || '—'],
-            ['Avaliação', c.avaliacao || '—'],
+            ['Total de horas', c.totalHoras],
+            ['Avaliação', c.avaliacao],
+          ],
+        },
+        {
+          icone: '📋', titulo: 'Kanban — atividade de desenvolvimento', destaque: true,
+          // Só existe quando o SoftExpert de fato gerou uma tarefa de
+          // codificação para este chamado — condicional aplicada abaixo
+          // (visivel: !!c.kanbanId), não um card sempre presente vazio.
+          visivel: !!c.kanbanId,
+          campos: [
+            ['ID Kanban', c.kanbanId],
+            ['Chave', c.kanbanKey],
+            ['Atributos', c.kanbanAtributos],
+            ['Início', c.kanbanDataInicio ? formatarDataHora(c.kanbanDataInicio) : null],
           ],
         },
       ];
 
-      const html = secoes.map(secao => `
-        <div class="info-secao">
-          <div class="info-secao-titulo">${escapeHtml(secao.titulo)}</div>
-          <div class="info-grid">${secao.campos.map(([k, v]) => `
-            <div class="info-item">
-              <span class="info-label">${escapeHtml(k)}</span>
-              <div class="info-value">${escapeHtml(String(v))}</div>
+      const html = cards
+        .filter(card => card.visivel !== false)
+        .map(card => {
+          const camposPreenchidos = card.campos.filter(([, v]) => v !== null && v !== undefined && v !== '');
+          if (!camposPreenchidos.length) return '';
+          return `
+            <div class="info-card${card.destaque ? ' info-card-destaque' : ''}">
+              <div class="info-card-titulo"><span class="info-card-icone">${card.icone}</span>${escapeHtml(card.titulo)}</div>
+              <div class="info-grid">${camposPreenchidos.map(([k, v]) => `
+                <div class="info-item">
+                  <span class="info-label">${escapeHtml(k)}</span>
+                  <div class="info-value">${escapeHtml(String(v))}</div>
+                </div>
+              `).join('')}</div>
             </div>
-          `).join('')}</div>
-        </div>
-      `).join('');
+          `;
+        })
+        .join('');
 
       document.getElementById('informacoes-body').innerHTML = renderizarDestaqueAguardando(c) + html;
     }

@@ -38,6 +38,12 @@ function _chamadoFilaParaDominio(row) {
     slaInicial: row.sla_inicial,
     slaAnterior: row.sla_anterior,
     slaPrazo: row.sla_prazo,
+    slaDataPrevFim: row.sla_data_prev_fim,
+    chamadoReferencia: row.chamado_referencia,
+    kanbanId: row.kanban_id,
+    kanbanKey: row.kanban_key,
+    kanbanAtributos: row.kanban_atributos,
+    kanbanDataInicio: row.kanban_data_inicio,
     solicitanteId: row.solicitante_id,
     solicitanteNome: row.solicitante_nome,
     solicitanteEmail: row.solicitante_email,
@@ -103,7 +109,8 @@ function listarFila(empresaId, { tecnicoId, filtroSla = 'todos', limite = 200 } 
       c.produto, c.familia, c.modulo,
       c.cliente_id, cl.nome AS cliente_nome, c.data_abertura,
       c.status_encerramento, c.sla, c.sla_horas, c.sla_status, c.sla_status_final,
-      c.sla_inicial, c.sla_anterior, c.sla_prazo,
+      c.sla_inicial, c.sla_anterior, c.sla_prazo, c.sla_data_prev_fim, c.chamado_referencia,
+      c.kanban_id, c.kanban_key, c.kanban_atributos, c.kanban_data_inicio,
       c.solicitante_id, uc.nome AS solicitante_nome, uc.email AS solicitante_email,
       c.tecnico_responsavel_id, t.nome AS tecnico_responsavel_nome,
       ultimo.data_posicionamento AS ultimo_posicionamento_em,
@@ -126,10 +133,17 @@ function listarRiscoSla(empresaId, { tecnicoId, filtroRisco = 'todos', limite = 
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
 
+  // Diferente de listarFila (que É sobre ação pendente do atendente, por
+  // isso exige aguardando_retorno=1), Risco SLA é a visão geral de "tudo e
+  // de todos" (pedido do usuário) — mostra qualquer chamado aberto em risco
+  // de SLA independente de quem está com a bola agora (Atendente, Cliente
+  // ou Fornecedor). Exigir aguardando_retorno=1 aqui escondia chamados
+  // aguardando Cliente/Fornecedor mesmo estando em atraso — bug real
+  // reportado pelo usuário (só aparecia o consultor logado por coincidência
+  // de quais chamados estavam com aguardando_retorno=1 no momento).
   const condicoes = [
     'c.empresa_id = ?',
     "(c.status_encerramento IS NULL OR c.status_encerramento != 'Encerrado')",
-    'ultimo.aguardando_retorno = 1',
     _filtroRiscoParaCondicao(filtroRisco),
   ];
   const params = [Number(empresaId)];
@@ -156,7 +170,8 @@ function listarRiscoSla(empresaId, { tecnicoId, filtroRisco = 'todos', limite = 
       c.produto, c.familia, c.modulo,
       c.cliente_id, cl.nome AS cliente_nome, c.data_abertura,
       c.status_encerramento, c.sla, c.sla_horas, c.sla_status, c.sla_status_final,
-      c.sla_inicial, c.sla_anterior, c.sla_prazo,
+      c.sla_inicial, c.sla_anterior, c.sla_prazo, c.sla_data_prev_fim, c.chamado_referencia,
+      c.kanban_id, c.kanban_key, c.kanban_atributos, c.kanban_data_inicio,
       c.solicitante_id, uc.nome AS solicitante_nome, uc.email AS solicitante_email,
       c.tecnico_responsavel_id, t.nome AS tecnico_responsavel_nome,
       ultimo.data_posicionamento AS ultimo_posicionamento_em,

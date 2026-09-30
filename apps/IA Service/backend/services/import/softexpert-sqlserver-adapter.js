@@ -36,6 +36,7 @@ const COLUNAS_DYNITSM = [
   'IDSLA', 'SLAHORAS', 'SLASTATUS', 'SLAFINALSTATUS', 'IDSLAINICIAL', 'IDSLAANTERIOR',
   'SOLUCAOAPLICADA', 'AVALIACAO', 'TOTALHORAS',
   'NCHAMADOREF',
+  'IDKANBAN', 'KEYKANBAN', 'ATRIBUTOSKANBAN', 'DATAINICIOKANBA',
   'OIDARQUIVO1', 'OIDARQUIVO2', 'RECORDIDANEXO',
 ];
 
@@ -87,6 +88,12 @@ const SQL_SLA_PRAZO = `
   END
 `;
 
+// SLA_DATA_PREV_FIM — data/hora prevista de conclusão do chamado (fórmula
+// fornecida pelo usuário, 2026-09). Reaproveita o mesmo JOIN_WFPROCESS de
+// SQL_SLA_PRAZO — NRTIMEESTFINISH é a quantidade de MINUTOS a somar em
+// DTESTIMATEDFINISH (a data "pura", sem hora), não um offset de dias.
+const SQL_SLA_DATA_PREV_FIM = `DATEADD(minute, W.NRTIMEESTFINISH, W.DTESTIMATEDFINISH)`;
+
 const JOIN_WFPROCESS = `
   INNER JOIN WFPROCESS W
     ON D.FGENABLED = 1 AND D.IDPROCESS = W.IDPROCESS
@@ -123,7 +130,7 @@ const COLUNAS_POSICIONAMENTO = [
 async function listarChamadosPeriodo(empresaId, fonte, { inicio, fim }, { offset = 0, limit = 500 } = {}) {
   const colunasD = COLUNAS_DYNITSM.map(c => `D.${c}`).join(', ');
   const sql = `
-    SELECT ${colunasD}, ${SQL_STATUS_CHAMADO} AS STATUS_ENCERRAMENTO, ${SQL_SLA_PRAZO} AS SLA_PRAZO
+    SELECT ${colunasD}, ${SQL_STATUS_CHAMADO} AS STATUS_ENCERRAMENTO, ${SQL_SLA_PRAZO} AS SLA_PRAZO, ${SQL_SLA_DATA_PREV_FIM} AS SLA_DATA_PREV_FIM
     FROM DYNITSM D
     ${JOIN_WFPROCESS}
     WHERE D.DT >= CONVERT(datetime, @inicio, 112) AND D.DT < CONVERT(datetime, @fim, 112)

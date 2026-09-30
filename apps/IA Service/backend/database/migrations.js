@@ -683,6 +683,26 @@ const MIGRATIONS = [
         ON mensagens (empresa_id, atendimento_id, origem_sistema, origem_referencia);
     `,
   },
+  {
+    version: 29,
+    descricao: 'Data/hora prevista de conclusao do chamado (SLA_DATA_PREV_FIM) — formula fornecida pelo usuario, 2026-09: DATEADD(minute, WFPROCESS.NRTIMEESTFINISH, WFPROCESS.DTESTIMATEDFINISH). Distinto de sla_prazo (categorico, dinamico) — e uma data/hora fixa calculada no momento da importacao. Usado na aba Detalhes do Chamado e na grid de Risco SLA.',
+    sql: `
+      ALTER TABLE chamados ADD COLUMN sla_data_prev_fim TEXT DEFAULT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_svc_chamados_sla_data_prev_fim
+        ON chamados (empresa_id, sla_data_prev_fim);
+    `,
+  },
+  {
+    version: 30,
+    descricao: 'Dados de Kanban do chamado (IDKANBAN/KEYKANBAN/ATRIBUTOSKANBAN/DATAINICIOKANBA de DYNITSM) — pedido do usuario, 2026-09: indica que uma atividade de desenvolvimento/codificacao foi gerada para o chamado. Exibido em grupo proprio na aba Detalhes do Chamado, so quando kanban_id existe.',
+    sql: `
+      ALTER TABLE chamados ADD COLUMN kanban_id TEXT DEFAULT NULL;
+      ALTER TABLE chamados ADD COLUMN kanban_key TEXT DEFAULT NULL;
+      ALTER TABLE chamados ADD COLUMN kanban_atributos TEXT DEFAULT NULL;
+      ALTER TABLE chamados ADD COLUMN kanban_data_inicio TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

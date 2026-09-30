@@ -113,6 +113,19 @@ function _mapearChamado(row) {
     // histórico de como o chamado foi encerrado, não seu prazo atual).
     statusEncerramento: normalizadores.textoOuNull(row.STATUS_ENCERRAMENTO),
     slaPrazo: normalizadores.textoOuNull(row.SLA_PRAZO),
+    // Data/hora prevista de conclusão (fórmula fornecida pelo usuário,
+    // 2026-09, ver SQL_SLA_DATA_PREV_FIM em softexpert-sqlserver-adapter.js)
+    // — diferente de SLA_PRAZO (categórico, dinâmico), é uma data/hora fixa
+    // calculada no momento da importação.
+    slaDataPrevFim: normalizadores.dataParaIso(row.SLA_DATA_PREV_FIM),
+    // Kanban — indica que uma atividade de desenvolvimento/codificação foi
+    // gerada para este chamado (2026-09, pedido do usuário). ATRIBUTOSKANBA
+    // chega como texto livre da origem (ex.: JSON ou string descritiva) —
+    // guardado como está, sem tentar parsear estrutura.
+    kanbanId: normalizadores.textoOuNull(row.IDKANBAN),
+    kanbanKey: normalizadores.textoOuNull(row.KEYKANBAN),
+    kanbanAtributos: normalizadores.textoOuNull(row.ATRIBUTOSKANBAN),
+    kanbanDataInicio: normalizadores.dataParaIso(row.DATAINICIOKANBA),
   };
 }
 

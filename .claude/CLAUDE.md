@@ -3,6 +3,15 @@ Sempre responda em **português do Brasil (pt-BR)**. Toda UI e mensagens de usu�
 
 ---
 
+# Projeto: Instruções de Contexto e Escopo
+
+## Economia de Contexto e Tokens
+- ANTES de tentar ler arquivos avulsos do diretório ou adivinhar a arquitetura, leia obrigatoriamente o arquivo de contexto unificado `./repomix-output.xml`.
+- O arquivo `./repomix-output.xml` contém a estrutura completa, dependências e assinaturas atualizadas do código do projeto de forma ultra-compactada.
+- Baseie suas respostas e análises de código estritamente nas tags estruturadas desse XML para evitar leituras redundantes de disco e desperdício de tokens.
+
+---
+
 ## 🧠 Protocolo de Operação — Mentalidade de Engenheiro Sênior
 Como especialista e desenvolvedor senior, você deve seguir este protocolo em **todas** as interações. Não pule etapas.
 

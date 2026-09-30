@@ -60,7 +60,10 @@ function getConfig(empresaId) {
   if (!config) return null;
   // Nunca retorna as chaves para o frontend — só indica se estão configuradas.
   // loginExternoApelido não é segredo (é a própria URL pública de acesso),
-  // volta em claro.
+  // volta em claro. Sempre da Platform (platform.loginExternoApelido) —
+  // mesma fonte que /entrar-servico/:apelido resolve (platformStore.
+  // getConfigPorApelido) — nunca do legado, senão a tela mostraria um
+  // apelido que o login público já não reconhece mais.
   return {
     empresaId: config.empresaId,
     provedorPrimario: config.provedorPrimario,
@@ -75,7 +78,7 @@ function getConfig(empresaId) {
     deepseekModelo: config.deepseekModelo || PROVIDER_CONFIGS.deepseek.model,
     claudeModelo: config.claudeModelo || PROVIDER_CONFIGS.claude.model,
     geminiModelo: config.geminiModelo || PROVIDER_CONFIGS.gemini.model,
-    loginExternoApelido: legado?.loginExternoApelido || null,
+    loginExternoApelido: platform?.loginExternoApelido || null,
     origemConfig: platform ? 'iahub-platform' : 'ia-service-legado',
     atualizadoEm: config.atualizadoEm,
   };
