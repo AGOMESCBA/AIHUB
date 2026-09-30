@@ -127,18 +127,38 @@
     .risco-consultor:hover, .risco-consultor.ativo { background:var(--wa-sidebar-active); }
     .risco-consultor-nome { font-size:12px; font-weight:900; line-height:1.25; }
     .risco-consultor-meta { display:flex; gap:5px; flex-wrap:wrap; margin-top:5px; color:var(--wa-text-tertiary); font-size:10.5px; }
-    .risco-grid-wrap { min-width:0; overflow:auto; padding:10px; }
-    .risco-grid { width:100%; border-collapse:separate; border-spacing:0 7px; font-size:11.5px; }
-    .risco-grid th { color:var(--wa-text-tertiary); text-align:left; font-size:10px; text-transform:uppercase; padding:0 8px 2px; white-space:nowrap; }
-    .risco-grid td { background:rgba(255,255,255,.035); border-top:1px solid var(--wa-border); border-bottom:1px solid var(--wa-border); padding:8px; vertical-align:top; }
-    .risco-grid td:first-child { border-left:1px solid var(--wa-border); border-radius:8px 0 0 8px; }
-    .risco-grid td:last-child { border-right:1px solid var(--wa-border); border-radius:0 8px 8px 0; }
-    .risco-grid tr { cursor:pointer; }
-    .risco-grid tr:hover td { background:rgba(255,255,255,.07); }
-    .risco-numero { color:var(--wa-accent); font-weight:900; white-space:nowrap; }
-    .risco-titulo { min-width:170px; max-width:260px; color:var(--wa-text); font-weight:800; line-height:1.3; }
-    .risco-texto { color:var(--wa-text-secondary); line-height:1.35; }
     .risco-empty { color:var(--wa-text-tertiary); padding:18px; font-size:12.5px; line-height:1.45; }
+
+    /* Grid Tabulator — mesma biblioteca da aba Dados do IA Command
+       (carregada sob demanda via CDN, ver garantirTabulator()), mas com
+       toolbar reduzida ao necessário para apoio ao analista: só busca +
+       agrupamento nativo por consultor, sem export Excel/PDF (fora do
+       escopo aqui, decisão explícita do usuário). Tema ajustado por cima do
+       tema escuro padrão do Tabulator para bater com a paleta --wa-*. */
+    .risco-grid-col { min-width:0; display:flex; flex-direction:column; min-height:0; }
+    .risco-grid-busca { flex:none; padding:8px 10px; border-bottom:1px solid var(--wa-border); }
+    .risco-grid-busca input {
+      width:100%; padding:8px 10px; border-radius:7px; border:1px solid var(--wa-border);
+      background:rgba(255,255,255,.04); color:var(--wa-text); font-size:12px;
+    }
+    .risco-grid-busca input::placeholder { color:var(--wa-text-tertiary); }
+    .risco-grid-wrap { flex:1; min-width:0; min-height:0; padding:8px; }
+    .risco-totais { flex:none; display:flex; gap:14px; flex-wrap:wrap; padding:8px 14px; border-top:1px solid var(--wa-border); background:rgba(0,0,0,.14); font-size:11.5px; }
+    .risco-total-item { display:flex; align-items:center; gap:6px; color:var(--wa-text-secondary); }
+    .risco-total-item strong { color:var(--wa-text); font-weight:900; }
+    .risco-total-item.destaque strong { color:var(--wa-accent); }
+
+    .risco-grid-wrap .tabulator { background:transparent; border:none; font-size:11.5px; }
+    .risco-grid-wrap .tabulator-header { background:rgba(255,255,255,.04); border-bottom:1px solid var(--wa-border); }
+    .risco-grid-wrap .tabulator-col { background:transparent; border-right:none; }
+    .risco-grid-wrap .tabulator-col-title { color:var(--wa-text-tertiary); font-size:10px; text-transform:uppercase; font-weight:800; }
+    .risco-grid-wrap .tabulator-row { background:rgba(255,255,255,.02); border-bottom:1px solid var(--wa-border); color:var(--wa-text-secondary); cursor:pointer; }
+    .risco-grid-wrap .tabulator-row:hover { background:rgba(255,255,255,.07); }
+    .risco-grid-wrap .tabulator-row .tabulator-cell { border-right:none; }
+    .risco-grid-wrap .tabulator-row.tabulator-group {
+      background:rgba(0,217,163,.08); color:var(--wa-accent); font-weight:800; border-bottom:1px solid var(--wa-border);
+    }
+    .risco-grid-wrap .tabulator-placeholder { color:var(--wa-text-tertiary); }
 
     /* ── Coluna direita: chat ───────────────────────────────────────────── */
     .chat-col { display:flex; flex-direction:column; min-height:0; min-width:0; background:var(--wa-panel); }
@@ -421,7 +441,13 @@
             </div>
             <div class="risco-layout">
               <div class="risco-consultores" id="risco-consultores"></div>
-              <div class="risco-grid-wrap" id="risco-grid-wrap"><div class="risco-empty">Carregando chamados em risco…</div></div>
+              <div class="risco-grid-col">
+                <div class="risco-grid-busca">
+                  <input type="text" id="risco-busca" placeholder="Buscar por número, cliente, usuário..." oninput="filtrarGridRisco()">
+                </div>
+                <div class="risco-grid-wrap" id="risco-grid-wrap"><div class="risco-empty">Carregando chamados em risco…</div></div>
+                <div class="risco-totais" id="risco-totais"></div>
+              </div>
             </div>
           </div>
         </aside>
@@ -783,9 +809,45 @@
       }
     }
 
+    // Carrega o Tabulator sob demanda via CDN — mesmo padrão de
+    // apps/IA Command/modules/protheus_whatsapp/public/protheus-chat.html
+    // (garantirTabulator), só na primeira vez que a aba Risco SLA é aberta.
+    // Sem export Excel/PDF aqui (decisão explícita do usuário: IA Service é
+    // apoio ao analista, não ferramenta de BI).
+    let tabulatorPromise = null;
+    function garantirTabulator() {
+      if (window.Tabulator) return Promise.resolve();
+      if (!tabulatorPromise) {
+        tabulatorPromise = Promise.all([
+          new Promise((resolve, reject) => {
+            if (document.querySelector('link[data-lazy-tabulator]')) return resolve();
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = 'https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator_midnight.min.css';
+            link.dataset.lazyTabulator = '1';
+            link.onload = resolve;
+            link.onerror = () => reject(new Error('Falha ao carregar estilo da grade.'));
+            document.head.appendChild(link);
+          }),
+          new Promise((resolve, reject) => {
+            if (window.Tabulator) return resolve();
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js';
+            script.onload = () => window.Tabulator ? resolve() : reject(new Error('Biblioteca indisponível após carregamento.'));
+            script.onerror = () => reject(new Error('Falha ao carregar biblioteca da grade.'));
+            document.head.appendChild(script);
+          }),
+        ]);
+      }
+      return tabulatorPromise;
+    }
+
+    let riscoTable = null;
+
     function renderizarRiscoSla() {
       const totalAtraso = riscoCache.chamados.filter(c => c.slaPrazo === 'Em atraso').length;
       const totalProximo = riscoCache.chamados.filter(c => c.slaPrazo === 'Proxima do vencimento').length;
+      const totalDia = riscoCache.chamados.filter(c => c.slaPrazo === 'Em dia').length;
       const consultoresEl = document.getElementById('risco-consultores');
       const todosAtivo = riscoConsultorSelecionado === 'todos';
       const todosBtn = `
@@ -800,36 +862,99 @@
         </button>`).join('');
       consultoresEl.innerHTML = todosBtn + (consultores || '<div class="risco-empty">Nenhum consultor com chamado em risco.</div>');
 
+      atualizarTotaisRisco(riscoCache.chamados, { totalAtraso, totalProximo, totalDia });
+      montarGridRisco();
+    }
+
+    // Totalizador dinâmico — geral + breakdown por status, sempre refletindo
+    // o conjunto de chamados atualmente visível (já filtrado por consultor
+    // selecionado, ANTES da busca de texto, que é responsabilidade do
+    // Tabulator via setFilter e não muda esse total — busca é "achar", não
+    // "recortar o escopo").
+    function atualizarTotaisRisco(chamados, { totalAtraso, totalProximo, totalDia }) {
+      const el = document.getElementById('risco-totais');
+      el.innerHTML = `
+        <span class="risco-total-item destaque"><strong>${chamados.length}</strong> no total</span>
+        <span class="risco-total-item"><strong>${totalAtraso}</strong> em atraso</span>
+        <span class="risco-total-item"><strong>${totalProximo}</strong> próx. vencimento</span>
+        <span class="risco-total-item"><strong>${totalDia}</strong> em dia</span>
+      `;
+    }
+
+    async function montarGridRisco() {
       const chamados = riscoConsultorSelecionado === 'todos'
         ? riscoCache.chamados
         : riscoCache.chamados.filter(c => (c.tecnicoResponsavelId || '__sem_consultor__') === riscoConsultorSelecionado);
+
       const gridEl = document.getElementById('risco-grid-wrap');
       if (!chamados.length) {
+        if (riscoTable) { riscoTable.destroy(); riscoTable = null; }
         gridEl.innerHTML = '<div class="risco-empty">Nenhum chamado encontrado para este filtro.</div>';
         return;
       }
-      gridEl.innerHTML = `
-        <table class="risco-grid">
-          <thead><tr>
-            <th>Chamado</th><th>Cliente</th><th>Usuário</th><th>Aguardando</th><th>Status</th><th>Consultor</th><th>Último</th>
-          </tr></thead>
-          <tbody>
-            ${chamados.map(c => `
-              <tr onclick="selecionarChamado('${escapeHtml(c.id)}')">
-                <td><div class="risco-numero">#${escapeHtml(c.numero)}</div><div class="risco-titulo">${escapeHtml(c.titulo || c.assunto || c.breveDescricao || '(sem título)')}</div></td>
-                <td class="risco-texto">${escapeHtml(c.clienteNome || '—')}</td>
-                <td class="risco-texto">${escapeHtml(c.solicitanteNome || '—')}</td>
-                <td class="risco-texto">${escapeHtml(labelSituacaoRetorno(c.situacaoRetorno) || '—')}</td>
-                <td>${badgeSla(c.slaPrazo)}</td>
-                <td class="risco-texto">${escapeHtml(c.tecnicoResponsavelNome || 'Sem consultor')}</td>
-                <td class="risco-texto">${formatarData(c.ultimoPosicionamentoEm)}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>`;
+
+      try {
+        await garantirTabulator();
+      } catch (err) {
+        gridEl.innerHTML = `<div class="risco-empty">Não foi possível carregar a grade: ${escapeHtml(err.message)}</div>`;
+        return;
+      }
+
+      const linhas = chamados.map(c => ({
+        id: c.id,
+        numero: `#${c.numero || '—'}`,
+        titulo: c.titulo || c.assunto || c.breveDescricao || '(sem título)',
+        cliente: c.clienteNome || '—',
+        usuario: c.solicitanteNome || '—',
+        aguardando: labelSituacaoRetorno(c.situacaoRetorno) || '—',
+        status: c.slaPrazo || '—',
+        consultor: c.tecnicoResponsavelNome || 'Sem consultor',
+        ultimo: c.ultimoPosicionamentoEm ? formatarData(c.ultimoPosicionamentoEm) : '—',
+      }));
+
+      if (!riscoTable) {
+        gridEl.innerHTML = '';
+        riscoTable = new Tabulator(gridEl, {
+          data: linhas,
+          layout: 'fitColumns',
+          height: '100%',
+          groupBy: 'consultor',
+          groupHeader: (value, count) => `${value} (${count} chamado${count === 1 ? '' : 's'})`,
+          placeholder: 'Nenhum chamado encontrado para este filtro.',
+          columns: [
+            { title: 'Chamado', field: 'numero', width: 90, headerSort: true },
+            { title: 'Título', field: 'titulo', widthGrow: 2 },
+            { title: 'Cliente', field: 'cliente', widthGrow: 1 },
+            { title: 'Usuário', field: 'usuario', widthGrow: 1 },
+            { title: 'Aguardando', field: 'aguardando', widthGrow: 1 },
+            { title: 'Status', field: 'status', widthGrow: 1, formatter: (cell) => badgeSla(cell.getValue()) },
+            { title: 'Consultor', field: 'consultor', visible: false },
+            { title: 'Último', field: 'ultimo', width: 100 },
+          ],
+        });
+        riscoTable.on('rowClick', (e, row) => selecionarChamado(row.getData().id));
+      } else {
+        riscoTable.setData(linhas);
+      }
+    }
+
+    function filtrarGridRisco() {
+      if (!riscoTable) return;
+      const termo = document.getElementById('risco-busca').value.trim();
+      if (!termo) { riscoTable.clearFilter(); return; }
+      riscoTable.setFilter([
+        [
+          { field: 'numero', type: 'like', value: termo },
+          { field: 'titulo', type: 'like', value: termo },
+          { field: 'cliente', type: 'like', value: termo },
+          { field: 'usuario', type: 'like', value: termo },
+        ],
+      ]);
     }
 
     function selecionarConsultorRisco(consultorId) {
       riscoConsultorSelecionado = consultorId || 'todos';
+      document.getElementById('risco-busca').value = '';
       renderizarRiscoSla();
     }
 
