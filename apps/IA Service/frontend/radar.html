@@ -112,6 +112,30 @@
 
     .fila-empty { padding:32px 16px; text-align:center; color:var(--wa-text-tertiary); font-size:13px; }
     .fila-aviso { margin:10px 16px; background:rgba(0,217,163,.1); color:var(--wa-accent); border:1px solid rgba(0,217,163,.3); border-radius:8px; padding:8px 10px; font-size:11.5px; line-height:1.4; }
+    .risco-panel { display:none; flex:1; min-height:0; overflow:hidden; flex-direction:column; border-top:1px solid var(--wa-border); }
+    .risco-panel.ativo { display:flex; }
+    .radar-shell.risco-aberto { grid-template-columns:560px 1fr; }
+    .risco-filtros { flex:none; display:flex; gap:5px; padding:10px 12px 8px; border-bottom:1px solid var(--wa-border); background:rgba(0,0,0,.12); }
+    .risco-filtro { border:1px solid var(--wa-border); background:rgba(255,255,255,.03); padding:5px 9px; border-radius:7px; font-size:11px; font-weight:800; color:var(--wa-text-secondary); cursor:pointer; }
+    .risco-filtro.ativo { background:rgba(0,217,163,.13); color:var(--wa-accent); border-color:rgba(0,217,163,.32); }
+    .risco-layout { flex:1; min-height:0; display:grid; grid-template-columns:190px 1fr; }
+    .risco-consultores { min-height:0; overflow-y:auto; border-right:1px solid var(--wa-border); }
+    .risco-consultor { width:100%; border:none; border-bottom:1px solid var(--wa-border); background:transparent; color:var(--wa-text); text-align:left; padding:10px 12px; cursor:pointer; }
+    .risco-consultor:hover, .risco-consultor.ativo { background:var(--wa-sidebar-active); }
+    .risco-consultor-nome { font-size:12px; font-weight:900; line-height:1.25; }
+    .risco-consultor-meta { display:flex; gap:5px; flex-wrap:wrap; margin-top:5px; color:var(--wa-text-tertiary); font-size:10.5px; }
+    .risco-grid-wrap { min-width:0; overflow:auto; padding:10px; }
+    .risco-grid { width:100%; border-collapse:separate; border-spacing:0 7px; font-size:11.5px; }
+    .risco-grid th { color:var(--wa-text-tertiary); text-align:left; font-size:10px; text-transform:uppercase; padding:0 8px 2px; white-space:nowrap; }
+    .risco-grid td { background:rgba(255,255,255,.035); border-top:1px solid var(--wa-border); border-bottom:1px solid var(--wa-border); padding:8px; vertical-align:top; }
+    .risco-grid td:first-child { border-left:1px solid var(--wa-border); border-radius:8px 0 0 8px; }
+    .risco-grid td:last-child { border-right:1px solid var(--wa-border); border-radius:0 8px 8px 0; }
+    .risco-grid tr { cursor:pointer; }
+    .risco-grid tr:hover td { background:rgba(255,255,255,.07); }
+    .risco-numero { color:var(--wa-accent); font-weight:900; white-space:nowrap; }
+    .risco-titulo { min-width:170px; max-width:260px; color:var(--wa-text); font-weight:800; line-height:1.3; }
+    .risco-texto { color:var(--wa-text-secondary); line-height:1.35; }
+    .risco-empty { color:var(--wa-text-tertiary); padding:18px; font-size:12.5px; line-height:1.45; }
 
     /* ── Coluna direita: chat ───────────────────────────────────────────── */
     .chat-col { display:flex; flex-direction:column; min-height:0; min-width:0; background:var(--wa-panel); }
@@ -133,6 +157,8 @@
     .chat-header.recolhido .chat-header-toggle { transform:rotate(-90deg); }
     .chat-header-numero { font-size:13px; font-weight:800; color:var(--wa-accent); }
     .chat-header-titulo { font-size:14px; font-weight:700; color:var(--wa-text); margin-top:2px; }
+    .chat-header-status { margin-top:6px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+    .chat-header-status-main { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:900; color:#fde68a; background:rgba(250,204,21,.12); border:1px solid rgba(250,204,21,.24); border-radius:8px; padding:4px 8px; }
     /* Uma única linha compacta reunindo TUDO que antes eram 3 blocos
        empilhados (meta + tags sistema + tags pessoas) — SLA/data/status são
        pílulas de "meta" (fundo neutro), sistema/módulo/solicitante/consultor
@@ -143,8 +169,7 @@
     .chat-header-pill { font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:99px; background:rgba(255,255,255,.06); color:var(--wa-text-secondary); border:1px solid var(--wa-border); white-space:nowrap; }
     .chat-header-pill strong { color:var(--wa-text); font-weight:700; }
     .chat-header-tag { font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:99px; background:rgba(255,255,255,.06); color:var(--wa-text-secondary); border:1px solid var(--wa-border); white-space:nowrap; }
-    .chat-header-situacao-retorno { font-size:10.5px; font-weight:800; color:#f87171; white-space:nowrap; }
-    .chat-header-descricao { margin-top:8px; padding:8px 12px; background:rgba(255,255,255,.03); border:1px solid var(--wa-border); border-radius:8px; font-size:12.5px; color:var(--wa-text-secondary); line-height:1.5; max-height:64px; overflow-y:auto; }
+    .chat-header-descricao { margin-top:8px; padding:10px 12px; background:rgba(255,255,255,.03); border:1px solid var(--wa-border); border-radius:8px; font-size:12.5px; color:var(--wa-text-secondary); line-height:1.5; max-height:126px; overflow-y:auto; }
     .chat-header-descricao-label { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--wa-text-tertiary); margin-bottom:4px; }
 
     .chat-header-anexos { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
@@ -214,6 +239,7 @@
     .composer-hint { font-size:11px; color:var(--wa-text-tertiary); margin-top:5px; }
 
     .radar-shell.pesquisa-aberta { grid-template-columns:360px minmax(0,1fr) 390px; }
+    .radar-shell.risco-aberto.pesquisa-aberta { grid-template-columns:560px minmax(0,1fr) 390px; }
     .chat-header-actions { display:flex; align-items:center; gap:6px; }
     .chat-header-action {
       flex:none; height:26px; border-radius:7px; border:1px solid var(--wa-border);
@@ -333,8 +359,9 @@
             <div class="fila-tabs">
               <button class="fila-tab" id="tab-geral" onclick="setModoFila(false)">Fila geral</button>
               <button class="fila-tab ativo" id="tab-minha" onclick="setModoFila(true)">Minha fila</button>
+              <button class="fila-tab" id="tab-risco" onclick="setPainelFila('risco')">Risco SLA</button>
             </div>
-            <div class="fila-filtros">
+            <div class="fila-filtros" id="fila-filtros">
               <button class="fila-filtro ativo" id="filtro-todos" onclick="setFiltroSla('todos')">Todos</button>
               <button class="fila-filtro" id="filtro-atraso" onclick="setFiltroSla('em_atraso')">Em atraso</button>
               <button class="fila-filtro" id="filtro-dia" onclick="setFiltroSla('em_dia')">Em dia</button>
@@ -366,6 +393,17 @@
           </div>
           <div id="fila-aviso"></div>
           <div class="fila-lista" id="fila-lista"><div class="fila-empty">Carregando…</div></div>
+          <div class="risco-panel" id="risco-panel">
+            <div class="risco-filtros">
+              <button class="risco-filtro ativo" id="risco-filtro-todos" onclick="setFiltroRisco('todos')">Todos</button>
+              <button class="risco-filtro" id="risco-filtro-atraso" onclick="setFiltroRisco('em_atraso')">Em atraso</button>
+              <button class="risco-filtro" id="risco-filtro-proximo" onclick="setFiltroRisco('proximo')">Próx. vencimento</button>
+            </div>
+            <div class="risco-layout">
+              <div class="risco-consultores" id="risco-consultores"></div>
+              <div class="risco-grid-wrap" id="risco-grid-wrap"><div class="risco-empty">Carregando chamados em risco…</div></div>
+            </div>
+          </div>
         </aside>
 
         <!-- Coluna direita: chat -->
@@ -380,8 +418,10 @@
               <div>
                 <div class="chat-header-numero" id="chat-header-numero">—</div>
                 <div class="chat-header-titulo" id="chat-header-titulo">—</div>
+                <div class="chat-header-status" id="chat-header-status"></div>
               </div>
               <div class="chat-header-actions">
+                <button class="chat-header-action" id="info-toggle-btn" type="button" title="Ver informações do chamado" onclick="abrirInformacoesChamado()">Informações</button>
                 <button class="chat-header-action" id="pesquisa-toggle-btn" type="button" title="Abrir banco de conhecimento" onclick="togglePesquisaTecnica()">Banco de Conhecimento</button>
                 <button class="chat-header-toggle" id="chat-header-toggle" type="button" title="Recolher detalhes" onclick="toggleChatHeader()">▾</button>
               </div>
@@ -485,8 +525,13 @@
   <script>
     let modoMinhaFila = true; // padrão: analista abre já na própria fila, não na fila geral de todos
     let filtroSlaAtual = 'todos';
+    let painelFilaAtual = 'fila';
+    let filtroRiscoAtual = 'todos';
+    let riscoConsultorSelecionado = 'todos';
+    let riscoCache = { consultores: [], chamados: [] };
     let timerAutoRefresh = null;
     let chamadoSelecionadoId = null;
+    let chamadoAtual = null;
     let atendimentoAtualId = null;
     let anexosPendentes = [];
     let enviando = false;
@@ -598,10 +643,30 @@
     }
 
     // ── Fila (coluna esquerda) ──────────────────────────────────────────────
+    function setPainelFila(painel) {
+      painelFilaAtual = painel === 'risco' ? 'risco' : 'fila';
+      const risco = painelFilaAtual === 'risco';
+      document.getElementById('tab-risco').classList.toggle('ativo', risco);
+      document.getElementById('tab-geral').classList.toggle('ativo', !risco && !modoMinhaFila);
+      document.getElementById('tab-minha').classList.toggle('ativo', !risco && modoMinhaFila);
+      document.getElementById('fila-filtros').style.display = risco ? 'none' : 'flex';
+      document.getElementById('fila-lista').style.display = risco ? 'none' : 'block';
+      document.getElementById('risco-panel').classList.toggle('ativo', risco);
+      document.getElementById('radar-shell').classList.toggle('risco-aberto', risco);
+      if (risco) carregarRiscoSla();
+      else carregarFila();
+    }
+
     function setModoFila(minhaFila) {
       modoMinhaFila = minhaFila;
+      painelFilaAtual = 'fila';
+      document.getElementById('tab-risco').classList.remove('ativo');
       document.getElementById('tab-geral').classList.toggle('ativo', !minhaFila);
       document.getElementById('tab-minha').classList.toggle('ativo', minhaFila);
+      document.getElementById('fila-filtros').style.display = 'flex';
+      document.getElementById('fila-lista').style.display = 'block';
+      document.getElementById('risco-panel').classList.remove('ativo');
+      document.getElementById('radar-shell').classList.remove('risco-aberto');
       carregarFila();
     }
     function setFiltroSla(filtro) {
@@ -612,9 +677,22 @@
       carregarFila();
     }
 
+    function setFiltroRisco(filtro) {
+      filtroRiscoAtual = filtro;
+      riscoConsultorSelecionado = 'todos';
+      document.getElementById('risco-filtro-todos').classList.toggle('ativo', filtro === 'todos');
+      document.getElementById('risco-filtro-atraso').classList.toggle('ativo', filtro === 'em_atraso');
+      document.getElementById('risco-filtro-proximo').classList.toggle('ativo', filtro === 'proximo');
+      carregarRiscoSla();
+    }
+
     async function carregarFila({ forceSync = false } = {}) {
       const empresaId = empresaIdAtual();
       if (!empresaId) return;
+      if (painelFilaAtual === 'risco') {
+        await carregarRiscoSla({ forceSync });
+        return;
+      }
       try {
         const params = { apenas_minha: modoMinhaFila ? 'true' : 'false', filtro_sla: filtroSlaAtual };
         if (!modoExterno) params.empresa_id = empresaId;
@@ -654,6 +732,79 @@
       }
     }
 
+    async function carregarRiscoSla({ forceSync = false } = {}) {
+      const empresaId = empresaIdAtual();
+      if (!empresaId) return;
+      try {
+        const params = { filtro: filtroRiscoAtual, apenas_minha: modoMinhaFila ? 'true' : 'false' };
+        if (!modoExterno) params.empresa_id = empresaId;
+        if (forceSync) params.force_sync = 'true';
+        const resultado = await api(`/radar/risco-sla?${new URLSearchParams(params).toString()}`);
+        riscoCache = {
+          consultores: resultado.consultores || [],
+          chamados: resultado.chamados || [],
+        };
+        filaCache = resultado.chamados || [];
+        if (!riscoCache.consultores.some(c => c.id === riscoConsultorSelecionado)) {
+          riscoConsultorSelecionado = 'todos';
+        }
+        document.getElementById('fila-contador').textContent = `${riscoCache.chamados.length} em risco`;
+        renderizarRiscoSla();
+      } catch (err) {
+        showError('Não foi possível carregar a aba de risco SLA: ' + err.message);
+      }
+    }
+
+    function renderizarRiscoSla() {
+      const totalAtraso = riscoCache.chamados.filter(c => c.slaPrazo === 'Em atraso').length;
+      const totalProximo = riscoCache.chamados.filter(c => c.slaPrazo === 'Proxima do vencimento').length;
+      const consultoresEl = document.getElementById('risco-consultores');
+      const todosAtivo = riscoConsultorSelecionado === 'todos';
+      const todosBtn = `
+        <button class="risco-consultor ${todosAtivo ? 'ativo' : ''}" type="button" onclick="selecionarConsultorRisco('todos')">
+          <div class="risco-consultor-nome">Todos os consultores</div>
+          <div class="risco-consultor-meta"><span>${riscoCache.chamados.length} chamado(s)</span><span>${totalAtraso} atraso</span><span>${totalProximo} próx.</span></div>
+        </button>`;
+      const consultores = riscoCache.consultores.map(c => `
+        <button class="risco-consultor ${c.id === riscoConsultorSelecionado ? 'ativo' : ''}" type="button" onclick="selecionarConsultorRisco('${escapeHtml(String(c.id))}')">
+          <div class="risco-consultor-nome">${escapeHtml(c.nome || 'Sem consultor')}</div>
+          <div class="risco-consultor-meta"><span>${c.total} chamado(s)</span><span>${c.emAtraso} atraso</span><span>${c.proximo} próx.</span></div>
+        </button>`).join('');
+      consultoresEl.innerHTML = todosBtn + (consultores || '<div class="risco-empty">Nenhum consultor com chamado em risco.</div>');
+
+      const chamados = riscoConsultorSelecionado === 'todos'
+        ? riscoCache.chamados
+        : riscoCache.chamados.filter(c => (c.tecnicoResponsavelId || '__sem_consultor__') === riscoConsultorSelecionado);
+      const gridEl = document.getElementById('risco-grid-wrap');
+      if (!chamados.length) {
+        gridEl.innerHTML = '<div class="risco-empty">Nenhum chamado encontrado para este filtro.</div>';
+        return;
+      }
+      gridEl.innerHTML = `
+        <table class="risco-grid">
+          <thead><tr>
+            <th>Chamado</th><th>Cliente</th><th>Usuário</th><th>Aguardando</th><th>Status</th><th>Consultor</th><th>Último</th>
+          </tr></thead>
+          <tbody>
+            ${chamados.map(c => `
+              <tr onclick="selecionarChamado('${escapeHtml(c.id)}')">
+                <td><div class="risco-numero">#${escapeHtml(c.numero)}</div><div class="risco-titulo">${escapeHtml(c.titulo || c.assunto || c.breveDescricao || '(sem título)')}</div></td>
+                <td class="risco-texto">${escapeHtml(c.clienteNome || '—')}</td>
+                <td class="risco-texto">${escapeHtml(c.solicitanteNome || '—')}</td>
+                <td class="risco-texto">${escapeHtml(labelSituacaoRetorno(c.situacaoRetorno) || '—')}</td>
+                <td>${badgeSla(c.slaPrazo)}</td>
+                <td class="risco-texto">${escapeHtml(c.tecnicoResponsavelNome || 'Sem consultor')}</td>
+                <td class="risco-texto">${formatarData(c.ultimoPosicionamentoEm)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    function selecionarConsultorRisco(consultorId) {
+      riscoConsultorSelecionado = consultorId || 'todos';
+      renderizarRiscoSla();
+    }
+
     // Atualização manual (botão "Atualizar agora") — mesma carga que o
     // auto-refresh, mas disparada pelo clique do analista. Reseta a
     // contagem regressiva do auto-refresh (evita atualizar de novo poucos
@@ -688,8 +839,9 @@
       document.getElementById('chat-body').innerHTML = '<div style="text-align:center;color:var(--wa-text-tertiary);font-size:13px;padding:20px;">Carregando…</div>';
 
       const chamado = filaCache.find(c => c.id === chamadoId);
+      chamadoAtual = chamado || null;
       if (chamado) preencherCabecalho(chamado);
-      carregarAnexosSoftExpert(chamadoId);
+      await carregarAnexosSoftExpert(chamadoId);
 
       try {
         const qs = qsEmpresa(empresaId);
@@ -737,7 +889,8 @@
         return;
       }
       resumo.style.display = 'block';
-      resumo.innerHTML = `<button class="anexos-abrir-btn" type="button" onclick="abrirGradeAnexosChamado()">📎 Anexos ${totalOrigem ? totalOrigem : total}${totalBaixados ? ` · IA ${totalBaixados}` : ''}</button>`;
+      const abertura = anexosSoftExpertCache.filter(a => a.origem === 'chamado').length;
+      resumo.innerHTML = `<button class="anexos-abrir-btn" type="button" onclick="abrirGradeAnexosChamado()">📎 Anexos abertura ${abertura || totalOrigem || total}${totalBaixados ? ` · IA ${totalBaixados}` : ''}</button>`;
     }
 
     function origemAnexoLabel(origem) {
@@ -796,16 +949,20 @@
     }
 
     function abrirGradeAnexosChamado() {
-      const origem = montarLinhasAnexos(anexosSoftExpertCache, { fonte: 'softexpert' });
+      const abertura = anexosSoftExpertCache.filter(a => a.origem === 'chamado');
+      const outros = anexosSoftExpertCache.filter(a => a.origem !== 'chamado');
+      const origem = montarLinhasAnexos(abertura.length ? abertura : anexosSoftExpertCache, { fonte: 'softexpert' });
+      const posicionamentos = montarLinhasAnexos(outros, { fonte: 'softexpert' });
       const baixados = montarLinhasAnexos(anexosAtendimentoCache, { fonte: 'local' });
       abrirModalAnexos({
         titulo: 'Anexos do chamado',
-        subtitulo: 'SoftExpert e arquivos baixados para análise da IA',
+        subtitulo: 'Abertura do SoftExpert, posicionamentos e arquivos baixados para análise da IA',
         html: `
           <div class="pesquisa-card">
-            <div class="pesquisa-card-title">SoftExpert</div>
+            <div class="pesquisa-card-title">Abertura do chamado</div>
             ${origem}
           </div>
+          ${outros.length ? `<div class="pesquisa-card"><div class="pesquisa-card-title">Posicionamentos / conversas</div>${posicionamentos}</div>` : ''}
           <div class="pesquisa-card">
             <div class="pesquisa-card-title">Baixados para IA / analista</div>
             ${baixados}
@@ -816,10 +973,16 @@
 
     function abrirGradeAnexosBubble(chave) {
       const anexos = anexosPorBubble.get(chave) || [];
+      const anexosSoft = anexos.filter(a => a._fonte === 'softexpert');
+      const anexosLocais = anexos.filter(a => a._fonte !== 'softexpert');
+      const html = [
+        anexosSoft.length ? `<div class="pesquisa-card"><div class="pesquisa-card-title">SoftExpert desta conversa</div>${montarLinhasAnexos(anexosSoft, { fonte: 'softexpert' })}</div>` : '',
+        anexosLocais.length ? `<div class="pesquisa-card"><div class="pesquisa-card-title">Arquivos anexados nesta conversa</div>${montarLinhasAnexos(anexosLocais.map(a => ({ ...a, origem: a.origem || 'analista' })), { fonte: 'local' })}</div>` : '',
+      ].filter(Boolean).join('') || '<div class="pesquisa-empty">Nenhum anexo encontrado para esta interação.</div>';
       abrirModalAnexos({
         titulo: 'Anexos da conversa',
         subtitulo: 'Arquivos vinculados a esta interação',
-        html: montarLinhasAnexos(anexos.map(a => ({ ...a, origem: a.origem || 'analista' })), { fonte: 'local' }),
+        html,
       });
     }
 
@@ -878,6 +1041,10 @@
       document.getElementById('chat-header').classList.toggle('recolhido', localStorage.getItem(CHAT_HEADER_RECOLHIDO_KEY) === '1');
       document.getElementById('chat-header-numero').textContent = `#${c.numero}`;
       document.getElementById('chat-header-titulo').textContent = c.titulo || c.assunto || c.breveDescricao || '(sem título)';
+      const situacaoLabel = labelSituacaoRetorno(c.situacaoRetorno);
+      document.getElementById('chat-header-status').innerHTML = situacaoLabel
+        ? `<span class="chat-header-status-main">⏳ ${escapeHtml(situacaoLabel)}</span>`
+        : '<span class="chat-header-status-main">⏳ Aguardando retorno</span>';
 
       // Tudo numa única linha compacta que quebra por flex-wrap (não por
       // design) — SLA/data/status/último posicionamento (pílulas de "meta")
@@ -894,15 +1061,7 @@
       if (c.ultimoPosicionamentoEm) linha.push(`<span class="chat-header-pill">Últ. posicionamento: <strong>${formatarData(c.ultimoPosicionamentoEm)}</strong></span>`);
       if (c.clienteNome) linha.push(`<span class="chat-header-tag">🏢 ${escapeHtml(c.clienteNome)}</span>`);
       if (c.produto) linha.push(`<span class="chat-header-tag">💻 ${escapeHtml(c.produto)}</span>`);
-      if (c.familia) linha.push(`<span class="chat-header-tag">📦 ${escapeHtml(c.familia)}</span>`);
-      if (c.modulo) linha.push(`<span class="chat-header-tag">🧩 ${escapeHtml(c.modulo)}</span>`);
-      if (c.solicitanteNome) {
-        const comEmail = c.solicitanteEmail ? ` — ${escapeHtml(c.solicitanteEmail)}` : '';
-        linha.push(`<span class="chat-header-tag">👤 ${escapeHtml(c.solicitanteNome)}${comEmail}</span>`);
-      }
       if (c.tecnicoResponsavelNome) linha.push(`<span class="chat-header-tag">🧑‍💻 Consultor: ${escapeHtml(c.tecnicoResponsavelNome)}</span>`);
-      const situacaoLabel = labelSituacaoRetorno(c.situacaoRetorno);
-      if (situacaoLabel) linha.push(`<span class="chat-header-situacao-retorno">${escapeHtml(situacaoLabel)}</span>`);
       document.getElementById('chat-header-linha').innerHTML = linha.join('');
 
       // Descrição do problema — fonte real que a IA usa para investigar (ver
@@ -916,6 +1075,68 @@
       } else {
         descricaoEl.style.display = 'none';
       }
+    }
+
+    function abrirInformacoesChamado() {
+      const c = chamadoAtual || filaCache.find(item => item.id === chamadoSelecionadoId);
+      if (!c) return;
+      const campos = [
+        ['Número', `#${c.numero || '—'}`],
+        ['Título', c.titulo || c.assunto || c.breveDescricao || '—'],
+        ['Cliente', c.clienteNome || '—'],
+        ['Usuário', [c.solicitanteNome, c.solicitanteEmail].filter(Boolean).join(' — ') || '—'],
+        ['Consultor', c.tecnicoResponsavelNome || 'Sem consultor'],
+        ['Aguardando', labelSituacaoRetorno(c.situacaoRetorno) || '—'],
+        ['SLA', c.slaPrazo || c.slaStatus || '—'],
+        ['SLA horas', c.slaHoras || '—'],
+        ['SLA inicial', c.slaInicial || '—'],
+        ['SLA anterior', c.slaAnterior || '—'],
+        ['Status', c.statusEncerramento || '—'],
+        ['Aberto em', formatarData(c.dataAbertura)],
+        ['Último posicionamento', formatarData(c.ultimoPosicionamentoEm)],
+        ['Produto', c.produto || '—'],
+        ['Família', c.familia || '—'],
+        ['Módulo', c.modulo || '—'],
+        ['Serviço', c.servico || '—'],
+        ['Tipo', c.tipoChamadoFinal || c.tipoChamado || '—'],
+        ['Natureza', c.natureza || '—'],
+        ['Nível', c.nivel || '—'],
+        ['Total de horas', c.totalHoras || '—'],
+        ['Avaliação', c.avaliacao || '—'],
+      ];
+      const html = `
+        <table class="anexos-grid">
+          <thead><tr><th>Informação</th><th>Valor</th></tr></thead>
+          <tbody>${campos.map(([k, v]) => `
+            <tr><td><div class="anexo-nome">${escapeHtml(k)}</div></td><td>${escapeHtml(String(v))}</td></tr>
+          `).join('')}</tbody>
+        </table>`;
+      abrirModalAnexos({
+        titulo: 'Informações do chamado',
+        subtitulo: 'Dados completos para análise operacional',
+        html,
+      });
+    }
+
+    function anexosSoftExpertDaMensagem(m) {
+      if (!anexosSoftExpertCache.length || !m?.conteudo) return [];
+      const texto = String(m.conteudo);
+      const dataMatch = texto.match(/\[(\d{4}-\d{2}-\d{2})\]/);
+      const dataMsg = dataMatch?.[1] || null;
+      const autorMatch = texto.match(/\]\s*([^:\n]+):/);
+      const autorMsg = autorMatch?.[1]?.trim().toLowerCase() || null;
+      if (!dataMsg && !autorMsg) return [];
+
+      return anexosSoftExpertCache
+        .filter(a => a.origem !== 'chamado')
+        .filter(a => {
+          const dataAnexo = a.referenciaData ? String(a.referenciaData).slice(0, 10) : null;
+          const autorAnexo = a.referenciaAutor ? String(a.referenciaAutor).trim().toLowerCase() : null;
+          const mesmaData = dataMsg && dataAnexo && dataMsg === dataAnexo;
+          const mesmoAutor = autorMsg && autorAnexo && (autorMsg.includes(autorAnexo) || autorAnexo.includes(autorMsg));
+          return mesmaData && (!autorMsg || !autorAnexo || mesmoAutor);
+        })
+        .map(a => ({ ...a, _fonte: 'softexpert' }));
     }
 
     function togglePesquisaTecnica() {
@@ -1135,10 +1356,14 @@
         for (const m of mensagens) {
           if (m.papel === 'system') continue;
           const direcao = m.papel === 'user' ? 'out' : 'in';
+          const anexosDaMensagem = [
+            ...(anexosPorMensagem[m.id] || []),
+            ...anexosSoftExpertDaMensagem(m),
+          ];
           addBubble({
             direcao,
             texto: m.conteudo,
-            anexos: anexosPorMensagem[m.id],
+            anexos: anexosDaMensagem,
             diagnostico: m.diagnostico,
             nivelConfianca: m.nivelConfianca,
             perguntaContexto: m.papel === 'assistant' ? perguntaAnterior : null,

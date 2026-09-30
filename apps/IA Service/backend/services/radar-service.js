@@ -98,6 +98,33 @@ function getFilaPorConsultorId(empresaId, consultorId, { filtroSla = 'todos', li
   return { chamados: radarRepo.listarFila(empresaId, { tecnicoId: tecnico.id, filtroSla, limite }), avisoSemVinculo: false };
 }
 
+function getRiscoSla(empresaId, { filtroRisco = 'todos', limite } = {}) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  return radarRepo.listarRiscoSla(empresaId, { filtroRisco, limite });
+}
+
+function getRiscoSlaPorConsultorId(empresaId, consultorId, { filtroRisco = 'todos', limite } = {}) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!consultorId) throw new Error('consultorId é obrigatório.');
+
+  const consultor = consultorService.getConsultor(empresaId, consultorId);
+  const { tecnico } = _resolverTecnicoDoConsultorResolvido(empresaId, consultor);
+  if (!tecnico) return { consultores: [], chamados: [], avisoSemVinculo: true };
+  const resultado = radarRepo.listarRiscoSla(empresaId, { tecnicoId: tecnico.id, filtroRisco, limite });
+  return { ...resultado, avisoSemVinculo: false };
+}
+
+function getRiscoSlaUsuario(empresaId, usuarioIdIahub, { apenasMinha = false, filtroRisco = 'todos', limite } = {}) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!apenasMinha) return { ...getRiscoSla(empresaId, { filtroRisco, limite }), avisoSemVinculo: false };
+
+  if (!usuarioIdIahub) throw new Error('usuarioIdIahub é obrigatório para filtrar "minha fila".');
+  const { tecnico } = _resolverTecnicoDoConsultor(empresaId, usuarioIdIahub);
+  if (!tecnico) return { consultores: [], chamados: [], avisoSemVinculo: true };
+  const resultado = radarRepo.listarRiscoSla(empresaId, { tecnicoId: tecnico.id, filtroRisco, limite });
+  return { ...resultado, avisoSemVinculo: false };
+}
+
 function _formatarConteudoBruto(chamado, posicionamentos) {
   const linhas = [
     `Chamado SoftExpert #${chamado.numero}`,
@@ -284,6 +311,9 @@ function iniciarAnalise(empresaId, chamadoId, { usuarioIdIahub, consultorId, pre
 module.exports = {
   getFila,
   getFilaPorConsultorId,
+  getRiscoSla,
+  getRiscoSlaUsuario,
+  getRiscoSlaPorConsultorId,
   iniciarAnalise,
   abrirOuCriarAtendimento: iniciarAnalise,
   buscarRelacionados,

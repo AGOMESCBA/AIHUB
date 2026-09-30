@@ -85,9 +85,13 @@
     .chip-claude { background:rgba(168,85,247,.12);color:#7e22ce; }
     .chip-gemini { background:rgba(59,130,246,.12);color:#2563eb; }
     .chain-arrow { color:var(--text-lo);font-size:.75rem; }
+    .copy-link-row { display:flex;align-items:center;gap:8px;max-width:640px; }
+    .copy-link-row .form-control { flex:1;min-width:0; }
+    .copy-link-btn { white-space:nowrap; }
 
     @media (max-width:600px) {
       .prov-header { flex-direction:column;align-items:flex-start; }
+      .copy-link-row { flex-direction:column;align-items:stretch; }
     }
   </style>
 </head>
@@ -414,7 +418,10 @@
                   </div>
                   <div class="form-group" style="margin-bottom:0">
                     <label class="form-label">Link para compartilhar</label>
-                    <input type="text" class="form-control" id="f-login-link" readonly style="cursor:text;max-width:480px" onclick="this.select()">
+                    <div class="copy-link-row">
+                      <input type="text" class="form-control" id="f-login-link" readonly style="cursor:text" onclick="this.select()">
+                      <button class="btn btn-ghost copy-link-btn" type="button" id="copiar-link-btn" onclick="copiarLinkAcesso()">Copiar link</button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -567,6 +574,37 @@
       : `${location.origin}/entrar-servico`;
   }
   window.atualizarLinkApelido = atualizarLinkApelido;
+
+  async function copiarLinkAcesso() {
+    const input = $('f-login-link');
+    const btn = $('copiar-link-btn');
+    const texto = input.value || '';
+    if (!texto) return;
+    const textoOriginal = btn.textContent;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(texto);
+      } else {
+        input.focus();
+        input.select();
+        document.execCommand('copy');
+      }
+      btn.textContent = 'Copiado';
+      btn.classList.remove('btn-ghost');
+      btn.classList.add('btn-primary');
+      setTimeout(() => {
+        btn.textContent = textoOriginal;
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-ghost');
+      }, 1600);
+    } catch (_) {
+      input.focus();
+      input.select();
+      btn.textContent = 'Selecionei';
+      setTimeout(() => { btn.textContent = textoOriginal; }, 1600);
+    }
+  }
+  window.copiarLinkAcesso = copiarLinkAcesso;
 
   function atualizarResumo() {
     const labels = { groq: 'Groq', openai: 'OpenAI', claude: 'Claude', gemini: 'Gemini' };

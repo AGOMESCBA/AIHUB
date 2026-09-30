@@ -675,6 +675,24 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
+  app.get('/api/ia-service/radar/risco-sla', async (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const { apenas_minha, filtro, limite, force_sync } = req.query || {};
+      const sincronizacao = await radarRefreshService.sincronizarAntesDaFila(empresaId, {
+        force: force_sync === 'true',
+      });
+      const resultado = radarService.getRiscoSlaUsuario(empresaId, req.session?.user_id || null, {
+        apenasMinha: apenas_minha === 'true',
+        filtroRisco: filtro || 'todos',
+        limite: limite ? Number(limite) : undefined,
+      });
+      res.json({ ...resultado, sincronizacao });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   function iniciarAnaliseRadar(req, res) {
     try {
       const empresaId = req.svcEmpresaId;

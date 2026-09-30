@@ -104,6 +104,22 @@ module.exports = function registrarRotasExterno(app) {
     }
   });
 
+  app.get('/api/ia-service-externo/radar/risco-sla', async (req, res) => {
+    try {
+      const { filtro, limite, force_sync } = req.query || {};
+      const sincronizacao = await radarRefreshService.sincronizarAntesDaFila(req.svcEmpresaId, {
+        force: force_sync === 'true',
+      });
+      const resultado = radarService.getRiscoSlaPorConsultorId(req.svcEmpresaId, req.svcConsultorExterno, {
+        filtroRisco: filtro || 'todos',
+        limite: limite ? Number(limite) : undefined,
+      });
+      res.json({ ...resultado, sincronizacao });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   app.get('/api/ia-service-externo/radar/chamados/:chamadoId/anexos-softexpert', async (req, res) => {
     try {
       const anexos = await anexosSoftExpertService.listarAnexosDoChamado(req.svcEmpresaId, req.params.chamadoId);
