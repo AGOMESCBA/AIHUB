@@ -306,6 +306,17 @@
     .info-label { display:block; font-size:10px; font-weight:900; text-transform:uppercase; color:var(--wa-accent); margin-bottom:4px; }
     .info-value { color:var(--wa-text); font-size:12.5px; line-height:1.35; overflow-wrap:anywhere; }
 
+    /* Destaque no topo da aba Detalhes — há quanto tempo o chamado aguarda
+       a parte atual (Atendente/Cliente/Fornecedor). Resume no cabeçalho de
+       uma olhada o que antes exigia ler a grade de campos inteira. */
+    .destaque-aguardando {
+      border:1px solid rgba(250,204,21,.28); border-radius:10px; background:rgba(250,204,21,.07);
+      padding:16px; margin-bottom:16px; text-align:center;
+    }
+    .destaque-aguardando-label { font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:#fde68a; }
+    .destaque-aguardando-dias { font-size:32px; font-weight:900; color:var(--wa-text); margin-top:6px; line-height:1.1; }
+    .destaque-aguardando-sub { font-size:11.5px; color:var(--wa-text-tertiary); margin-top:6px; }
+
     @media (max-width: 900px) {
       .radar-shell { grid-template-columns:1fr; }
       .fila-col.chat-aberto { display:none; }
@@ -442,11 +453,8 @@
             <button class="view-tab active" id="tab-conversa" type="button" role="tab" aria-selected="true" onclick="trocarAbaChat('conversa')">
               <span class="badge-dot"></span> Conversa
             </button>
-            <button class="view-tab" id="tab-dados" type="button" role="tab" aria-selected="false" onclick="trocarAbaChat('dados')">
-              <span class="badge-dot"></span> Dados
-            </button>
             <button class="view-tab" id="tab-informacoes" type="button" role="tab" aria-selected="false" onclick="trocarAbaChat('informacoes')">
-              <span class="badge-dot"></span> Informações
+              <span class="badge-dot"></span> Detalhes
             </button>
             <button class="view-tab" id="tab-banco-conhecimento" type="button" role="tab" aria-selected="false" onclick="trocarAbaChat('banco-conhecimento')">
               <span class="badge-dot"></span> Banco de Conhecimento
@@ -467,10 +475,6 @@
                 </div>
                 <div class="composer-hint">Ctrl+Enter para enviar · anexe prints, logs e fonte relacionados ao problema</div>
               </div>
-            </div>
-
-            <div class="view-panel" id="painel-dados">
-              <div class="pesquisa-empty" style="padding:16px">Ainda não há dados tabulares para este chamado. Faça uma pergunta cuja resposta traga uma listagem — os registros aparecerão aqui.</div>
             </div>
 
             <div class="view-panel" id="painel-informacoes">
@@ -1067,7 +1071,7 @@
     // de apps/IA Command/modules/protheus_whatsapp/public/protheus-chat.html
     // (trocarAba). Cada aba já carrega seu conteúdo sob demanda, só na
     // primeira vez que é aberta (abrirInformacoesChamado/carregarPesquisaTecnica).
-    const ABAS_CHAT = ['conversa', 'dados', 'informacoes', 'banco-conhecimento'];
+    const ABAS_CHAT = ['conversa', 'informacoes', 'banco-conhecimento'];
     function trocarAbaChat(aba) {
       if (!ABAS_CHAT.includes(aba)) return;
       ABAS_CHAT.forEach(id => {
@@ -1089,19 +1093,12 @@
         ? `<span class="chat-header-status-main">⏳ ${escapeHtml(situacaoLabel)}</span>`
         : '<span class="chat-header-status-main">⏳ Aguardando retorno</span>';
 
-      // Tudo numa única linha compacta que quebra por flex-wrap (não por
-      // design) — SLA/data/status/último posicionamento (pílulas de "meta")
-      // e sistema/módulo/cliente/solicitante/consultor (pílulas de "tag")
-      // misturados na mesma linha, na ordem de prioridade de leitura rápida.
-      // Dados de pessoa vêm de chamados.solicitante_id/tecnico_responsavel_id,
-      // resolvidos via JOIN em radar-repository.js (100% coberto para
-      // solicitante, ~97% para técnico — chamados sem alocação simplesmente
-      // omitem essa pílula).
+      // Linha reduzida ao essencial para leitura rápida na lista — o resto
+      // (data de abertura, status de encerramento, último posicionamento,
+      // SLA detalhado etc.) fica na aba Detalhes, que já reúne esses campos
+      // na grade + no destaque de "há quanto tempo aguarda" no topo.
       const linha = [];
       if (c.slaPrazo) linha.push(badgeSla(c.slaPrazo));
-      linha.push(`<span class="chat-header-pill">Aberto em <strong>${formatarData(c.dataAbertura)}</strong></span>`);
-      if (c.statusEncerramento) linha.push(`<span class="chat-header-pill">Status: <strong>${escapeHtml(c.statusEncerramento)}</strong></span>`);
-      if (c.ultimoPosicionamentoEm) linha.push(`<span class="chat-header-pill">Últ. posicionamento: <strong>${formatarData(c.ultimoPosicionamentoEm)}</strong></span>`);
       if (c.tecnicoResponsavelNome) linha.push(`<span class="chat-header-tag">🧑‍💻 Consultor: ${escapeHtml(c.tecnicoResponsavelNome)}</span>`);
       document.getElementById('chat-header-linha').innerHTML = linha.join('');
 
@@ -1127,7 +1124,6 @@
         ['Cliente', c.clienteNome || '—'],
         ['Usuário', [c.solicitanteNome, c.solicitanteEmail].filter(Boolean).join(' — ') || '—'],
         ['Consultor', c.tecnicoResponsavelNome || 'Sem consultor'],
-        ['Aguardando', labelSituacaoRetorno(c.situacaoRetorno) || '—'],
         ['SLA', c.slaPrazo || c.slaStatus || '—'],
         ['SLA horas', c.slaHoras || '—'],
         ['SLA inicial', c.slaInicial || '—'],
@@ -1145,13 +1141,41 @@
         ['Total de horas', c.totalHoras || '—'],
         ['Avaliação', c.avaliacao || '—'],
       ];
-      const html = `<div class="info-grid">${campos.map(([k, v]) => `
+      const grid = `<div class="info-grid">${campos.map(([k, v]) => `
         <div class="info-item">
           <span class="info-label">${escapeHtml(k)}</span>
           <div class="info-value">${escapeHtml(String(v))}</div>
         </div>
       `).join('')}</div>`;
-      document.getElementById('informacoes-body').innerHTML = html;
+      document.getElementById('informacoes-body').innerHTML = renderizarDestaqueAguardando(c) + grid;
+    }
+
+    // Há quanto tempo o chamado aguarda a parte atual (categoria real vinda
+    // de posicionamentos.situacao_retorno, migration v22 — só 3 valores
+    // confirmados nos dados: Atendente/J2A, Cliente, Fornecedor). Cálculo
+    // simplificado: agora − data do ÚLTIMO posicionamento, não soma o
+    // histórico completo de trocas de situação (isso exigiria percorrer
+    // todos os posicionamentos do chamado, deixado para uma iteração futura
+    // se fizer falta).
+    function diasEntre(dataIso) {
+      if (!dataIso) return null;
+      const inicio = new Date(dataIso);
+      if (Number.isNaN(inicio.getTime())) return null;
+      const ms = Date.now() - inicio.getTime();
+      return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
+    }
+
+    function renderizarDestaqueAguardando(c) {
+      const dias = diasEntre(c.ultimoPosicionamentoEm || c.dataAbertura);
+      const label = labelSituacaoRetorno(c.situacaoRetorno) || 'Sem posicionamento registrado';
+      const diasTexto = dias === null ? '—' : dias === 0 ? 'Hoje' : dias === 1 ? '1 dia' : `${dias} dias`;
+      return `
+        <div class="destaque-aguardando">
+          <div class="destaque-aguardando-label">${escapeHtml(label)}</div>
+          <div class="destaque-aguardando-dias">${escapeHtml(diasTexto)}</div>
+          <div class="destaque-aguardando-sub">desde o último posicionamento em ${escapeHtml(formatarData(c.ultimoPosicionamentoEm || c.dataAbertura))}</div>
+        </div>
+      `;
     }
 
     function anexosSoftExpertDaMensagem(m) {
