@@ -790,7 +790,14 @@
       const empresaId = empresaIdAtual();
       if (!empresaId) return;
       try {
-        const params = { filtro: filtroRiscoAtual, apenas_minha: modoMinhaFila ? 'true' : 'false' };
+        // Risco SLA é sempre uma visão de TODOS os consultores — o filtro
+        // por pessoa é o próprio seletor de consultor dentro da tela
+        // (selecionarConsultorRisco), nunca o conceito de "minha fila" das
+        // abas Minha fila/Fila geral (modoMinhaFila é outro estado, que
+        // nunca é resetado ao entrar em Risco SLA — enviá-lo aqui restringia
+        // sempre ao usuário logado, mesmo com "Todos os consultores"
+        // selecionado na tela).
+        const params = { filtro: filtroRiscoAtual, apenas_minha: 'false' };
         if (!modoExterno) params.empresa_id = empresaId;
         if (forceSync) params.force_sync = 'true';
         const resultado = await api(`/radar/risco-sla?${new URLSearchParams(params).toString()}`);
@@ -1002,6 +1009,12 @@
         const resultado = await api(`/radar/chamados/${chamadoId}/iniciar-analise${qs ? '?' + qs : ''}`, { method: 'POST' });
         atendimentoAtualId = resultado.atendimentoId;
         await carregarMensagens();
+        // Só aguarda se o backend de fato disparou a pré-análise em
+        // background (radar-service.js retorna preAnaliseDisparada=false
+        // quando o consultor tem a preferência desligada — nesse caso o
+        // atendimento é criado SEM resposta da IA de propósito, esperar
+        // seria só um timeout de 30s à toa).
+        if (resultado.preAnaliseDisparada) await aguardarPreAnalise();
         if (document.getElementById('tab-banco-conhecimento').classList.contains('active')) carregarPesquisaTecnica(chamadoId);
       } catch (err) {
         showError('Não foi possível iniciar a análise: ' + err.message);
@@ -1355,10 +1368,6 @@
       const pesquisa = resultado?.pesquisa || {};
       const relacionados = resultado?.relacionados || [];
       const body = document.getElementById('pesquisa-body');
-      const subtitulo = document.getElementById('pesquisa-subtitle');
-      subtitulo.textContent = pesquisa.perfil?.nome
-        ? `${pesquisa.perfil.nome} · confiança ${pesquisa.confianca || 'baixa'}`
-        : 'Base interna e trilhas técnicas';
 
       body.innerHTML = pesquisaAbaAtual === 'web'
         ? renderizarAbaPesquisaWeb(pesquisa)
@@ -1504,7 +1513,7 @@
 
     async function carregarMensagens() {
       const empresaId = empresaIdAtual();
-      if (!empresaId || !atendimentoAtualId) return;
+      if (!empresaId || !atendimentoAtualId) return false;
       try {
         const qs = qsEmpresa(empresaId);
         const sufixo = qs ? '?' + qs : '';
@@ -1522,9 +1531,11 @@
           (anexosPorMensagem[a.mensagemId] ||= []).push(a);
         }
         let perguntaAnterior = null;
+        let temRespostaIa = false;
         for (const m of mensagens) {
           if (m.papel === 'system') continue;
           const direcao = m.papel === 'user' ? 'out' : 'in';
+          if (m.papel === 'assistant') temRespostaIa = true;
           const anexosDaMensagem = [
             ...(anexosPorMensagem[m.id] || []),
             ...anexosSoftExpertDaMensagem(m),
@@ -1539,9 +1550,29 @@
           });
           if (direcao === 'out') perguntaAnterior = m.conteudo;
         }
+        return temRespostaIa;
       } catch (err) {
         showError('Não foi possível carregar as mensagens: ' + err.message);
+        return false;
       }
+    }
+
+    // Pré-análise da IA roda em BACKGROUND no servidor (fire-and-forget,
+    // radar-service._dispararPreAnaliseEmBackground) — a resposta HTTP de
+    // iniciar-analise volta quase na hora, antes da IA terminar. Sem isso, a
+    // resposta só aparecia quando o analista reabria o mesmo chamado depois
+    // (a próxima carregarMensagens() já encontrava pronto). Faz polling
+    // curto mostrando "Analisando…" até a resposta chegar ou estourar o
+    // tempo máximo — mesmo indicador visual (showTyping/hideTyping) já
+    // usado para mensagens manuais do composer.
+    async function aguardarPreAnalise({ maxTentativas = 20, intervaloMs = 1500 } = {}) {
+      showTyping();
+      for (let tentativa = 0; tentativa < maxTentativas; tentativa++) {
+        const temResposta = await carregarMensagens();
+        if (temResposta) { hideTyping(); return; }
+        await new Promise(r => setTimeout(r, intervaloMs));
+      }
+      hideTyping();
     }
 
     document.getElementById('anexo-input').addEventListener('change', async (e) => {

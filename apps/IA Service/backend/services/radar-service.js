@@ -308,10 +308,11 @@ function iniciarAnalise(empresaId, chamadoId, { usuarioIdIahub, consultorId, pre
     _sincronizarHistoricoImportado(empresaId, existente.id, chamado, posicionamentos, usuarioIdIahub);
     const mensagens = mensagemRepo.listarMensagens(empresaId, existente.id, { limite: 500 });
     const jaTemRespostaIa = mensagens.some(m => m.papel === 'assistant');
-    if (preAnaliseLigada && !jaTemRespostaIa) {
+    const preAnaliseDisparada = preAnaliseLigada && !jaTemRespostaIa;
+    if (preAnaliseDisparada) {
       _dispararPreAnaliseEmBackground(empresaId, chamado, existente, { chamadoId, preAnaliseHabilitada: true });
     }
-    return { atendimento: existente, reaberto: true };
+    return { atendimento: existente, reaberto: true, preAnaliseDisparada };
   }
 
   const posicionamentos = chamadoRepo.listarPosicionamentosDoChamado(empresaId, chamadoId);
@@ -336,7 +337,7 @@ function iniciarAnalise(empresaId, chamadoId, { usuarioIdIahub, consultorId, pre
   // desde a primeira resposta da IA.
   _dispararPreAnaliseEmBackground(empresaId, chamado, atendimento, { chamadoId, preAnaliseHabilitada: preAnaliseLigada });
 
-  return { atendimento, reaberto: false };
+  return { atendimento, reaberto: false, preAnaliseDisparada: preAnaliseLigada };
 }
 
 module.exports = {

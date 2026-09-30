@@ -150,12 +150,14 @@
     .toast{position:fixed;bottom:24px;right:24px;background:#10b981;color:#fff;padding:11px 18px;border-radius:var(--radius);font-size:13px;font-weight:500;transform:translateY(80px);opacity:0;transition:var(--transition);z-index:999;}
     .toast.show{transform:translateY(0);opacity:1;}
     .toast.error{background:#dc2626;}
+    html.embedded-platform,
+    html.embedded-platform body{height:auto;overflow:visible;}
     html.embedded-platform body{background:transparent;}
-    html.embedded-platform .layout{display:block;min-height:auto;}
+    html.embedded-platform .layout{display:block;min-height:auto;height:auto;overflow:visible;}
     html.embedded-platform .sidebar,
     html.embedded-platform .topbar{display:none!important;}
-    html.embedded-platform .main{margin:0!important;min-height:auto;}
-    html.embedded-platform .page-content{padding:0!important;}
+    html.embedded-platform .main{margin:0!important;min-height:auto;height:auto;overflow:visible;display:block;}
+    html.embedded-platform .page-content{padding:0!important;overflow:visible;height:auto;}
     html.embedded-platform .editor-actionbar{top:0;margin:0 0 18px;padding:0 0 12px;}
   </style>
   <script>

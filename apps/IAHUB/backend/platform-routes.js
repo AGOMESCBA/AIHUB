@@ -70,6 +70,18 @@ function parseJson(value, fallback) {
 function normalizePhone(value) {
   return String(value || '').replace(/\D/g, '');
 }
+// Mesma regra de slug já usada em apps/IA Service/backend/repositories/
+// ai-config-repository.js:_normalizarApelido — minúsculas, só [a-z0-9-],
+// sem hífen duplicado/nas pontas. Duplicada aqui de propósito: a Platform
+// nunca importa módulos do IA Service em runtime (bancos fisicamente
+// separados, regra do projeto).
+function normalizarApelido(valor) {
+  const limpo = String(valor || '').trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return limpo || null;
+}
 function mapAi(row, reveal = false) {
   if (!row) return {
     empresaId: null,
@@ -86,6 +98,7 @@ function mapAi(row, reveal = false) {
       deepseek: 'deepseek-chat',
       claude: 'claude-haiku-4-5-20251001',
     },
+    loginExternoApelido: null,
     secrets: {},
     configurado: false,
   };
@@ -112,6 +125,7 @@ function mapAi(row, reveal = false) {
       deepseek_api_key: secretValue(row, 'deepseek_api_key_enc', reveal),
       claude_api_key: secretValue(row, 'claude_api_key_enc', reveal),
     },
+    loginExternoApelido: row.login_externo_apelido || null,
     configurado: true,
   };
 }
@@ -131,6 +145,18 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
     const eid = empresaId(req);
     const atual = getAiRow(eid);
     const body = req.body || {};
+
+    let apelido = atual?.login_externo_apelido ?? null;
+    if (body.loginExternoApelido !== undefined) {
+      apelido = normalizarApelido(body.loginExternoApelido);
+      if (apelido) {
+        const emUso = getDB().prepare(`
+          SELECT empresa_id FROM platform_ai_configs WHERE login_externo_apelido = ? AND empresa_id != ?
+        `).get(apelido, eid);
+        if (emUso) return res.status(409).json({ error: `O apelido "${apelido}" já está em uso por outra empresa.` });
+      }
+    }
+
     const data = {
       id: atual?.id || uuid(),
       provider: body.provider || body.provedorPrimario || atual?.provider || 'groq',
@@ -158,24 +184,25 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
            SET provider = ?, modelo = ?, provedor_primario = ?, fallback_ordem = ?, confianca_minima = ?,
                whisper_model = ?, historico_turnos = ?, groq_api_key_enc = ?, openai_api_key_enc = ?,
                gemini_api_key_enc = ?, deepseek_api_key_enc = ?, claude_api_key_enc = ?, groq_modelo = ?,
-               openai_modelo = ?, gemini_modelo = ?, deepseek_modelo = ?, claude_modelo = ?, atualizado_em = ?
+               openai_modelo = ?, gemini_modelo = ?, deepseek_modelo = ?, claude_modelo = ?,
+               login_externo_apelido = ?, atualizado_em = ?
          WHERE empresa_id = ?
       `).run(data.provider, data.modelo, data.provedor_primario, data.fallback_ordem, data.confianca_minima,
         data.whisper_model, data.historico_turnos, data.groq_api_key_enc, data.openai_api_key_enc,
         data.gemini_api_key_enc, data.deepseek_api_key_enc, data.claude_api_key_enc, data.groq_modelo,
-        data.openai_modelo, data.gemini_modelo, data.deepseek_modelo, data.claude_modelo, data.atualizado_em, eid);
+        data.openai_modelo, data.gemini_modelo, data.deepseek_modelo, data.claude_modelo, apelido, data.atualizado_em, eid);
     } else {
       getDB().prepare(`
         INSERT INTO platform_ai_configs (
           id, empresa_id, provider, modelo, provedor_primario, fallback_ordem, confianca_minima,
           whisper_model, historico_turnos, groq_api_key_enc, openai_api_key_enc, gemini_api_key_enc,
           deepseek_api_key_enc, claude_api_key_enc, groq_modelo, openai_modelo, gemini_modelo,
-          deepseek_modelo, claude_modelo, ativo, criado_em, atualizado_em
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+          deepseek_modelo, claude_modelo, login_externo_apelido, ativo, criado_em, atualizado_em
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
       `).run(data.id, eid, data.provider, data.modelo, data.provedor_primario, data.fallback_ordem, data.confianca_minima,
         data.whisper_model, data.historico_turnos, data.groq_api_key_enc, data.openai_api_key_enc, data.gemini_api_key_enc,
         data.deepseek_api_key_enc, data.claude_api_key_enc, data.groq_modelo, data.openai_modelo, data.gemini_modelo,
-        data.deepseek_modelo, data.claude_modelo, data.atualizado_em, data.atualizado_em);
+        data.deepseek_modelo, data.claude_modelo, apelido, data.atualizado_em, data.atualizado_em);
     }
     res.json(mapAi(getAiRow(eid)));
   });

@@ -14,8 +14,8 @@
 
 const rateLimit = require('express-rate-limit');
 const loginExternoService = require('../services/login-externo-service');
-const aiConfigRepo = require('../repositories/ai-config-repository');
 const crud = require('../../../IAHUB/backend/crud');
+const platformStore = require('../../../IAHUB/backend/platform-store');
 
 // Mesmo padrão de rate-limit reforçado já usado em /api/login (index.js) —
 // 15 minutos / 20 tentativas por IP. Rota pública sem sessão, alvo natural
@@ -85,7 +85,7 @@ module.exports = function registrarRotasLoginExterno(app) {
   // desconhecido cai no 404 (não existe "empresa errada" aqui, é só uma
   // etiqueta opcional).
   app.get('/entrar-servico/:apelido', (req, res) => {
-    const config = aiConfigRepo.getConfigPorApelido(req.params.apelido);
+    const config = platformStore.getConfigPorApelido(req.params.apelido);
     if (!config) return res.status(404).send('Not found');
     res.setHeader('Cache-Control', 'no-store, max-age=0');
     res.setHeader('Referrer-Policy', 'no-referrer');
@@ -96,7 +96,7 @@ module.exports = function registrarRotasLoginExterno(app) {
   // reaproveita empresas.login_logo_url, mesmo campo da tela de login
   // principal do IAHub. Só expõe o estritamente necessário para render.
   app.get('/api/ia-service-publico/empresa-por-apelido/:apelido', (req, res) => {
-    const config = aiConfigRepo.getConfigPorApelido(req.params.apelido);
+    const config = platformStore.getConfigPorApelido(req.params.apelido);
     if (!config) return res.status(404).json({ error: 'Apelido não encontrado.' });
     const empresa = crud.buscarPorId('empresas', config.empresaId);
     if (!empresa) return res.status(404).json({ error: 'Empresa não encontrada.' });

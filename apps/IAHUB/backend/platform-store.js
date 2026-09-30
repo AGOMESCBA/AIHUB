@@ -135,4 +135,18 @@ function listarIaServicePorTelefone(telefoneNormalizado) {
   });
 }
 
-module.exports = { getAiConfig, listarIaServicePorTelefone };
+// Resolve a empresa a partir do apelido configurável do login externo do IA
+// Service (/entrar-servico/:apelido) — só identidade visual (nome/logo na
+// tela de entrada), o login continua funcionando 100% por telefone mesmo
+// sem apelido. Antes vivia em ai_config.login_externo_apelido (IA Service);
+// migrado para platform_ai_configs, fonte única de verdade agora.
+function getConfigPorApelido(apelido) {
+  if (!apelido) return null;
+  const row = getDB().prepare(`
+    SELECT empresa_id FROM platform_ai_configs WHERE login_externo_apelido = ?
+  `).get(String(apelido).toLowerCase());
+  if (!row) return null;
+  return { empresaId: row.empresa_id };
+}
+
+module.exports = { getAiConfig, listarIaServicePorTelefone, getConfigPorApelido };

@@ -30,6 +30,7 @@ function ensurePlatformSchema(db) {
       gemini_modelo TEXT,
       deepseek_modelo TEXT,
       claude_modelo TEXT,
+      login_externo_apelido TEXT,
       ativo INTEGER DEFAULT 1,
       criado_em TEXT,
       atualizado_em TEXT
@@ -118,7 +119,18 @@ function ensurePlatformSchema(db) {
     ['platform_import_runs', 'resumo_json', 'TEXT'],
     ['platform_import_runs', 'erro', 'TEXT'],
     ['platform_import_runs', 'finalizado_em', 'TEXT'],
+    ['platform_ai_configs', 'login_externo_apelido', 'TEXT'],
   ].forEach(([table, column, definition]) => addColumnIfMissing(db, table, column, definition));
+
+  // Índice único parcial — criado à parte do CREATE TABLE porque bancos já
+  // existentes só ganham a coluna via addColumnIfMissing acima, então o
+  // índice precisa ser garantido aqui também (idempotente, mesma regra do
+  // CREATE TABLE IF NOT EXISTS).
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_platform_ai_configs_apelido
+      ON platform_ai_configs (login_externo_apelido)
+      WHERE login_externo_apelido IS NOT NULL;
+  `);
 }
 
 module.exports = { ensurePlatformSchema };
