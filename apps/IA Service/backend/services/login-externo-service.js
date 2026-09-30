@@ -20,6 +20,7 @@ const crypto = require('crypto');
 const { getDB } = require('../database');
 const consultorRepo = require('../repositories/consultor-repository');
 const crud = require('../../../IAHUB/backend/crud');
+const platformStore = require('../../../IAHUB/backend/platform-store');
 
 const TTL_CODIGO_MS = 5 * 60 * 1000; // 5 minutos — mesmo default do IA Command
 const MAX_TENTATIVAS = 5; // mesmo default do IA Command
@@ -54,12 +55,33 @@ function _limparChallengesExpirados(db) {
 function listarEmpresasDoTelefone(telefoneBruto) {
   const telefone = normalizarTelefone(telefoneBruto);
   if (!telefone) return [];
+  const autorizadosPlatform = platformStore.listarIaServicePorTelefone(telefone);
+  if (autorizadosPlatform.length) {
+    return autorizadosPlatform
+      .map(item => {
+        const empresa = crud.buscarPorId('empresas', item.empresaId);
+        if (!empresa || !item.idSoftexpert) return null;
+        const consultor = consultorRepo.upsertConsultorPlatform(item.empresaId, {
+          platformIdentityId: item.platformIdentityId,
+          usuarioIdIahub: item.usuarioIdIahub,
+          idSoftexpert: item.idSoftexpert,
+          telefone: item.telefone,
+          ativo: item.ativo,
+          preAnaliseAutomatica: item.preAnaliseAutomatica,
+        });
+        return { id: item.empresaId, nome: empresa.razao_social || empresa.nome || `Empresa #${item.empresaId}`, consultorId: consultor.id, origem: 'iahub-platform' };
+      })
+      .filter(Boolean);
+  }
+
+  if (process.env.SVC_ALLOW_LEGACY_CONSULTORES !== '1') return [];
+
   const consultores = consultorRepo.listarConsultoresPorTelefoneNormalizado(telefone, normalizarTelefone);
   return consultores
     .map(c => {
       const empresa = crud.buscarPorId('empresas', c.empresaId);
       if (!empresa) return null;
-      return { id: c.empresaId, nome: empresa.razao_social || empresa.nome || `Empresa #${c.empresaId}`, consultorId: c.id };
+      return { id: c.empresaId, nome: empresa.razao_social || empresa.nome || `Empresa #${c.empresaId}`, consultorId: c.id, origem: 'ia-service-legado' };
     })
     .filter(Boolean);
 }

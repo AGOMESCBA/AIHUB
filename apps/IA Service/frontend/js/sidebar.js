@@ -41,7 +41,6 @@
     {
       id: 'configuracao', label: 'Configuração', icon: '⚙', defaultOpen: false,
       items: [
-        { id: 'svc-consultores', label: 'Consultores', href: '/app/ia-service/consultores.html', icon: '👤' },
         { id: 'svc-config-ia',   label: 'Configuração de IA', href: '/app/ia-service/config-ia.html', icon: '🤖' },
       ],
     },

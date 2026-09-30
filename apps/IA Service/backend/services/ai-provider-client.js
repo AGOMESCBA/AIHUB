@@ -15,11 +15,12 @@ const https = require('https');
 const PROVIDER_CONFIGS = {
   groq: { hostname: 'api.groq.com', path: '/openai/v1/chat/completions', model: 'openai/gpt-oss-20b', tipo: 'openai_compat', suportaImagem: false },
   openai: { hostname: 'api.openai.com', path: '/v1/chat/completions', model: 'gpt-4o-mini', tipo: 'openai_compat', suportaImagem: true },
+  deepseek: { hostname: 'api.deepseek.com', path: '/chat/completions', model: 'deepseek-chat', tipo: 'openai_compat', suportaImagem: false },
   claude: { hostname: 'api.anthropic.com', path: '/v1/messages', model: 'claude-haiku-4-5-20251001', tipo: 'anthropic', suportaImagem: true },
   gemini: { hostname: 'generativelanguage.googleapis.com', path: null, model: 'gemini-3.5-flash', tipo: 'gemini', suportaImagem: true },
 };
 
-const DEFAULT_ORDER = ['groq', 'openai', 'claude', 'gemini'];
+const DEFAULT_ORDER = ['groq', 'deepseek', 'openai', 'claude', 'gemini'];
 
 function _httpPost(hostname, path, headers, body, timeoutMs = 45000) {
   return new Promise((resolve, reject) => {

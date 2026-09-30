@@ -115,6 +115,53 @@ function listarConsultoresPorTelefoneNormalizado(telefoneNormalizado, normalizar
     .filter(c => normalizarFn(c.telefone) === telefoneNormalizado);
 }
 
+function upsertConsultorPlatform(empresaId, dados) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const db = getDB();
+  const agora = new Date().toISOString();
+  const idPreferencial = dados.platformIdentityId || crypto.randomUUID();
+  const existentePorId = db.prepare('SELECT * FROM consultores WHERE id = ? AND empresa_id = ?').get(idPreferencial, Number(empresaId));
+  const existentePorSoftExpert = dados.idSoftexpert
+    ? db.prepare('SELECT * FROM consultores WHERE empresa_id = ? AND id_softexpert = ?').get(Number(empresaId), String(dados.idSoftexpert))
+    : null;
+  const existente = existentePorId || existentePorSoftExpert;
+
+  if (existente) {
+    db.prepare(`
+      UPDATE consultores
+         SET usuario_id_iahub = ?, id_softexpert = ?, telefone = ?, ativo = ?, pre_analise_automatica = ?, atualizado_em = ?
+       WHERE id = ? AND empresa_id = ?
+    `).run(
+      dados.usuarioIdIahub ? Number(dados.usuarioIdIahub) : existente.usuario_id_iahub,
+      dados.idSoftexpert ?? existente.id_softexpert,
+      dados.telefone ?? existente.telefone,
+      dados.ativo === false ? 0 : 1,
+      dados.preAnaliseAutomatica === false ? 0 : 1,
+      agora,
+      existente.id,
+      Number(empresaId)
+    );
+    return _rowParaDominio(db.prepare('SELECT * FROM consultores WHERE id = ? AND empresa_id = ?').get(existente.id, Number(empresaId)));
+  }
+
+  db.prepare(`
+    INSERT INTO consultores (id, usuario_id_iahub, empresa_id, id_softexpert, telefone, ativo, pre_analise_automatica, criado_em, atualizado_em)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    idPreferencial,
+    dados.usuarioIdIahub ? Number(dados.usuarioIdIahub) : null,
+    Number(empresaId),
+    dados.idSoftexpert ?? null,
+    dados.telefone ?? null,
+    dados.ativo === false ? 0 : 1,
+    dados.preAnaliseAutomatica === false ? 0 : 1,
+    agora,
+    agora
+  );
+
+  return _rowParaDominio(db.prepare('SELECT * FROM consultores WHERE id = ? AND empresa_id = ?').get(idPreferencial, Number(empresaId)));
+}
+
 function atualizarConsultor(empresaId, consultorId, patch) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
@@ -157,6 +204,7 @@ module.exports = {
   getConsultorPorUsuario,
   listarConsultores,
   listarConsultoresPorTelefoneNormalizado,
+  upsertConsultorPlatform,
   atualizarConsultor,
   excluirConsultor,
 };

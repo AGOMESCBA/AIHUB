@@ -16,7 +16,6 @@ const anexoRepo = require('../repositories/anexo-repository');
 const investigacaoService = require('../services/investigacao-service');
 const versaoFonteService = require('../services/versao-fonte-service');
 const aiConfigService = require('../services/ai-config-service');
-const aiConfigRepo = require('../repositories/ai-config-repository');
 const aiProviderClient = require('../services/ai-provider-client');
 const agenteLocalService = require('../services/agente-local-service');
 const historicalImportService = require('../services/import/historical-import-service');
@@ -288,9 +287,8 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       }
       let chave = apiKey && String(apiKey).trim();
       if (!chave) {
-        const config = aiConfigRepo.getConfig(empresaId);
-        const campo = { groq: 'groqApiKey', openai: 'openaiApiKey', claude: 'claudeApiKey', gemini: 'geminiApiKey' }[provedor];
-        chave = config?.[campo];
+        const { keys } = aiConfigService.resolverKeysEOrdem(empresaId);
+        chave = keys?.[provedor];
       }
       if (!chave) return res.status(400).json({ ok: false, erro: 'Nenhuma chave informada nem salva para este provedor.' });
 
@@ -304,6 +302,9 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   // ── Consultores/Técnicos ───────────────────────────────────────────────
   app.post('/api/ia-service/consultores', (req, res) => {
     try {
+      if (process.env.SVC_ALLOW_LEGACY_CONSULTORES_WRITE !== '1') {
+        return res.status(410).json({ error: 'Cadastro de Analistas isolado. Use IAHub Platform > Números Autorizados > aba IA Service.' });
+      }
       const empresaId = req.svcEmpresaId;
       const { usuarioIdIahub, idSoftexpert, telefone, preAnaliseAutomatica } = req.body || {};
       const consultor = consultorService.criarConsultor(empresaId, { usuarioIdIahub, idSoftexpert, telefone, preAnaliseAutomatica });
@@ -338,6 +339,9 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
 
   app.put('/api/ia-service/consultores/:id', (req, res) => {
     try {
+      if (process.env.SVC_ALLOW_LEGACY_CONSULTORES_WRITE !== '1') {
+        return res.status(410).json({ error: 'Cadastro de Analistas isolado. Use IAHub Platform > Números Autorizados > aba IA Service.' });
+      }
       const empresaId = req.svcEmpresaId;
       const { idSoftexpert, telefone, ativo, preAnaliseAutomatica } = req.body || {};
       const consultor = consultorService.atualizarConsultor(empresaId, req.params.id, { idSoftexpert, telefone, ativo, preAnaliseAutomatica });
@@ -350,6 +354,9 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
 
   app.delete('/api/ia-service/consultores/:id', (req, res) => {
     try {
+      if (process.env.SVC_ALLOW_LEGACY_CONSULTORES_WRITE !== '1') {
+        return res.status(410).json({ error: 'Cadastro de Analistas isolado. Use IAHub Platform > Números Autorizados > aba IA Service.' });
+      }
       const empresaId = req.svcEmpresaId;
       const excluido = consultorService.excluirConsultor(empresaId, req.params.id);
       if (!excluido) return res.status(404).json({ error: 'Consultor não encontrado.' });

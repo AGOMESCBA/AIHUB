@@ -236,6 +236,7 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
           papel: r.papel,
           codigoIdentidade: r.codigo_identidade,
           liberado: !!r.liberado,
+          metadata: parseJson(r.metadata_json, {}),
         }));
       }
       return item;

@@ -111,7 +111,7 @@
       <a class="nav-etapa" onclick="abrirEtapa('e3-1',event)"><div class="nav-etapa-dot"></div>Base Histórica</a>
 
       <div class="nav-fase-hdr" onclick="scrollFase('f4')"><div class="nav-fase-num">4</div>Configuração</div>
-      <a class="nav-etapa" onclick="abrirEtapa('e4-1',event)"><div class="nav-etapa-dot"></div>Cadastro de Consultores</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e4-1',event)"><div class="nav-etapa-dot"></div>Números autorizados</a>
       <a class="nav-etapa" onclick="abrirEtapa('e4-2',event)"><div class="nav-etapa-dot"></div>Login externo por WhatsApp</a>
     </div>
     <div class="guia-nav-footer">
@@ -128,7 +128,7 @@
         <span class="guia-hero-badge">📡 Radar de Chamados</span>
         <span class="guia-hero-badge">🧠 Investigação com IA</span>
         <span class="guia-hero-badge">🗂 Base Histórica</span>
-        <span class="guia-hero-badge">👤 Consultores</span>
+        <span class="guia-hero-badge">👤 Números autorizados</span>
       </div>
     </div>
 
@@ -162,7 +162,7 @@
         <p class="etapa-desc">A IA pode investigar um chamado sozinha, sem esperar uma pergunta do consultor, em dois momentos distintos:</p>
         <div class="guia-table-wrap"><table class="guia-table"><thead><tr><th>Gatilho</th><th>Quando dispara</th></tr></thead><tbody>
           <tr><td>Na importação</td><td>Quando um chamado entra na fila pela primeira vez (recebe seu primeiro posicionamento aguardando retorno do atendente) durante a sincronização com o SoftExpert.</td></tr>
-          <tr><td>Ao abrir no Radar</td><td>Quando o consultor seleciona, no Radar, um chamado que ainda não tinha atendimento — configurável por consultor em <a href="#" onclick="abrirEtapa('e4-1',event)">Cadastro de Consultores</a>.</td></tr>
+          <tr><td>Ao abrir no Radar</td><td>Quando o consultor seleciona, no Radar, um chamado que ainda não tinha atendimento — configurável em <a href="#" onclick="abrirEtapa('e4-1',event)">IAHub Platform > Números Autorizados > IA Service</a>.</td></tr>
         </tbody></table></div>
         <div class="callout info"><span class="callout-icon">ℹ</span><span>Se a pré-análise automática estiver desligada para o consultor, o chat abre só com o conteúdo do chamado — a IA responde normalmente quando o consultor perguntar algo no composer.</span></div>
       </div></div></article>
@@ -185,10 +185,10 @@
     </section>
 
     <section class="fase-section" id="f4">
-      <div class="fase-header"><div class="fase-badge f4">4</div><div class="fase-titulo"><h2>Configuração</h2><p>Cadastro dos consultores que usam o sistema</p></div></div>
+      <div class="fase-header"><div class="fase-badge f4">4</div><div class="fase-titulo"><h2>Configuração</h2><p>Cadastro central dos números autorizados no IAHub Platform</p></div></div>
 
-      <article class="etapa-card" id="e4-1"><div class="etapa-card-header" onclick="toggleEtapa('e4-1')"><span class="etapa-num">4.1</span><span class="etapa-titulo">Cadastro de Consultores</span><span class="etapa-arrow">▾</span></div><div class="etapa-body"><div class="etapa-body-inner">
-        <p class="etapa-desc">Vincula um usuário já existente do IA HUB (login normal) a um técnico do SoftExpert e, opcionalmente, a um WhatsApp para acesso externo. Não cria login novo.</p>
+      <article class="etapa-card" id="e4-1"><div class="etapa-card-header" onclick="toggleEtapa('e4-1')"><span class="etapa-num">4.1</span><span class="etapa-titulo">Números autorizados</span><span class="etapa-arrow">▾</span></div><div class="etapa-body"><div class="etapa-body-inner">
+        <p class="etapa-desc">Configure em IAHub Platform > Números Autorizados > IA Service o telefone, ID SoftExpert, usuário IA HUB opcional e preferência de pré-análise. Este é o cadastro oficial do Chat Web.</p>
         <div class="campo-secao">Campos do cadastro</div>
         <div class="campo-lista">
           <div class="campo-item campo-obrigatorio"><div class="campo-nome">ID do usuário IA HUB <span class="campo-req">Obrigatório</span></div><div class="campo-desc">ID numérico de um usuário já cadastrado no IA HUB.</div></div>
@@ -199,7 +199,7 @@
       </div></div></article>
 
       <article class="etapa-card" id="e4-2"><div class="etapa-card-header" onclick="toggleEtapa('e4-2')"><span class="etapa-num">4.2</span><span class="etapa-titulo">Login externo por WhatsApp</span><span class="etapa-arrow">▾</span></div><div class="etapa-body"><div class="etapa-body-inner">
-        <p class="etapa-desc">Consultores sem login no IA HUB podem acessar o Radar direto pelo telefone cadastrado, sem senha.</p>
+        <p class="etapa-desc">Números liberados no IAHub Platform podem acessar o Radar direto pelo telefone cadastrado, sem senha.</p>
         <div class="step-list">
           <div class="step-item"><div class="step-num">1</div><div class="step-body">Acessar <code>/entrar-servico/:slug-da-empresa</code>.</div></div>
           <div class="step-item"><div class="step-num">2</div><div class="step-body">Informar o WhatsApp cadastrado como consultor.</div></div>
