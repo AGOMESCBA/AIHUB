@@ -6,6 +6,7 @@ const consultorService = require('./consultor-service');
 const clienteRepo = require('../repositories/cliente-repository');
 const chamadoRepo = require('../repositories/chamado-repository');
 const atendimentoRepo = require('../repositories/atendimento-repository');
+const mensagemRepo = require('../repositories/mensagem-repository');
 const radarRepo = require('../repositories/radar-repository');
 const radarConfigRepo = require('../repositories/radar-config-repository');
 const investigacaoService = require('./investigacao-service');
@@ -14,6 +15,7 @@ const anexosSoftExpertService = require('./anexos-softexpert-service');
 const SISTEMA_ORIGEM_PADRAO = 'softexpert';
 const AUTO_REFRESH_PADRAO_SEGUNDOS = 60;
 const AUTO_REFRESH_VALORES_VALIDOS = new Set([0, 30, 60, 300, 900]);
+const preAnalisesEmAndamento = new Set();
 
 function getConfig(empresaId) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
@@ -129,12 +131,100 @@ function _formatarConteudoBruto(chamado, posicionamentos) {
   return linhas.join('\n');
 }
 
+function _normalizarNome(nome) {
+  return String(nome || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function _textoAberturaChamado(chamado) {
+  return [
+    chamado.descricao || chamado.breveDescricao || chamado.assunto || chamado.titulo,
+    chamado.informacoesAdicionais ? `Informações adicionais: ${chamado.informacoesAdicionais}` : null,
+    chamado.observacoes ? `Observações: ${chamado.observacoes}` : null,
+  ].filter(Boolean).join('\n\n');
+}
+
+function _textoPosicionamento(p) {
+  return [p.assunto, p.descricao, p.resultado].filter(Boolean).join('\n\n') || '(sem texto)';
+}
+
+function _autorPosicionamento(p) {
+  return p.tecnicoNomeOrigem || 'Autor não identificado';
+}
+
+function _papelPosicionamento(chamado, p) {
+  if (p.tecnicoId && chamado.tecnicoResponsavelId && p.tecnicoId === chamado.tecnicoResponsavelId) return 'user';
+  const autor = _normalizarNome(_autorPosicionamento(p));
+  const responsavel = _normalizarNome(chamado.tecnicoResponsavelNome);
+  return responsavel && autor === responsavel ? 'user' : 'customer';
+}
+
+function _gravarHistoricoComoMensagens(empresaId, atendimentoId, chamado, posicionamentos, usuarioIdIahub) {
+  const abertura = _textoAberturaChamado(chamado);
+  if (abertura) {
+    mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
+      papel: 'customer',
+      conteudo: `Abertura do chamado por ${chamado.solicitanteNome || 'solicitante não identificado'}\n\n${abertura}`,
+      usuarioId: null,
+    });
+  }
+
+  for (const p of posicionamentos) {
+    const data = p.dataPosicionamento ? p.dataPosicionamento.slice(0, 10) : 'sem data';
+    const autor = _autorPosicionamento(p);
+    const papel = _papelPosicionamento(chamado, p);
+    mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
+      papel,
+      conteudo: `[${data}] ${autor}\n\n${_textoPosicionamento(p)}`,
+      usuarioId: papel === 'user' ? (usuarioIdIahub ?? null) : null,
+    });
+  }
+}
+
 function buscarRelacionados(empresaId, chamadoId, { limite = 8 } = {}) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   if (!chamadoId) throw new Error('chamadoId é obrigatório.');
   return {
     chamados: chamadoRepo.listarChamadosRelacionados(empresaId, chamadoId, { limite }),
   };
+}
+
+function _resolverConsultorDaAbertura(empresaId, { usuarioIdIahub, consultorId } = {}) {
+  if (consultorId) return consultorService.getConsultor(empresaId, consultorId);
+  if (usuarioIdIahub) {
+    const { consultor } = _resolverTecnicoDoConsultor(empresaId, usuarioIdIahub);
+    return consultor;
+  }
+  return null;
+}
+
+function _preAnaliseHabilitada(consultor, preAnaliseAutomatica) {
+  return preAnaliseAutomatica !== undefined
+    ? !!preAnaliseAutomatica
+    : !!consultor && consultor.preAnaliseAutomatica !== false;
+}
+
+function _dispararPreAnaliseEmBackground(empresaId, chamado, atendimento, { chamadoId, preAnaliseHabilitada }) {
+  if (preAnalisesEmAndamento.has(atendimento.id)) return;
+  preAnalisesEmAndamento.add(atendimento.id);
+  anexosSoftExpertService.sincronizarAnexosParaAtendimento(empresaId, chamadoId, atendimento.id)
+    .catch(err => {
+      console.error(`[IA Service] Sincronização de anexos do SoftExpert falhou (chamado ${chamado.numero}):`, err.message);
+      return [];
+    })
+    .then((anexosSincronizados = []) => {
+      if (!preAnaliseHabilitada) return;
+      const anexoIds = anexosSincronizados.map(a => a.id).filter(Boolean);
+      investigacaoService.processarPreAnalise(empresaId, atendimento.id, { anexoIds }).catch(err => {
+        console.error(`[IA Service] Pré-análise automática (abertura no radar) falhou (chamado ${chamado.numero}):`, err.message);
+      });
+    })
+    .finally(() => {
+      preAnalisesEmAndamento.delete(atendimento.id);
+    });
 }
 
 /**
@@ -154,33 +244,30 @@ function iniciarAnalise(empresaId, chamadoId, { usuarioIdIahub, consultorId, pre
     origem: chamado.sistemaOrigem || SISTEMA_ORIGEM_PADRAO,
     referenciaExterna: chamado.numero,
   });
+  const consultor = _resolverConsultorDaAbertura(empresaId, { usuarioIdIahub, consultorId });
+  const preAnaliseLigada = _preAnaliseHabilitada(consultor, preAnaliseAutomatica);
+
   if (existente) {
+    const mensagens = mensagemRepo.listarMensagens(empresaId, existente.id, { limite: 500 });
+    const jaTemRespostaIa = mensagens.some(m => m.papel === 'assistant');
+    if (preAnaliseLigada && !jaTemRespostaIa) {
+      _dispararPreAnaliseEmBackground(empresaId, chamado, existente, { chamadoId, preAnaliseHabilitada: true });
+    }
     return { atendimento: existente, reaberto: true };
   }
 
-  // Sessão externa já resolve consultorId direto (via token); sessão normal
-  // do IA HUB resolve por usuarioIdIahub. No máximo um dos dois é passado.
-  let consultor = null;
-  if (consultorId) {
-    consultor = consultorService.getConsultor(empresaId, consultorId);
-  } else if (usuarioIdIahub) {
-    ({ consultor } = _resolverTecnicoDoConsultor(empresaId, usuarioIdIahub));
-  }
   const posicionamentos = chamadoRepo.listarPosicionamentosDoChamado(empresaId, chamadoId);
   const conteudoBruto = _formatarConteudoBruto(chamado, posicionamentos);
 
-  const atendimento = atendimentoRepo.criarAtendimentoComPrimeiraMensagem(
-    empresaId,
-    {
-      origem: chamado.sistemaOrigem || SISTEMA_ORIGEM_PADRAO,
-      canalEntrada: 'radar',
-      referenciaExterna: chamado.numero,
-      conteudoBruto,
-      criadoPorUsuarioId: usuarioIdIahub ?? null,
-      consultorId: consultor?.id ?? null,
-    },
-    { papel: 'user', conteudo: conteudoBruto, usuarioId: usuarioIdIahub ?? null }
-  );
+  const atendimento = atendimentoRepo.criarAtendimento(empresaId, {
+    origem: chamado.sistemaOrigem || SISTEMA_ORIGEM_PADRAO,
+    canalEntrada: 'radar',
+    referenciaExterna: chamado.numero,
+    conteudoBruto,
+    criadoPorUsuarioId: usuarioIdIahub ?? null,
+    consultorId: consultor?.id ?? null,
+  });
+  _gravarHistoricoComoMensagens(empresaId, atendimento.id, chamado, posicionamentos, usuarioIdIahub);
 
   // Sincroniza anexos do SoftExpert (prints, planilhas, logs já anexados ao
   // chamado na origem) para o armazenamento local ANTES da pré-análise —
@@ -189,31 +276,7 @@ function iniciarAnalise(empresaId, chamadoId, { usuarioIdIahub, consultorId, pre
   // atrasa a resposta HTTP de "iniciar análise"); a pré-análise só começa
   // depois de tentar sincronizar, para já poder correlacionar os anexos
   // desde a primeira resposta da IA.
-  const preAnaliseHabilitada = preAnaliseAutomatica !== undefined
-    ? !!preAnaliseAutomatica
-    : !!consultor && consultor.preAnaliseAutomatica !== false;
-  anexosSoftExpertService.sincronizarAnexosParaAtendimento(empresaId, chamadoId, atendimento.id)
-    .catch(err => {
-      console.error(`[IA Service] Sincronização de anexos do SoftExpert falhou (chamado ${chamado.numero}):`, err.message);
-      return [];
-    })
-    .then((anexosSincronizados = []) => {
-      // Pré-análise automática ao iniciar análise do chamado (pedido do usuário,
-      // 2026-09): configurável por consultor (consultores.pre_analise_automatica,
-      // default true) — se ligada, a IA já analisa sozinha assim que o
-      // consultor seleciona um chamado que ainda não tinha sessão interna; se
-      // desligada, o chat abre só com o conteúdo bruto do chamado, esperando
-      // o consultor perguntar manualmente. Distinto (e adicional) do gatilho
-      // já existente na IMPORTAÇÃO (historical-import-service.js), que
-      // dispara independente dessa config — os dois pontos de entrada
-      // continuam coexistindo. Best-effort: erro aqui nunca derruba a
-      // abertura da sessão interna, só fica registrado em log.
-      if (!preAnaliseHabilitada) return;
-      const anexoIds = anexosSincronizados.map(a => a.id).filter(Boolean);
-      investigacaoService.processarPreAnalise(empresaId, atendimento.id, { anexoIds }).catch(err => {
-        console.error(`[IA Service] Pré-análise automática (abertura no radar) falhou (chamado ${chamado.numero}):`, err.message);
-      });
-    });
+  _dispararPreAnaliseEmBackground(empresaId, chamado, atendimento, { chamadoId, preAnaliseHabilitada: preAnaliseLigada });
 
   return { atendimento, reaberto: false };
 }

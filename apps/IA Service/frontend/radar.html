@@ -156,6 +156,13 @@
     }
     .chat-header-anexo-chip:hover { background:rgba(255,255,255,.09); color:var(--wa-text); }
     .chat-header-anexo-chip .tamanho { color:var(--wa-text-tertiary); font-size:10.5px; }
+    .chat-header-anexos-resumo { margin-top:8px; display:none; }
+    .anexos-abrir-btn {
+      display:inline-flex; align-items:center; gap:6px; border:1px solid rgba(0,217,163,.28);
+      border-radius:8px; background:rgba(0,217,163,.1); color:var(--wa-accent);
+      font-size:11.5px; font-weight:800; padding:6px 10px; cursor:pointer;
+    }
+    .anexos-abrir-btn:hover { background:rgba(0,217,163,.17); }
 
     .chat-body {
       flex:1; overflow-y:auto; padding:16px 20px; display:flex; flex-direction:column; gap:12px;
@@ -178,6 +185,8 @@
 
     .anexos-do-turno { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
     .anexo-chip { display:flex; align-items:center; gap:5px; background:rgba(0,0,0,.2); border:1px solid var(--wa-border); border-radius:8px; padding:4px 8px; font-size:11.5px; color:var(--wa-text-secondary); }
+    .anexo-chip-btn { cursor:pointer; }
+    .anexo-chip-btn:hover { color:var(--wa-accent); border-color:rgba(0,217,163,.32); }
 
     .diagnostico-card { margin-top:8px; border-top:1px solid rgba(255,255,255,.08); padding-top:8px; }
     .diagnostico-secao { margin-bottom:8px; }
@@ -236,8 +245,29 @@
     .pesquisa-pos-item { font-size:11px; color:var(--wa-text-secondary); line-height:1.35; background:rgba(0,0,0,.16); border-radius:7px; padding:7px; }
     .pesquisa-pos-data { color:var(--wa-text-tertiary); font-weight:800; font-size:10px; }
 
-    .error-banner { display:none; position:fixed; top:16px; right:16px; background:#fee2e2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:10px 14px; font-size:13px; z-index:200; max-width:360px; box-shadow:var(--shadow-sm); }
+    .error-banner { display:none; position:fixed; top:16px; right:16px; background:#fee2e2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:10px 14px; font-size:13px; z-index:200; max-width:420px; box-shadow:var(--shadow-sm); line-height:1.45; }
+    .error-banner-actions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+    .error-banner-btn { border:1px solid #991b1b; background:#991b1b; color:#fff; border-radius:7px; padding:7px 10px; font-size:12px; font-weight:800; cursor:pointer; }
+    .error-banner-btn.secondary { background:transparent; color:#991b1b; }
     .toast-status { position:fixed; top:16px; right:16px; background:var(--wa-header); color:var(--wa-text); border:1px solid var(--wa-border); border-radius:8px; padding:8px 14px; font-size:12px; box-shadow:0 4px 12px rgba(0,0,0,.4); display:none; z-index:200; }
+    .anexos-modal-backdrop { display:none; position:fixed; inset:0; z-index:260; background:rgba(0,0,0,.58); align-items:center; justify-content:center; padding:24px; }
+    .anexos-modal-backdrop.ativo { display:flex; }
+    .anexos-modal { width:min(860px, 96vw); max-height:86vh; display:flex; flex-direction:column; background:var(--wa-panel); color:var(--wa-text); border:1px solid var(--wa-border); border-radius:10px; box-shadow:0 18px 60px rgba(0,0,0,.45); overflow:hidden; }
+    .anexos-modal-head { flex:none; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; background:var(--wa-header); border-bottom:1px solid var(--wa-border); }
+    .anexos-modal-title { font-size:14px; font-weight:900; }
+    .anexos-modal-subtitle { font-size:11px; color:var(--wa-text-tertiary); margin-top:2px; }
+    .anexos-modal-close { width:28px; height:28px; border-radius:7px; border:1px solid var(--wa-border); background:rgba(255,255,255,.04); color:var(--wa-text-secondary); cursor:pointer; }
+    .anexos-modal-body { flex:1; min-height:0; overflow:auto; padding:12px; }
+    .anexos-grid { width:100%; border-collapse:separate; border-spacing:0 7px; font-size:12px; }
+    .anexos-grid th { color:var(--wa-text-tertiary); font-size:10.5px; text-transform:uppercase; text-align:left; padding:0 9px 2px; }
+    .anexos-grid td { background:rgba(255,255,255,.035); border-top:1px solid var(--wa-border); border-bottom:1px solid var(--wa-border); padding:9px; vertical-align:top; }
+    .anexos-grid td:first-child { border-left:1px solid var(--wa-border); border-radius:8px 0 0 8px; }
+    .anexos-grid td:last-child { border-right:1px solid var(--wa-border); border-radius:0 8px 8px 0; }
+    .anexo-nome { font-weight:800; color:var(--wa-text); word-break:break-word; }
+    .anexo-meta { color:var(--wa-text-tertiary); font-size:11px; margin-top:3px; }
+    .anexo-status { display:inline-flex; padding:3px 7px; border-radius:99px; background:rgba(0,217,163,.1); color:var(--wa-accent); border:1px solid rgba(0,217,163,.24); font-size:10.5px; font-weight:800; white-space:nowrap; }
+    .anexo-acao { border:1px solid var(--wa-border); border-radius:7px; background:rgba(255,255,255,.04); color:var(--wa-text-secondary); font-size:11px; font-weight:800; padding:6px 8px; cursor:pointer; white-space:nowrap; }
+    .anexo-acao:hover { color:var(--wa-accent); border-color:rgba(0,217,163,.32); }
 
     @media (max-width: 900px) {
       .radar-shell { grid-template-columns:1fr; }
@@ -352,13 +382,14 @@
                 <div class="chat-header-titulo" id="chat-header-titulo">—</div>
               </div>
               <div class="chat-header-actions">
-                <button class="chat-header-action" id="pesquisa-toggle-btn" type="button" title="Abrir pesquisa técnica" onclick="togglePesquisaTecnica()">Pesquisa</button>
+                <button class="chat-header-action" id="pesquisa-toggle-btn" type="button" title="Abrir banco de conhecimento" onclick="togglePesquisaTecnica()">Banco de Conhecimento</button>
                 <button class="chat-header-toggle" id="chat-header-toggle" type="button" title="Recolher detalhes" onclick="toggleChatHeader()">▾</button>
               </div>
             </div>
             <div class="chat-header-detalhes" id="chat-header-detalhes">
               <div class="chat-header-linha" id="chat-header-linha"></div>
               <div class="chat-header-descricao" id="chat-header-descricao" style="display:none"></div>
+              <div class="chat-header-anexos-resumo" id="chat-header-anexos-resumo"></div>
               <div class="chat-header-anexos" id="chat-header-anexos" style="display:none"></div>
             </div>
           </div>
@@ -380,7 +411,7 @@
         <aside class="pesquisa-col" id="pesquisa-col">
           <div class="pesquisa-head">
             <div>
-              <div class="pesquisa-title">Pesquisa do Analista</div>
+              <div class="pesquisa-title">Banco de Conhecimento</div>
               <div class="pesquisa-subtitle" id="pesquisa-subtitle">Base interna e trilhas técnicas</div>
             </div>
             <button class="pesquisa-close" type="button" title="Fechar pesquisa" onclick="fecharPesquisaTecnica()">x</button>
@@ -390,7 +421,7 @@
             <button class="pesquisa-tab" id="pesquisa-tab-web" type="button" onclick="setPesquisaAba('web')">Pesquisa técnica</button>
           </div>
           <div class="pesquisa-body" id="pesquisa-body">
-            <div class="pesquisa-empty">Selecione um chamado e abra a pesquisa para ver chamados semelhantes, posicionamentos e fontes técnicas sugeridas.</div>
+            <div class="pesquisa-empty">Selecione um chamado para ver chamados semelhantes, posicionamentos e fontes técnicas sugeridas.</div>
           </div>
         </aside>
 
@@ -401,6 +432,18 @@
 
   <div id="error-banner" class="error-banner"></div>
   <div id="toast-status" class="toast-status"></div>
+  <div class="anexos-modal-backdrop" id="anexos-modal-backdrop" onclick="fecharModalAnexos(event)">
+    <div class="anexos-modal" role="dialog" aria-modal="true" aria-labelledby="anexos-modal-title" onclick="event.stopPropagation()">
+      <div class="anexos-modal-head">
+        <div>
+          <div class="anexos-modal-title" id="anexos-modal-title">Anexos</div>
+          <div class="anexos-modal-subtitle" id="anexos-modal-subtitle">Arquivos vinculados ao chamado</div>
+        </div>
+        <button class="anexos-modal-close" type="button" title="Fechar" onclick="fecharModalAnexos()">x</button>
+      </div>
+      <div class="anexos-modal-body" id="anexos-modal-body"></div>
+    </div>
+  </div>
 
   <script>
     // ── Modo de acesso: sessão normal do IA HUB (cookie) vs. sessão externa
@@ -421,6 +464,7 @@
     // sessão, então em modo externo ele NUNCA é carregado (senão o usuário
     // seria expulso da tela antes do JS abaixo rodar).
     const TOKEN_EXTERNO_KEY = 'svc_token_externo';
+    const LOGIN_APELIDO_KEY = 'svc_login_apelido';
     const modoExterno = location.pathname === '/radar-externo';
     const modoTelaCheia = modoExterno || location.pathname === '/app/ia-service/chat';
     const tokenExterno = modoExterno ? localStorage.getItem(TOKEN_EXTERNO_KEY) : null;
@@ -450,14 +494,38 @@
     let ultimaPerguntaPendente = null; // contexto da pergunta associada à próxima resposta da IA (card "Pergunta")
     let pesquisaAberta = false;
     let pesquisaAbaAtual = 'interna';
+    let sessaoExternaInvalida = false;
     const pesquisaCachePorChamado = new Map();
+    let anexosSoftExpertCache = [];
+    let anexosAtendimentoCache = [];
+    const anexosPorBubble = new Map();
 
-    function showError(msg) {
+    function showError(msg, opts = {}) {
+      if (modoExterno && sessaoExternaInvalida && !opts.force) return;
       const el = document.getElementById('error-banner');
       el.textContent = msg;
       el.style.display = 'block';
       clearTimeout(showError._t);
-      showError._t = setTimeout(() => { el.style.display = 'none'; }, 6000);
+      if (!opts.persistente) showError._t = setTimeout(() => { el.style.display = 'none'; }, 6000);
+    }
+    function irParaAutenticacaoExterna() {
+      localStorage.removeItem(TOKEN_EXTERNO_KEY);
+      const apelido = localStorage.getItem(LOGIN_APELIDO_KEY);
+      location.href = apelido ? '/entrar-servico/' + encodeURIComponent(apelido) : '/entrar-servico';
+    }
+    function showSessaoExternaInvalida(msg) {
+      sessaoExternaInvalida = true;
+      if (timerAutoRefresh) { clearInterval(timerAutoRefresh); timerAutoRefresh = null; }
+      if (timerContagemRegressiva) { clearInterval(timerContagemRegressiva); timerContagemRegressiva = null; }
+      segundosRestantes = 0;
+      atualizarLabelContagem();
+      document.getElementById('fila-atualizar-btn')?.setAttribute('disabled', 'disabled');
+      const lista = document.getElementById('fila-lista');
+      if (lista) lista.innerHTML = '<div class="fila-empty">Sessao expirada. Entre novamente para carregar sua fila.</div>';
+      const el = document.getElementById('error-banner');
+      el.innerHTML = '<div><strong>Sessao expirada</strong></div><div>' + escapeHtml(msg || 'Sua sessao externa expirou ou nao e mais valida.') + '</div><div class="error-banner-actions"><button class="error-banner-btn" onclick="irParaAutenticacaoExterna()">Entrar novamente</button><button class="error-banner-btn secondary" onclick="location.reload()">Tentar novamente</button></div>';
+      el.style.display = 'block';
+      clearTimeout(showError._t);
     }
     function showToast(msg) {
       const el = document.getElementById('toast-status');
@@ -468,6 +536,13 @@
     }
     function escapeHtml(s) {
       return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+    }
+    function formatarTamanho(bytes) {
+      const n = Number(bytes);
+      if (!n) return '';
+      if (n < 1024) return `${n} B`;
+      if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+      return `${(n / (1024 * 1024)).toFixed(1)} MB`;
     }
     // Prefixo de rota + header de auth mudam conforme o modo. Em modo externo
     // não há empresa_id explícito na query (o token já resolve a empresa no
@@ -481,6 +556,9 @@
       if (modoExterno) headers['x-sessao-externa'] = tokenExterno;
       const r = await fetch(apiPath(pathSemPrefixo), { ...opts, headers });
       const body = await r.json().catch(() => ({}));
+      if (modoExterno && (r.status === 401 || r.status === 403)) {
+        showSessaoExternaInvalida(body.error || 'Sessao externa invalida ou expirada.');
+      }
       if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
       return body;
     }
@@ -587,7 +665,7 @@
       try {
         await carregarFila({ forceSync: true });
       } finally {
-        btn.disabled = false;
+        btn.disabled = !!sessaoExternaInvalida;
         btn.classList.remove('carregando');
       }
       const segundos = Number(document.getElementById('autoRefreshSelect').value);
@@ -631,19 +709,118 @@
     // esconde a seção de anexos, silenciosamente.
     async function carregarAnexosSoftExpert(chamadoId) {
       const container = document.getElementById('chat-header-anexos');
+      const resumo = document.getElementById('chat-header-anexos-resumo');
       container.style.display = 'none';
       container.innerHTML = '';
+      resumo.style.display = 'none';
+      resumo.innerHTML = '';
+      anexosSoftExpertCache = [];
       try {
         const resultado = await api(`/radar/chamados/${chamadoId}/anexos-softexpert`);
+        anexosSoftExpertCache = resultado.anexos || [];
         if (!resultado.anexos?.length) return;
-        container.innerHTML = resultado.anexos.map((a, i) => {
-          const tamanhoKb = a.tamanho ? `${Math.round(a.tamanho / 1024)}KB` : '';
-          return `<button type="button" class="chat-header-anexo-chip" onclick="abrirAnexoSoftExpert('${chamadoId}', '${encodeURIComponent(a.oid)}')">📎 ${escapeHtml(a.nome)} <span class="tamanho">${tamanhoKb}</span></button>`;
-        }).join('');
-        container.style.display = 'flex';
+        renderizarResumoAnexos();
       } catch (_) {
         // Silencioso — anexo é complemento, não deve gerar erro visível no chat.
       }
+    }
+
+    function renderizarResumoAnexos() {
+      const resumo = document.getElementById('chat-header-anexos-resumo');
+      if (!resumo) return;
+      const totalOrigem = anexosSoftExpertCache.length;
+      const totalBaixados = anexosAtendimentoCache.length;
+      const total = totalOrigem + totalBaixados;
+      if (!total) {
+        resumo.style.display = 'none';
+        resumo.innerHTML = '';
+        return;
+      }
+      resumo.style.display = 'block';
+      resumo.innerHTML = `<button class="anexos-abrir-btn" type="button" onclick="abrirGradeAnexosChamado()">📎 Anexos ${totalOrigem ? totalOrigem : total}${totalBaixados ? ` · IA ${totalBaixados}` : ''}</button>`;
+    }
+
+    function origemAnexoLabel(origem) {
+      if (origem === 'chamado') return 'Abertura';
+      if (origem === 'posicionamento') return 'Posicionamento';
+      if (origem === 'anexo') return 'Grade de anexos';
+      if (origem === 'ia') return 'Baixado para IA';
+      if (origem === 'analista') return 'Analista';
+      return origem || 'Anexo';
+    }
+
+    function montarLinhasAnexos(anexos, { fonte = 'softexpert' } = {}) {
+      if (!anexos?.length) {
+        return '<div class="pesquisa-empty">Nenhum anexo encontrado para este contexto.</div>';
+      }
+      const linhas = anexos.map((a, i) => {
+        const nome = a.nome || a.nomeOriginal || `Anexo ${i + 1}`;
+        const origem = fonte === 'softexpert' ? origemAnexoLabel(a.origem) : origemAnexoLabel(a.origem || 'ia');
+        const tamanho = formatarTamanho(a.tamanho);
+        const tipo = a.extensao || a.mimeType || '';
+        const status = fonte === 'softexpert'
+          ? 'Na origem'
+          : (a.conteudoExtraido ? 'Conteúdo extraído' : 'Baixado');
+        const referencia = [a.referenciaAutor, a.referenciaData ? formatarData(a.referenciaData) : null].filter(Boolean).join(' · ');
+        const meta = [tipo, tamanho, referencia].filter(Boolean).join(' · ');
+        const acao = fonte === 'softexpert'
+          ? `<button class="anexo-acao" type="button" onclick="abrirAnexoSoftExpert('${chamadoSelecionadoId}', '${encodeURIComponent(a.oid)}')">Abrir</button>`
+          : `<button class="anexo-acao" type="button" onclick="abrirAnexoLocal('${a.id}')">Abrir</button>`;
+        return `
+          <tr>
+            <td><div class="anexo-nome">${escapeHtml(nome)}</div>${meta ? `<div class="anexo-meta">${escapeHtml(meta)}</div>` : ''}</td>
+            <td>${escapeHtml(origem)}</td>
+            <td><span class="anexo-status">${escapeHtml(status)}</span></td>
+            <td>${acao}</td>
+          </tr>
+        `;
+      }).join('');
+      return `
+        <table class="anexos-grid">
+          <thead><tr><th>Arquivo</th><th>Origem</th><th>Status</th><th>Ação</th></tr></thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      `;
+    }
+
+    function abrirModalAnexos({ titulo, subtitulo, html }) {
+      document.getElementById('anexos-modal-title').textContent = titulo || 'Anexos';
+      document.getElementById('anexos-modal-subtitle').textContent = subtitulo || 'Arquivos vinculados ao chamado';
+      document.getElementById('anexos-modal-body').innerHTML = html || '<div class="pesquisa-empty">Nenhum anexo encontrado.</div>';
+      document.getElementById('anexos-modal-backdrop').classList.add('ativo');
+    }
+
+    function fecharModalAnexos(event) {
+      if (event && event.target !== document.getElementById('anexos-modal-backdrop')) return;
+      document.getElementById('anexos-modal-backdrop').classList.remove('ativo');
+    }
+
+    function abrirGradeAnexosChamado() {
+      const origem = montarLinhasAnexos(anexosSoftExpertCache, { fonte: 'softexpert' });
+      const baixados = montarLinhasAnexos(anexosAtendimentoCache, { fonte: 'local' });
+      abrirModalAnexos({
+        titulo: 'Anexos do chamado',
+        subtitulo: 'SoftExpert e arquivos baixados para análise da IA',
+        html: `
+          <div class="pesquisa-card">
+            <div class="pesquisa-card-title">SoftExpert</div>
+            ${origem}
+          </div>
+          <div class="pesquisa-card">
+            <div class="pesquisa-card-title">Baixados para IA / analista</div>
+            ${baixados}
+          </div>
+        `,
+      });
+    }
+
+    function abrirGradeAnexosBubble(chave) {
+      const anexos = anexosPorBubble.get(chave) || [];
+      abrirModalAnexos({
+        titulo: 'Anexos da conversa',
+        subtitulo: 'Arquivos vinculados a esta interação',
+        html: montarLinhasAnexos(anexos.map(a => ({ ...a, origem: a.origem || 'analista' })), { fonte: 'local' }),
+      });
     }
 
     // Download via fetch (não <a href> direto) porque em modo externo a
@@ -653,6 +830,23 @@
       try {
         const headers = modoExterno ? { 'x-sessao-externa': tokenExterno } : {};
         const r = await fetch(apiPath(`/radar/chamados/${chamadoId}/anexos-softexpert/${oidCodificado}`), { headers });
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(body.error || `Erro ${r.status}`);
+        }
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank', 'noopener');
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } catch (err) {
+        showError('Não foi possível abrir o anexo: ' + err.message);
+      }
+    }
+
+    async function abrirAnexoLocal(anexoId) {
+      try {
+        const headers = modoExterno ? { 'x-sessao-externa': tokenExterno } : {};
+        const r = await fetch(apiPath(`/anexos/${anexoId}/download`), { headers });
         if (!r.ok) {
           const body = await r.json().catch(() => ({}));
           throw new Error(body.error || `Erro ${r.status}`);
@@ -890,9 +1084,11 @@
       bubble.innerHTML = cabecalhoPergunta + corpo;
 
       if (anexos && anexos.length) {
+        const chaveAnexos = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        anexosPorBubble.set(chaveAnexos, anexos);
         const anexosDiv = document.createElement('div');
         anexosDiv.className = 'anexos-do-turno';
-        anexosDiv.innerHTML = anexos.map(a => `<span class="anexo-chip">📄 ${escapeHtml(a.nomeOriginal)}</span>`).join('');
+        anexosDiv.innerHTML = `<button class="anexo-chip anexo-chip-btn" type="button" onclick="abrirGradeAnexosBubble('${chaveAnexos}')">📎 ${anexos.length} anexo(s)</button>`;
         bubble.appendChild(anexosDiv);
       }
 
@@ -926,6 +1122,8 @@
           api(`/atendimentos/${atendimentoAtualId}/mensagens${sufixo}`),
           api(`/atendimentos/${atendimentoAtualId}/anexos${sufixo}`),
         ]);
+        anexosAtendimentoCache = anexosDoAtendimento || [];
+        renderizarResumoAnexos();
         const chatBody = document.getElementById('chat-body');
         chatBody.innerHTML = '';
         const anexosPorMensagem = {};
@@ -943,7 +1141,7 @@
             anexos: anexosPorMensagem[m.id],
             diagnostico: m.diagnostico,
             nivelConfianca: m.nivelConfianca,
-            perguntaContexto: direcao === 'in' ? perguntaAnterior : null,
+            perguntaContexto: m.papel === 'assistant' ? perguntaAnterior : null,
           });
           if (direcao === 'out') perguntaAnterior = m.conteudo;
         }

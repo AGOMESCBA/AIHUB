@@ -10,6 +10,8 @@
 // (fila, abrir-atendimento, mensagens, anexos, investigar, config). Nada
 // além disso é exposto neste namespace.
 
+const fs = require('fs');
+const path = require('path');
 const multer = require('multer');
 const { requireSessaoExterna } = require('../services/sessao-externa-middleware');
 const atendimentoService = require('../services/atendimento-service');
@@ -185,6 +187,22 @@ module.exports = function registrarRotasExterno(app) {
   app.get('/api/ia-service-externo/atendimentos/:id/anexos', (req, res) => {
     try {
       res.json(atendimentoService.listarAnexos(req.svcEmpresaId, req.params.id));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service-externo/anexos/:id/download', (req, res) => {
+    try {
+      const anexo = anexoRepo.getAnexo(req.svcEmpresaId, req.params.id);
+      if (!anexo) return res.status(404).json({ error: 'Anexo não encontrado.' });
+
+      const caminhoAbsoluto = path.join(armazenamento.ANEXOS_DIR, anexo.caminhoRelativo);
+      if (!fs.existsSync(caminhoAbsoluto)) return res.status(404).json({ error: 'Arquivo não encontrado em disco.' });
+
+      res.setHeader('Content-Type', anexo.mimeType || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(anexo.nomeOriginal)}"`);
+      fs.createReadStream(caminhoAbsoluto).pipe(res);
     } catch (err) {
       _handleErro(res, err);
     }

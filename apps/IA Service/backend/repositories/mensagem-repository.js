@@ -5,7 +5,7 @@
 const crypto = require('crypto');
 const { getDB } = require('../database');
 
-const PAPEIS_VALIDOS = new Set(['user', 'assistant', 'system']);
+const PAPEIS_VALIDOS = new Set(['user', 'assistant', 'system', 'customer']);
 
 function _rowParaDominio(row) {
   if (!row) return null;
@@ -28,7 +28,7 @@ function salvarMensagem(empresaId, atendimentoId, dados) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   if (!atendimentoId) throw new Error('atendimentoId é obrigatório.');
   if (!PAPEIS_VALIDOS.has(dados.papel)) {
-    throw new Error(`papel inválido: ${dados.papel}. Use user, assistant ou system.`);
+    throw new Error(`papel inválido: ${dados.papel}. Use user, assistant, customer ou system.`);
   }
 
   const db = getDB();

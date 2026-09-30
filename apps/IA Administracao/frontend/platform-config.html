@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IAHub Platform - Configurar IA</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn{flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md);transition:background var(--transition),color var(--transition);}
+    .topbar-menu-btn:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .topbar-title{flex:1;min-width:0;font-weight:700;}
+    .editor-shell{display:flex;flex-direction:column;min-height:0;}
+    .editor-actionbar{position:sticky;top:-24px;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0 12px;margin:-24px 0 20px;background:var(--bg-base);border-bottom:1px solid var(--border);}
+    .editor-actionbar-title{display:flex;flex-direction:column;gap:2px;min-width:0;}
+    .editor-actionbar-title strong{color:var(--text-hi);font-size:16px;}
+    .editor-actionbar-title span{color:var(--text-md);font-size:12px;}
+    .editor-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+    .editor-grid{display:grid;gap:18px;grid-template-columns:1fr 280px;align-items:start;}
+    .editor-grid.whatsapp-full{grid-template-columns:1fr;}
+    .editor-grid.whatsapp-full > .editor-side{display:none;}
+    @media(max-width:860px){.editor-grid{grid-template-columns:1fr;}}
+    .editor-main,.editor-side{min-width:0;}
+    .iac-tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:18px;gap:0;flex-wrap:wrap;}
+    .iac-tab{padding:9px 16px;font-size:13px;font-weight:500;color:var(--text-md);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:color var(--transition);white-space:nowrap;}
+    .iac-tab:hover{color:var(--accent);}
+    .iac-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+    .iac-tab-panel{display:none;}
+    .iac-tab-panel.active{display:block;}
+    .form-section{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+    .form-section + .form-section{margin-top:14px;}
+    .form-section-body{padding:18px;}
+    .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+    .form-grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;}
+    @media(max-width:760px){.form-grid,.form-grid-3{grid-template-columns:1fr;}}
+    .form-group{display:flex;flex-direction:column;gap:6px;min-width:0;margin-bottom:16px;}
+    .form-group:last-child{margin-bottom:0;}
+    .form-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);}
+    .form-control{width:100%;min-height:38px;border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text-hi);background:var(--bg-base);font:inherit;outline:none;}
+    .form-control:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow);}
+    textarea.form-control{min-height:86px;resize:vertical;}
+    .form-hint{font-size:11px;color:var(--text-lo);margin-top:3px;}
+    .pass-wrap{position:relative;display:flex;align-items:center;}
+    .pass-wrap .form-control{padding-right:42px;}
+    .btn-pass-toggle{position:absolute;right:1px;top:1px;bottom:1px;width:38px;border:none;background:transparent;color:var(--text-lo);cursor:pointer;border-radius:0 7px 7px 0;display:flex;align-items:center;justify-content:center;transition:color var(--transition),background var(--transition);font-size:12px;}
+    .btn-pass-toggle:hover{color:var(--text-hi);background:var(--bg-hover);}
+    .btn-pass-toggle svg,.btn-pass-toggle svg *{pointer-events:none;}
+    .key-action{display:flex;align-items:center;gap:8px;margin-top:8px;}
+    .prov-header{display:flex;align-items:center;gap:12px;margin-bottom:20px;}
+    .prov-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+    .prov-icon-groq{background:rgba(249,115,22,.12);}
+    .prov-icon-gemini{background:rgba(59,130,246,.12);}
+    .prov-icon-deepseek{background:rgba(20,184,166,.12);}
+    .prov-icon-claude{background:rgba(168,85,247,.12);}
+    .prov-icon-openai{background:rgba(16,163,127,.12);}
+    .prov-icon-agente{background:rgba(14,165,233,.12);font-size:20px;}
+    .prov-meta{flex:1;min-width:0;}
+    .prov-name{font-size:16px;font-weight:700;color:var(--text-hi);display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    .prov-desc{font-size:13px;color:var(--text-md);margin-top:2px;}
+    .provider-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;}
+    .badge-groq{background:rgba(249,115,22,.12);color:#ea580c;}
+    .badge-gemini{background:rgba(59,130,246,.12);color:#2563eb;}
+    .badge-deepseek{background:rgba(20,184,166,.12);color:#0f766e;}
+    .badge-claude{background:rgba(168,85,247,.12);color:#7e22ce;}
+    .badge-openai{background:rgba(16,163,127,.12);color:#047857;}
+    .badge-primario{background:rgba(124,58,237,.15);color:var(--accent);}
+    .badge-agente-ativo{background:rgba(16,185,129,.12);color:#059669;}
+    .badge-agente-inativo{background:var(--bg-hover);color:var(--text-lo);}
+    .btn-warning{background:rgba(234,88,12,.1);color:#c2410c;border:1px solid rgba(234,88,12,.2);transition:background var(--transition),color var(--transition);}
+    .btn-warning:hover{background:rgba(234,88,12,.18);color:#9a3412;}
+    .test-result{margin-top:10px;padding:9px 14px;border-radius:var(--radius-sm);font-size:13px;display:none;}
+    .test-result.ok{background:#dcfce7;color:#15803d;display:block;}
+    .test-result.fail{background:#fee2e2;color:#b91c1c;display:block;}
+    .summary-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;}
+    .summary-card + .summary-card{margin-top:14px;}
+    .summary-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);margin-bottom:12px;}
+    .summary-grid{display:flex;flex-direction:column;gap:10px;}
+    .summary-item{display:flex;flex-direction:column;gap:2px;}
+    .summary-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);}
+    .summary-value{font-size:13px;color:var(--text-hi);word-break:break-word;}
+    .badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700;width:max-content;}
+    .badge-ok{background:#dcfce7;color:#15803d;}
+    .badge-muted{background:var(--bg-hover);color:var(--text-lo);}
+    .identity-table{width:100%;border-collapse:collapse;font-size:13px;background:var(--bg-card);}
+    .identity-table th,.identity-table td{padding:13px 16px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle;}
+    .identity-table th{color:var(--text-lo);font-size:11px;text-transform:uppercase;letter-spacing:.05em;background:var(--bg-base);}
+    .identity-table th:last-child,.identity-table td:last-child{width:92px;min-width:92px;text-align:right;white-space:nowrap;}
+    .identity-table tr{cursor:pointer;}
+    .identity-table tr:hover{background:var(--bg-hover);}
+    .identity-roles{color:var(--text-md);font-size:12px;line-height:1.5;}
+    .identity-id{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--text-lo);}
+    .identity-phone{font-family:ui-monospace,Consolas,monospace;color:var(--text-md);}
+    .role-list{display:flex;flex-direction:column;gap:8px;margin-top:10px;}
+    .role-row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px;align-items:end;}
+    @media(max-width:860px){.role-row{grid-template-columns:1fr;}}
+    .page-kicker{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:3px;}
+    .page-title{font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25;}
+    .page-subtitle{font-size:13px;color:var(--text-md);margin-top:4px;}
+    .page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px;}
+    .quick-panel{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;box-shadow:var(--shadow-sm);}
+    .quick-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+    .filter-area{padding-top:12px;border-top:1px solid var(--border);margin-top:12px;display:none;}
+    .quick-panel.open .filter-area{display:block;}
+    .quick-row .form-control{height:36px;font-size:13px;}
+    .quick-row input.form-control{flex:1;min-width:220px;}
+    .quick-row select.form-control{width:auto;min-width:145px;}
+    .filter-status{font-size:12px;color:var(--text-lo);flex:1;}
+    .grid-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card);}
+    .grid-title{font-size:13px;font-weight:700;color:var(--text-hi);}
+    .grid-meta{font-size:12px;color:var(--text-lo);margin-top:1px;}
+    .badge-ativo,.badge-inativo{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;}
+    .badge-ativo{background:#dcfce7;color:#15803d;}
+    .badge-inativo{background:var(--bg-hover);color:var(--text-lo);}
+    .module-chips{display:flex;gap:6px;flex-wrap:wrap;}
+    .module-chip{display:inline-flex;align-items:center;border:0;background:var(--bg-base);color:var(--text-md);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700;white-space:nowrap;}
+    .chip-fin{background:#dbeafe;color:#1d4ed8;}
+    .chip-cmp{background:#fef9c3;color:#854d0e;}
+    .chip-fat{background:#f0fdf4;color:#166534;}
+    .chip-com{background:#faf5ff;color:#6b21a8;}
+    .chip-est{background:#fff7ed;color:#9a3412;}
+    .chip-soft{background:#ccfbf1;color:#0f766e;}
+    .chip-user{background:#fef3c7;color:#92400e;}
+    .chip-gestor{background:#e0e7ff;color:#3730a3;}
+    .btn-icon{background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;font-size:15px;transition:background .15s;}
+    .btn-icon:hover{background:var(--bg-hover);}
+    .actions-cell{display:inline-flex;align-items:center;justify-content:flex-end;gap:8px;white-space:nowrap;}
+    .form-tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;}
+    .form-tab{padding:9px 18px;font-size:13px;font-weight:700;color:var(--text-lo);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s,border-color .15s;}
+    .form-tab:hover{color:var(--text-hi);}
+    .form-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+    .tab-pane{display:none;}
+    .tab-pane.active{display:block;}
+    .form-section-header{padding:16px 18px;border-bottom:1px solid var(--border);}
+    .form-section-title{font-size:14px;font-weight:700;color:var(--text-hi);}
+    .form-section-subtitle{font-size:12px;color:var(--text-md);margin-top:3px;}
+    .info-box{background:var(--accent-glow);border:1px solid rgba(124,58,237,.25);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text-md);line-height:1.6;margin-top:12px;}
+    .empresa-cards{display:flex;flex-direction:column;gap:12px;}
+    .empresa-card{border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);overflow:hidden;}
+    .empresa-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:var(--bg-base);border-bottom:1px solid var(--border);}
+    .empresa-card-title{font-weight:700;color:var(--text-hi);font-size:13px;}
+    .empresa-card-sub{font-size:11px;color:var(--text-lo);margin-top:1px;}
+    .empresa-card-badge{background:#ecfdf5;color:#047857;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;margin-left:6px;}
+    .empresa-card-body{padding:14px;}
+    .sistema-block{border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+    .sistema-block-head{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--accent-glow);font-size:12px;font-weight:700;color:var(--accent);}
+    .sistema-block-body{padding:12px;display:flex;flex-direction:column;gap:10px;}
+    .wa-detail-grid{display:grid;grid-template-columns:1fr 280px;gap:18px;align-items:start;}
+    @media(max-width:960px){.page-head,.wa-detail-grid{display:block}.page-head .editor-actions{margin-top:12px}.quick-row select.form-control{width:100%;}.quick-row input.form-control{min-width:100%;}}
+    .toast{position:fixed;bottom:24px;right:24px;background:#10b981;color:#fff;padding:11px 18px;border-radius:var(--radius);font-size:13px;font-weight:500;transform:translateY(80px);opacity:0;transition:var(--transition);z-index:999;}
+    .toast.show{transform:translateY(0);opacity:1;}
+    .toast.error{background:#dc2626;}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">☰</button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IAHub ></span> Configurar IA</span>
+    </div>
+
+    <div class="page-content">
+      <div class="editor-shell">
+        <div class="editor-actionbar">
+          <div class="editor-actionbar-title">
+            <strong>IAHub Platform</strong>
+            <span>Configure provedores de IA, agente local e telefones autorizados.</span>
+          </div>
+          <div class="editor-actions">
+            <button class="btn btn-ghost" onclick="carregarTudo()">↺ Descartar</button>
+            <button class="btn btn-primary" onclick="salvarAbaAtual()">Salvar configuracoes</button>
+          </div>
+        </div>
+
+        <div class="iac-tabs">
+          <button class="iac-tab active" onclick="mudarAba(this,'aba-groq')">⚡ Groq</button>
+          <button class="iac-tab" onclick="mudarAba(this,'aba-openai')">✦ OpenAI / GPT</button>
+          <button class="iac-tab" onclick="mudarAba(this,'aba-gemini')">✦ Gemini</button>
+          <button class="iac-tab" onclick="mudarAba(this,'aba-deepseek')">▣ DeepSeek</button>
+          <button class="iac-tab" onclick="mudarAba(this,'aba-claude')">◆ Claude</button>
+          <button class="iac-tab" onclick="mudarAba(this,'aba-comportamento')">⚙ Comportamento</button>
+          <button class="iac-tab" onclick="mudarAba(this,'aba-agente')">🔌 Agente Local</button>
+          <button class="iac-tab" onclick="mudarAba(this,'aba-identidades')">Números Autorizados</button>
+          <button class="iac-tab" onclick="mudarAba(this,'aba-importacao')">Importacao</button>
+        </div>
+
+        <div class="editor-grid" id="platform-editor-grid">
+          <div class="editor-main">
+            <div class="iac-tab-panel active" id="aba-groq"><div class="form-section"><div class="form-section-body">
+              <div class="prov-header"><div class="prov-icon prov-icon-groq">⚡</div><div class="prov-meta"><div class="prov-name">Groq <span id="pbadge-groq" class="provider-badge badge-groq">⚡ Rapido</span></div><div class="prov-desc">Alta velocidade, ideal para respostas rapidas em tempo real.</div></div></div>
+              <div class="form-group"><label class="form-label">Chave de API (Groq)</label><div class="pass-wrap"><input type="password" id="key-groq" class="form-control" placeholder="gsk_..."><button type="button" class="btn-pass-toggle" onclick="toggleKey('key-groq')" title="Mostrar/ocultar chave"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div><div class="form-hint">Obtida em console.groq.com. Deixe em branco para manter a chave atual.</div><div id="status-groq" style="margin-top:6px;font-size:12px"></div><div class="key-action"><button class="btn btn-ghost" onclick="testarProvedor('groq')">Testar conexao</button></div><div class="test-result" id="test-groq"></div></div>
+              <div class="form-group"><label class="form-label">Modelo</label><select id="model-groq" class="form-control"><option value="openai/gpt-oss-20b">openai/gpt-oss-20b - Recomendado</option><option value="openai/gpt-oss-120b">openai/gpt-oss-120b - Mais capaz</option><option value="qwen/qwen3.6-27b">qwen/qwen3.6-27b - Alternativo</option><option value="groq/compound">groq/compound - Roteamento interno Groq</option><option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option></select><div class="form-hint">Modelo usado quando Groq for acionado.</div></div>
+            </div></div></div>
+
+            <div class="iac-tab-panel" id="aba-openai"><div class="form-section"><div class="form-section-body">
+              <div class="prov-header"><div class="prov-icon prov-icon-openai">✦</div><div class="prov-meta"><div class="prov-name">OpenAI / GPT <span id="pbadge-openai" class="provider-badge badge-openai">✦ GPT-4o</span></div><div class="prov-desc">Modelos GPT da OpenAI. Usa gpt-4o-mini por padrao.</div></div></div>
+              <div class="form-group"><label class="form-label">Chave de API (OpenAI)</label><div class="pass-wrap"><input type="password" id="key-openai" class="form-control" placeholder="sk-..."><button type="button" class="btn-pass-toggle" onclick="toggleKey('key-openai')" title="Mostrar/ocultar chave"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div><div class="form-hint">Obtida em platform.openai.com. Deixe em branco para manter a chave atual.</div><div id="status-openai" style="margin-top:6px;font-size:12px"></div><div class="key-action"><button class="btn btn-ghost" onclick="testarProvedor('openai')">Testar conexao</button></div><div class="test-result" id="test-openai"></div></div>
+              <div class="form-group"><label class="form-label">Modelo</label><select id="model-openai" class="form-control"><option value="gpt-4o-mini">gpt-4o-mini - Recomendado</option><option value="gpt-4o">gpt-4o - Alta qualidade</option><option value="gpt-4-turbo">gpt-4-turbo - Raciocinio avancado</option></select><div class="form-hint">Modelo usado quando OpenAI for acionado.</div></div>
+            </div></div></div>
+
+            <div class="iac-tab-panel" id="aba-gemini"><div class="form-section"><div class="form-section-body">
+              <div class="prov-header"><div class="prov-icon prov-icon-gemini">✦</div><div class="prov-meta"><div class="prov-name">Google Gemini <span id="pbadge-gemini" class="provider-badge badge-gemini">✦ Multimodal</span></div><div class="prov-desc">Provedor Google com grande janela de contexto e capacidades multimodais.</div></div></div>
+              <div class="form-group"><label class="form-label">Chave de API (Gemini)</label><div class="pass-wrap"><input type="password" id="key-gemini" class="form-control" placeholder="AIzaSy..."><button type="button" class="btn-pass-toggle" onclick="toggleKey('key-gemini')" title="Mostrar/ocultar chave"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div><div class="form-hint">Obtida em aistudio.google.com. Deixe em branco para manter a chave atual.</div><div id="status-gemini" style="margin-top:6px;font-size:12px"></div><div class="key-action"><button class="btn btn-ghost" onclick="testarProvedor('gemini')">Testar conexao</button></div><div class="test-result" id="test-gemini"></div></div>
+              <div class="form-group"><label class="form-label">Modelo</label><select id="model-gemini" class="form-control"><option value="gemini-3.5-flash">gemini-3.5-flash - Recomendado</option><option value="gemini-2.5-flash">gemini-2.5-flash</option><option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option><option value="gemini-2.5-pro">gemini-2.5-pro</option><option value="gemini-2.0-flash">gemini-2.0-flash</option></select><div class="form-hint">Modelo usado quando Gemini for acionado.</div></div>
+            </div></div></div>
+
+            <div class="iac-tab-panel" id="aba-deepseek"><div class="form-section"><div class="form-section-body">
+              <div class="prov-header"><div class="prov-icon prov-icon-deepseek">▣</div><div class="prov-meta"><div class="prov-name">DeepSeek <span id="pbadge-deepseek" class="provider-badge badge-deepseek">▣ Custo-beneficio</span></div><div class="prov-desc">Otimo custo-beneficio para logica estruturada. Requer saldo na conta.</div></div></div>
+              <div class="form-group"><label class="form-label">Chave de API (DeepSeek)</label><div class="pass-wrap"><input type="password" id="key-deepseek" class="form-control" placeholder="sk-..."><button type="button" class="btn-pass-toggle" onclick="toggleKey('key-deepseek')" title="Mostrar/ocultar chave"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div><div class="form-hint">Obtida em platform.deepseek.com. Deixe em branco para manter a chave atual.</div><div id="status-deepseek" style="margin-top:6px;font-size:12px"></div><div class="key-action"><button class="btn btn-ghost" onclick="testarProvedor('deepseek')">Testar conexao</button></div><div class="test-result" id="test-deepseek"></div></div>
+              <div class="form-group"><label class="form-label">Modelo</label><select id="model-deepseek" class="form-control"><option value="deepseek-chat">deepseek-chat - Recomendado</option><option value="deepseek-reasoner">deepseek-reasoner - Raciocinio avancado</option></select><div class="form-hint">Modelo usado quando DeepSeek for acionado.</div></div>
+            </div></div></div>
+
+            <div class="iac-tab-panel" id="aba-claude"><div class="form-section"><div class="form-section-body">
+              <div class="prov-header"><div class="prov-icon prov-icon-claude">◆</div><div class="prov-meta"><div class="prov-name">Claude <span id="pbadge-claude" class="provider-badge badge-claude">◆ Elite</span></div><div class="prov-desc">Provedor Anthropic. Alta qualidade para cenarios complexos.</div></div></div>
+              <div class="form-group"><label class="form-label">Chave de API (Claude / Anthropic)</label><div class="pass-wrap"><input type="password" id="key-claude" class="form-control" placeholder="sk-ant-..."><button type="button" class="btn-pass-toggle" onclick="toggleKey('key-claude')" title="Mostrar/ocultar chave"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div><div class="form-hint">Obtida em console.anthropic.com. Deixe em branco para manter a chave atual.</div><div id="status-claude" style="margin-top:6px;font-size:12px"></div><div class="key-action"><button class="btn btn-ghost" onclick="testarProvedor('claude')">Testar conexao</button></div><div class="test-result" id="test-claude"></div></div>
+              <div class="form-group"><label class="form-label">Modelo</label><select id="model-claude" class="form-control"><option value="claude-haiku-4-5-20251001">claude-haiku-4-5-20251001 - Recomendado</option><option value="claude-sonnet-4-6">claude-sonnet-4-6 - Balanceado</option><option value="claude-opus-4-8">claude-opus-4-8 - Elite</option><option value="claude-3-5-sonnet-latest">claude-3-5-sonnet-latest</option></select><div class="form-hint">Modelo usado quando Claude for acionado.</div></div>
+            </div></div></div>
+
+            <div class="iac-tab-panel" id="aba-comportamento"><div class="form-section"><div class="form-section-body">
+              <div class="prov-header"><div class="prov-icon prov-icon-agente">⚙</div><div class="prov-meta"><div class="prov-name">Comportamento <span class="provider-badge badge-primario">Fallback</span></div><div class="prov-desc">Defina provedor principal, ordem de fallback e parametros gerais.</div></div></div>
+              <div class="form-grid"><div class="form-group"><label class="form-label">Provedor primario</label><select id="ai-primary-provider" class="form-control" onchange="atualizarResumo()"><option value="groq">Groq</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="deepseek">DeepSeek</option><option value="claude">Claude</option></select></div><div class="form-group"><label class="form-label">Ordem de fallback</label><input id="ai-fallback-order" class="form-control" placeholder="groq,deepseek,gemini,claude,openai" oninput="atualizarResumo()"></div></div>
+              <div class="form-grid-3"><div class="form-group"><label class="form-label">Confianca minima</label><input id="ai-min-confidence" class="form-control" type="number" min="0" max="1" step="0.01"></div><div class="form-group"><label class="form-label">Historico</label><input id="ai-history-turns" class="form-control" type="number" min="0" max="50" step="1"></div><div class="form-group"><label class="form-label">Whisper</label><input id="ai-whisper-model" class="form-control" placeholder="whisper-large-v3"></div></div>
+            </div></div></div>
+
+            <div class="iac-tab-panel" id="aba-agente"><div class="form-section"><div class="form-section-body">
+              <div class="prov-header"><div class="prov-icon prov-icon-agente">🔌</div><div class="prov-meta"><div class="prov-name">Agente Local <span id="agente-status-badge" class="provider-badge badge-agente-inativo">○ Inativo</span></div><div class="prov-desc">API instalada no servidor do cliente para executar integracoes locais.</div></div></div>
+              <div class="form-grid"><div class="form-group"><label class="form-label">Status</label><select id="agent-enabled" class="form-control" onchange="atualizarResumo()"><option value="true">Ativo</option><option value="false">Inativo</option></select></div><div class="form-group"><label class="form-label">URL do Agente</label><input id="agent-base-url" class="form-control" placeholder="http://192.168.1.10:8765"></div></div>
+            </div></div></div>
+
+            <div class="iac-tab-panel" id="aba-identidades">
+              <div id="wa-lista">
+                <div class="page-head">
+                  <div>
+                    <div class="page-kicker">Configuracao</div>
+                    <div class="page-title">Numeros WhatsApp Autorizados</div>
+                    <div class="page-subtitle">Contatos que podem enviar comandos e acessar chats pela plataforma IAHub.</div>
+                  </div>
+                  <div class="editor-actions">
+                    <button class="btn btn-ghost" onclick="toast('Ajuda detalhada sera migrada junto com a rotina completa do IA Command')">? Ajuda</button>
+                    <button class="btn btn-primary" onclick="novaIdentidade()">+ Novo Numero</button>
+                  </div>
+                </div>
+
+                <div class="quick-panel" id="wa-filter-panel">
+                  <div class="quick-row">
+                    <button class="btn btn-ghost" id="wa-filter-toggle" onclick="toggleFiltrosWhatsApp()">+ Mostrar filtros</button>
+                    <span class="filter-status" id="wa-filter-status">Sem filtros ativos</span>
+                  </div>
+                  <div class="filter-area" id="wa-filter-area">
+                    <div class="quick-row">
+                      <input id="wa-busca" type="text" class="form-control" placeholder="Buscar por nome ou numero..." oninput="renderIdentidades()">
+                      <select id="wa-status" class="form-control" onchange="renderIdentidades()">
+                        <option value="">Todos</option>
+                        <option value="ativo">Ativos</option>
+                        <option value="inativo">Inativos</option>
+                      </select>
+                      <button class="btn btn-ghost" onclick="limparFiltroWhatsApp()">Limpar</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-section" style="padding:0;overflow:hidden">
+                  <div class="grid-toolbar">
+                    <div>
+                      <div class="grid-title">Numeros cadastrados</div>
+                      <div id="wa-count" class="grid-meta">Carregando...</div>
+                    </div>
+                  </div>
+                  <div style="overflow:auto"><table class="identity-table"><thead><tr><th>#</th><th>Nome</th><th>Numero</th><th>Modulos na empresa</th><th>Perfis</th><th>Criado em</th><th>Acoes</th></tr></thead><tbody id="identities-body"><tr><td colspan="7">Carregando...</td></tr></tbody></table></div>
+                </div>
+              </div>
+
+              <div id="wa-form" style="display:none">
+                <div class="editor-actionbar" style="position:static;top:auto;margin:0 0 20px;padding:12px 0">
+                  <div class="editor-actionbar-title">
+                    <strong id="wa-form-title">Novo Numero</strong>
+                    <span id="wa-form-subtitle">Preencha os dados gerais e configure os acessos.</span>
+                  </div>
+                  <div class="editor-actions">
+                    <button class="btn btn-ghost" onclick="abrirListaWhatsApp()">← Voltar a lista</button>
+                    <button class="btn btn-primary" onclick="salvarIdentidade()">Salvar</button>
+                  </div>
+                </div>
+
+                <div class="wa-detail-grid">
+                  <main class="editor-main">
+                    <div class="form-tabs">
+                      <button class="form-tab active" onclick="mudarAbaWhatsAppForm('geral',this)">Geral</button>
+                      <button class="form-tab" onclick="mudarAbaWhatsAppForm('grupos',this)">Grupos</button>
+                      <button class="form-tab" onclick="mudarAbaWhatsAppForm('empresas',this)">Empresas WhatsApp</button>
+                      <button class="form-tab" onclick="mudarAbaWhatsAppForm('protheus',this)">Empresas Protheus</button>
+                    </div>
+
+                    <div class="tab-pane active" id="wa-pane-geral">
+                      <section class="form-section">
+                        <div class="form-section-header">
+                          <div class="form-section-title">Identificacao</div>
+                          <div class="form-section-subtitle">Nome do contato e numero usado para receber codigos e acessar os chats.</div>
+                        </div>
+                        <div class="form-section-body">
+                          <input type="hidden" id="identity-id">
+                          <div class="form-grid">
+                            <div class="form-group"><label class="form-label">Nome</label><input id="identity-name" class="form-control" placeholder="ex: Alessandro Gomes"></div>
+                            <div class="form-group"><label class="form-label">WhatsApp</label><input id="identity-phone" class="form-control" placeholder="+5565999875116"></div>
+                            <div class="form-group"><label class="form-label">Status</label><select id="identity-active" class="form-control"><option value="true">Ativo</option><option value="false">Inativo</option></select></div>
+                            <div class="form-group"><label class="form-label">Tipo</label><select id="identity-kind" class="form-control"><option value="analista">Analista</option><option value="consultor">Consultor</option><option value="admin">Admin</option></select></div>
+                            <div class="form-group" style="grid-column:1/-1"><label class="form-label">Observacoes</label><textarea id="identity-notes" class="form-control" placeholder="Informacoes internas para auditoria e suporte."></textarea></div>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+
+                    <div class="tab-pane" id="wa-pane-grupos">
+                      <section class="form-section">
+                        <div class="form-section-header">
+                          <div class="form-section-title">Grupos do Usuario</div>
+                          <div class="form-section-subtitle">Estrutura reservada para migrar os grupos WhatsApp do IA Command.</div>
+                        </div>
+                        <div class="form-section-body">
+                          <div class="info-box" style="margin-top:0">Os grupos serao carregados aqui quando a migracao completa da rotina de numeros autorizados for ligada ao IAHub.</div>
+                        </div>
+                      </section>
+                    </div>
+
+                    <div class="tab-pane" id="wa-pane-empresas">
+                      <section class="form-section">
+                        <div class="form-section-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                          <div>
+                            <div class="form-section-title">Acessos por Empresa</div>
+                            <div class="form-section-subtitle">Mesmo conceito do IA Command: sistema, modulo, papel e codigo por contato.</div>
+                          </div>
+                          <button class="btn btn-ghost" type="button" onclick="adicionarRole()">Adicionar acesso</button>
+                        </div>
+                        <div class="form-section-body">
+                          <div class="info-box" style="margin-top:0;margin-bottom:14px">Esta estrutura foi importada do IA Command e sera usada pelo IA Service como fonte central do IAHub.</div>
+                          <div class="empresa-cards">
+                            <div class="empresa-card">
+                              <div class="empresa-card-head">
+                                <div>
+                                  <div class="empresa-card-title">Empresa atual <span class="empresa-card-badge">IAHub</span></div>
+                                  <div class="empresa-card-sub">Acessos autorizados para este numero</div>
+                                </div>
+                              </div>
+                              <div class="empresa-card-body">
+                                <div class="sistema-block">
+                                  <div class="sistema-block-head">Permissoes</div>
+                                  <div class="sistema-block-body">
+                                    <div id="roles-list" class="role-list"></div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+
+                    <div class="tab-pane" id="wa-pane-protheus">
+                      <section class="form-section">
+                        <div class="form-section-header">
+                          <div class="form-section-title">Filiais Protheus (Chat Web)</div>
+                          <div class="form-section-subtitle">Resumo dos acessos que o login web deve respeitar no IA Service.</div>
+                        </div>
+                        <div class="form-section-body">
+                          <div class="info-box" style="margin-top:0;margin-bottom:14px">Nesta etapa o IAHub preserva os acessos importados do IA Command. O detalhamento por filial entra no Grupo 2, quando o IA Service passar a consumir este modelo central.</div>
+                          <div id="wa-role-summary" class="module-chips"></div>
+                        </div>
+                      </section>
+                    </div>
+                  </main>
+
+                  <aside class="editor-side">
+                    <section class="form-section" style="position:sticky;top:56px">
+                      <div class="form-section-header">
+                        <div class="form-section-title">Dados do Registro</div>
+                      </div>
+                      <div class="form-section-body">
+                        <div class="summary-grid">
+                          <div class="summary-item"><span class="summary-label">ID do Registro</span><input id="wa-side-id" class="form-control" disabled style="font-family:monospace;font-size:12px;color:var(--text-lo);background:var(--bg-hover)" value="-"></div>
+                          <div class="summary-item"><span class="summary-label">ID da Empresa</span><input id="wa-side-company-id" class="form-control" disabled style="font-family:monospace;font-size:12px;color:var(--text-lo);background:var(--bg-hover)" value="1"></div>
+                          <div class="summary-item"><span class="summary-label">Empresa</span><input id="wa-side-company" class="form-control" disabled style="font-size:13px;color:var(--text-lo);background:var(--bg-hover)" value="Sessao atual"></div>
+                          <div class="summary-item"><span class="summary-label">Status</span><select id="wa-side-status-select" class="form-control" disabled><option>Ativo</option><option>Inativo</option></select></div>
+                          <p style="font-size:12px;color:var(--text-lo);line-height:1.5;margin:4px 0 0">O acesso geral tambem e gerido exclusivamente na aba Empresas.</p>
+                        </div>
+                      </div>
+                    </section>
+                  </aside>
+                </div>
+              </div>
+            </div>
+
+            <div class="iac-tab-panel" id="aba-importacao"><div class="form-section"><div class="form-section-body">
+              <div class="prov-header"><div class="prov-icon prov-icon-agente">↧</div><div class="prov-meta"><div class="prov-name">Importacao IA Command</div><div class="prov-desc">Historico das cargas ja gravadas no IAHub Platform.</div></div></div>
+              <div style="overflow:auto"><table class="identity-table"><thead><tr><th>Data</th><th>Status</th><th>Resumo</th><th>Erro</th></tr></thead><tbody id="import-runs-body"><tr><td colspan="4">Carregando...</td></tr></tbody></table></div>
+            </div></div></div>
+          </div>
+
+          <aside class="editor-side">
+            <div class="summary-card"><div class="summary-title">Resumo</div><div class="summary-grid">
+              <div class="summary-item"><span class="summary-label">Empresa</span><span class="summary-value" id="summary-company">Sessao atual</span></div>
+              <div class="summary-item"><span class="summary-label">Provedor</span><span class="summary-value" id="summary-provider">-</span></div>
+              <div class="summary-item"><span class="summary-label">Fallback</span><span class="summary-value" id="summary-fallback">-</span></div>
+              <div class="summary-item"><span class="summary-label">Agente</span><span class="summary-value" id="summary-agent">-</span></div>
+              <div class="summary-item"><span class="summary-label">Telefones</span><span class="summary-value" id="summary-identities">-</span></div>
+            </div></div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const providers = ['groq','openai','gemini','deepseek','claude'];
+const state = { activeTab:'aba-groq', identities:[] };
+function toggleSidebar(){ const sb=document.getElementById('sidebar'); if(!sb) return; const pinned=!sb.classList.contains('pinned'); sb.classList.toggle('pinned',pinned); document.querySelector('.layout')?.classList.toggle('sidebar-pinned',pinned); }
+function montarMenuPlatform(){ const nav=document.querySelector('.sidebar-nav'); if(!nav) return; const itens=[['/app/ia-administracao/administracao.html','IA Administracao','⚙'],['/app/ia-administracao/platform-config.html','IAHub Platform','IA'],['/app/ia-administracao/platform-config.html#numeros','Numeros Autorizados','▦']]; nav.innerHTML='<div class="nav-section-hdr open"><span class="nav-icon">▦</span><span class="nav-label">IAHub</span></div><div class="nav-section-body open">'+itens.map(([href,label,icon])=>'<a class="nav-item sub" href="'+href+'" style="text-decoration:none"><span class="nav-icon">'+icon+'</span><span class="nav-label">'+label+'</span></a>').join('')+'</div>'; const footer=document.querySelector('.sidebar-footer'); if(footer) footer.innerHTML=`<button class="nav-item sub" onclick="location.href='/app/ia-administracao/administracao.html'" title="Voltar"><span class="nav-icon">←</span><span class="nav-label">Voltar</span></button>`; }
+function qs(){ const p=new URLSearchParams(location.search); const eid=p.get('empresaId'); return eid?'?empresaId='+encodeURIComponent(eid):''; }
+function empresaIdBody(){ const eid=new URLSearchParams(location.search).get('empresaId'); return eid?{empresaId:Number(eid)}:{}; }
+async function api(url,options){ const r=await fetch(url,{credentials:'include',headers:{'Content-Type':'application/json'},...(options||{})}); const data=await r.json().catch(()=>({})); if(!r.ok||data.ok===false) throw new Error(data.error||data.erro||'Falha na requisicao'); return data; }
+function toast(msg,error){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.toggle('error',!!error); el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
+function mudarAba(btn,id){ state.activeTab=id; document.querySelectorAll('.iac-tab').forEach(b=>b.classList.remove('active')); document.querySelectorAll('.iac-tab-panel').forEach(p=>p.classList.remove('active')); btn.classList.add('active'); document.getElementById(id).classList.add('active'); document.getElementById('platform-editor-grid')?.classList.toggle('whatsapp-full',id==='aba-identidades'); }
+function eyeIcon(hidden){ return hidden ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C5 20 1 12 1 12a20.29 20.29 0 0 1 5.06-5.94"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.44 20.44 0 0 1-3.17 4.19"/><path d="M14.12 14.12a3 3 0 0 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>' : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'; }
+function setEyeIcon(input){ const btn=input.closest('.pass-wrap')?.querySelector('.btn-pass-toggle'); if(btn) btn.innerHTML=eyeIcon(input.type==='password'); }
+function toggleKey(id){ const i=document.getElementById(id); i.type=i.type==='password'?'text':'password'; setEyeIcon(i); }
+function fill(id,v){ const el=document.getElementById(id); if(el) el.value=v==null?'':v; }
+function text(id,v){ const el=document.getElementById(id); if(el) el.textContent=v==null||v===''?'-':v; }
+function boolValue(id){ return document.getElementById(id).value==='true'; }
+async function carregarTudo(){ await Promise.all([carregarIa(),carregarAgente(),carregarIdentidades(),carregarImportacoes()]); atualizarResumo(); }
+async function carregarIa(){ try{ const cfg=await api('/api/iahub/platform/ai-config'+qs()); fill('ai-primary-provider',cfg.provedorPrimario||cfg.provider||'groq'); fill('ai-fallback-order',cfg.fallbackOrdem||''); fill('ai-min-confidence',cfg.confiancaMinima??0.6); fill('ai-history-turns',cfg.historicoTurnos??5); fill('ai-whisper-model',cfg.whisperModel||'whisper-large-v3'); providers.forEach(p=>{ fill('model-'+p,cfg.modelos&&cfg.modelos[p]||''); fill('key-'+p,''); const key=p==='openai'?'openai_api_key':p+'_api_key'; const ok=cfg.secrets&&cfg.secrets[key]&&cfg.secrets[key].configurado; const s=document.getElementById('status-'+p); if(s) s.innerHTML=ok?'<span class="badge badge-ok">Chave configurada</span>':'<span class="badge badge-muted">Sem chave</span>'; }); atualizarBadges(); }catch(e){ toast(e.message,true); } }
+async function salvarIa(){ const body={...empresaIdBody(),provider:document.getElementById('ai-primary-provider').value,provedorPrimario:document.getElementById('ai-primary-provider').value,fallbackOrdem:document.getElementById('ai-fallback-order').value,confiancaMinima:Number(document.getElementById('ai-min-confidence').value||0.6),historicoTurnos:Number(document.getElementById('ai-history-turns').value||5),whisperModel:document.getElementById('ai-whisper-model').value.trim(),groqModelo:document.getElementById('model-groq').value,openaiModelo:document.getElementById('model-openai').value,geminiModelo:document.getElementById('model-gemini').value,deepseekModelo:document.getElementById('model-deepseek').value,claudeModelo:document.getElementById('model-claude').value}; const map={groq:'groq_api_key',openai:'openai_api_key',gemini:'gemini_api_key',deepseek:'deepseek_api_key',claude:'claude_api_key'}; providers.forEach(p=>{ const v=document.getElementById('key-'+p).value.trim(); if(v) body[map[p]]=v; }); await api('/api/iahub/platform/ai-config',{method:'POST',body:JSON.stringify(body)}); toast('Configuracoes salvas'); await carregarIa(); }
+async function testarProvedor(provedor){ const div=document.getElementById('test-'+provedor); div.className='test-result'; div.style.display='block'; div.textContent='Testando conexao...'; try{ const data=await api('/api/iahub/platform/ai-config/test',{method:'POST',body:JSON.stringify({...empresaIdBody(),provedor,api_key:document.getElementById('key-'+provedor).value.trim()})}); div.className='test-result ok'; div.textContent='Conexao OK. Intencao: '+(data.intencao||'-')+' | confianca: '+(data.confianca??'-'); }catch(e){ div.className='test-result fail'; div.textContent=e.message; } }
+async function carregarAgente(){ try{ const a=await api('/api/iahub/platform/agent-config'+qs()); fill('agent-enabled',String(a.agenteLocalAtivo!==false)); fill('agent-base-url',a.agenteLocalUrl||''); const badge=document.getElementById('agente-status-badge'); const ativo=a.agenteLocalAtivo!==false; badge.className='provider-badge '+(ativo?'badge-agente-ativo':'badge-agente-inativo'); badge.textContent=ativo?'● Ativo':'○ Inativo'; }catch(e){} }
+async function carregarIdentidades(){ try{ state.identities=await api('/api/iahub/platform/whatsapp-identities'+(qs()?qs()+'&includeRoles=1':'?includeRoles=1')); renderIdentidades(); }catch(e){ document.getElementById('identities-body').innerHTML='<tr><td colspan="4">Erro ao carregar</td></tr>'; } }
+function rolesTexto(item){ return (item.roles||[]).map(r=>[r.sistema,r.modulo,r.papel,r.codigoIdentidade].filter(Boolean).join(' / ')).filter(Boolean); }
+function toggleFiltrosWhatsApp(){ const p=document.getElementById('wa-filter-panel'); const b=document.getElementById('wa-filter-toggle'); const open=!p?.classList.contains('open'); p?.classList.toggle('open',open); if(b) b.textContent=open?'− Ocultar filtros':'+ Mostrar filtros'; }
+function numeroFmt(v){ const n=String(v||'').replace(/\D/g,''); if(n.length===13&&n.startsWith('55')) return '+55 ('+n.slice(2,4)+') '+n.slice(4,9)+'-'+n.slice(9); if(n.length===12&&n.startsWith('55')) return '+55 ('+n.slice(2,4)+') '+n.slice(4,8)+'-'+n.slice(8); return v||n||''; }
+function dataCurta(v){ if(!v) return ''; const d=new Date(v); if(isNaN(d)) return String(v).slice(0,16).replace('T',' '); return d.toLocaleString('pt-BR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+function moduloChips(item){ const roles=item.roles||[]; const chips=[]; const seen=new Set(); const add=(key,label,cls)=>{ if(seen.has(key)) return; seen.add(key); chips.push('<span class="module-chip '+cls+'">'+esc(label)+'</span>'); }; roles.forEach(r=>{ const sis=String(r.sistema||'').toLowerCase(); const mod=String(r.modulo||'').toLowerCase(); if(sis.includes('protheus')){ if(mod.includes('financeiro')) add('fin','Fin','chip-fin'); else if(mod.includes('compra')) add('cmp','Cmp','chip-cmp'); else if(mod.includes('fatur')) add('fat','Fat','chip-fat'); else if(mod.includes('comissao')||mod.includes('comissão')) add('com','Com','chip-com'); else if(mod.includes('estoque')) add('est','Est','chip-est'); else add('pro-'+mod,mod.slice(0,3).replace(/^./,c=>c.toUpperCase())||'Pro','chip-fin'); } else if(sis||mod){ add(sis+'-'+mod,(mod||sis).slice(0,4).replace(/^./,c=>c.toUpperCase()),'chip-soft'); } }); return chips.length?chips.join(' '):'<span style="color:var(--text-lo);font-size:11px">Nenhum modulo liberado</span>'; }
+function perfilChips(item){ const chips=[]; const seen=new Set(); (item.roles||[]).forEach(r=>{ const sis=String(r.sistema||'').toLowerCase(); const mod=String(r.modulo||''); const papel=String(r.papel||''); if(!papel) return; const key=sis+'-'+mod+'-'+papel; if(seen.has(key)) return; seen.add(key); const low=papel.toLowerCase(); const cls=low.includes('gestor')?'chip-gestor':low.includes('usuario')||low.includes('usuário')?'chip-user':'chip-soft'; const label=sis.includes('protheus')?papel:(sis.replace(/^./,c=>c.toUpperCase())+' '+mod.replace(/^./,c=>c.toUpperCase())+': '+papel); chips.push('<span class="module-chip '+cls+'">'+esc(label)+'</span>'); }); return chips.length?chips.join(' '):'<span style="color:var(--text-lo);font-size:11px">-</span>'; }
+function filtrarIdentidades(){ const q=(document.getElementById('wa-busca')?.value||'').trim().toLowerCase(); const st=document.getElementById('wa-status')?.value||''; return state.identities.filter(i=>{ const hay=[i.nome,i.numero,i.numeroNormalizado,i.origemSistema,...rolesTexto(i)].join(' ').toLowerCase(); const okBusca=!q||hay.includes(q); const okStatus=!st||(st==='ativo'?i.ativo!==false:i.ativo===false); return okBusca&&okStatus; }); }
+function renderIdentidades(){ const body=document.getElementById('identities-body'); if(!body) return; const rows=filtrarIdentidades(); const total=state.identities.length; const count=document.getElementById('wa-count'); if(count) count.textContent=rows.length===total?(total===1?'1 numero':total+' numeros'):rows.length+' de '+total+' numeros'; const fs=document.getElementById('wa-filter-status'); if(fs){ const q=(document.getElementById('wa-busca')?.value||'').trim(); const st=document.getElementById('wa-status')?.value||''; fs.textContent=(q||st)?'Filtros ativos: '+[q&&('busca "'+q+'"'),st&&st].filter(Boolean).join(' | '):'Sem filtros ou agrupamentos ativos'; } if(!total){ body.innerHTML='<tr><td colspan="7">Nenhum numero cadastrado</td></tr>'; atualizarResumo(); return; } if(!rows.length){ body.innerHTML='<tr><td colspan="7">Nenhum numero encontrado com os filtros atuais</td></tr>'; atualizarResumo(); return; } body.innerHTML=rows.map(i=>'<tr onclick="editarIdentidade('+esc(JSON.stringify(i.id))+')"><td><span class="identity-id">'+esc(String(i.id||'').slice(0,8))+'...</span></td><td><strong style="color:var(--text-hi)">'+esc(i.nome||'')+'</strong></td><td><span class="identity-phone">'+esc(numeroFmt(i.numero||i.numeroNormalizado||''))+'</span></td><td><div class="module-chips">'+moduloChips(i)+'</div></td><td><div class="module-chips">'+perfilChips(i)+'</div></td><td>'+esc(dataCurta(i.criadoEm))+'</td><td><span class="actions-cell"><button class="btn-icon" onclick="event.stopPropagation();editarIdentidade('+esc(JSON.stringify(i.id))+')" title="Editar">✏️</button><button class="btn-icon" onclick="event.stopPropagation();excluirIdentidade('+esc(JSON.stringify(i.id))+')" title="Excluir" style="color:#dc2626">🗑</button></span></td></tr>').join(''); atualizarResumo(); }
+function limparFiltroWhatsApp(){ fill('wa-busca',''); fill('wa-status',''); renderIdentidades(); }
+function abrirListaWhatsApp(){ const lista=document.getElementById('wa-lista'); const form=document.getElementById('wa-form'); if(lista) lista.style.display='block'; if(form) form.style.display='none'; }
+function abrirFormularioWhatsApp(){ const lista=document.getElementById('wa-lista'); const form=document.getElementById('wa-form'); if(lista) lista.style.display='none'; if(form) form.style.display='block'; }
+function mudarAbaWhatsAppForm(nome,btn){ document.querySelectorAll('#wa-form .form-tab').forEach(b=>b.classList.remove('active')); document.querySelectorAll('#wa-form .tab-pane').forEach(p=>p.classList.remove('active')); if(btn) btn.classList.add('active'); const pane=document.getElementById('wa-pane-'+nome); if(pane) pane.classList.add('active'); }
+function atualizarResumoIdentidade(item){ fill('wa-side-id',item&&item.id||document.getElementById('identity-id')?.value||'-'); fill('wa-side-company-id',new URLSearchParams(location.search).get('empresaId')||'1'); fill('wa-side-company',new URLSearchParams(location.search).get('empresaId')?'Empresa '+new URLSearchParams(location.search).get('empresaId'):'Sessao atual'); fill('wa-side-status-select',(item&&item.ativo===false)?'Inativo':'Ativo'); const sum=document.getElementById('wa-role-summary'); if(sum){ const roles=item?rolesTexto(item):Array.from(document.querySelectorAll('.role-row')).map(row=>Array.from(row.querySelectorAll('[data-role-field]')).map(i=>i.value.trim()).filter(Boolean).join(' / ')).filter(Boolean); sum.innerHTML=roles.length?roles.map(r=>'<span class="module-chip">'+esc(r)+'</span>').join(''):'<span class="module-chip">sem acesso configurado</span>'; } }
+function novaIdentidade(){ fill('identity-id',''); fill('identity-name',''); fill('identity-phone',''); fill('identity-active','true'); fill('identity-kind','analista'); fill('identity-notes',''); text('wa-form-title','Novo Numero'); text('wa-form-subtitle','Preencha os campos e salve.'); const list=document.getElementById('roles-list'); if(list) list.innerHTML=''; adicionarRole(); atualizarResumoIdentidade(null); abrirFormularioWhatsApp(); mudarAbaWhatsAppForm('geral',document.querySelector('#wa-form .form-tab')); }
+function editarIdentidade(id){ const i=state.identities.find(x=>x.id===id); if(!i) return; fill('identity-id',i.id); fill('identity-name',i.nome||''); fill('identity-phone',i.numero||i.numeroNormalizado||''); fill('identity-active',String(i.ativo!==false)); fill('identity-kind',i.metadata&&i.metadata.tipo||'analista'); fill('identity-notes',i.observacoes||''); text('wa-form-title',i.nome||'Numero WhatsApp'); text('wa-form-subtitle',(i.numero||i.numeroNormalizado||'')+' | origem '+(i.origemSistema||'ia-command')); const list=document.getElementById('roles-list'); list.innerHTML=''; (i.roles||[]).forEach(adicionarRole); if(!i.roles||!i.roles.length) adicionarRole(); atualizarResumoIdentidade(i); abrirFormularioWhatsApp(); mudarAbaWhatsAppForm('geral',document.querySelector('#wa-form .form-tab')); }
+async function excluirIdentidade(id){ if(!confirm('Excluir este numero autorizado?')) return; await api('/api/iahub/platform/whatsapp-identities/'+encodeURIComponent(id),{method:'DELETE',body:JSON.stringify(empresaIdBody())}); toast('Numero excluido'); await carregarIdentidades(); if(document.getElementById('identity-id')?.value===id) abrirListaWhatsApp(); }
+function adicionarRole(role){ const row=document.createElement('div'); row.className='role-row'; row.innerHTML=field('Sistema','sistema',role&&role.sistema||'ia-service')+field('Modulo','modulo',role&&role.modulo||'chat-web')+field('Papel','papel',role&&role.papel||'analista')+field('Codigo','codigoIdentidade',role&&role.codigoIdentidade||'')+'<button class="btn btn-ghost" onclick="removerRole(this)">Remover</button>'; document.getElementById('roles-list').appendChild(row); atualizarResumoIdentidade(null); }
+function removerRole(button){ const row=button.closest('.role-row'); if(row) row.remove(); atualizarResumoIdentidade(null); }
+function field(label,name,value){ return '<div class="form-group"><label class="form-label">'+label+'</label><input class="form-control" data-role-field="'+name+'" value="'+esc(value||'')+'"></div>'; }
+async function salvarIdentidade(){ const id=document.getElementById('identity-id').value; const payload=await api('/api/iahub/platform/whatsapp-identities',{method:'POST',body:JSON.stringify({...empresaIdBody(),id:id||undefined,nome:document.getElementById('identity-name').value.trim(),numero:document.getElementById('identity-phone').value.trim(),ativo:boolValue('identity-active'),observacoes:document.getElementById('identity-notes').value.trim(),metadata:{tipo:document.getElementById('identity-kind').value}})}); const roles=Array.from(document.querySelectorAll('.role-row')).map(row=>{ const r={}; row.querySelectorAll('[data-role-field]').forEach(i=>r[i.dataset.roleField]=i.value.trim()); r.liberado=true; return r; }).filter(r=>r.sistema||r.modulo||r.papel||r.codigoIdentidade); await api('/api/iahub/platform/whatsapp-identities/'+payload.id+'/roles',{method:'PUT',body:JSON.stringify({...empresaIdBody(),roles})}); toast('WhatsApp salvo'); await carregarIdentidades(); editarIdentidade(payload.id); }
+async function carregarImportacoes(){ try{ const runs=await api('/api/iahub/platform/import/runs'+qs()); const body=document.getElementById('import-runs-body'); if(!runs.length){ body.innerHTML='<tr><td colspan="4">Nenhuma importacao executada</td></tr>'; return; } body.innerHTML=runs.map(r=>'<tr><td>'+esc(formatDate(r.iniciadoEm))+'</td><td><span class="badge '+(r.status==='ok'?'badge-ok':'badge-muted')+'">'+esc(r.status||'')+'</span></td><td>'+esc(JSON.stringify(r.resumo||{}))+'</td><td>'+esc(r.erro||'')+'</td></tr>').join(''); }catch(e){} }
+async function salvarAbaAtual(){ try{ if(['aba-groq','aba-openai','aba-gemini','aba-deepseek','aba-claude','aba-comportamento'].includes(state.activeTab)) return await salvarIa(); if(state.activeTab==='aba-identidades'){ const form=document.getElementById('wa-form'); if(form&&form.style.display!=='none') return await salvarIdentidade(); return toast('Abra ou crie um numero para salvar'); } toast('Nada para salvar nesta aba'); }catch(e){ toast(e.message,true); } }
+function atualizarBadges(){ const primary=document.getElementById('ai-primary-provider').value; const info={groq:['badge-groq','⚡ Rapido'],openai:['badge-openai','✦ GPT-4o'],gemini:['badge-gemini','✦ Multimodal'],deepseek:['badge-deepseek','▣ Custo-beneficio'],claude:['badge-claude','◆ Elite']}; providers.forEach(p=>{ const b=document.getElementById('pbadge-'+p); if(!b) return; if(p===primary){ b.className='provider-badge badge-primario'; b.textContent='Primario'; } else { b.className='provider-badge '+info[p][0]; b.textContent=info[p][1]; } }); atualizarResumo(); }
+function atualizarResumo(){ text('summary-company',new URLSearchParams(location.search).get('empresaId')||'Sessao atual'); text('summary-provider',document.getElementById('ai-primary-provider').value); text('summary-fallback',document.getElementById('ai-fallback-order').value); text('summary-agent',boolValue('agent-enabled')?'Ativo':'Inativo'); text('summary-identities',String(state.identities.length)); }
+function formatDate(v){ if(!v) return ''; try{return new Date(v).toLocaleString('pt-BR');}catch(_){return v;} }
+function esc(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
+document.addEventListener('DOMContentLoaded',()=>{ montarMenuPlatform(); document.querySelectorAll('.pass-wrap input[type="password"]').forEach(setEyeIcon); novaIdentidade(); abrirListaWhatsApp(); carregarTudo(); ['ai-primary-provider','ai-fallback-order','agent-enabled'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('input',atualizarBadges); }); if(location.hash==='#numeros'){ const btn=[...document.querySelectorAll('.iac-tab')].find(b=>b.getAttribute('onclick')?.includes('aba-identidades')); if(btn) mudarAba(btn,'aba-identidades'); } });
+</script>
+</body>
+</html>

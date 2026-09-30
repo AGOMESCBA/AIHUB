@@ -574,6 +574,9 @@ require('./modules/sistemas/routes')(app, { requireAuth, requireAdmin });
 // ── Módulo Segurança ──────────────────────────────────────────────────────────
 require('./modules/seguranca/routes')(app, { requireAuth });
 
+// IAHub Platform - configuracao central inspirada no IA Command
+require('./apps/IAHUB/backend/platform-routes')(app, { requireAuth, requireAdmin });
+
 // ── IA Command ────────────────────────────────────────────────────────────────
 require('./apps/IA Command/modules/database').inicializarDB();
 require('./apps/IA Command/modules/routes')(app, { requireAuth, requireIaCommand, io });

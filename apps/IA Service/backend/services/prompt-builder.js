@@ -66,6 +66,14 @@ function _formatarAnexoTexto(anexo) {
   return `--- Anexo: ${anexo.nomeOriginal}${linguagem} [${marcador}] ---\n${anexo.conteudoExtraido}\n--- fim de ${anexo.nomeOriginal} ---`;
 }
 
+function _limitarTexto(texto, max = 2200) {
+  const s = String(texto || '');
+  if (s.length <= max) return s;
+  const inicio = Math.floor(max * 0.72);
+  const fim = Math.floor(max * 0.28);
+  return `${s.slice(0, inicio)}\n\n[...conteúdo intermediário omitido para caber no limite da IA...]\n\n${s.slice(-fim)}`;
+}
+
 /**
  * Monta o prompt de usuário a partir do histórico da conversa + anexos de
  * texto do turno atual. Anexos de imagem NÃO entram aqui — são passados
@@ -81,9 +89,13 @@ function buildUserPrompt({ atendimento, mensagens, anexosTextoDoTurno, mensagemA
 
   if (mensagens.length > 0) {
     partes.push('\n## Histórico da conversa');
-    for (const m of mensagens) {
-      const papel = m.papel === 'user' ? 'Analista' : m.papel === 'assistant' ? 'Você (resposta anterior)' : 'Sistema';
-      partes.push(`[${papel}]: ${m.conteudo}`);
+    const historicoRecente = mensagens.slice(-12);
+    if (mensagens.length > historicoRecente.length) {
+      partes.push(`[Sistema]: ${mensagens.length - historicoRecente.length} mensagem(ns) antiga(s) foram omitidas para manter a análise dentro do limite do provedor de IA.`);
+    }
+    for (const m of historicoRecente) {
+      const papel = m.papel === 'user' ? 'Analista' : m.papel === 'assistant' ? 'Você (resposta anterior)' : m.papel === 'customer' ? 'Cliente/usuário' : 'Sistema';
+      partes.push(`[${papel}]: ${_limitarTexto(m.conteudo)}`);
     }
   }
 
@@ -95,7 +107,7 @@ function buildUserPrompt({ atendimento, mensagens, anexosTextoDoTurno, mensagemA
   }
 
   if (pesquisaTecnicaTexto) {
-    partes.push('\n' + pesquisaTecnicaTexto);
+    partes.push('\n' + _limitarTexto(pesquisaTecnicaTexto, 3600));
   }
 
   partes.push(`\n## Mensagem atual do analista\n${mensagemAtual}`);

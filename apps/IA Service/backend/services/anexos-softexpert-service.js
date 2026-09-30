@@ -101,6 +101,9 @@ async function listarAnexosDoChamado(empresaId, chamadoId) {
     extensao: a.IDEXTENSION || null,
     tamanho: Number(a.NRSIZE) || null,
     origem: a.origem,
+    referenciaOid: a.OID_REFERENCIA || null,
+    referenciaData: a.DATA_REFERENCIA || null,
+    referenciaAutor: a.AUTOR_REFERENCIA || null,
     mimeType: _mimeTypePorExtensao(a.IDEXTENSION),
   }));
 }

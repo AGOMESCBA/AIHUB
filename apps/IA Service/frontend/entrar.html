@@ -136,13 +136,15 @@
     // em Configuração de IA) é só identidade visual — busca nome/logo pra
     // mostrar aqui, mas o login continua 100% por telefone, nunca trava
     // nem pré-seleciona a empresa de fato.
+    const LOGIN_APELIDO_KEY = 'svc_login_apelido';
     let challengeId = null;
     let telefoneValidado = null;
 
     (function carregarIdentidadePorApelido() {
       const partes = location.pathname.split('/').filter(Boolean);
       const apelido = partes.length > 1 ? partes[partes.length - 1] : null;
-      if (!apelido) return;
+      if (!apelido) { localStorage.removeItem(LOGIN_APELIDO_KEY); return; }
+      localStorage.setItem(LOGIN_APELIDO_KEY, apelido);
       fetch(`/api/ia-service-publico/empresa-por-apelido/${encodeURIComponent(apelido)}`)
         .then(r => r.ok ? r.json() : null)
         .then(info => {
