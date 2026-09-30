@@ -113,6 +113,7 @@ function ensurePlatformSchema(db) {
     ['platform_identity_roles', 'origem_sistema', 'TEXT'],
     ['platform_identity_roles', 'origem_id', 'TEXT'],
     ['platform_identity_roles', 'importado_em', 'TEXT'],
+    ['platform_import_runs', 'origem_sistema', 'TEXT'],
     ['platform_import_runs', 'tipo', 'TEXT'],
     ['platform_import_runs', 'resumo_json', 'TEXT'],
     ['platform_import_runs', 'erro', 'TEXT'],

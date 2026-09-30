@@ -122,20 +122,46 @@ function importarNumerosJ2A() {
       }
 
       const roles = [];
-      for (const m of porNumero.get(n.id) || []) {
+      const modulosDoNumero = porNumero.get(n.id) || [];
+      for (const m of modulosDoNumero) {
         const defaults = roleDefaults({ ...m, ...n }, m.modulo);
         roles.push({
           sistema: m.erp || 'protheus',
           modulo: defaults.modulo,
           papel: defaults.papel,
           codigoIdentidade: defaults.codigo,
-          liberado: true,
+          liberado: Number(m.liberado) !== 0,
           origemId: m.id,
           metadata: { origem_tabela: 'whatsapp_numero_modulos' },
         });
       }
       if (n.cod_aprov_erp) roles.push({ sistema: 'protheus', modulo: 'compras', papel: 'aprovador', codigoIdentidade: n.cod_aprov_erp, liberado: true, origemId: `${n.id}:cod_aprov_erp`, metadata: { origem_coluna: 'cod_aprov_erp', legado: true } });
       if (n.cod_cliente_erp) roles.push({ sistema: 'protheus', modulo: 'financeiro', papel: 'cliente', codigoIdentidade: n.cod_cliente_erp, liberado: true, origemId: `${n.id}:cod_cliente_erp`, metadata: { origem_coluna: 'cod_cliente_erp', legado: true } });
+
+      // Autorização PRÓPRIA do IA Service ('ia-service/chat-web'), nunca
+      // emprestada de outro sistema — mas a importação já cria esse vínculo
+      // automaticamente quando o número tem acesso liberado ao módulo
+      // SoftExpert de chamados no IA Command (sinal de que é de fato um
+      // consultor de sustentação), evitando configuração manual por
+      // consultor na maioria dos casos. Segue liberado/desliberado igual ao
+      // módulo de origem — se o SoftExpert for desativado no IA Command, a
+      // reimportação reflete isso aqui também (não é "importar uma vez e
+      // nunca mais sincronizar").
+      const moduloSoftexpert = modulosDoNumero.find(m => String(m.erp || '').toLowerCase() === 'softexpert' && String(m.modulo || '').toLowerCase() === 'chamados');
+      if (moduloSoftexpert) {
+        const idSoftexpert = n.erp_id || moduloSoftexpert.codigo_identidade || null;
+        if (idSoftexpert) {
+          roles.push({
+            sistema: 'ia-service',
+            modulo: 'chat-web',
+            papel: moduloSoftexpert.papel || 'analista',
+            codigoIdentidade: idSoftexpert,
+            liberado: Number(moduloSoftexpert.liberado) !== 0,
+            origemId: `${n.id}:ia-service-auto`,
+            metadata: { origem: 'auto-softexpert-chamados', idSoftexpert },
+          });
+        }
+      }
 
       for (const role of roles) {
         const op = upsertRole(platformDb, identityId, empresaId, role);
