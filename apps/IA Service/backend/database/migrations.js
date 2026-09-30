@@ -703,6 +703,19 @@ const MIGRATIONS = [
       ALTER TABLE chamados ADD COLUMN kanban_data_inicio TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 31,
+    descricao: 'Campos de duracao do chamado vindos da view ITSM_CHAMADOS (dias uteis por fase do atendimento) — formulas fornecidas pelo usuario, 2026-09, todas baseadas em DBO.FN_SE_ITSM_DIASUTEIS(IDPROCESS, 12, lista-de-atividades). dias_dur/hr_dur = duracao total (hr_dur = dias_dur * 8, ja calculado na origem). Os demais sao a mesma duracao total fatiada por quem estava com o chamado: sup (suporte, sem FSW), fsw (desenvolvimento), dist (distribuidor/dono do produto), cli (cliente) e ticli (tecnologia do cliente, subconjunto de cli). Adicionados como campos extras — NAO substituem sla_data_prev_fim nem sla_prazo, que continuam vindo do JOIN com WFPROCESS.',
+    sql: `
+      ALTER TABLE chamados ADD COLUMN dias_dur INTEGER DEFAULT NULL;
+      ALTER TABLE chamados ADD COLUMN hr_dur INTEGER DEFAULT NULL;
+      ALTER TABLE chamados ADD COLUMN dias_dur_sup INTEGER DEFAULT NULL;
+      ALTER TABLE chamados ADD COLUMN dias_dur_fsw INTEGER DEFAULT NULL;
+      ALTER TABLE chamados ADD COLUMN dias_dur_dist INTEGER DEFAULT NULL;
+      ALTER TABLE chamados ADD COLUMN dias_dur_cli INTEGER DEFAULT NULL;
+      ALTER TABLE chamados ADD COLUMN dias_dur_ticli INTEGER DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

@@ -126,6 +126,16 @@ function _mapearChamado(row) {
     kanbanKey: normalizadores.textoOuNull(row.KEYKANBAN),
     kanbanAtributos: normalizadores.textoOuNull(row.ATRIBUTOSKANBAN),
     kanbanDataInicio: normalizadores.dataParaIso(row.DATAINICIOKANBA),
+    // Duração em dias úteis por fase do atendimento — view ITSM_CHAMADOS,
+    // fórmulas fornecidas pelo usuário (2026-09), baseadas em
+    // DBO.FN_SE_ITSM_DIASUTEIS. Campos extras, não substituem sla_prazo.
+    diasDur: normalizadores.numeroOuNull(row.DIAS_DUR),
+    hrDur: normalizadores.numeroOuNull(row.HR_DUR),
+    diasDurSup: normalizadores.numeroOuNull(row.DIAS_DUR_SUP),
+    diasDurFsw: normalizadores.numeroOuNull(row.DIAS_DUR_FSW),
+    diasDurDist: normalizadores.numeroOuNull(row.DIAS_DUR_DIST),
+    diasDurCli: normalizadores.numeroOuNull(row.DIAS_DUR_CLI),
+    diasDurTicli: normalizadores.numeroOuNull(row.DIAS_DUR_TICLI),
   };
 }
 

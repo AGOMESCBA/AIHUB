@@ -101,6 +101,20 @@ const JOIN_WFPROCESS = `
    AND W.CDPROCESSMODEL = 1759 AND W.FGWFGROUP = 1 AND W.FGSTATUS NOT IN (3)
 `;
 
+// Campos de duração do chamado (dias úteis por fase) — vêm da view
+// ITSM_CHAMADOS, fornecida pelo usuário em 2026-09, confirmada 1 linha por
+// IDPROCESS (mesma cardinalidade de WFPROCESS). LEFT JOIN (não INNER) por
+// cautela: se algum chamado do período não tiver linha correspondente na
+// view, não queremos perder o chamado inteiro da importação — os campos de
+// duração ficam NULL nesse caso, o resto continua vindo normalmente.
+const JOIN_ITSM_CHAMADOS = `
+  LEFT JOIN ITSM_CHAMADOS ITC ON ITC.IDPROCESS = D.IDPROCESS
+`;
+const COLUNAS_ITSM_CHAMADOS = [
+  'ITC.DIAS_DUR', 'ITC.HR_DUR', 'ITC.DIAS_DUR_SUP', 'ITC.DIAS_DUR_FSW',
+  'ITC.DIAS_DUR_DIST', 'ITC.DIAS_DUR_CLI', 'ITC.DIAS_DUR_TICLI',
+];
+
 const COLUNAS_POSICIONAMENTO = [
   'OID', 'CHAMADO', 'DATAATUAL', 'EMPRESA', 'COLABCLIENTE',
   'SITUACAOCHAMADO', 'ANALISTAJ2A', 'CDUSERANA',
@@ -129,10 +143,12 @@ const COLUNAS_POSICIONAMENTO = [
  */
 async function listarChamadosPeriodo(empresaId, fonte, { inicio, fim }, { offset = 0, limit = 500 } = {}) {
   const colunasD = COLUNAS_DYNITSM.map(c => `D.${c}`).join(', ');
+  const colunasItsm = COLUNAS_ITSM_CHAMADOS.join(', ');
   const sql = `
-    SELECT ${colunasD}, ${SQL_STATUS_CHAMADO} AS STATUS_ENCERRAMENTO, ${SQL_SLA_PRAZO} AS SLA_PRAZO, ${SQL_SLA_DATA_PREV_FIM} AS SLA_DATA_PREV_FIM
+    SELECT ${colunasD}, ${SQL_STATUS_CHAMADO} AS STATUS_ENCERRAMENTO, ${SQL_SLA_PRAZO} AS SLA_PRAZO, ${SQL_SLA_DATA_PREV_FIM} AS SLA_DATA_PREV_FIM, ${colunasItsm}
     FROM DYNITSM D
     ${JOIN_WFPROCESS}
+    ${JOIN_ITSM_CHAMADOS}
     WHERE D.DT >= CONVERT(datetime, @inicio, 112) AND D.DT < CONVERT(datetime, @fim, 112)
     ORDER BY D.OID
     OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY

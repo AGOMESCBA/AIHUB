@@ -1307,6 +1307,24 @@
           ],
         },
         {
+          icone: '⏳', titulo: 'Duração do atendimento',
+          // Dias úteis por fase — view ITSM_CHAMADOS (DBO.FN_SE_ITSM_DIASUTEIS),
+          // pedido do usuário 2026-09. diasDur/hrDur é o total geral; os
+          // demais são o mesmo total fatiado por quem estava com o chamado
+          // (suporte, desenvolvimento, distribuidor, cliente, tecnologia do
+          // cliente) — por isso ficam em card separado de "SLA & prazos"
+          // (que é sobre previsão, não duração já decorrida).
+          campos: [
+            ['Duração total', c.diasDur != null ? `${c.diasDur} dia(s) útil(is)` : null],
+            ['Duração total em horas', c.hrDur != null ? `${c.hrDur}h` : null],
+            ['Em suporte', c.diasDurSup != null ? `${c.diasDurSup} dia(s)` : null],
+            ['Em desenvolvimento', c.diasDurFsw != null ? `${c.diasDurFsw} dia(s)` : null],
+            ['Com o distribuidor', c.diasDurDist != null ? `${c.diasDurDist} dia(s)` : null],
+            ['Com o cliente', c.diasDurCli != null ? `${c.diasDurCli} dia(s)` : null],
+            ['Com a tecnologia do cliente', c.diasDurTicli != null ? `${c.diasDurTicli} dia(s)` : null],
+          ],
+        },
+        {
           icone: '🏷', titulo: 'Classificação',
           campos: [
             ['Produto', c.produto],
