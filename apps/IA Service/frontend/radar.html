@@ -350,11 +350,11 @@
        uma olhada o que antes exigia ler a grade de campos inteira. */
     .destaque-aguardando {
       border:1px solid rgba(250,204,21,.28); border-radius:10px; background:rgba(250,204,21,.07);
-      padding:16px; margin-bottom:16px; text-align:center;
+      padding:10px 16px; margin-bottom:16px; text-align:center;
     }
-    .destaque-aguardando-label { font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:#fde68a; }
-    .destaque-aguardando-dias { font-size:32px; font-weight:900; color:var(--wa-text); margin-top:6px; line-height:1.1; }
-    .destaque-aguardando-sub { font-size:11.5px; color:var(--wa-text-tertiary); margin-top:6px; }
+    .destaque-aguardando-label { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:#fde68a; }
+    .destaque-aguardando-dias { font-size:22px; font-weight:900; color:var(--wa-text); margin-top:2px; line-height:1.2; }
+    .destaque-aguardando-sub { font-size:11px; color:var(--wa-text-tertiary); margin-top:2px; }
 
     @media (max-width: 900px) {
       .radar-shell { grid-template-columns:1fr; }
@@ -540,6 +540,18 @@
           </div>
         </section>
 
+        <div class="anexos-modal-backdrop" id="anexos-modal-backdrop" onclick="fecharModalAnexos(event)">
+          <div class="anexos-modal" role="dialog" aria-modal="true" aria-labelledby="anexos-modal-title" onclick="event.stopPropagation()">
+            <div class="anexos-modal-head">
+              <div>
+                <div class="anexos-modal-title" id="anexos-modal-title">Anexos</div>
+                <div class="anexos-modal-subtitle" id="anexos-modal-subtitle">Arquivos vinculados ao chamado</div>
+              </div>
+              <button class="anexos-modal-close" type="button" title="Fechar" onclick="fecharModalAnexos()">x</button>
+            </div>
+            <div class="anexos-modal-body" id="anexos-modal-body"></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -547,18 +559,6 @@
 
   <div id="error-banner" class="error-banner"></div>
   <div id="toast-status" class="toast-status"></div>
-  <div class="anexos-modal-backdrop" id="anexos-modal-backdrop" onclick="fecharModalAnexos(event)">
-    <div class="anexos-modal" role="dialog" aria-modal="true" aria-labelledby="anexos-modal-title" onclick="event.stopPropagation()">
-      <div class="anexos-modal-head">
-        <div>
-          <div class="anexos-modal-title" id="anexos-modal-title">Anexos</div>
-          <div class="anexos-modal-subtitle" id="anexos-modal-subtitle">Arquivos vinculados ao chamado</div>
-        </div>
-        <button class="anexos-modal-close" type="button" title="Fechar" onclick="fecharModalAnexos()">x</button>
-      </div>
-      <div class="anexos-modal-body" id="anexos-modal-body"></div>
-    </div>
-  </div>
 
   <script>
     // ── Modo de acesso: sessão normal do IA HUB (cookie) vs. sessão externa
@@ -870,7 +870,7 @@
           <div class="risco-consultor-nome">${escapeHtml(c.nome || 'Sem consultor')}</div>
           <div class="risco-consultor-meta"><span>${c.total} chamado(s)</span><span>${c.emAtraso} atraso</span><span>${c.proximo} próx.</span></div>
         </button>`).join('');
-      consultoresEl.innerHTML = todosBtn + (consultores || '<div class="risco-empty">Nenhum consultor com chamado em risco.</div>');
+      consultoresEl.innerHTML = todosBtn + (consultores || '<div class="risco-empty">Nenhum consultor com chamado em aberto.</div>');
 
       atualizarTotaisRisco(riscoCache.chamados, { totalAtraso, totalProximo, totalDia });
       montarGridRisco();
@@ -920,6 +920,7 @@
         status: c.slaPrazo || '—',
         consultor: c.tecnicoResponsavelNome || 'Sem consultor',
         previsao: c.slaDataPrevFim ? formatarDataHora(c.slaDataPrevFim) : '—',
+        duracao: c.diasDur != null ? `${c.diasDur}d` : '—',
         ultimo: c.ultimoPosicionamentoEm ? formatarData(c.ultimoPosicionamentoEm) : '—',
       }));
 
@@ -941,6 +942,7 @@
             { title: 'Status', field: 'status', widthGrow: 1, formatter: (cell) => badgeSla(cell.getValue()) },
             { title: 'Consultor', field: 'consultor', visible: false },
             { title: 'Previsão conclusão', field: 'previsao', width: 140 },
+            { title: 'Duração', field: 'duracao', width: 90, hozAlign: 'right' },
             { title: 'Último', field: 'ultimo', width: 100 },
           ],
         });

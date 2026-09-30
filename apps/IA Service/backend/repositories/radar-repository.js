@@ -62,10 +62,16 @@ function _chamadoFilaParaDominio(row) {
   };
 }
 
+// 'todos' (padrão) NÃO filtra por sla_prazo — pedido do usuário, 2026-09: a
+// aba Risco SLA deve ser um RADAR completo de todo mundo com chamado aberto
+// (em dia, próximo ou atraso), não só quem está em risco. Um consultor com
+// todos os chamados "Em dia" tem que aparecer na lista de consultores mesmo
+// assim, senão a visão de acompanhamento fica incompleta. Os filtros
+// específicos (em_atraso/proximo) continuam restringindo como antes.
 function _filtroRiscoParaCondicao(filtroRisco) {
   if (filtroRisco === 'em_atraso') return "c.sla_prazo = 'Em atraso'";
   if (filtroRisco === 'proximo') return "c.sla_prazo = 'Proxima do vencimento'";
-  return "c.sla_prazo IN ('Em atraso', 'Proxima do vencimento')";
+  return '1=1';
 }
 
 /**
