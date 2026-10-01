@@ -752,7 +752,7 @@ FROM SD2010 SD2
 JOIN SF2010 SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
 JOIN SB1010 SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '
 WHERE SF2.D_E_L_E_T_ = ' ' AND SD2.D_E_L_E_T_ = ' ' AND SF2.F2_EMISSAO BETWEEN '20260801' AND '20260831' AND SF2.F2_TIPO = 'N'
-  AND (NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') OR SD2.D2_CF IN ('5932','6932','6933'))
+  AND (NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') OR SD2.D2_CF IN ('5932','6932','6933','5949'))
   AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156')
   AND NOT (SD2.D2_CF LIKE '52%' OR SD2.D2_CF LIKE '62%')
   AND SD2.D2_CF NOT IN ('5410','6410','5411','6411','5412','6412','5413','6413')
@@ -769,12 +769,12 @@ const validacaoCfopParcial = runner._test.validarSqlIaOwnerBasico(
   'Qual foi produto menos vendido nesta ultima consulta',
 );
 assert.strictEqual(validacaoCfopParcial.ok, false, 'CFOP de receita parcial deve ser rejeitado');
-assert(validacaoCfopParcial.erros.some(e => e.includes('Faltam CFOPs') && e.includes('5933')), 'erro deve diagnosticar explicitamente o CFOP 5933 ausente');
+assert(validacaoCfopParcial.erros.some(e => e.includes('Faltam CFOPs') && e.includes('5933') && e.includes('6949')), 'erro deve diagnosticar explicitamente os CFOPs ausentes');
 const retryCfopParcial = runner._test.buildRetryTecnicoIaOwner({
   erro: Object.assign(new Error(validacaoCfopParcial.erros.join(' | ')), { _tipo: 'contrato_ia_owner_invalido' }),
 });
-assert(retryCfopParcial.includes("IN ('5932','6932','5933','6933')"), 'retry de CFOP deve levar a excecao completa literal');
-assert(retryCfopParcial.includes('Se faltar 5933'), 'retry de CFOP deve destacar o erro especifico de lista parcial');
+assert(retryCfopParcial.includes("IN ('5932','6932','5933','6933','5949','6949')"), 'retry de CFOP deve levar a excecao completa literal');
+assert(retryCfopParcial.includes('Se faltar 5933, 5949 ou 6949'), 'retry de CFOP deve destacar o erro especifico de lista parcial');
 
 const sqlSemanalAcumuladoValido = `
 SET ROWCOUNT 10000;

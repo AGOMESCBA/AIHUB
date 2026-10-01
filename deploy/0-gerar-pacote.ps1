@@ -41,7 +41,7 @@ $EXCLUDE_DIRS  = @(
     "uploads",
     "sessions"
 )
-$EXCLUDE_FILES = @(".env", "*.log", "*.err", "data.json", "*.db", "*.sqlite", "*.sqlite3")
+$EXCLUDE_FILES = @(".env", "*.log", "*.err", "data.json", "*.db", "*.sqlite", "*.sqlite3", ".repomixignore", "repomix-output.xml", "repomix.config.json")
 
 function Test-DeployFile {
     param(

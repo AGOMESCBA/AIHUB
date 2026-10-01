@@ -529,10 +529,10 @@ function _blocoRetryTecnicoIaOwner(subtipo, mensagem, linhasEntidades) {
       'Contrato obrigatorio — REGRA FISCAL BRASILEIRA DE CFOP PARA RECEITA:',
       '- Quando a pergunta pedir faturamento, vendas, vendido/faturado ou receita, retorne somente operacoes que geram receita.',
       '- Essa e uma regra fiscal nacional de interpretacao de CFOP, nao uma regra especifica do ERP.',
-      "- Remessas nao geram receita: exclua CFOP com prefixo 59/69 usando AND (NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') OR SD2.D2_CF IN ('5932','6932','5933','6933')).",
-      "- EXCECAO DENTRO DO PREFIXO 59/69: CFOP 5932/6932 (frete de transportadora) e 5933/6933 (servico tributado por ISS) SAO receita real — NAO exclua esses 4 codigos, mesmo comecando com 59/69. So 5931/6931 (retencao de imposto de frete de autonomo) e 5934/6934 (remessa simbolica em armazem geral) continuam sem receita.",
-      "- CORRECAO OBRIGATORIA E LITERAL: se a tentativa anterior trouxe IN ('5932','6932','6933') ou qualquer lista parcial, substitua por IN ('5932','6932','5933','6933').",
-      "- CHECK FISCAL ANTES DE RESPONDER: confira visualmente que os 4 codigos aparecem na excecao do prefixo 59/69: 5932, 6932, 5933 e 6933. Se faltar 5933, a resposta esta fiscalmente errada e sera rejeitada.",
+      "- Remessas nao geram receita: exclua CFOP com prefixo 59/69 usando AND (NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') OR SD2.D2_CF IN ('5932','6932','5933','6933','5949','6949')).",
+      "- EXCECAO DENTRO DO PREFIXO 59/69: CFOP 5932/6932 (frete de transportadora), 5933/6933 (servico tributado por ISS) e 5949/6949 SAO receita real — NAO exclua esses 6 codigos, mesmo comecando com 59/69. So 5931/6931 (retencao de imposto de frete de autonomo) e 5934/6934 (remessa simbolica em armazem geral) continuam sem receita.",
+      "- CORRECAO OBRIGATORIA E LITERAL: se a tentativa anterior trouxe IN ('5932','6932','6933') ou qualquer lista parcial, substitua por IN ('5932','6932','5933','6933','5949','6949').",
+      "- CHECK FISCAL ANTES DE RESPONDER: confira visualmente que os 6 codigos aparecem na excecao do prefixo 59/69: 5932, 6932, 5933, 6933, 5949 e 6949. Se faltar 5933, 5949 ou 6949, a resposta esta fiscalmente errada e sera rejeitada.",
       "- Transferencias nao geram receita: exclua AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156').",
       "- Devolucoes de compra nao geram receita: exclua AND NOT (SD2.D2_CF LIKE '52%' OR SD2.D2_CF LIKE '62%').",
       "- Devolucoes de compra com ST nao geram receita: exclua AND SD2.D2_CF NOT IN ('5410','6410','5411','6411','5412','6412','5413','6413').",
@@ -797,9 +797,9 @@ function _reforcoFinalRetryCfop(mensagemErro) {
   return [
     '',
     'LEMBRETE FINAL (nao ignore mesmo apos ler o SQL acima):',
-    "O SQL acima esta ERRADO porque nao exclui todos os CFOPs sem receita operacional (ou excluiu 5932/5933/6932/6933 que SAO receita). Antes de responder, adicione ao WHERE do bloco de receita (SD2):",
-    "AND (NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') OR SD2.D2_CF IN ('5932','6932','5933','6933')) AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156') AND NOT (SD2.D2_CF LIKE '52%' OR SD2.D2_CF LIKE '62%') AND SD2.D2_CF NOT IN ('5410','6410','5411','6411','5412','6412','5413','6413') AND NOT (SD2.D2_CF LIKE '55%' OR SD2.D2_CF LIKE '65%') AND NOT (SD2.D2_CF LIKE '56%' OR SD2.D2_CF LIKE '66%')",
-    "Se o SQL antigo tinha IN ('5932','6932','6933'), ele esta incompleto: faltou 5933. Nao repita o SQL acima sem os 4 codigos da excecao.",
+    "O SQL acima esta ERRADO porque nao exclui todos os CFOPs sem receita operacional (ou excluiu 5932/5933/6932/6933/5949/6949 que SAO receita). Antes de responder, adicione ao WHERE do bloco de receita (SD2):",
+    "AND (NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') OR SD2.D2_CF IN ('5932','6932','5933','6933','5949','6949')) AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156') AND NOT (SD2.D2_CF LIKE '52%' OR SD2.D2_CF LIKE '62%') AND SD2.D2_CF NOT IN ('5410','6410','5411','6411','5412','6412','5413','6413') AND NOT (SD2.D2_CF LIKE '55%' OR SD2.D2_CF LIKE '65%') AND NOT (SD2.D2_CF LIKE '56%' OR SD2.D2_CF LIKE '66%')",
+    "Se o SQL antigo tinha IN ('5932','6932','6933'), ele esta incompleto: faltaram 5933, 5949 e 6949. Nao repita o SQL acima sem os 6 codigos da excecao.",
   ].join('\n');
 }
 
