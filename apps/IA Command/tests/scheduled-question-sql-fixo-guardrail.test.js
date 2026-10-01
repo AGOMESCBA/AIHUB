@@ -2,6 +2,8 @@
 
 const assert = require('assert');
 const scheduledRunner = require('../modules/scheduler/scheduled-question-runner');
+const iaOwnerRunner = require('../modules/erp/ia-owner/runner');
+const faturamentoSpec = require('../modules/erp/totvs_protheus/faturamento/faturamento-ia-owner-spec');
 const crud = require('../modules/database/crud');
 
 (async () => {
@@ -18,8 +20,8 @@ const crud = require('../modules/database/crud');
 
   assert.strictEqual(
     scheduledRunner._test.erroSqlFixoPermiteRetryIA({ tipo: 'erro', subtipo: 'contrato_query_plan_invalido' }),
-    true,
-    'rejeicao query_plan de SQL fixo deve permitir retry por IA',
+    false,
+    'rejeicao query_plan de SQL fixo nao deve regenerar SQL por IA',
   );
   assert.strictEqual(
     scheduledRunner._test.erroSqlFixoPermiteRetryIA({ tipo: 'erro', subtipo: 'acesso_negado_vendedor' }),
@@ -49,9 +51,30 @@ const crud = require('../modules/database/crud');
     },
   });
 
-  assert.strictEqual(chamouIa, true, 'deve chamar IA quando SQL fixo falhar por guardrail corrigivel');
-  assert.strictEqual(resultado.tipo, 'sucesso_ai_sql');
-  assert.strictEqual(resultado._pipeline_origem, 'agendamento_sql_fixo_retry_ia');
+  assert.strictEqual(chamouIa, false, 'nao deve chamar IA quando SQL fixo falhar por guardrail corrigivel');
+  assert.strictEqual(resultado, resultadoOriginal);
+
+  const sqlFaturamentoFixoSemCfop = `
+SET ROWCOUNT 10000;
+SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 6) AS competencia, SUM(SD2.D2_TOTAL) AS faturamento_total
+FROM SF2990 SF2
+JOIN SD2990 SD2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC
+WHERE SF2.F2_EMISSAO BETWEEN '20260901' AND '20260930'
+  AND SF2.F2_TIPO = 'N'
+  AND SF2.D_E_L_E_T_ = ' '
+  AND SD2.D_E_L_E_T_ = ' '
+GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 6)
+`;
+  assert.strictEqual(
+    iaOwnerRunner._test.validarSqlIaOwnerBasico(sqlFaturamentoFixoSemCfop, faturamentoSpec, {}, 'faturamento do mes').ok,
+    false,
+    'fluxo IA normal deve exigir contrato fiscal de CFOP em faturamento',
+  );
+  assert.strictEqual(
+    iaOwnerRunner._test.validarSqlIaOwnerBasico(sqlFaturamentoFixoSemCfop, faturamentoSpec, {}, 'faturamento do mes', { sqlFixoDireto: true, permitirSelectTop: true }).ok,
+    true,
+    'SQL fixo direto nao deve ser reprovado por contrato semantico de geracao IA',
+  );
 
   const listarOriginal = crud.listar;
   try {

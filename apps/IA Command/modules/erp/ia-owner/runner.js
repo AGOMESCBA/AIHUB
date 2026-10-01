@@ -3162,23 +3162,28 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '', opts =
   const texto = String(sql || '').trim();
   const erros = [];
   const permitirSelectTop = opts.permitirSelectTop === true;
-  erros.push(...validarDecomposicaoAnaliseVertical(texto, mensagem).erros);
-  if (String(spec.nome || '').toLowerCase() === 'faturamento') {
-    erros.push(...validarResultadoMensalVerticalVariacao(texto, mensagem).erros);
+  const sqlFixoDireto = opts.sqlFixoDireto === true;
+  if (!sqlFixoDireto) {
+    erros.push(...validarDecomposicaoAnaliseVertical(texto, mensagem).erros);
+    if (String(spec.nome || '').toLowerCase() === 'faturamento') {
+      erros.push(...validarResultadoMensalVerticalVariacao(texto, mensagem).erros);
+    }
   }
   erros.push(...validarParentesesBalanceados(texto).erros);
   erros.push(...validarPontoEVirgulaUnico(texto).erros);
   erros.push(...validarJoinDepoisWhere(texto).erros);
-  erros.push(...validarFiltroFiscalCarregada(texto, mensagem).erros);
-  erros.push(...validarDevolucaoConsistente(texto, mensagem).erros);
-  erros.push(...validarComparativoCrossModuleNormalizado(texto, spec, mensagem).erros);
-  erros.push(...validarGranularidadeSemanalTransversal(texto, mensagem).erros);
-  if (String(spec.nome || '').toLowerCase() === 'faturamento') {
-    erros.push(...validarTesDescricaoQuandoAgrupado(texto, mensagem).erros);
-  }
-  erros.push(...validarPrecedenciaOrRemessaSemParenteses(texto).erros);
-  if (String(spec.nome || '').toLowerCase() === 'faturamento') {
-    erros.push(...validarJoinSA3VendedorPrincipal(texto).erros);
+  if (!sqlFixoDireto) {
+    erros.push(...validarFiltroFiscalCarregada(texto, mensagem).erros);
+    erros.push(...validarDevolucaoConsistente(texto, mensagem).erros);
+    erros.push(...validarComparativoCrossModuleNormalizado(texto, spec, mensagem).erros);
+    erros.push(...validarGranularidadeSemanalTransversal(texto, mensagem).erros);
+    if (String(spec.nome || '').toLowerCase() === 'faturamento') {
+      erros.push(...validarTesDescricaoQuandoAgrupado(texto, mensagem).erros);
+    }
+    erros.push(...validarPrecedenciaOrRemessaSemParenteses(texto).erros);
+    if (String(spec.nome || '').toLowerCase() === 'faturamento') {
+      erros.push(...validarJoinSA3VendedorPrincipal(texto).erros);
+    }
   }
   if (!/^SET\s+ROWCOUNT\s+\d+\s*;\s*(?:WITH\b|SELECT\b)/i.test(texto)) {
     erros.push('SQL deve iniciar com SET ROWCOUNT N; SELECT ... ou SET ROWCOUNT N; WITH ... (CTE)');
@@ -3207,7 +3212,7 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '', opts =
     const regex = regra?.regex instanceof RegExp ? regra.regex : null;
     if (regex && regex.test(texto)) {
       erros.push(regra.mensagem || 'SQL rejeitado por regra tecnica do modulo.');
-    } else if (typeof regra?.validar === 'function') {
+    } else if (!sqlFixoDireto && typeof regra?.validar === 'function') {
       const msg = regra.validar(texto, mensagem);
       if (msg) erros.push(msg);
     }
@@ -3273,6 +3278,18 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '', opts =
 }
 
 function permitirSelectTopPorIntent(intent = {}) {
+  const origem = String(intent?.origem || intent?._origem || '').toLowerCase();
+  const pipelineOrigem = String(intent?._pipeline_origem || intent?.pipeline_origem || '').toLowerCase();
+  const systemOrigin = String(intent?._systemOrigin || intent?.systemOrigin || '').toLowerCase();
+  return origem === 'agendamento_sql_fixo'
+    || pipelineOrigem === 'agendamento_sql_fixo'
+    || systemOrigin === 'agendamento'
+    || intent?._skipIaSqlGeneration === true
+    || intent?._sqlFixo === true
+    || intent?.sql_fixo === true;
+}
+
+function intentEhSqlFixoDireto(intent = {}) {
   const origem = String(intent?.origem || intent?._origem || '').toLowerCase();
   const pipelineOrigem = String(intent?._pipeline_origem || intent?.pipeline_origem || '').toLowerCase();
   const systemOrigin = String(intent?._systemOrigin || intent?.systemOrigin || '').toLowerCase();
@@ -4125,7 +4142,7 @@ function interpolarRespostaPlanejada(template, rows = []) {
   return /\{[a-zA-Z0-9_]+\}/.test(saida) ? null : saida;
 }
 
-async function prepararSql({ spec, sql, sx2, sx2LoboGuara = undefined, sx2Empresa = null, sx3, protheus, middlewareCfg, entidades, filial, periodo, planoConsulta, mensagem, permitirSelectTop = false, empresaId = null, filialLoboGuaraState = null }) {
+async function prepararSql({ spec, sql, sx2, sx2LoboGuara = undefined, sx2Empresa = null, sx3, protheus, middlewareCfg, entidades, filial, periodo, planoConsulta, mensagem, permitirSelectTop = false, empresaId = null, filialLoboGuaraState = null, sqlFixoDireto = false }) {
   let sqlEntradaNormalizado = normalizarAliasesBaseAusentes(sql, spec);
   sqlEntradaNormalizado = sx2SqlNormalizer.adaptarSqlCanonicoPorSX2(sqlEntradaNormalizado, sx2, {
     logPrefix: spec.logPrefix,
@@ -4156,12 +4173,12 @@ async function prepararSql({ spec, sql, sx2, sx2LoboGuara = undefined, sx2Empres
     }
   }
 
-  const validacaoBasica = validarSqlIaOwnerBasico(sqlEntradaNormalizado, spec, sx2, mensagem, { permitirSelectTop });
+  const validacaoBasica = validarSqlIaOwnerBasico(sqlEntradaNormalizado, spec, sx2, mensagem, { permitirSelectTop, sqlFixoDireto });
   if (!validacaoBasica.ok) {
     // Acumula também erros do query_plan para que o retry receba todos os problemas de uma vez,
     // evitando ciclos onde a IA corrige só o D_E_L_E_T_ mas mantém UNION ALL ou estrutura errada.
     const errosCombinados = [...validacaoBasica.erros];
-    if (planoConsulta) {
+    if (planoConsulta && !sqlFixoDireto) {
       const validacaoPlanoAntecipada = queryPlan.validarSqlContraPlano(sqlEntradaNormalizado, planoConsulta);
       for (const e of validacaoPlanoAntecipada.erros) {
         if (!errosCombinados.includes(e)) errosCombinados.push(e);
@@ -4169,15 +4186,17 @@ async function prepararSql({ spec, sql, sx2, sx2LoboGuara = undefined, sx2Empres
     }
     throw Object.assign(new Error(`SQL rejeitado por contrato IA-OWNER: ${errosCombinados.join(' | ')}`), { _tipo: 'contrato_ia_owner_invalido', _sql: sqlEntradaNormalizado });
   }
-  const validacaoPeriodo = validarPeriodoDeclaradoNoSql(sqlEntradaNormalizado, spec, periodo, {
-    periodosPermitidos: planoConsulta?.periodos_comparativos,
-  });
-  if (!validacaoPeriodo.ok) {
-    throw Object.assign(new Error(`SQL rejeitado por periodo inconsistente: ${validacaoPeriodo.erros.join(' | ')}`), { _tipo: 'periodo_sql_inconsistente', _sql: sqlEntradaNormalizado });
-  }
-  const validacaoPeriodosComparativos = validarPeriodosComparativosNoSql(sqlEntradaNormalizado, spec, planoConsulta);
-  if (!validacaoPeriodosComparativos.ok) {
-    throw Object.assign(new Error(`SQL rejeitado por periodo inconsistente: ${validacaoPeriodosComparativos.erros.join(' | ')}`), { _tipo: 'periodo_sql_inconsistente', _sql: sqlEntradaNormalizado });
+  if (!sqlFixoDireto) {
+    const validacaoPeriodo = validarPeriodoDeclaradoNoSql(sqlEntradaNormalizado, spec, periodo, {
+      periodosPermitidos: planoConsulta?.periodos_comparativos,
+    });
+    if (!validacaoPeriodo.ok) {
+      throw Object.assign(new Error(`SQL rejeitado por periodo inconsistente: ${validacaoPeriodo.erros.join(' | ')}`), { _tipo: 'periodo_sql_inconsistente', _sql: sqlEntradaNormalizado });
+    }
+    const validacaoPeriodosComparativos = validarPeriodosComparativosNoSql(sqlEntradaNormalizado, spec, planoConsulta);
+    if (!validacaoPeriodosComparativos.ok) {
+      throw Object.assign(new Error(`SQL rejeitado por periodo inconsistente: ${validacaoPeriodosComparativos.erros.join(' | ')}`), { _tipo: 'periodo_sql_inconsistente', _sql: sqlEntradaNormalizado });
+    }
   }
   let out = sx3SqlValidator.normalizarReferenciasAliasSql(sqlEntradaNormalizado);
   const contratosRelacionais = completarContratoRelacionalSD1SF1(out);
@@ -4341,9 +4360,11 @@ async function prepararSql({ spec, sql, sx2, sx2LoboGuara = undefined, sx2Empres
       { _tipo: 'lobo_guara_escopo_nao_aplicado', _sql: out, filialEscopoResultado }
     );
   }
-  const validacaoPlano = queryPlan.validarSqlContraPlano(out, planoConsulta);
-  if (!validacaoPlano.ok) {
-    throw Object.assign(new Error(`SQL rejeitado pelo query_plan: ${validacaoPlano.erros.join(' | ')}`), { _tipo: 'contrato_query_plan_invalido', _sql: out });
+  if (!sqlFixoDireto) {
+    const validacaoPlano = queryPlan.validarSqlContraPlano(out, planoConsulta);
+    if (!validacaoPlano.ok) {
+      throw Object.assign(new Error(`SQL rejeitado pelo query_plan: ${validacaoPlano.erros.join(' | ')}`), { _tipo: 'contrato_query_plan_invalido', _sql: out });
+    }
   }
   const mw = spec.sqlMiddleware.processar(out, { ...middlewareCfg, mensagem_original: mensagem });
   if (mw.bloqueado) throw Object.assign(new Error(mw.motivo_bloqueio || 'SQL bloqueado pelo middleware.'), { _tipo: 'sql_bloqueado' });
@@ -5684,7 +5705,7 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
       });
       auditoriaBase.query_plan = planoConsulta;
       const permitirSelectTop = permitirSelectTopPorIntent(intent);
-      preparado = await prepararSql({ spec, sql: sqlCanonico, sx2, sx2LoboGuara: sx2Puro, sx2Empresa, sx3: sx3Validacao, protheus, middlewareCfg: { ...middlewareCfg, limite_ranking: intent?.limite }, entidades, filial: intent.filtros?.filial || 'TODAS', periodo: intent._periodoCanonicoResolvido || intent.periodo, planoConsulta, mensagem, permitirSelectTop, empresaId, filialLoboGuaraState: intent?._filialLoboGuara || null });
+      preparado = await prepararSql({ spec, sql: sqlCanonico, sx2, sx2LoboGuara: sx2Puro, sx2Empresa, sx3: sx3Validacao, protheus, middlewareCfg: { ...middlewareCfg, limite_ranking: intent?.limite }, entidades, filial: intent.filtros?.filial || 'TODAS', periodo: intent._periodoCanonicoResolvido || intent.periodo, planoConsulta, mensagem, permitirSelectTop, empresaId, filialLoboGuaraState: intent?._filialLoboGuara || null, sqlFixoDireto: intentEhSqlFixoDireto(intent) });
       auditoriaBase.sql_apos_sx3 = sx3SqlValidator.normalizarReferenciasAliasSql(sqlCanonico);
       auditoriaBase.sql_apos_contratos_relacionais = preparado.sqlAposContratosRelacionais;
       auditoriaBase.contratos_relacionais_aplicados = preparado.contratosRelacionaisAplicados;
@@ -5810,6 +5831,7 @@ module.exports = {
     interpolarRespostaPlanejada,
     validarSqlIaOwnerBasico,
     permitirSelectTopPorIntent,
+    intentEhSqlFixoDireto,
     validarPontoEVirgulaUnico,
     validarJoinDepoisWhere,
     validarFiltroFiscalCarregada,

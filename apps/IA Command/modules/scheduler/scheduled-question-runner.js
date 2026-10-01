@@ -344,15 +344,7 @@ function montarIntentSqlFixo(job) {
 }
 
 function erroSqlFixoPermiteRetryIA(resultado = {}) {
-  if (resultado?.tipo !== 'erro') return false;
-  const subtipo = String(resultado.subtipo || '').trim();
-  if (/^acesso_negado_/.test(subtipo) || subtipo === 'sem_conexao') return false;
-  return [
-    'contrato_query_plan_invalido',
-    'contrato_ia_owner_invalido',
-    'periodo_sql_inconsistente',
-    'sql_bloqueado',
-  ].includes(subtipo);
+  return false;
 }
 
 async function tentarRetryIaAposSqlFixo({ handler, resultadoSqlFixo, intent, empresaId } = {}) {
