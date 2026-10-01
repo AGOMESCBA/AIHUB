@@ -33,6 +33,22 @@ function getConsultor(empresaId, consultorId) {
   return consultorRepo.getConsultor(empresaId, consultorId);
 }
 
+// Resolve o nome de exibição do consultor: usuário IAHub vinculado (se
+// houver) como primeira fonte, senão o técnico importado do SoftExpert
+// correspondente ao id_softexpert do consultor (ver nota em
+// consultor-repository.getNomeTecnicoPorIdOrigem) — cobre o caso
+// predominante hoje, consultor cadastrado só com telefone, sem vínculo de
+// login IAHub.
+function getNomeExibicao(empresaId, consultorId) {
+  const consultor = consultorRepo.getConsultor(empresaId, consultorId);
+  if (!consultor) return null;
+  if (consultor.usuarioIdIahub) {
+    const usuario = usuariosDb.buscarPorId(consultor.usuarioIdIahub);
+    if (usuario?.nome) return usuario.nome;
+  }
+  return consultorRepo.getNomeTecnicoPorIdOrigem(empresaId, consultor.idSoftexpert);
+}
+
 function getConsultorPorUsuario(empresaId, usuarioIdIahub) {
   return consultorRepo.getConsultorPorUsuario(empresaId, usuarioIdIahub);
 }
@@ -53,6 +69,7 @@ module.exports = {
   criarConsultor,
   getConsultor,
   getConsultorPorUsuario,
+  getNomeExibicao,
   listarConsultores,
   atualizarConsultor,
   excluirConsultor,

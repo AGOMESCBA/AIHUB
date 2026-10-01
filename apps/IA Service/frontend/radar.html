@@ -145,7 +145,7 @@
       background:rgba(255,255,255,.04); color:var(--wa-text); font-size:12px;
     }
     .risco-grid-busca input::placeholder { color:var(--wa-text-tertiary); }
-    .risco-grid-wrap { flex:1; min-width:0; min-height:0; padding:8px; }
+    .risco-grid-wrap { flex:1; min-width:0; min-height:0; padding:8px; overflow:auto; }
     .risco-totais { flex:none; display:flex; gap:14px; flex-wrap:wrap; padding:8px 14px; border-top:1px solid var(--wa-border); background:rgba(0,0,0,.14); font-size:11.5px; }
     .risco-total-item { display:flex; align-items:center; gap:6px; color:var(--wa-text-secondary); }
     .risco-total-item strong { color:var(--wa-text); font-weight:900; }
@@ -435,7 +435,7 @@
             </div>
             <div class="fila-tabs">
               <button class="fila-tab" id="tab-geral" onclick="setModoFila(false)"><span class="fila-tab-dot"></span>Fila geral</button>
-              <button class="fila-tab ativo" id="tab-minha" onclick="setModoFila(true)"><span class="fila-tab-dot"></span>Minha fila</button>
+              <button class="fila-tab ativo" id="tab-minha" onclick="setModoFila(true)"><span class="fila-tab-dot"></span>Minha fila<span id="tab-minha-nome"></span></button>
             </div>
             <div class="fila-filtros" id="fila-filtros">
               <button class="fila-filtro ativo" id="filtro-todos" onclick="setFiltroSla('todos')">Todos</button>
@@ -951,18 +951,18 @@
         gridEl.innerHTML = '';
         riscoTable = new Tabulator(gridEl, {
           data: linhas,
-          layout: 'fitColumns',
+          layout: 'fitDataTable',
           height: '100%',
           groupBy: 'consultor',
           groupHeader: (value, count) => `${value} (${count} chamado${count === 1 ? '' : 's'})`,
           placeholder: 'Nenhum chamado encontrado para este filtro.',
           columns: [
             { title: 'Chamado', field: 'numero', width: 90, headerSort: true },
-            { title: 'Título', field: 'titulo', widthGrow: 2 },
-            { title: 'Cliente', field: 'cliente', widthGrow: 1 },
-            { title: 'Usuário', field: 'usuario', widthGrow: 1 },
-            { title: 'Aguardando', field: 'aguardando', widthGrow: 1 },
-            { title: 'Status', field: 'status', widthGrow: 1, formatter: (cell) => badgeSla(cell.getValue()) },
+            { title: 'Título', field: 'titulo', width: 260 },
+            { title: 'Cliente', field: 'cliente', width: 140 },
+            { title: 'Usuário', field: 'usuario', width: 140 },
+            { title: 'Aguardando', field: 'aguardando', width: 120 },
+            { title: 'Status', field: 'status', width: 120, formatter: (cell) => badgeSla(cell.getValue()) },
             { title: 'Consultor', field: 'consultor', visible: false },
             { title: 'Previsão conclusão', field: 'previsao', width: 140 },
             { title: 'Duração', field: 'duracao', width: 90, hozAlign: 'right' },
@@ -2068,9 +2068,11 @@
             badge.classList.add('trocavel');
             montarEmpresaDropdown(info.outrasEmpresas);
           }
+          preencherNomeConsultorNaAba(info.consultorNome);
         } else {
           nome = window._iahubEmpresa?.nome || window._iahubEmpresa?.razao_social || null;
           logoUrl = window._iahubEmpresa?.login_logo_url || null;
+          preencherNomeConsultorNaAba(window._iahubUser?.nome || null);
         }
       } catch (_) {
         // Falha ao resolver nome não deve travar a tela — badge só some.
@@ -2086,6 +2088,16 @@
         iconFallback.style.display = 'none';
       }
       badge.style.display = 'flex';
+    }
+
+    // "Minha fila — <nome>" — pedido do usuário, 2026-10: a tela não dizia
+    // em lugar nenhum qual consultor está logado. Modo externo usa o nome
+    // resolvido por whoami (via técnico do SoftExpert, ver backend); modo
+    // normal usa window._iahubUser.nome (sempre disponível, populado por
+    // auth.js antes desta página carregar).
+    function preencherNomeConsultorNaAba(nomeConsultor) {
+      const span = document.getElementById('tab-minha-nome');
+      if (span && nomeConsultor) span.textContent = ' — ' + nomeConsultor;
     }
 
     function montarEmpresaDropdown(outrasEmpresas) {

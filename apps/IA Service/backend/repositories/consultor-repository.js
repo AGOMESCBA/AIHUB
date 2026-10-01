@@ -198,6 +198,22 @@ function excluirConsultor(empresaId, consultorId) {
   return resultado.changes > 0;
 }
 
+// Nome de exibição do consultor — a tabela `consultores` não tem campo
+// próprio de nome (só telefone/id_softexpert/vínculo opcional com usuário
+// IAHub, ver nota no topo do arquivo). A fonte real do nome é `tecnicos`
+// (importado do SoftExpert), cruzando id_softexpert do consultor com
+// id_origem do técnico — funciona mesmo sem usuarioIdIahub vinculado, que é
+// o cenário predominante hoje (login só por telefone). Usado para exibir
+// "Minha fila — <nome>" no radar (pedido do usuário, 2026-10).
+function getNomeTecnicoPorIdOrigem(empresaId, idSoftexpert) {
+  if (!empresaId || !idSoftexpert) return null;
+  const db = getDB();
+  const row = db.prepare(`
+    SELECT nome FROM tecnicos WHERE empresa_id = ? AND id_origem = ?
+  `).get(Number(empresaId), String(idSoftexpert));
+  return row?.nome || null;
+}
+
 module.exports = {
   criarConsultor,
   getConsultor,
@@ -207,4 +223,5 @@ module.exports = {
   upsertConsultorPlatform,
   atualizarConsultor,
   excluirConsultor,
+  getNomeTecnicoPorIdOrigem,
 };

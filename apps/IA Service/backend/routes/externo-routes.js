@@ -26,7 +26,6 @@ const loginExternoService = require('../services/login-externo-service');
 const technicalResearchService = require('../services/technical-research-service');
 const radarRefreshService = require('../services/radar-refresh-service');
 const crud = require('../../../IAHUB/backend/crud');
-const usuariosDb = require('../../../IAHUB/backend/usuarios/database');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: armazenamento.TAMANHO_MAXIMO_BYTES } });
 
@@ -57,7 +56,6 @@ module.exports = function registrarRotasExterno(app) {
     try {
       const empresa = crud.buscarPorId('empresas', req.svcEmpresaId);
       const consultor = consultorService.getConsultor(req.svcEmpresaId, req.svcConsultorExterno);
-      const usuario = consultor?.usuarioIdIahub ? usuariosDb.buscarPorId(consultor.usuarioIdIahub) : null;
       const outrasEmpresas = consultor?.telefone
         ? loginExternoService.listarEmpresasDoTelefone(consultor.telefone)
             .filter(e => Number(e.id) !== Number(req.svcEmpresaId))
@@ -66,7 +64,13 @@ module.exports = function registrarRotasExterno(app) {
       res.json({
         empresaNome: empresa?.razao_social || empresa?.nome || null,
         empresaLogoUrl: empresa?.login_logo_url || null,
-        consultorNome: usuario?.nome || null,
+        // Antes só usava o nome do usuário IAHub vinculado (usuarioIdIahub),
+        // que é opcional e raramente preenchido hoje (login é só por
+        // telefone, ver migration v25) — ficava quase sempre null. Agora
+        // resolve via técnico importado do SoftExpert como fallback
+        // (consultorService.getNomeExibicao), pedido do usuário, 2026-10:
+        // mostrar "Minha fila — <nome>" no radar.
+        consultorNome: consultorService.getNomeExibicao(req.svcEmpresaId, req.svcConsultorExterno),
         outrasEmpresas,
       });
     } catch (err) {
@@ -104,17 +108,25 @@ module.exports = function registrarRotasExterno(app) {
     }
   });
 
+  // Risco SLA é sempre uma visão de TODOS os consultores (mesmo motivo já
+  // corrigido na rota de sessão por cookie, routes/index.js — "radar:
+  // acompanhar todos, não só o que está logado"). Essa rota do modo
+  // externo (login por telefone) usava getRiscoSlaPorConsultorId, que
+  // SEMPRE restringe ao consultor da própria sessão — nunca existia um
+  // caminho "todos" aqui, por isso quem entrava por telefone só via a
+  // própria fila mesmo depois da correção equivalente na rota de sessão
+  // normal (bug real, reportado múltiplas vezes pelo usuário, 2026-10).
   app.get('/api/ia-service-externo/radar/risco-sla', async (req, res) => {
     try {
       const { filtro, limite, force_sync } = req.query || {};
       const sincronizacao = await radarRefreshService.sincronizarAntesDaFila(req.svcEmpresaId, {
         force: force_sync === 'true',
       });
-      const resultado = radarService.getRiscoSlaPorConsultorId(req.svcEmpresaId, req.svcConsultorExterno, {
+      const resultado = radarService.getRiscoSla(req.svcEmpresaId, {
         filtroRisco: filtro || 'todos',
         limite: limite ? Number(limite) : undefined,
       });
-      res.json({ ...resultado, sincronizacao });
+      res.json({ ...resultado, avisoSemVinculo: false, sincronizacao });
     } catch (err) {
       _handleErro(res, err);
     }
