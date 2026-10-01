@@ -240,6 +240,51 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
     } : {});
   });
 
+  app.post('/api/iahub/platform/agent-config', requireAuth, requireAdmin, requireEmpresa, (req, res) => {
+    const eid = empresaId(req);
+    const atual = getAgentRow(eid);
+    const body = req.body || {};
+
+    const data = {
+      id: atual?.id || uuid(),
+      agente_local_url: body.agenteLocalUrl !== undefined ? String(body.agenteLocalUrl || '').trim() : atual?.agente_local_url || '',
+      agente_local_ativo: body.agenteLocalAtivo !== undefined ? (body.agenteLocalAtivo ? 1 : 0) : (atual?.agente_local_ativo ?? 1),
+      agente_local_token_enc: body.agenteLocalToken ? encrypt(body.agenteLocalToken) : atual?.agente_local_token_enc || null,
+      agente_local_crypto_ativo: body.agenteLocalCryptoAtivo !== undefined ? (body.agenteLocalCryptoAtivo ? 1 : 0) : (atual?.agente_local_crypto_ativo ?? 0),
+      agente_local_crypto_key_enc: body.agenteLocalCryptoKey ? encrypt(body.agenteLocalCryptoKey) : atual?.agente_local_crypto_key_enc || null,
+      atualizado_em: now(),
+    };
+
+    if (atual) {
+      getDB().prepare(`
+        UPDATE platform_agent_configs
+           SET agente_local_url = ?, agente_local_ativo = ?, agente_local_token_enc = ?,
+               agente_local_crypto_ativo = ?, agente_local_crypto_key_enc = ?, atualizado_em = ?
+         WHERE empresa_id = ?
+      `).run(data.agente_local_url, data.agente_local_ativo, data.agente_local_token_enc,
+        data.agente_local_crypto_ativo, data.agente_local_crypto_key_enc, data.atualizado_em, eid);
+    } else {
+      getDB().prepare(`
+        INSERT INTO platform_agent_configs (
+          id, empresa_id, agente_local_url, agente_local_ativo, agente_local_token_enc,
+          agente_local_crypto_ativo, agente_local_crypto_key_enc, criado_em, atualizado_em
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(data.id, eid, data.agente_local_url, data.agente_local_ativo, data.agente_local_token_enc,
+        data.agente_local_crypto_ativo, data.agente_local_crypto_key_enc, data.atualizado_em, data.atualizado_em);
+    }
+
+    const row = getAgentRow(eid);
+    res.json({
+      id: row.id,
+      empresaId: row.empresa_id,
+      agenteLocalUrl: row.agente_local_url || '',
+      agenteLocalAtivo: !!row.agente_local_ativo,
+      agenteLocalTokenConfigurado: !!row.agente_local_token_enc,
+      agenteLocalCryptoAtivo: !!row.agente_local_crypto_ativo,
+      agenteLocalCryptoKeyConfigurada: !!row.agente_local_crypto_key_enc,
+    });
+  });
+
   app.get('/api/iahub/platform/whatsapp-identities', requireAuth, requireEmpresa, (req, res) => {
     const eid = empresaId(req);
     const rows = getDB().prepare('SELECT * FROM platform_whatsapp_identities WHERE empresa_id = ? ORDER BY nome COLLATE NOCASE ASC').all(eid);

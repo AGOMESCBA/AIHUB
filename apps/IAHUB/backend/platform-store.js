@@ -81,6 +81,21 @@ function getAiConfig(empresaId) {
   };
 }
 
+function getAgentConfig(empresaId) {
+  if (!empresaId) return null;
+  const row = safeGet('SELECT * FROM platform_agent_configs WHERE empresa_id = ?', [Number(empresaId)]);
+  if (!row || !row.agente_local_url) return null;
+  return {
+    empresaId: row.empresa_id,
+    url: row.agente_local_url || '',
+    token: decrypt(row.agente_local_token_enc),
+    ativo: !!row.agente_local_ativo,
+    cryptoAtivo: !!row.agente_local_crypto_ativo,
+    cryptoKey: decrypt(row.agente_local_crypto_key_enc),
+    atualizadoEm: row.atualizado_em,
+  };
+}
+
 function listarIaServicePorTelefone(telefoneNormalizado) {
   const telefone = String(telefoneNormalizado || '').replace(/\D/g, '');
   if (!telefone) return [];
@@ -149,4 +164,4 @@ function getConfigPorApelido(apelido) {
   return { empresaId: row.empresa_id };
 }
 
-module.exports = { getAiConfig, listarIaServicePorTelefone, getConfigPorApelido };
+module.exports = { getAiConfig, getAgentConfig, listarIaServicePorTelefone, getConfigPorApelido };

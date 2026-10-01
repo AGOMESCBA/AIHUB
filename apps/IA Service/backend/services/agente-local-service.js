@@ -5,27 +5,77 @@
 const agenteRepo = require('../repositories/agente-local-repository');
 const cryptoEnvelope = require('./crypto-envelope');
 const provider = require('./agente-local-provider');
+const platformStore = require('../../../IAHUB/backend/platform-store');
+
+function permitirConfigLegada() {
+  return process.env.SVC_ALLOW_LEGACY_CONFIG === '1';
+}
+
+/**
+ * Resolve a config do Agente Local com a mesma cascata já usada para
+ * chaves de IA (ver ai-config-service.resolverKeysEOrdem): Platform
+ * primeiro, legado (agente_local_config do próprio IA Service) só como
+ * fallback explícito (2026-10, mesma migração das outras 5 abas de
+ * Configuração de IA — Platform agora também guarda URL/Token/Crypto Key
+ * do Agente Local em platform_agent_configs). Devolve sempre no formato
+ * "token/cryptoKey já decifrados em texto puro" — quem chama nunca precisa
+ * saber se veio da Platform (decrypt próprio) ou do legado (cryptoEnvelope).
+ */
+function _resolverConfig(empresaId) {
+  const platform = platformStore.getAgentConfig(empresaId);
+  if (platform) {
+    return {
+      empresaId: platform.empresaId,
+      url: platform.url,
+      token: platform.token || null,
+      cryptoKey: platform.cryptoKey || null,
+      cryptoAtivo: platform.cryptoAtivo,
+      ultimoTesteEm: null,
+      ultimoTesteOk: null,
+      tokenConfigurado: !!platform.token,
+      cryptoKeyConfigurada: !!platform.cryptoKey,
+    };
+  }
+  if (!permitirConfigLegada()) return null;
+  const legado = agenteRepo.getConfig(empresaId);
+  if (!legado) return null;
+  return {
+    empresaId: legado.empresaId,
+    url: legado.url,
+    token: legado.tokenEnc ? cryptoEnvelope.decryptSecret(legado.tokenEnc) : null,
+    cryptoKey: legado.cryptoKeyEnc ? cryptoEnvelope.decryptSecret(legado.cryptoKeyEnc) : null,
+    cryptoAtivo: legado.cryptoAtivo,
+    ultimoTesteEm: legado.ultimoTesteEm,
+    ultimoTesteOk: legado.ultimoTesteOk,
+    tokenConfigurado: !!legado.tokenEnc,
+    cryptoKeyConfigurada: !!legado.cryptoKeyEnc,
+  };
+}
 
 function getConfig(empresaId) {
-  const config = agenteRepo.getConfig(empresaId);
+  const config = _resolverConfig(empresaId);
   if (!config) return { empresaId, configurado: false };
   return {
     empresaId: config.empresaId,
     url: config.url,
-    tokenConfigurado: !!config.tokenEnc,
+    tokenConfigurado: config.tokenConfigurado,
     cryptoAtivo: config.cryptoAtivo,
-    cryptoKeyConfigurada: !!config.cryptoKeyEnc,
+    cryptoKeyConfigurada: config.cryptoKeyConfigurada,
     ultimoTesteEm: config.ultimoTesteEm,
     ultimoTesteOk: config.ultimoTesteOk,
-    configurado: !!(config.url && config.tokenEnc),
+    configurado: !!(config.url && config.token),
   };
 }
 
-function salvarConfig(empresaId, { url, token, cryptoKey, cryptoAtivo }) {
-  const dados = { url, cryptoAtivo };
-  if (token) dados.tokenEnc = cryptoEnvelope.encryptSecret(token);
-  if (cryptoKey) dados.cryptoKeyEnc = cryptoEnvelope.encryptSecret(cryptoKey);
-  agenteRepo.salvarConfig(empresaId, dados);
+function salvarConfig(empresaId, dados) {
+  if (process.env.SVC_ALLOW_LEGACY_CONFIG_WRITE !== '1') {
+    throw new Error('Configuração de Agente Local isolada. Use IAHub Platform → Configurar IA → Agente Local.');
+  }
+  const { url, token, cryptoKey, cryptoAtivo } = dados;
+  const legado = { url, cryptoAtivo };
+  if (token) legado.tokenEnc = cryptoEnvelope.encryptSecret(token);
+  if (cryptoKey) legado.cryptoKeyEnc = cryptoEnvelope.encryptSecret(cryptoKey);
+  agenteRepo.salvarConfig(empresaId, legado);
   return getConfig(empresaId);
 }
 
@@ -39,9 +89,8 @@ function salvarConfig(empresaId, { url, token, cryptoKey, cryptoAtivo }) {
  * carregamento normal da tela (getConfig acima nunca inclui o valor cru).
  */
 function getTokenRevelado(empresaId) {
-  const config = agenteRepo.getConfig(empresaId);
-  if (!config?.tokenEnc) return null;
-  return cryptoEnvelope.decryptSecret(config.tokenEnc);
+  const config = _resolverConfig(empresaId);
+  return config?.token || null;
 }
 
 /**
@@ -51,19 +100,17 @@ function getTokenRevelado(empresaId) {
  * AES-256-GCM"), copiada manualmente pelo usuário.
  */
 function getCryptoKeyRevelada(empresaId) {
-  const config = agenteRepo.getConfig(empresaId);
-  if (!config?.cryptoKeyEnc) return null;
-  return cryptoEnvelope.decryptSecret(config.cryptoKeyEnc);
+  const config = _resolverConfig(empresaId);
+  return config?.cryptoKey || null;
 }
 
 async function testarConexao(empresaId) {
-  const config = agenteRepo.getConfig(empresaId);
+  const config = _resolverConfig(empresaId);
   if (!config?.url) throw new Error('URL do Agente Local não configurada.');
-  if (!config?.tokenEnc) throw new Error('Token do Agente Local não configurado.');
+  if (!config?.token) throw new Error('Token do Agente Local não configurado.');
 
-  const token = cryptoEnvelope.decryptSecret(config.tokenEnc);
   try {
-    await provider.testarAgente(config.url, token);
+    await provider.testarAgente(config.url, config.token);
     agenteRepo.registrarTeste(empresaId, true);
     return { ok: true, mensagem: 'Conexão com o Agente Local estabelecida com sucesso.' };
   } catch (err) {
@@ -82,10 +129,9 @@ async function testarConexao(empresaId) {
  * fallback de digitar manualmente.
  */
 async function listarConexoesDoAgente(empresaId) {
-  const config = agenteRepo.getConfig(empresaId);
-  if (!config?.url || !config?.tokenEnc) throw new Error('Configure o Agente Local (URL + token) antes de listar conexões.');
-  const token = cryptoEnvelope.decryptSecret(config.tokenEnc);
-  return provider.listarConexoes(config.url, token, { empresaId });
+  const config = _resolverConfig(empresaId);
+  if (!config?.url || !config?.token) throw new Error('Configure o Agente Local (URL + token) antes de listar conexões.');
+  return provider.listarConexoes(config.url, config.token, { empresaId });
 }
 
 /**
@@ -146,20 +192,17 @@ function listarFontes(empresaId, filtros) {
 }
 
 async function testarFonte(empresaId, fonteId) {
-  const config = agenteRepo.getConfig(empresaId);
-  if (!config?.url || !config?.tokenEnc) throw new Error('Configure o Agente Local (URL + token) antes de testar a fonte.');
+  const config = _resolverConfig(empresaId);
+  if (!config?.url || !config?.token) throw new Error('Configure o Agente Local (URL + token) antes de testar a fonte.');
   const fonte = agenteRepo.getFonte(empresaId, fonteId);
   if (!fonte) throw new Error('Fonte histórica não encontrada.');
 
-  const token = cryptoEnvelope.decryptSecret(config.tokenEnc);
-  const cryptoKey = config.cryptoKeyEnc ? cryptoEnvelope.decryptSecret(config.cryptoKeyEnc) : null;
-
-  const rows = await provider.executarSelect(config.url, token, {
+  const rows = await provider.executarSelect(config.url, config.token, {
     sql: 'SELECT 1 AS ok',
     limit: 1,
     connectionKey: fonte.connectionKey,
     cryptoAtivo: config.cryptoAtivo,
-    cryptoKey,
+    cryptoKey: config.cryptoKey,
     empresaId,
   });
   return { ok: true, rows };
@@ -171,20 +214,17 @@ async function testarFonte(empresaId, fonteId) {
  * importador nunca lide com segredos diretamente.
  */
 async function executarSelectNaFonte(empresaId, fonteId, { sql, params, limit }) {
-  const config = agenteRepo.getConfig(empresaId);
-  if (!config?.url || !config?.tokenEnc) throw new Error('Agente Local não configurado para esta empresa.');
+  const config = _resolverConfig(empresaId);
+  if (!config?.url || !config?.token) throw new Error('Agente Local não configurado para esta empresa.');
   const fonte = agenteRepo.getFonte(empresaId, fonteId);
   if (!fonte) throw new Error('Fonte histórica não encontrada.');
   if (!fonte.ativo) throw new Error('Fonte histórica inativa.');
 
-  const token = cryptoEnvelope.decryptSecret(config.tokenEnc);
-  const cryptoKey = config.cryptoKeyEnc ? cryptoEnvelope.decryptSecret(config.cryptoKeyEnc) : null;
-
-  return provider.executarSelect(config.url, token, {
+  return provider.executarSelect(config.url, config.token, {
     sql, params, limit,
     connectionKey: fonte.connectionKey,
     cryptoAtivo: config.cryptoAtivo,
-    cryptoKey,
+    cryptoKey: config.cryptoKey,
     empresaId,
   });
 }

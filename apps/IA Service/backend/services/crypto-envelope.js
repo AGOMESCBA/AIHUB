@@ -117,8 +117,20 @@ function decryptSecret(encryptedText) {
   } catch (_) {
     throw new Error('Segredo armazenado em formato inválido (não é um envelope JSON).');
   }
-  const payload = decryptPayload(envelope, _chaveSegredos());
-  return payload.s;
+  try {
+    const payload = decryptPayload(envelope, _chaveSegredos());
+    return payload.s;
+  } catch (err) {
+    // GCM lança "Unsupported state or unable to authenticate data" quando a
+    // tag de autenticação não bate — na prática, sempre que SVC_DATA_CRYPTO_KEY
+    // mudou depois que este segredo foi salvo (ver deploy/INSTRUCOES.md: essa
+    // chave é fixa por instalação, nunca deveria trocar). Mensagem amigável
+    // em vez do erro técnico do Node, que confundia o usuário final (2026-10).
+    if (/unsupported state|unable to authenticate/i.test(err.message)) {
+      throw new Error('Credencial protegida não pôde ser lida (chave de criptografia da instalação mudou desde que foi salva). Reconfigure em Configuração de IA → Agente Local.');
+    }
+    throw err;
+  }
 }
 
 module.exports = {

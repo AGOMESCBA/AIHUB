@@ -322,6 +322,13 @@
     .anexos-grid td { background:rgba(255,255,255,.035); border-top:1px solid var(--wa-border); border-bottom:1px solid var(--wa-border); padding:9px; vertical-align:top; }
     .anexos-grid td:first-child { border-left:1px solid var(--wa-border); border-radius:8px 0 0 8px; }
     .anexos-grid td:last-child { border-right:1px solid var(--wa-border); border-radius:0 8px 8px 0; }
+    /* Sem isso, o navegador aplica o fundo branco padrão de seleção/foco de
+       texto na linha, ilegível sobre o tema escuro (bug reportado pelo
+       usuário, 2026-10). */
+    .anexos-grid tr:hover td { background:rgba(255,255,255,.07); }
+    .anexos-grid tr:focus-within td { background:rgba(0,217,163,.1); }
+    .anexos-grid tr:active td { background:rgba(0,217,163,.14); }
+    .anexos-grid td::selection, .anexos-grid td *::selection { background:rgba(0,217,163,.3); color:var(--wa-text); }
     .anexo-nome { font-weight:800; color:var(--wa-text); word-break:break-word; }
     .anexo-meta { color:var(--wa-text-tertiary); font-size:11px; margin-top:3px; }
     .anexo-status { display:inline-flex; padding:3px 7px; border-radius:99px; background:rgba(0,217,163,.1); color:var(--wa-accent); border:1px solid rgba(0,217,163,.24); font-size:10.5px; font-weight:800; white-space:nowrap; }

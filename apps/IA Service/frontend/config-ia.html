@@ -62,6 +62,11 @@
     :root[data-theme="dark"] .test-result.ok   { background:rgba(74,222,128,.16);color:#a3ecc0; }
     :root[data-theme="dark"] .test-result.fail { background:rgba(248,113,113,.16);color:#f3b0b0; }
 
+    /* Aviso "somente leitura, editável na Platform" — mesmo padrão já usado
+       na aba Link de acesso, agora reaproveitado em Groq/OpenAI/Claude/
+       Gemini/Ordem de uso. */
+    .callout-readonly { background:var(--accent-glow);border:1px solid var(--accent);border-radius:var(--radius);padding:12px 14px;font-size:12.5px;color:var(--text-md);line-height:1.55;margin-bottom:16px; }
+
     /* Summary sidebar */
     .summary-grid  { display:flex;flex-direction:column;gap:10px; }
     .summary-item  { display:flex;flex-direction:column;gap:2px; }
@@ -120,12 +125,10 @@
         <div class="editor-actionbar">
           <div class="editor-actionbar-title">
             <strong>Configuração de IA</strong>
-            <span>Chaves de API, modelo por provedor, Agente Local e link de acesso.</span>
+            <span>Chaves e provedores agora são gerenciados na IAHub Platform. Aqui ficam Agente Local (próprio deste servidor) e o resumo de leitura.</span>
           </div>
           <div class="editor-actions">
             <button class="btn btn-ghost" type="button" id="ajuda-btn">Ajuda</button>
-            <button class="btn btn-ghost" type="button" id="descartar-btn">↺ Descartar</button>
-            <button class="btn btn-primary" type="button" id="salvar-topo-btn">Salvar configurações</button>
           </div>
         </div>
 
@@ -157,15 +160,19 @@
                       <div class="prov-desc" id="psub-groq">Alta velocidade, ideal para respostas rápidas em tempo real.</div>
                     </div>
                   </div>
+                  <div class="callout callout-readonly">
+                    Chave e modelo agora são configurados na <strong>IAHub Platform → Configurar IA → Groq</strong>.
+                    <a href="/app/ia-administracao/platform-config.html" style="color:var(--accent);font-weight:700;margin-left:4px">Abrir IAHub Platform ↗</a>
+                  </div>
                   <div class="form-group">
                     <label class="form-label">Chave de API (Groq)</label>
                     <div class="pass-wrap">
-                      <input type="password" id="f-groq" class="form-control" placeholder="gsk_…" oninput="atualizarResumo()">
+                      <input type="password" id="f-groq" class="form-control" placeholder="gsk_…" disabled>
                       <button type="button" class="btn-pass-toggle" id="toggle-groq" onclick="toggleKey('groq')" title="Mostrar/ocultar chave">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                       </button>
                     </div>
-                    <div class="form-hint">Obtida em console.groq.com → API Keys. Deixe em branco para manter a chave atual.</div>
+                    <div class="form-hint">Editável apenas na IAHub Platform.</div>
                     <div id="status-groq" style="margin-top:6px;font-size:12px"></div>
                     <div class="key-action">
                       <button class="btn btn-ghost" type="button" onclick="testarProvedor('groq')">Testar conexão</button>
@@ -174,10 +181,10 @@
                   </div>
                   <div class="form-group" style="margin-bottom:0">
                     <label class="form-label">Modelo</label>
-                    <select id="f-groq-modelo" class="form-control" onchange="atualizarResumo()">
+                    <select id="f-groq-modelo" class="form-control" disabled>
                       <option value="openai/gpt-oss-20b">openai/gpt-oss-20b — ⭐ Recomendado (menor custo)</option>
                     </select>
-                    <div class="form-hint">Modelo usado quando Groq for acionado (principal ou fallback).</div>
+                    <div class="form-hint">Editável apenas na IAHub Platform.</div>
                   </div>
                 </div>
               </div>
@@ -194,15 +201,19 @@
                       <div class="prov-desc" id="psub-openai">Modelos GPT da OpenAI. Usa gpt-4o-mini por padrão — alto desempenho e custo acessível.</div>
                     </div>
                   </div>
+                  <div class="callout callout-readonly">
+                    Chave e modelo agora são configurados na <strong>IAHub Platform → Configurar IA → OpenAI</strong>.
+                    <a href="/app/ia-administracao/platform-config.html" style="color:var(--accent);font-weight:700;margin-left:4px">Abrir IAHub Platform ↗</a>
+                  </div>
                   <div class="form-group">
                     <label class="form-label">Chave de API (OpenAI)</label>
                     <div class="pass-wrap">
-                      <input type="password" id="f-openai" class="form-control" placeholder="sk-…" oninput="atualizarResumo()">
+                      <input type="password" id="f-openai" class="form-control" placeholder="sk-…" disabled>
                       <button type="button" class="btn-pass-toggle" id="toggle-openai" onclick="toggleKey('openai')" title="Mostrar/ocultar chave">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                       </button>
                     </div>
-                    <div class="form-hint">Obtida em platform.openai.com → API Keys. Deixe em branco para manter a chave atual.</div>
+                    <div class="form-hint">Editável apenas na IAHub Platform.</div>
                     <div id="status-openai" style="margin-top:6px;font-size:12px"></div>
                     <div class="key-action">
                       <button class="btn btn-ghost" type="button" onclick="testarProvedor('openai')">Testar conexão</button>
@@ -211,10 +222,10 @@
                   </div>
                   <div class="form-group" style="margin-bottom:0">
                     <label class="form-label">Modelo</label>
-                    <select id="f-openai-modelo" class="form-control" onchange="atualizarResumo()">
+                    <select id="f-openai-modelo" class="form-control" disabled>
                       <option value="gpt-4o-mini">gpt-4o-mini — ⭐ Recomendado (menor custo)</option>
                     </select>
-                    <div class="form-hint">Modelo usado quando OpenAI for acionado (principal ou fallback).</div>
+                    <div class="form-hint">Editável apenas na IAHub Platform.</div>
                   </div>
                 </div>
               </div>
@@ -231,15 +242,19 @@
                       <div class="prov-desc" id="psub-claude">Fallback com suporte a análise de imagem (anexos).</div>
                     </div>
                   </div>
+                  <div class="callout callout-readonly">
+                    Chave e modelo agora são configurados na <strong>IAHub Platform → Configurar IA → Claude</strong>.
+                    <a href="/app/ia-administracao/platform-config.html" style="color:var(--accent);font-weight:700;margin-left:4px">Abrir IAHub Platform ↗</a>
+                  </div>
                   <div class="form-group">
                     <label class="form-label">Chave de API (Claude)</label>
                     <div class="pass-wrap">
-                      <input type="password" id="f-claude" class="form-control" placeholder="sk-ant-…" oninput="atualizarResumo()">
+                      <input type="password" id="f-claude" class="form-control" placeholder="sk-ant-…" disabled>
                       <button type="button" class="btn-pass-toggle" id="toggle-claude" onclick="toggleKey('claude')" title="Mostrar/ocultar chave">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                       </button>
                     </div>
-                    <div class="form-hint">Obtida em console.anthropic.com → API Keys. Deixe em branco para manter a chave atual.</div>
+                    <div class="form-hint">Editável apenas na IAHub Platform.</div>
                     <div id="status-claude" style="margin-top:6px;font-size:12px"></div>
                     <div class="key-action">
                       <button class="btn btn-ghost" type="button" onclick="testarProvedor('claude')">Testar conexão</button>
@@ -248,10 +263,10 @@
                   </div>
                   <div class="form-group" style="margin-bottom:0">
                     <label class="form-label">Modelo</label>
-                    <select id="f-claude-modelo" class="form-control" onchange="atualizarResumo()">
+                    <select id="f-claude-modelo" class="form-control" disabled>
                       <option value="claude-haiku-4-5-20251001">claude-haiku-4-5-20251001 — ⭐ Recomendado (menor custo)</option>
                     </select>
-                    <div class="form-hint">Modelo usado quando Claude for acionado (principal ou fallback).</div>
+                    <div class="form-hint">Editável apenas na IAHub Platform.</div>
                   </div>
                 </div>
               </div>
@@ -268,15 +283,19 @@
                       <div class="prov-desc" id="psub-gemini">Fallback com suporte a análise de imagem (anexos).</div>
                     </div>
                   </div>
+                  <div class="callout callout-readonly">
+                    Chave e modelo agora são configurados na <strong>IAHub Platform → Configurar IA → Gemini</strong>.
+                    <a href="/app/ia-administracao/platform-config.html" style="color:var(--accent);font-weight:700;margin-left:4px">Abrir IAHub Platform ↗</a>
+                  </div>
                   <div class="form-group">
                     <label class="form-label">Chave de API (Gemini)</label>
                     <div class="pass-wrap">
-                      <input type="password" id="f-gemini" class="form-control" placeholder="AIzaSy…" oninput="atualizarResumo()">
+                      <input type="password" id="f-gemini" class="form-control" placeholder="AIzaSy…" disabled>
                       <button type="button" class="btn-pass-toggle" id="toggle-gemini" onclick="toggleKey('gemini')" title="Mostrar/ocultar chave">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                       </button>
                     </div>
-                    <div class="form-hint">Obtida em aistudio.google.com → Get API Key. Deixe em branco para manter a chave atual.</div>
+                    <div class="form-hint">Editável apenas na IAHub Platform.</div>
                     <div id="status-gemini" style="margin-top:6px;font-size:12px"></div>
                     <div class="key-action">
                       <button class="btn btn-ghost" type="button" onclick="testarProvedor('gemini')">Testar conexão</button>
@@ -285,67 +304,38 @@
                   </div>
                   <div class="form-group" style="margin-bottom:0">
                     <label class="form-label">Modelo</label>
-                    <select id="f-gemini-modelo" class="form-control" onchange="atualizarResumo()">
+                    <select id="f-gemini-modelo" class="form-control" disabled>
                       <option value="gemini-3.5-flash">gemini-3.5-flash — ⭐ Recomendado (rápido, multimodal)</option>
                     </select>
-                    <div class="form-hint">Modelo usado quando Gemini for acionado (principal ou fallback).</div>
+                    <div class="form-hint">Editável apenas na IAHub Platform.</div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- ABA ORDEM DE USO -->
+            <!-- ABA ORDEM DE USO (somente leitura — edição migrada para a IAHub Platform) -->
             <div class="iac-tab-panel" id="aba-ordem">
               <div class="form-section">
                 <div class="form-section-header">
                   <div class="form-section-title">Ordem de uso</div>
-                  <div class="form-section-subtitle">Qual provedor tentar primeiro, e a ordem de fallback se ele falhar ou estiver sem chave.</div>
+                  <div class="form-section-subtitle">Qual provedor é tentado primeiro, e a ordem de fallback se ele falhar ou estiver sem chave.</div>
                 </div>
                 <div class="form-section-body">
+                  <div class="callout callout-readonly">
+                    Provedor primário e ordem de fallback agora são configurados na <strong>IAHub Platform → Configurar IA → Comportamento</strong>.
+                    <a href="/app/ia-administracao/platform-config.html" style="color:var(--accent);font-weight:700;margin-left:4px">Abrir IAHub Platform ↗</a>
+                  </div>
                   <div class="form-group">
                     <label class="form-label">Provedor primário</label>
-                    <select id="f-provedor-primario" class="form-control" style="max-width:420px" onchange="atualizarResumo()">
-                      <option value="groq">Groq — ⭐ Recomendado (mais rápido, menor custo)</option>
-                      <option value="openai">OpenAI — Alta qualidade, custo elevado</option>
-                      <option value="claude">Claude — Anthropic, raciocínio complexo</option>
-                      <option value="gemini">Gemini — Google, contexto amplo</option>
-                    </select>
-                    <div class="form-hint">O provedor primário é tentado primeiro; depois entra a ordem de fallback abaixo.</div>
+                    <input type="hidden" id="f-provedor-primario" value="groq">
+                    <div class="form-control" id="rs-ordem-primario-display" style="max-width:420px;background:var(--bg-hover);color:var(--text-md)">—</div>
+                    <div class="form-hint">Editável apenas na IAHub Platform.</div>
                   </div>
                   <div class="form-group" style="margin-bottom:0">
                     <label class="form-label">Ordem de fallback</label>
                     <input type="hidden" id="f-fallback-ordem" value="groq,openai,claude,gemini">
-                    <div class="fallback-presets">
-                      <div class="fallback-card fallback-card-selected" data-ordem="groq,openai,claude,gemini" onclick="selecionarPreset(this)">
-                        <div class="fallback-card-header"><span class="fallback-card-badge badge-groq">⭐ Recomendado</span></div>
-                        <div class="fallback-card-title">Econômico &amp; Rápido</div>
-                        <div class="fallback-card-seq">
-                          <span class="provider-chip chip-groq">Groq</span><span class="chain-arrow">→</span>
-                          <span class="provider-chip chip-openai">OpenAI</span><span class="chain-arrow">→</span>
-                          <span class="provider-chip chip-claude">Claude</span><span class="chain-arrow">→</span>
-                          <span class="provider-chip chip-gemini">Gemini</span>
-                        </div>
-                        <div class="fallback-card-desc">Groq como principal (rápido, custo baixo). Os demais entram em ordem se ele falhar ou estiver sem chave.</div>
-                      </div>
-                      <div class="fallback-card" data-ordem="groq,claude,openai,gemini" onclick="selecionarPreset(this)">
-                        <div class="fallback-card-header"><span class="fallback-card-badge badge-openai">🏆 Alta Qualidade</span></div>
-                        <div class="fallback-card-title">Máxima Qualidade</div>
-                        <div class="fallback-card-seq">
-                          <span class="provider-chip chip-groq">Groq</span><span class="chain-arrow">→</span>
-                          <span class="provider-chip chip-claude">Claude</span><span class="chain-arrow">→</span>
-                          <span class="provider-chip chip-openai">OpenAI</span><span class="chain-arrow">→</span>
-                          <span class="provider-chip chip-gemini">Gemini</span>
-                        </div>
-                        <div class="fallback-card-desc">Groq principal, Claude e OpenAI como fallback de alta qualidade. Ideal quando precisão é prioritária sobre custo.</div>
-                      </div>
-                      <div class="fallback-card fallback-card-custom" data-ordem="" onclick="selecionarPreset(this)">
-                        <div class="fallback-card-header"><span class="fallback-card-badge" style="background:var(--bg-hover);color:var(--text-lo)">⚙️ Personalizado</span></div>
-                        <div class="fallback-card-title">Customizado</div>
-                        <div class="fallback-card-desc">Defina manualmente a ordem digitando os provedores separados por vírgula.</div>
-                        <input id="fallback-custom-input" class="form-control" style="margin-top:8px;display:none" placeholder="groq,openai,claude,gemini" oninput="onCustomFallbackInput(this.value)">
-                        <div class="form-hint" style="margin-top:4px;display:none" id="fallback-custom-hint">Valores válidos: groq, openai, claude, gemini</div>
-                      </div>
-                    </div>
+                    <div class="fallback-card-seq" id="rs-ordem-fallback-display"></div>
+                    <div class="form-hint">Editável apenas na IAHub Platform.</div>
                   </div>
                 </div>
               </div>
@@ -362,39 +352,44 @@
                       <div class="prov-desc">Credenciais de conexão com o Agente Local instalado na rede do cliente — usado para consultar o SoftExpert (Base Histórica) via SELECT-only.</div>
                     </div>
                   </div>
+                  <div class="callout callout-readonly">
+                    URL, Token e Crypto Key agora são configurados na <strong>IAHub Platform → Configurar IA → Agente Local</strong>.
+                    <a href="/app/ia-administracao/platform-config.html" style="color:var(--accent);font-weight:700;margin-left:4px">Abrir IAHub Platform ↗</a>
+                  </div>
                   <div class="form-group">
                     <label class="form-label">URL</label>
-                    <input type="text" id="agente-url" class="form-control" placeholder="http://192.168.1.50:8765">
+                    <input type="text" id="agente-url" class="form-control" placeholder="http://192.168.1.50:8765" disabled>
                   </div>
                   <div class="form-group">
                     <label class="form-label">Token</label>
                     <div class="pass-wrap">
-                      <input type="password" id="agente-token" class="form-control" placeholder="Token de API do agente">
+                      <input type="password" id="agente-token" class="form-control" placeholder="Token de API do agente" disabled>
                       <button type="button" class="btn-pass-toggle" onclick="toggleAgenteTokenVisivel()" title="Mostrar/ocultar token">
                         <svg id="agente-token-icon-mostrar" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                         <svg id="agente-token-icon-ocultar" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                       </button>
                     </div>
+                    <div class="form-hint">Editável apenas na IAHub Platform.</div>
                   </div>
                   <div class="form-group">
-                    <label class="form-label"><input type="checkbox" id="agente-crypto-ativo"> Exigir criptografia (AES-256-GCM)</label>
+                    <label class="form-label"><input type="checkbox" id="agente-crypto-ativo" disabled> Exigir criptografia (AES-256-GCM)</label>
                   </div>
                   <div class="form-group" style="margin-bottom:0">
                     <label class="form-label">Chave de criptografia (crypto_key)</label>
                     <div class="pass-wrap">
-                      <input type="password" id="agente-crypto-key" class="form-control" placeholder="Mesma CRYPTO_KEY da tela local do agente">
+                      <input type="password" id="agente-crypto-key" class="form-control" placeholder="Mesma CRYPTO_KEY da tela local do agente" disabled>
                       <button type="button" class="btn-pass-toggle" onclick="toggleAgenteCryptoKeyVisivel()" title="Mostrar/ocultar chave">
                         <svg id="agente-crypto-key-icon-mostrar" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                         <svg id="agente-crypto-key-icon-ocultar" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                       </button>
                     </div>
+                    <div class="form-hint">Editável apenas na IAHub Platform.</div>
                   </div>
                   <div class="key-action">
                     <span class="form-hint" id="agente-status" style="margin:0"></span>
                   </div>
                   <div class="key-action">
                     <button class="btn btn-ghost" type="button" id="testar-agente-btn">Testar conexão</button>
-                    <button class="btn btn-primary" type="button" id="salvar-agente-btn">Salvar Agente Local</button>
                   </div>
                 </div>
               </div>
@@ -549,29 +544,6 @@
     }
   }
 
-  window.selecionarPreset = function (card) {
-    const jaSelecionado = card.classList.contains('fallback-card-selected');
-    document.querySelectorAll('.fallback-card').forEach(c => c.classList.remove('fallback-card-selected'));
-    card.classList.add('fallback-card-selected');
-    const isCustom = card.classList.contains('fallback-card-custom');
-    const customInput = $('fallback-custom-input');
-    const customHint = $('fallback-custom-hint');
-    customInput.style.display = isCustom ? '' : 'none';
-    customHint.style.display = isCustom ? '' : 'none';
-    if (!isCustom) {
-      $('f-fallback-ordem').value = card.dataset.ordem;
-      atualizarResumo();
-    } else {
-      if (!jaSelecionado) customInput.value = '';
-      customInput.focus();
-    }
-  };
-
-  window.onCustomFallbackInput = function (val) {
-    $('f-fallback-ordem').value = val.trim();
-    atualizarResumo();
-  };
-
   function atualizarLinkApelido() {
     const apelido = $('f-login-apelido').value.trim().toLowerCase();
     $('f-login-link').value = apelido
@@ -613,16 +585,28 @@
 
   function atualizarResumo() {
     const labels = { groq: 'Groq', openai: 'OpenAI', claude: 'Claude', gemini: 'Gemini' };
+    const chips = { groq: 'chip-groq', openai: 'chip-openai', claude: 'chip-claude', gemini: 'chip-gemini' };
     const prim = $('f-provedor-primario').value;
+    const fallback = $('f-fallback-ordem').value.trim();
     _atualizarBadgesProvedores(prim);
     $('rs-primario').textContent = labels[prim] || '—';
-    $('rs-fallback').textContent = $('f-fallback-ordem').value.trim() || '—';
+    $('rs-fallback').textContent = fallback || '—';
     PROVIDERS.forEach(p => {
       const configurada = $(`status-${p}`).classList.contains('key-ok');
       const modelo = $(`f-${p}-modelo`).value;
       $(`rs-${p}`).textContent = `${configurada ? '✓ configurada' : 'usando .env'} — ${modelo}`;
     });
     $('rs-link').textContent = $('f-login-link').value || '—';
+
+    const primDisplay = $('rs-ordem-primario-display');
+    if (primDisplay) primDisplay.textContent = labels[prim] || '—';
+    const fallbackDisplay = $('rs-ordem-fallback-display');
+    if (fallbackDisplay) {
+      const provedores = fallback ? fallback.split(',').map(s => s.trim()).filter(Boolean) : [];
+      fallbackDisplay.innerHTML = provedores.length
+        ? provedores.map((p, i) => `<span class="provider-chip ${chips[p] || ''}">${labels[p] || p}</span>${i < provedores.length - 1 ? '<span class="chain-arrow">→</span>' : ''}`).join('')
+        : '—';
+    }
   }
   window.atualizarResumo = atualizarResumo;
 
@@ -649,19 +633,6 @@
       $('f-provedor-primario').value = config.provedorPrimario || 'groq';
       $('f-fallback-ordem').value = config.fallbackOrdem || 'groq,openai,claude,gemini';
 
-      const cardMatch = document.querySelector(`.fallback-card[data-ordem="${$('f-fallback-ordem').value}"]`);
-      document.querySelectorAll('.fallback-card').forEach(c => c.classList.remove('fallback-card-selected'));
-      if (cardMatch) {
-        cardMatch.classList.add('fallback-card-selected');
-        $('fallback-custom-input').style.display = 'none';
-        $('fallback-custom-hint').style.display = 'none';
-      } else {
-        document.querySelector('.fallback-card-custom').classList.add('fallback-card-selected');
-        $('fallback-custom-input').style.display = '';
-        $('fallback-custom-hint').style.display = '';
-        $('fallback-custom-input').value = $('f-fallback-ordem').value;
-      }
-
       if (config.groqModelo) $('f-groq-modelo').value = config.groqModelo;
       if (config.openaiModelo) $('f-openai-modelo').value = config.openaiModelo;
       if (config.claudeModelo) $('f-claude-modelo').value = config.claudeModelo;
@@ -671,32 +642,6 @@
       atualizarResumo();
     } catch (err) {
       console.error('Não foi possível carregar a configuração:', err.message);
-    }
-  }
-
-  async function salvar() {
-    const empresaId = empresaIdAtual();
-    if (!empresaId) return;
-    const dados = {
-      empresa_id: empresaId,
-      provedorPrimario: $('f-provedor-primario').value,
-      fallbackOrdem: $('f-fallback-ordem').value.trim() || null,
-      groqApiKey: $('f-groq').value.trim() || null,
-      openaiApiKey: $('f-openai').value.trim() || null,
-      claudeApiKey: $('f-claude').value.trim() || null,
-      geminiApiKey: $('f-gemini').value.trim() || null,
-      groqModelo: $('f-groq-modelo').value,
-      openaiModelo: $('f-openai-modelo').value,
-      claudeModelo: $('f-claude-modelo').value,
-      geminiModelo: $('f-gemini-modelo').value,
-    };
-    try {
-      await api('/api/ia-service/config/ia', { method: 'PUT', body: JSON.stringify(dados) });
-      PROVIDERS.forEach(p => { $(`f-${p}`).value = ''; });
-      await carregar();
-      mostrarToast('✅ Configurações salvas!');
-    } catch (err) {
-      mostrarToast('✗ ' + err.message, true);
     }
   }
 
@@ -739,11 +684,6 @@
     setTimeout(() => { toast.style.transform = 'translateY(80px)'; toast.style.opacity = '0'; }, 2500);
   }
 
-  $('salvar-topo-btn').addEventListener('click', salvar);
-  $('descartar-btn').addEventListener('click', () => {
-    PROVIDERS.forEach(p => { $(`f-${p}`).value = ''; });
-    carregar();
-  });
   $('ajuda-btn').addEventListener('click', () => {
     (window.openTab || ((url) => window.open(url, '_blank')))('/app/ia-service/guia/index.html', 'Guia', '📘');
   });
@@ -826,28 +766,6 @@
     }
   };
 
-  async function salvarAgente() {
-    const empresaId = empresaIdAtual();
-    if (!empresaId) return;
-    try {
-      await api(`/api/ia-service/base-historica/agente-local?empresa_id=${empresaId}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          url: $('agente-url').value,
-          token: $('agente-token').value || undefined,
-          cryptoAtivo: $('agente-crypto-ativo').checked,
-          cryptoKey: $('agente-crypto-key').value || undefined,
-        }),
-      });
-      $('agente-token').value = '';
-      $('agente-crypto-key').value = '';
-      await carregarAgente();
-      mostrarToast('✅ Agente Local salvo!');
-    } catch (err) {
-      feedbackAgente('Não foi possível salvar: ' + err.message, false);
-    }
-  }
-
   async function testarAgente() {
     const empresaId = empresaIdAtual();
     if (!empresaId) return;
@@ -861,7 +779,6 @@
   }
 
   $('testar-agente-btn').addEventListener('click', testarAgente);
-  $('salvar-agente-btn').addEventListener('click', salvarAgente);
 
   window._iahubAuthReady?.then(() => { carregar(); carregarAgente(); }) ?? (carregar(), carregarAgente());
 })();
