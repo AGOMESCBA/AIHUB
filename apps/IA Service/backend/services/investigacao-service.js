@@ -90,7 +90,15 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
   }
 
   // Vincula os anexos deste turno à mensagem (eles já existem em `anexos`,
-  // criados pela rota de upload — aqui só associamos à mensagem correta).
+  // criados pela rota de upload ou pela sincronização automática do
+  // SoftExpert — aqui só associamos à mensagem correta). No modo manual, a
+  // mensagem do usuário já existe neste ponto; no modo automático (pré-
+  // análise do radar) não há mensagem de usuário, então o vínculo é feito
+  // mais abaixo, à mensagem do assistente que a IA está prestes a gerar —
+  // sem isso, os anexos sincronizados ficavam "soltos" no atendimento,
+  // visíveis só no resumo do cabeçalho do chat, nunca dentro da bolha da
+  // mensagem que de fato os usou na análise (bug reportado pelo usuário,
+  // 2026-09).
   const anexosDoTurno = anexoIds
     .map(id => anexoRepo.getAnexo(empresaId, id))
     .filter(Boolean);
@@ -181,6 +189,12 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     provider: resultado.provider,
     model: resultado.model,
   });
+
+  if (!mensagemUsuario) {
+    for (const anexo of anexosDoTurno) {
+      anexoRepo.vincularMensagem(empresaId, anexo.id, mensagemAssistente.id);
+    }
+  }
 
   // Se a IA produziu um fonte corrigido E há exatamente um anexo de código
   // neste turno para servir de "original", versiona automaticamente (seção 9

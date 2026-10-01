@@ -198,6 +198,14 @@
       transition:transform .15s ease, background .15s ease;
     }
     .chat-header-toggle:hover { background:rgba(255,255,255,.08); }
+    .chat-header-pesquisar {
+      flex:none; display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700;
+      border-radius:7px; border:1px solid var(--wa-border); background:rgba(0,217,163,.08);
+      color:var(--wa-accent); cursor:pointer; padding:6px 10px; white-space:nowrap;
+      transition:background .15s ease;
+    }
+    .chat-header-pesquisar:hover { background:rgba(0,217,163,.16); }
+    .chat-header-pesquisar:disabled { opacity:.5; cursor:not-allowed; }
     .chat-header-detalhes { overflow:hidden; max-height:300px; transition:max-height .2s ease, opacity .15s ease, margin-top .2s ease; opacity:1; }
     .chat-header.recolhido .chat-header-detalhes { max-height:0; opacity:0; }
     .chat-header.recolhido .chat-header-toggle { transform:rotate(-90deg); }
@@ -483,6 +491,7 @@
                     <div class="chat-header-titulo" id="chat-header-titulo">—</div>
                     <div class="chat-header-linha" id="chat-header-linha"></div>
                   </div>
+                  <button class="chat-header-pesquisar" id="chat-header-pesquisar" type="button" title="Reenvia todo o histórico e anexos do chamado para a IA buscar uma nova solução" onclick="pesquisarSolucoes()">🔎 Pesquisar Soluções</button>
                   <button class="chat-header-toggle" id="chat-header-toggle" type="button" title="Recolher detalhes" onclick="toggleChatHeader()">▾</button>
                 </div>
                 <div class="chat-header-detalhes" id="chat-header-detalhes">
@@ -1729,6 +1738,41 @@
         addBubble({ direcao: 'in', texto: 'Não foi possível concluir a análise: ' + err.message });
       } finally {
         enviando = false;
+      }
+    }
+
+    const TEXTO_PESQUISAR_SOLUCOES = 'Revise todo o histórico deste chamado e os anexos sincronizados (abertura, posicionamentos e conversas anteriores) e pesquise uma nova solução — considere o que já foi tentado e descarte hipóteses já descartadas, buscando um diagnóstico ou próximo passo diferente do que já foi sugerido.';
+
+    // Reenvia TODO o histórico (sempre incluído pelo backend em qualquer
+    // turno) + TODOS os anexos já sincronizados do atendimento (não só os
+    // do último turno) — pedido do usuário, 2026-09: dar à IA o máximo de
+    // contexto real disponível para uma segunda tentativa de diagnóstico,
+    // não só o resumo em texto que ela mesma escreveu da primeira vez.
+    async function pesquisarSolucoes() {
+      if (enviando || !atendimentoAtualId) return;
+      const empresaId = empresaIdAtual();
+      const btn = document.getElementById('chat-header-pesquisar');
+
+      addBubble({ direcao: 'out', texto: TEXTO_PESQUISAR_SOLUCOES });
+      showTyping();
+      enviando = true;
+      if (btn) btn.disabled = true;
+
+      try {
+        const qs = qsEmpresa(empresaId);
+        const anexoIds = anexosAtendimentoCache.map(a => a.id);
+        const resposta = await api(`/atendimentos/${atendimentoAtualId}/investigar${qs ? '?' + qs : ''}`, {
+          method: 'POST',
+          body: JSON.stringify({ texto: TEXTO_PESQUISAR_SOLUCOES, anexoIds }),
+        });
+        hideTyping();
+        addBubble({ direcao: 'in', texto: resposta.conteudo, diagnostico: resposta.diagnostico, nivelConfianca: resposta.nivelConfianca, perguntaContexto: TEXTO_PESQUISAR_SOLUCOES });
+      } catch (err) {
+        hideTyping();
+        addBubble({ direcao: 'in', texto: 'Não foi possível concluir a nova pesquisa: ' + err.message });
+      } finally {
+        enviando = false;
+        if (btn) btn.disabled = false;
       }
     }
 
