@@ -1223,8 +1223,19 @@
 
     function abrirGradeAnexosChamado() {
       const abertura = anexosSoftExpertCache.filter(a => a.origem === 'chamado' || a.origem === 'anexo');
-      const outros = anexosSoftExpertCache.filter(a => a.origem !== 'chamado' && a.origem !== 'anexo');
+      const outrosBruto = anexosSoftExpertCache.filter(a => a.origem !== 'chamado' && a.origem !== 'anexo');
       const baseAbertura = abertura.length ? abertura : anexosSoftExpertCache;
+
+      // O SoftExpert pode listar o MESMO arquivo físico tanto na origem
+      // "chamado/anexo" quanto em "posicionamentos" (ex.: foto anexada na
+      // abertura e referenciada de novo num posicionamento). Sem este
+      // filtro, montarLinhasAnexosUnificado deduplica dentro de cada seção
+      // separadamente, mas o mesmo nome aparecia duplicado ENTRE as seções
+      // "Abertura do chamado" e "Posicionamentos/conversas" — bug reportado
+      // pelo usuário, 2026-10. Abertura tem prioridade de exibição; qualquer
+      // nome já mostrado ali é removido de "outros".
+      const nomesAbertura = new Set(baseAbertura.map(a => a.nome || a.nomeOriginal).filter(Boolean));
+      const outros = outrosBruto.filter(a => !nomesAbertura.has(a.nome || a.nomeOriginal));
 
       // Anexo local só entra como "correspondência" de uma linha do
       // SoftExpert — reservado aqui para não duplicar entre Abertura e

@@ -171,11 +171,13 @@ function _erroCotaOuCredito(msg) {
 async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts = {}) {
   const ordem = _normalizarOrdem(cfg);
   const erros = [];
+  let tentados = 0;
 
   for (const provedor of ordem) {
     if (!keys?.[provedor]) continue;
     if (imagens.length && !PROVIDER_CONFIGS[provedor].suportaImagem) continue;
 
+    tentados += 1;
     const modeloDoProvedor = cfg?.modelos?.[provedor] || opts.model || PROVIDER_CONFIGS[provedor].model;
     try {
       const resultado = await chamarProvedor(provedor, keys[provedor], systemPrompt, userPrompt, imagens, { ...opts, model: modeloDoProvedor });
@@ -186,13 +188,24 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
   }
 
   const semChave = !ordem.some(p => keys?.[p]);
+  // Distingue "ninguém foi sequer tentado por falta de suporte a imagem" de
+  // "todos tentaram e falharam" — são causas diferentes e exigem ação
+  // diferente do analista (configurar um provedor com visão vs. investigar
+  // erro de API). Sem essa distinção, o erro genérico "todos falharam"
+  // escondia que, na prática, zero chamadas tinham sido feitas (bug real:
+  // turno com imagens e só Groq/DeepSeek configurados nunca tentava
+  // nenhum provedor, usuário via erro sem entender a causa, 2026-10).
+  const semProvedorComImagem = imagens.length > 0 && !semChave && tentados === 0;
   const cotaEsgotada = erros.length > 0 && erros.every(e => _erroCotaOuCredito(e.msg));
   const erroFinal = new Error(
     semChave
       ? 'Nenhum provider de IA configurado para esta empresa.'
-      : `Todos os providers falharam: ${erros.map(e => `${e.provedor}: ${e.msg}`).join(' | ')}`
+      : semProvedorComImagem
+        ? `Nenhum provider configurado com chave suporta análise de imagem (necessário para ${imagens.length} anexo(s) deste turno). Configure uma chave para OpenAI, Claude ou Gemini em Configurações do IA Service.`
+        : `Todos os providers falharam: ${erros.map(e => `${e.provedor}: ${e.msg}`).join(' | ')}`
   );
   erroFinal._semChave = semChave;
+  erroFinal._semProvedorComImagem = semProvedorComImagem;
   erroFinal._cotaEsgotada = cotaEsgotada;
   throw erroFinal;
 }

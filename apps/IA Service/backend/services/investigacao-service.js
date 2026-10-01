@@ -144,7 +144,18 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     pesquisaTecnicaTexto,
   });
 
+  // Carrega as imagens do turno do disco. Decisão explícita do usuário,
+  // 2026-10: imagem anexada NUNCA pode ser ignorada silenciosamente — antes,
+  // uma falha de leitura só gerava um console.warn e o turno seguia como se
+  // nada tivesse acontecido, produzindo uma resposta "normal" que na
+  // verdade nunca viu a foto (achado real: chamado com 7 fotos de
+  // WhatsApp recebeu diagnóstico genérico). Agora: falha de leitura ou
+  // buffer corrompido (tamanho gravado ≠ tamanho lido) interrompe o turno
+  // ANTES de chamar a IA — nunca gera uma resposta fingindo análise
+  // completa. O analista vê o erro e tenta de novo, em vez de confiar
+  // silenciosamente numa análise capenga.
   const imagens = [];
+  const falhasImagem = [];
   for (const anexo of anexosImagemDoTurno) {
     const fs = require('fs');
     const path = require('path');
@@ -152,21 +163,37 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     try {
       const caminhoAbsoluto = path.join(armazenamento.ANEXOS_DIR, anexo.caminhoRelativo);
       const buffer = fs.readFileSync(caminhoAbsoluto);
+      if (!buffer.length || (anexo.tamanho && buffer.length !== anexo.tamanho)) {
+        throw new Error(`Arquivo lido com tamanho inconsistente (esperado ${anexo.tamanho ?? '?'} bytes, lido ${buffer.length} bytes).`);
+      }
       imagens.push({ mimeType: anexo.mimeType, base64: buffer.toString('base64') });
     } catch (err) {
-      // Se o arquivo não puder ser lido, segue sem essa imagem — não derruba
-      // o turno inteiro por causa de um anexo problemático.
-      console.warn('[IA Service] Falha ao ler anexo de imagem para análise:', anexo.id, err.message);
+      console.error('[IA Service] Falha ao ler anexo de imagem para análise:', anexo.id, anexo.nomeOriginal, err.message);
+      falhasImagem.push(anexo.nomeOriginal || anexo.id);
     }
+  }
+  if (falhasImagem.length > 0) {
+    const mensagemErro = `Não foi possível carregar ${falhasImagem.length} imagem(ns) anexada(s) para análise (${falhasImagem.join(', ')}) — a investigação foi interrompida para não gerar um diagnóstico sem considerar essas evidências. Tente novamente; se persistir, reenvie o(s) arquivo(s).`;
+    return mensagemRepo.salvarMensagem(empresaId, atendimentoId, { papel: 'assistant', conteudo: mensagemErro, usuarioId: null });
   }
 
   const { keys, cfg } = aiConfigService.resolverKeysEOrdem(empresaId);
+
+  // Timeout escalado pelo volume de imagens — payload maior (base64 de N
+  // fotos) leva mais tempo de upload + processamento do lado do provedor.
+  // Com timeout fixo, turnos com várias imagens (ex.: 7 fotos de WhatsApp)
+  // arriscavam estourar o prazo, cair no provedor seguinte do fallback (que
+  // pode não suportar imagem) e seguir SEM nunca ter analisado as fotos —
+  // silenciosamente, sem erro visível. Decisão do usuário, 2026-10: anexo
+  // de imagem nunca pode ser ignorado, então o timeout precisa ser realista
+  // para o volume real do turno.
+  const timeoutMs = 45000 + imagens.length * 15000;
 
   let resultado;
   try {
     resultado = await aiProviderClient.chamarIA(keys, cfg, promptBuilder.SYSTEM_PROMPT, userPrompt, imagens, {
       maxTokens: 6000,
-      timeoutMs: 45000,
+      timeoutMs,
     });
   } catch (erro) {
     // Mensagem de erro registrada como turno do assistente, para o analista
