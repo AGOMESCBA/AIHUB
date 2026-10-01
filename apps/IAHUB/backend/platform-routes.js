@@ -141,6 +141,22 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
     res.json(mapAi(getAiRow(empresaId(req))));
   });
 
+  // Revela as 5 chaves de API (Groq/OpenAI/Gemini/DeepSeek/Claude) já
+  // salvas em texto puro — mesmo padrão e justificativa do botão "olhinho"
+  // do Agente Local (GET /agent-config/reveal abaixo): ação explícita sob
+  // clique do admin, nunca incluída no GET normal de status acima (que só
+  // indica "configurado: true/false", nunca o valor). Faltava esta rota —
+  // os botões de revelar nas abas Groq/OpenAI/Gemini/DeepSeek/Claude não
+  // tinham de onde buscar o valor salvo (bug reportado pelo usuário, 2026-10).
+  app.get('/api/iahub/platform/ai-config/reveal', requireAuth, requireAdmin, requireEmpresa, (req, res) => {
+    const row = getAiRow(empresaId(req));
+    const out = {};
+    for (const p of PROVIDERS) {
+      out[p] = row ? decrypt(row[`${p}_api_key_enc`]) : '';
+    }
+    res.json(out);
+  });
+
   app.post('/api/iahub/platform/ai-config', requireAuth, requireAdmin, requireEmpresa, (req, res) => {
     const eid = empresaId(req);
     const atual = getAiRow(eid);
@@ -207,6 +223,14 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
     res.json(mapAi(getAiRow(eid)));
   });
 
+  // Teste de conexão genérico — ANTES reaproveitava classificarIntencao do
+  // IA Command, pedindo pro provedor classificar uma pergunta financeira
+  // dentro das categorias de intenção do Protheus. A chave até funcionava,
+  // mas o resultado ("intencao: desconhecido, confianca: 0") confundia o
+  // usuário, pois não fazia sentido fora daquele domínio (bug reportado,
+  // 2026-10). Agora só valida se a chave responde, com um prompt mínimo —
+  // mesmo mecanismo (ai-provider-client.chamarProvedor) já usado pelo
+  // próprio teste de conexão do IA Service.
   app.post('/api/iahub/platform/ai-config/test', requireAuth, requireAdmin, requireEmpresa, async (req, res) => {
     const provedor = PROVIDERS.includes(req.body?.provedor) ? req.body.provedor : 'groq';
     const row = getAiRow(empresaId(req));
@@ -214,14 +238,10 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
     const apiKey = String(req.body?.api_key || '').trim() || decrypt(row?.[field]);
     if (!apiKey) return res.status(400).json({ ok: false, erro: 'Informe uma chave ou salve uma chave para este provedor.' });
     try {
-      const msg = 'Qual o faturamento deste mes?';
-      let result;
-      if (provedor === 'gemini') result = await require('../../IA Command/modules/ai/providers/gemini').classificarIntencao(msg, apiKey, [], [], null, row?.gemini_modelo);
-      else if (provedor === 'deepseek') result = await require('../../IA Command/modules/ai/providers/deepseek').classificarIntencao(msg, apiKey);
-      else if (provedor === 'claude') result = await require('../../IA Command/modules/ai/providers/claude').classificarIntencao(msg, apiKey, [], [], null, row?.claude_modelo);
-      else if (provedor === 'openai') result = await require('../../IA Command/modules/ai/providers/openai').classificarIntencao(msg, apiKey);
-      else result = await require('../../IA Command/modules/ai/providers/groq').classificarIntencao(msg, apiKey);
-      res.json({ ok: true, intencao: result?.intencao || null, confianca: result?.confianca ?? null });
+      const aiProviderClient = require('../../IA Service/backend/services/ai-provider-client');
+      const modelo = row?.[`${provedor}_modelo`] || null;
+      await aiProviderClient.chamarProvedor(provedor, apiKey, 'Você é um assistente de teste.', 'Responda apenas OK.', [], { model: modelo, maxTokens: 10, timeoutMs: 15000 });
+      res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ ok: false, erro: err.message || 'Falha ao testar provedor.' });
     }
