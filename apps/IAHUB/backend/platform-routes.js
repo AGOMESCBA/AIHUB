@@ -240,6 +240,19 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
     } : {});
   });
 
+  // Revela o Token/Crypto Key JÁ SALVOS em texto puro — mesmo padrão e
+  // justificativa já usados em agente-local-service.getTokenRevelado do IA
+  // Service (botão "olhinho" da tela, ação explícita sob clique do admin,
+  // nunca incluído no GET normal acima). Exige requireAdmin (diferente do
+  // GET de status, que qualquer usuário da empresa pode ver).
+  app.get('/api/iahub/platform/agent-config/reveal', requireAuth, requireAdmin, requireEmpresa, (req, res) => {
+    const row = getAgentRow(empresaId(req));
+    res.json({
+      agenteLocalToken: row ? decrypt(row.agente_local_token_enc) : '',
+      agenteLocalCryptoKey: row ? decrypt(row.agente_local_crypto_key_enc) : '',
+    });
+  });
+
   app.post('/api/iahub/platform/agent-config', requireAuth, requireAdmin, requireEmpresa, (req, res) => {
     const eid = empresaId(req);
     const atual = getAgentRow(eid);

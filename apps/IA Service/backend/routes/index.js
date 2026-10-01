@@ -772,6 +772,24 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
+  // Força a sincronização (download + extração de texto) de qualquer anexo
+  // do SoftExpert ainda não baixado para este atendimento — usado pelo botão
+  // "Pesquisar Soluções" antes de reenviar tudo para a IA (pedido do
+  // usuário, 2026-10: garantir que nenhum anexo do chamado fique de fora da
+  // nova análise, mesmo que a pré-análise automática nunca tenha rodado
+  // para ele). Mesmo service já usado internamente pela pré-análise.
+  app.post('/api/ia-service/radar/chamados/:chamadoId/anexos-softexpert/sincronizar', async (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const { atendimentoId } = req.body || {};
+      if (!atendimentoId) return res.status(400).json({ error: 'atendimentoId é obrigatório.' });
+      const sincronizados = await anexosSoftExpertService.sincronizarAnexosParaAtendimento(empresaId, req.params.chamadoId, atendimentoId);
+      res.json({ sincronizados: sincronizados.length });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   app.put('/api/ia-service/radar/config', (req, res) => {
     try {
       const empresaId = req.svcEmpresaId;

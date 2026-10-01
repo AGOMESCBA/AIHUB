@@ -11,6 +11,7 @@ const radarRepo = require('../repositories/radar-repository');
 const radarConfigRepo = require('../repositories/radar-config-repository');
 const investigacaoService = require('./investigacao-service');
 const anexosSoftExpertService = require('./anexos-softexpert-service');
+const anexoRepo = require('../repositories/anexo-repository');
 
 const SISTEMA_ORIGEM_PADRAO = 'softexpert';
 const AUTO_REFRESH_PADRAO_SEGUNDOS = 60;
@@ -271,9 +272,19 @@ function _dispararPreAnaliseEmBackground(empresaId, chamado, atendimento, { cham
       console.error(`[IA Service] Sincronização de anexos do SoftExpert falhou (chamado ${chamado.numero}):`, err.message);
       return [];
     })
-    .then((anexosSincronizados = []) => {
+    .then(() => {
       if (!preAnaliseHabilitada) return;
-      const anexoIds = anexosSincronizados.map(a => a.id).filter(Boolean);
+      // sincronizarAnexosParaAtendimento devolve só os anexos BAIXADOS NESTA
+      // execução (filtra os já sincronizados antes, para não duplicar
+      // download/extração) — usar esse retorno como anexoIds da IA fazia a
+      // pré-análise esquecer qualquer anexo já baixado em uma tentativa
+      // anterior (ex.: reabertura do chamado, ou anexo já visto no modal),
+      // mesmo com o conteúdo pronto no banco (bug real reportado pelo
+      // usuário, 2026-10: log de erro anexado na abertura nunca chegou à
+      // IA porque já tinha sido sincronizado antes da pré-análise rodar).
+      // Busca TODOS os anexos já no atendimento, não só os novos.
+      const todosAnexos = anexoRepo.listarAnexos(empresaId, atendimento.id);
+      const anexoIds = todosAnexos.map(a => a.id).filter(Boolean);
       investigacaoService.processarPreAnalise(empresaId, atendimento.id, { anexoIds }).catch(err => {
         console.error(`[IA Service] Pré-análise automática (abertura no radar) falhou (chamado ${chamado.numero}):`, err.message);
       });

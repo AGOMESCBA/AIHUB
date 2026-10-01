@@ -165,7 +165,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
   let resultado;
   try {
     resultado = await aiProviderClient.chamarIA(keys, cfg, promptBuilder.SYSTEM_PROMPT, userPrompt, imagens, {
-      maxTokens: 4000,
+      maxTokens: 6000,
       timeoutMs: 45000,
     });
   } catch (erro) {
@@ -177,13 +177,24 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     return mensagemRepo.salvarMensagem(empresaId, atendimentoId, { papel: 'assistant', conteudo: mensagemErro, usuarioId: null });
   }
 
-  const secoes = _extrairSecoes(resultado.texto);
-  const nivelConfianca = _extrairNivelConfianca(resultado.texto);
+  // Nenhum dos 3 provedores informa de forma óbvia quando a resposta foi
+  // cortada por limite de tamanho (finish_reason='length'/stop_reason=
+  // 'max_tokens'/finishReason='MAX_TOKENS', capturado em ai-provider-client.js
+  // e devolvido como resultado.truncado) — sem avisar, o analista via uma
+  // frase cortada no meio sem explicação (bug real reportado pelo usuário,
+  // 2026-10). Aviso anexado ao próprio texto salvo, não só logado, para
+  // aparecer na bolha do chat.
+  const textoFinal = resultado.truncado
+    ? `${resultado.texto}\n\n⚠️ *Resposta cortada pelo limite de tamanho da IA — peça para "continuar" ou reformule de forma mais objetiva.*`
+    : resultado.texto;
+
+  const secoes = _extrairSecoes(textoFinal);
+  const nivelConfianca = _extrairNivelConfianca(textoFinal);
   const fonteCorrigidoTexto = _extrairFonteCorrigido(secoes);
 
   const mensagemAssistente = mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
     papel: 'assistant',
-    conteudo: resultado.texto,
+    conteudo: textoFinal,
     diagnostico: secoes,
     nivelConfianca,
     provider: resultado.provider,

@@ -118,6 +118,18 @@ module.exports = function registrarRotasLoginExterno(app) {
     res.sendFile(require('path').join(__dirname, '..', '..', 'frontend', 'radar.html'));
   });
 
+  // Mesmo HTML de /radar-externo, só com o apelido refletido na URL por
+  // clareza visual pós-login (pedido do usuário, 2026-10: evitar que a URL
+  // vire genérica depois de entrar, já que a tela de login mostra o apelido
+  // mas o chat não). O apelido aqui é só cosmético — não é lido nem validado
+  // nesta rota, a empresa real e o isolamento entre clientes continuam
+  // vindo 100% do token x-sessao-externa a cada chamada de API, nunca da URL.
+  app.get('/radar-externo/:apelido', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.sendFile(require('path').join(__dirname, '..', '..', 'frontend', 'radar.html'));
+  });
+
   app.post('/api/ia-service-publico/login/iniciar', rateLimitLoginExterno, async (req, res) => {
     let resultado;
     try {

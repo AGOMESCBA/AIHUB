@@ -89,7 +89,7 @@ async function _chamarOpenAICompat(cfg, apiKey, systemPrompt, userPrompt, imagen
 
   const parsed = await _httpPost(cfg.hostname, cfg.path, { Authorization: `Bearer ${apiKey}` }, body, opts.timeoutMs);
   const content = parsed.choices?.[0]?.message?.content;
-  return { texto: _normalizarTexto(content, 'OpenAI-compat'), usage: parsed.usage || {} };
+  return { texto: _normalizarTexto(content, 'OpenAI-compat'), usage: parsed.usage || {}, truncado: parsed.choices?.[0]?.finish_reason === 'length' };
 }
 
 async function _chamarAnthropic(cfg, apiKey, systemPrompt, userPrompt, imagens, opts = {}) {
@@ -115,7 +115,7 @@ async function _chamarAnthropic(cfg, apiKey, systemPrompt, userPrompt, imagens, 
     opts.timeoutMs
   );
   const content = Array.isArray(parsed.content) ? parsed.content.map(c => c.text || '').join('\n') : parsed.content?.[0]?.text;
-  return { texto: _normalizarTexto(content, 'Anthropic'), usage: parsed.usage || {} };
+  return { texto: _normalizarTexto(content, 'Anthropic'), usage: parsed.usage || {}, truncado: parsed.stop_reason === 'max_tokens' };
 }
 
 async function _chamarGemini(cfg, apiKey, systemPrompt, userPrompt, imagens, opts = {}) {
@@ -131,7 +131,7 @@ async function _chamarGemini(cfg, apiKey, systemPrompt, userPrompt, imagens, opt
 
   const parsed = await _httpPost(cfg.hostname, path, {}, body, opts.timeoutMs);
   const content = parsed.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('\n');
-  return { texto: _normalizarTexto(content, 'Gemini'), usage: parsed.usageMetadata || {} };
+  return { texto: _normalizarTexto(content, 'Gemini'), usage: parsed.usageMetadata || {}, truncado: parsed.candidates?.[0]?.finishReason === 'MAX_TOKENS' };
 }
 
 async function chamarProvedor(provedor, apiKey, systemPrompt, userPrompt, imagens, opts = {}) {

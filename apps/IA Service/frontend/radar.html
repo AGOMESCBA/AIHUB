@@ -324,14 +324,17 @@
     .anexos-grid td:last-child { border-right:1px solid var(--wa-border); border-radius:0 8px 8px 0; }
     /* Sem isso, o navegador aplica o fundo branco padrão de seleção/foco de
        texto na linha, ilegível sobre o tema escuro (bug reportado pelo
-       usuário, 2026-10). */
-    .anexos-grid tr:hover td { background:rgba(255,255,255,.07); }
-    .anexos-grid tr:focus-within td { background:rgba(0,217,163,.1); }
-    .anexos-grid tr:active td { background:rgba(0,217,163,.14); }
-    .anexos-grid td::selection, .anexos-grid td *::selection { background:rgba(0,217,163,.3); color:var(--wa-text); }
+       usuário, 2026-10) — azul claro translúcido em vez de cinza/branco,
+       por pedido explícito do usuário, para destacar melhor a linha
+       selecionada/em foco. */
+    .anexos-grid tr:hover td { background:rgba(96,165,250,.12); }
+    .anexos-grid tr:focus-within td { background:rgba(96,165,250,.22); }
+    .anexos-grid tr:active td { background:rgba(96,165,250,.3); }
+    .anexos-grid td::selection, .anexos-grid td *::selection { background:rgba(96,165,250,.4); color:var(--wa-text); }
     .anexo-nome { font-weight:800; color:var(--wa-text); word-break:break-word; }
     .anexo-meta { color:var(--wa-text-tertiary); font-size:11px; margin-top:3px; }
     .anexo-status { display:inline-flex; padding:3px 7px; border-radius:99px; background:rgba(0,217,163,.1); color:var(--wa-accent); border:1px solid rgba(0,217,163,.24); font-size:10.5px; font-weight:800; white-space:nowrap; }
+    .anexo-status-ia { margin-left:5px; background:rgba(99,102,241,.12); color:#a5b4fc; border-color:rgba(99,102,241,.3); }
     .anexo-acao { border:1px solid var(--wa-border); border-radius:7px; background:rgba(255,255,255,.04); color:var(--wa-text-secondary); font-size:11px; font-weight:800; padding:6px 8px; cursor:pointer; white-space:nowrap; }
     .anexo-acao:hover { color:var(--wa-accent); border-color:rgba(0,217,163,.32); }
     /* Aba Detalhes do Chamado — cada categoria é um CARD visual distinto
@@ -392,7 +395,7 @@
 </head>
 <body>
   <script>
-    if (location.pathname === '/radar-externo' || location.pathname === '/app/ia-service/chat') {
+    if (/^\/radar-externo(\/|$)/.test(location.pathname) || location.pathname === '/app/ia-service/chat') {
       document.body.classList.add('tela-cheia');
     }
   </script>
@@ -596,7 +599,11 @@
     // seria expulso da tela antes do JS abaixo rodar).
     const TOKEN_EXTERNO_KEY = 'svc_token_externo';
     const LOGIN_APELIDO_KEY = 'svc_login_apelido';
-    const modoExterno = location.pathname === '/radar-externo';
+    // /radar-externo/:apelido (2026-10) é o mesmo modo externo de
+    // /radar-externo puro — o apelido na URL é só cosmético (refletido pós-
+    // login para não ficar genérica), nunca lido/validado aqui; a resolução
+    // de empresa continua 100% pelo tokenExterno abaixo.
+    const modoExterno = /^\/radar-externo(\/|$)/.test(location.pathname);
     const modoTelaCheia = modoExterno || location.pathname === '/app/ia-service/chat';
     const tokenExterno = modoExterno ? localStorage.getItem(TOKEN_EXTERNO_KEY) : null;
 
@@ -1108,8 +1115,10 @@
         const referencia = [a.referenciaAutor, a.referenciaData ? formatarData(a.referenciaData) : null].filter(Boolean).join(' · ');
         const meta = [tipo, tamanho, referencia].filter(Boolean).join(' · ');
         const acao = fonte === 'softexpert'
-          ? `<button class="anexo-acao" type="button" onclick="abrirAnexoSoftExpert('${chamadoSelecionadoId}', '${encodeURIComponent(a.oid)}')">Abrir</button>`
-          : `<button class="anexo-acao" type="button" onclick="abrirAnexoLocal('${a.id}')">Abrir</button>`;
+          ? `<button class="anexo-acao" type="button" onclick="abrirAnexoSoftExpert('${chamadoSelecionadoId}', '${encodeURIComponent(a.oid)}')">Abrir</button>
+             <button class="anexo-acao" type="button" onclick="baixarAnexoSoftExpert('${chamadoSelecionadoId}', '${encodeURIComponent(a.oid)}', '${escapeHtml(nome)}')">Baixar</button>`
+          : `<button class="anexo-acao" type="button" onclick="abrirAnexoLocal('${a.id}')">Abrir</button>
+             <button class="anexo-acao" type="button" onclick="baixarAnexoLocal('${a.id}', '${escapeHtml(nome)}')">Baixar</button>`;
         return `
           <tr>
             <td><div class="anexo-nome">${escapeHtml(nome)}</div>${meta ? `<div class="anexo-meta">${escapeHtml(meta)}</div>` : ''}</td>
@@ -1123,6 +1132,79 @@
         <table class="anexos-grid">
           <thead><tr><th>Arquivo</th><th>Origem</th><th>Status</th><th>Ação</th></tr></thead>
           <tbody>${linhas}</tbody>
+        </table>
+      `;
+    }
+
+    // Une a lista "ao vivo" do SoftExpert com a lista local (baixada/
+    // processada pelo IA Service) por nome de arquivo — pedido do usuário,
+    // 2026-10: antes as duas apareciam como seções separadas mostrando o
+    // MESMO arquivo duas vezes (confuso), sem deixar claro que "Baixado
+    // para IA" é só uma cópia processada do que já está em "Abertura".
+    // Prioriza a ação de abrir via SoftExpert (fonte sempre disponível,
+    // vs. cópia local que pode ter sido limpa) e acrescenta um badge
+    // "✓ Analisado pela IA" quando há correspondência local com conteúdo
+    // extraído, sem duplicar a linha.
+    function montarLinhasAnexosUnificado(anexosSoft, anexosLocais) {
+      const todos = [...anexosSoft, ...anexosLocais];
+      if (!todos.length) {
+        return '<div class="pesquisa-empty">Nenhum anexo encontrado para este contexto.</div>';
+      }
+      const porNome = new Map();
+      for (const a of anexosLocais) {
+        const nome = a.nome || a.nomeOriginal || '';
+        if (nome) porNome.set(nome, a);
+      }
+
+      const vistos = new Set();
+      const linhas = anexosSoft.map((a, i) => {
+        const nome = a.nome || a.nomeOriginal || `Anexo ${i + 1}`;
+        vistos.add(nome);
+        const local = porNome.get(nome);
+        const origem = origemAnexoLabel(a.origem);
+        const tamanho = formatarTamanho(a.tamanho);
+        const tipo = a.extensao || a.mimeType || '';
+        const referencia = [a.referenciaAutor, a.referenciaData ? formatarData(a.referenciaData) : null].filter(Boolean).join(' · ');
+        const meta = [tipo, tamanho, referencia].filter(Boolean).join(' · ');
+        const badgeIa = local ? `<span class="anexo-status anexo-status-ia">${local.conteudoExtraido ? '✓ Analisado pela IA' : '✓ Baixado para IA'}</span>` : '';
+        const acao = `<button class="anexo-acao" type="button" onclick="abrirAnexoSoftExpert('${chamadoSelecionadoId}', '${encodeURIComponent(a.oid)}')">Abrir</button>
+          <button class="anexo-acao" type="button" onclick="baixarAnexoSoftExpert('${chamadoSelecionadoId}', '${encodeURIComponent(a.oid)}', '${escapeHtml(nome)}')">Baixar</button>`;
+        return `
+          <tr>
+            <td><div class="anexo-nome">${escapeHtml(nome)}</div>${meta ? `<div class="anexo-meta">${escapeHtml(meta)}</div>` : ''}</td>
+            <td>${escapeHtml(origem)}</td>
+            <td><span class="anexo-status">Na origem</span>${badgeIa}</td>
+            <td>${acao}</td>
+          </tr>
+        `;
+      });
+
+      // Anexos SÓ locais (ex.: enviados manualmente pelo analista no chat,
+      // sem equivalente no SoftExpert) — continuam aparecendo, sem duplicar
+      // o que já foi listado acima por nome.
+      for (const a of anexosLocais) {
+        const nome = a.nome || a.nomeOriginal || '';
+        if (nome && vistos.has(nome)) continue;
+        const tamanho = formatarTamanho(a.tamanho);
+        const tipo = a.extensao || a.mimeType || '';
+        const meta = [tipo, tamanho].filter(Boolean).join(' · ');
+        const status = a.conteudoExtraido ? 'Conteúdo extraído' : 'Baixado';
+        const acao = `<button class="anexo-acao" type="button" onclick="abrirAnexoLocal('${a.id}')">Abrir</button>
+          <button class="anexo-acao" type="button" onclick="baixarAnexoLocal('${a.id}', '${escapeHtml(nome)}')">Baixar</button>`;
+        linhas.push(`
+          <tr>
+            <td><div class="anexo-nome">${escapeHtml(nome || 'Anexo')}</div>${meta ? `<div class="anexo-meta">${escapeHtml(meta)}</div>` : ''}</td>
+            <td>${escapeHtml(origemAnexoLabel(a.origem || 'ia'))}</td>
+            <td><span class="anexo-status">${escapeHtml(status)}</span></td>
+            <td>${acao}</td>
+          </tr>
+        `);
+      }
+
+      return `
+        <table class="anexos-grid">
+          <thead><tr><th>Arquivo</th><th>Origem</th><th>Status</th><th>Ação</th></tr></thead>
+          <tbody>${linhas.join('')}</tbody>
         </table>
       `;
     }
@@ -1142,15 +1224,25 @@
     function abrirGradeAnexosChamado() {
       const abertura = anexosSoftExpertCache.filter(a => a.origem === 'chamado' || a.origem === 'anexo');
       const outros = anexosSoftExpertCache.filter(a => a.origem !== 'chamado' && a.origem !== 'anexo');
-      const origem = montarLinhasAnexos(abertura.length ? abertura : anexosSoftExpertCache, { fonte: 'softexpert' });
-      const posicionamentos = montarLinhasAnexos(outros, { fonte: 'softexpert' });
-      const baixados = montarLinhasAnexos(anexosAtendimentoCache, { fonte: 'local' });
+      const baseAbertura = abertura.length ? abertura : anexosSoftExpertCache;
+
+      // Anexo local só entra como "correspondência" de uma linha do
+      // SoftExpert — reservado aqui para não duplicar entre Abertura e
+      // Posicionamentos quando o mesmo nome aparecer nos dois (raro, mas
+      // possível). Anexos sem nenhum anexo SoftExpert associado (ex.:
+      // enviado manualmente pelo analista no chat) viram sua própria seção.
+      const nomesSoftExpert = new Set([...baseAbertura, ...outros].map(a => a.nome || a.nomeOriginal).filter(Boolean));
+      const locaisSemOrigem = anexosAtendimentoCache.filter(a => !nomesSoftExpert.has(a.nome || a.nomeOriginal));
+
+      const origem = montarLinhasAnexosUnificado(baseAbertura, anexosAtendimentoCache);
+      const posicionamentos = montarLinhasAnexosUnificado(outros, anexosAtendimentoCache);
+      const avulsos = locaisSemOrigem.length ? montarLinhasAnexos(locaisSemOrigem, { fonte: 'local' }) : '';
       const avisoErro = anexosSoftExpertErro
         ? `<div class="pesquisa-empty">Não foi possível consultar os anexos do SoftExpert: ${escapeHtml(anexosSoftExpertErro)}</div>`
         : '';
       abrirModalAnexos({
         titulo: 'Anexos do chamado',
-        subtitulo: 'Abertura do SoftExpert, posicionamentos e arquivos baixados para análise da IA',
+        subtitulo: 'Arquivos vinculados ao chamado no SoftExpert — o selo "Analisado pela IA" indica que o conteúdo já foi lido na investigação',
         html: `
           ${avisoErro}
           <div class="pesquisa-card">
@@ -1158,10 +1250,7 @@
             ${origem}
           </div>
           ${outros.length ? `<div class="pesquisa-card"><div class="pesquisa-card-title">Posicionamentos / conversas</div>${posicionamentos}</div>` : ''}
-          <div class="pesquisa-card">
-            <div class="pesquisa-card-title">Baixados para IA / analista</div>
-            ${baixados}
-          </div>
+          ${avulsos ? `<div class="pesquisa-card"><div class="pesquisa-card-title">Enviados manualmente no chat</div>${avulsos}</div>` : ''}
         `,
       });
     }
@@ -1215,6 +1304,49 @@
         setTimeout(() => URL.revokeObjectURL(url), 60000);
       } catch (err) {
         showError('Não foi possível abrir o anexo: ' + err.message);
+      }
+    }
+
+    // Força download (em vez de abrir em nova aba) — pedido do usuário,
+    // 2026-10: só havia "Abrir", sem opção de salvar o arquivo localmente.
+    // Reaproveita o mesmo fetch das funções de abrir acima, só troca
+    // window.open por um <a download> temporário.
+    function _baixarBlob(blob, nomeArquivo) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nomeArquivo || 'arquivo';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+
+    async function baixarAnexoSoftExpert(chamadoId, oidCodificado, nomeArquivo) {
+      try {
+        const headers = modoExterno ? { 'x-sessao-externa': tokenExterno } : {};
+        const r = await fetch(apiPath(`/radar/chamados/${chamadoId}/anexos-softexpert/${oidCodificado}`), { headers });
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(body.error || `Erro ${r.status}`);
+        }
+        _baixarBlob(await r.blob(), nomeArquivo);
+      } catch (err) {
+        showError('Não foi possível baixar o anexo: ' + err.message);
+      }
+    }
+
+    async function baixarAnexoLocal(anexoId, nomeArquivo) {
+      try {
+        const headers = modoExterno ? { 'x-sessao-externa': tokenExterno } : {};
+        const r = await fetch(apiPath(`/anexos/${anexoId}/download`), { headers });
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(body.error || `Erro ${r.status}`);
+        }
+        _baixarBlob(await r.blob(), nomeArquivo);
+      } catch (err) {
+        showError('Não foi possível baixar o anexo: ' + err.message);
       }
     }
 
@@ -1751,12 +1883,14 @@
     const TEXTO_PESQUISAR_SOLUCOES = 'Revise todo o histórico deste chamado e os anexos sincronizados (abertura, posicionamentos e conversas anteriores) e pesquise uma nova solução — considere o que já foi tentado e descarte hipóteses já descartadas, buscando um diagnóstico ou próximo passo diferente do que já foi sugerido.';
 
     // Reenvia TODO o histórico (sempre incluído pelo backend em qualquer
-    // turno) + TODOS os anexos já sincronizados do atendimento (não só os
-    // do último turno) — pedido do usuário, 2026-09: dar à IA o máximo de
-    // contexto real disponível para uma segunda tentativa de diagnóstico,
-    // não só o resumo em texto que ela mesma escreveu da primeira vez.
+    // turno) + TODOS os anexos do atendimento, incluindo os do SoftExpert
+    // ainda não baixados antes — pedido do usuário, 2026-10: o botão deve
+    // ter o MESMO nível de contexto da pré-análise automática, nunca uma
+    // resposta protocolar/genérica por falta de anexo sincronizado. Sincroniza
+    // primeiro (mesmo mecanismo da pré-análise automática) e só então monta
+    // anexoIds a partir da lista COMPLETA e atualizada do atendimento.
     async function pesquisarSolucoes() {
-      if (enviando || !atendimentoAtualId) return;
+      if (enviando || !atendimentoAtualId || !chamadoSelecionadoId) return;
       const empresaId = empresaIdAtual();
       const btn = document.getElementById('chat-header-pesquisar');
 
@@ -1767,8 +1901,19 @@
 
       try {
         const qs = qsEmpresa(empresaId);
+        const sufixo = qs ? '?' + qs : '';
+        try {
+          await api(`/radar/chamados/${chamadoSelecionadoId}/anexos-softexpert/sincronizar${sufixo}`, {
+            method: 'POST',
+            body: JSON.stringify({ atendimentoId: atendimentoAtualId }),
+          });
+        } catch (err) {
+          console.warn('[IA Service] Falha ao sincronizar anexos antes de pesquisar soluções:', err.message);
+        }
+        const anexosAtuais = await api(`/atendimentos/${atendimentoAtualId}/anexos${sufixo}`);
+        anexosAtendimentoCache = anexosAtuais || [];
         const anexoIds = anexosAtendimentoCache.map(a => a.id);
-        const resposta = await api(`/atendimentos/${atendimentoAtualId}/investigar${qs ? '?' + qs : ''}`, {
+        const resposta = await api(`/atendimentos/${atendimentoAtualId}/investigar${sufixo}`, {
           method: 'POST',
           body: JSON.stringify({ texto: TEXTO_PESQUISAR_SOLUCOES, anexoIds }),
         });

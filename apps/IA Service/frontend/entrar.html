@@ -764,7 +764,13 @@
 
     function entrarComToken(token) {
       localStorage.setItem('svc_token_externo', token);
-      location.href = '/radar-externo';
+      // Reflete o apelido na URL pós-login só por clareza visual (pedido do
+      // usuário, 2026-10) — a segurança/isolamento entre empresas continua
+      // 100% pelo token de sessão (x-sessao-externa), nunca pela URL; um
+      // apelido desconhecido em /radar-externo/:apelido ainda serve o mesmo
+      // radar.html normalmente, a empresa real vem do token.
+      const apelido = localStorage.getItem(LOGIN_APELIDO_KEY);
+      location.href = apelido ? `/radar-externo/${encodeURIComponent(apelido)}` : '/radar-externo';
     }
 
     async function enviarCodigo() {
