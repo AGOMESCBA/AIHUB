@@ -1926,7 +1926,7 @@
         const anexoIds = anexosAtendimentoCache.map(a => a.id);
         const resposta = await api(`/atendimentos/${atendimentoAtualId}/investigar${sufixo}`, {
           method: 'POST',
-          body: JSON.stringify({ texto: TEXTO_PESQUISAR_SOLUCOES, anexoIds }),
+          body: JSON.stringify({ texto: TEXTO_PESQUISAR_SOLUCOES, anexoIds, anexosComoContexto: true }),
         });
         hideTyping();
         addBubble({ direcao: 'in', texto: resposta.conteudo, diagnostico: resposta.diagnostico, nivelConfianca: resposta.nivelConfianca, perguntaContexto: TEXTO_PESQUISAR_SOLUCOES });

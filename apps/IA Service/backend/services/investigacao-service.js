@@ -160,7 +160,7 @@ async function _registrarErroVisual({ empresaId, atendimentoId, mensagemUsuario,
  * IA que analise o que já está no histórico. `texto` vira uma instrução
  * fixa, não uma mensagem do analista.
  */
-async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anexoIds = [], automatico = false }) {
+async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anexoIds = [], automatico = false, anexosComoContexto = false }) {
   const atendimento = mensagemService.getAtendimento(empresaId, atendimentoId);
   if (!atendimento) throw new Error('Atendimento não encontrado nesta empresa.');
 
@@ -199,7 +199,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     .map(id => anexoRepo.getAnexo(empresaId, id))
     .filter(Boolean);
 
-  if (mensagemUsuario) {
+  if (mensagemUsuario && !anexosComoContexto) {
     for (const anexo of anexosDoTurno) {
       anexoRepo.vincularMensagem(empresaId, anexo.id, mensagemUsuario.id);
     }
@@ -262,6 +262,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     mensagens: historico,
     mensagemAtual: texto,
     anexosDoTurno,
+    anexosComoContexto,
     pesquisaTecnicaTexto,
     pesquisa: pesquisaTecnica,
     relacionados,
@@ -389,6 +390,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
           mensagens: historico,
           mensagemAtual: texto,
           anexosDoTurno,
+          anexosComoContexto,
           pesquisaTecnicaTexto,
           pesquisa: pesquisaTecnica,
           relacionados,
@@ -539,7 +541,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     }
   }
 
-  if (!mensagemUsuario) {
+  if (!mensagemUsuario && !anexosComoContexto) {
     for (const anexo of anexosDoTurno) {
       anexoRepo.vincularMensagem(empresaId, anexo.id, mensagemAssistente.id);
     }

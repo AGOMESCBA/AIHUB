@@ -207,6 +207,7 @@ function montarContextoInvestigacao({
   mensagens,
   mensagemAtual,
   anexosDoTurno = [],
+  anexosComoContexto = false,
   pesquisaTecnicaTexto = '',
   pesquisa = null,
   relacionados = [],
@@ -217,7 +218,7 @@ function montarContextoInvestigacao({
 } = {}) {
   const termos = _termos([mensagemAtual, atendimento?.conteudoBruto].filter(Boolean).join('\n'));
   const todosAnexos = anexoRepo.listarAnexos(atendimento.empresaId, atendimento.id);
-  const idsTurno = new Set(anexosDoTurno.map(a => a.id));
+  const idsTurno = new Set(anexosComoContexto ? [] : anexosDoTurno.map(a => a.id));
   const idsForcados = new Set((evidenciaForcadaIds || []).filter(Boolean));
   const modeloPrimario = cfg?.modelos?.[cfg?.provedorPrimario] || Object.values(cfg?.modelos || {})[0] || null;
   const orcamento = tokenBudget.criarOrcamento({ modelo: modeloPrimario, systemPrompt });
@@ -264,8 +265,8 @@ function montarContextoInvestigacao({
     const forcado = idsForcados.has(anexo.id);
     const nomeCitado = _nomeCitado(mensagemAtual, anexo.nomeOriginal);
     const isImagem = anexo.mimeType?.startsWith('image/');
-    const referenciaImagem = _pareceReferenciaImagem(mensagemAtual);
-    const referenciaVisualImplicita = _pareceReferenciaVisualImplicita(mensagemAtual);
+    const referenciaImagem = !anexosComoContexto && _pareceReferenciaImagem(mensagemAtual);
+    const referenciaVisualImplicita = !anexosComoContexto && _pareceReferenciaVisualImplicita(mensagemAtual);
     const precisaImagem = isImagem && (atual || nomeCitado || referenciaImagem || referenciaVisualImplicita);
     const conteudo = anexo.conteudoExtraido || '';
     const score = (forcado ? 120 : 0)

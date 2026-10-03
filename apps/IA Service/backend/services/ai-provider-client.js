@@ -13,12 +13,23 @@
 const https = require('https');
 
 const PROVIDER_CONFIGS = {
-  groq: { hostname: 'api.groq.com', path: '/openai/v1/chat/completions', model: 'openai/gpt-oss-20b', tipo: 'openai_compat', suportaImagem: false },
+  groq: { hostname: 'api.groq.com', path: '/openai/v1/chat/completions', model: 'openai/gpt-oss-20b', tipo: 'openai_compat', suportaImagem: false, usaRaciocinio: true },
   openai: { hostname: 'api.openai.com', path: '/v1/chat/completions', model: 'gpt-4o-mini', tipo: 'openai_compat', suportaImagem: true },
   deepseek: { hostname: 'api.deepseek.com', path: '/chat/completions', model: 'deepseek-chat', tipo: 'openai_compat', suportaImagem: false },
   claude: { hostname: 'api.anthropic.com', path: '/v1/messages', model: 'claude-haiku-4-5-20251001', tipo: 'anthropic', suportaImagem: true },
   gemini: { hostname: 'generativelanguage.googleapis.com', path: null, model: 'gemini-3.5-flash', tipo: 'gemini', suportaImagem: true },
 };
+
+// Modelos de raciocínio (ex.: GPT-OSS na Groq) gastam parte do max_tokens
+// "pensando" (campo completion_tokens_details.reasoning_tokens) antes de
+// escrever a resposta final — com max_tokens baixo, o resultado vem com
+// message.content vazio e finish_reason="length" mesmo com a chamada tendo
+// sido bem-sucedida (HTTP 200, chave válida, uso contabilizado). Piso alto o
+// bastante para sobrar espaço para o texto depois do raciocínio em prompts
+// curtos (ex.: teste de conexão, que antes pedia maxTokens: 10 e sempre
+// falhava com "Resposta vazia do OpenAI-compat", bug real reportado pelo
+// usuário, 2026-10).
+const MIN_TOKENS_RACIOCINIO = 300;
 
 const DEFAULT_ORDER = ['groq', 'deepseek', 'openai', 'claude', 'gemini'];
 
@@ -67,7 +78,7 @@ function _normalizarTexto(data, providerName) {
 // `imagens` é uma lista de { mimeType, base64 } — vazia na maioria das
 // chamadas (texto puro), preenchida quando o atendimento tem anexos de imagem.
 
-async function _chamarOpenAICompat(cfg, apiKey, systemPrompt, userPrompt, imagens, opts = {}) {
+async function _chamarOpenAICompatUmaVez(cfg, apiKey, systemPrompt, userPrompt, imagens, opts, maxTokens) {
   const model = opts.model || cfg.model;
   const conteudoUser = imagens.length
     ? [
@@ -83,13 +94,32 @@ async function _chamarOpenAICompat(cfg, apiKey, systemPrompt, userPrompt, imagen
       { role: 'user', content: conteudoUser },
     ],
     temperature: opts.temperature ?? 0,
-    max_tokens: opts.maxTokens || 3000,
+    max_tokens: maxTokens,
   };
   if (opts.json) body.response_format = { type: 'json_object' };
 
   const parsed = await _httpPost(cfg.hostname, cfg.path, { Authorization: `Bearer ${apiKey}` }, body, opts.timeoutMs);
   const content = parsed.choices?.[0]?.message?.content;
-  return { texto: _normalizarTexto(content, 'OpenAI-compat'), usage: parsed.usage || {}, truncado: parsed.choices?.[0]?.finish_reason === 'length' };
+  const finishReason = parsed.choices?.[0]?.finish_reason;
+  return { content, usage: parsed.usage || {}, truncado: finishReason === 'length' };
+}
+
+async function _chamarOpenAICompat(cfg, apiKey, systemPrompt, userPrompt, imagens, opts = {}) {
+  const maxTokensPedido = opts.maxTokens || 3000;
+  const maxTokensInicial = cfg.usaRaciocinio ? Math.max(maxTokensPedido, MIN_TOKENS_RACIOCINIO) : maxTokensPedido;
+
+  let resultado = await _chamarOpenAICompatUmaVez(cfg, apiKey, systemPrompt, userPrompt, imagens, opts, maxTokensInicial);
+
+  // Modelo de raciocínio pode consumir todo o orçamento "pensando" e deixar
+  // message.content vazio mesmo com HTTP 200 — não é falha de credencial/cota,
+  // é orçamento de tokens insuficiente para concluir a resposta. Uma única
+  // retentativa com o dobro do orçamento resolve o caso real (teste de
+  // conexão com maxTokens: 10) sem mascarar erro genuíno de outro provider.
+  if (cfg.usaRaciocinio && !String(resultado.content || '').trim() && resultado.truncado) {
+    resultado = await _chamarOpenAICompatUmaVez(cfg, apiKey, systemPrompt, userPrompt, imagens, opts, maxTokensInicial * 2);
+  }
+
+  return { texto: _normalizarTexto(resultado.content, 'OpenAI-compat'), usage: resultado.usage, truncado: resultado.truncado };
 }
 
 async function _chamarAnthropic(cfg, apiKey, systemPrompt, userPrompt, imagens, opts = {}) {

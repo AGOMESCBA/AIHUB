@@ -274,7 +274,7 @@ module.exports = function registrarRotasExterno(app) {
 
   app.post('/api/ia-service-externo/atendimentos/:id/investigar', async (req, res) => {
     try {
-      const { texto, anexoIds } = req.body || {};
+      const { texto, anexoIds, anexosComoContexto } = req.body || {};
       if (!texto || !String(texto).trim()) {
         return res.status(400).json({ error: 'texto é obrigatório.' });
       }
@@ -282,6 +282,7 @@ module.exports = function registrarRotasExterno(app) {
         texto: String(texto).trim(),
         usuarioId: null,
         anexoIds: Array.isArray(anexoIds) ? anexoIds : [],
+        anexosComoContexto: anexosComoContexto === true,
       });
       res.status(201).json(mensagemAssistente);
     } catch (err) {
