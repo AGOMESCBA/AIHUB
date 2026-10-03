@@ -716,6 +716,158 @@ const MIGRATIONS = [
       ALTER TABLE chamados ADD COLUMN dias_dur_ticli INTEGER DEFAULT NULL;
     `,
   },
+  {
+    version: 32,
+    descricao: 'Auditoria da investigacao IA: manifesto de evidencias, contexto selecionado, pesquisa, usage, fallback e quality gate por resposta sem duplicar binarios/anexos.',
+    sql: `
+      CREATE TABLE IF NOT EXISTS investigacao_execucoes (
+        id                         TEXT PRIMARY KEY,
+        empresa_id                 INTEGER NOT NULL,
+        atendimento_id             TEXT NOT NULL REFERENCES atendimentos(id) ON DELETE CASCADE,
+        mensagem_id                TEXT DEFAULT NULL REFERENCES mensagens(id) ON DELETE SET NULL,
+        mensagem_usuario_id        TEXT DEFAULT NULL REFERENCES mensagens(id) ON DELETE SET NULL,
+        provider                   TEXT DEFAULT NULL,
+        model                      TEXT DEFAULT NULL,
+        status                     TEXT NOT NULL DEFAULT 'concluido',
+        manifesto_json             TEXT DEFAULT NULL,
+        contexto_json              TEXT DEFAULT NULL,
+        pesquisa_json              TEXT DEFAULT NULL,
+        quality_gate_json          TEXT DEFAULT NULL,
+        usage_json                 TEXT DEFAULT NULL,
+        tentativas_json            TEXT DEFAULT NULL,
+        tokens_estimados_prompt    INTEGER DEFAULT NULL,
+        tokens_estimados_resposta  INTEGER DEFAULT NULL,
+        prompt_chars               INTEGER DEFAULT NULL,
+        resposta_chars             INTEGER DEFAULT NULL,
+        resposta_truncada          INTEGER NOT NULL DEFAULT 0,
+        latencia_ms                INTEGER DEFAULT NULL,
+        retry_de_quality_gate      INTEGER NOT NULL DEFAULT 0,
+        criado_em                  TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_svc_investigacao_execucoes_atendimento
+        ON investigacao_execucoes (empresa_id, atendimento_id, criado_em);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_investigacao_execucoes_mensagem
+        ON investigacao_execucoes (empresa_id, mensagem_id);
+    `,
+  },
+  {
+    version: 33,
+    descricao: 'Dossie tecnico persistente minimo do atendimento: estado atual, itens estruturados e relacoes de proveniencia da investigacao.',
+    sql: `
+      CREATE TABLE IF NOT EXISTS investigacao_dossies (
+        id TEXT PRIMARY KEY,
+        empresa_id INTEGER NOT NULL,
+        atendimento_id TEXT NOT NULL REFERENCES atendimentos(id) ON DELETE CASCADE,
+        status TEXT NOT NULL DEFAULT 'INVESTIGANDO',
+        problema_atual TEXT,
+        resumo_estado TEXT,
+        diagnostico_atual TEXT,
+        causa_raiz TEXT,
+        solucao_proposta TEXT,
+        solucao_aplicada TEXT,
+        resultado_validacao TEXT,
+        nivel_confianca TEXT,
+        perguntas_pendentes_json TEXT,
+        pendencias_json TEXT,
+        fontes_usadas_json TEXT,
+        chamados_historicos_usados_json TEXT,
+        versao INTEGER NOT NULL DEFAULT 1,
+        stale INTEGER NOT NULL DEFAULT 0,
+        atualizado_por_mensagem_id TEXT REFERENCES mensagens(id) ON DELETE SET NULL,
+        atualizado_por_execucao_id TEXT REFERENCES investigacao_execucoes(id) ON DELETE SET NULL,
+        criado_em TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL,
+        UNIQUE (empresa_id, atendimento_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_svc_investigacao_dossies_atendimento
+        ON investigacao_dossies (empresa_id, atendimento_id);
+
+      CREATE TABLE IF NOT EXISTS investigacao_itens (
+        id TEXT PRIMARY KEY,
+        empresa_id INTEGER NOT NULL,
+        atendimento_id TEXT NOT NULL REFERENCES atendimentos(id) ON DELETE CASCADE,
+        dossie_id TEXT NOT NULL REFERENCES investigacao_dossies(id) ON DELETE CASCADE,
+        tipo TEXT NOT NULL,
+        codigo TEXT NOT NULL,
+        titulo TEXT,
+        descricao TEXT NOT NULL,
+        status TEXT NOT NULL,
+        confianca TEXT,
+        dados_json TEXT,
+        ordem INTEGER NOT NULL,
+        criado_por_mensagem_id TEXT REFERENCES mensagens(id) ON DELETE SET NULL,
+        atualizado_por_mensagem_id TEXT REFERENCES mensagens(id) ON DELETE SET NULL,
+        criado_por_execucao_id TEXT REFERENCES investigacao_execucoes(id) ON DELETE SET NULL,
+        atualizado_por_execucao_id TEXT REFERENCES investigacao_execucoes(id) ON DELETE SET NULL,
+        criado_em TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL,
+        UNIQUE (empresa_id, atendimento_id, tipo, codigo)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_svc_investigacao_itens_dossie
+        ON investigacao_itens (empresa_id, dossie_id, ordem);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_investigacao_itens_tipo
+        ON investigacao_itens (empresa_id, atendimento_id, tipo, ordem);
+
+      CREATE TABLE IF NOT EXISTS investigacao_item_relacoes (
+        id TEXT PRIMARY KEY,
+        empresa_id INTEGER NOT NULL,
+        atendimento_id TEXT NOT NULL REFERENCES atendimentos(id) ON DELETE CASCADE,
+        item_id TEXT NOT NULL REFERENCES investigacao_itens(id) ON DELETE CASCADE,
+        alvo_tipo TEXT NOT NULL,
+        alvo_id TEXT NOT NULL,
+        papel TEXT NOT NULL,
+        detalhe_json TEXT,
+        criado_em TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_svc_investigacao_relacoes_item
+        ON investigacao_item_relacoes (empresa_id, item_id, criado_em);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_investigacao_relacoes_alvo
+        ON investigacao_item_relacoes (empresa_id, atendimento_id, alvo_tipo, alvo_id);
+    `,
+  },
+  {
+    version: 34,
+    descricao: 'Atualizacao semantica estruturada do dossie tecnico: auditoria, idempotencia e rastreio de propostas aceitas/rejeitadas por turno.',
+    sql: `
+      CREATE TABLE IF NOT EXISTS investigacao_dossie_atualizacoes (
+        id TEXT PRIMARY KEY,
+        empresa_id INTEGER NOT NULL,
+        atendimento_id TEXT NOT NULL REFERENCES atendimentos(id) ON DELETE CASCADE,
+        dossie_id TEXT NOT NULL REFERENCES investigacao_dossies(id) ON DELETE CASCADE,
+        mensagem_usuario_id TEXT DEFAULT NULL REFERENCES mensagens(id) ON DELETE SET NULL,
+        mensagem_assistente_id TEXT DEFAULT NULL REFERENCES mensagens(id) ON DELETE SET NULL,
+        execucao_id TEXT DEFAULT NULL REFERENCES investigacao_execucoes(id) ON DELETE SET NULL,
+        idempotency_key TEXT NOT NULL,
+        provider TEXT DEFAULT NULL,
+        model TEXT DEFAULT NULL,
+        status TEXT NOT NULL,
+        interpretacao_json TEXT DEFAULT NULL,
+        proposta_json TEXT DEFAULT NULL,
+        estado_anterior_json TEXT DEFAULT NULL,
+        alteracoes_aceitas_json TEXT DEFAULT NULL,
+        alteracoes_rejeitadas_json TEXT DEFAULT NULL,
+        erro TEXT DEFAULT NULL,
+        usage_json TEXT DEFAULT NULL,
+        tentativas_json TEXT DEFAULT NULL,
+        latencia_ms INTEGER DEFAULT NULL,
+        criado_em TEXT NOT NULL,
+        UNIQUE (empresa_id, atendimento_id, idempotency_key)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_svc_dossie_atualizacoes_atendimento
+        ON investigacao_dossie_atualizacoes (empresa_id, atendimento_id, criado_em);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_dossie_atualizacoes_execucao
+        ON investigacao_dossie_atualizacoes (empresa_id, execucao_id);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

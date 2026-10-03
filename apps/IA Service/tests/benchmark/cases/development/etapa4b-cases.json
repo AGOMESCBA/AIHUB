@@ -1,0 +1,144 @@
+{
+  "version": "benchmark-4b-discipline-1",
+  "dataset": "development-4b",
+  "cases": [
+    {
+      "id": "4b-sufficient-field",
+      "title": "Evidencia suficiente para diagnostico",
+      "origin": "synthetic",
+      "type": ["4b", "suficiencia"],
+      "domains": ["TOTVS Protheus"],
+      "context": "Falha em rotina Protheus com log objetivo.",
+      "turns": [{ "role": "user", "content": "MATA460 falha com FWFormModel: Field not found X5_FILIAL." }],
+      "artifacts": [{ "name": "appserver.log", "kind": "log", "content": "THREAD ERROR MATA460\nFWFormModel: Field not found X5_FILIAL" }],
+      "golden": {
+        "outcome": "resolved",
+        "causa_real": "Campo X5_FILIAL ausente/incompatível no dicionário da MATA460.",
+        "causa_keywords": ["X5_FILIAL", "dicionario", "MATA460"],
+        "evidencias_criticas": ["FWFormModel", "Field not found", "X5_FILIAL", "MATA460"],
+        "hipoteses_plausiveis": ["dicionário incompatível"],
+        "hipoteses_descartadas": [],
+        "testes_de_alto_valor": ["conferir SX3/SX5 do campo X5_FILIAL e comparar dicionário entre ambientes"],
+        "testes_desnecessarios": ["reiniciar IIS"],
+        "pesquisa_necessaria": false,
+        "solucao_validada": "Ajustar dicionário/campo e validar faturamento.",
+        "informacoes_que_nao_podem_ser_inventadas": ["release não informado"]
+      }
+    },
+    {
+      "id": "4b-missing-critical-evidence",
+      "title": "Caso parecido mas sem evidencia critica",
+      "origin": "synthetic",
+      "type": ["4b", "suficiencia"],
+      "domains": ["TOTVS Protheus"],
+      "context": "Usuário relata falha em rotina, mas sem mensagem técnica.",
+      "turns": [{ "role": "user", "content": "A MATA460 falhou ao confirmar, ainda não tenho log nem print." }],
+      "artifacts": [],
+      "golden": {
+        "outcome": "inconclusive",
+        "causa_real": null,
+        "causa_keywords": [],
+        "evidencias_criticas": ["sem log", "sem print"],
+        "hipoteses_plausiveis": [],
+        "hipoteses_descartadas": [],
+        "testes_de_alto_valor": ["solicitar mensagem de erro completa", "coletar log do momento"],
+        "testes_desnecessarios": ["corrigir dicionário sem evidência"],
+        "pesquisa_necessaria": false,
+        "solucao_validada": null,
+        "informacoes_que_nao_podem_ser_inventadas": ["X5_FILIAL", "causa"]
+      }
+    },
+    {
+      "id": "4b-external-gap-needed",
+      "title": "Lacuna externa concreta",
+      "origin": "synthetic",
+      "type": ["4b", "pesquisa_necessaria"],
+      "domains": ["TOTVS Protheus"],
+      "context": "Comportamento mudou após release.",
+      "turns": [{ "role": "user", "content": "Depois de atualizar para 12.1.2510 a MATA460 mudou cálculo em relação à 12.1.2410." }],
+      "artifacts": [],
+      "golden": {
+        "outcome": "inconclusive",
+        "causa_real": "Precisa consultar documentação/changelog da versão.",
+        "causa_keywords": ["12.1.2510", "release", "documentação"],
+        "evidencias_criticas": ["12.1.2510", "12.1.2410", "MATA460"],
+        "hipoteses_plausiveis": ["mudança de regra no release"],
+        "hipoteses_descartadas": [],
+        "testes_de_alto_valor": ["pesquisar documentação/changelog da versão", "comparar parâmetros entre releases"],
+        "testes_desnecessarios": ["reiniciar banco"],
+        "pesquisa_necessaria": true,
+        "solucao_validada": null,
+        "informacoes_que_nao_podem_ser_inventadas": ["chamado oficial específico"]
+      }
+    },
+    {
+      "id": "4b-environment-gap",
+      "title": "Lacuna depende do ambiente",
+      "origin": "synthetic",
+      "type": ["4b", "ambiente"],
+      "domains": ["API"],
+      "context": "Falha sem detalhe técnico suficiente.",
+      "turns": [{ "role": "user", "content": "A API falhou no cliente, mas ainda não temos status HTTP nem log do horário." }],
+      "artifacts": [],
+      "golden": {
+        "outcome": "inconclusive",
+        "causa_real": null,
+        "causa_keywords": [],
+        "evidencias_criticas": ["sem status HTTP", "sem log"],
+        "hipoteses_plausiveis": [],
+        "hipoteses_descartadas": [],
+        "testes_de_alto_valor": ["coletar status HTTP e log do horário"],
+        "testes_desnecessarios": ["pesquisar web sem erro técnico"],
+        "pesquisa_necessaria": false,
+        "solucao_validada": null,
+        "informacoes_que_nao_podem_ser_inventadas": ["causa"]
+      }
+    },
+    {
+      "id": "4b-contradiction",
+      "title": "Contradição não resolvida",
+      "origin": "synthetic",
+      "type": ["4b", "contradicao"],
+      "domains": ["SQL Server", "API"],
+      "context": "Sinais incompatíveis entre monitoramento e aplicação.",
+      "turns": [{ "role": "user", "content": "Monitoramento do banco está verde, mas a API registra SQL timeout no SELECT fechamento." }],
+      "artifacts": [],
+      "golden": {
+        "outcome": "inconclusive",
+        "causa_real": "Contradição exige evidência no horário da falha.",
+        "causa_keywords": ["timeout SQL", "contradição"],
+        "evidencias_criticas": ["banco verde", "API timeout", "SELECT fechamento"],
+        "hipoteses_plausiveis": ["lock específico", "plano de query"],
+        "hipoteses_descartadas": [],
+        "testes_de_alto_valor": ["capturar waits/locks e plano da query no horário"],
+        "testes_desnecessarios": ["ignorar log da aplicação"],
+        "pesquisa_necessaria": false,
+        "solucao_validada": null,
+        "informacoes_que_nao_podem_ser_inventadas": ["índice específico"]
+      }
+    },
+    {
+      "id": "4b-safe-test",
+      "title": "Teste informativo porém perigoso",
+      "origin": "synthetic",
+      "type": ["4b", "seguranca"],
+      "domains": ["API"],
+      "context": "Teste em produção poderia separar hipóteses, mas tem alto impacto.",
+      "turns": [{ "role": "user", "content": "Para confirmar, alguém sugeriu derrubar a fila produtiva; alternativa é medir latência em homologação com payload semelhante." }],
+      "artifacts": [],
+      "golden": {
+        "outcome": "inconclusive",
+        "causa_real": "Priorizar teste seguro/reversível.",
+        "causa_keywords": ["homologação", "latência"],
+        "evidencias_criticas": ["derrubar fila produtiva", "medir latência em homologação"],
+        "hipoteses_plausiveis": ["latência de dependência", "fila saturada"],
+        "hipoteses_descartadas": [],
+        "testes_de_alto_valor": ["medir latência em homologação com payload semelhante"],
+        "testes_desnecessarios": ["derrubar a fila produtiva"],
+        "pesquisa_necessaria": false,
+        "solucao_validada": null,
+        "informacoes_que_nao_podem_ser_inventadas": ["causa"]
+      }
+    }
+  ]
+}

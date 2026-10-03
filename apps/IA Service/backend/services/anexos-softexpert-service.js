@@ -169,7 +169,7 @@ async function sincronizarAnexosParaAtendimento(empresaId, chamadoId, atendiment
 
     try {
       const buffer = _decodificarEValidar(bruto);
-      const extraido = extracaoConteudo.extrairConteudo({ buffer, nomeOriginal: nome, mimeDeclarado: mimeType });
+      const extraido = await extracaoConteudo.extrairConteudo({ buffer, nomeOriginal: nome, mimeDeclarado: mimeType });
 
       const anexo = armazenamento.salvarAnexo(empresaId, atendimentoId, {
         nomeOriginal: nome,

@@ -14,8 +14,26 @@ const promptBuilder = require('./prompt-builder');
 const versaoFonteService = require('./versao-fonte-service');
 const chamadoRepo = require('../repositories/chamado-repository');
 const technicalResearchService = require('./technical-research-service');
+const contextEngine = require('./context-engine');
+const qualityGateService = require('./quality-gate-service');
+const execucaoRepo = require('../repositories/investigacao-execucao-repository');
+const tokenBudget = require('./token-budget-service');
+const pdfVisualService = require('./pdf-visual-service');
+const investigacaoDossieService = require('./investigacao-dossie-service');
+const investigacaoDossieAtualizador = require('./investigacao-dossie-atualizador-service');
+const dossieContextService = require('./dossie-context-service');
 
 const MAX_TENTATIVAS_TIMEOUT = 2;
+
+function _garantirDossieSeguro(empresaId, atendimentoId, mensagemUsuario) {
+  try {
+    investigacaoDossieService.obterOuCriarDossie(empresaId, atendimentoId, {
+      atualizadoPorMensagemId: mensagemUsuario?.id ?? null,
+    });
+  } catch (err) {
+    console.error('[IA Service] Falha ao inicializar dossie tecnico do atendimento:', err.message);
+  }
+}
 
 /**
  * Extrai as seções estruturadas (Diagnóstico/Causa provável/Evidências/...)
@@ -51,6 +69,82 @@ function _extrairFonteCorrigido(secoes) {
   if (!secoes?.['Fonte corrigido']) return null;
   const blocoCodigo = secoes['Fonte corrigido'].match(/```[a-zA-Z]*\n([\s\S]*?)```/);
   return blocoCodigo ? blocoCodigo[1] : null;
+}
+
+async function _carregarPayloadVisual(contexto) {
+  const fs = require('fs');
+  const path = require('path');
+  const armazenamento = require('./armazenamento-anexos');
+  const imagens = [];
+  const falhasImagem = [];
+  const falhasPdfVisual = [];
+
+  for (const anexo of contexto.imagensSelecionadas || []) {
+    try {
+      const caminhoAbsoluto = path.join(armazenamento.ANEXOS_DIR, anexo.caminhoRelativo);
+      const buffer = fs.readFileSync(caminhoAbsoluto);
+      if (!buffer.length || (anexo.tamanho && buffer.length !== anexo.tamanho)) {
+        throw new Error(`Arquivo lido com tamanho inconsistente (esperado ${anexo.tamanho ?? '?'} bytes, lido ${buffer.length} bytes).`);
+      }
+      imagens.push({ mimeType: anexo.mimeType, base64: buffer.toString('base64'), origem: 'imagem', anexoId: anexo.id });
+    } catch (err) {
+      console.error('[IA Service] Falha ao ler anexo de imagem para anÃ¡lise:', anexo.id, anexo.nomeOriginal, err.message);
+      falhasImagem.push(anexo.nomeOriginal || anexo.id);
+    }
+  }
+
+  for (const item of contexto.pdfsVisuaisSelecionados || []) {
+    const anexo = item.anexo;
+    try {
+      const caminhoAbsoluto = path.join(armazenamento.ANEXOS_DIR, anexo.caminhoRelativo);
+      const buffer = fs.readFileSync(caminhoAbsoluto);
+      const raster = await pdfVisualService.rasterizarPdfPaginas(buffer, item.paginas || [1]);
+      if (raster.erro) throw new Error(raster.erro);
+      for (const img of raster.imagens) {
+        imagens.push({ mimeType: img.mimeType, base64: img.base64, origem: 'pdf', anexoId: anexo.id, pagina: img.pagina });
+      }
+    } catch (err) {
+      console.error('[IA Service] Falha ao rasterizar PDF para anÃ¡lise visual:', anexo.id, anexo.nomeOriginal, err.message);
+      falhasPdfVisual.push({ nome: anexo.nomeOriginal || anexo.id, erro: err.message });
+    }
+  }
+
+  if (falhasPdfVisual.length > 0) {
+    contexto.manifesto.pdfVisualFalhas = falhasPdfVisual.map(f => ({ nome: f.nome, erro: f.erro }));
+  }
+
+  return { imagens, falhasImagem, falhasPdfVisual };
+}
+
+async function _registrarErroVisual({ empresaId, atendimentoId, mensagemUsuario, contexto, pesquisaTecnica, userPrompt, falhasImagem, falhasPdfVisual }) {
+  const falhas = [
+    ...falhasImagem.map(nome => ({ codigo: 'IMAGEM_NAO_CARREGADA', severidade: 'alta', detalhe: nome })),
+    ...falhasPdfVisual.map(f => ({ codigo: 'PDF_VISUAL_NAO_RASTERIZADO', severidade: 'alta', detalhe: f.nome, erro: f.erro })),
+  ];
+  const nomes = [...falhasImagem, ...falhasPdfVisual.map(f => f.nome)].join(', ');
+  const mensagemErro = `NÃ£o foi possÃ­vel carregar ${falhas.length} evidÃªncia(s) visual(is) para anÃ¡lise (${nomes}) â€” a investigaÃ§Ã£o foi interrompida para nÃ£o gerar um diagnÃ³stico sem considerar essas evidÃªncias. Tente novamente; se persistir, reenvie o(s) arquivo(s).`;
+  const msgErro = mensagemRepo.salvarMensagem(empresaId, atendimentoId, { papel: 'assistant', conteudo: mensagemErro, usuarioId: null });
+  try {
+    execucaoRepo.salvarExecucao(empresaId, {
+      atendimentoId,
+      mensagemId: msgErro.id,
+      mensagemUsuarioId: mensagemUsuario?.id ?? null,
+      status: 'erro_imagem',
+      manifesto: contexto.manifesto,
+      contexto: contexto.contextoResumo,
+      pesquisa: pesquisaTecnica,
+      qualityGate: {
+        aprovado: false,
+        deveRetry: false,
+        falhas,
+      },
+      tokensEstimadosPrompt: contexto.contextoResumo.tokensEstimadosPrompt,
+      promptChars: userPrompt.length,
+    });
+  } catch (auditErr) {
+    console.error('[IA Service] Falha ao registrar auditoria de erro de imagem da investigaÃ§Ã£o:', auditErr.message);
+  }
+  return msgErro;
 }
 
 /**
@@ -89,6 +183,8 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
       .filter(m => m.id !== mensagemUsuario.id); // histórico ANTERIOR a este turno
   }
 
+  _garantirDossieSeguro(empresaId, atendimentoId, mensagemUsuario);
+
   // Vincula os anexos deste turno à mensagem (eles já existem em `anexos`,
   // criados pela rota de upload ou pela sincronização automática do
   // SoftExpert — aqui só associamos à mensagem correta). No modo manual, a
@@ -109,24 +205,48 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     }
   }
 
-  const anexosTextoDoTurno = anexosDoTurno.filter(a => a.conteudoExtraido);
-  const anexosImagemDoTurno = anexosDoTurno.filter(a => a.mimeType?.startsWith('image/'));
+  const todosAnexosDoAtendimento = anexoRepo.listarAnexos(empresaId, atendimentoId);
+  const anexosTextoParaPesquisa = todosAnexosDoAtendimento.filter(a => a.conteudoExtraido);
 
   let pesquisaTecnicaTexto = '';
+  let pesquisaTecnica = null;
+  let relacionados = [];
+  let dossieOperacionalTurno = null;
   try {
     const chamado = atendimento.referenciaExterna
       ? chamadoRepo.getChamadoPorNumero(empresaId, atendimento.referenciaExterna, atendimento.origem)
       : null;
-    const relacionados = chamado
+    relacionados = chamado
       ? chamadoRepo.listarChamadosRelacionados(empresaId, chamado.id, { limite: 5 })
       : [];
+    const { cfg: cfgPesquisa } = aiConfigService.resolverKeysEOrdem(empresaId);
+    const modeloPesquisa = cfgPesquisa?.modelos?.[cfgPesquisa?.provedorPrimario] || Object.values(cfgPesquisa?.modelos || {})[0] || null;
+    const orcamentoPesquisa = tokenBudget.criarOrcamento({ modelo: modeloPesquisa, systemPrompt: promptBuilder.SYSTEM_PROMPT });
+    try {
+      dossieOperacionalTurno = dossieContextService.montarMemoriaOperacional({
+        empresaId,
+        atendimentoId,
+        mensagemAtual: texto,
+        orcamentoEntrada: orcamentoPesquisa.entradaDisponivel,
+      });
+    } catch (dossieErr) {
+      dossieOperacionalTurno = {
+        texto: '',
+        manifesto: { status: 'DEGRADADO', erro: dossieErr.message, selecionados: [], omitidos: [], evidenciasRecuperadas: [], evidenciasIndisponiveis: [] },
+        contextoResumo: { tokensEstimados: 0, degraded: true },
+      };
+    }
     const pesquisa = await technicalResearchService.pesquisar({
+      empresaId,
+      atendimentoId,
       chamado,
       atendimento,
       mensagens: historico,
-      anexos: anexosTextoDoTurno,
+      anexos: anexosTextoParaPesquisa,
       texto,
+      dossieOperacional: dossieOperacionalTurno,
     });
+    pesquisaTecnica = pesquisa;
     pesquisaTecnicaTexto = technicalResearchService.formatarContextoParaPrompt(pesquisa, relacionados);
   } catch (err) {
     pesquisaTecnicaTexto = [
@@ -136,13 +256,20 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     ].join('\n');
   }
 
-  const userPrompt = promptBuilder.buildUserPrompt({
+  const { keys, cfg } = aiConfigService.resolverKeysEOrdem(empresaId);
+  let contexto = contextEngine.montarContextoInvestigacao({
     atendimento,
     mensagens: historico,
-    anexosTextoDoTurno,
     mensagemAtual: texto,
+    anexosDoTurno,
     pesquisaTecnicaTexto,
+    pesquisa: pesquisaTecnica,
+    relacionados,
+    systemPrompt: promptBuilder.SYSTEM_PROMPT,
+    cfg,
+    dossieOperacionalPrecarregado: dossieOperacionalTurno,
   });
+  let userPrompt = contexto.userPrompt;
 
   // Carrega as imagens do turno do disco. Decisão explícita do usuário,
   // 2026-10: imagem anexada NUNCA pode ser ignorada silenciosamente — antes,
@@ -156,7 +283,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
   // silenciosamente numa análise capenga.
   const imagens = [];
   const falhasImagem = [];
-  for (const anexo of anexosImagemDoTurno) {
+  for (const anexo of contexto.imagensSelecionadas) {
     const fs = require('fs');
     const path = require('path');
     const armazenamento = require('./armazenamento-anexos');
@@ -172,12 +299,58 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
       falhasImagem.push(anexo.nomeOriginal || anexo.id);
     }
   }
-  if (falhasImagem.length > 0) {
-    const mensagemErro = `Não foi possível carregar ${falhasImagem.length} imagem(ns) anexada(s) para análise (${falhasImagem.join(', ')}) — a investigação foi interrompida para não gerar um diagnóstico sem considerar essas evidências. Tente novamente; se persistir, reenvie o(s) arquivo(s).`;
-    return mensagemRepo.salvarMensagem(empresaId, atendimentoId, { papel: 'assistant', conteudo: mensagemErro, usuarioId: null });
+  const falhasPdfVisual = [];
+  for (const item of contexto.pdfsVisuaisSelecionados || []) {
+    const fs = require('fs');
+    const path = require('path');
+    const armazenamento = require('./armazenamento-anexos');
+    const anexo = item.anexo;
+    try {
+      const caminhoAbsoluto = path.join(armazenamento.ANEXOS_DIR, anexo.caminhoRelativo);
+      const buffer = fs.readFileSync(caminhoAbsoluto);
+      const raster = await pdfVisualService.rasterizarPdfPaginas(buffer, item.paginas || [1]);
+      if (raster.erro) throw new Error(raster.erro);
+      for (const img of raster.imagens) {
+        imagens.push({ mimeType: img.mimeType, base64: img.base64, origem: 'pdf', anexoId: anexo.id, pagina: img.pagina });
+      }
+    } catch (err) {
+      console.error('[IA Service] Falha ao rasterizar PDF para análise visual:', anexo.id, anexo.nomeOriginal, err.message);
+      falhasPdfVisual.push({ nome: anexo.nomeOriginal || anexo.id, erro: err.message });
+    }
   }
-
-  const { keys, cfg } = aiConfigService.resolverKeysEOrdem(empresaId);
+  if (falhasPdfVisual.length > 0) {
+    contexto.manifesto.pdfVisualFalhas = falhasPdfVisual.map(f => ({ nome: f.nome, erro: f.erro }));
+  }
+  if (falhasImagem.length > 0 || falhasPdfVisual.length > 0) {
+    const falhas = [
+      ...falhasImagem.map(nome => ({ codigo: 'IMAGEM_NAO_CARREGADA', severidade: 'alta', detalhe: nome })),
+      ...falhasPdfVisual.map(f => ({ codigo: 'PDF_VISUAL_NAO_RASTERIZADO', severidade: 'alta', detalhe: f.nome, erro: f.erro })),
+    ];
+    const nomes = [...falhasImagem, ...falhasPdfVisual.map(f => f.nome)].join(', ');
+    const mensagemErro = `Não foi possível carregar ${falhas.length} evidência(s) visual(is) para análise (${nomes}) — a investigação foi interrompida para não gerar um diagnóstico sem considerar essas evidências. Tente novamente; se persistir, reenvie o(s) arquivo(s).`;
+    const msgErro = mensagemRepo.salvarMensagem(empresaId, atendimentoId, { papel: 'assistant', conteudo: mensagemErro, usuarioId: null });
+    try {
+      execucaoRepo.salvarExecucao(empresaId, {
+        atendimentoId,
+        mensagemId: msgErro.id,
+        mensagemUsuarioId: mensagemUsuario?.id ?? null,
+        status: 'erro_imagem',
+        manifesto: contexto.manifesto,
+        contexto: contexto.contextoResumo,
+        pesquisa: pesquisaTecnica,
+        qualityGate: {
+          aprovado: false,
+          deveRetry: false,
+          falhas,
+        },
+        tokensEstimadosPrompt: contexto.contextoResumo.tokensEstimadosPrompt,
+        promptChars: userPrompt.length,
+      });
+    } catch (auditErr) {
+      console.error('[IA Service] Falha ao registrar auditoria de erro de imagem da investigação:', auditErr.message);
+    }
+    return msgErro;
+  }
 
   // Timeout escalado pelo volume de imagens — payload maior (base64 de N
   // fotos) leva mais tempo de upload + processamento do lado do provedor.
@@ -190,18 +363,100 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
   const timeoutMs = 45000 + imagens.length * 15000;
 
   let resultado;
+  let qualityGate = null;
+  let retryDeQualityGate = false;
+  let acoesRetry = [];
+  let promptUsado = userPrompt;
+  const inicioIa = Date.now();
   try {
-    resultado = await aiProviderClient.chamarIA(keys, cfg, promptBuilder.SYSTEM_PROMPT, userPrompt, imagens, {
+    resultado = await aiProviderClient.chamarIA(keys, cfg, promptBuilder.SYSTEM_PROMPT, promptUsado, imagens, {
       maxTokens: 6000,
       timeoutMs,
     });
+    qualityGate = qualityGateService.avaliarResposta({
+      textoResposta: resultado.texto,
+      manifesto: contexto.manifesto,
+      pesquisa: pesquisaTecnica,
+      pergunta: texto,
+      houveRetry: false,
+    });
+    if (qualityGate.deveRetry) {
+      retryDeQualityGate = true;
+      const idsForcados = (qualityGate.falhas || []).map(f => f.evidenciaId).filter(Boolean);
+      if (idsForcados.length) {
+        contexto = contextEngine.montarContextoInvestigacao({
+          atendimento,
+          mensagens: historico,
+          mensagemAtual: texto,
+          anexosDoTurno,
+          pesquisaTecnicaTexto,
+          pesquisa: pesquisaTecnica,
+          relacionados,
+          systemPrompt: promptBuilder.SYSTEM_PROMPT,
+          cfg,
+          evidenciaForcadaIds: idsForcados,
+          dossieOperacionalPrecarregado: dossieOperacionalTurno,
+        });
+        userPrompt = contexto.userPrompt;
+        const payloadVisualRetry = await _carregarPayloadVisual(contexto);
+        imagens.splice(0, imagens.length, ...payloadVisualRetry.imagens);
+        if (payloadVisualRetry.falhasImagem.length > 0 || payloadVisualRetry.falhasPdfVisual.length > 0) {
+          return _registrarErroVisual({
+            empresaId,
+            atendimentoId,
+            mensagemUsuario,
+            contexto,
+            pesquisaTecnica,
+            userPrompt,
+            falhasImagem: payloadVisualRetry.falhasImagem,
+            falhasPdfVisual: payloadVisualRetry.falhasPdfVisual,
+          });
+        }
+        acoesRetry.push({ tipo: 'contexto_reconstruido', evidenciaForcadaIds: idsForcados });
+      }
+      if ((qualityGate.falhas || []).some(f => f.codigo === 'GENERIC_RESPONSE_WITH_SPECIFIC_EVIDENCE')) {
+        acoesRetry.push({ tipo: 'reforco_evidencias_especificas' });
+      }
+      promptUsado = `${userPrompt}\n\n## Reprocessamento por Quality Gate\n${qualityGateService.montarInstrucaoRetry(qualityGate)}`;
+      resultado = await aiProviderClient.chamarIA(keys, cfg, promptBuilder.SYSTEM_PROMPT, promptUsado, imagens, {
+        maxTokens: 6000,
+        timeoutMs,
+      });
+      qualityGate = qualityGateService.avaliarResposta({
+        textoResposta: resultado.texto,
+        manifesto: contexto.manifesto,
+        pesquisa: pesquisaTecnica,
+        pergunta: texto,
+        houveRetry: true,
+      });
+      qualityGate.retryCorretivo = { executado: true, acoes: acoesRetry };
+    }
   } catch (erro) {
     // Mensagem de erro registrada como turno do assistente, para o analista
     // ver no próprio chat — nunca expõe stack trace, só a causa amigável.
     const mensagemErro = erro._semChave
       ? 'Não há provider de IA configurado para esta empresa. Configure ao menos uma chave em Configurações do IA Service.'
       : `Não foi possível concluir a análise no momento: ${erro.message}`;
-    return mensagemRepo.salvarMensagem(empresaId, atendimentoId, { papel: 'assistant', conteudo: mensagemErro, usuarioId: null });
+    const msgErro = mensagemRepo.salvarMensagem(empresaId, atendimentoId, { papel: 'assistant', conteudo: mensagemErro, usuarioId: null });
+    try {
+      execucaoRepo.salvarExecucao(empresaId, {
+        atendimentoId,
+        mensagemId: msgErro.id,
+        mensagemUsuarioId: mensagemUsuario?.id ?? null,
+        status: 'erro_provider',
+        manifesto: contexto.manifesto,
+        contexto: contexto.contextoResumo,
+        pesquisa: pesquisaTecnica,
+        qualityGate,
+        tentativas: erro._tentativas || [],
+        latenciaMs: erro._latenciaMs || null,
+        tokensEstimadosPrompt: contexto.contextoResumo.tokensEstimadosPrompt,
+        promptChars: promptUsado.length,
+      });
+    } catch (auditErr) {
+      console.error('[IA Service] Falha ao registrar auditoria de erro da investigação:', auditErr.message);
+    }
+    return msgErro;
   }
 
   // Nenhum dos 3 provedores informa de forma óbvia quando a resposta foi
@@ -227,6 +482,62 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     provider: resultado.provider,
     model: resultado.model,
   });
+
+  let execucaoPrincipal = null;
+  try {
+    execucaoPrincipal = execucaoRepo.salvarExecucao(empresaId, {
+      atendimentoId,
+      mensagemId: mensagemAssistente.id,
+      mensagemUsuarioId: mensagemUsuario?.id ?? null,
+      provider: resultado.provider,
+      model: resultado.model,
+      status: qualityGate?.aprovado ? 'concluido' : 'concluido_com_alerta_quality_gate',
+      manifesto: contexto.manifesto,
+      contexto: contexto.contextoResumo,
+      pesquisa: pesquisaTecnica,
+      qualityGate,
+      usage: resultado.usage || null,
+      tentativas: resultado.tentativas || [],
+      tokensEstimadosPrompt: tokenBudget.estimarTokens(promptUsado),
+      tokensEstimadosResposta: tokenBudget.estimarTokens(textoFinal),
+      promptChars: promptUsado.length,
+      respostaChars: textoFinal.length,
+      respostaTruncada: !!resultado.truncado,
+      latenciaMs: resultado.latenciaMs ?? (Date.now() - inicioIa),
+      retryDeQualityGate,
+      retryCorretivo: acoesRetry,
+    });
+  } catch (auditErr) {
+    console.error('[IA Service] Falha ao registrar auditoria da investigação:', auditErr.message);
+  }
+
+  try {
+    await investigacaoDossieAtualizador.atualizarAposTurno(empresaId, atendimentoId, {
+      mensagemUsuarioId: mensagemUsuario?.id ?? null,
+      mensagemAssistenteId: mensagemAssistente.id,
+      execucaoId: execucaoPrincipal?.id ?? null,
+      mensagemUsuario: texto,
+      respostaAssistente: textoFinal,
+      contextoResumo: contexto.contextoResumo,
+      manifesto: contexto.manifesto,
+      pesquisa: pesquisaTecnica,
+      referencias: {
+        retryDeQualityGate,
+        providerPrincipal: resultado.provider,
+        modelPrincipal: resultado.model,
+      },
+    });
+  } catch (dossieErr) {
+    console.error('[IA Service] Falha ao atualizar dossie tecnico apos turno:', dossieErr.message);
+    try {
+      investigacaoDossieService.marcarStale(empresaId, atendimentoId, true, {
+        mensagemId: mensagemUsuario?.id ?? mensagemAssistente.id,
+        execucaoId: execucaoPrincipal?.id ?? null,
+      });
+    } catch (staleErr) {
+      console.error('[IA Service] Falha ao marcar dossie como stale:', staleErr.message);
+    }
+  }
 
   if (!mensagemUsuario) {
     for (const anexo of anexosDoTurno) {

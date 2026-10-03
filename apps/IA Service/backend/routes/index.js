@@ -27,6 +27,8 @@ const radarService = require('../services/radar-service');
 const anexosSoftExpertService = require('../services/anexos-softexpert-service');
 const technicalResearchService = require('../services/technical-research-service');
 const radarRefreshService = require('../services/radar-refresh-service');
+const investigacaoExecucaoRepo = require('../repositories/investigacao-execucao-repository');
+const investigacaoDossieService = require('../services/investigacao-dossie-service');
 
 // multer com storage em memória — o binário só vai para disco depois da
 // validação (armazenamento.validarAnexo), nunca antes. Limite de tamanho
@@ -34,6 +36,7 @@ const radarRefreshService = require('../services/radar-refresh-service');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: armazenamento.TAMANHO_MAXIMO_BYTES } });
 
 function _erroParaStatus(err) {
+  if (err.code === 'CONFLITO_VERSAO_DOSSIE' || err.status === 409) return 409;
   if (/não encontrado|not found/i.test(err.message)) return 404;
   if (/obrigatóri|inválid|Já existe|não permitid|excede o limite|vazio/i.test(err.message)) return 400;
   return 500;
@@ -131,6 +134,29 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
+  app.get('/api/ia-service/atendimentos/:id/investigacoes', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const atendimento = atendimentoService.getAtendimento(empresaId, req.params.id);
+      if (!atendimento) return res.status(404).json({ error: 'Atendimento não encontrado.' });
+      const limite = Math.min(Number(req.query?.limite) || 20, 100);
+      res.json({ execucoes: investigacaoExecucaoRepo.listarPorAtendimento(empresaId, req.params.id, { limite }) });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service/atendimentos/:id/dossie', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const atendimento = atendimentoService.getAtendimento(empresaId, req.params.id);
+      if (!atendimento) return res.status(404).json({ error: 'Atendimento não encontrado.' });
+      res.json(investigacaoDossieService.obterEstadoCompleto(empresaId, req.params.id));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   // ── Investigação (Etapa 2) — o fluxo principal do chat técnico ──────────
   // Recebe texto + IDs de anexos já enviados (via /anexos abaixo), persiste o
   // turno do usuário, monta contexto (histórico + anexos), chama a IA,
@@ -168,7 +194,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   // conteúdo (texto/linguagem/encoding — nunca confia só na extensão), salva
   // em disco (fora do SQLite) e grava metadados. Anexo fica "solto" (sem
   // mensagem_id) até ser referenciado em POST .../investigar.
-  app.post('/api/ia-service/atendimentos/:id/anexos', upload.single('arquivo'), (req, res) => {
+  app.post('/api/ia-service/atendimentos/:id/anexos', upload.single('arquivo'), async (req, res) => {
     try {
       const empresaId = req.svcEmpresaId;
       const atendimentoId = req.params.id;
@@ -177,7 +203,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       const atendimento = atendimentoService.getAtendimento(empresaId, atendimentoId);
       if (!atendimento) return res.status(404).json({ error: 'Atendimento não encontrado.' });
 
-      const extraido = extracaoConteudo.extrairConteudo({
+      const extraido = await extracaoConteudo.extrairConteudo({
         buffer: req.file.buffer,
         nomeOriginal: req.file.originalname,
         mimeDeclarado: req.file.mimetype,

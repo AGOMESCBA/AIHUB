@@ -171,7 +171,9 @@ function _erroCotaOuCredito(msg) {
 async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts = {}) {
   const ordem = _normalizarOrdem(cfg);
   const erros = [];
+  const tentativas = [];
   let tentados = 0;
+  const inicioGeral = Date.now();
 
   for (const provedor of ordem) {
     if (!keys?.[provedor]) continue;
@@ -179,11 +181,14 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
 
     tentados += 1;
     const modeloDoProvedor = cfg?.modelos?.[provedor] || opts.model || PROVIDER_CONFIGS[provedor].model;
+    const inicioTentativa = Date.now();
     try {
       const resultado = await chamarProvedor(provedor, keys[provedor], systemPrompt, userPrompt, imagens, { ...opts, model: modeloDoProvedor });
-      return { ...resultado, provider: provedor, model: modeloDoProvedor };
+      tentativas.push({ provider: provedor, model: modeloDoProvedor, status: 'ok', latenciaMs: Date.now() - inicioTentativa });
+      return { ...resultado, provider: provedor, model: modeloDoProvedor, tentativas, latenciaMs: Date.now() - inicioGeral };
     } catch (erro) {
       erros.push({ provedor, msg: erro.message });
+      tentativas.push({ provider: provedor, model: modeloDoProvedor, status: 'erro', erro: erro.message, latenciaMs: Date.now() - inicioTentativa });
     }
   }
 
@@ -207,6 +212,8 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
   erroFinal._semChave = semChave;
   erroFinal._semProvedorComImagem = semProvedorComImagem;
   erroFinal._cotaEsgotada = cotaEsgotada;
+  erroFinal._tentativas = tentativas;
+  erroFinal._latenciaMs = Date.now() - inicioGeral;
   throw erroFinal;
 }
 

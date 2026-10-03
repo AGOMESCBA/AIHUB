@@ -37,9 +37,10 @@ function limparEDesligar() {
   }
 }
 
+async function main() {
 try {
   // ── Extração de conteúdo: não confiar só na extensão (seção 5 do prompt) ─
-  const sqlDisfarcado = extrairConteudo({
+  const sqlDisfarcado = await extrairConteudo({
     buffer: Buffer.from("SELECT * FROM SA1010 WHERE D_E_L_E_T_ = ''"),
     nomeOriginal: 'consulta.txt',
     mimeDeclarado: 'text/plain',
@@ -47,7 +48,7 @@ try {
   assert.strictEqual(sqlDisfarcado.linguagemDetectada, 'sql', 'TXT contendo SQL deve ser identificado como sql, não texto comum');
   assert.strictEqual(sqlDisfarcado.eCodigo, true);
 
-  const imagem = extrairConteudo({
+  const imagem = await extrairConteudo({
     buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0]),
     nomeOriginal: 'print.png',
     mimeDeclarado: 'image/png',
@@ -55,7 +56,7 @@ try {
   assert.strictEqual(imagem.ehImagem, true);
   assert.strictEqual(imagem.mimeReal, 'image/png');
 
-  const mimeMentiroso = extrairConteudo({
+  const mimeMentiroso = await extrairConteudo({
     // Client declara PNG mas o conteúdo é texto puro — o MIME real deve
     // prevalecer sobre o declarado (magic number confirma que não é PNG).
     buffer: Buffer.from('isto nao e uma imagem'),
@@ -162,3 +163,9 @@ Execute a atividade novamente no ambiente de homologação e confirme que o erro
 } finally {
   limparEDesligar();
 }
+}
+
+main().catch(err => {
+  console.error(err);
+  process.exit(1);
+});

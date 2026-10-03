@@ -236,7 +236,7 @@ module.exports = function registrarRotasExterno(app) {
     }
   });
 
-  app.post('/api/ia-service-externo/atendimentos/:id/anexos', upload.single('arquivo'), (req, res) => {
+  app.post('/api/ia-service-externo/atendimentos/:id/anexos', upload.single('arquivo'), async (req, res) => {
     try {
       const empresaId = req.svcEmpresaId;
       const atendimentoId = req.params.id;
@@ -245,7 +245,7 @@ module.exports = function registrarRotasExterno(app) {
       const atendimento = atendimentoService.getAtendimento(empresaId, atendimentoId);
       if (!atendimento) return res.status(404).json({ error: 'Atendimento não encontrado.' });
 
-      const extraido = extracaoConteudo.extrairConteudo({
+      const extraido = await extracaoConteudo.extrairConteudo({
         buffer: req.file.buffer,
         nomeOriginal: req.file.originalname,
         mimeDeclarado: req.file.mimetype,

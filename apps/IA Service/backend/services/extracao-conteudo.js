@@ -8,6 +8,7 @@
 // (não este módulo) faz a análise semântica do código.
 
 const path = require('path');
+const pdfParse = require('pdf-parse');
 
 // MIME types tratados como "texto legível" — seu conteúdo é extraído como
 // string e enviado para a IA. Imagens e PDFs seguem caminhos diferentes
@@ -96,7 +97,69 @@ function _detectarLinguagemPorConteudo(texto) {
  * para gravar via anexoRepo.atualizarExtracao — não decide se o anexo "faz
  * parte da análise", isso é responsabilidade do service de investigação.
  */
-function extrairConteudo({ buffer, nomeOriginal, mimeDeclarado }) {
+function _limitarExtracaoPersistida(texto, max = 250000) {
+  const s = String(texto || '').trim();
+  if (s.length <= max) return s;
+  return `${s.slice(0, max)}\n\n[...conteudo textual extraido truncado para persistencia; arquivo original preservado em disco...]`;
+}
+
+function _extrairTextoPdfBruto(buffer) {
+  const bruto = buffer.toString('latin1');
+  const trechos = [];
+  const reStream = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  let streamMatch;
+  while ((streamMatch = reStream.exec(bruto))) {
+    const conteudo = streamMatch[1];
+    const reTexto = /\(([^()]*(?:\\.[^()]*)*)\)\s*Tj/g;
+    let textoMatch;
+    while ((textoMatch = reTexto.exec(conteudo))) {
+      trechos.push(textoMatch[1]
+        .replace(/\\([\\()])/g, '$1')
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t'));
+    }
+  }
+  const texto = trechos.join('\n').replace(/[^\x09\x0a\x0d\x20-\x7eÀ-ÿ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const imprimiveis = texto.replace(/[^\x20-\x7eÀ-ÿ]/g, '').length;
+  const ratio = texto.length ? imprimiveis / texto.length : 0;
+  if (texto.length < 30 || ratio < 0.85) return '';
+  return _limitarExtracaoPersistida(texto);
+}
+
+async function _extrairPdf(buffer) {
+  let data;
+  try {
+    data = await pdfParse(buffer);
+  } catch (err) {
+    const textoBruto = _extrairTextoPdfBruto(buffer);
+    if (textoBruto) {
+      return [
+        '[PDF extraido textualmente - fallback bruto]',
+        'Observacao: o parser principal nao conseguiu interpretar a estrutura completa do PDF; texto simples foi recuperado de streams nao comprimidos.',
+        'Imagens, prints, graficos e diagramas internos do PDF nao foram extraidos nesta etapa; o arquivo original permanece preservado.',
+        '',
+        textoBruto,
+      ].join('\n');
+    }
+    const detalhe = err?.message ? ` (${err.message})` : '';
+    return [
+      '[PDF detectado]',
+      `Observacao: nao foi possivel extrair texto automaticamente deste PDF${detalhe}.`,
+      'Imagens, prints, graficos e diagramas internos do PDF nao foram extraidos nesta etapa; o arquivo original permanece preservado.',
+    ].join('\n');
+  }
+  const texto = _limitarExtracaoPersistida(data.text || '');
+  const paginas = data.numpages || data.numrender || null;
+  const cabecalho = [
+    '[PDF extraido textualmente]',
+    paginas ? `Paginas: ${paginas}` : null,
+    'Observacao: imagens, prints, graficos e diagramas internos do PDF nao foram extraidos nesta etapa; o arquivo original permanece preservado.',
+  ].filter(Boolean).join('\n');
+  return texto ? `${cabecalho}\n\n${texto}` : cabecalho;
+}
+
+async function extrairConteudo({ buffer, nomeOriginal, mimeDeclarado }) {
   const mimeReal = _detectarMimeReal(buffer, mimeDeclarado, nomeOriginal);
   const ext = path.extname(nomeOriginal || '').toLowerCase();
 
@@ -105,11 +168,8 @@ function extrairConteudo({ buffer, nomeOriginal, mimeDeclarado }) {
   }
 
   if (mimeReal === 'application/pdf') {
-    // Extração de texto de PDF fica fora do escopo desta etapa (exigiria lib
-    // de parsing de PDF, dependência nova não avaliada) — o PDF é preservado
-    // como anexo e citado no contexto, mas seu conteúdo textual não é extraído
-    // automaticamente. Documentado como pendência conhecida.
-    return { mimeReal, ehTexto: false, ehImagem: false, conteudoExtraido: null, linguagemDetectada: null, encodingDetectado: null, eCodigo: false };
+    const conteudoExtraido = await _extrairPdf(buffer);
+    return { mimeReal, ehTexto: !!conteudoExtraido, ehImagem: false, conteudoExtraido, linguagemDetectada: 'pdf', encodingDetectado: null, eCodigo: false };
   }
 
   // Texto: decodifica, detecta linguagem por extensão OU conteúdo (nunca só
