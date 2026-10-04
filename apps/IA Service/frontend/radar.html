@@ -1987,12 +1987,17 @@
         const qs = qsEmpresa(empresaId);
         const sufixo = qs ? '?' + qs : '';
         try {
-          await api(`/radar/chamados/${chamadoIdDoTurno}/anexos-softexpert/sincronizar${sufixo}`, {
+          const syncAnexos = await api(`/radar/chamados/${chamadoIdDoTurno}/anexos-softexpert/sincronizar${sufixo}`, {
             method: 'POST',
             body: JSON.stringify({ atendimentoId: atendimentoIdDoTurno }),
           });
+          const indisponiveis = syncAnexos?.indisponiveis || [];
+          if (indisponiveis.length) {
+            const nomes = indisponiveis.map(a => a.nome || a.id).slice(0, 5).join(', ');
+            throw new Error(`Nao foi possivel baixar/reparar ${indisponiveis.length} anexo(s) para a IA (${nomes}). Abra a grade de anexos e tente baixar novamente; se persistir, reimporte o chamado ou reenvie o(s) arquivo(s).`);
+          }
         } catch (err) {
-          console.warn('[IA Service] Falha ao sincronizar anexos antes de pesquisar soluções:', err.message);
+          throw err;
         }
         const anexosAtuais = await api(`/atendimentos/${atendimentoIdDoTurno}/anexos${sufixo}`);
         const anexoIds = (anexosAtuais || []).map(a => a.id);

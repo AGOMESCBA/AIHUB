@@ -307,4 +307,5 @@ module.exports = {
   listarAnexosDoChamado,
   baixarAnexo,
   sincronizarAnexosParaAtendimento: sincronizarAnexosParaAtendimentoComReparo,
+  arquivoLocalIntegro: _arquivoLocalIntegro,
 };

@@ -106,6 +106,7 @@ async function main() {
   assert.strictEqual(locais.length, 1, 'reparo do arquivo fisico nao deve criar duplicata');
   assert.strictEqual(locais[0].id, anexoAntesReparo.id, 'reparo deve preservar o mesmo registro de anexo');
   assert.ok(fs.existsSync(path.join(armazenamento.ANEXOS_DIR, locais[0].caminhoRelativo)), 'arquivo reparado deve existir em disco');
+  assert.ok(anexosSoftExpertService.arquivoLocalIntegro(locais[0]), 'arquivo reparado deve ser reconhecido como integro');
 
   anexoRepo.salvarMetadadosAnexo(EMPRESA, atendimento.id, {
     nomeOriginal: 'legado-sem-oid.txt',
@@ -122,6 +123,7 @@ async function main() {
   assert.strictEqual(locais.length, 2, 'vincular legado não deve criar terceira linha');
   const localLegado = locais.find(a => a.nomeOriginal === 'legado-sem-oid.txt');
   assert.strictEqual(localLegado.origemOid, 'BLOB-LEGADO');
+  assert.ok(anexosSoftExpertService.arquivoLocalIntegro(localLegado), 'legado reparado deve ficar disponivel para a IA');
 
   console.log('anexos-softexpert-sync.test.js: ok');
 }

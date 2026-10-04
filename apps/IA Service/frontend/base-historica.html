@@ -330,7 +330,7 @@
     lista.querySelectorAll('.fonte-btn-excluir').forEach(btn => {
       btn.addEventListener('click', () => excluirFonte(btn.dataset.id, btn.dataset.nome));
     });
-    select.innerHTML = fontes.map(f => `<option value="${f.id}">${escapeHtml(f.nome)}</option>`).join('');
+    select.innerHTML = fontes.map(f => `<option value="${f.id}">${escapeHtml(f.nome)} (${escapeHtml(f.connectionKey || 'sem rota')})</option>`).join('');
   }
 
   // A fonte aqui é só uma REFERÊNCIA (connection_key) — a conexão real com

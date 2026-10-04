@@ -139,6 +139,12 @@ async function executarSelect(url, token, { sql, params, limit, connectionKey, c
     throw new Error('Agente Local retornou resposta criptografada, mas a criptografia está inativa nesta fonte.');
   }
 
+  if (data?.status === 'erro' || data?.ok === false) {
+    const mensagem = data.erro || data.error || data.detail || 'Agente Local retornou erro ao executar o SELECT.';
+    const origem = data.origem_conexao ? ` Origem da conexao: ${data.origem_conexao}.` : '';
+    throw new Error(`${mensagem}${origem}`);
+  }
+
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.rows)) return data.rows;
   throw new Error('Resposta do agente não contém "rows". Verifique o endpoint/connection_key configurados.');
