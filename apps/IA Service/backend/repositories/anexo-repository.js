@@ -199,6 +199,50 @@ function atualizarExtracao(empresaId, anexoId, { conteudoExtraido, linguagemDete
  * Lista todas as versões de um arquivo de código: a versão 1 (o próprio anexo
  * original) + todas as correções geradas a partir dele, em ordem cronológica.
  */
+function atualizarArquivoSincronizado(empresaId, anexoId, {
+  nomeOriginal,
+  nomeInterno,
+  mimeType,
+  tamanho,
+  caminhoRelativo,
+  conteudoExtraido,
+  linguagemDetectada,
+  encodingDetectado,
+  eCodigo,
+}) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!anexoId) throw new Error('anexoId é obrigatório.');
+
+  const db = getDB();
+  const info = db.prepare(`
+    UPDATE anexos
+       SET nome_original = ?,
+           nome_interno = ?,
+           mime_type = ?,
+           tamanho = ?,
+           caminho_relativo = ?,
+           conteudo_extraido = ?,
+           linguagem_detectada = ?,
+           encoding_detectado = ?,
+           e_codigo = ?
+     WHERE id = ? AND empresa_id = ?
+  `).run(
+    nomeOriginal,
+    nomeInterno,
+    mimeType,
+    tamanho,
+    caminhoRelativo,
+    conteudoExtraido ?? null,
+    linguagemDetectada ?? null,
+    encodingDetectado ?? null,
+    eCodigo ? 1 : 0,
+    anexoId,
+    Number(empresaId)
+  );
+  if (info.changes === 0) return null;
+  return getAnexo(empresaId, anexoId);
+}
+
 function listarVersoes(empresaId, anexoOriginalId) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
@@ -221,5 +265,6 @@ module.exports = {
   vincularOrigem,
   vincularMensagem,
   atualizarExtracao,
+  atualizarArquivoSincronizado,
   listarVersoes,
 };

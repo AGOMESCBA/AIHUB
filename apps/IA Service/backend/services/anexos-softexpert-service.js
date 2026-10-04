@@ -13,6 +13,8 @@ const anexoRepo = require('../repositories/anexo-repository');
 const armazenamento = require('./armazenamento-anexos');
 const extracaoConteudo = require('./extracao-conteudo');
 const { resolverAdapter } = require('./import/adapters');
+const fs = require('fs');
+const path = require('path');
 
 const LIMITE_TAMANHO_BYTES = 25 * 1024 * 1024; // 25MB — mesmo teto de anexo já usado em armazenamento-anexos.js
 const SISTEMA_ORIGEM = 'softexpert';
@@ -82,6 +84,17 @@ function _decodificarEValidar(bruto) {
   }
 
   return buffer;
+}
+
+function _arquivoLocalIntegro(anexo) {
+  if (!anexo?.caminhoRelativo) return false;
+  try {
+    const caminho = path.join(armazenamento.ANEXOS_DIR, anexo.caminhoRelativo);
+    const stat = fs.statSync(caminho);
+    return !!stat.size && (!anexo.tamanho || Math.abs(stat.size - anexo.tamanho) <= Math.max(16, anexo.tamanho * 0.02));
+  } catch (_) {
+    return false;
+  }
 }
 
 /**
@@ -211,4 +224,87 @@ async function sincronizarAnexosParaAtendimento(empresaId, chamadoId, atendiment
   return sincronizados;
 }
 
-module.exports = { listarAnexosDoChamado, baixarAnexo, sincronizarAnexosParaAtendimento };
+async function sincronizarAnexosParaAtendimentoComReparo(empresaId, chamadoId, atendimentoId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!chamadoId) throw new Error('chamadoId é obrigatório.');
+  if (!atendimentoId) throw new Error('atendimentoId é obrigatório.');
+
+  const { anexosBrutos } = await _buscarAnexosBrutos(empresaId, chamadoId);
+  if (!anexosBrutos.length) return [];
+
+  const anexosLocais = anexoRepo.listarAnexos(empresaId, atendimentoId);
+  const porNomeLegado = new Map(anexosLocais.map(a => [a.nomeOriginal, a]));
+
+  const sincronizados = [];
+  for (const bruto of anexosBrutos) {
+    const nome = bruto.NMNAME || `anexo.${bruto.IDEXTENSION || 'bin'}`;
+    const origem = {
+      origemSistema: SISTEMA_ORIGEM,
+      origemOid: bruto.OID,
+      origemTipo: bruto.origem,
+      origemReferenciaOid: bruto.OID_REFERENCIA ?? null,
+    };
+
+    const existentePorOrigem = anexoRepo.getAnexoPorOrigem(empresaId, atendimentoId, origem);
+    if (existentePorOrigem && _arquivoLocalIntegro(existentePorOrigem)) continue;
+
+    const legadoMesmoNome = porNomeLegado.get(nome);
+    if (!existentePorOrigem && legadoMesmoNome && !legadoMesmoNome.origemOid && _arquivoLocalIntegro(legadoMesmoNome)) {
+      const vinculado = anexoRepo.vincularOrigem(empresaId, legadoMesmoNome.id, origem);
+      if (vinculado) sincronizados.push(vinculado);
+      continue;
+    }
+
+    const mimeType = _mimeTypePorExtensao(bruto.IDEXTENSION);
+    if (!armazenamento.MIME_PERMITIDOS.has(mimeType)) continue;
+
+    try {
+      const buffer = _decodificarEValidar(bruto);
+      const extraido = await extracaoConteudo.extrairConteudo({ buffer, nomeOriginal: nome, mimeDeclarado: mimeType });
+
+      if (existentePorOrigem || (legadoMesmoNome && !legadoMesmoNome.origemOid)) {
+        const alvo = existentePorOrigem || anexoRepo.vincularOrigem(empresaId, legadoMesmoNome.id, origem);
+        const atualizado = armazenamento.substituirArquivoAnexo(empresaId, atendimentoId, alvo, {
+          nomeOriginal: nome,
+          mimeType: extraido.mimeReal,
+          tamanho: buffer.length,
+          conteudo: buffer,
+          conteudoExtraido: extraido.conteudoExtraido,
+          linguagemDetectada: extraido.linguagemDetectada,
+          encodingDetectado: extraido.encodingDetectado,
+          eCodigo: extraido.eCodigo,
+        });
+        if (atualizado) sincronizados.push(atualizado);
+        continue;
+      }
+
+      const anexo = armazenamento.salvarAnexo(empresaId, atendimentoId, {
+        nomeOriginal: nome,
+        mimeType: extraido.mimeReal,
+        tamanho: buffer.length,
+        conteudo: buffer,
+        usuarioId: null,
+        ...origem,
+      });
+
+      const anexoAtualizado = anexoRepo.atualizarExtracao(empresaId, anexo.id, {
+        conteudoExtraido: extraido.conteudoExtraido,
+        linguagemDetectada: extraido.linguagemDetectada,
+        encodingDetectado: extraido.encodingDetectado,
+        eCodigo: extraido.eCodigo,
+      });
+
+      sincronizados.push(anexoAtualizado);
+    } catch (err) {
+      console.error(`[IA Service] Falha ao sincronizar anexo "${nome}" do SoftExpert (chamado ${chamadoId}):`, err.message);
+    }
+  }
+
+  return sincronizados;
+}
+
+module.exports = {
+  listarAnexosDoChamado,
+  baixarAnexo,
+  sincronizarAnexosParaAtendimento: sincronizarAnexosParaAtendimentoComReparo,
+};

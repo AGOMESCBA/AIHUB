@@ -146,6 +146,38 @@ async function main() {
     assert.ok(contextoAnexosSincronizados.userPrompt.includes('tom de conversa tecnica humana'), 'prompt final deve pedir conversa tecnica humana');
     assert.ok(!contextoAnexosSincronizados.userPrompt.includes('estruture a resposta conforme especificado'), 'prompt final nao deve puxar a IA para laudo formal');
 
+    const atendimentoCustom = atendimentoRepo.criarAtendimento(EMPRESA, {
+      origem: 'softexpert',
+      canalEntrada: 'radar',
+      conteudoBruto: 'Protheus | Impressao de nota fiscal: informacoes adicionais cortando no DANFE customizado.',
+    });
+    const prw = salvarAnexo(atendimentoCustom.id, 'danfeii_new.prw', {
+      linguagemDetectada: 'advpl',
+      eCodigo: true,
+      conteudoExtraido: [
+        '#INCLUDE "PROTHEUS.CH"',
+        'User Function DANFEII_NEW()',
+        'Local cTexto := SC5->C5_MENNOTA',
+        'oPrn:Say(nLin, nCol, SubStr(cTexto, 1, 60))',
+        'Return',
+      ].join('\n'),
+    });
+    const contextoCustom = contextEngine.montarContextoInvestigacao({
+      atendimento: atendimentoCustom,
+      mensagens: [],
+      mensagemAtual: 'Revise os anexos e sugira a correcao para a impressao da NF-e com informacoes adicionais cortando.',
+      anexosDoTurno: [],
+      anexosComoContexto: true,
+      pesquisaTecnicaTexto: '',
+      systemPrompt: promptBuilder.SYSTEM_PROMPT,
+      cfg: { provedorPrimario: 'openai', modelos: { openai: 'gpt-4o-mini' } },
+    });
+    const evidenciaPrw = contextoCustom.manifesto.selecionados.find(e => e.id === prw.id);
+    assert.ok(evidenciaPrw, 'PRW de customizacao deve entrar no contexto de chamado de impressao');
+    assert.strictEqual(evidenciaPrw.prioridade, 'CRITICA', 'PRW de customizacao deve ser evidencia critica nesse tipo de chamado');
+    assert.ok(contextoCustom.userPrompt.includes('DANFEII_NEW'), 'prompt deve incluir a rotina do PRW');
+    assert.ok(contextoCustom.userPrompt.includes('SubStr(cTexto, 1, 60)'), 'prompt deve incluir o trecho que pode causar truncamento');
+
     const pdfBuffer = criarPdfBuffer('Manual tecnico: erro PDF-777 resolvido ajustando parametro MV_TESTE.');
     const pdf = await extrairConteudo({ buffer: pdfBuffer, nomeOriginal: 'manual.pdf', mimeDeclarado: 'application/pdf' });
     assert.strictEqual(pdf.linguagemDetectada, 'pdf');

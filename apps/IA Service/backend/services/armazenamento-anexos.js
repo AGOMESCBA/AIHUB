@@ -101,6 +101,54 @@ function salvarAnexo(empresaId, atendimentoId, {
   });
 }
 
+function substituirArquivoAnexo(empresaId, atendimentoId, anexoExistente, {
+  nomeOriginal,
+  mimeType,
+  tamanho,
+  conteudo,
+  conteudoExtraido,
+  linguagemDetectada,
+  encodingDetectado,
+  eCodigo,
+}) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!atendimentoId) throw new Error('atendimentoId é obrigatório.');
+  if (!anexoExistente?.id) throw new Error('anexoExistente é obrigatório.');
+
+  const validacao = validarAnexo({ nomeOriginal, mimeType, tamanho });
+  if (!validacao.ok) throw new Error(validacao.erro);
+
+  const nomeInterno = `${crypto.randomUUID()}${validacao.extensao}`;
+  const dirEmpresaAtendimento = path.join(ANEXOS_DIR, String(empresaId), String(atendimentoId));
+  fs.mkdirSync(dirEmpresaAtendimento, { recursive: true });
+
+  const caminhoAbsoluto = path.join(dirEmpresaAtendimento, nomeInterno);
+  fs.writeFileSync(caminhoAbsoluto, conteudo);
+
+  const caminhoRelativo = path.relative(ANEXOS_DIR, caminhoAbsoluto).split(path.sep).join('/');
+
+  const atualizado = anexoRepo.atualizarArquivoSincronizado(empresaId, anexoExistente.id, {
+    nomeOriginal,
+    nomeInterno,
+    mimeType,
+    tamanho,
+    caminhoRelativo,
+    conteudoExtraido,
+    linguagemDetectada,
+    encodingDetectado,
+    eCodigo,
+  });
+
+  const caminhoAntigo = anexoExistente.caminhoRelativo
+    ? path.join(ANEXOS_DIR, anexoExistente.caminhoRelativo)
+    : null;
+  if (caminhoAntigo && caminhoAntigo !== caminhoAbsoluto) {
+    try { fs.unlinkSync(caminhoAntigo); } catch (_) {}
+  }
+
+  return atualizado;
+}
+
 module.exports = {
   ANEXOS_DIR,
   MIME_PERMITIDOS,
@@ -108,4 +156,5 @@ module.exports = {
   TAMANHO_MAXIMO_BYTES,
   validarAnexo,
   salvarAnexo,
+  substituirArquivoAnexo,
 };

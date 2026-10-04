@@ -123,6 +123,27 @@ const COLUNAS_POSICIONAMENTO = [
   'OIDARQUIVO1', 'OIDARQUIVO2',
 ];
 
+function inteiroNaoNegativo(valor, padrao = 0) {
+  const numero = Number(valor);
+  if (!Number.isFinite(numero) || numero < 0) return padrao;
+  return Math.floor(numero);
+}
+
+function inteiroPositivo(valor, padrao = 500, maximo = 5000) {
+  const numero = Number(valor);
+  if (!Number.isFinite(numero) || numero <= 0) return padrao;
+  return Math.min(Math.floor(numero), maximo);
+}
+
+function removerColunaControlePaginacao(row) {
+  const limpo = {};
+  for (const [chave, valor] of Object.entries(row || {})) {
+    if (String(chave).toLowerCase() === '__rn') continue;
+    limpo[chave] = valor;
+  }
+  return limpo;
+}
+
 /**
  * Lista chamados de DYNITSM dentro do período [inicio, fim), paginado.
  * `inicio`/`fim` chegam como 'YYYYMMDD' (interface pública mantida —
@@ -144,21 +165,35 @@ const COLUNAS_POSICIONAMENTO = [
 async function listarChamadosPeriodo(empresaId, fonte, { inicio, fim }, { offset = 0, limit = 500 } = {}) {
   const colunasD = COLUNAS_DYNITSM.map(c => `D.${c}`).join(', ');
   const colunasItsm = COLUNAS_ITSM_CHAMADOS.join(', ');
+  const paginaOffset = inteiroNaoNegativo(offset, 0);
+  const paginaLimit = inteiroPositivo(limit, 500, 5000);
+  const linhaInicialExclusiva = paginaOffset;
+  const linhaFinalInclusiva = paginaOffset + paginaLimit;
+
+  // Evita OFFSET/FETCH com @parametros. Em alguns ambientes SQL Server/Agente
+  // Local essa forma volta lote vazio sem erro, embora a mesma query sem
+  // paginação encontre milhares de registros. ROW_NUMBER é compatível com
+  // versões/compatibility levels mais antigos e mantém a carga retomável.
   const sql = `
-    SELECT ${colunasD}, ${SQL_STATUS_CHAMADO} AS STATUS_ENCERRAMENTO, ${SQL_SLA_PRAZO} AS SLA_PRAZO, ${SQL_SLA_DATA_PREV_FIM} AS SLA_DATA_PREV_FIM, ${colunasItsm}
-    FROM DYNITSM D
-    ${JOIN_WFPROCESS}
-    ${JOIN_ITSM_CHAMADOS}
-    WHERE D.DT >= CONVERT(datetime, @inicio, 112) AND D.DT < CONVERT(datetime, @fim, 112)
-    ORDER BY D.OID
-    OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+    WITH chamados_paginados AS (
+      SELECT ${colunasD}, ${SQL_STATUS_CHAMADO} AS STATUS_ENCERRAMENTO, ${SQL_SLA_PRAZO} AS SLA_PRAZO, ${SQL_SLA_DATA_PREV_FIM} AS SLA_DATA_PREV_FIM, ${colunasItsm},
+             ROW_NUMBER() OVER (ORDER BY D.OID) AS __rn
+      FROM DYNITSM D
+      ${JOIN_WFPROCESS}
+      ${JOIN_ITSM_CHAMADOS}
+      WHERE D.DT >= CONVERT(datetime, @inicio, 112) AND D.DT < CONVERT(datetime, @fim, 112)
+    )
+    SELECT *
+    FROM chamados_paginados
+    WHERE __rn > ${linhaInicialExclusiva} AND __rn <= ${linhaFinalInclusiva}
+    ORDER BY __rn
   `;
   const rows = await agenteLocalService.executarSelectNaFonte(empresaId, fonte.id, {
     sql,
-    params: { inicio, fim, offset, limit },
-    limit,
+    params: { inicio, fim },
+    limit: paginaLimit,
   });
-  return rows;
+  return rows.map(removerColunaControlePaginacao);
 }
 
 async function contarChamadosPeriodo(empresaId, fonte, { inicio, fim }) {

@@ -17,6 +17,7 @@ const agenteRepo = require('../backend/repositories/agente-local-repository');
 const chamadoRepo = require('../backend/repositories/chamado-repository');
 const atendimentoRepo = require('../backend/repositories/atendimento-repository');
 const anexoRepo = require('../backend/repositories/anexo-repository');
+const armazenamento = require('../backend/services/armazenamento-anexos');
 
 const EMPRESA = 99101;
 let anexosOrigem = [];
@@ -95,6 +96,16 @@ async function main() {
   const segunda = await anexosSoftExpertService.sincronizarAnexosParaAtendimento(EMPRESA, chamado.id, atendimento.id);
   assert.strictEqual(segunda.length, 0, 'segunda sincronização por mesmo OID não deve duplicar');
   assert.strictEqual(anexoRepo.listarAnexos(EMPRESA, atendimento.id).length, 1, 'não deve criar duplicata');
+
+  const anexoAntesReparo = anexoRepo.listarAnexos(EMPRESA, atendimento.id)[0];
+  fs.unlinkSync(path.join(armazenamento.ANEXOS_DIR, anexoAntesReparo.caminhoRelativo));
+  anexosOrigem = [bruto({ oid: 'BLOB-1', nome: 'evidencia.txt', conteudo: 'conteudo rebaixado apos perda do arquivo fisico' })];
+  const reparo = await anexosSoftExpertService.sincronizarAnexosParaAtendimento(EMPRESA, chamado.id, atendimento.id);
+  assert.strictEqual(reparo.length, 1, 'arquivo fisico ausente deve ser baixado novamente');
+  locais = anexoRepo.listarAnexos(EMPRESA, atendimento.id);
+  assert.strictEqual(locais.length, 1, 'reparo do arquivo fisico nao deve criar duplicata');
+  assert.strictEqual(locais[0].id, anexoAntesReparo.id, 'reparo deve preservar o mesmo registro de anexo');
+  assert.ok(fs.existsSync(path.join(armazenamento.ANEXOS_DIR, locais[0].caminhoRelativo)), 'arquivo reparado deve existir em disco');
 
   anexoRepo.salvarMetadadosAnexo(EMPRESA, atendimento.id, {
     nomeOriginal: 'legado-sem-oid.txt',
