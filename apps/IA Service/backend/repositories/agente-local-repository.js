@@ -166,8 +166,37 @@ function listarFontes(empresaId, filtros = {}) {
 function excluirFonte(empresaId, fonteId) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
-  const resultado = db.prepare(`DELETE FROM fontes_historicas WHERE id = ? AND empresa_id = ?`).run(fonteId, Number(empresaId));
-  return resultado.changes > 0;
+  const fonte = getFonte(empresaId, fonteId);
+  if (!fonte) return { excluida: false };
+  const excluir = db.transaction(() => {
+    const limpeza = _limparHistoricoDaFonte(db, empresaId, fonteId);
+    const resultado = db.prepare(`DELETE FROM fontes_historicas WHERE id = ? AND empresa_id = ?`).run(fonteId, Number(empresaId));
+    return { excluida: resultado.changes > 0, ...limpeza };
+  });
+  return excluir();
+}
+
+function _limparHistoricoDaFonte(db, empresaId, fonteId) {
+  const empresa = Number(empresaId);
+  const atendimentosRemovidos = db.prepare(`
+    DELETE FROM atendimentos
+    WHERE empresa_id = ?
+      AND EXISTS (
+        SELECT 1
+          FROM chamados c
+         WHERE c.empresa_id = atendimentos.empresa_id
+           AND c.fonte_id = ?
+           AND c.sistema_origem = atendimentos.origem
+           AND c.numero = atendimentos.referencia_externa
+      )
+  `).run(empresa, fonteId).changes;
+
+  const importacoesRemovidas = db.prepare(`
+    SELECT COUNT(*) AS total FROM importacoes WHERE empresa_id = ? AND fonte_id = ?
+  `).get(empresa, fonteId)?.total || 0;
+
+  db.prepare(`DELETE FROM importacoes WHERE empresa_id = ? AND fonte_id = ?`).run(empresa, fonteId);
+  return { atendimentosRemovidos, importacoesRemovidas };
 }
 
 /**
@@ -183,9 +212,9 @@ function limparHistoricoFonte(empresaId, fonteId) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
   const fonte = getFonte(empresaId, fonteId);
-  if (!fonte) return false;
-  db.prepare(`DELETE FROM importacoes WHERE empresa_id = ? AND fonte_id = ?`).run(Number(empresaId), fonteId);
-  return true;
+  if (!fonte) return { limpa: false };
+  const limpar = db.transaction(() => _limparHistoricoDaFonte(db, empresaId, fonteId));
+  return { limpa: true, ...limpar() };
 }
 
 module.exports = {

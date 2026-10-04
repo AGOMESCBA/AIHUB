@@ -18,9 +18,11 @@ const database = require('../backend/database');
 database.inicializarDB(dbTmpPath);
 
 const agenteRepo = require('../backend/repositories/agente-local-repository');
+const atendimentoRepo = require('../backend/repositories/atendimento-repository');
 const chamadoRepo = require('../backend/repositories/chamado-repository');
 const clienteRepo = require('../backend/repositories/cliente-repository');
 const importacaoRepo = require('../backend/repositories/importacao-repository');
+const mensagemRepo = require('../backend/repositories/mensagem-repository');
 
 const EMPRESA = 9701;
 
@@ -241,6 +243,25 @@ async function main() {
     { OID: 'POS-AGD-4', CHAMADO: '888888', DATAATUAL: '2026-09-24 00:00:00', AGUARDANRETORNO: null }
   );
   assert.strictEqual(posAguardandoNulo.aguardandoRetorno, null, 'AGUARDANRETORNO nulo deve mapear para null, nao false');
+
+  // Reset de testes precisa apagar tambem os atendimentos do Radar derivados
+  // da fonte. Eles ficam em `atendimentos`, fora da cascata de importacoes.
+  const chamadoParaReset = chamadoRepo.getChamadoPorOid(EMPRESA, fonte.id, 'OID-1');
+  const atendimentoRadar = atendimentoRepo.criarAtendimento(EMPRESA, {
+    origem: chamadoParaReset.sistemaOrigem,
+    canalEntrada: 'radar',
+    referenciaExterna: chamadoParaReset.numero,
+    conteudoBruto: 'Atendimento do Radar gerado a partir da base historica',
+  });
+  mensagemRepo.salvarMensagem(EMPRESA, atendimentoRadar.id, {
+    papel: 'assistant',
+    conteudo: 'Resposta antiga da IA que nao pode sobreviver ao reset da fonte.',
+  });
+  const limpeza = agenteRepo.limparHistoricoFonte(EMPRESA, fonte.id);
+  assert.strictEqual(limpeza.limpa, true, 'limpeza da fonte deve confirmar execucao');
+  assert.ok(limpeza.importacoesRemovidas >= 1, 'reset deve remover importacoes da fonte');
+  assert.ok(limpeza.atendimentosRemovidos >= 1, 'reset deve remover atendimentos do Radar vinculados aos chamados da fonte');
+  assert.strictEqual(atendimentoRepo.getAtendimento(EMPRESA, atendimentoRadar.id), null, 'atendimento do Radar e suas respostas antigas da IA devem ser removidos no reset');
 
   console.log('base-historica-import.test.js: ok (todos os asserts passaram)');
 }

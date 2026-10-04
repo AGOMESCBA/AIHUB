@@ -53,6 +53,8 @@
     .empty-state { padding:20px; text-align:center; color:var(--text-lo); font-size:13px; }
     .error-banner { display:none; background:#fee2e2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:10px 12px; font-size:13px; margin-bottom:14px; }
     .info-banner { display:none; background:#dbeafe; color:#1e40af; border:1px solid #bfdbfe; border-radius:8px; padding:10px 12px; font-size:13px; margin-bottom:14px; }
+    .btn-danger-soft { border-color:#fecaca !important; background:#fff1f2 !important; color:#991b1b !important; }
+    .btn-danger-soft:hover { background:#ffe4e6 !important; }
     .importacao-feedback { display:none; border:1px solid var(--border); border-radius:8px; background:var(--bg-base); padding:10px 12px; margin:0 0 12px; color:var(--text-md); font-size:12.5px; }
     .importacao-feedback strong { color:var(--text-hi); }
     .importacao-feedback .warn { color:#92400e; font-weight:800; }
@@ -135,6 +137,11 @@
           <button class="btn btn-primary" id="btn-importacao-inicial" type="button" onclick="iniciarImportacao()">Importação inicial</button>
           <button class="btn btn-ghost" id="btn-sincronizar-agora" type="button" onclick="sincronizarIncremental()">Sincronizar agora</button>
           <button class="btn btn-ghost" id="btn-diagnosticar-periodo" type="button" onclick="diagnosticarPeriodo()">Diagnosticar período</button>
+          <button class="btn btn-ghost" id="btn-refresh-importacoes" type="button" onclick="refreshImportacoesManual()">Atualizar tela</button>
+          <button class="btn btn-ghost btn-danger-soft" id="btn-reimportar-zero" type="button" onclick="reimportarDoZero()">Reimportar do zero</button>
+        </div>
+        <div class="form-hint" style="margin:-2px 0 12px">
+          Os cards de cima mostram o total atual da base histórica. O painel e a tabela abaixo mostram apenas o resultado de cada execução de importação/sincronização.
         </div>
         <div id="importacao-feedback" class="importacao-feedback"></div>
 
@@ -213,11 +220,11 @@
     const zero = finalizada && totaisImportacao(i) === 0 && !Number(i.registrosErro || 0);
     el.style.display = 'block';
     el.innerHTML = `
-      <strong>${iniciado ? 'Importação iniciada' : 'Última importação acompanhada'}:</strong>
+      <strong>${iniciado ? 'Execução iniciada' : 'Resultado desta execução'}:</strong>
       ${escapeHtml(i.tipo)} · <strong>${escapeHtml(i.status)}</strong> · período ${escapeHtml(i.periodoInicio || '?')} a ${escapeHtml(i.periodoFim || '?')} · tempo ${escapeHtml(tempo)}<br>
       Chamados — lidos: ${i.registrosLidos} · inseridos: ${i.registrosInseridos} · atualizados: ${i.registrosAtualizados} · sem alteração: ${i.registrosIgnorados} · erros: ${i.registrosErro}<br>
       Posicionamentos — lidos: ${i.posicionamentosLidos} · inseridos: ${i.posicionamentosInseridos} · atualizados: ${i.posicionamentosAtualizados}
-      ${zero ? '<br><span class="warn">A rotina executou, mas a origem retornou zero registros para este período. Use "Diagnosticar período" para ver em qual filtro da query os registros estão sumindo.</span>' : ''}
+      ${zero ? '<br><span class="warn">Veio zero registro: a rotina executou corretamente, mas a origem não retornou chamados/posicionamentos para este período. Use "Diagnosticar período" para ver em qual filtro da query os registros estão sumindo.</span>' : ''}
       ${i.mensagemErro ? `<br><span class="warn">${escapeHtml(i.mensagemErro)}</span>` : ''}
     `;
   }
@@ -437,38 +444,46 @@
   // deixa isso claro antes de confirmar.
   async function limparHistoricoFonte(fonteId, nome) {
     hideError();
+    hideInfo();
     if (!confirm(`Limpar todo o histórico de importações da fonte "${nome}"?\n\nIsso apaga as importações registradas e, em cascata, os chamados/posicionamentos já trazidos por ela — a fonte continua cadastrada (nome/connection_key preservados) para reimportar depois. Se houver uma importação em andamento agora, ela pode falhar no meio.`)) return;
     const empresaId = empresaIdAtual();
     try {
-      await api(`/api/ia-service/base-historica/fontes/${fonteId}/historico?empresa_id=${empresaId}`, { method: 'DELETE' });
-      carregarResumo();
-      carregarImportacoes();
+      const resultado = await api(`/api/ia-service/base-historica/fontes/${fonteId}/historico?empresa_id=${empresaId}`, { method: 'DELETE' });
+      showInfo(`Histórico limpo. Atendimentos do Radar removidos: ${resultado.atendimentosRemovidos || 0}. Importações removidas: ${resultado.importacoesRemovidas || 0}.`);
+      await carregarResumo();
+      await carregarImportacoes();
+      activateTab('tab-importacoes');
     } catch (err) { showError('Não foi possível limpar o histórico da fonte: ' + err.message); }
+  }
+
+  async function dispararImportacaoSelecionada({ mensagemInicio } = {}) {
+    const empresaId = empresaIdAtual();
+    const fonteId = document.getElementById('importar-fonte').value;
+    if (!fonteId) throw new Error('Cadastre e selecione uma fonte antes de importar.');
+    const importacao = await api(`/api/ia-service/base-historica/fontes/${fonteId}/importar?empresa_id=${empresaId}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        periodoInicio: dataParaYyyymmdd(document.getElementById('importar-inicio').value),
+        periodoFim: dataParaYyyymmdd(document.getElementById('importar-fim').value),
+      }),
+    });
+    impState.sortField = 'criadoEm';
+    impState.sortDir = 'desc';
+    impState.destaqueId = importacao.id;
+    activateTab('tab-importacoes');
+    showInfo(mensagemInicio || 'Importação inicial iniciada. Ela roda em background; a tabela abaixo será atualizada automaticamente.');
+    mostrarFeedbackImportacao(importacao, { iniciado: true });
+    await carregarImportacoes();
+    acompanharImportacao(importacao.id);
+    return importacao;
   }
 
   async function iniciarImportacao() {
     hideError();
     hideInfo();
-    const empresaId = empresaIdAtual();
-    const fonteId = document.getElementById('importar-fonte').value;
-    if (!fonteId) return showError('Cadastre e selecione uma fonte antes de importar.');
     setButtonLoading('btn-importacao-inicial', true, 'Iniciando...');
     try {
-      const importacao = await api(`/api/ia-service/base-historica/fontes/${fonteId}/importar?empresa_id=${empresaId}`, {
-        method: 'POST',
-        body: JSON.stringify({
-          periodoInicio: dataParaYyyymmdd(document.getElementById('importar-inicio').value),
-          periodoFim: dataParaYyyymmdd(document.getElementById('importar-fim').value),
-        }),
-      });
-      impState.sortField = 'criadoEm';
-      impState.sortDir = 'desc';
-      impState.destaqueId = importacao.id;
-      activateTab('tab-importacoes');
-      showInfo('Importação inicial iniciada. Ela roda em background; a tabela abaixo será atualizada automaticamente.');
-      mostrarFeedbackImportacao(importacao, { iniciado: true });
-      await carregarImportacoes();
-      acompanharImportacao(importacao.id);
+      await dispararImportacaoSelecionada();
     } catch (err) { showError('Não foi possível iniciar a importação: ' + err.message); }
     finally { setButtonLoading('btn-importacao-inicial', false); }
   }
@@ -481,15 +496,64 @@
     if (!fonteId) return showError('Selecione uma fonte.');
     setButtonLoading('btn-sincronizar-agora', true, 'Sincronizando...');
     try {
-      await api(`/api/ia-service/base-historica/fontes/${fonteId}/sincronizar-incremental?empresa_id=${empresaId}`, { method: 'POST', body: JSON.stringify({}) });
+      const resposta = await api(`/api/ia-service/base-historica/fontes/${fonteId}/sincronizar-incremental?empresa_id=${empresaId}`, { method: 'POST', body: JSON.stringify({}) });
+      const importacao = resposta.importacao;
       impState.sortField = 'criadoEm';
       impState.sortDir = 'desc';
+      impState.destaqueId = importacao?.id || null;
       activateTab('tab-importacoes');
       showInfo('Sincronização incremental iniciada. Ela roda em background; a tabela abaixo será atualizada automaticamente.');
       await carregarImportacoes();
-      if (impState.rows[0]) mostrarFeedbackImportacao(impState.rows[0], { iniciado: true });
+      if (importacao?.id) {
+        mostrarFeedbackImportacao(importacao, { iniciado: true });
+        acompanharImportacao(importacao.id);
+      } else if (impState.rows[0]) {
+        mostrarFeedbackImportacao(impState.rows[0], { iniciado: true });
+      }
     } catch (err) { showError('Não foi possível iniciar a sincronização: ' + err.message); }
     finally { setButtonLoading('btn-sincronizar-agora', false); }
+  }
+
+  async function refreshImportacoesManual() {
+    hideError();
+    setButtonLoading('btn-refresh-importacoes', true, 'Atualizando...');
+    try {
+      await Promise.all([carregarResumo(), carregarImportacoes()]);
+      const atual = impState.destaqueId ? impState.rows.find(i => i.id === impState.destaqueId) : impState.rows[0];
+      if (atual) mostrarFeedbackImportacao(atual);
+      showInfo('Tela atualizada com os dados mais recentes.');
+    } catch (err) {
+      showError('Não foi possível atualizar a tela: ' + err.message);
+    } finally {
+      setButtonLoading('btn-refresh-importacoes', false);
+    }
+  }
+
+  async function reimportarDoZero() {
+    hideError();
+    hideInfo();
+    const empresaId = empresaIdAtual();
+    const fonteSelect = document.getElementById('importar-fonte');
+    const fonteId = fonteSelect.value;
+    const fonteNome = fonteSelect.options[fonteSelect.selectedIndex]?.textContent || fonteId;
+    if (!fonteId) return showError('Selecione uma fonte para reimportar.');
+    const inicio = dataParaYyyymmdd(document.getElementById('importar-inicio').value);
+    const fim = dataParaYyyymmdd(document.getElementById('importar-fim').value);
+    if (!confirm(`Reimportar do zero a fonte "${fonteNome}"?\n\nIsso apaga as importações anteriores, os chamados/posicionamentos históricos e os atendimentos do Radar criados a partir dessa fonte, incluindo respostas antigas da IA. Depois inicia uma nova importação do período ${inicio} a ${fim}.`)) return;
+
+    setButtonLoading('btn-reimportar-zero', true, 'Reimportando...');
+    try {
+      const limpeza = await api(`/api/ia-service/base-historica/fontes/${fonteId}/historico?empresa_id=${empresaId}`, { method: 'DELETE' });
+      await carregarResumo();
+      await carregarImportacoes();
+      await dispararImportacaoSelecionada({
+        mensagemInicio: `Base zerada para esta fonte. Atendimentos removidos: ${limpeza.atendimentosRemovidos || 0}. Importações removidas: ${limpeza.importacoesRemovidas || 0}. Nova importação iniciada.`,
+      });
+    } catch (err) {
+      showError('Não foi possível reimportar do zero: ' + err.message);
+    } finally {
+      setButtonLoading('btn-reimportar-zero', false);
+    }
   }
 
   function renderImportacoesTable() {

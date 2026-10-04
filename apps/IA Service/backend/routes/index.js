@@ -500,9 +500,9 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   // agenteLocalService.excluirFonte. A confirmação clara disso fica na UI.
   app.delete('/api/ia-service/base-historica/fontes/:id', (req, res) => {
     try {
-      const excluida = agenteLocalService.excluirFonte(req.svcEmpresaId, req.params.id);
-      if (!excluida) return res.status(404).json({ error: 'Fonte não encontrada.' });
-      res.status(204).end();
+      const resultado = agenteLocalService.excluirFonte(req.svcEmpresaId, req.params.id);
+      if (!resultado?.excluida) return res.status(404).json({ error: 'Fonte não encontrada.' });
+      res.json(resultado);
     } catch (err) {
       _handleErro(res, err);
     }
@@ -514,8 +514,9 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   // agenteLocalService.limparHistoricoFonte.
   app.delete('/api/ia-service/base-historica/fontes/:id/historico', (req, res) => {
     try {
-      agenteLocalService.limparHistoricoFonte(req.svcEmpresaId, req.params.id);
-      res.status(204).end();
+      const resultado = agenteLocalService.limparHistoricoFonte(req.svcEmpresaId, req.params.id);
+      if (!resultado?.limpa) return res.status(404).json({ error: 'Fonte não encontrada.' });
+      res.json(resultado);
     } catch (err) {
       _handleErro(res, err);
     }
@@ -643,11 +644,12 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       const empresaId = req.svcEmpresaId;
       const { janelaDias } = req.body || {};
 
-      historicalSyncService.executarIncremental(empresaId, req.params.id, { janelaDias }).catch(err => {
+      const { importacao, promise } = historicalSyncService.iniciarIncremental(empresaId, req.params.id, { janelaDias });
+      promise.catch(err => {
         console.error('[IA Service] Sincronização incremental falhou:', err.message);
       });
 
-      res.status(202).json({ ok: true, mensagem: 'Sincronização incremental iniciada.' });
+      res.status(202).json({ ok: true, mensagem: 'Sincronização incremental iniciada.', importacao });
     } catch (err) {
       _handleErro(res, err);
     }
