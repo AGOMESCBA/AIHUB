@@ -30,6 +30,7 @@ const PROVIDER_CONFIGS = {
 // falhava com "Resposta vazia do OpenAI-compat", bug real reportado pelo
 // usuário, 2026-10).
 const MIN_TOKENS_RACIOCINIO = 300;
+const DEFAULT_MAX_PROVIDER_ROUNDS = 3;
 
 const DEFAULT_ORDER = ['groq', 'deepseek', 'openai', 'claude', 'gemini'];
 
@@ -182,7 +183,19 @@ function _normalizarOrdem({ provedorPrimario, fallbackOrdem } = {}) {
 }
 
 function _erroCotaOuCredito(msg) {
-  return /quota|rate.?limit|free_tier|exceeded|429|credit balance|insufficient.{0,20}(credit|balance|funds)|purchase credits|billing/i.test(msg || '');
+  return /quota|free_tier|exceeded|credit balance|insufficient.{0,20}(credit|balance|funds)|purchase credits|billing/i.test(msg || '');
+}
+
+function _erroPermanenteProvider(msg) {
+  return /api key not valid|invalid api key|incorrect api key|unauthorized|forbidden|401|403|credit balance|insufficient.{0,20}(credit|balance|funds)|purchase credits|billing|model .*not found|does not exist/i.test(msg || '');
+}
+
+function _erroTransitorioProvider(msg) {
+  return /econnreset|etimedout|eai_again|socket hang up|network|timeout|timed out|rate.?limit|429|temporar|try again|503|502|504|500|overloaded|capacity/i.test(msg || '');
+}
+
+function _sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
@@ -204,21 +217,38 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
   const tentativas = [];
   let tentados = 0;
   const inicioGeral = Date.now();
+  const maxRodadas = Math.max(1, Math.min(Number(opts.maxProviderRounds) || DEFAULT_MAX_PROVIDER_ROUNDS, 5));
+  const retryDelayMs = Math.max(0, Number(opts.providerRetryDelayMs) || 1200);
+  const providersPermanentes = new Set();
+  const candidatos = ordem.filter(provedor => keys?.[provedor] && (!imagens.length || PROVIDER_CONFIGS[provedor].suportaImagem));
 
-  for (const provedor of ordem) {
-    if (!keys?.[provedor]) continue;
-    if (imagens.length && !PROVIDER_CONFIGS[provedor].suportaImagem) continue;
+  for (let rodada = 1; rodada <= maxRodadas; rodada++) {
+    let houveTransitorioNaRodada = false;
 
-    tentados += 1;
-    const modeloDoProvedor = cfg?.modelos?.[provedor] || opts.model || PROVIDER_CONFIGS[provedor].model;
-    const inicioTentativa = Date.now();
-    try {
-      const resultado = await chamarProvedor(provedor, keys[provedor], systemPrompt, userPrompt, imagens, { ...opts, model: modeloDoProvedor });
-      tentativas.push({ provider: provedor, model: modeloDoProvedor, status: 'ok', latenciaMs: Date.now() - inicioTentativa });
-      return { ...resultado, provider: provedor, model: modeloDoProvedor, tentativas, latenciaMs: Date.now() - inicioGeral };
-    } catch (erro) {
-      erros.push({ provedor, msg: erro.message });
-      tentativas.push({ provider: provedor, model: modeloDoProvedor, status: 'erro', erro: erro.message, latenciaMs: Date.now() - inicioTentativa });
+    for (const provedor of candidatos) {
+      if (providersPermanentes.has(provedor)) continue;
+
+      tentados += 1;
+      const modeloDoProvedor = cfg?.modelos?.[provedor] || opts.model || PROVIDER_CONFIGS[provedor].model;
+      const inicioTentativa = Date.now();
+      try {
+        const resultado = await chamarProvedor(provedor, keys[provedor], systemPrompt, userPrompt, imagens, { ...opts, model: modeloDoProvedor });
+        tentativas.push({ provider: provedor, model: modeloDoProvedor, status: 'ok', rodada, latenciaMs: Date.now() - inicioTentativa });
+        return { ...resultado, provider: provedor, model: modeloDoProvedor, tentativas, latenciaMs: Date.now() - inicioGeral };
+      } catch (erro) {
+        const msg = erro.message;
+        const permanente = _erroPermanenteProvider(msg);
+        const transitorio = !permanente && _erroTransitorioProvider(msg);
+        erros.push({ provedor, msg, rodada, transitorio, permanente });
+        tentativas.push({ provider: provedor, model: modeloDoProvedor, status: 'erro', erro: msg, rodada, transitorio, permanente, latenciaMs: Date.now() - inicioTentativa });
+        if (permanente) providersPermanentes.add(provedor);
+        if (transitorio) houveTransitorioNaRodada = true;
+      }
+    }
+
+    if (!houveTransitorioNaRodada || rodada >= maxRodadas) break;
+    if (retryDelayMs > 0) {
+      await _sleep(retryDelayMs * rodada);
     }
   }
 
@@ -247,4 +277,4 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
   throw erroFinal;
 }
 
-module.exports = { chamarIA, chamarProvedor, PROVIDER_CONFIGS };
+module.exports = { chamarIA, chamarProvedor, PROVIDER_CONFIGS, _erroTransitorioProvider, _erroPermanenteProvider };
