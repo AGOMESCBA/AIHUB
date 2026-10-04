@@ -16,6 +16,75 @@ function _temRespostaGenerica(texto) {
   return genericos.filter(g => s.includes(g)).length >= 2 && !/\*\*evid[eê]ncias\*\*|fonte corrigido|linha|stack|exception|erro/i.test(texto || '');
 }
 
+function _usaTemplateFormalRobotico(texto) {
+  if (/(^|\n)\s*#{1,4}\s+/i.test(String(texto || ''))) return true;
+  const secoes = [
+    'diagnostico',
+    'causa provavel',
+    'fatos e evidencias',
+    'evidencias',
+    'chamados semelhantes',
+    'pesquisa tecnica',
+    'correcao proposta',
+    'lacunas investigativas',
+    'validacao',
+    'proximos passos',
+  ];
+  const normalizado = _normalizar(texto);
+  const qtd = secoes.filter(secao => {
+    const re = new RegExp(`(^|\\n)\\s*(#{1,4}\\s*)?(\\*\\*)?${secao}(\\*\\*)?\\s*[:\\-]?`, 'i');
+    return re.test(normalizado);
+  }).length;
+  return qtd >= 4;
+}
+
+function _correcaoPoucoAcionavel(texto) {
+  const s = _normalizar(texto);
+  const recomendacoesFracas = [
+    'analise mais detalhada',
+    'analisar mais detalhadamente',
+    'agendar uma videochamada',
+    'realizar uma videochamada',
+    'entender melhor o contexto',
+    'consultar a documentacao',
+    'verificar se ha patches',
+    'verificar se ha atualizacoes',
+  ];
+  const temFraca = recomendacoesFracas.some(t => s.includes(t));
+  if (!temFraca) return false;
+  if (s.includes('agendar uma videochamada') || s.includes('realizar uma videochamada')) return true;
+  if (s.includes('consultar a documentacao') && s.includes('se precisar de mais informacoes')) return true;
+  const temAcaoTecnica = /\b(mv_[a-z0-9_]+|sx[235]|ponto de entrada|gatilho|valid|when|fwwhen|debug|log|fonte|rotina|parametro|reproduzir|comparar|desabilitar|homologacao|rpo|rdmake|advpl|tlpp|dbaccess)\b/i.test(s);
+  return !temAcaoTecnica;
+}
+
+function _acaoIgnoraErroMaisEspecifico(texto) {
+  const s = _normalizar(texto);
+  const erroModoEdicao = /fwwhen|modo edicao nao respeitado|valor nao pode ser atribuido/.test(s);
+  if (!erroModoEdicao) return false;
+  const primeiraAcaoParametro = /primeir[oa][\s\S]{0,180}\bmv_[a-z0-9_]+/.test(s);
+  if (!primeiraAcaoParametro) return false;
+  const primeiraAcaoAtacaEdicao = /primeir[oa][\s\S]{0,260}\b(when|valid|gatilho|ponto de entrada|customizacao|modo de edicao|atribuicao|atribuir|campo)\b/.test(s);
+  return !primeiraAcaoAtacaEdicao;
+}
+
+function _citaIdsInternosComoEvidencia(texto) {
+  const s = String(texto || '');
+  return /\b(log|logs|mensagens?)\b[\s\S]{0,120}\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i.test(s);
+}
+
+function _descartaCustomizacaoSemBase(textoResposta, manifesto) {
+  const s = _normalizar(textoResposta);
+  const descarta = /nao por customizacao|nao e customizacao|erro e gerado pelo proprio protheus|comportamento padrao do protheus/.test(s);
+  if (!descarta) return false;
+  const selecionados = manifesto?.selecionados || [];
+  const temFonteOuLog = selecionados.some(e => {
+    const nome = _normalizar(e.nome || '');
+    return nome.endsWith('.log') || nome.endsWith('.prw') || nome.endsWith('.tlpp') || nome.endsWith('.advpl') || nome.endsWith('.ini') || nome.endsWith('.json') || nome.endsWith('.xml');
+  });
+  return !temFonteOuLog;
+}
+
 function _normalizar(texto) {
   return String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
@@ -23,6 +92,10 @@ function _normalizar(texto) {
 function _temJustificativa(texto) {
   const s = _normalizar(texto);
   return /\b(porque|devido|pois|apos|nova evidencia|mudou|alterou|repetir.*rev|novo log|periodo diferente|execucao diferente|ambiente mudou|versao nova|revalidar)\b/i.test(s);
+}
+
+function _paginasLidasOuReutilizadas(pesquisa) {
+  return (pesquisa?.paginasLidas || []).filter(p => p.status === 'lida' || p.status === 'reutilizada');
 }
 
 function _avaliarRegressaoInvestigativa(textoResposta, manifesto) {
@@ -96,8 +169,10 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
   const omitidos = manifesto?.omitidos || [];
   const analisados = selecionados.filter(e => e.status === 'ANALISADA' || e.status === 'PARCIALMENTE_ANALISADA');
   const anexosAnalisados = analisados.filter(e => e.tipo === 'anexo' || e.tipo === 'imagem');
+  const imagensAnalisadas = analisados.filter(e => e.tipo === 'imagem');
   const pedeAnexo = /\b(anexo|arquivo|fonte|log|print|imagem|screenshot|pdf|compare|ver novamente)\b/i.test(perguntaTexto);
   const evidenciaCriticaOmitida = omitidos.find(e => (e.score || 0) >= 80 && e.status !== 'NAO_SUPORTADA');
+  const paginasComConteudo = _paginasLidasOuReutilizadas(pesquisa);
 
   if (pedeAnexo && anexosAnalisados.length === 0) {
     falhas.push({ codigo: 'ATTACHMENT_NOT_ANALYZED', legado: 'PERGUNTA_PEDE_ANEXO_SEM_ANEXO_ANALISADO', severidade: 'alta', acaoCorretiva: 'reconstruir_contexto_com_anexo_ou_visual' });
@@ -107,6 +182,58 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
   }
   if (_temRespostaGenerica(resposta) && analisados.length > 0) {
     falhas.push({ codigo: 'GENERIC_RESPONSE_WITH_SPECIFIC_EVIDENCE', legado: 'RESPOSTA_GENERICA_COM_EVIDENCIA_DISPONIVEL', severidade: 'media', acaoCorretiva: 'reforcar_evidencias_especificas' });
+  }
+  if (_usaTemplateFormalRobotico(resposta) && (analisados.length > 0 || paginasComConteudo.length > 0)) {
+    falhas.push({
+      codigo: 'ROBOTIC_TEMPLATE_RESPONSE',
+      severidade: 'media',
+      detalhe: 'resposta usou estrutura de laudo formal apesar de haver contexto para uma conversa tecnica direta',
+      acaoCorretiva: 'reescrever_com_tom_conversacional',
+    });
+  }
+  if (_correcaoPoucoAcionavel(resposta) && (analisados.length > 0 || paginasComConteudo.length > 0)) {
+    falhas.push({
+      codigo: 'WEAK_ACTIONABLE_CORRECTION',
+      severidade: 'media',
+      detalhe: 'resposta terminou em recomendacao generica mesmo com evidencias especificas disponiveis',
+      acaoCorretiva: 'propor_primeiro_ajuste_ou_teste_tecnico',
+    });
+  }
+  if (_acaoIgnoraErroMaisEspecifico(resposta) && (analisados.length > 0 || paginasComConteudo.length > 0)) {
+    falhas.push({
+      codigo: 'SPECIFIC_ERROR_NOT_PRIORITIZED',
+      severidade: 'media',
+      detalhe: 'resposta escolheu parametro/documentacao como primeira acao mesmo havendo erro especifico de modo de edicao/atribuicao',
+      acaoCorretiva: 'priorizar_erro_especifico_na_correcao',
+    });
+  }
+  if (_citaIdsInternosComoEvidencia(resposta)) {
+    falhas.push({
+      codigo: 'INTERNAL_IDS_USED_AS_EVIDENCE',
+      severidade: 'media',
+      detalhe: 'resposta citou ids internos do manifesto como se fossem logs/evidencias do chamado',
+      acaoCorretiva: 'remover_ids_internos_e_citar_conteudo_visivel',
+    });
+  }
+  if (_descartaCustomizacaoSemBase(resposta, manifesto)) {
+    falhas.push({
+      codigo: 'CUSTOMIZATION_DISCARDED_WITHOUT_CODE_OR_LOG',
+      severidade: 'media',
+      detalhe: 'resposta descartou customizacao sem fonte/log/configuracao suficiente para sustentar a conclusao',
+      acaoCorretiva: 'rebaixar_para_hipotese_e_pedir_fonte_ou_log_especifico',
+    });
+  }
+  if (imagensAnalisadas.length > 0 && /imagem|imagens|print|screenshot|tela/i.test(resposta)) {
+    const respostaNormalizada = _normalizar(resposta);
+    const temSinalVisualConcreto = /fwwhen|%\s*rateio|perc\s+rateio|valor do rat|nf rateio|modo edicao|valor nao pode ser atribuido|incluir|alterar|100[, ]?00|105[, ]?6/.test(respostaNormalizada);
+    if (!temSinalVisualConcreto) {
+      falhas.push({
+        codigo: 'VISUAL_EVIDENCE_TOO_GENERIC',
+        severidade: 'media',
+        detalhe: 'resposta cita imagens/prints sem mencionar texto, campo, percentual ou mensagem visivel nos anexos',
+        acaoCorretiva: 'citar_evidencia_visual_concreta',
+      });
+    }
   }
   falhas.push(...investigativeDiscipline.avaliarAfirmacoes({
     textoResposta: resposta,
@@ -120,8 +247,8 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
   falhas.push(..._avaliarRegressaoInvestigativa(resposta, manifesto));
   if (/pesquis|tdn|totvs|softexpert|documenta[cç][aã]o|fonte oficial/i.test(perguntaTexto)) {
     if (!pesquisa?.configurado) falhas.push({ codigo: 'RESEARCH_REQUIRED_NOT_EXECUTED', legado: 'PESQUISA_NAO_CONFIGURADA', severidade: 'media', acaoCorretiva: 'informar_pesquisa_indisponivel' });
-    else if (pesquisa?.modo !== 'web') falhas.push({ codigo: 'RESEARCH_CONFIGURED_WITHOUT_RESULTS', legado: 'PESQUISA_CONFIGURADA_SEM_RESULTADO', severidade: 'baixa' });
-    else if (!(pesquisa?.paginasLidas || []).some(p => p.status === 'lida')) falhas.push({ codigo: 'RESEARCH_FOUND_BUT_NOT_READ', legado: 'PESQUISA_SEM_PAGINA_LIDA', severidade: 'media', acaoCorretiva: 'tentar_fetch_seguro' });
+    else if (pesquisa?.modo !== 'web') falhas.push({ codigo: 'RESEARCH_CONFIGURED_WITHOUT_RESULTS', legado: 'PESQUISA_CONFIGURADA_SEM_RESULTADO', severidade: 'media', acaoCorretiva: 'executar_pesquisa_solicitada_ou_declarar_limite' });
+    else if (!paginasComConteudo.length) falhas.push({ codigo: 'RESEARCH_FOUND_BUT_NOT_READ', legado: 'PESQUISA_SEM_PAGINA_LIDA', severidade: 'media', acaoCorretiva: 'tentar_fetch_seguro' });
   }
 
   const deveRetry = !houveRetry && falhas.some(f => ['alta', 'media'].includes(f.severidade));
@@ -137,7 +264,7 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
       dossieStale: manifesto?.dossie?.stale ?? null,
       dossieItensSelecionados: manifesto?.dossie?.itensSelecionados?.length || 0,
       pesquisaModo: pesquisa?.modo || null,
-      paginasLidas: (pesquisa?.paginasLidas || []).filter(p => p.status === 'lida').length,
+      paginasLidas: paginasComConteudo.length,
     },
   };
 }
@@ -161,6 +288,13 @@ function montarInstrucaoRetry(gate) {
     regressao.length ? `Regressao investigativa detectada: ${regressao.map(f => `${f.codigo}${f.itemCodigo ? ` em ${f.itemCodigo}` : ''}${f.evidencia ? ` em ${f.evidencia}` : ''}`).join('; ')}.` : '',
     regressao.length ? 'Use o estado atual do dossie: nao repita teste/evidencia/hipotese/solucao ja encerrados sem justificar explicitamente qual evidencia ou mudanca nova torna a repeticao necessaria.' : '',
     'Refaca a analise usando explicitamente as evidencias selecionadas no manifesto. Cite as evidencias tecnicas que sustentam o diagnostico.',
+    'Reescreva como conversa tecnica humana, nao como laudo com template fixo. Evite cabecalhos formais em Markdown como "### Fatos", "### Causa provavel" e "### Proximos passos". Comece pelo ponto que mais muda a analise e va direto ao proximo ajuste/teste de maior valor.',
+    'Se houver evidencias suficientes, proponha uma acao tecnica concreta. Nao use "agendar videochamada", "analisar melhor" ou "consultar documentacao" como recomendacao principal quando ja existem prints, logs, parametros, rotinas ou fontes oficiais apontando uma trilha.',
+    'A primeira acao tecnica deve atacar a evidencia mais especifica do caso. Se houver uma mensagem de erro concreta (por exemplo modo de edicao, campo nao atribuivel, stack trace ou excecao), priorize essa trilha antes de parametros/documentacao genericos.',
+    'Nao cite IDs internos do manifesto como se fossem logs, mensagens ou evidencias do chamado. Cite apenas conteudo visivel, nome de arquivo, campo, mensagem de erro, trecho de log real ou fonte tecnica.',
+    'Nao descarte customizacao nem atribua o erro ao produto padrao sem fonte, log ou codigo sustentando essa conclusao. Se nao houver esse material, diga que precisa conferir fonte/gatilho/ponto de entrada.',
+    'Quando houver imagens/prints enviados, cite textos, campos, percentuais, mensagens ou estados visiveis nas telas. Nao escreva apenas "as imagens mostram" sem dizer o que foi visto.',
+    'Quando houver fontes oficiais lidas ou reutilizadas, use-as como evidencia externa rastreavel e diferencie parametro/documentacao de causa confirmada no ambiente.',
     'Se a evidencia necessaria nao estiver disponivel ou nao for suportada, diga isso objetivamente e peca a evidencia especifica que falta.',
     'Se uma causa ou fato tecnico nao estiver sustentado, rebaixe para hipotese explicita e informe a lacuna/proximo passo de maior valor.',
     pesquisaIndisponivel ? 'Pesquisa tecnica externa era necessaria para esta pergunta mas nao pode ser executada (mecanismo de busca indisponivel nesta instalacao). Declare isso explicitamente na resposta ao usuario — nao apresente a causa como se tivesse sido corroborada por fonte externa, e nao finja ter pesquisado.' : '',

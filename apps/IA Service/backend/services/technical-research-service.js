@@ -780,6 +780,10 @@ function planejarPesquisa(ctx = {}) {
         ? `nova evidencia tecnica distintiva: ${sinaisMensagemAtual.erros[0].slice(0, 80)}`
         : null;
   const dedup = _deduplicarConsultas(consultasCandidatas, historico, motivoReexecucao);
+  if (ctx.forcarPesquisa && dedup.consultas.length) {
+    devePesquisar = true;
+    motivo = motivoReexecucao;
+  }
   if (devePesquisar && !dedup.consultas.length) {
     devePesquisar = false;
     motivo = 'consultas candidatas ja foram executadas e nao ha justificativa para repetir agora';

@@ -147,12 +147,56 @@ async function testarPedidoExplicitoNaoQuebraDeteccaoDeterministicaForte() {
   assert.strictEqual(pesquisa.plano.devePesquisar, true);
 }
 
+async function testarForcarPesquisaVenceSemanticaDesfavoravel() {
+  const empresaId = 70250;
+  const at = atendimento(empresaId, 'Protheus rateio de nota com comportamento repetido');
+  const texto = 'Revise todo o historico deste chamado e os anexos sincronizados e pesquise uma nova solucao.';
+  execucaoRepo.salvarExecucao(empresaId, {
+    atendimentoId: at.id,
+    status: 'concluido',
+    pesquisa: {
+      consultas: ['TOTVS Protheus rateio nota MV_RATDESP MV_TPRTDSP'],
+      paginasLidas: [{ url: 'https://tdn.totvs.com/pages/rateio', status: 'lida', trecho: 'pesquisa anterior' }],
+    },
+  });
+  const dossie = memoria(empresaId, at.id, texto);
+  const pesquisa = await pesquisaService.pesquisar({
+    empresaId,
+    atendimentoId: at.id,
+    atendimento: at,
+    texto,
+    dossieOperacional: dossie,
+    forcarPesquisa: true,
+  }, {
+    buscarSerper: async () => [{
+      titulo: 'TDN rateio Protheus',
+      url: 'https://tdn.totvs.com/pages/rateio-nf',
+      trecho: 'conteudo novo controlado',
+      fonte: 'Serper/Google',
+      consulta: 'rateio',
+    }],
+    abrirResultados: async (resultados) => resultados.slice(0, 1).map(r => ({
+      titulo: r.titulo,
+      url: r.url,
+      status: 'lida',
+      trecho: 'pagina efetivamente lida no teste',
+      consulta: r.consulta,
+      rankingScore: r.rankingScore,
+    })),
+    interpretarSemantico: interpretarSemanticoComPedido(false),
+  });
+  assert.strictEqual(pesquisa.plano.devePesquisar, true, 'forcarPesquisa=true deve vencer semantica desfavoravel');
+  assert.strictEqual(pesquisa.modo, 'web', 'forcarPesquisa=true deve executar busca quando ha provider disponivel');
+  assert.ok(pesquisa.paginasLidas.some(p => p.status === 'lida'), 'forcarPesquisa=true deve ler ao menos uma pagina quando ha resultado');
+}
+
 async function main() {
   database.inicializarDB(dbTmp());
   try {
     await testarPedidosExplicitosQuandoInvestigacaoAberta();
     await testarPedidoExplicitoComPesquisaJaExecutada();
     await testarPedidoExplicitoNaoQuebraDeteccaoDeterministicaForte();
+    await testarForcarPesquisaVenceSemanticaDesfavoravel();
     console.log(`etapa-v1-pesquisa-explicita.test.js: ok (${PEDIDOS_EXPLICITOS_PESQUISA.length} formulacoes + cenario E + regressao fast-path)`);
   } finally {
     database.fecharDB();

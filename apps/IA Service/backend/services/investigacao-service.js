@@ -452,6 +452,60 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
         pergunta: texto,
         houveRetry: true,
       });
+      const codigosReescritaFinal = new Set([
+        'ROBOTIC_TEMPLATE_RESPONSE',
+        'WEAK_ACTIONABLE_CORRECTION',
+        'SPECIFIC_ERROR_NOT_PRIORITIZED',
+        'INTERNAL_IDS_USED_AS_EVIDENCE',
+        'CUSTOMIZATION_DISCARDED_WITHOUT_CODE_OR_LOG',
+      ]);
+      const falhasReescritaFinal = (qualityGate.falhas || []).filter(f => codigosReescritaFinal.has(f.codigo));
+      if (falhasReescritaFinal.length > 0 && (qualityGate.falhas || []).every(f => codigosReescritaFinal.has(f.codigo))) {
+        acoesRetry.push({ tipo: 'reescrita_final_quality_gate', falhas: falhasReescritaFinal.map(f => f.codigo) });
+        const evidenciasResumo = (contexto.manifesto?.selecionados || [])
+          .slice(0, 12)
+          .map(e => `${e.tipo}:${e.nome || e.id} (${e.status}; ${e.motivo || 'sem motivo'})`)
+          .join('\n');
+        const fontesResumo = (pesquisaTecnica?.paginasLidas || [])
+          .slice(0, 6)
+          .map(p => `${p.status || 'fonte'}: ${p.titulo || p.url}`)
+          .join('\n');
+        promptUsado = [
+          '## Reescrita final obrigatoria por Quality Gate',
+          qualityGateService.montarInstrucaoRetry(qualityGate),
+          '',
+          'A resposta abaixo ja analisou o caso, mas ainda falhou no Quality Gate. Reescreva SEM reinvestigar do zero.',
+          '',
+          'Regras obrigatorias:',
+          '- nao use cabecalhos Markdown;',
+          '- nao use checklist de laudo;',
+          '- nao recomende videochamada;',
+          '- comece pelo erro especifico mais forte;',
+          '- diga o primeiro teste/ajuste tecnico concreto;',
+          '- mantenha evidencias visuais e fontes oficiais que sustentam a analise;',
+          '- se mencionar parametros/documentacao, trate como apoio e nao como primeira trilha quando existir erro especifico de tela/log.',
+          '',
+          '## Evidencias selecionadas resumidas',
+          evidenciasResumo || 'Sem resumo de evidencias.',
+          '',
+          '## Fontes tecnicas lidas/reutilizadas',
+          fontesResumo || 'Sem fontes tecnicas.',
+          '',
+          '## Resposta anterior a reescrever',
+          resultado.texto,
+        ].join('\n');
+        resultado = await aiProviderClient.chamarIA(keys, cfg, promptBuilder.SYSTEM_PROMPT, promptUsado, [], {
+          maxTokens: 2200,
+          timeoutMs: Math.min(timeoutMs, 60000),
+        });
+        qualityGate = qualityGateService.avaliarResposta({
+          textoResposta: resultado.texto,
+          manifesto: contexto.manifesto,
+          pesquisa: pesquisaTecnica,
+          pergunta: texto,
+          houveRetry: true,
+        });
+      }
       qualityGate.retryCorretivo = { executado: true, acoes: acoesRetry };
     }
   } catch (erro) {

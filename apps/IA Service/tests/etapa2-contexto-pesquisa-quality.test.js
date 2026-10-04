@@ -129,6 +129,23 @@ async function main() {
     assert.ok(contexto.manifesto.omitidos.length > 0, 'manifesto deve registrar evidências omitidas por orçamento/relevância');
     assert.ok(contexto.manifesto.selecionados.some(e => e.id === logAntigo.id && e.status === 'PARCIALMENTE_ANALISADA'), 'log grande deve ser marcado como parcial');
 
+    const contextoAnexosSincronizados = contextEngine.montarContextoInvestigacao({
+      atendimento,
+      mensagens,
+      mensagemAtual: 'Revise todo o historico deste chamado e os anexos sincronizados e pesquise uma nova solucao.',
+      anexosDoTurno: [imagem],
+      anexosComoContexto: true,
+      pesquisaTecnicaTexto: '',
+      systemPrompt: promptBuilder.SYSTEM_PROMPT,
+      cfg: { provedorPrimario: 'openai', modelos: { openai: 'gpt-4o-mini' } },
+    });
+    assert.ok(
+      contextoAnexosSincronizados.imagensSelecionadas.some(a => a.id === imagem.id),
+      'imagem sincronizada enviada como contexto deve ser analisada, nao omitida por baixa relevancia'
+    );
+    assert.ok(contextoAnexosSincronizados.userPrompt.includes('tom de conversa tecnica humana'), 'prompt final deve pedir conversa tecnica humana');
+    assert.ok(!contextoAnexosSincronizados.userPrompt.includes('estruture a resposta conforme especificado'), 'prompt final nao deve puxar a IA para laudo formal');
+
     const pdfBuffer = criarPdfBuffer('Manual tecnico: erro PDF-777 resolvido ajustando parametro MV_TESTE.');
     const pdf = await extrairConteudo({ buffer: pdfBuffer, nomeOriginal: 'manual.pdf', mimeDeclarado: 'application/pdf' });
     assert.strictEqual(pdf.linguagemDetectada, 'pdf');
@@ -159,6 +176,80 @@ async function main() {
     });
     assert.strictEqual(gate.deveRetry, true);
     assert.ok(gate.falhas.some(f => f.codigo === 'GENERIC_RESPONSE_WITH_SPECIFIC_EVIDENCE' || f.legado === 'RESPOSTA_GENERICA_COM_EVIDENCIA_DISPONIVEL'));
+
+    const gatePesquisaReutilizada = qualityGate.avaliarResposta({
+      textoResposta: 'Diagnostico: a fonte oficial reutilizada da TOTVS descreve o parametro MV_TPRTDSP e sera usada apenas como apoio externo.',
+      manifesto: { selecionados: [], omitidos: [] },
+      pesquisa: {
+        configurado: true,
+        modo: 'web',
+        paginasLidas: [{ status: 'reutilizada', url: 'https://centraldeatendimento.totvs.com/hc/pt-br/articles/x', titulo: 'TOTVS' }],
+      },
+      pergunta: 'pesquise na documentacao oficial',
+    });
+    assert.ok(!gatePesquisaReutilizada.falhas.some(f => f.codigo === 'RESEARCH_FOUND_BUT_NOT_READ'), 'pagina reutilizada deve contar como fonte lida');
+    assert.strictEqual(gatePesquisaReutilizada.criterios.paginasLidas, 1);
+
+    const gateVisualGenerico = qualityGate.avaliarResposta({
+      textoResposta: 'As imagens mostram percentuais incorretos e sugerem problema na rotina de rateio.',
+      manifesto: { selecionados: [{ status: 'ANALISADA', tipo: 'imagem', nome: 'imagem (28).png' }], omitidos: [] },
+      pesquisa: { configurado: true, modo: 'web', paginasLidas: [{ status: 'lida' }] },
+      pergunta: 'analise os prints anexos',
+    });
+    assert.ok(gateVisualGenerico.falhas.some(f => f.codigo === 'VISUAL_EVIDENCE_TOO_GENERIC'), 'print analisado exige evidência visual concreta na resposta');
+
+    const gateTemplateRobotico = qualityGate.avaliarResposta({
+      textoResposta: [
+        '**Diagnostico**',
+        'O erro FWWHEN aparece no rateio.',
+        '**Causa provavel**',
+        'Pode haver atribuicao indevida.',
+        '**Evidencias**',
+        'Print com % Rateio.',
+        '**Correcao proposta**',
+        'Analisar melhor a rotina.',
+        '**Validacao**',
+        'Testar em homologacao.',
+        '**Proximos passos**',
+        'Agendar uma videochamada.',
+      ].join('\n'),
+      manifesto: { selecionados: [{ status: 'ANALISADA', tipo: 'imagem', nome: 'rateio.png' }], omitidos: [] },
+      pesquisa: { configurado: true, modo: 'web', paginasLidas: [{ status: 'reutilizada' }] },
+      pergunta: 'pesquise uma nova solucao com base nos anexos',
+    });
+    assert.ok(gateTemplateRobotico.falhas.some(f => f.codigo === 'ROBOTIC_TEMPLATE_RESPONSE'), 'resposta em laudo formal deve acionar retry conversacional');
+
+    const gateCorrecaoFraca = qualityGate.avaliarResposta({
+      textoResposta: 'Olhando os prints, o caso merece uma analise mais detalhada. Sugiro agendar uma videochamada com o cliente para entender melhor o contexto e consultar a documentacao da TOTVS.',
+      manifesto: { selecionados: [{ status: 'ANALISADA', tipo: 'imagem', nome: 'rateio.png' }], omitidos: [] },
+      pesquisa: { configurado: true, modo: 'web', paginasLidas: [{ status: 'lida' }] },
+      pergunta: 'pesquise uma nova solucao com base nos anexos',
+    });
+    assert.ok(gateCorrecaoFraca.falhas.some(f => f.codigo === 'WEAK_ACTIONABLE_CORRECTION'), 'correcao proposta generica deve ser recusada quando ha evidencias especificas');
+
+    const gateErroEspecificoIgnorado = qualityGate.avaliarResposta({
+      textoResposta: 'O ponto principal e a mensagem "Modo edição não respeitado. Valor não pode ser atribuído. (% Rateio)". O primeiro teste tecnico que eu faria agora e conferir os parametros MV_RATDESP e MV_TPRTDSP na documentacao.',
+      manifesto: { selecionados: [{ status: 'ANALISADA', tipo: 'imagem', nome: 'rateio.png' }], omitidos: [] },
+      pesquisa: { configurado: true, modo: 'web', paginasLidas: [{ status: 'lida' }] },
+      pergunta: 'pesquise uma nova solucao com base nos anexos',
+    });
+    assert.ok(gateErroEspecificoIgnorado.falhas.some(f => f.codigo === 'SPECIFIC_ERROR_NOT_PRIORITIZED'), 'erro especifico de modo de edicao deve guiar a primeira acao antes de parametro generico');
+
+    const gateIdsInternos = qualityGate.avaliarResposta({
+      textoResposta: 'Mensagens de log 979745a0-c8f4-4de7-916f-954bd8a6cc72 confirmam que o erro veio do Protheus.',
+      manifesto: { selecionados: [{ status: 'ANALISADA', tipo: 'imagem', nome: 'rateio.png' }], omitidos: [] },
+      pesquisa: { configurado: true, modo: 'web', paginasLidas: [{ status: 'lida' }] },
+      pergunta: 'pesquise uma nova solucao com base nos anexos',
+    });
+    assert.ok(gateIdsInternos.falhas.some(f => f.codigo === 'INTERNAL_IDS_USED_AS_EVIDENCE'), 'ids internos nao podem virar evidencia/log na resposta');
+
+    const gateDescartaCustomizacao = qualityGate.avaliarResposta({
+      textoResposta: 'A mensagem indica que o erro e gerado pelo proprio Protheus, nao por customizacao.',
+      manifesto: { selecionados: [{ status: 'ANALISADA', tipo: 'imagem', nome: 'rateio.png' }], omitidos: [] },
+      pesquisa: { configurado: true, modo: 'web', paginasLidas: [{ status: 'lida' }] },
+      pergunta: 'pesquise uma nova solucao com base nos anexos',
+    });
+    assert.ok(gateDescartaCustomizacao.falhas.some(f => f.codigo === 'CUSTOMIZATION_DISCARDED_WITHOUT_CODE_OR_LOG'), 'nao deve descartar customizacao sem fonte/log/codigo');
 
     console.log('etapa2-contexto-pesquisa-quality.test.js: ok');
   } finally {
