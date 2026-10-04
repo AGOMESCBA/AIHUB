@@ -81,6 +81,28 @@ function getAiConfig(empresaId) {
   };
 }
 
+// Pesquisa Web é infraestrutura do Motor de Investigação (IA Service), não
+// um provider de resposta conversacional — por isso vive em tabela própria
+// (platform_search_configs), mesmo padrão de platform_agent_configs: 1
+// config por empresa, nunca misturada com platform_ai_configs (que é
+// especificamente sobre os 5 providers de IA de chat). Mesmo conceito de
+// provedor primário + ordem de fallback já usado para as IAs (ver
+// getAiConfig acima) — "gemini"/"openai" aqui não têm chave própria, a
+// pesquisa reaproveita a chave Gemini/OpenAI já configurada em
+// platform_ai_configs para aquela empresa (resolvido no IA Service, não aqui).
+function getSearchConfig(empresaId) {
+  if (!empresaId) return null;
+  const row = safeGet('SELECT * FROM platform_search_configs WHERE empresa_id = ? AND COALESCE(ativo, 1) = 1', [Number(empresaId)]);
+  if (!row) return null;
+  return {
+    empresaId: row.empresa_id,
+    provedorPrimario: row.provedor_primario || 'serper',
+    fallbackOrdem: row.fallback_ordem || 'serper,gemini,openai',
+    serperApiKey: decrypt(row.serper_api_key_enc),
+    atualizadoEm: row.atualizado_em,
+  };
+}
+
 function getAgentConfig(empresaId) {
   if (!empresaId) return null;
   const row = safeGet('SELECT * FROM platform_agent_configs WHERE empresa_id = ?', [Number(empresaId)]);
@@ -164,4 +186,4 @@ function getConfigPorApelido(apelido) {
   return { empresaId: row.empresa_id };
 }
 
-module.exports = { getAiConfig, getAgentConfig, listarIaServicePorTelefone, getConfigPorApelido };
+module.exports = { getAiConfig, getSearchConfig, getAgentConfig, listarIaServicePorTelefone, getConfigPorApelido };

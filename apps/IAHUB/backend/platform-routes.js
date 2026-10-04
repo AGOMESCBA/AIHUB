@@ -135,6 +135,37 @@ function getAiRow(eid) {
 function getAgentRow(eid) {
   return getDB().prepare('SELECT * FROM platform_agent_configs WHERE empresa_id = ?').get(Number(eid));
 }
+function getSearchRow(eid) {
+  return getDB().prepare('SELECT * FROM platform_search_configs WHERE empresa_id = ?').get(Number(eid));
+}
+// Pesquisa Web é infraestrutura do Motor de Investigação, não um provider de
+// IA conversacional — tabela própria (platform_search_configs), mas MESMO
+// conceito de "provedor primário + ordem de fallback" já usado na Config de
+// IA (ver mapAi acima): um select de primário + presets de fallback na UI.
+// Providers válidos: serper, gemini, openai. Gemini/OpenAI não têm campo de
+// chave aqui — reaproveitam a credencial já configurada em
+// platform_ai_configs para a mesma empresa (resolvido no IA Service).
+const SEARCH_PROVIDERS = ['serper', 'gemini', 'openai'];
+function mapSearch(row, reveal = false) {
+  if (!row) return {
+    empresaId: null,
+    provedorPrimario: 'serper',
+    fallbackOrdem: 'serper,gemini,openai',
+    secrets: {},
+    configurado: false,
+  };
+  return {
+    id: row.id,
+    empresaId: row.empresa_id,
+    provedorPrimario: row.provedor_primario || 'serper',
+    fallbackOrdem: row.fallback_ordem || 'serper,gemini,openai',
+    secrets: {
+      serper_api_key: secretValue(row, 'serper_api_key_enc', reveal),
+    },
+    configurado: !!row.serper_api_key_enc,
+    atualizadoEm: row.atualizado_em,
+  };
+}
 
 module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdmin }) {
   app.get('/api/iahub/platform/ai-config', requireAuth, requireEmpresa, (req, res) => {
@@ -245,6 +276,122 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
     } catch (err) {
       res.status(500).json({ ok: false, erro: err.message || 'Falha ao testar provedor.' });
     }
+  });
+
+  app.get('/api/iahub/platform/search-config', requireAuth, requireEmpresa, (req, res) => {
+    res.json(mapSearch(getSearchRow(empresaId(req))));
+  });
+
+  // Revela a chave Serper já salva em texto puro — mesmo padrão e
+  // justificativa do botão "olhinho" de ai-config/reveal acima: ação
+  // explícita sob clique do admin, nunca incluída no GET normal de status.
+  app.get('/api/iahub/platform/search-config/reveal', requireAuth, requireAdmin, requireEmpresa, (req, res) => {
+    const row = getSearchRow(empresaId(req));
+    res.json({ serper: row ? decrypt(row.serper_api_key_enc) : '' });
+  });
+
+  app.post('/api/iahub/platform/search-config', requireAuth, requireAdmin, requireEmpresa, (req, res) => {
+    const eid = empresaId(req);
+    const atual = getSearchRow(eid);
+    const body = req.body || {};
+
+    // Mesmo padrão de fallbackOrdem das IAs: salva a string como veio, sem
+    // validar nomes aqui — a filtragem defensiva de providers inválidos
+    // acontece em runtime, no consumidor (ver _normalizarOrdemPesquisa no
+    // IA Service, espelhando ai-provider-client._normalizarOrdem).
+    const data = {
+      id: atual?.id || uuid(),
+      provedor_primario: body.provedorPrimario || body.provedor_primario || atual?.provedor_primario || 'serper',
+      fallback_ordem: body.fallbackOrdem || body.fallback_ordem || atual?.fallback_ordem || 'serper,gemini,openai',
+      serper_api_key_enc: body.serper_api_key ? encrypt(body.serper_api_key) : atual?.serper_api_key_enc || null,
+      atualizado_em: now(),
+    };
+    if (atual) {
+      getDB().prepare(`
+        UPDATE platform_search_configs
+           SET provedor_primario = ?, fallback_ordem = ?, serper_api_key_enc = ?, atualizado_em = ?
+         WHERE empresa_id = ?
+      `).run(data.provedor_primario, data.fallback_ordem, data.serper_api_key_enc, data.atualizado_em, eid);
+    } else {
+      getDB().prepare(`
+        INSERT INTO platform_search_configs (
+          id, empresa_id, provedor_primario, fallback_ordem, serper_api_key_enc, ativo, criado_em, atualizado_em
+        ) VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+      `).run(data.id, eid, data.provedor_primario, data.fallback_ordem, data.serper_api_key_enc, data.atualizado_em, data.atualizado_em);
+    }
+    res.json(mapSearch(getSearchRow(eid)));
+  });
+
+  // Teste de conexão do Serper — consulta mínima e real (num: 1) só para
+  // validar que a chave autentica e o serviço responde, sem gastar mais
+  // créditos do que o necessário. Mesmo mecanismo de chamada HTTP crua já
+  // usado pelo IA Service (technical-research-service._buscarSerper),
+  // reaproveitado aqui via require lazy dentro do handler — mesma regra já
+  // seguida pelo teste de providers de IA acima: a Platform nunca importa
+  // módulos do IA Service em runtime fora de uma chamada pontual como esta.
+  app.post('/api/iahub/platform/search-config/test', requireAuth, requireAdmin, requireEmpresa, async (req, res) => {
+    const row = getSearchRow(empresaId(req));
+    const apiKey = String(req.body?.serper_api_key || '').trim() || decrypt(row?.serper_api_key_enc);
+    if (!apiKey) return res.status(400).json({ ok: false, erro: 'Informe uma chave ou salve uma chave do Serper.' });
+    try {
+      const https = require('https');
+      await new Promise((resolve, reject) => {
+        const payload = JSON.stringify({ q: 'teste de conexao', num: 1 });
+        const r = https.request({
+          hostname: 'google.serper.dev',
+          path: '/search',
+          method: 'POST',
+          headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+          timeout: 15000,
+        }, (resp) => {
+          let raw = '';
+          resp.on('data', c => { raw += c; });
+          resp.on('end', () => {
+            if (resp.statusCode >= 400) {
+              let msg = `HTTP ${resp.statusCode}`;
+              try { msg = JSON.parse(raw)?.message || msg; } catch (_) { /* mantém msg padrão */ }
+              return reject(new Error(msg));
+            }
+            resolve();
+          });
+        });
+        r.on('timeout', () => r.destroy(new Error('Timeout ao conectar ao Serper.')));
+        r.on('error', reject);
+        r.write(payload);
+        r.end();
+      });
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ ok: false, erro: err.message || 'Falha ao testar conexão com o Serper.' });
+    }
+  });
+
+  // Modelos Gemini confirmados com suporte a grounding via google_search
+  // (ai.google.dev/gemini-api/docs/generate-content/google-search, auditoria
+  // 2026-10) — "disponível" na UI só é afirmado depois de checar isso, nunca
+  // só por existir uma chave Gemini cadastrada (pedido explícito do usuário:
+  // "somente considerar disponível depois de validar tecnicamente").
+  const GEMINI_MODELOS_COM_GOOGLE_SEARCH = /^gemini-(3\.8|3\.7|3\.6|3\.5|3\.1|2\.5|2\.0)/i;
+  app.get('/api/iahub/platform/search-config/capabilities', requireAuth, requireEmpresa, (req, res) => {
+    const eid = empresaId(req);
+    const aiRow = getAiRow(eid);
+    const geminiModelo = aiRow?.gemini_modelo || 'gemini-3.5-flash';
+    const geminiCredencial = !!aiRow?.gemini_api_key_enc;
+    const openaiCredencial = !!aiRow?.openai_api_key_enc;
+    res.json({
+      gemini: {
+        credencial: geminiCredencial,
+        modelo: geminiModelo,
+        // OpenAI/Web Search usa a Responses API com modelo fixo (gpt-4o-mini),
+        // independente do modelo configurado para chat — por isso só depende
+        // de credencial, não do modelo salvo.
+        disponivel: geminiCredencial && GEMINI_MODELOS_COM_GOOGLE_SEARCH.test(geminiModelo),
+      },
+      openai: {
+        credencial: openaiCredencial,
+        disponivel: openaiCredencial,
+      },
+    });
   });
 
   app.get('/api/iahub/platform/agent-config', requireAuth, requireEmpresa, (req, res) => {

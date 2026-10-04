@@ -13,6 +13,25 @@ const RAW_URL = Symbol('rawUrl');
 
 const STATUS_URL_REUTILIZAVEL = new Set(['lida', 'reutilizada']);
 const STATUS_URL_RETRY_PERMITIDO = new Set(['erro_fetch', 'timeout', 'erro', 'bloqueada', 'content_type_invalido', 'limite_download']);
+
+// Detecta um PEDIDO de pesquisa (ação solicitada pelo usuário), não uma
+// EVIDÊNCIA técnica — são sinais diferentes. Cobre verbos de busca em 1ª/2ª/
+// imperativo (pesquise/pesquisar/procure/busque/consulte/veja se/checa se/
+// investiga/tenta achar/dá uma olhada/vasculhe) combinados com um
+// complemento de fonte/conhecimento (documentação, solução, referência,
+// internet, site, base de conhecimento, nota técnica, publicado, conhecido),
+// para não disparar em frases que usem "vê"/"olha" sem relação com pesquisa
+// externa (ex.: "olha o anexo que mandei"). Mantido deliberadamente amplo
+// (não é só "pesquise"/"pesquisar"/"procure", achado real do Caso #001,
+// 2026-10: usuário pediu 3 vezes de formas diferentes e nenhuma foi tratada
+// como pedido explícito) — a decisão final de PESQUISAR OU NÃO continua
+// vindo da camada semântica estruturada (zona cinzenta → validação
+// determinística), este detector só decide se vale a pena perguntar.
+const RE_PEDIDO_PESQUISA = /\b(pesquis\w*|procur\w*|busc\w*|busqu\w*|consult\w*|investig\w*|vascul\w*|ve[ij]a?\s+se|check?a\s+se|d[áa]\s+uma\s+olhada|tenta\s+achar|olha\s+se|ser[áa]\s+que\s+(existe|tem|h[áa]))\b[^.?!]{0,80}\b(solu[cç][aã]o|document\w*|refer[eê]ncia\w*|internet|site|fonte\w*|conhecid\w*|publicad\w*|base\s+de\s+conhecimento|nota\s+t[eé]cnica|artigo\w*|tdn|oficial\w*|extern\w*)\b/i;
+
+function _temPedidoExplicitoPesquisa(texto) {
+  return RE_PEDIDO_PESQUISA.test(String(texto || ''));
+}
 const STOPWORDS_DEDUP = new Set([
   'site', 'www', 'com', 'br', 'pt', 'http', 'https', 'html', 'docs', 'doc', 'kb', 'tdn',
   'totvs', 'protheus', 'softexpert', 'workflow', 'api', 'rest', 'erro', 'error', 'falha',
@@ -77,6 +96,31 @@ function _textoDoContexto({ chamado, atendimento, mensagens = [], anexos = [], t
     atendimento?.conteudoBruto, texto,
     ...mensagens.map(m => m.conteudo),
     ...anexos.map(a => `${a.nomeOriginal} ${a.conteudoExtraido || ''}`),
+  ].filter(Boolean).join('\n');
+}
+
+// Texto da "conversa" (chamado + histórico de mensagens + mensagem atual +
+// diagnóstico já registrado no dossiê), SEM o conteúdo bruto de anexos de
+// código/config. Anexos de código tendem a ser longos e ricos em padrões
+// sintáticos (nomes de rotina, HTTP, tabelas) que não têm relação com a
+// ocorrência relatada — quando um anexo de código genérico (ex.: rotina de
+// impressão de DANFE) coexiste com um diagnóstico já dado pela IA sobre outra
+// rotina (ex.: erro em banco/fornecedor), o blob de texto combinado fazia o
+// anexo "vencer" por volume, direcionando pesquisa/objetivo para o assunto
+// errado (achado real, Caso #001, 2026-10: diagnóstico citava M070CLIFOR/
+// GFIN.API.BANKS.PUTBANKS, mas a pesquisa foi montada em torno de termos do
+// anexo danfeii_new.prw, nunca mencionado no diagnóstico). A prioridade
+// correta é: o que já foi dito sobre o problema (mensagens + dossiê) manda;
+// anexo de código só entra como sinal quando a conversa não tem nada.
+function _textoConversa({ chamado, atendimento, mensagens = [], texto = '', dossieTexto = '' }) {
+  return [
+    chamado?.produto, chamado?.familia, chamado?.modulo, chamado?.servico,
+    chamado?.tipoChamado, chamado?.tipoChamadoFinal, chamado?.titulo, chamado?.assunto,
+    chamado?.breveDescricao, chamado?.descricao, chamado?.informacoesAdicionais,
+    atendimento?.conteudoBruto,
+    ...mensagens.map(m => m.conteudo),
+    dossieTexto,
+    texto,
   ].filter(Boolean).join('\n');
 }
 
@@ -169,12 +213,21 @@ function _temSinalForte(sinais = {}) {
   return Object.values(sinais).some(lista => Array.isArray(lista) && lista.length > 0);
 }
 
+// Só o texto LIVRE do dossiê (dossieOperacional.texto) entra aqui — nunca o
+// JSON serializado de regressaoGuard/itensSelecionados. Esse texto alimenta
+// _extrairSinaisTecnicos()/_montarConsultaPorSinais() para montar a consulta
+// EXTERNA de pesquisa; estado estruturado do dossiê (guard.testesExecutados,
+// guard.hipotesesDescartadas etc.) já é consumido separadamente e
+// corretamente em planejarPesquisa() via `guard.*` — nunca precisou estar
+// nesta string. Incluir o JSON aqui (como fazia antes) contaminava toda
+// consulta de pesquisa com texto de estado interno sem significado para um
+// motor de busca externo: quando a frase resultante virava uma busca por
+// FRASE EXATA (entre aspas) em _montarConsultaPorSinais, o JSON dentro dela
+// garantia zero resultado no Serper em qualquer turno com dossie ativo —
+// ou seja, na maioria dos atendimentos reais em investigacao (achado real,
+// 2026-10, confirmado por teste E2E contra API real).
 function _textoDossie(dossieOperacional) {
-  return [
-    dossieOperacional?.texto,
-    JSON.stringify(dossieOperacional?.manifesto?.regressaoGuard || {}),
-    JSON.stringify(dossieOperacional?.manifesto?.itensSelecionados || []),
-  ].filter(Boolean).join('\n');
+  return dossieOperacional?.texto || '';
 }
 
 function _mensagemCurtaSemEvidencia(texto, sinais) {
@@ -279,7 +332,15 @@ function _montarConsultaPorSinais(det, sinais, objetivo, textoBase) {
   partes.push(...(sinais.tabelasCampos || []).slice(0, 3));
   partes.push(...(sinais.versoesBuilds || []).slice(0, 2));
   if (sinais.http?.length) partes.push(`HTTP ${sinais.http[0]}`);
-  if (sinais.erros?.length) partes.push(`"${sinais.erros[0].replace(/"/g, '').slice(0, 120)}"`);
+  // Termos livres, NUNCA entre aspas de frase exata: uma mensagem de erro
+  // raramente aparece verbatim (mesma pontuacao/capitalizacao) em paginas
+  // indexadas, entao busca por frase exata zera a maioria das vezes mesmo
+  // com o Serper operacional (achado real, 2026-10, confirmado contra API
+  // real — a mesma consulta sem aspas encontrou resultados imediatamente).
+  // _termosRelevantes() extrai so as palavras distintivas (>=4 letras, sem
+  // stopwords) em vez da frase inteira, mantendo a consulta especifica sem
+  // exigir correspondencia literal.
+  if (sinais.erros?.length) partes.push(..._termosRelevantes(sinais.erros[0], 6));
   if (partes.length < 3) partes.push(..._termosRelevantes([objetivo, textoBase].join('\n'), 8));
   return sanitizarConsultaExterna(partes.join(' '));
 }
@@ -387,6 +448,14 @@ function _consultasEquivalentes(a, b) {
 function _classificarPreAnaliseSemantica({ texto = '', sinaisMensagemAtual = {}, guard = {}, historico = {} } = {}) {
   const t = _normalizar(texto).replace(/\s+/g, ' ').trim();
   if (!t) return { zona: 'sem_material', precisaSemantica: false };
+  // Pedido explícito de pesquisa é checado ANTES do fast path determinístico
+  // forte: mesmo quando a mensagem já tem sinal técnico reconhecido (ex.:
+  // "MATA460 Field not found... pesquise uma solução"), queremos que a
+  // camada semântica veja o pedido para decidir cenário D vs. E (investigação
+  // aberta vs. mesma pesquisa já executada) em vez de simplesmente seguir o
+  // fast path, que não considera reexecução/pedido do usuário.
+  const temPedidoPesquisa = _temPedidoExplicitoPesquisa(texto);
+  if (temPedidoPesquisa) return { zona: 'pedido_explicito_pesquisa', precisaSemantica: true };
   if (_temSinalForte(sinaisMensagemAtual)) return { zona: 'deterministica_forte', precisaSemantica: false };
   const temContrasteOperacional = /\b(mas|porem|enquanto|so em|somente|funciona|conclui|nao|não|010\d|ambiente|usuario|unidade|filial|perfil)\b/i.test(t);
   const administrativo = t.length <= 140
@@ -619,10 +688,17 @@ function planejarPesquisa(ctx = {}) {
   const perfil = PERFIS[det.dominio] || PERFIS.generico;
   const textoBase = _textoDoContexto(ctx);
   const dossieTexto = _textoDossie(ctx.dossieOperacional);
-  const sinais = _extrairSinaisTecnicos({ ...ctx, texto: [ctx.texto, dossieTexto].filter(Boolean).join('\n') });
+  const textoConversa = _textoConversa({ ...ctx, dossieTexto });
+  const sinaisConversa = _extrairSinaisTecnicos({ texto: textoConversa });
+  // Sinal da conversa (mensagens + dossiê + mensagem atual) manda sempre que
+  // existir; o blob completo (incluindo anexos de código) só é usado quando
+  // a conversa sozinha não trouxe nenhum sinal técnico aproveitável — evita
+  // que um anexo de código genérico desvie objetivo/consulta de pesquisa para
+  // um assunto diferente do diagnóstico já em curso (ver _textoConversa).
+  const sinais = _temSinalForte(sinaisConversa) ? sinaisConversa : _extrairSinaisTecnicos({ ...ctx, texto: [ctx.texto, dossieTexto].filter(Boolean).join('\n') });
   const sinaisMensagemAtual = _extrairSinaisTecnicos({ ...ctx, chamado: null, atendimento: null, mensagens: [], anexos: [], texto: ctx.texto || '' });
   const historico = _coletarHistoricoPesquisa(ctx.empresaId || ctx.atendimento?.empresaId, ctx.atendimentoId || ctx.atendimento?.id);
-  const objetivo = _objetivoDoPlano({ det, sinais, dossieOperacional: ctx.dossieOperacional, texto: ctx.texto || textoBase });
+  const objetivo = _objetivoDoPlano({ det, sinais, dossieOperacional: ctx.dossieOperacional, texto: ctx.texto || textoConversa });
   const lacunas = [];
   const guard = ctx.dossieOperacional?.manifesto?.regressaoGuard || {};
   if ((guard.testesExecutados || []).length) lacunas.push('proximo passo apos teste ja executado');
@@ -646,18 +722,43 @@ function planejarPesquisa(ctx = {}) {
     motivo = 'sem material tecnico para pesquisa';
   }
 
-  const consultasBase = montarConsultas({ ...ctx, texto: [ctx.texto, dossieTexto].filter(Boolean).join('\n') }).consultas;
-  const consultaSinais = _montarConsultaPorSinais(det, sinais, objetivo, textoBase);
+  // Mesma prioridade conversa-primeiro aplicada a `sinais` acima: só repassa
+  // anexos para montarConsultas() quando a conversa não tem sinal técnico
+  // próprio, senão o termo mais frequente do anexo de código (ex.: nome de
+  // rotina de impressão) acaba entrando como consulta extra desalinhada do
+  // diagnóstico real em curso.
+  const ctxConsultaBase = _temSinalForte(sinaisConversa)
+    ? { ...ctx, mensagens: ctx.mensagens, anexos: [], texto: textoConversa }
+    : { ...ctx, texto: [ctx.texto, dossieTexto].filter(Boolean).join('\n') };
+  const consultasBase = montarConsultas(ctxConsultaBase).consultas;
+  // Mesma prioridade: o fallback de _montarConsultaPorSinais (usado quando
+  // há menos de 3 termos estruturados) usa _termosRelevantes sobre este
+  // texto-base — se vier do blob completo com anexos, o termo mais frequente
+  // do anexo de código ainda vaza para a consulta mesmo com `sinais` já
+  // corrigido (achado real, regressão do Caso #001: "imprimeproc" aparecia
+  // na consulta final mesmo com objetivo/sinais corretos).
+  const textoBaseParaConsulta = _temSinalForte(sinaisConversa) ? textoConversa : textoBase;
+  const consultaSinais = _montarConsultaPorSinais(det, sinais, objetivo, textoBaseParaConsulta);
   const consultasCandidatas = [...new Set([
     consultaSinais,
     ...consultasBase,
   ].map(q => sanitizarConsultaExterna(q)).filter(Boolean))].slice(0, 5);
 
-  const motivoReexecucao = sinaisMensagemAtual.versoesBuilds?.length
-    ? `nova versao/build relevante: ${sinaisMensagemAtual.versoesBuilds[0]}`
-    : sinaisMensagemAtual.erros?.length
-      ? `nova evidencia tecnica distintiva: ${sinaisMensagemAtual.erros[0].slice(0, 80)}`
-      : null;
+  // ctx.forcarPesquisa: pedido EXPLICITO do usuario (botao "Pesquisar
+  // Soluções" do Radar, nunca disparo automatico) para reexecutar a pesquisa
+  // mesmo que o núcleo técnico pareça repetido — o dedup existe para o Motor
+  // evitar repetir sozinho uma busca sem motivo, não para bloquear um pedido
+  // humano explicito de tentar de novo (achado real, 2026-10: usuário clicou
+  // "Pesquisar Soluções" pela 2ª vez no mesmo chamado e o Motor silenciosamente
+  // não pesquisou nada por considerar "já executado", devolvendo resposta
+  // genérica sem nenhuma pesquisa nova).
+  const motivoReexecucao = ctx.forcarPesquisa
+    ? 'pesquisa solicitada explicitamente pelo usuario (botao Pesquisar Soluções)'
+    : sinaisMensagemAtual.versoesBuilds?.length
+      ? `nova versao/build relevante: ${sinaisMensagemAtual.versoesBuilds[0]}`
+      : sinaisMensagemAtual.erros?.length
+        ? `nova evidencia tecnica distintiva: ${sinaisMensagemAtual.erros[0].slice(0, 80)}`
+        : null;
   const dedup = _deduplicarConsultas(consultasCandidatas, historico, motivoReexecucao);
   if (devePesquisar && !dedup.consultas.length) {
     devePesquisar = false;
@@ -943,8 +1044,19 @@ async function _abrirResultados(resultados, limite = 4, plano = {}, opts = {}) {
   return paginas;
 }
 
-async function _buscarSerper(consultas, limitePorConsulta) {
-  const key = process.env.SERPER_API_KEY;
+async function _buscarSerper(consultas, limitePorConsulta, { apiKey } = {}) {
+  // BUG REAL CORRIGIDO (2026-10, achado em teste E2E contra API real): esta
+  // funcao lia a chave SO de process.env.SERPER_API_KEY, ignorando o
+  // parametro apiKey vindo de searchConfig (resolverConfigPesquisa) — ao
+  // contrario de _buscarGeminiWebSearch/_buscarOpenAIWebSearch, que sempre
+  // respeitaram a chave recebida por parametro. Na pratica, a chave Serper
+  // configurada pela tela "Pesquisa Web" (platform_search_configs) NUNCA era
+  // usada; Serper so funcionava se SERPER_API_KEY tambem estivesse definida
+  // como variavel de ambiente do processo — quebrando silenciosamente (`[]`,
+  // nunca um erro) a propria feature de configuracao via tela implementada
+  // nesta sessao. env var mantida como fallback de compatibilidade retroativa
+  // com o caminho legado (searchConfig ausente).
+  const key = apiKey || process.env.SERPER_API_KEY;
   if (!key) return [];
   const resultados = [];
   for (const q of consultas) {
@@ -982,7 +1094,156 @@ async function _buscarBing(consultas, limitePorConsulta) {
   return resultados;
 }
 
-async function pesquisar(ctx = {}, { limitePorConsulta = 3, buscarSerper, buscarBing, abrirResultados, forcarRefresh = false, interpretarSemantico, timeoutMsSemantico } = {}) {
+// Gemini/Google Search — grounding nativo no MESMO endpoint generateContent
+// já usado para chat (ai-provider-client.js), ativado por tools:[{google_search:{}}].
+// Confirmado por auditoria (2026-10, doc oficial ai.google.dev/gemini-api/docs/
+// generate-content/google-search): funciona com o modelo já configurado
+// (gemini-3.5-flash está na lista de suporte), citações estruturadas em
+// candidates[0].groundingMetadata.groundingChunks. NÃO combina com function
+// calling na mesma chamada — por isso é uma chamada isolada, sem relação com
+// o ai-provider-client.chamarIA usado para a resposta principal do chat.
+async function _buscarGeminiWebSearch(consultas, limitePorConsulta, { apiKey, modelo } = {}) {
+  if (!apiKey) return [];
+  const model = modelo || 'gemini-3.5-flash';
+  const resultados = [];
+  // O chamador (pesquisar()) já garante que só 1 consulta chega aqui (a mais
+  // relevante do plano) — nunca o loop completo de até 5 usado pelo Serper.
+  // Guard adicional aqui por segurança caso esta função seja chamada
+  // diretamente em outro lugar no futuro: medido por teste real contra a API
+  // (2026-10), uma única chamada de grounding levou 255 segundos (o modelo
+  // decide sozinho gerar várias sub-buscas internas, confirmado em
+  // webSearchQueries) — com várias consultas sequenciais o tempo total
+  // passaria de 15-20 minutos, inviável para uma resposta de chat.
+  const q = consultas[0];
+  if (!q) return [];
+  const path = `/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  let data;
+  try {
+    // CAUSA RAIZ DOS 255s INVESTIGADA E CORRIGIDA (2026-10, não só mitigada
+    // por timeout): confirmado via documentação oficial do Gemini 3
+    // (ai.google.dev/gemini-api/docs/gemini-3) que (1) `thinking_level` tem
+    // default "high" quando omitido — o modelo decide sozinho quanto
+    // "pensar" antes/durante o grounding, e (2) `temperature` abaixo do
+    // default (1.0) é EXPLICITAMENTE advertido pela doc como causa de
+    // "looping" ("may lead to unexpected behavior, such as looping... ") —
+    // exatamente o padrão das 5 sub-buscas internas observadas. Corrigido:
+    // thinking_level "low" (suficiente para decidir buscar, sem o
+    // aprofundamento máximo do default) + temperature no default
+    // recomendado. Combinação relatada na comunidade (PR público
+    // Victorpalkin/quizliveapp#47) como correção para o mesmo sintoma.
+    // Timeout ainda generoso (60s, abaixo dos 90s/255s anteriores) porque
+    // nenhuma config documentada ELIMINA toda variabilidade do grounding —
+    // uma demora extrema continua sendo tratada como falha operacional pelo
+    // router (aciona o próximo fallback), não trava o turno.
+    data = await _postJson({ hostname: 'generativelanguage.googleapis.com', path, headers: {}, timeoutMs: 60000, body: {
+      contents: [{ role: 'user', parts: [{ text: q }] }],
+      tools: [{ google_search: {} }],
+      generationConfig: { temperature: 1, thinkingConfig: { thinkingLevel: 'low' } },
+    } });
+  } catch (err) {
+    throw new Error(`Gemini/Google Search: ${err.message}`);
+  }
+  const chunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+  const texto = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('\n');
+  for (const chunk of chunks.slice(0, limitePorConsulta)) {
+    const web = chunk.web || {};
+    if (!web.uri) continue;
+    // CONFIRMADO POR TESTE REAL (2026-10): groundingChunks[].web.uri NÃO é
+    // a URL final da fonte — é um link de redirect da própria Google
+    // (vertexaisearch.cloud.google.com/grounding-api-redirect/...). Usar
+    // esse link direto como "fonte rastreável" quebraria auditoria/
+    // proveniência (a URL salva não seria a citável de verdade) e
+    // _fonteOficial(uri) sempre falharia (checa o domínio do redirect, não
+    // do site real). web.title traz o HOSTNAME real (ex.: "tdn.totvs.com"),
+    // mas não a URL completa — por isso resolvemos a URL final seguindo o
+    // redirect via safeFetch (mesmo guard SSRF já usado para abrir
+    // páginas), e só então aplicamos _fonteOficial na URL de fato.
+    let urlFinal = web.uri;
+    try {
+      const resolvido = await safeFetch.resolverRedirectFinal(web.uri);
+      if (resolvido) urlFinal = resolvido;
+    } catch (_) {
+      // Falha ao resolver o redirect: mantém o link original do Google
+      // como está (melhor que descartar o resultado inteiro), mas ele não
+      // será uma fonte citável de verdade — sinalizado via oficial:false.
+    }
+    const r = { titulo: web.title || urlFinal, url: redigirUrl(urlFinal), trecho: redigirTexto(texto.slice(0, 400)), fonte: 'Gemini/Google Search', consulta: q, status: 'ENCONTRADA', oficial: _fonteOficial(urlFinal) };
+    r[RAW_URL] = urlFinal;
+    resultados.push(r);
+  }
+  return resultados;
+}
+
+// OpenAI/Web Search — EXCLUSIVAMENTE via Responses API (/v1/responses),
+// endpoint DIFERENTE do Chat Completions (/v1/chat/completions) usado pelo
+// resto do ai-provider-client.js para a resposta principal do chat. Isso é
+// intencional (decisão do usuário, 2026-10): o modelo padrão (gpt-4o-mini)
+// não suporta web search em Chat Completions, e trocar toda a integração de
+// chat para a Responses API está fora de escopo — só esta chamada pontual,
+// quando OpenAI é acionada pelo ROUTER DE PESQUISA (nunca pela resposta
+// principal), usa este caminho. A chave reaproveitada é a mesma já
+// configurada para a empresa (openaiApiKey), nenhuma chave nova.
+async function _buscarOpenAIWebSearch(consultas, limitePorConsulta, { apiKey } = {}) {
+  if (!apiKey) return [];
+  const resultados = [];
+  // Mesmo guard de 1 consulta do Gemini acima: o chamador (pesquisar()) já
+  // só passa 1 item aqui. Timeout mais alto que o default (8s) por segurança
+  // — medido real (2026-10) que web_search via Responses API respondeu em
+  // poucos segundos num teste, mas sem garantia de pior caso equivalente ao
+  // Gemini (255s); uma demora extrema deve ser tratada como falha
+  // operacional e acionar o próximo fallback, não travar o turno.
+  for (const q of consultas) {
+    let data;
+    try {
+      // A Responses API OFERECE a tool web_search ao modelo, nao a FORCA —
+      // confirmado por teste real (2026-10): a mesma informacao tecnica,
+      // enviada como lista de termos soltos (formato bom para Serper/Gemini),
+      // frequentemente faz o gpt-4o-mini responder do proprio conhecimento
+      // sem acionar busca nenhuma (output so tem "message", sem
+      // "web_search_call"). A MESMA informacao, reformulada como instrucao
+      // imperativa pedindo pesquisa, aciona a tool de forma consistente.
+      // `q` (a consulta crua do plano) continua sendo o valor auditado/
+      // logado em tentativasBusca — só o texto enviado à API muda.
+      data = await _postJson({ hostname: 'api.openai.com', path: '/v1/responses', headers: { Authorization: `Bearer ${apiKey}` }, timeoutMs: 60000, body: {
+        model: 'gpt-4o-mini',
+        input: `Pesquise na internet e cite fontes reais sobre: ${q}`,
+        tools: [{ type: 'web_search' }],
+      } });
+    } catch (err) {
+      throw new Error(`OpenAI/Web Search: ${err.message}`);
+    }
+    const mensagem = (data.output || []).find(o => o.type === 'message');
+    const conteudo = (mensagem?.content || []).find(c => c.type === 'output_text');
+    const anotacoes = (conteudo?.annotations || []).filter(a => a.type === 'url_citation');
+    for (const anot of anotacoes.slice(0, limitePorConsulta)) {
+      if (!anot.url) continue;
+      const trecho = String(conteudo.text || '').slice(anot.start_index ?? 0, anot.end_index ?? undefined);
+      const r = { titulo: anot.title || anot.url, url: redigirUrl(anot.url), trecho: redigirTexto(trecho || conteudo.text?.slice(0, 400) || ''), fonte: 'OpenAI/Web Search', consulta: q, status: 'ENCONTRADA', oficial: _fonteOficial(anot.url) };
+      r[RAW_URL] = anot.url;
+      resultados.push(r);
+    }
+  }
+  return resultados;
+}
+
+const SEARCH_PROVIDER_CONFIGS = {
+  serper: { nome: 'Serper/Google' },
+  gemini: { nome: 'Gemini/Google Search' },
+  openai: { nome: 'OpenAI/Web Search' },
+};
+const DEFAULT_SEARCH_ORDER = ['serper', 'gemini', 'openai'];
+
+// Mesmo padrão de _normalizarOrdem em ai-provider-client.js: provedor
+// primário primeiro, depois o resto do fallback configurado, depois o
+// default — filtra defensivamente qualquer nome inválido (mesma regra já
+// usada para os 5 providers de IA, nunca lança erro por entrada malformada).
+function _normalizarOrdemPesquisa({ provedorPrimario, fallbackOrdem } = {}) {
+  const fallback = String(fallbackOrdem || '').split(',').map(s => s.trim()).filter(Boolean);
+  const ordem = [provedorPrimario, ...fallback, ...DEFAULT_SEARCH_ORDER].filter(Boolean);
+  return [...new Set(ordem)].filter(p => SEARCH_PROVIDER_CONFIGS[p]);
+}
+
+async function pesquisar(ctx = {}, { limitePorConsulta = 3, buscarSerper, buscarBing, buscarGemini, buscarOpenai, abrirResultados, forcarRefresh = false, interpretarSemantico, timeoutMsSemantico, searchConfig } = {}) {
   const inicio = Date.now();
   const plano = await planejarPesquisaComSemantica(ctx, { interpretarSemantico, timeoutMsSemantico });
   const perfil = PERFIS[plano.dominio] || PERFIS.generico;
@@ -991,26 +1252,86 @@ async function pesquisar(ctx = {}, { limitePorConsulta = 3, buscarSerper, buscar
   let erroBusca = null;
   let paginasLidas = [];
   let providerBusca = null;
+  let tentativasBusca = [];
   let consultasExecutadas = [];
   let consultasDeduplicadas = plano.consultasIgnoradas || [];
   let ranking = [];
   let urlsReutilizadas = [];
   let trechosOmitidos = [];
 
+  // searchConfig vem de ai-config-service.resolverConfigPesquisa (cascata
+  // Platform → env var) — se ausente (chamador legado/teste antigo), cai
+  // para o comportamento histórico (Serper/Bing por env var direta), sem
+  // quebrar nenhum caller existente.
+  const temConfigNova = !!searchConfig;
+  const chaves = {
+    serper: searchConfig?.serperApiKey || process.env.SERPER_API_KEY || null,
+    gemini: searchConfig?.geminiApiKey || null,
+    openai: searchConfig?.openaiApiKey || null,
+  };
+  const funcoesBusca = {
+    serper: buscarSerper || ((consultas, limite) => _buscarSerper(consultas, limite, { apiKey: chaves.serper })),
+    gemini: buscarGemini || ((consultas, limite) => _buscarGeminiWebSearch(consultas, limite, { apiKey: chaves.gemini, modelo: searchConfig?.geminiModelo })),
+    openai: buscarOpenai || ((consultas, limite) => _buscarOpenAIWebSearch(consultas, limite, { apiKey: chaves.openai })),
+  };
+  const ordemBusca = temConfigNova ? _normalizarOrdemPesquisa(searchConfig) : ['serper', 'bing'];
+
   if (plano.devePesquisar) {
-    try {
-      const serper = buscarSerper || _buscarSerper;
-      const bing = buscarBing || _buscarBing;
-      const abrir = abrirResultados || _abrirResultados;
-      consultasExecutadas = plano.consultas;
-      resultados = await serper(plano.consultas, limitePorConsulta);
-      if (resultados.length) providerBusca = 'Serper/Google';
-      if (!resultados.length) {
-        resultados = await bing(plano.consultas, limitePorConsulta);
-        if (resultados.length) providerBusca = 'Bing';
+    consultasExecutadas = plano.consultas;
+    // Fallback OPERACIONAL: só avança para o próximo provider se o atual
+    // FALHOU (exceção — chave inválida, timeout, erro de rede), nunca
+    // porque "não achou resultado" (isso é resposta válida, não falha) nem
+    // "todos simultaneamente" (achado real do briefing: pesquisar com os 3
+    // ao mesmo tempo desperdiça custo e viola "seguir a sequência
+    // configurada, não usar todos"). Bing continua como fallback legado
+    // quando não há searchConfig novo (compat retroativa com .env puro).
+    for (const provider of ordemBusca) {
+      if (provider === 'bing') {
+        try {
+          resultados = await (buscarBing || _buscarBing)(plano.consultas, limitePorConsulta);
+          tentativasBusca.push({ provider: 'Bing', status: resultados.length ? 'ok' : 'sem_resultado' });
+          if (resultados.length) { providerBusca = 'Bing'; break; }
+        } catch (err) {
+          tentativasBusca.push({ provider: 'Bing', status: 'erro', erro: redigirTexto(err.message) });
+        }
+        continue;
       }
+      // No caminho legado (sem searchConfig), chama sempre — a própria função
+      // de busca (_buscarSerper etc.) já decide retornar [] sem chave, mesmo
+      // contrato de sempre. Só no caminho novo (searchConfig presente) o
+      // roteador pula provider sem credencial ANTES de chamar, para não
+      // gastar uma tentativa/latência em algo que sabemos que vai falhar.
+      if (temConfigNova && !chaves[provider]) {
+        tentativasBusca.push({ provider: SEARCH_PROVIDER_CONFIGS[provider].nome, status: 'sem_chave' });
+        continue;
+      }
+      // Serper é rápido (API de busca dedicada) e recebe TODAS as consultas
+      // do plano. Gemini/OpenAI fazem grounding completo por conta própria a
+      // partir de UMA pergunta (medido real: 255s numa única chamada,
+      // gerando sozinhos várias sub-buscas internas — webSearchQueries) —
+      // mandar as até 5 consultas do plano gastaria minutos. A consulta
+      // escolhida é a "consulta de sinais" (plano.consultas[0]): construída
+      // por _montarConsultaPorSinais diretamente dos sinais técnicos mais
+      // fortes (rotina/campo/HTTP/erro), estruturalmente mais específica que
+      // as consultas genéricas de domínio que vêm depois no array — não é
+      // uma escolha por posição arbitrária, é a mesma que o Motor já
+      // considera mais forte ao montá-la primeiro.
+      const consultasParaProvider = provider === 'serper' ? plano.consultas : plano.consultas.slice(0, 1);
+      const inicioTentativa = Date.now();
+      try {
+        resultados = await funcoesBusca[provider](consultasParaProvider, limitePorConsulta);
+        tentativasBusca.push({ provider: SEARCH_PROVIDER_CONFIGS[provider].nome, status: resultados.length ? 'ok' : 'sem_resultado', consulta: consultasParaProvider[0] || null, latenciaMs: Date.now() - inicioTentativa });
+        if (resultados.length) { providerBusca = SEARCH_PROVIDER_CONFIGS[provider].nome; break; }
+      } catch (err) {
+        tentativasBusca.push({ provider: SEARCH_PROVIDER_CONFIGS[provider].nome, status: 'erro', erro: redigirTexto(err.message), consulta: consultasParaProvider[0] || null, latenciaMs: Date.now() - inicioTentativa });
+        erroBusca = err.message;
+      }
+    }
+
+    try {
       if (resultados.length) {
         modo = 'web';
+        erroBusca = null;
         resultados = _rankearResultados(resultados, plano);
         ranking = resultados.slice(0, 10).map(r => ({
           titulo: r.titulo,
@@ -1020,6 +1341,7 @@ async function pesquisar(ctx = {}, { limitePorConsulta = 3, buscarSerper, buscar
           motivos: r.rankingMotivos,
           oficial: r.oficial,
         }));
+        const abrir = abrirResultados || _abrirResultados;
         paginasLidas = await abrir(resultados, 4, plano, { forcarRefresh });
         urlsReutilizadas = paginasLidas.urlsReutilizadas || [];
         trechosOmitidos = paginasLidas.trechosOmitidos || [];
@@ -1033,6 +1355,9 @@ async function pesquisar(ctx = {}, { limitePorConsulta = 3, buscarSerper, buscar
 
   const latenciaMs = Date.now() - inicio;
   const paginasLidasLimpas = Array.isArray(paginasLidas) ? paginasLidas.map(p => ({ ...p })) : [];
+  const configurado = temConfigNova
+    ? !!(chaves.serper || chaves.gemini || chaves.openai)
+    : !!(process.env.SERPER_API_KEY || process.env.BING_SEARCH_API_KEY);
   return {
     dominio: plano.dominio,
     confianca: plano.confianca,
@@ -1051,6 +1376,7 @@ async function pesquisar(ctx = {}, { limitePorConsulta = 3, buscarSerper, buscar
     ranking,
     urlsReutilizadas,
     trechosOmitidos,
+    tentativasBusca,
     tokensPesquisa: tokenBudget.estimarTokens([
       JSON.stringify(plano),
       JSON.stringify(resultados.slice(0, 10)),
@@ -1061,7 +1387,7 @@ async function pesquisar(ctx = {}, { limitePorConsulta = 3, buscarSerper, buscar
     providerBusca,
     modo,
     erroBusca,
-    configurado: !!(process.env.SERPER_API_KEY || process.env.BING_SEARCH_API_KEY),
+    configurado,
   };
 }
 

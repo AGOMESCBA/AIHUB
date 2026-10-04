@@ -23,6 +23,10 @@
     .row.in .bubble { background:var(--bg-card); border:1px solid var(--border); color:var(--text-hi); border-bottom-left-radius:3px; }
     .bubble code, .bubble pre { font-family:ui-monospace,Consolas,monospace; font-size:12.5px; }
     .bubble pre { background:rgba(0,0,0,.06); border-radius:8px; padding:10px; overflow-x:auto; white-space:pre; }
+    .bubble-header { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; font-size:10.5px; line-height:1.2; color:var(--text-lo); }
+    .bubble-author { font-weight:900; text-transform:uppercase; letter-spacing:.045em; color:var(--text-md); }
+    .row.out .bubble-author { color:rgba(26,18,0,.82); }
+    .bubble-time { flex:none; font-variant-numeric:tabular-nums; white-space:nowrap; opacity:.9; }
 
     .anexos-do-turno { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
     .anexo-chip { display:flex; align-items:center; gap:5px; background:rgba(0,0,0,.05); border:1px solid var(--border); border-radius:8px; padding:4px 8px; font-size:11.5px; }
@@ -120,6 +124,20 @@
         return i % 2 === 1 ? `<pre><code>${escapado}</code></pre>` : escapado;
       }).join('');
     }
+    function formatarDataHoraMensagem(iso) {
+      if (!iso) return '';
+      try {
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return String(iso);
+        return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      } catch (_) { return String(iso); }
+    }
+    function rotuloPapelMensagem(papel, direcao) {
+      if (papel === 'assistant') return 'IA';
+      if (papel === 'customer') return 'Cliente';
+      if (papel === 'system') return 'Sistema';
+      return direcao === 'out' ? 'Analista' : 'Mensagem';
+    }
 
     function renderizarDiagnostico(diagnostico, nivelConfianca) {
       if (!diagnostico) return '';
@@ -134,16 +152,20 @@
       return html;
     }
 
-    function addBubble({ direcao, texto, anexos, diagnostico, nivelConfianca }) {
+    function addBubble({ direcao, texto, anexos, diagnostico, nivelConfianca, criadoEm, papel }) {
       const chatBody = document.getElementById('chat-body');
       const row = document.createElement('div');
       row.className = `row ${direcao}`;
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
+      const autor = rotuloPapelMensagem(papel, direcao);
+      const horario = formatarDataHoraMensagem(criadoEm || new Date().toISOString());
+      const cabecalhoMensagem = `<div class="bubble-header"><span class="bubble-author">${escapeHtml(autor)}</span><span class="bubble-time">${escapeHtml(horario)}</span></div>`;
 
-      bubble.innerHTML = direcao === 'in' && diagnostico
+      const corpo = direcao === 'in' && diagnostico
         ? renderizarDiagnostico(diagnostico, nivelConfianca)
         : renderizarTextoComCodigo(texto);
+      bubble.innerHTML = cabecalhoMensagem + corpo;
 
       if (anexos && anexos.length) {
         const anexosDiv = document.createElement('div');
@@ -202,6 +224,8 @@
             anexos: anexosPorMensagem[m.id],
             diagnostico: m.diagnostico,
             nivelConfianca: m.nivelConfianca,
+            criadoEm: m.criadoEm,
+            papel: m.papel,
           });
         }
       } catch (err) {
@@ -248,7 +272,7 @@
       if (!texto) return showError('Digite uma mensagem antes de enviar.');
 
       const anexosDoTurno = anexosPendentes.slice();
-      addBubble({ direcao: 'out', texto, anexos: anexosDoTurno });
+      addBubble({ direcao: 'out', texto, anexos: anexosDoTurno, criadoEm: new Date().toISOString(), papel: 'user' });
       textarea.value = '';
       anexosPendentes = [];
       renderizarAnexosPendentes();
@@ -261,10 +285,10 @@
           body: JSON.stringify({ texto, anexoIds: anexosDoTurno.map(a => a.id) }),
         });
         hideTyping();
-        addBubble({ direcao: 'in', texto: resposta.conteudo, diagnostico: resposta.diagnostico, nivelConfianca: resposta.nivelConfianca });
+        addBubble({ direcao: 'in', texto: resposta.conteudo, diagnostico: resposta.diagnostico, nivelConfianca: resposta.nivelConfianca, criadoEm: resposta.criadoEm, papel: 'assistant' });
       } catch (err) {
         hideTyping();
-        addBubble({ direcao: 'in', texto: 'Não foi possível concluir a análise: ' + err.message });
+        addBubble({ direcao: 'in', texto: 'Não foi possível concluir a análise: ' + err.message, criadoEm: new Date().toISOString(), papel: 'assistant' });
       } finally {
         enviando = false;
       }

@@ -48,6 +48,17 @@ function ensurePlatformSchema(db) {
       atualizado_em TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS platform_search_configs (
+      id TEXT PRIMARY KEY,
+      empresa_id INTEGER NOT NULL UNIQUE,
+      provedor_primario TEXT,
+      fallback_ordem TEXT,
+      serper_api_key_enc TEXT,
+      ativo INTEGER DEFAULT 1,
+      criado_em TEXT,
+      atualizado_em TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS platform_whatsapp_identities (
       id TEXT PRIMARY KEY,
       empresa_id INTEGER NOT NULL,

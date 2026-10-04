@@ -145,6 +145,16 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
 function montarInstrucaoRetry(gate) {
   const falhas = (gate?.falhas || []).map(f => f.codigo).join(', ');
   const regressao = (gate?.falhas || []).filter(f => String(f.codigo || '').startsWith('REGRESSAO_INVESTIGATIVA'));
+  // Achado real, Caso #001 (2026-10): quando pesquisa era necessária mas não
+  // pôde ser executada (sem chave configurada) OU foi mal interpretada pelo
+  // plano, a resposta seguia como se a investigação externa tivesse sido
+  // considerada normalmente, sem declarar a limitação — o usuário via uma
+  // "causa provável" repetida sem saber que nenhuma fonte externa real foi
+  // consultada. Esta instrução não inventa resultado nem força retry
+  // infinito (deveRetry já é limitado a 1 tentativa em investigacao-service.js);
+  // apenas garante que, quando a 2ª tentativa ainda carregar essa falha, o
+  // texto final seja obrigado a declarar a limitação explicitamente.
+  const pesquisaIndisponivel = (gate?.falhas || []).some(f => f.codigo === 'RESEARCH_REQUIRED_NOT_EXECUTED');
   return [
     'A resposta anterior falhou no Quality Gate interno.',
     `Falhas detectadas: ${falhas || 'nao especificadas'}.`,
@@ -153,6 +163,7 @@ function montarInstrucaoRetry(gate) {
     'Refaca a analise usando explicitamente as evidencias selecionadas no manifesto. Cite as evidencias tecnicas que sustentam o diagnostico.',
     'Se a evidencia necessaria nao estiver disponivel ou nao for suportada, diga isso objetivamente e peca a evidencia especifica que falta.',
     'Se uma causa ou fato tecnico nao estiver sustentado, rebaixe para hipotese explicita e informe a lacuna/proximo passo de maior valor.',
+    pesquisaIndisponivel ? 'Pesquisa tecnica externa era necessaria para esta pergunta mas nao pode ser executada (mecanismo de busca indisponivel nesta instalacao). Declare isso explicitamente na resposta ao usuario — nao apresente a causa como se tivesse sido corroborada por fonte externa, e nao finja ter pesquisado.' : '',
   ].filter(Boolean).join('\n');
 }
 

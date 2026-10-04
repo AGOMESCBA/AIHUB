@@ -120,11 +120,25 @@ function upsertConsultorPlatform(empresaId, dados) {
   const db = getDB();
   const agora = new Date().toISOString();
   const idPreferencial = dados.platformIdentityId || crypto.randomUUID();
+  // Telefone manda: um numero nao pode existir mais de uma vez na mesma
+  // empresa (regra de negocio explicita do usuario, 2026-10). Checado ANTES
+  // de id/id_softexpert porque um consultor pode ter sido cadastrado antes
+  // de existir identidade na Platform (id/id_softexpert antigos, diferentes
+  // dos que a importacao traz depois para a mesma pessoa) — sem essa
+  // prioridade, upsert cria um SEGUNDO registro para o mesmo telefone e a
+  // escrita de usuario_id_iahub colide com UNIQUE(usuario_id_iahub,
+  // empresa_id) do registro antigo (bug real encontrado em producao,
+  // 2026-10: telefone com id_softexpert=186 pre-Platform + registro novo da
+  // importacao com id_softexpert=957, upsert tentava gravar usuario_id_iahub
+  // no registro novo e colidia com o antigo).
+  const existentePorTelefone = dados.telefone
+    ? db.prepare('SELECT * FROM consultores WHERE empresa_id = ? AND telefone = ?').get(Number(empresaId), String(dados.telefone))
+    : null;
   const existentePorId = db.prepare('SELECT * FROM consultores WHERE id = ? AND empresa_id = ?').get(idPreferencial, Number(empresaId));
   const existentePorSoftExpert = dados.idSoftexpert
     ? db.prepare('SELECT * FROM consultores WHERE empresa_id = ? AND id_softexpert = ?').get(Number(empresaId), String(dados.idSoftexpert))
     : null;
-  const existente = existentePorId || existentePorSoftExpert;
+  const existente = existentePorTelefone || existentePorId || existentePorSoftExpert;
 
   if (existente) {
     db.prepare(`

@@ -29,6 +29,7 @@ const technicalResearchService = require('../services/technical-research-service
 const radarRefreshService = require('../services/radar-refresh-service');
 const investigacaoExecucaoRepo = require('../repositories/investigacao-execucao-repository');
 const investigacaoDossieService = require('../services/investigacao-dossie-service');
+const turnoLockService = require('../services/turno-lock-service');
 
 // multer com storage em memória — o binário só vai para disco depois da
 // validação (armazenamento.validarAnexo), nunca antes. Limite de tamanho
@@ -162,21 +163,34 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   // turno do usuário, monta contexto (histórico + anexos), chama a IA,
   // persiste e devolve a resposta estruturada.
   app.post('/api/ia-service/atendimentos/:id/investigar', async (req, res) => {
+    const empresaId = req.svcEmpresaId;
+    const atendimentoId = req.params.id;
+    // Lock por empresa+atendimento (não por usuário/global): duplo-clique,
+    // refresh ou retry HTTP enquanto este MESMO atendimento já está sendo
+    // processado é rejeitado com 409; outro atendimento qualquer (do mesmo
+    // usuário ou de outro) processa em paralelo sem nenhuma espera — o
+    // backend nunca teve lock global, então não há nada para "destravar"
+    // além desta proteção pontual de idempotência.
+    if (!turnoLockService.tentarAdquirir(empresaId, atendimentoId)) {
+      return res.status(409).json({ error: 'Este atendimento já está processando uma investigação. Aguarde a resposta atual.' });
+    }
     try {
-      const empresaId = req.svcEmpresaId;
-      const { texto, anexoIds, anexosComoContexto } = req.body || {};
+      const { texto, anexoIds, anexosComoContexto, forcarPesquisa } = req.body || {};
       if (!texto || !String(texto).trim()) {
         return res.status(400).json({ error: 'texto é obrigatório.' });
       }
-      const mensagemAssistente = await investigacaoService.processarTurno(empresaId, req.params.id, {
+      const mensagemAssistente = await investigacaoService.processarTurno(empresaId, atendimentoId, {
         texto: String(texto).trim(),
         usuarioId: req.session?.user_id || null,
         anexoIds: Array.isArray(anexoIds) ? anexoIds : [],
         anexosComoContexto: anexosComoContexto === true,
+        forcarPesquisa: forcarPesquisa === true,
       });
       res.status(201).json(mensagemAssistente);
     } catch (err) {
       _handleErro(res, err);
+    } finally {
+      turnoLockService.liberar(empresaId, atendimentoId);
     }
   });
 

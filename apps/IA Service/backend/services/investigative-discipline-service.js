@@ -403,7 +403,13 @@ function aplicarDisciplinaPesquisa(plano = {}, ctx = {}) {
     lacunaInvestigativa: disciplina.lacuna,
     proximoPassoMaiorValor: disciplina.proximoPasso,
   };
-  if (ctx.disciplina4B && disciplina.suficiencia === 'SUFICIENTE_PARA_DIAGNOSTICO' && !disciplina.pesquisa.necessaria) {
+  // Pedido EXPLICITO do usuario (botao "Pesquisar Soluções") nunca e vetado
+  // pela disciplina automatica 4B — a disciplina existe para o Motor decidir
+  // sozinho se vale gastar pesquisa externa num turno automatico, não para
+  // ignorar um clique humano que pede pesquisa de propósito (achado real,
+  // 2026-10: disciplina bloqueou pesquisa com motivo "lacuna depende de
+  // evidencia do ambiente" mesmo o usuário tendo clicado o botão de pesquisa).
+  if (!ctx.forcarPesquisa && ctx.disciplina4B && disciplina.suficiencia === 'SUFICIENTE_PARA_DIAGNOSTICO' && !disciplina.pesquisa.necessaria) {
     novo.devePesquisar = false;
     novo.motivo = 'evidencias internas suficientes para diagnostico; pesquisa externa dispensada';
     novo.consultasIgnoradas = [
@@ -413,7 +419,7 @@ function aplicarDisciplinaPesquisa(plano = {}, ctx = {}) {
     novo.consultas = [];
     novo.consultasDetalhadas = [];
   }
-  if (ctx.disciplina4B && (disciplina.lacuna.tipo === 'EVIDENCIA_AMBIENTE' || disciplina.lacuna.tipo === 'CONTRADICAO')) {
+  if (!ctx.forcarPesquisa && ctx.disciplina4B && (disciplina.lacuna.tipo === 'EVIDENCIA_AMBIENTE' || disciplina.lacuna.tipo === 'CONTRADICAO')) {
     novo.devePesquisar = false;
     novo.motivo = disciplina.lacuna.tipo === 'CONTRADICAO'
       ? 'ha contradicao a resolver com evidencia do ambiente antes de pesquisa externa'

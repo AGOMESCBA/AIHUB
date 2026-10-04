@@ -104,7 +104,18 @@ async function fetchTextoSeguro(url, opts = {}, _redirects = []) {
       path: `${parsed.pathname}${parsed.search}`,
       method: 'GET',
       timeout: cfg.timeoutMs,
+      // BUG REAL CONFIRMADO POR TESTE CONTRA REDE REAL (2026-10): o `lookup`
+      // custom do Node, quando `options.all` vem true (Node 18+ passa isso
+      // por padrão em `https.request`), exige que o callback receba um ARRAY
+      // de endereços (`cb(null, [{address, family}, ...])`), não um endereço
+      // único (`cb(null, address, family)`). A forma antiga (endereço único)
+      // nunca lançava erro em testes porque toda a suíte mockava
+      // abrirResultados/fetchTextoSeguro — nunca bateu na rede real antes de
+      // 2026-10 (Pesquisa Web multi-provider, validação contra Gemini real).
+      // Suporta os dois formatos de chamada para não quebrar em versões mais
+      // antigas do Node que ainda pedem endereço único.
       lookup: (hostname, options, cb) => {
+        if (options?.all) return cb(null, enderecos);
         const escolhido = enderecos[0];
         cb(null, escolhido.address, escolhido.family);
       },
@@ -177,9 +188,61 @@ async function fetchTextoSeguro(url, opts = {}, _redirects = []) {
   });
 }
 
+// Resolve só a URL FINAL de uma cadeia de redirects, sem baixar o corpo —
+// usado quando a origem (ex.: Gemini/groundingChunks) devolve um link de
+// redirect (vertexaisearch.cloud.google.com/grounding-api-redirect/...) em
+// vez da URL real da fonte, e precisamos da URL citável de verdade para
+// auditoria/proveniência e para checar se é uma fonte oficial. Usa HEAD
+// (mais leve que fetchTextoSeguro, que baixa o corpo inteiro) com o MESMO
+// guard de segurança (validação de protocolo + resolução de DNS bloqueando
+// IP privado) em cada salto da cadeia — nunca segue redirect para destino
+// interno, mesma proteção de fetchTextoSeguro.
+async function resolverRedirectFinal(url, opts = {}, _redirects = []) {
+  const cfg = { ...DEFAULTS, ...opts };
+  const { parsed, enderecos } = await validarUrlSegura(url);
+  const lib = parsed.protocol === 'https:' ? https : http;
+
+  return new Promise((resolve, reject) => {
+    let finalizado = false;
+    const req = lib.request({
+      protocol: parsed.protocol,
+      hostname: parsed.hostname,
+      port: parsed.port || undefined,
+      path: `${parsed.pathname}${parsed.search}`,
+      method: 'HEAD',
+      timeout: cfg.timeoutMs,
+      // Mesma correção de fetchTextoSeguro acima — ver comentário lá.
+      lookup: (hostname, options, cb) => {
+        if (options?.all) return cb(null, enderecos);
+        const escolhido = enderecos[0];
+        cb(null, escolhido.address, escolhido.family);
+      },
+      headers: { 'User-Agent': 'IAHub-IA-Service/1.0 safe-technical-research' },
+    }, async (res) => {
+      try {
+        res.resume();
+        if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+          if (_redirects.length >= cfg.maxRedirects) throw new Error('Limite de redirects excedido.');
+          const next = new URL(res.headers.location, parsed).toString();
+          const final = await resolverRedirectFinal(next, cfg, [..._redirects, parsed.toString()]);
+          if (!finalizado) { finalizado = true; resolve(final); }
+          return;
+        }
+        if (!finalizado) { finalizado = true; resolve(parsed.toString()); }
+      } catch (err) {
+        if (!finalizado) { finalizado = true; reject(err); }
+      }
+    });
+    req.setTimeout(cfg.timeoutMs, () => req.destroy(new Error(`Timeout de ${Math.round(cfg.timeoutMs / 1000)}s ao resolver redirect.`)));
+    req.on('error', err => { if (!finalizado) { finalizado = true; reject(err); } });
+    req.end();
+  });
+}
+
 module.exports = {
   DEFAULTS,
   fetchTextoSeguro,
+  resolverRedirectFinal,
   validarUrlSegura,
   resolverDestinoSeguro,
   isIpBloqueado,

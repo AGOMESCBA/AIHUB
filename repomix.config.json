@@ -1,0 +1,61 @@
+{
+  "$schema": "https://repomix.com",
+  "input": {
+    "maxFileSize": 40960
+  },
+  "output": {
+    "filePath": "repomix-output.xml",
+    "style": "xml",
+    "filePathStyle": "target-relative",
+    "parsableStyle": false,
+    "fileSummary": true,
+    "directoryStructure": true,
+    "files": true,
+    "removeComments": true,
+    "removeEmptyLines": true,
+    "compress": true,
+    "topFilesLength": 5,
+    "showLineNumbers": false,
+    "truncateBase64": true,
+    "copyToClipboard": false,
+    "includeFullDirectoryStructure": false,
+    "tokenCountTree": false,
+    "git": {
+      "sortByChanges": true,
+      "sortByChangesMaxCommits": 100,
+      "includeDiffs": false,
+      "includeLogs": false,
+      "includeLogsCount": 50
+    }
+  },
+  "include": [],
+  "ignore": {
+    "useGitignore": true,
+    "useDotIgnore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "node_modules/**",
+      ".wwebjs_auth/**",
+      ".wwebjs_cache/**",
+      "tmp/**",
+      "logs/**",
+      "deploy/**",
+      "*.log",
+      "*.err",
+      "package-lock.json",
+      "yarn.lock",
+      "pnpm-lock.yaml",
+      "**/guia/index.html",
+      "IA_SERVICE_ANALISE_IAHUB_COMMAND.md",
+      "**/_prod_compare/**",
+      "**/protheus-chat.html",
+      "**/administracao.html"
+    ]
+  },
+  "security": {
+    "enableSecurityCheck": true
+  },
+  "tokenCount": {
+    "encoding": "o200k_base"
+  }
+}

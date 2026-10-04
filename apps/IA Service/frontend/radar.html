@@ -255,6 +255,10 @@
     .bubble pre { background:rgba(0,0,0,.25); border-radius:8px; padding:10px; overflow-x:auto; white-space:pre; }
 
     .bubble-question-context { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--wa-accent); margin-bottom:6px; opacity:.9; }
+    .bubble-header { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; font-size:10.5px; line-height:1.2; color:var(--wa-text-tertiary); }
+    .bubble-author { font-weight:900; text-transform:uppercase; letter-spacing:.045em; color:var(--wa-text-secondary); }
+    .row.out .bubble-author { color:rgba(233,237,239,.86); }
+    .bubble-time { flex:none; font-variant-numeric:tabular-nums; white-space:nowrap; opacity:.9; }
 
     .anexos-do-turno { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; padding-top:8px; border-top:1px dashed rgba(255,255,255,.1); }
     .anexo-chip { display:flex; align-items:center; gap:6px; background:rgba(0,217,163,.1); border:1px solid rgba(0,217,163,.3); border-radius:8px; padding:5px 10px; font-size:12px; font-weight:700; color:var(--wa-accent); }
@@ -631,7 +635,18 @@
     let chamadoAtual = null;
     let atendimentoAtualId = null;
     let anexosPendentes = [];
-    let enviando = false;
+    let enviando = false; // true somente enquanto o ATENDIMENTO ATUAL (visível na tela) está processando
+    // Processamento em segundo plano é por atendimento, não pela aba visível:
+    // um analista pode abrir o Atendimento B enquanto o Atendimento A ainda
+    // está aguardando a IA — a chamada HTTP de A continua rodando no servidor
+    // (que já processava atendimentos em paralelo, sem nenhum lock global) e
+    // sua resposta deve ser aplicada ao atendimento certo quando chegar,
+    // mesmo que a tela já esteja mostrando outro atendimento (achado real,
+    // 2026-10: o único bloqueio existente era a flag `enviando` global abaixo
+    // combinada com `atendimentoAtualId` global — trocar de atendimento não
+    // cancelava a chamada em curso, só fazia a resposta "desaparecer" porque
+    // caía num `atendimentoAtualId` que já tinha mudado).
+    const atendimentosEmProcessamento = new Set();
     let filaCache = [];
     let ultimaPerguntaPendente = null; // contexto da pergunta associada à próxima resposta da IA (card "Pergunta")
     let pesquisaAbaAtual = 'interna';
@@ -725,6 +740,20 @@
       try {
         return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       } catch (_) { return iso; }
+    }
+    function formatarDataHoraMensagem(iso) {
+      if (!iso) return '';
+      try {
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return String(iso);
+        return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      } catch (_) { return String(iso); }
+    }
+    function rotuloPapelMensagem(papel, direcao) {
+      if (papel === 'assistant') return 'IA';
+      if (papel === 'customer') return 'Cliente';
+      if (papel === 'system') return 'Sistema';
+      return direcao === 'out' ? 'Analista' : 'Mensagem';
     }
     function badgeSla(slaPrazo) {
       if (slaPrazo === 'Em atraso') return `<span class="badge badge-em-atraso">Em atraso</span>`;
@@ -1043,6 +1072,11 @@
         const resultado = await api(`/radar/chamados/${chamadoId}/iniciar-analise${qs ? '?' + qs : ''}`, { method: 'POST' });
         atendimentoAtualId = resultado.atendimentoId;
         await carregarMensagens();
+        // Se este atendimento já estava processando em background (o
+        // analista mandou mensagem, trocou de aba, e voltou antes da
+        // resposta chegar), restaura o indicador "Analisando…" agora que ele
+        // é o atendimento visível de novo.
+        _atualizarIndicadorProcessamento(atendimentoAtualId);
         // Só aguarda se o backend de fato disparou a pré-análise em
         // background (radar-service.js retorna preAnaliseDisparada=false
         // quando o consultor tem a preferência desligada — nesse caso o
@@ -1717,12 +1751,15 @@
      * rótulo com a pergunta que originou aquela resposta em destaque, e um
      * rodapé com nível de confiança quando houver diagnóstico estruturado.
      */
-    function addBubble({ direcao, texto, anexos, diagnostico, nivelConfianca, perguntaContexto }) {
+    function addBubble({ direcao, texto, anexos, diagnostico, nivelConfianca, perguntaContexto, criadoEm, papel }) {
       const chatBody = document.getElementById('chat-body');
       const row = document.createElement('div');
       row.className = `row ${direcao}`;
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
+      const autor = rotuloPapelMensagem(papel, direcao);
+      const horario = formatarDataHoraMensagem(criadoEm || new Date().toISOString());
+      const cabecalhoMensagem = `<div class="bubble-header"><span class="bubble-author">${escapeHtml(autor)}</span><span class="bubble-time">${escapeHtml(horario)}</span></div>`;
 
       const cabecalhoPergunta = (direcao === 'in' && perguntaContexto)
         ? `<div class="bubble-question-context">Pergunta: ${escapeHtml(perguntaContexto).slice(0, 140)}</div>`
@@ -1732,7 +1769,7 @@
         ? renderizarDiagnostico(diagnostico, nivelConfianca)
         : renderizarTextoComCodigo(texto);
 
-      bubble.innerHTML = cabecalhoPergunta + corpo;
+      bubble.innerHTML = cabecalhoMensagem + cabecalhoPergunta + corpo;
 
       if (anexos && anexos.length) {
         const chaveAnexos = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -1800,6 +1837,8 @@
             diagnostico: m.diagnostico,
             nivelConfianca: m.nivelConfianca,
             perguntaContexto: m.papel === 'assistant' ? perguntaAnterior : null,
+            criadoEm: m.criadoEm,
+            papel: m.papel,
           });
           if (direcao === 'out') perguntaAnterior = m.conteudo;
         }
@@ -1860,34 +1899,61 @@
       renderizarAnexosPendentes();
     }
 
+    // Atualiza a UI do indicador "Analisando…"/composer somente se o
+    // atendimento informado ainda for o que está visível na tela — evita que
+    // a resposta de um atendimento em background mexa no chat de outro
+    // atendimento que o analista tenha aberto nesse meio tempo.
+    function _atualizarIndicadorProcessamento(atendimentoIdDoTurno) {
+      if (atendimentoIdDoTurno !== atendimentoAtualId) return;
+      enviando = atendimentosEmProcessamento.has(atendimentoAtualId);
+      if (enviando) showTyping(); else hideTyping();
+      const btnPesquisar = document.getElementById('chat-header-pesquisar');
+      if (btnPesquisar) btnPesquisar.disabled = enviando;
+    }
+
     async function enviarMensagem() {
-      if (enviando || !atendimentoAtualId) return;
+      // Mesmo atendimento já processando: não reenvia (duplo clique/Enter
+      // repetido). Atendimento DIFERENTE do que está processando em segundo
+      // plano: segue normalmente — cada atendimento tem sua própria entrada
+      // no Set, não existe mais trava única por usuário.
+      if (!atendimentoAtualId || atendimentosEmProcessamento.has(atendimentoAtualId)) return;
       const empresaId = empresaIdAtual();
+      const atendimentoIdDoTurno = atendimentoAtualId;
       const textarea = document.getElementById('composer-texto');
       const texto = textarea.value.trim();
       if (!texto) return showError('Digite uma mensagem antes de enviar.');
 
       const anexosDoTurno = anexosPendentes.slice();
-      addBubble({ direcao: 'out', texto, anexos: anexosDoTurno });
+      addBubble({ direcao: 'out', texto, anexos: anexosDoTurno, criadoEm: new Date().toISOString(), papel: 'user' });
       textarea.value = '';
       anexosPendentes = [];
       renderizarAnexosPendentes();
-      showTyping();
-      enviando = true;
+      atendimentosEmProcessamento.add(atendimentoIdDoTurno);
+      _atualizarIndicadorProcessamento(atendimentoIdDoTurno);
 
       try {
         const qs = qsEmpresa(empresaId);
-        const resposta = await api(`/atendimentos/${atendimentoAtualId}/investigar${qs ? '?' + qs : ''}`, {
+        const resposta = await api(`/atendimentos/${atendimentoIdDoTurno}/investigar${qs ? '?' + qs : ''}`, {
           method: 'POST',
           body: JSON.stringify({ texto, anexoIds: anexosDoTurno.map(a => a.id) }),
         });
-        hideTyping();
-        addBubble({ direcao: 'in', texto: resposta.conteudo, diagnostico: resposta.diagnostico, nivelConfianca: resposta.nivelConfianca, perguntaContexto: texto });
+        atendimentosEmProcessamento.delete(atendimentoIdDoTurno);
+        if (atendimentoIdDoTurno === atendimentoAtualId) {
+          hideTyping();
+          enviando = false;
+          addBubble({ direcao: 'in', texto: resposta.conteudo, diagnostico: resposta.diagnostico, nivelConfianca: resposta.nivelConfianca, perguntaContexto: texto, criadoEm: resposta.criadoEm, papel: 'assistant' });
+        }
+        // Atendimento não está mais visível: a mensagem já foi persistida
+        // pelo backend e aparecerá normalmente via carregarMensagens() na
+        // próxima vez que o analista reabrir esse atendimento — não há nada
+        // para "entregar" na tela agora.
       } catch (err) {
-        hideTyping();
-        addBubble({ direcao: 'in', texto: 'Não foi possível concluir a análise: ' + err.message });
-      } finally {
-        enviando = false;
+        atendimentosEmProcessamento.delete(atendimentoIdDoTurno);
+        if (atendimentoIdDoTurno === atendimentoAtualId) {
+          hideTyping();
+          enviando = false;
+          addBubble({ direcao: 'in', texto: 'Não foi possível concluir a análise: ' + err.message, criadoEm: new Date().toISOString(), papel: 'assistant' });
+        }
       }
     }
 
@@ -1901,41 +1967,50 @@
     // primeiro (mesmo mecanismo da pré-análise automática) e só então monta
     // anexoIds a partir da lista COMPLETA e atualizada do atendimento.
     async function pesquisarSolucoes() {
-      if (enviando || !atendimentoAtualId || !chamadoSelecionadoId) return;
+      if (!atendimentoAtualId || !chamadoSelecionadoId || atendimentosEmProcessamento.has(atendimentoAtualId)) return;
       const empresaId = empresaIdAtual();
+      const atendimentoIdDoTurno = atendimentoAtualId;
+      const chamadoIdDoTurno = chamadoSelecionadoId;
       const btn = document.getElementById('chat-header-pesquisar');
 
-      addBubble({ direcao: 'out', texto: TEXTO_PESQUISAR_SOLUCOES });
-      showTyping();
-      enviando = true;
-      if (btn) btn.disabled = true;
+      addBubble({ direcao: 'out', texto: TEXTO_PESQUISAR_SOLUCOES, criadoEm: new Date().toISOString(), papel: 'user' });
+      atendimentosEmProcessamento.add(atendimentoIdDoTurno);
+      _atualizarIndicadorProcessamento(atendimentoIdDoTurno);
+      if (btn && atendimentoIdDoTurno === atendimentoAtualId) btn.disabled = true;
 
       try {
         const qs = qsEmpresa(empresaId);
         const sufixo = qs ? '?' + qs : '';
         try {
-          await api(`/radar/chamados/${chamadoSelecionadoId}/anexos-softexpert/sincronizar${sufixo}`, {
+          await api(`/radar/chamados/${chamadoIdDoTurno}/anexos-softexpert/sincronizar${sufixo}`, {
             method: 'POST',
-            body: JSON.stringify({ atendimentoId: atendimentoAtualId }),
+            body: JSON.stringify({ atendimentoId: atendimentoIdDoTurno }),
           });
         } catch (err) {
           console.warn('[IA Service] Falha ao sincronizar anexos antes de pesquisar soluções:', err.message);
         }
-        const anexosAtuais = await api(`/atendimentos/${atendimentoAtualId}/anexos${sufixo}`);
-        anexosAtendimentoCache = anexosAtuais || [];
-        const anexoIds = anexosAtendimentoCache.map(a => a.id);
-        const resposta = await api(`/atendimentos/${atendimentoAtualId}/investigar${sufixo}`, {
+        const anexosAtuais = await api(`/atendimentos/${atendimentoIdDoTurno}/anexos${sufixo}`);
+        const anexoIds = (anexosAtuais || []).map(a => a.id);
+        if (atendimentoIdDoTurno === atendimentoAtualId) anexosAtendimentoCache = anexosAtuais || [];
+        const resposta = await api(`/atendimentos/${atendimentoIdDoTurno}/investigar${sufixo}`, {
           method: 'POST',
-          body: JSON.stringify({ texto: TEXTO_PESQUISAR_SOLUCOES, anexoIds, anexosComoContexto: true }),
+          body: JSON.stringify({ texto: TEXTO_PESQUISAR_SOLUCOES, anexoIds, anexosComoContexto: true, forcarPesquisa: true }),
         });
-        hideTyping();
-        addBubble({ direcao: 'in', texto: resposta.conteudo, diagnostico: resposta.diagnostico, nivelConfianca: resposta.nivelConfianca, perguntaContexto: TEXTO_PESQUISAR_SOLUCOES });
+        atendimentosEmProcessamento.delete(atendimentoIdDoTurno);
+        if (atendimentoIdDoTurno === atendimentoAtualId) {
+          hideTyping();
+          enviando = false;
+          addBubble({ direcao: 'in', texto: resposta.conteudo, diagnostico: resposta.diagnostico, nivelConfianca: resposta.nivelConfianca, perguntaContexto: TEXTO_PESQUISAR_SOLUCOES, criadoEm: resposta.criadoEm, papel: 'assistant' });
+        }
       } catch (err) {
-        hideTyping();
-        addBubble({ direcao: 'in', texto: 'Não foi possível concluir a nova pesquisa: ' + err.message });
+        atendimentosEmProcessamento.delete(atendimentoIdDoTurno);
+        if (atendimentoIdDoTurno === atendimentoAtualId) {
+          hideTyping();
+          enviando = false;
+          addBubble({ direcao: 'in', texto: 'Não foi possível concluir a nova pesquisa: ' + err.message, criadoEm: new Date().toISOString(), papel: 'assistant' });
+        }
       } finally {
-        enviando = false;
-        if (btn) btn.disabled = false;
+        if (btn && atendimentoIdDoTurno === atendimentoAtualId) btn.disabled = false;
       }
     }
 

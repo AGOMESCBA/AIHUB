@@ -868,6 +868,54 @@ const MIGRATIONS = [
         ON investigacao_dossie_atualizacoes (empresa_id, execucao_id);
     `,
   },
+  {
+    version: 35,
+    descricao: 'Telefone passa a ser unico por empresa em consultores (regra de negocio explicita do usuario, 2026-10: "o numero nao pode existir mais de uma vez por empresa"). Achado real em producao: upsertConsultorPlatform() buscava consultor existente so por id/id_softexpert, nunca por telefone — quando a importacao da Platform criava um registro novo para uma pessoa que ja tinha um consultor pre-Platform com id_softexpert diferente, o upsert tentava gravar usuario_id_iahub no registro novo e colidia com UNIQUE(usuario_id_iahub, empresa_id) do registro antigo, quebrando o login por telefone com uma mensagem de erro generica e enganosa ("numero nao encontrado"). Antes de criar o indice unico, resolve automaticamente qualquer duplicidade remanescente: para cada (empresa_id, telefone) duplicado, mantem o registro de MAIOR rowid (o mais recente — SQLite atribui rowid crescente por ordem de insercao, e o registro da Platform e sempre inserido depois do legado), repontando atendimentos/svc_sessoes_externas dos demais para ele antes de remove-los. Nenhum historico e perdido.',
+    sql: `
+      UPDATE atendimentos
+         SET consultor_id = (
+           SELECT c.id FROM consultores c
+            JOIN consultores velho ON velho.id = atendimentos.consultor_id
+            WHERE c.empresa_id = velho.empresa_id AND c.telefone = velho.telefone
+            ORDER BY c.rowid DESC LIMIT 1
+         )
+       WHERE consultor_id IN (
+         SELECT velho.id FROM consultores velho
+          WHERE velho.telefone IS NOT NULL
+            AND velho.rowid < (
+              SELECT MAX(c2.rowid) FROM consultores c2
+               WHERE c2.empresa_id = velho.empresa_id AND c2.telefone = velho.telefone
+            )
+       );
+
+      UPDATE svc_sessoes_externas
+         SET consultor_id = (
+           SELECT c.id FROM consultores c
+            JOIN consultores velho ON velho.id = svc_sessoes_externas.consultor_id
+            WHERE c.empresa_id = velho.empresa_id AND c.telefone = velho.telefone
+            ORDER BY c.rowid DESC LIMIT 1
+         )
+       WHERE consultor_id IN (
+         SELECT velho.id FROM consultores velho
+          WHERE velho.telefone IS NOT NULL
+            AND velho.rowid < (
+              SELECT MAX(c2.rowid) FROM consultores c2
+               WHERE c2.empresa_id = velho.empresa_id AND c2.telefone = velho.telefone
+            )
+       );
+
+      DELETE FROM consultores
+       WHERE telefone IS NOT NULL
+         AND rowid < (
+           SELECT MAX(c2.rowid) FROM consultores c2
+            WHERE c2.empresa_id = consultores.empresa_id AND c2.telefone = consultores.telefone
+         );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_svc_consultores_empresa_telefone
+        ON consultores (empresa_id, telefone)
+        WHERE telefone IS NOT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

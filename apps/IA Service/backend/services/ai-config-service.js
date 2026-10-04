@@ -46,6 +46,25 @@ function resolverKeysEOrdem(empresaId) {
   return { keys, cfg };
 }
 
+// Pesquisa Web (Serper/Gemini/OpenAI) é infraestrutura separada dos 5
+// providers de resposta — mesma cascata de resolverKeysEOrdem (Platform →
+// env var), mas lendo platform_search_configs em vez de platform_ai_configs.
+// Gemini/OpenAI aqui NÃO têm chave própria: reaproveitam a credencial já
+// resolvida para a empresa em resolverKeysEOrdem (decisão do usuário,
+// 2026-10 — "não criar uma segunda chave").
+function resolverConfigPesquisa(empresaId) {
+  const search = platformStore.getSearchConfig(empresaId);
+  const { keys: keysIa, cfg: cfgIa } = resolverKeysEOrdem(empresaId);
+  return {
+    provedorPrimario: search?.provedorPrimario || 'serper',
+    fallbackOrdem: search?.fallbackOrdem || 'serper,gemini,openai',
+    serperApiKey: search?.serperApiKey || process.env.SVC_SERPER_API_KEY || process.env.SERPER_API_KEY || null,
+    geminiApiKey: keysIa.gemini,
+    geminiModelo: cfgIa.modelos.gemini,
+    openaiApiKey: keysIa.openai,
+  };
+}
+
 function salvarConfig(empresaId, dados) {
   if (process.env.SVC_ALLOW_LEGACY_CONFIG_WRITE !== '1') {
     throw new Error('Configuração de IA isolada. Use IAHub Platform > Configurar IA.');
@@ -84,4 +103,4 @@ function getConfig(empresaId) {
   };
 }
 
-module.exports = { resolverKeysEOrdem, salvarConfig, getConfig };
+module.exports = { resolverKeysEOrdem, resolverConfigPesquisa, salvarConfig, getConfig };

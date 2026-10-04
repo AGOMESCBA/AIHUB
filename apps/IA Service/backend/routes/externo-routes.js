@@ -18,6 +18,7 @@ const atendimentoService = require('../services/atendimento-service');
 const investigacaoService = require('../services/investigacao-service');
 const extracaoConteudo = require('../services/extracao-conteudo');
 const anexoRepo = require('../repositories/anexo-repository');
+const turnoLockService = require('../services/turno-lock-service');
 const armazenamento = require('../services/armazenamento-anexos');
 const radarService = require('../services/radar-service');
 const anexosSoftExpertService = require('../services/anexos-softexpert-service');
@@ -273,20 +274,28 @@ module.exports = function registrarRotasExterno(app) {
   });
 
   app.post('/api/ia-service-externo/atendimentos/:id/investigar', async (req, res) => {
+    const empresaId = req.svcEmpresaId;
+    const atendimentoId = req.params.id;
+    if (!turnoLockService.tentarAdquirir(empresaId, atendimentoId)) {
+      return res.status(409).json({ error: 'Este atendimento já está processando uma investigação. Aguarde a resposta atual.' });
+    }
     try {
-      const { texto, anexoIds, anexosComoContexto } = req.body || {};
+      const { texto, anexoIds, anexosComoContexto, forcarPesquisa } = req.body || {};
       if (!texto || !String(texto).trim()) {
         return res.status(400).json({ error: 'texto é obrigatório.' });
       }
-      const mensagemAssistente = await investigacaoService.processarTurno(req.svcEmpresaId, req.params.id, {
+      const mensagemAssistente = await investigacaoService.processarTurno(empresaId, atendimentoId, {
         texto: String(texto).trim(),
         usuarioId: null,
         anexoIds: Array.isArray(anexoIds) ? anexoIds : [],
         anexosComoContexto: anexosComoContexto === true,
+        forcarPesquisa: forcarPesquisa === true,
       });
       res.status(201).json(mensagemAssistente);
     } catch (err) {
       _handleErro(res, err);
+    } finally {
+      turnoLockService.liberar(empresaId, atendimentoId);
     }
   });
 

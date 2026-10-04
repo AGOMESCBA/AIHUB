@@ -160,7 +160,7 @@ async function _registrarErroVisual({ empresaId, atendimentoId, mensagemUsuario,
  * IA que analise o que já está no histórico. `texto` vira uma instrução
  * fixa, não uma mensagem do analista.
  */
-async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anexoIds = [], automatico = false, anexosComoContexto = false }) {
+async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anexoIds = [], automatico = false, anexosComoContexto = false, forcarPesquisa = false }) {
   const atendimento = mensagemService.getAtendimento(empresaId, atendimentoId);
   if (!atendimento) throw new Error('Atendimento não encontrado nesta empresa.');
 
@@ -245,6 +245,27 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
       anexos: anexosTextoParaPesquisa,
       texto,
       dossieOperacional: dossieOperacionalTurno,
+      // Pedido EXPLICITO do usuario (botão "Pesquisar Soluções" do Radar) —
+      // nunca bloqueado por dedup de consulta nem pela disciplina 4B (ver
+      // technical-research-service._deduplicarConsultas e
+      // investigative-discipline-service.aplicarDisciplinaPesquisa). Só é
+      // true quando o caller explicitamente pede reexecução; nunca setado em
+      // turnos automáticos.
+      forcarPesquisa,
+      // Etapa 4B (disciplina investigativa) existia implementada e testada
+      // isoladamente, mas nunca conectada ao fluxo real — nenhum atendimento
+      // de produção jamais chamou com esse flag (achado real, Caso #001,
+      // 2026-10: a resposta real nunca passou pela suficiência/lacuna
+      // estruturada, só pelo Quality Gate léxico). Habilitado via env var
+      // para permitir desligar rapidamente se um efeito colateral aparecer
+      // em produção sem precisar de novo deploy.
+      disciplina4B: process.env.IA_SERVICE_DISCIPLINA_4B !== '0',
+    }, {
+      // Pesquisa Web sem contratar Serper/Bing por .env (decisão do usuário,
+      // 2026-10): reutiliza a infraestrutura de providers de IA já
+      // configurada na Platform (Serper com credencial própria, Gemini/
+      // OpenAI reaproveitando a chave de IA já cadastrada da empresa).
+      searchConfig: aiConfigService.resolverConfigPesquisa(empresaId),
     });
     pesquisaTecnica = pesquisa;
     pesquisaTecnicaTexto = technicalResearchService.formatarContextoParaPrompt(pesquisa, relacionados);
