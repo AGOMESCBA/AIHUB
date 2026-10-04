@@ -248,13 +248,27 @@ function Start-IaHubServices {
         if ($svc.Status -eq "StartPending") {
             Write-Host "      ${serviceName}: aguardando inicializacao ja em andamento..." -ForegroundColor Gray
         } else {
-            Invoke-Nssm -Arguments @("start", $serviceName)
+            try {
+                Invoke-Nssm -Arguments @("start", $serviceName)
+            } catch {
+                if ($serviceName -eq $SERVICE_NAME) {
+                    throw
+                }
+
+                Write-Host "      AVISO: $serviceName nao iniciou via NSSM. O deploy vai continuar." -ForegroundColor Yellow
+                Write-Host "             Motivo: $($_.Exception.Message)" -ForegroundColor Yellow
+                Write-Host "             Verifique logs em $PROJECT_PATH\logs\ ou rode: nssm get `"$serviceName`" AppStderr" -ForegroundColor Yellow
+                continue
+            }
         }
 
         if (Wait-ServiceState -Name $serviceName -DesiredStatus "Running" -TimeoutSeconds $SERVICE_START_TIMEOUT_SECONDS) {
             Write-Host "      ${serviceName}: RODANDO" -ForegroundColor Green
         } else {
             $current = Get-ServiceStatusText -Name $serviceName
+            if ($serviceName -eq $SERVICE_NAME) {
+                throw "Servico principal $serviceName nao ficou Running em $SERVICE_START_TIMEOUT_SECONDS segundos. Status atual: $current"
+            }
             Write-Host "      AVISO: $serviceName nao ficou Running em $SERVICE_START_TIMEOUT_SECONDS segundos. Status atual: $current" -ForegroundColor Yellow
             Write-Host "             Verifique logs em $PROJECT_PATH\logs\" -ForegroundColor Yellow
         }
