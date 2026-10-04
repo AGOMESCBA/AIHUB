@@ -536,10 +536,25 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       const empresaId = req.svcEmpresaId;
       const fonteId = req.params.id;
 
+      const valorColuna = (row, nomes) => {
+        if (!row) return null;
+        const mapa = Object.fromEntries(Object.entries(row).map(([k, v]) => [String(k).toLowerCase(), v]));
+        for (const nome of nomes) {
+          const valor = mapa[String(nome).toLowerCase()];
+          if (valor !== undefined && valor !== null) return valor;
+        }
+        return null;
+      };
+
       const rodar = async (label, sql) => {
         try {
           const rows = await agenteLocalService.executarSelectNaFonte(empresaId, fonteId, { sql, params, limit: 5 });
-          return { label, ok: true, total: rows?.[0]?.total ?? null, amostra: rows?.slice(0, 3) ?? [] };
+          return {
+            label,
+            ok: true,
+            total: valorColuna(rows?.[0], ['total', 'qtd', 'count', 'count(*)']),
+            amostra: rows?.slice(0, 3) ?? [],
+          };
         } catch (err) {
           return { label, ok: false, erro: err.message };
         }

@@ -618,7 +618,10 @@
       const diag = await api(`/api/ia-service/base-historica/fontes/${fonteId}/diagnostico?empresa_id=${empresaId}&periodoInicio=${inicio}&periodoFim=${fim}`);
       const linhas = (diag.resultados || []).map(r => {
         if (!r.ok) return `<div><strong>${escapeHtml(r.label)}:</strong> erro - ${escapeHtml(r.erro)}</div>`;
-        return `<div><strong>${escapeHtml(r.label)}:</strong> ${escapeHtml(r.total ?? '?')}</div>`;
+        const amostra = Array.isArray(r.amostra) && r.amostra.length
+          ? ` <span style="color:var(--text-lo)">amostra: ${escapeHtml(JSON.stringify(r.amostra).slice(0, 240))}</span>`
+          : '';
+        return `<div><strong>${escapeHtml(r.label)}:</strong> ${escapeHtml(r.total ?? 'sem coluna total')}${amostra}</div>`;
       }).join('');
       const el = document.getElementById('importacao-feedback');
       el.style.display = 'block';
