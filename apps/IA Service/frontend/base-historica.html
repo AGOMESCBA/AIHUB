@@ -52,6 +52,11 @@
     .col-contadores { width:auto; }
     .empty-state { padding:20px; text-align:center; color:var(--text-lo); font-size:13px; }
     .error-banner { display:none; background:#fee2e2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:10px 12px; font-size:13px; margin-bottom:14px; }
+    .info-banner { display:none; background:#dbeafe; color:#1e40af; border:1px solid #bfdbfe; border-radius:8px; padding:10px 12px; font-size:13px; margin-bottom:14px; }
+    .importacao-feedback { display:none; border:1px solid var(--border); border-radius:8px; background:var(--bg-base); padding:10px 12px; margin:0 0 12px; color:var(--text-md); font-size:12.5px; }
+    .importacao-feedback strong { color:var(--text-hi); }
+    .importacao-feedback .warn { color:#92400e; font-weight:800; }
+    .grid-table tbody tr.importacao-destaque td { background:#eff6ff; box-shadow:inset 3px 0 0 var(--accent); }
 
     @media (max-width: 900px) {
       .head-row { align-items:flex-start;flex-direction:column; }
@@ -87,6 +92,7 @@
       </div>
 
       <div id="error-banner" class="error-banner"></div>
+      <div id="info-banner" class="info-banner"></div>
 
       <div class="metric-grid" id="resumo-grid">
         <div class="metric"><span>Clientes</span><strong>—</strong></div>
@@ -126,9 +132,11 @@
           <div class="form-field"><label>Fonte</label><select id="importar-fonte" class="form-control"></select></div>
           <div class="form-field"><label>Data inicial</label><input type="date" id="importar-inicio" class="form-control" value="2026-01-01"></div>
           <div class="form-field"><label>Data final</label><input type="date" id="importar-fim" class="form-control" value="2026-12-31"></div>
-          <button class="btn btn-primary" type="button" onclick="iniciarImportacao()">Importação inicial</button>
-          <button class="btn btn-ghost" type="button" onclick="sincronizarIncremental()">Sincronizar agora</button>
+          <button class="btn btn-primary" id="btn-importacao-inicial" type="button" onclick="iniciarImportacao()">Importação inicial</button>
+          <button class="btn btn-ghost" id="btn-sincronizar-agora" type="button" onclick="sincronizarIncremental()">Sincronizar agora</button>
+          <button class="btn btn-ghost" id="btn-diagnosticar-periodo" type="button" onclick="diagnosticarPeriodo()">Diagnosticar período</button>
         </div>
+        <div id="importacao-feedback" class="importacao-feedback"></div>
 
         <div class="table-card">
           <div class="table-wrap">
@@ -154,10 +162,12 @@
 <script src="/js/auth.js"></script>
 <script src="/app/ia-service/js/sidebar.js"></script>
 <script>
-  const impState = { rows: [], sortField: 'periodoInicio', sortDir: 'desc' };
+  const impState = { rows: [], sortField: 'criadoEm', sortDir: 'desc', destaqueId: null };
 
   function showError(msg) { const el = document.getElementById('error-banner'); el.textContent = msg; el.style.display = 'block'; }
   function hideError() { document.getElementById('error-banner').style.display = 'none'; }
+  function showInfo(msg) { const el = document.getElementById('info-banner'); el.textContent = msg; el.style.display = 'block'; }
+  function hideInfo() { document.getElementById('info-banner').style.display = 'none'; }
   function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
 
   async function api(path, opts = {}) {
@@ -168,6 +178,49 @@
   }
   function empresaIdAtual() { return window._iahubEmpresa?.id || null; }
   function dataParaYyyymmdd(dataIso) { return dataIso.replaceAll('-', ''); }
+  function formatarDataHora(iso) {
+    if (!iso) return '?';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString('pt-BR');
+  }
+  function formatarDuracao(inicioIso, fimIso) {
+    if (!inicioIso) return '?';
+    const ini = new Date(inicioIso).getTime();
+    const fim = fimIso ? new Date(fimIso).getTime() : Date.now();
+    if (Number.isNaN(ini) || Number.isNaN(fim) || fim < ini) return '?';
+    const seg = Math.round((fim - ini) / 1000);
+    if (seg < 60) return `${seg}s`;
+    const min = Math.floor(seg / 60);
+    const resto = seg % 60;
+    return `${min}min ${String(resto).padStart(2, '0')}s`;
+  }
+  function setButtonLoading(id, loading, textoLoading) {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    if (!btn.dataset.textoOriginal) btn.dataset.textoOriginal = btn.textContent;
+    btn.disabled = !!loading;
+    btn.textContent = loading ? textoLoading : btn.dataset.textoOriginal;
+  }
+  function totaisImportacao(i) {
+    return Number(i?.registrosLidos || 0) + Number(i?.posicionamentosLidos || 0);
+  }
+  function mostrarFeedbackImportacao(i, { iniciado = false } = {}) {
+    const el = document.getElementById('importacao-feedback');
+    if (!el || !i) return;
+    const finalizada = !['pendente', 'executando'].includes(i.status);
+    const tempo = formatarDuracao(i.inicioEm || i.criadoEm, finalizada ? (i.terminoEm || i.atualizadoEm) : null);
+    const zero = finalizada && totaisImportacao(i) === 0 && !Number(i.registrosErro || 0);
+    el.style.display = 'block';
+    el.innerHTML = `
+      <strong>${iniciado ? 'Importação iniciada' : 'Última importação acompanhada'}:</strong>
+      ${escapeHtml(i.tipo)} · <strong>${escapeHtml(i.status)}</strong> · período ${escapeHtml(i.periodoInicio || '?')} a ${escapeHtml(i.periodoFim || '?')} · tempo ${escapeHtml(tempo)}<br>
+      Chamados — lidos: ${i.registrosLidos} · inseridos: ${i.registrosInseridos} · atualizados: ${i.registrosAtualizados} · sem alteração: ${i.registrosIgnorados} · erros: ${i.registrosErro}<br>
+      Posicionamentos — lidos: ${i.posicionamentosLidos} · inseridos: ${i.posicionamentosInseridos} · atualizados: ${i.posicionamentosAtualizados}
+      ${zero ? '<br><span class="warn">A rotina executou, mas a origem retornou zero registros para este período. Use "Diagnosticar período" para ver em qual filtro da query os registros estão sumindo.</span>' : ''}
+      ${i.mensagemErro ? `<br><span class="warn">${escapeHtml(i.mensagemErro)}</span>` : ''}
+    `;
+  }
 
   function activateTab(id) {
     document.querySelectorAll('.tab-panel').forEach(el => el.classList.toggle('active', el.id === id));
@@ -395,30 +448,48 @@
 
   async function iniciarImportacao() {
     hideError();
+    hideInfo();
     const empresaId = empresaIdAtual();
     const fonteId = document.getElementById('importar-fonte').value;
     if (!fonteId) return showError('Cadastre e selecione uma fonte antes de importar.');
+    setButtonLoading('btn-importacao-inicial', true, 'Iniciando...');
     try {
-      await api(`/api/ia-service/base-historica/fontes/${fonteId}/importar?empresa_id=${empresaId}`, {
+      const importacao = await api(`/api/ia-service/base-historica/fontes/${fonteId}/importar?empresa_id=${empresaId}`, {
         method: 'POST',
         body: JSON.stringify({
           periodoInicio: dataParaYyyymmdd(document.getElementById('importar-inicio').value),
           periodoFim: dataParaYyyymmdd(document.getElementById('importar-fim').value),
         }),
       });
-      carregarImportacoes();
+      impState.sortField = 'criadoEm';
+      impState.sortDir = 'desc';
+      impState.destaqueId = importacao.id;
+      activateTab('tab-importacoes');
+      showInfo('Importação inicial iniciada. Ela roda em background; a tabela abaixo será atualizada automaticamente.');
+      mostrarFeedbackImportacao(importacao, { iniciado: true });
+      await carregarImportacoes();
+      acompanharImportacao(importacao.id);
     } catch (err) { showError('Não foi possível iniciar a importação: ' + err.message); }
+    finally { setButtonLoading('btn-importacao-inicial', false); }
   }
 
   async function sincronizarIncremental() {
     hideError();
+    hideInfo();
     const empresaId = empresaIdAtual();
     const fonteId = document.getElementById('importar-fonte').value;
     if (!fonteId) return showError('Selecione uma fonte.');
+    setButtonLoading('btn-sincronizar-agora', true, 'Sincronizando...');
     try {
       await api(`/api/ia-service/base-historica/fontes/${fonteId}/sincronizar-incremental?empresa_id=${empresaId}`, { method: 'POST', body: JSON.stringify({}) });
-      carregarImportacoes();
+      impState.sortField = 'criadoEm';
+      impState.sortDir = 'desc';
+      activateTab('tab-importacoes');
+      showInfo('Sincronização incremental iniciada. Ela roda em background; a tabela abaixo será atualizada automaticamente.');
+      await carregarImportacoes();
+      if (impState.rows[0]) mostrarFeedbackImportacao(impState.rows[0], { iniciado: true });
     } catch (err) { showError('Não foi possível iniciar a sincronização: ' + err.message); }
+    finally { setButtonLoading('btn-sincronizar-agora', false); }
   }
 
   function renderImportacoesTable() {
@@ -430,14 +501,15 @@
     });
     document.getElementById('importacoes-empty').style.display = rows.length ? 'none' : 'block';
     document.getElementById('importacoes-tbody').innerHTML = rows.map(i => `
-      <tr>
+      <tr class="${i.id === impState.destaqueId ? 'importacao-destaque' : ''}">
         <td>${escapeHtml(i.tipo)}</td>
         <td><span class="status-badge ${i.status}">${escapeHtml(i.status)}</span></td>
         <td>${i.periodoInicio || '?'} a ${i.periodoFim || '?'}</td>
         <td>
           Lidos: ${i.registrosLidos} · Inseridos: ${i.registrosInseridos} · Atualizados: ${i.registrosAtualizados} ·
           Sem alteração: ${i.registrosIgnorados} · Erros: ${i.registrosErro}<br>
-          Posicionamentos — Lidos: ${i.posicionamentosLidos} · Inseridos: ${i.posicionamentosInseridos} · Atualizados: ${i.posicionamentosAtualizados}
+          Posicionamentos — Lidos: ${i.posicionamentosLidos} · Inseridos: ${i.posicionamentosInseridos} · Atualizados: ${i.posicionamentosAtualizados}<br>
+          Tempo: ${escapeHtml(formatarDuracao(i.inicioEm || i.criadoEm, i.terminoEm || i.atualizadoEm))} · Início: ${escapeHtml(formatarDataHora(i.inicioEm || i.criadoEm))}
           ${i.mensagemErro ? `<br><span style="color:#991b1b">${escapeHtml(i.mensagemErro)}</span>` : ''}
           ${i.status === 'falhou' || i.status === 'interrompido' ? `<div style="margin-top:6px"><button class="btn btn-ghost" type="button" onclick="retomarImportacao('${i.fonteId}','${i.id}')">Retomar</button></div>` : ''}
         </td>
@@ -449,6 +521,49 @@
     const empresaId = empresaIdAtual();
     impState.rows = await api(`/api/ia-service/base-historica/importacoes?empresa_id=${empresaId}&limite=50`);
     renderImportacoesTable();
+  }
+
+  function acompanharImportacao(importacaoId) {
+    let tentativas = 0;
+    const timer = setInterval(async () => {
+      tentativas += 1;
+      try {
+        await carregarImportacoes();
+        const atual = impState.rows.find(i => i.id === importacaoId);
+        if (!atual || !['pendente', 'executando'].includes(atual.status) || tentativas >= 1200) {
+          clearInterval(timer);
+          if (atual) mostrarFeedbackImportacao(atual);
+          carregarResumo().catch(() => {});
+        }
+      } catch (_) {
+        if (tentativas >= 3) clearInterval(timer);
+      }
+    }, 1500);
+  }
+
+  async function diagnosticarPeriodo() {
+    hideError();
+    hideInfo();
+    const empresaId = empresaIdAtual();
+    const fonteId = document.getElementById('importar-fonte').value;
+    if (!fonteId) return showError('Selecione uma fonte para diagnosticar.');
+    setButtonLoading('btn-diagnosticar-periodo', true, 'Diagnosticando...');
+    try {
+      const inicio = dataParaYyyymmdd(document.getElementById('importar-inicio').value);
+      const fim = dataParaYyyymmdd(document.getElementById('importar-fim').value);
+      const diag = await api(`/api/ia-service/base-historica/fontes/${fonteId}/diagnostico?empresa_id=${empresaId}&periodoInicio=${inicio}&periodoFim=${fim}`);
+      const linhas = (diag.resultados || []).map(r => {
+        if (!r.ok) return `<div><strong>${escapeHtml(r.label)}:</strong> erro - ${escapeHtml(r.erro)}</div>`;
+        return `<div><strong>${escapeHtml(r.label)}:</strong> ${escapeHtml(r.total ?? '?')}</div>`;
+      }).join('');
+      const el = document.getElementById('importacao-feedback');
+      el.style.display = 'block';
+      el.innerHTML = `<strong>Diagnóstico do período ${escapeHtml(inicio)} a ${escapeHtml(fim)}</strong>${linhas ? `<div style="margin-top:6px">${linhas}</div>` : ''}`;
+    } catch (err) {
+      showError('Não foi possível diagnosticar o período: ' + err.message);
+    } finally {
+      setButtonLoading('btn-diagnosticar-periodo', false);
+    }
   }
 
   document.querySelectorAll('#tab-importacoes th.sortable').forEach(th => th.addEventListener('click', () => {
