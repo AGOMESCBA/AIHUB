@@ -599,7 +599,7 @@ async function _interpretarSemanticaPesquisa(ctx, plano, pre, opts = {}) {
   return auditoria;
 }
 
-function _aplicarInterpretacaoSemantica(plano, interpretacao) {
+function _aplicarInterpretacaoSemantica(plano, interpretacao, ctx = {}) {
   const res = interpretacao?.resultado;
   if (!res) {
     return {
@@ -615,21 +615,34 @@ function _aplicarInterpretacaoSemantica(plano, interpretacao) {
     ...plano,
     interpretacaoSemantica: interpretacao,
   };
-  if (plano.disciplinaModo4B && plano.suficiencia === 'SUFICIENTE_PARA_DIAGNOSTICO' && plano.lacunaInvestigativa?.tipo === 'NENHUMA') {
-    return {
-      ...planoNovo,
-      devePesquisar: false,
-      motivo: plano.motivo || 'evidencias internas suficientes para diagnostico; sem lacuna externa concreta',
-    };
+  // Pedido EXPLICITO do usuario (ctx.forcarPesquisa) vence tambem esta
+  // camada — mesma razao das duas checagens de disciplina 4B em
+  // planejarPesquisa()/aplicarDisciplinaPesquisa(): a interpretacao
+  // semantica decide se um turno AUTOMATICO tem mudanca relevante o
+  // suficiente pra pesquisar sozinho, nao se deve ignorar um clique humano
+  // que pede pesquisa de proposito (achado real, 2026-10: mesmo apos
+  // corrigir o bloqueio da disciplina 4B, esta camada ainda revertia
+  // devePesquisar para false quando a interpretacao semantica nao via
+  // "evidencia nova" — o texto fixo do botão "Pesquisar Soluções" nunca
+  // contem evidencia tecnica nova por si só, então a interpretação semântica
+  // quase sempre concluía "sem novidade").
+  if (!ctx.forcarPesquisa) {
+    if (plano.disciplinaModo4B && plano.suficiencia === 'SUFICIENTE_PARA_DIAGNOSTICO' && plano.lacunaInvestigativa?.tipo === 'NENHUMA') {
+      return {
+        ...planoNovo,
+        devePesquisar: false,
+        motivo: plano.motivo || 'evidencias internas suficientes para diagnostico; sem lacuna externa concreta',
+      };
+    }
+    if (plano.disciplinaModo4B && ['EVIDENCIA_AMBIENTE', 'CONTRADICAO'].includes(plano.lacunaInvestigativa?.tipo) && !plano.pesquisa?.necessaria) {
+      return {
+        ...planoNovo,
+        devePesquisar: false,
+        motivo: plano.motivo || 'lacuna depende de evidencia do ambiente, nao de pesquisa externa',
+      };
+    }
   }
-  if (plano.disciplinaModo4B && ['EVIDENCIA_AMBIENTE', 'CONTRADICAO'].includes(plano.lacunaInvestigativa?.tipo) && !plano.pesquisa?.necessaria) {
-    return {
-      ...planoNovo,
-      devePesquisar: false,
-      motivo: plano.motivo || 'lacuna depende de evidencia do ambiente, nao de pesquisa externa',
-    };
-  }
-  if (relevante) {
+  if (ctx.forcarPesquisa || relevante) {
     planoNovo.devePesquisar = true;
     planoNovo.motivo = `mudanca investigativa reconhecida semanticamente: ${res.tipoMudanca}`;
     planoNovo.lacunas = [...new Set([...(planoNovo.lacunas || []), `semantica:${res.tipoMudanca}`])];
@@ -660,7 +673,14 @@ async function planejarPesquisaComSemantica(ctx = {}, opts = {}) {
     guard,
     historico: plano.historico,
   });
-  if (['administrativa', 'sem_material', 'sem_evidencia_clara'].includes(pre.zona) && !_temSinalForte(_extrairSinaisTecnicos({ ...ctx, chamado: null, atendimento: null, mensagens: [], anexos: [], texto: ctx.texto || '' }))) {
+  // Pedido EXPLICITO do usuario nunca cai no atalho "zona administrativa/sem
+  // material/sem evidencia clara" — esse atalho existe pra turnos realmente
+  // conversacionais ("obrigado", "ok", "vou verificar"), mas o TEXTO FIXO do
+  // botão "Pesquisar Soluções" ("Revise todo o histórico... e pesquise uma
+  // nova solução") é uma instrução genérica sem sinal técnico próprio, então
+  // caia frequentemente nessa mesma zona por acidente (achado real, 2026-10:
+  // terceiro ponto de bloqueio encontrado além do dedup e da disciplina 4B).
+  if (!ctx.forcarPesquisa && ['administrativa', 'sem_material', 'sem_evidencia_clara'].includes(pre.zona) && !_temSinalForte(_extrairSinaisTecnicos({ ...ctx, chamado: null, atendimento: null, mensagens: [], anexos: [], texto: ctx.texto || '' }))) {
     return {
       ...plano,
       devePesquisar: false,
@@ -680,7 +700,7 @@ async function planejarPesquisaComSemantica(ctx = {}, opts = {}) {
     };
   }
   const interpretacao = await _interpretarSemanticaPesquisa(ctx, plano, pre, opts);
-  return _aplicarInterpretacaoSemantica({ ...plano, preAnalise: pre }, interpretacao);
+  return _aplicarInterpretacaoSemantica({ ...plano, preAnalise: pre }, interpretacao, ctx);
 }
 
 function planejarPesquisa(ctx = {}) {
