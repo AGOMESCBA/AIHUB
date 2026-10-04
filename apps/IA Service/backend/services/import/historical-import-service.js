@@ -25,6 +25,7 @@ const chamadoRepo = require('../../repositories/chamado-repository');
 const importacaoRepo = require('../../repositories/importacao-repository');
 const agenteRepo = require('../../repositories/agente-local-repository');
 const atendimentoRepo = require('../../repositories/atendimento-repository');
+const anexosSoftExpertService = require('../anexos-softexpert-service');
 const radarService = require('../radar-service');
 
 const TAMANHO_LOTE_PADRAO = 500;
@@ -309,10 +310,12 @@ async function _processarChamado(empresaId, fonte, adapter, importacaoId, rowBru
     else posSemAlteracao++;
   }
 
+  const anexos = await _sincronizarAnexosSeAtendimentoExistente(empresaId, chamado);
   await _dispararPreAnaliseSePrimeiroContato(empresaId, chamado);
 
   return {
     resultado, inconsistencias, chamadoId: chamado.id,
+    anexos,
     posicionamentos: { total: posicionamentosBrutos.length, inseridos: posInseridos, atualizados: posAtualizados, semAlteracao: posSemAlteracao },
   };
 }
@@ -359,6 +362,22 @@ async function _dispararPreAnaliseSePrimeiroContato(empresaId, chamado) {
     radarService.iniciarAnalise(empresaId, chamado.id, { preAnaliseAutomatica: false });
   } catch (err) {
     console.error(`[IA Service] Falha ao avaliar pré-análise automática (chamado ${chamado.numero}):`, err.message);
+  }
+}
+
+async function _sincronizarAnexosSeAtendimentoExistente(empresaId, chamado) {
+  try {
+    const atendimento = atendimentoRepo.getAtendimentoPorReferencia(empresaId, {
+      origem: chamado.sistemaOrigem || SISTEMA_ORIGEM,
+      referenciaExterna: chamado.numero,
+    });
+    if (!atendimento) return { sincronizados: 0, ignorado: 'sem_atendimento' };
+
+    const sincronizados = await anexosSoftExpertService.sincronizarAnexosParaAtendimento(empresaId, chamado.id, atendimento.id);
+    return { sincronizados: sincronizados.length };
+  } catch (err) {
+    console.error(`[IA Service] Falha ao sincronizar anexos durante importação do chamado ${chamado.numero}:`, err.message);
+    return { sincronizados: 0, erro: err.message };
   }
 }
 

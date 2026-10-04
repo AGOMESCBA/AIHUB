@@ -15,6 +15,7 @@ const extracaoConteudo = require('./extracao-conteudo');
 const { resolverAdapter } = require('./import/adapters');
 
 const LIMITE_TAMANHO_BYTES = 25 * 1024 * 1024; // 25MB — mesmo teto de anexo já usado em armazenamento-anexos.js
+const SISTEMA_ORIGEM = 'softexpert';
 
 function _mimeTypePorExtensao(extensao) {
   const ext = String(extensao || '').toLowerCase().replace(/^\./, '');
@@ -157,12 +158,26 @@ async function sincronizarAnexosParaAtendimento(empresaId, chamadoId, atendiment
   const { anexosBrutos } = await _buscarAnexosBrutos(empresaId, chamadoId);
   if (!anexosBrutos.length) return [];
 
-  const jaSincronizados = new Set(anexoRepo.listarAnexos(empresaId, atendimentoId).map(a => a.nomeOriginal));
+  const anexosLocais = anexoRepo.listarAnexos(empresaId, atendimentoId);
+  const porNomeLegado = new Map(anexosLocais.map(a => [a.nomeOriginal, a]));
 
   const sincronizados = [];
   for (const bruto of anexosBrutos) {
     const nome = bruto.NMNAME || `anexo.${bruto.IDEXTENSION || 'bin'}`;
-    if (jaSincronizados.has(nome)) continue; // já sincronizado antes — não duplica
+    const origem = {
+      origemSistema: SISTEMA_ORIGEM,
+      origemOid: bruto.OID,
+      origemTipo: bruto.origem,
+      origemReferenciaOid: bruto.OID_REFERENCIA ?? null,
+    };
+    if (anexoRepo.getAnexoPorOrigem(empresaId, atendimentoId, origem)) continue; // já sincronizado antes — não duplica por OID real
+
+    const legadoMesmoNome = porNomeLegado.get(nome);
+    if (legadoMesmoNome && !legadoMesmoNome.origemOid) {
+      const vinculado = anexoRepo.vincularOrigem(empresaId, legadoMesmoNome.id, origem);
+      if (vinculado) sincronizados.push(vinculado);
+      continue;
+    }
 
     const mimeType = _mimeTypePorExtensao(bruto.IDEXTENSION);
     if (!armazenamento.MIME_PERMITIDOS.has(mimeType)) continue; // tipo não suportado pelo pipeline (Excel/Word/ZIP) — fica só como download
@@ -177,6 +192,7 @@ async function sincronizarAnexosParaAtendimento(empresaId, chamadoId, atendiment
         tamanho: buffer.length,
         conteudo: buffer,
         usuarioId: null,
+        ...origem,
       });
 
       const anexoAtualizado = anexoRepo.atualizarExtracao(empresaId, anexo.id, {

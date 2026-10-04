@@ -24,6 +24,10 @@ function _rowParaDominio(row) {
     tamanho: row.tamanho,
     caminhoRelativo: row.caminho_relativo,
     usuarioId: row.usuario_id,
+    origemSistema: row.origem_sistema,
+    origemOid: row.origem_oid,
+    origemTipo: row.origem_tipo,
+    origemReferenciaOid: row.origem_referencia_oid,
     criadoEm: row.criado_em,
     conteudoExtraido: row.conteudo_extraido,
     linguagemDetectada: row.linguagem_detectada,
@@ -51,10 +55,12 @@ function salvarMetadadosAnexo(empresaId, atendimentoId, dados) {
   db.prepare(`
     INSERT INTO anexos (
       id, empresa_id, atendimento_id, mensagem_id, nome_original, nome_interno,
-      mime_type, tamanho, caminho_relativo, usuario_id, criado_em,
+      mime_type, tamanho, caminho_relativo, usuario_id,
+      origem_sistema, origem_oid, origem_tipo, origem_referencia_oid,
+      criado_em,
       conteudo_extraido, linguagem_detectada, encoding_detectado, e_codigo,
       anexo_original_id, mensagem_origem_id, explicacao_alteracao
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     Number(empresaId),
@@ -66,6 +72,10 @@ function salvarMetadadosAnexo(empresaId, atendimentoId, dados) {
     dados.tamanho,
     dados.caminhoRelativo,
     dados.usuarioId ?? null,
+    dados.origemSistema ?? null,
+    dados.origemOid ?? null,
+    dados.origemTipo ?? null,
+    dados.origemReferenciaOid ?? null,
     agora,
     dados.conteudoExtraido ?? null,
     dados.linguagemDetectada ?? null,
@@ -77,6 +87,48 @@ function salvarMetadadosAnexo(empresaId, atendimentoId, dados) {
   );
 
   return _rowParaDominio(db.prepare('SELECT * FROM anexos WHERE id = ?').get(id));
+}
+
+function getAnexoPorOrigem(empresaId, atendimentoId, { origemSistema, origemOid }) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!atendimentoId) throw new Error('atendimentoId é obrigatório.');
+  if (!origemSistema || !origemOid) return null;
+
+  const db = getDB();
+  const row = db.prepare(`
+    SELECT * FROM anexos
+     WHERE empresa_id = ?
+       AND atendimento_id = ?
+       AND origem_sistema = ?
+       AND origem_oid = ?
+     LIMIT 1
+  `).get(Number(empresaId), atendimentoId, origemSistema, origemOid);
+  return _rowParaDominio(row);
+}
+
+function vincularOrigem(empresaId, anexoId, { origemSistema, origemOid, origemTipo, origemReferenciaOid }) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!anexoId) throw new Error('anexoId é obrigatório.');
+  if (!origemSistema || !origemOid) throw new Error('origemSistema e origemOid são obrigatórios.');
+
+  const db = getDB();
+  const info = db.prepare(`
+    UPDATE anexos
+       SET origem_sistema = ?,
+           origem_oid = ?,
+           origem_tipo = ?,
+           origem_referencia_oid = ?
+     WHERE id = ? AND empresa_id = ?
+  `).run(
+    origemSistema,
+    origemOid,
+    origemTipo ?? null,
+    origemReferenciaOid ?? null,
+    anexoId,
+    Number(empresaId)
+  );
+  if (info.changes === 0) return null;
+  return getAnexo(empresaId, anexoId);
 }
 
 function listarAnexos(empresaId, atendimentoId) {
@@ -161,4 +213,13 @@ function listarVersoes(empresaId, anexoOriginalId) {
   return [original, ...correcoes.map(_rowParaDominio)];
 }
 
-module.exports = { salvarMetadadosAnexo, listarAnexos, getAnexo, vincularMensagem, atualizarExtracao, listarVersoes };
+module.exports = {
+  salvarMetadadosAnexo,
+  listarAnexos,
+  getAnexo,
+  getAnexoPorOrigem,
+  vincularOrigem,
+  vincularMensagem,
+  atualizarExtracao,
+  listarVersoes,
+};

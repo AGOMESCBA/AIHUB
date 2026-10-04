@@ -59,7 +59,18 @@ function validarAnexo({ nomeOriginal, mimeType, tamanho }) {
  * anexo-repository. `bufferOuConteudo` é o conteúdo bruto do arquivo — a Etapa 2
  * decide o transporte real (multipart/base64/etc.), esta função só recebe bytes.
  */
-function salvarAnexo(empresaId, atendimentoId, { nomeOriginal, mimeType, tamanho, conteudo, mensagemId, usuarioId }) {
+function salvarAnexo(empresaId, atendimentoId, {
+  nomeOriginal,
+  mimeType,
+  tamanho,
+  conteudo,
+  mensagemId,
+  usuarioId,
+  origemSistema,
+  origemOid,
+  origemTipo,
+  origemReferenciaOid,
+}) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   if (!atendimentoId) throw new Error('atendimentoId é obrigatório.');
 
@@ -83,6 +94,10 @@ function salvarAnexo(empresaId, atendimentoId, { nomeOriginal, mimeType, tamanho
     caminhoRelativo,
     mensagemId,
     usuarioId,
+    origemSistema,
+    origemOid,
+    origemTipo,
+    origemReferenciaOid,
   });
 }
 

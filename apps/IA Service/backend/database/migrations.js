@@ -916,6 +916,20 @@ const MIGRATIONS = [
         WHERE telefone IS NOT NULL;
     `,
   },
+  {
+    version: 36,
+    descricao: 'Metadados de origem dos anexos sincronizados do SoftExpert para idempotencia por OID real do SEBLOB, evitando depender apenas do nome do arquivo.',
+    sql: `
+      ALTER TABLE anexos ADD COLUMN origem_sistema TEXT DEFAULT NULL;
+      ALTER TABLE anexos ADD COLUMN origem_oid TEXT DEFAULT NULL;
+      ALTER TABLE anexos ADD COLUMN origem_tipo TEXT DEFAULT NULL;
+      ALTER TABLE anexos ADD COLUMN origem_referencia_oid TEXT DEFAULT NULL;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_svc_anexos_origem
+        ON anexos (empresa_id, atendimento_id, origem_sistema, origem_oid)
+        WHERE origem_sistema IS NOT NULL AND origem_oid IS NOT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

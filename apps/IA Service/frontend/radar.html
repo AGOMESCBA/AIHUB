@@ -323,7 +323,7 @@
     .anexos-modal-body { flex:1; min-height:0; overflow:auto; padding:12px; }
     .anexos-grid { width:100%; border-collapse:separate; border-spacing:0 7px; font-size:12px; }
     .anexos-grid th { color:var(--wa-text-tertiary); font-size:10.5px; text-transform:uppercase; text-align:left; padding:0 9px 2px; }
-    .anexos-grid td { background:rgba(255,255,255,.035); border-top:1px solid var(--wa-border); border-bottom:1px solid var(--wa-border); padding:9px; vertical-align:top; }
+    .anexos-grid td { background:rgba(255,255,255,.035); border-top:1px solid var(--wa-border); border-bottom:1px solid var(--wa-border); padding:9px; vertical-align:top; color:var(--wa-text-secondary); }
     .anexos-grid td:first-child { border-left:1px solid var(--wa-border); border-radius:8px 0 0 8px; }
     .anexos-grid td:last-child { border-right:1px solid var(--wa-border); border-radius:0 8px 8px 0; }
     /* Sem isso, o navegador aplica o fundo branco padrão de seleção/foco de
@@ -331,16 +331,16 @@
        usuário, 2026-10) — azul claro translúcido em vez de cinza/branco,
        por pedido explícito do usuário, para destacar melhor a linha
        selecionada/em foco. */
-    .anexos-grid tr:hover td { background:rgba(96,165,250,.12); }
-    .anexos-grid tr:focus-within td { background:rgba(96,165,250,.22); }
-    .anexos-grid tr:active td { background:rgba(96,165,250,.3); }
-    .anexos-grid td::selection, .anexos-grid td *::selection { background:rgba(96,165,250,.4); color:var(--wa-text); }
+    .anexos-grid tr:hover td { background:rgba(0,217,163,.08); color:var(--wa-text); }
+    .anexos-grid tr:focus-within td { background:rgba(0,217,163,.12); color:var(--wa-text); box-shadow:inset 0 1px 0 rgba(0,217,163,.16), inset 0 -1px 0 rgba(0,217,163,.16); }
+    .anexos-grid tr:active td { background:rgba(0,217,163,.16); color:var(--wa-text); }
+    .anexos-grid td::selection, .anexos-grid td *::selection { background:rgba(0,217,163,.32); color:var(--wa-text); }
     .anexo-nome { font-weight:800; color:var(--wa-text); word-break:break-word; }
     .anexo-meta { color:var(--wa-text-tertiary); font-size:11px; margin-top:3px; }
     .anexo-status { display:inline-flex; padding:3px 7px; border-radius:99px; background:rgba(0,217,163,.1); color:var(--wa-accent); border:1px solid rgba(0,217,163,.24); font-size:10.5px; font-weight:800; white-space:nowrap; }
     .anexo-status-ia { margin-left:5px; background:rgba(99,102,241,.12); color:#a5b4fc; border-color:rgba(99,102,241,.3); }
     .anexo-acao { border:1px solid var(--wa-border); border-radius:7px; background:rgba(255,255,255,.04); color:var(--wa-text-secondary); font-size:11px; font-weight:800; padding:6px 8px; cursor:pointer; white-space:nowrap; }
-    .anexo-acao:hover { color:var(--wa-accent); border-color:rgba(0,217,163,.32); }
+    .anexo-acao:hover, .anexos-grid tr:focus-within .anexo-acao { color:var(--wa-accent); border-color:rgba(0,217,163,.32); background:rgba(0,217,163,.08); }
     /* Aba Detalhes do Chamado — cada categoria é um CARD visual distinto
        (borda/fundo/sombra próprios, ícone em badge colorido), não uma faixa
        de título fino em cima de uma grade genérica. Campos sem valor são
@@ -1276,11 +1276,16 @@
       // Posicionamentos quando o mesmo nome aparecer nos dois (raro, mas
       // possível). Anexos sem nenhum anexo SoftExpert associado (ex.:
       // enviado manualmente pelo analista no chat) viram sua própria seção.
-      const nomesSoftExpert = new Set([...baseAbertura, ...outros].map(a => a.nome || a.nomeOriginal).filter(Boolean));
-      const locaisSemOrigem = anexosAtendimentoCache.filter(a => !nomesSoftExpert.has(a.nome || a.nomeOriginal));
+      const nomeLocal = a => a.nome || a.nomeOriginal || '';
+      const nomesBaseAbertura = new Set(baseAbertura.map(nomeLocal).filter(Boolean));
+      const nomesOutros = new Set(outros.map(nomeLocal).filter(Boolean));
+      const nomesSoftExpert = new Set([...nomesBaseAbertura, ...nomesOutros]);
+      const locaisAbertura = anexosAtendimentoCache.filter(a => nomesBaseAbertura.has(nomeLocal(a)));
+      const locaisOutros = anexosAtendimentoCache.filter(a => nomesOutros.has(nomeLocal(a)));
+      const locaisSemOrigem = anexosAtendimentoCache.filter(a => !nomesSoftExpert.has(nomeLocal(a)));
 
-      const origem = montarLinhasAnexosUnificado(baseAbertura, anexosAtendimentoCache);
-      const posicionamentos = montarLinhasAnexosUnificado(outros, anexosAtendimentoCache);
+      const origem = montarLinhasAnexosUnificado(baseAbertura, locaisAbertura);
+      const posicionamentos = montarLinhasAnexosUnificado(outros, locaisOutros);
       const avulsos = locaisSemOrigem.length ? montarLinhasAnexos(locaisSemOrigem, { fonte: 'local' }) : '';
       const avisoErro = anexosSoftExpertErro
         ? `<div class="pesquisa-empty">Não foi possível consultar os anexos do SoftExpert: ${escapeHtml(anexosSoftExpertErro)}</div>`
