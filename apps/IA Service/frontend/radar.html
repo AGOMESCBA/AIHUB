@@ -208,15 +208,13 @@
     }
     .chat-header-toggle:hover { background:rgba(255,255,255,.08); }
     .chat-header-pesquisar {
-      flex:none; display:flex; align-items:center; gap:8px; font-size:13px; font-weight:900;
-      border-radius:8px; border:1px solid rgba(0,217,163,.5); background:linear-gradient(135deg, #00d9a3, #18b6f6);
-      color:#061314; cursor:pointer; padding:10px 16px; white-space:nowrap;
-      box-shadow:0 0 0 1px rgba(255,255,255,.08) inset, 0 8px 22px rgba(0,217,163,.22);
-      text-transform:uppercase; letter-spacing:0;
-      transition:transform .15s ease, box-shadow .15s ease, filter .15s ease;
+      flex:none; display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700;
+      border-radius:7px; border:1px solid rgba(0,217,163,.3); background:rgba(0,217,163,.08);
+      color:var(--wa-accent); cursor:pointer; padding:6px 10px; white-space:nowrap;
+      transition:background .15s ease, border-color .15s ease;
     }
-    .chat-header-pesquisar:hover { transform:translateY(-1px); filter:saturate(1.08); box-shadow:0 0 0 1px rgba(255,255,255,.12) inset, 0 10px 26px rgba(0,217,163,.3); }
-    .chat-header-pesquisar:disabled { opacity:.55; cursor:not-allowed; transform:none; box-shadow:none; }
+    .chat-header-pesquisar:hover { background:rgba(0,217,163,.16); border-color:rgba(0,217,163,.45); }
+    .chat-header-pesquisar:disabled { opacity:.5; cursor:not-allowed; }
     .chat-header-detalhes { overflow:hidden; max-height:300px; transition:max-height .2s ease, opacity .15s ease, margin-top .2s ease; opacity:1; }
     .chat-header.recolhido .chat-header-detalhes { max-height:0; opacity:0; }
     .chat-header.recolhido .chat-header-toggle { transform:rotate(-90deg); }
@@ -381,16 +379,32 @@
     .info-label { display:block; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; color:var(--wa-text-tertiary); margin-bottom:4px; }
     .info-value { color:var(--wa-text); font-size:13.5px; font-weight:600; line-height:1.35; overflow-wrap:anywhere; }
 
-    /* Destaque no topo da aba Detalhes — há quanto tempo o chamado aguarda
-       a parte atual (Atendente/Cliente/Fornecedor). Resume no cabeçalho de
-       uma olhada o que antes exigia ler a grade de campos inteira. */
+    /* Faixa superior da aba Detalhes: destaque de espera (1/3) + identificação
+       resumida do chamado (2/3) lado a lado — antes eram dois blocos
+       empilhados (banner full-width + card "Identificação" repetindo número/
+       título logo abaixo), desperdiçando altura com informação duplicada.
+       Em telas estreitas empilha (ver @media abaixo). */
+    .detalhes-topo { display:grid; grid-template-columns:1fr 2fr; gap:12px; margin-bottom:12px; align-items:stretch; }
+    @media (max-width: 640px) { .detalhes-topo { grid-template-columns:1fr; } }
+
     .destaque-aguardando {
       border:1px solid rgba(250,204,21,.28); border-radius:10px; background:rgba(250,204,21,.07);
-      padding:10px 16px; margin-bottom:16px; text-align:center;
+      padding:12px 14px; display:flex; flex-direction:column; justify-content:center; min-width:0;
     }
-    .destaque-aguardando-label { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:#fde68a; }
-    .destaque-aguardando-dias { font-size:22px; font-weight:900; color:var(--wa-text); margin-top:2px; line-height:1.2; }
-    .destaque-aguardando-sub { font-size:11px; color:var(--wa-text-tertiary); margin-top:2px; }
+    .destaque-aguardando-label { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:#fde68a; }
+    .destaque-aguardando-dias { font-size:22px; font-weight:900; color:var(--wa-text); margin-top:3px; line-height:1.2; }
+    .destaque-aguardando-sub { font-size:10.5px; color:var(--wa-text-tertiary); margin-top:3px; }
+
+    .detalhes-resumo {
+      border:1px solid var(--wa-border); border-radius:10px; background:var(--wa-header);
+      padding:12px 14px; min-width:0; display:flex; flex-direction:column; justify-content:center; gap:6px;
+    }
+    .detalhes-resumo-numero { font-size:11px; font-weight:800; color:var(--wa-accent); letter-spacing:.02em; }
+    .detalhes-resumo-titulo { font-size:13.5px; font-weight:700; color:var(--wa-text); line-height:1.3; }
+    .detalhes-resumo-descricao {
+      font-size:12px; color:var(--wa-text-secondary); line-height:1.45;
+      display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+    }
 
     @media (max-width: 900px) {
       .radar-shell { grid-template-columns:1fr; }
@@ -1499,6 +1513,11 @@
       const linha = [];
       linha.push(`<span class="chat-header-status-main">⏳ ${escapeHtml(situacaoLabel || 'Aguardando retorno não informado')}</span>`);
       if (c.slaPrazo) linha.push(badgeSla(c.slaPrazo));
+      const diasSemPosicionamento = diasEntre(c.ultimoPosicionamentoEm || c.dataAbertura);
+      if (diasSemPosicionamento !== null) {
+        const diasTexto = diasSemPosicionamento === 0 ? 'Hoje' : diasSemPosicionamento === 1 ? '1 dia' : `${diasSemPosicionamento} dias`;
+        linha.push(`<span class="chat-header-tag">🕓 ${escapeHtml(diasTexto)} sem posicionamento</span>`);
+      }
       if (c.tecnicoResponsavelNome) linha.push(`<span class="chat-header-tag">🧑‍💻 Consultor: ${escapeHtml(c.tecnicoResponsavelNome)}</span>`);
       document.getElementById('chat-header-linha').innerHTML = linha.join('');
 
@@ -1532,8 +1551,6 @@
         {
           icone: '📄', titulo: 'Identificação',
           campos: [
-            ['Número', `#${c.numero}`],
-            ['Título', c.titulo || c.assunto || c.breveDescricao],
             ['Cliente', c.clienteNome],
             ['Usuário', [c.solicitanteNome, c.solicitanteEmail].filter(Boolean).join(' — ')],
             ['Consultor', c.tecnicoResponsavelNome],
@@ -1614,7 +1631,13 @@
         })
         .join('');
 
-      document.getElementById('informacoes-body').innerHTML = renderizarDestaqueAguardando(c) + html;
+      const topo = `
+        <div class="detalhes-topo">
+          ${renderizarDestaqueAguardando(c)}
+          ${renderizarResumoChamado(c)}
+        </div>
+      `;
+      document.getElementById('informacoes-body').innerHTML = topo + html;
     }
 
     // Há quanto tempo o chamado aguarda a parte atual (categoria real vinda
@@ -1641,6 +1664,21 @@
           <div class="destaque-aguardando-label">${escapeHtml(label)}</div>
           <div class="destaque-aguardando-dias">${escapeHtml(diasTexto)}</div>
           <div class="destaque-aguardando-sub">desde o último posicionamento em ${escapeHtml(formatarData(c.ultimoPosicionamentoEm || c.dataAbertura))}</div>
+        </div>
+      `;
+    }
+
+    // Resumo compacto (número + título + descrição) ao lado do destaque de
+    // espera — a info de identificação completa (cliente/usuário/consultor)
+    // continua no card "Identificação" logo abaixo, sem duplicar aqui.
+    function renderizarResumoChamado(c) {
+      const titulo = c.titulo || c.assunto || c.breveDescricao || '(sem título)';
+      const descricao = c.descricao || c.breveDescricao || c.assunto;
+      return `
+        <div class="detalhes-resumo">
+          <div class="detalhes-resumo-numero">#${escapeHtml(String(c.numero))}</div>
+          <div class="detalhes-resumo-titulo">${escapeHtml(titulo)}</div>
+          ${descricao ? `<div class="detalhes-resumo-descricao">${escapeHtml(descricao)}</div>` : ''}
         </div>
       `;
     }

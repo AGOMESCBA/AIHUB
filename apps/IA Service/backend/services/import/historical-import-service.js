@@ -264,7 +264,10 @@ async function _processarChamado(empresaId, fonte, adapter, importacaoId, rowBru
     slaInicial: c.slaInicial, slaAnterior: c.slaAnterior,
     solucaoAplicada: c.solucaoAplicada, avaliacao: c.avaliacao, totalHoras: c.totalHoras,
     chamadoReferencia: c.chamadoReferencia,
-    statusEncerramento: c.statusEncerramento, slaPrazo: c.slaPrazo,
+    statusEncerramento: c.statusEncerramento, slaPrazo: c.slaPrazo, slaDataPrevFim: c.slaDataPrevFim,
+    kanbanId: c.kanbanId, kanbanKey: c.kanbanKey, kanbanAtributos: c.kanbanAtributos, kanbanDataInicio: c.kanbanDataInicio,
+    diasDur: c.diasDur, hrDur: c.hrDur, diasDurSup: c.diasDurSup, diasDurFsw: c.diasDurFsw,
+    diasDurDist: c.diasDurDist, diasDurCli: c.diasDurCli, diasDurTicli: c.diasDurTicli,
   });
 
   if (!c.dataAbertura && c.dataAberturaBruta) {
