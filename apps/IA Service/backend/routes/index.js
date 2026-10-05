@@ -498,9 +498,9 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   // Exclusão SEMPRE apaga em cascata (ON DELETE CASCADE) o histórico de
   // importações/chamados/posicionamentos vinculado — ver
   // agenteLocalService.excluirFonte. A confirmação clara disso fica na UI.
-  app.delete('/api/ia-service/base-historica/fontes/:id', (req, res) => {
+  app.delete('/api/ia-service/base-historica/fontes/:id', async (req, res) => {
     try {
-      const resultado = agenteLocalService.excluirFonte(req.svcEmpresaId, req.params.id);
+      const resultado = await agenteLocalService.excluirFonte(req.svcEmpresaId, req.params.id);
       if (!resultado?.excluida) return res.status(404).json({ error: 'Fonte não encontrada.' });
       res.json(resultado);
     } catch (err) {
@@ -512,9 +512,9 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   // (e em cascata chamados/posicionamentos vinculados), mantém o cadastro
   // (nome/connection_key) intacto para reimportar. Ver
   // agenteLocalService.limparHistoricoFonte.
-  app.delete('/api/ia-service/base-historica/fontes/:id/historico', (req, res) => {
+  app.delete('/api/ia-service/base-historica/fontes/:id/historico', async (req, res) => {
     try {
-      const resultado = agenteLocalService.limparHistoricoFonte(req.svcEmpresaId, req.params.id);
+      const resultado = await agenteLocalService.limparHistoricoFonte(req.svcEmpresaId, req.params.id);
       if (!resultado?.limpa) return res.status(404).json({ error: 'Fonte não encontrada.' });
       res.json(resultado);
     } catch (err) {

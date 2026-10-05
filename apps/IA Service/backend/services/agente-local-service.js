@@ -19,10 +19,10 @@ const atendimentoRepo = require('../repositories/atendimento-repository');
 // mesmo os 169 diretórios órfãos (3.56 MB) de limpezas passadas antes deste
 // fix existir. Best-effort: uma falha ao apagar um diretório não aborta o
 // restante nem a limpeza do banco, que já aconteceu antes desta chamada.
-function _limparAnexosOrfaosDaEmpresa(empresaId) {
+async function _limparAnexosOrfaosDaEmpresa(empresaId) {
   try {
     const atendimentoIdsValidos = atendimentoRepo.listarIdsPorEmpresa(empresaId);
-    return armazenamentoAnexos.limparDiretoriosOrfaos(empresaId, atendimentoIdsValidos);
+    return await armazenamentoAnexos.limparDiretoriosOrfaos(empresaId, atendimentoIdsValidos);
   } catch (_) {
     return { removidos: 0 };
   }
@@ -196,19 +196,19 @@ function getFonte(empresaId, fonteId) {
  * valor, só serve pra reimportar. Sem trava aqui — a confirmação/aviso fica
  * na UI (base-historica.html), não no backend.
  */
-function excluirFonte(empresaId, fonteId) {
+async function excluirFonte(empresaId, fonteId) {
   const fonte = agenteRepo.getFonte(empresaId, fonteId);
   if (!fonte) throw new Error('Fonte histórica não encontrada.');
   const resultado = agenteRepo.excluirFonte(empresaId, fonteId);
-  const { removidos } = _limparAnexosOrfaosDaEmpresa(empresaId);
+  const { removidos } = await _limparAnexosOrfaosDaEmpresa(empresaId);
   return { ...resultado, diretoriosAnexosRemovidos: removidos };
 }
 
-function limparHistoricoFonte(empresaId, fonteId) {
+async function limparHistoricoFonte(empresaId, fonteId) {
   const fonte = agenteRepo.getFonte(empresaId, fonteId);
   if (!fonte) throw new Error('Fonte histórica não encontrada.');
   const resultado = agenteRepo.limparHistoricoFonte(empresaId, fonteId);
-  const { removidos } = _limparAnexosOrfaosDaEmpresa(empresaId);
+  const { removidos } = await _limparAnexosOrfaosDaEmpresa(empresaId);
   return { ...resultado, diretoriosAnexosRemovidos: removidos };
 }
 

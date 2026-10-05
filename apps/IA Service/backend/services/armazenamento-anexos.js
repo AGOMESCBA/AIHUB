@@ -173,20 +173,29 @@ function removerDiretorioAtendimento(empresaId, atendimentoId) {
  * banco, não pode continuar em disco). Decisão explícita do usuário:
  * "reimportar do zero é sumir com o que tem" — nenhum anexo de execução
  * anterior pode sobreviver à limpeza, nem os que já eram órfãos antes dela.
+ *
+ * Assíncrona (fs.promises) de propósito — achado real em produção (2026-10):
+ * a versão síncrona original (fs.readdirSync/rmSync) bloqueava o event loop
+ * inteiro do Node durante a varredura, travando TODAS as rotas do servidor
+ * (não só esta) até terminar. Com milhares de diretórios/arquivos acumulados
+ * ou disco mais lento que o ambiente de teste local, isso trava o processo
+ * de forma indistinguível de um deadlock — só reiniciar o serviço "resolvia"
+ * até a próxima execução da mesma rotina.
  */
-function limparDiretoriosOrfaos(empresaId, atendimentoIdsValidos) {
+async function limparDiretoriosOrfaos(empresaId, atendimentoIdsValidos) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const dirEmpresa = path.resolve(ANEXOS_DIR, String(empresaId));
-  if (!fs.existsSync(dirEmpresa)) return { removidos: 0 };
+  if (!(await fs.promises.access(dirEmpresa).then(() => true, () => false))) return { removidos: 0 };
 
   const validos = new Set(atendimentoIdsValidos || []);
+  const nomes = await fs.promises.readdir(dirEmpresa);
   let removidos = 0;
-  for (const nome of fs.readdirSync(dirEmpresa)) {
+  for (const nome of nomes) {
     if (validos.has(nome)) continue;
     const alvo = path.resolve(dirEmpresa, nome);
     if (!alvo.startsWith(`${dirEmpresa}${path.sep}`)) continue; // nunca deveria acontecer (nome vem do próprio readdir), defesa extra
     try {
-      fs.rmSync(alvo, { recursive: true, force: true });
+      await fs.promises.rm(alvo, { recursive: true, force: true });
       removidos += 1;
     } catch (_) {}
   }
