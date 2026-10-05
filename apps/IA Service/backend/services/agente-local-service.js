@@ -204,10 +204,22 @@ async function excluirFonte(empresaId, fonteId) {
   return { ...resultado, diretoriosAnexosRemovidos: removidos };
 }
 
+// "Limpar Log" — só apaga o log de importações, nunca toca em atendimentos/
+// anexos (ver agenteRepo.limparHistoricoFonte), então não há diretório de
+// disco para varrer aqui.
 async function limparHistoricoFonte(empresaId, fonteId) {
   const fonte = agenteRepo.getFonte(empresaId, fonteId);
   if (!fonte) throw new Error('Fonte histórica não encontrada.');
-  const resultado = agenteRepo.limparHistoricoFonte(empresaId, fonteId);
+  return agenteRepo.limparHistoricoFonte(empresaId, fonteId);
+}
+
+// "Zerar Base" — reset radical da fonte (chamados/posicionamentos/
+// atendimentos/importações), sem disparar reimportação em seguida (isso é
+// decisão explícita do usuário no frontend, separado de "Reimportar do zero").
+async function zerarBaseFonte(empresaId, fonteId) {
+  const fonte = agenteRepo.getFonte(empresaId, fonteId);
+  if (!fonte) throw new Error('Fonte histórica não encontrada.');
+  const resultado = agenteRepo.zerarBaseFonte(empresaId, fonteId);
   const { removidos } = await _limparAnexosOrfaosDaEmpresa(empresaId);
   return { ...resultado, diretoriosAnexosRemovidos: removidos };
 }

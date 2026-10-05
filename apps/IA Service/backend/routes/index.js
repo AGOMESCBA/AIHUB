@@ -508,14 +508,27 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
-  // "Reset" da fonte SEM excluí-la — apaga só o histórico de importações
-  // (e em cascata chamados/posicionamentos vinculados), mantém o cadastro
-  // (nome/connection_key) intacto para reimportar. Ver
-  // agenteLocalService.limparHistoricoFonte.
+  // "Limpar Log" — apaga só o log de importações (status/contadores de
+  // execução). Não toca em atendimentos/chamados/posicionamentos/anexos.
+  // Ver agenteLocalService.limparHistoricoFonte.
   app.delete('/api/ia-service/base-historica/fontes/:id/historico', async (req, res) => {
     try {
       const resultado = await agenteLocalService.limparHistoricoFonte(req.svcEmpresaId, req.params.id);
       if (!resultado?.limpa) return res.status(404).json({ error: 'Fonte não encontrada.' });
+      res.json(resultado);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // "Zerar Base" — reset radical da fonte (chamados/posicionamentos/
+  // atendimentos/anexos/importações), sem reimportar em seguida. Mantém o
+  // cadastro da fonte (nome/connection_key) intacto. Ver
+  // agenteLocalService.zerarBaseFonte.
+  app.delete('/api/ia-service/base-historica/fontes/:id/zerar-base', async (req, res) => {
+    try {
+      const resultado = await agenteLocalService.zerarBaseFonte(req.svcEmpresaId, req.params.id);
+      if (!resultado?.zerada) return res.status(404).json({ error: 'Fonte não encontrada.' });
       res.json(resultado);
     } catch (err) {
       _handleErro(res, err);

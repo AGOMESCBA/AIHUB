@@ -162,11 +162,11 @@ function listarFontes(empresaId, filtros = {}) {
 
 /**
  * Exclusão SEMPRE apaga em cascata (ON DELETE CASCADE, migrations.js) todo o
- * histórico de importações/chamados/posicionamentos vinculado a esta fonte —
- * decisão explícita do usuário (2026-09): depois de importar, a fonte não
- * tem mais valor de rastreabilidade, só serve para reimportar; se o usuário
- * pediu para excluir, ele já sabe que o histórico vai junto. A UI confirma
- * isso claramente antes de chamar esta rota (ver base-historica.html).
+ * histórico de chamados/posicionamentos/atendimentos/importações vinculado a
+ * esta fonte — decisão explícita do usuário (2026-09): depois de importar, a
+ * fonte não tem mais valor de rastreabilidade, só serve para reimportar; se o
+ * usuário pediu para excluir, ele já sabe que o histórico vai junto. A UI
+ * confirma isso claramente antes de chamar esta rota (ver base-historica.html).
  */
 function excluirFonte(empresaId, fonteId) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
@@ -174,15 +174,46 @@ function excluirFonte(empresaId, fonteId) {
   const fonte = getFonte(empresaId, fonteId);
   if (!fonte) return { excluida: false };
   const excluir = db.transaction(() => {
-    const limpeza = _limparHistoricoDaFonte(db, empresaId, fonteId);
+    const limpeza = _zerarBaseDaFonte(db, empresaId, fonteId);
     const resultado = db.prepare(`DELETE FROM fontes_historicas WHERE id = ? AND empresa_id = ?`).run(fonteId, Number(empresaId));
     return { excluida: resultado.changes > 0, ...limpeza };
   });
   return excluir();
 }
 
-function _limparHistoricoDaFonte(db, empresaId, fonteId) {
+// IDs de atendimento capturados ANTES do DELETE — depois de apagado o
+// registro, não há mais como saber quais diretórios de anexos em disco
+// (data/anexos/<empresa>/<atendimento_id>/) pertenciam a ele (ver
+// armazenamento-anexos.limparDiretoriosOrfaos, chamada por quem invoca
+// este repository).
+function _atendimentoIdsDaFonte(db, empresaId, fonteId) {
+  return db.prepare(`
+    SELECT atendimentos.id AS id
+      FROM atendimentos
+     WHERE atendimentos.empresa_id = ?
+       AND EXISTS (
+        SELECT 1
+          FROM chamados c
+         WHERE c.empresa_id = atendimentos.empresa_id
+           AND c.fonte_id = ?
+           AND c.sistema_origem = atendimentos.origem
+           AND c.numero = atendimentos.referencia_externa
+      )
+  `).all(Number(empresaId), fonteId).map(r => r.id);
+}
+
+/**
+ * Reset RADICAL de uma fonte sem excluí-la (connection_key/nome preservados):
+ * apaga `chamados` (cascata automática para `posicionamentos`, FK
+ * ON DELETE CASCADE), `atendimentos` (objetos de chat/Radar — sem FK direta
+ * para chamados, precisa de DELETE explícito) e `importações`. Decisão
+ * explícita do usuário (2026-10): "Zerar Base" existe separado de
+ * "Reimportar do zero" para permitir limpar tudo sem disparar uma nova
+ * importação automática em seguida.
+ */
+function _zerarBaseDaFonte(db, empresaId, fonteId) {
   const empresa = Number(empresaId);
+  const atendimentoIdsRemovidos = _atendimentoIdsDaFonte(db, empresa, fonteId);
 
   const atendimentosRemovidos = db.prepare(`
     DELETE FROM atendimentos
@@ -197,29 +228,47 @@ function _limparHistoricoDaFonte(db, empresaId, fonteId) {
       )
   `).run(empresa, fonteId).changes;
 
+  const chamadosRemovidos = db.prepare(`DELETE FROM chamados WHERE empresa_id = ? AND fonte_id = ?`).run(empresa, fonteId).changes;
+
   const importacoesRemovidas = db.prepare(`
     SELECT COUNT(*) AS total FROM importacoes WHERE empresa_id = ? AND fonte_id = ?
   `).get(empresa, fonteId)?.total || 0;
-
   db.prepare(`DELETE FROM importacoes WHERE empresa_id = ? AND fonte_id = ?`).run(empresa, fonteId);
-  return { atendimentosRemovidos, importacoesRemovidas };
+
+  return { atendimentosRemovidos, chamadosRemovidos, importacoesRemovidas, atendimentoIdsRemovidos };
+}
+
+function zerarBaseFonte(empresaId, fonteId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const db = getDB();
+  const fonte = getFonte(empresaId, fonteId);
+  if (!fonte) return { zerada: false };
+  const zerar = db.transaction(() => _zerarBaseDaFonte(db, empresaId, fonteId));
+  return { zerada: true, ...zerar() };
 }
 
 /**
- * "Reset" de uma fonte SEM excluí-la (connection_key/nome continuam iguais,
- * prontos para reimportar) — apaga as importações (e em cascata,
- * raw_import/chamados/posicionamentos vinculados a esta fonte, mesmo
- * ON DELETE CASCADE de excluirFonte, ver migrations.js). Decisão explícita
- * do usuário (2026-09): limpar tentativas anteriores (algumas zeradas por
- * connection_key errado, antes do dropdown existir) sem perder o cadastro
- * da fonte já corrigido.
+ * "Limpar Log" — apaga SÓ o log de execuções (`importações`: status,
+ * contadores, tempo). Não toca em `atendimentos`, `chamados`,
+ * `posicionamentos` nem `anexos`. Decisão explícita do usuário (2026-10):
+ * antes esta função também apagava `atendimentos` (zerando o chat/
+ * investigação da IA), o que surpreendia o usuário ao ver a tela
+ * "Atendimentos" esvaziar mesmo sem pedir isso — separado agora do reset
+ * radical (ver zerarBaseFonte acima).
  */
 function limparHistoricoFonte(empresaId, fonteId) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
   const fonte = getFonte(empresaId, fonteId);
   if (!fonte) return { limpa: false };
-  const limpar = db.transaction(() => _limparHistoricoDaFonte(db, empresaId, fonteId));
+  const empresa = Number(empresaId);
+  const limpar = db.transaction(() => {
+    const importacoesRemovidas = db.prepare(`
+      SELECT COUNT(*) AS total FROM importacoes WHERE empresa_id = ? AND fonte_id = ?
+    `).get(empresa, fonteId)?.total || 0;
+    db.prepare(`DELETE FROM importacoes WHERE empresa_id = ? AND fonte_id = ?`).run(empresa, fonteId);
+    return { importacoesRemovidas };
+  });
   return { limpa: true, ...limpar() };
 }
 
@@ -233,4 +282,5 @@ module.exports = {
   listarFontes,
   excluirFonte,
   limparHistoricoFonte,
+  zerarBaseFonte,
 };
