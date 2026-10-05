@@ -159,6 +159,7 @@ nssm set $SERVICE_NAME Start            SERVICE_AUTO_START
 nssm set $SERVICE_NAME DisplayName      "IAHub - Analisador de Curriculos"
 nssm set $SERVICE_NAME Description      "Sistema web de analise de curriculos via WhatsApp"
 nssm set $SERVICE_NAME AppRestartDelay  5000
+nssm set $SERVICE_NAME AppEnvironmentExtra NODE_OPTIONS=--use-system-ca
 
 Write-Host "      Servico IAHub registrado!" -ForegroundColor Green
 

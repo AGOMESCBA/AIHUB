@@ -240,6 +240,11 @@ function Start-IaHubServices {
     foreach ($serviceName in $toStart) {
         $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
         if (!$svc) { continue }
+
+        if ($serviceName -eq $SERVICE_NAME) {
+            Invoke-Nssm -Arguments @("set", $serviceName, "AppEnvironmentExtra", "NODE_OPTIONS=--use-system-ca")
+        }
+
         if ($svc.Status -eq "Running") {
             Write-Host "      ${serviceName}: RODANDO" -ForegroundColor Green
             continue

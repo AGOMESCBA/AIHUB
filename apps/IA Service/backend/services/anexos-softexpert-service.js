@@ -97,6 +97,19 @@ function _arquivoLocalIntegro(anexo) {
   }
 }
 
+function listarAnexosLocaisIndisponiveis(empresaId, atendimentoId) {
+  return anexoRepo.listarAnexos(empresaId, atendimentoId)
+    .filter(a => !_arquivoLocalIntegro(a))
+    .map(a => ({
+      id: a.id,
+      nome: a.nomeOriginal,
+      mimeType: a.mimeType,
+      tamanho: a.tamanho,
+      origemSistema: a.origemSistema,
+      origemOid: a.origemOid,
+    }));
+}
+
 /**
  * Lista metadados dos anexos do chamado (sem o binário — leve, para exibir
  * chips/lista no chat). `origem` distingue de qual das três fontes do
@@ -303,9 +316,17 @@ async function sincronizarAnexosParaAtendimentoComReparo(empresaId, chamadoId, a
   return sincronizados;
 }
 
+async function sincronizarEValidarAnexosParaAtendimento(empresaId, chamadoId, atendimentoId) {
+  const sincronizados = await sincronizarAnexosParaAtendimentoComReparo(empresaId, chamadoId, atendimentoId);
+  const indisponiveis = listarAnexosLocaisIndisponiveis(empresaId, atendimentoId);
+  return { sincronizados, indisponiveis };
+}
+
 module.exports = {
   listarAnexosDoChamado,
   baixarAnexo,
   sincronizarAnexosParaAtendimento: sincronizarAnexosParaAtendimentoComReparo,
+  sincronizarEValidarAnexosParaAtendimento,
+  listarAnexosLocaisIndisponiveis,
   arquivoLocalIntegro: _arquivoLocalIntegro,
 };

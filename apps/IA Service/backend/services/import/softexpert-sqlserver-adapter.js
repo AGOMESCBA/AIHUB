@@ -102,13 +102,20 @@ const JOIN_WFPROCESS = `
 `;
 
 // Campos de duração do chamado (dias úteis por fase) — vêm da view
-// ITSM_CHAMADOS, fornecida pelo usuário em 2026-09, confirmada 1 linha por
-// IDPROCESS (mesma cardinalidade de WFPROCESS). LEFT JOIN (não INNER) por
-// cautela: se algum chamado do período não tiver linha correspondente na
-// view, não queremos perder o chamado inteiro da importação — os campos de
-// duração ficam NULL nesse caso, o resto continua vindo normalmente.
+// ITSM_CHAMADOS, fornecida pelo usuário em 2026-09. LEFT JOIN (não INNER)
+// por cautela: se algum chamado do período não tiver linha correspondente
+// na view, não queremos perder o chamado inteiro da importação — os campos
+// de duração ficam NULL nesse caso, o resto continua vindo normalmente.
+//
+// 2026-10: view foi apagada e recriada numa atualização do SoftExpert, com
+// estrutura de colunas diferente da original — a chave de ligação com
+// DYNITSM não é mais ITC.IDPROCESS (coluna não existe mais na view).
+// Confirmado contra dados reais (INFORMATION_SCHEMA + amostra): a coluna
+// ITC.CHAMADO da view nova contém o mesmo valor de D.IDPROCESS (ex:
+// '036683'), ambos varchar — join direto sem cast, 9342/12147 chamados do
+// período com correspondência (resto é esperado ficar NULL via LEFT JOIN).
 const JOIN_ITSM_CHAMADOS = `
-  LEFT JOIN ITSM_CHAMADOS ITC ON ITC.IDPROCESS = D.IDPROCESS
+  LEFT JOIN ITSM_CHAMADOS ITC ON ITC.CHAMADO = D.IDPROCESS
 `;
 const COLUNAS_ITSM_CHAMADOS = [
   'ITC.DIAS_DUR', 'ITC.HR_DUR', 'ITC.DIAS_DUR_SUP', 'ITC.DIAS_DUR_FSW',
@@ -228,6 +235,48 @@ async function listarPosicionamentosDoChamado(empresaId, fonte, idProcess) {
 }
 
 /**
+ * Mesma consulta de listarPosicionamentosDoChamado, mas para um LOTE inteiro
+ * de chamados de uma vez (WHERE CHAMADO IN (...)) em vez de um round-trip de
+ * rede por chamado — 2026-10, otimização de performance: a importação fazia
+ * 1 SELECT por chamado (até 500/lote), dominada por latência de rede até o
+ * SQL Server do cliente via Agente Local, não por processamento. Resultado
+ * agrupado por CHAMADO em Map para o orquestrador distribuir em memória.
+ *
+ * `executarSelectNaFonte`/`_resolverParams` (agente-local-provider.js) só
+ * substitui @chave por um valor ESCALAR escapado, sem suporte a lista — por
+ * isso o IN (...) é montado aqui mesmo, com o mesmo escape de aspas simples
+ * usado em _resolverParams (idProcess vem de DYNITSM.IDPROCESS já lido do
+ * próprio SQL Server nesta mesma importação, não é input externo, mas o
+ * escape é mantido por disciplina).
+ */
+async function listarPosicionamentosDoLote(empresaId, fonte, idProcessList) {
+  const resultado = new Map();
+  if (!idProcessList?.length) return resultado;
+
+  const valoresEscapados = idProcessList
+    .filter(id => id !== null && id !== undefined && id !== '')
+    .map(id => `'${String(id).replace(/'/g, "''")}'`);
+  if (!valoresEscapados.length) return resultado;
+
+  const sql = `
+    SELECT ${COLUNAS_POSICIONAMENTO.join(', ')}
+    FROM DYNITSMGRIDREGISTR
+    WHERE CHAMADO IN (${valoresEscapados.join(', ')})
+    ORDER BY CHAMADO, DATAATUAL
+  `;
+  const rows = await agenteLocalService.executarSelectNaFonte(empresaId, fonte.id, {
+    sql, params: {}, limit: 50000,
+  });
+
+  for (const row of rows) {
+    const chave = String(row.CHAMADO);
+    if (!resultado.has(chave)) resultado.set(chave, []);
+    resultado.get(chave).push(row);
+  }
+  return resultado;
+}
+
+/**
  * Lista os anexos reais do chamado no SoftExpert (não os uploads feitos pelo
  * próprio analista no IA Service — esses já existem via armazenamento-anexos.js).
  * Componente "CONTAINER" do formulário SE não é uma coluna simples — o
@@ -289,5 +338,6 @@ module.exports = {
   listarChamadosPeriodo,
   contarChamadosPeriodo,
   listarPosicionamentosDoChamado,
+  listarPosicionamentosDoLote,
   listarAnexosDoChamado,
 };

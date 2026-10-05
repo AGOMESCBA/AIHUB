@@ -841,11 +841,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       const empresaId = req.svcEmpresaId;
       const { atendimentoId } = req.body || {};
       if (!atendimentoId) return res.status(400).json({ error: 'atendimentoId é obrigatório.' });
-      const sincronizados = await anexosSoftExpertService.sincronizarAnexosParaAtendimento(empresaId, req.params.chamadoId, atendimentoId);
-      const locais = anexoRepo.listarAnexos(empresaId, atendimentoId);
-      const indisponiveis = locais
-        .filter(a => !anexosSoftExpertService.arquivoLocalIntegro(a))
-        .map(a => ({ id: a.id, nome: a.nomeOriginal, mimeType: a.mimeType, tamanho: a.tamanho }));
+      const { sincronizados, indisponiveis } = await anexosSoftExpertService.sincronizarEValidarAnexosParaAtendimento(empresaId, req.params.chamadoId, atendimentoId);
       res.json({ sincronizados: sincronizados.length, indisponiveis });
     } catch (err) {
       _handleErro(res, err);

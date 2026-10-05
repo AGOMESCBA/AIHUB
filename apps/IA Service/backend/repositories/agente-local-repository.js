@@ -151,7 +151,12 @@ function listarFontes(empresaId, filtros = {}) {
     condicoes.push('ativo = ?');
     params.push(filtros.ativo ? 1 : 0);
   }
-  const rows = db.prepare(`SELECT * FROM fontes_historicas WHERE ${condicoes.join(' AND ')} ORDER BY criado_em ASC`).all(...params);
+  const rows = db.prepare(`
+    SELECT *
+      FROM fontes_historicas
+     WHERE ${condicoes.join(' AND ')}
+     ORDER BY datetime(atualizado_em) DESC, datetime(criado_em) DESC, nome ASC
+  `).all(...params);
   return rows.map(_fonteParaDominio);
 }
 

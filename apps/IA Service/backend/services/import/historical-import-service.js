@@ -200,7 +200,7 @@ function _mapearPosicionamento(row) {
  * função própria para que um erro num chamado não aborte o lote inteiro
  * (seção 20 do prompt) — o chamador (executarLote) captura exceções daqui.
  */
-async function _processarChamado(empresaId, fonte, adapter, importacaoId, rowBruta) {
+async function _processarChamado(empresaId, fonte, adapter, importacaoId, rowBruta, posicionamentosPreCarregados) {
   const c = _mapearChamado(rowBruta);
   const inconsistencias = [];
 
@@ -271,8 +271,14 @@ async function _processarChamado(empresaId, fonte, adapter, importacaoId, rowBru
     inconsistencias.push({ tipo: 'data_abertura_nao_reconhecida', detalhe: `DT bruto: ${JSON.stringify(c.dataAberturaBruta)}` });
   }
 
-  // Posicionamentos: TODOS os do chamado, sem filtrar por data (seção 46 do prompt).
-  const posicionamentosBrutos = await adapter.listarPosicionamentosDoChamado(empresaId, fonte, c.numero || c.oidOrigem);
+  // Posicionamentos: TODOS os do chamado, sem filtrar por data (seção 46 do
+  // prompt). Se o chamador já pré-carregou o lote inteiro via
+  // listarPosicionamentosDoLote (2026-10, otimização de performance — ver
+  // comentário em executarFullLoad), usa o resultado em memória; senão cai
+  // no comportamento original (1 SELECT por chamado) — mantém compatibilidade
+  // com adapters que não implementem o método de lote.
+  const posicionamentosBrutos = posicionamentosPreCarregados
+    ?? await adapter.listarPosicionamentosDoChamado(empresaId, fonte, c.numero || c.oidOrigem);
   let posInseridos = 0, posAtualizados = 0, posSemAlteracao = 0;
 
   for (const rowPos of posicionamentosBrutos) {
@@ -420,10 +426,26 @@ async function executarFullLoad(empresaId, fonteId, { periodoInicio, periodoFim,
       const lote = await adapter.listarChamadosPeriodo(empresaId, fonte, { inicio: periodoInicio, fim: periodoFim }, { offset, limit: tamanhoLote });
       if (!lote.length) break;
 
+      // 2026-10, otimização de performance: sem isso, o importador fazia 1
+      // SELECT de posicionamentos por CHAMADO (até 500 round-trips de rede
+      // por lote, dominando o tempo total da importação — ~500 chamados/min
+      // medido em produção). Se o adapter expõe listarPosicionamentosDoLote
+      // (hoje só softexpert-sqlserver-adapter.js), busca o lote inteiro numa
+      // única query WHERE CHAMADO IN (...) e distribui em memória — 1
+      // round-trip por lote em vez de 1 por chamado. Adapters que não
+      // implementem o método (interface original, adapters/index.js) caem
+      // no comportamento antigo via posicionamentosPreCarregados=undefined.
+      const posicionamentosPorChamado = typeof adapter.listarPosicionamentosDoLote === 'function'
+        ? await adapter.listarPosicionamentosDoLote(empresaId, fonte, lote.map(r => r.IDPROCESS))
+        : null;
+
       for (const rowBruta of lote) {
         contadores.registrosLidos++;
         try {
-          const resultadoChamado = await _processarChamado(empresaId, fonte, adapter, importacao.id, rowBruta);
+          const posicionamentosPreCarregados = posicionamentosPorChamado
+            ? (posicionamentosPorChamado.get(String(rowBruta.IDPROCESS)) || [])
+            : undefined;
+          const resultadoChamado = await _processarChamado(empresaId, fonte, adapter, importacao.id, rowBruta, posicionamentosPreCarregados);
 
           if (resultadoChamado.resultado === 'inserido') contadores.registrosInseridos++;
           else if (resultadoChamado.resultado === 'atualizado') contadores.registrosAtualizados++;

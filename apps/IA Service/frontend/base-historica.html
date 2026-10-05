@@ -143,6 +143,11 @@
         <div class="form-hint" style="margin:-2px 0 12px">
           Os cards de cima mostram o total atual da base histórica. O painel e a tabela abaixo mostram apenas o resultado de cada execução de importação/sincronização.
         </div>
+        <div class="callout" style="margin:-2px 0 14px;padding:10px 12px;border-radius:8px;background:var(--bg-base);border:1px solid var(--border);font-size:12.5px;color:var(--text-lo)">
+          <strong style="color:var(--text-md)">Importação inicial</strong> usa o período definido acima e não apaga nada antes — soma sobre o que já existe. Use para a primeira carga de um intervalo ou para reprocessar um período específico.<br>
+          <strong style="color:var(--text-md)">Sincronizar agora</strong> ignora as datas acima: calcula sozinho a partir do fim da última importação <em>concluída com sucesso</em> dessa fonte (com uma pequena margem de segurança para trás) até agora. Sem nenhuma importação concluída ainda, ele só traz os últimos dias — não serve para trazer um histórico completo. Pensado para rotina do dia a dia, depois que a carga inicial já funcionou.<br>
+          <strong style="color:var(--text-md)">Reimportar do zero</strong> apaga todo o histórico da fonte (importações, chamados, posicionamentos e os atendimentos do Radar/respostas da IA gerados a partir deles) e em seguida roda uma importação inicial no período acima. Use quando uma importação anterior falhou/ficou inconsistente e você quer recomeçar limpo.
+        </div>
         <div id="importacao-feedback" class="importacao-feedback"></div>
 
         <div class="table-card">
@@ -575,10 +580,55 @@
           Posicionamentos — Lidos: ${i.posicionamentosLidos} · Inseridos: ${i.posicionamentosInseridos} · Atualizados: ${i.posicionamentosAtualizados}<br>
           Tempo: ${escapeHtml(formatarDuracao(i.inicioEm || i.criadoEm, i.terminoEm || i.atualizadoEm))} · Início: ${escapeHtml(formatarDataHora(i.inicioEm || i.criadoEm))}
           ${i.mensagemErro ? `<br><span style="color:#991b1b">${escapeHtml(i.mensagemErro)}</span>` : ''}
-          ${i.status === 'falhou' || i.status === 'interrompido' ? `<div style="margin-top:6px"><button class="btn btn-ghost" type="button" onclick="retomarImportacao('${i.fonteId}','${i.id}')">Retomar</button></div>` : ''}
+          <div style="margin-top:6px;display:flex;gap:8px">
+            ${i.status === 'falhou' || i.status === 'interrompido' ? `<button class="btn btn-ghost" type="button" onclick="retomarImportacao('${i.fonteId}','${i.id}')">Retomar</button>` : ''}
+            ${Number(i.registrosErro) > 0 ? `<button class="btn btn-ghost btn-danger-soft" type="button" onclick="verErrosImportacao('${i.id}')">Ver erros (${i.registrosErro})</button>` : ''}
+          </div>
         </td>
       </tr>
     `).join('');
+  }
+
+  function _linhaInconsistencia(inc) {
+    return `
+      <div style="padding:6px 0;border-bottom:1px solid var(--border)">
+        <strong>${escapeHtml(inc.tipoEntidade)}</strong> · ${escapeHtml(inc.tipoInconsistencia)}
+        ${inc.oidOrigem ? ` · OID: ${escapeHtml(inc.oidOrigem)}` : ''}<br>
+        <span style="color:var(--text-lo)">${escapeHtml(inc.detalhe || '')}</span>
+      </div>
+    `;
+  }
+
+  // Dentro de importacao_inconsistencias existem dois níveis bem diferentes:
+  // 'erro_processamento' é o chamado que REALMENTE falhou (o que a tabela de
+  // importações conta em "Erros") — o resto (posicionamento_sem_tecnico,
+  // cnpj_ausente etc) é aviso leve de campo opcional vazio na origem, não
+  // impede a importação do registro. Misturar os dois sob "erros" confunde
+  // (um período grande gera milhares de avisos leves, só algumas dezenas de
+  // falhas reais) — por isso a tela separa em duas seções.
+  async function verErrosImportacao(importacaoId) {
+    hideError();
+    const empresaId = empresaIdAtual();
+    try {
+      const inconsistencias = await api(`/api/ia-service/base-historica/importacoes/${importacaoId}/inconsistencias?empresa_id=${empresaId}`);
+      const erros = (inconsistencias || []).filter(i => i.tipoInconsistencia === 'erro_processamento');
+      const avisos = (inconsistencias || []).filter(i => i.tipoInconsistencia !== 'erro_processamento');
+
+      const linhasErros = erros.map(_linhaInconsistencia).join('') || '<span style="color:var(--text-lo)">Nenhum erro real registrado.</span>';
+      const linhasAvisos = avisos.map(_linhaInconsistencia).join('') || '<span style="color:var(--text-lo)">Nenhum aviso registrado.</span>';
+
+      const el = document.getElementById('importacao-feedback');
+      el.style.display = 'block';
+      el.innerHTML = `
+        <strong style="color:#991b1b">Erros reais — chamado não importado (${erros.length})</strong>
+        <div style="margin-top:6px;max-height:220px;overflow:auto">${linhasErros}</div>
+        <strong style="display:block;margin-top:14px">Avisos leves — campo opcional ausente na origem, chamado foi importado normalmente (${avisos.length})</strong>
+        <div style="margin-top:6px;max-height:220px;overflow:auto">${linhasAvisos}</div>
+      `;
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (err) {
+      showError('Não foi possível carregar os erros da importação: ' + err.message);
+    }
   }
 
   async function carregarImportacoes() {

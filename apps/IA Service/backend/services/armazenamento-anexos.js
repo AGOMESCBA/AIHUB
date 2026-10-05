@@ -149,6 +149,20 @@ function substituirArquivoAnexo(empresaId, atendimentoId, anexoExistente, {
   return atualizado;
 }
 
+function removerDiretorioAtendimento(empresaId, atendimentoId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!atendimentoId) throw new Error('atendimentoId é obrigatório.');
+
+  const dirEmpresa = path.resolve(ANEXOS_DIR, String(empresaId));
+  const dirEmpresaAtendimento = path.resolve(dirEmpresa, String(atendimentoId));
+  if (!dirEmpresaAtendimento.startsWith(`${dirEmpresa}${path.sep}`)) {
+    throw new Error('Diretório de anexos inválido para remoção.');
+  }
+  if (!fs.existsSync(dirEmpresaAtendimento)) return false;
+  fs.rmSync(dirEmpresaAtendimento, { recursive: true, force: true });
+  return true;
+}
+
 module.exports = {
   ANEXOS_DIR,
   MIME_PERMITIDOS,
@@ -157,4 +171,5 @@ module.exports = {
   validarAnexo,
   salvarAnexo,
   substituirArquivoAnexo,
+  removerDiretorioAtendimento,
 };
