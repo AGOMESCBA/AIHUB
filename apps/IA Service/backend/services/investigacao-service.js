@@ -147,6 +147,45 @@ async function _registrarErroVisual({ empresaId, atendimentoId, mensagemUsuario,
   return msgErro;
 }
 
+const SYSTEM_PROMPT_CLASSIFICACAO_TURNO = `Você classifica uma única mensagem de um analista de suporte técnico dentro de um chat de investigação. Responda APENAS com um JSON: {"tipo": "pergunta_processo" | "investigacao"}.
+
+"pergunta_processo": a mensagem pergunta sobre VOCÊ (a IA) ou sobre O PROCESSO de atendimento — sua capacidade, limites, próximos passos administrativos, prazos, ou pede uma confirmação pontual — SEM trazer nenhuma evidência técnica nova (erro, log, anexo, resposta a um pedido seu). Exemplos: "se eu te enviar o fonte, você consegue corrigir?", "você consegue ver vídeo?", "precisa abrir chamado na TOTVS também?", "em quanto tempo você responde?", "o que você precisa de mim agora?".
+
+"investigacao": a mensagem traz (ou pede para usar) evidência técnica — descrição de erro, log, trecho de código, resultado de teste, confirmação/negação de uma hipótese técnica, ou pede explicitamente para investigar/corrigir/pesquisar algo concreto.
+
+Na dúvida entre os dois, responda "investigacao" (nunca deixe de investigar uma evidência técnica real por classificar errado).`;
+
+/**
+ * Classifica a mensagem ATUAL do analista antes de montar o prompt completo
+ * de investigação — 2026-10, achado real em produção: perguntas pontuais
+ * sobre processo/capacidade ("se eu te enviar o fonte, você consegue
+ * corrigir?") recebiam de volta o MESMO diagnóstico técnico já dado antes,
+ * ignorando a pergunta. Só pedir no texto do system prompt para "responder a
+ * pergunta pontual primeiro" não resolveu (testado contra o caso real: o
+ * modelo seguiu reabrindo o diagnóstico) — o prompt principal carrega demais
+ * contexto técnico competindo pela atenção do modelo. Esta classificação
+ * roda ANTES, isolada, com uma chamada curta e barata, para decidir se vale
+ * a pena montar o prompt completo ou responder de forma curta e direta.
+ *
+ * Falha aberta: qualquer erro na classificação (provider fora, JSON
+ * inválido) devolve 'investigacao' — o comportamento padrão já existente,
+ * nunca pior do que o que já estava em produção antes desta função existir.
+ */
+async function _classificarTurno(texto, { keys, cfg }) {
+  if (!texto || texto.length > 400) return 'investigacao';
+  try {
+    const resultado = await aiProviderClient.chamarIA(
+      keys, cfg, SYSTEM_PROMPT_CLASSIFICACAO_TURNO, texto, [],
+      { maxTokens: 30, timeoutMs: 12000, json: true, maxProviderRounds: 1 },
+    );
+    const parsed = JSON.parse(resultado.texto.match(/\{[\s\S]*\}/)?.[0] || '{}');
+    return parsed.tipo === 'pergunta_processo' ? 'pergunta_processo' : 'investigacao';
+  } catch (err) {
+    console.error('[IA Service] Classificação de turno falhou, seguindo como investigação:', err.message);
+    return 'investigacao';
+  }
+}
+
 /**
  * Processa um turno de investigação: usuário envia texto + (opcionalmente)
  * referências a anexos já persistidos (upload acontece antes, via rota
@@ -207,6 +246,35 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
 
   const todosAnexosDoAtendimento = anexoRepo.listarAnexos(empresaId, atendimentoId);
   const anexosTextoParaPesquisa = todosAnexosDoAtendimento.filter(a => a.conteudoExtraido);
+
+  // Pergunta de processo/capacidade ("se eu te enviar o fonte, você
+  // consegue corrigir?") não passa pelo prompt completo de investigação —
+  // ver _classificarTurno acima. Só roda em turno manual, sem forcarPesquisa
+  // (o botão "Pesquisar Soluções" sempre quer investigação completa) e sem
+  // anexo novo deste turno (anexo novo é, quase sempre, evidência técnica).
+  if (!automatico && !forcarPesquisa && anexoIds.length === 0 && mensagemUsuario) {
+    const { keys: keysClassificacao, cfg: cfgClassificacao } = aiConfigService.resolverKeysEOrdem(empresaId);
+    const tipoTurno = await _classificarTurno(texto, { keys: keysClassificacao, cfg: cfgClassificacao });
+    if (tipoTurno === 'pergunta_processo') {
+      const historicoRecente = historico.slice(-8)
+        .map(m => `[${m.papel === 'user' ? 'Analista' : 'Você'}]: ${String(m.conteudo || '').slice(0, 600)}`)
+        .join('\n');
+      const promptCurto = `## Contexto recente da conversa\n${historicoRecente}\n\n## Pergunta atual do analista\n${texto}\n\nResponda SOMENTE essa pergunta, de forma direta e breve (poucas frases). Não reabra nem repita o diagnóstico técnico já dado nas mensagens anteriores.`;
+      try {
+        const resultadoCurto = await aiProviderClient.chamarIA(
+          keysClassificacao, cfgClassificacao, promptBuilder.SYSTEM_PROMPT, promptCurto, [],
+          { maxTokens: 500, timeoutMs: 20000 },
+        );
+        return mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
+          papel: 'assistant', conteudo: resultadoCurto.texto, usuarioId: null,
+          provider: resultadoCurto.provider, model: resultadoCurto.model,
+        });
+      } catch (err) {
+        console.error('[IA Service] Falha ao responder pergunta de processo curta, seguindo fluxo completo:', err.message);
+        // cai para o fluxo normal abaixo — falha aqui não deve bloquear o turno
+      }
+    }
+  }
 
   let pesquisaTecnicaTexto = '';
   let pesquisaTecnica = null;
