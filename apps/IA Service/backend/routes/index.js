@@ -527,7 +527,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   // agenteLocalService.zerarBaseFonte.
   app.delete('/api/ia-service/base-historica/fontes/:id/zerar-base', async (req, res) => {
     try {
-      const resultado = await agenteLocalService.zerarBaseFonte(req.svcEmpresaId, req.params.id);
+      const { atendimentoIdsRemovidos, ...resultado } = await agenteLocalService.zerarBaseFonte(req.svcEmpresaId, req.params.id);
       if (!resultado?.zerada) return res.status(404).json({ error: 'Fonte não encontrada.' });
       res.json(resultado);
     } catch (err) {

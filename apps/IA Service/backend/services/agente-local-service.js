@@ -279,6 +279,7 @@ module.exports = {
   listarFontes,
   excluirFonte,
   limparHistoricoFonte,
+  zerarBaseFonte,
   testarFonte,
   executarSelectNaFonte,
 };
