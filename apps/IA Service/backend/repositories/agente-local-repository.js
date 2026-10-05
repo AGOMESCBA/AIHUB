@@ -168,17 +168,14 @@ function listarFontes(empresaId, filtros = {}) {
  * usuário pediu para excluir, ele já sabe que o histórico vai junto. A UI
  * confirma isso claramente antes de chamar esta rota (ver base-historica.html).
  */
-function excluirFonte(empresaId, fonteId) {
+async function excluirFonte(empresaId, fonteId) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
   const fonte = getFonte(empresaId, fonteId);
   if (!fonte) return { excluida: false };
-  const excluir = db.transaction(() => {
-    const limpeza = _zerarBaseDaFonte(db, empresaId, fonteId);
-    const resultado = db.prepare(`DELETE FROM fontes_historicas WHERE id = ? AND empresa_id = ?`).run(fonteId, Number(empresaId));
-    return { excluida: resultado.changes > 0, ...limpeza };
-  });
-  return excluir();
+  const limpeza = await zerarBaseFonte(empresaId, fonteId);
+  const resultado = db.prepare(`DELETE FROM fontes_historicas WHERE id = ? AND empresa_id = ?`).run(fonteId, Number(empresaId));
+  return { excluida: resultado.changes > 0, ...limpeza };
 }
 
 // IDs de atendimento capturados ANTES do DELETE — depois de apagado o
@@ -211,40 +208,77 @@ function _atendimentoIdsDaFonte(db, empresaId, fonteId) {
  * "Reimportar do zero" para permitir limpar tudo sem disparar uma nova
  * importação automática em seguida.
  */
-function _zerarBaseDaFonte(db, empresaId, fonteId) {
+const TAMANHO_LOTE_ZERAR_BASE = 500;
+
+function _cederEventLoop() {
+  return new Promise(resolve => setImmediate(resolve));
+}
+
+/**
+ * Apaga em LOTES pequenos (TAMANHO_LOTE_ZERAR_BASE por vez), cada um em sua
+ * própria transação curta, cedendo o event loop (setImmediate) entre lotes.
+ * Achado real em produção (2026-10): apagar ~11 mil chamados + ~56 mil
+ * posicionamentos (cascata) numa ÚNICA transação síncrona do better-sqlite3
+ * bloqueava o processo Node INTEIRO por mais de 2 minutos — nenhuma outra
+ * rota respondia nesse intervalo, nem um SELECT trivial como "Atualizar
+ * tela" (que não tem nada a ver com a causa, só ficava preso atrás na fila
+ * do mesmo processo single-thread). Fatiar em lotes devolve o controle ao
+ * event loop periodicamente, sem deixar o sistema inteiro preso numa única
+ * operação pesada.
+ */
+async function _deletarEmLotes(db, sql, params) {
+  let total = 0;
+  const stmt = db.prepare(sql);
+  while (true) {
+    const changes = db.transaction(() => stmt.run(...params, TAMANHO_LOTE_ZERAR_BASE).changes)();
+    total += changes;
+    if (changes < TAMANHO_LOTE_ZERAR_BASE) break;
+    await _cederEventLoop();
+  }
+  return total;
+}
+
+async function zerarBaseFonte(empresaId, fonteId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const db = getDB();
+  const fonte = getFonte(empresaId, fonteId);
+  if (!fonte) return { zerada: false };
   const empresa = Number(empresaId);
+
   const atendimentoIdsRemovidos = _atendimentoIdsDaFonte(db, empresa, fonteId);
 
-  const atendimentosRemovidos = db.prepare(`
+  // DELETE ... LIMIT não existe no SQLite por padrão — usa rowid IN (SELECT
+  // ... LIMIT N) para fatiar sem precisar de extensão nenhuma.
+  const atendimentosRemovidos = await _deletarEmLotes(db, `
     DELETE FROM atendimentos
-    WHERE empresa_id = ?
-      AND EXISTS (
-        SELECT 1
-          FROM chamados c
-         WHERE c.empresa_id = atendimentos.empresa_id
-           AND c.fonte_id = ?
-           AND c.sistema_origem = atendimentos.origem
-           AND c.numero = atendimentos.referencia_externa
-      )
-  `).run(empresa, fonteId).changes;
+     WHERE rowid IN (
+       SELECT atendimentos.rowid
+         FROM atendimentos
+        WHERE atendimentos.empresa_id = ?
+          AND EXISTS (
+            SELECT 1 FROM chamados c
+             WHERE c.empresa_id = atendimentos.empresa_id
+               AND c.fonte_id = ?
+               AND c.sistema_origem = atendimentos.origem
+               AND c.numero = atendimentos.referencia_externa
+          )
+        LIMIT ?
+     )
+  `, [empresa, fonteId]);
 
-  const chamadosRemovidos = db.prepare(`DELETE FROM chamados WHERE empresa_id = ? AND fonte_id = ?`).run(empresa, fonteId).changes;
+  const chamadosRemovidos = await _deletarEmLotes(db, `
+    DELETE FROM chamados
+     WHERE rowid IN (
+       SELECT rowid FROM chamados WHERE empresa_id = ? AND fonte_id = ? LIMIT ?
+     )
+  `, [empresa, fonteId]);
 
   const importacoesRemovidas = db.prepare(`
     SELECT COUNT(*) AS total FROM importacoes WHERE empresa_id = ? AND fonte_id = ?
   `).get(empresa, fonteId)?.total || 0;
   db.prepare(`DELETE FROM importacoes WHERE empresa_id = ? AND fonte_id = ?`).run(empresa, fonteId);
 
-  return { atendimentosRemovidos, chamadosRemovidos, importacoesRemovidas, atendimentoIdsRemovidos };
-}
-
-function zerarBaseFonte(empresaId, fonteId) {
-  if (!empresaId) throw new Error('empresaId é obrigatório.');
-  const db = getDB();
-  const fonte = getFonte(empresaId, fonteId);
-  if (!fonte) return { zerada: false };
-  const zerar = db.transaction(() => _zerarBaseDaFonte(db, empresaId, fonteId));
-  return { zerada: true, ...zerar() };
+  return { zerada: true, atendimentosRemovidos, chamadosRemovidos, importacoesRemovidas, atendimentoIdsRemovidos };
 }
 
 /**

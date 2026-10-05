@@ -540,6 +540,24 @@
   // do usuário (2026-10): antes isso também apagava atendimentos, zerando
   // o chat/investigação da IA sem o usuário pedir — separado agora de
   // "Zerar Base", que é o reset radical de verdade.
+  // Mostra o RESULTADO de uma operação destrutiva (Limpar Log/Zerar Base) de
+  // forma impossível de passar despercebida — pedido explícito do usuário
+  // (2026-10): o showInfo (banner azul fino no topo) não bastava, o usuário
+  // "não tinha como saber se deu erro, se apagou nem nada". Reaproveita o
+  // mesmo painel #importacao-feedback (destacado, perto dos botões/tabela)
+  // usado pelas execuções de importação, com scrollIntoView garantindo que
+  // fique visível mesmo rodando dentro do iframe do shell MDI.
+  function mostrarResultadoOperacao({ titulo, linhas, erro }) {
+    const el = document.getElementById('importacao-feedback');
+    el.style.display = 'block';
+    el.style.borderLeft = erro ? '4px solid #dc2626' : '4px solid #16a34a';
+    el.innerHTML = `
+      <strong style="color:${erro ? '#991b1b' : '#166534'}">${escapeHtml(titulo)}</strong><br>
+      ${linhas.map(l => escapeHtml(l)).join('<br>')}
+    `;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
   async function limparLog() {
     hideError();
     hideInfo();
@@ -550,9 +568,14 @@
     if (!confirm('Limpar o log de importações desta fonte?\n\nIsso apaga só o histórico de execuções (status/contadores listados na tabela abaixo) — chamados, posicionamentos, atendimentos do Radar e anexos já importados continuam intactos.')) return;
     try {
       const resultado = await api(`/api/ia-service/base-historica/fontes/${fonteId}/historico?empresa_id=${empresaId}`, { method: 'DELETE' });
-      showInfo(`Log limpo. Importações removidas: ${resultado.importacoesRemovidas || 0}.`);
+      mostrarResultadoOperacao({
+        titulo: '✅ Log limpo com sucesso.',
+        linhas: [`Importações removidas: ${resultado.importacoesRemovidas || 0}`],
+      });
       await carregarImportacoes();
-    } catch (err) { showError('Não foi possível limpar o log: ' + err.message); }
+    } catch (err) {
+      mostrarResultadoOperacao({ titulo: '❌ Não foi possível limpar o log.', linhas: [err.message], erro: true });
+    }
   }
 
   // "Zerar Base" — reset radical: apaga chamados/posicionamentos/
@@ -570,11 +593,24 @@
     const fonteNome = fonteSelect.options[fonteSelect.selectedIndex]?.textContent || fonteId;
     if (!fonteId) return showError('Selecione uma fonte para zerar a base.');
     if (!confirm(`Zerar a base da fonte "${fonteNome}"?\n\nIsso apaga chamados, posicionamentos, atendimentos do Radar/respostas da IA e anexos (banco e disco) já importados por ela, além do log de importações. A fonte continua cadastrada. NÃO reimporta automaticamente depois — use "Importação de Período" se quiser repopular.`)) return;
+    setButtonLoading('btn-apagar', true, 'Zerando base...');
     try {
       const resultado = await api(`/api/ia-service/base-historica/fontes/${fonteId}/zerar-base?empresa_id=${empresaId}`, { method: 'DELETE' });
-      showInfo(`Base zerada. Chamados removidos: ${resultado.chamadosRemovidos || 0}. Atendimentos removidos: ${resultado.atendimentosRemovidos || 0}. Importações removidas: ${resultado.importacoesRemovidas || 0}.`);
+      mostrarResultadoOperacao({
+        titulo: '✅ Base zerada com sucesso.',
+        linhas: [
+          `Chamados removidos: ${resultado.chamadosRemovidos || 0}`,
+          `Atendimentos removidos: ${resultado.atendimentosRemovidos || 0}`,
+          `Importações removidas: ${resultado.importacoesRemovidas || 0}`,
+          `Diretórios de anexos removidos: ${resultado.diretoriosAnexosRemovidos || 0}`,
+        ],
+      });
       await carregarImportacoes();
-    } catch (err) { showError('Não foi possível zerar a base: ' + err.message); }
+    } catch (err) {
+      mostrarResultadoOperacao({ titulo: '❌ Não foi possível zerar a base.', linhas: [err.message], erro: true });
+    } finally {
+      setButtonLoading('btn-apagar', false);
+    }
   }
 
   async function dispararImportacaoSelecionada({ mensagemInicio } = {}) {
@@ -693,7 +729,7 @@
           Lidos: ${i.registrosLidos} · Inseridos: ${i.registrosInseridos} · Atualizados: ${i.registrosAtualizados} ·
           Sem alteração: ${i.registrosIgnorados} · Erros: ${i.registrosErro}<br>
           Posicionamentos — Lidos: ${i.posicionamentosLidos} · Inseridos: ${i.posicionamentosInseridos} · Atualizados: ${i.posicionamentosAtualizados}<br>
-          Tempo: ${escapeHtml(formatarDuracao(i.inicioEm || i.criadoEm, i.terminoEm || i.atualizadoEm))} · Início: ${escapeHtml(formatarDataHora(i.inicioEm || i.criadoEm))}
+          Tempo: ${escapeHtml(formatarDuracao(i.inicioEm || i.criadoEm, ['pendente', 'executando'].includes(i.status) ? null : (i.terminoEm || i.atualizadoEm)))} · Início: ${escapeHtml(formatarDataHora(i.inicioEm || i.criadoEm))}
           ${i.mensagemErro ? `<br><span style="color:#991b1b">${escapeHtml(i.mensagemErro)}</span>` : ''}
           <div style="margin-top:6px;display:flex;gap:8px">
             ${i.status === 'falhou' || i.status === 'interrompido' ? `<button class="btn btn-ghost" type="button" onclick="retomarImportacao('${i.fonteId}','${i.id}')">Retomar</button>` : ''}

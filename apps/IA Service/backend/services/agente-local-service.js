@@ -199,7 +199,7 @@ function getFonte(empresaId, fonteId) {
 async function excluirFonte(empresaId, fonteId) {
   const fonte = agenteRepo.getFonte(empresaId, fonteId);
   if (!fonte) throw new Error('Fonte histórica não encontrada.');
-  const resultado = agenteRepo.excluirFonte(empresaId, fonteId);
+  const resultado = await agenteRepo.excluirFonte(empresaId, fonteId);
   const { removidos } = await _limparAnexosOrfaosDaEmpresa(empresaId);
   return { ...resultado, diretoriosAnexosRemovidos: removidos };
 }
@@ -219,7 +219,7 @@ async function limparHistoricoFonte(empresaId, fonteId) {
 async function zerarBaseFonte(empresaId, fonteId) {
   const fonte = agenteRepo.getFonte(empresaId, fonteId);
   if (!fonte) throw new Error('Fonte histórica não encontrada.');
-  const resultado = agenteRepo.zerarBaseFonte(empresaId, fonteId);
+  const resultado = await agenteRepo.zerarBaseFonte(empresaId, fonteId);
   const { removidos } = await _limparAnexosOrfaosDaEmpresa(empresaId);
   return { ...resultado, diretoriosAnexosRemovidos: removidos };
 }
