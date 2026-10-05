@@ -115,11 +115,19 @@
 
     .fila-empty { padding:32px 16px; text-align:center; color:var(--wa-text-tertiary); font-size:13px; }
     .fila-aviso { margin:10px 16px; background:rgba(0,217,163,.1); color:var(--wa-accent); border:1px solid rgba(0,217,163,.3); border-radius:8px; padding:8px 10px; font-size:11.5px; line-height:1.4; }
-    .risco-filtros { flex:none; display:flex; gap:5px; padding:10px 12px 8px; border-bottom:1px solid var(--wa-border); background:rgba(0,0,0,.12); }
+    .risco-filtros { flex:none; display:flex; align-items:center; gap:5px; padding:10px 12px 8px; border-bottom:1px solid var(--wa-border); background:rgba(0,0,0,.12); }
     .risco-filtro { border:1px solid var(--wa-border); background:rgba(255,255,255,.03); padding:5px 9px; border-radius:7px; font-size:11px; font-weight:800; color:var(--wa-text-secondary); cursor:pointer; }
     .risco-filtro.ativo { background:rgba(0,217,163,.13); color:var(--wa-accent); border-color:rgba(0,217,163,.32); }
-    .risco-layout { flex:1; min-height:0; display:grid; grid-template-columns:240px 1fr; }
+    .risco-sidebar-toggle {
+      margin-left:auto; border:1px solid rgba(0,217,163,.28); background:rgba(0,217,163,.09);
+      color:var(--wa-accent); border-radius:7px; padding:5px 9px; font-size:11px; font-weight:900;
+      cursor:pointer; display:flex; align-items:center; gap:6px; white-space:nowrap;
+    }
+    .risco-sidebar-toggle:hover { background:rgba(0,217,163,.16); }
+    .risco-layout { flex:1; min-height:0; display:grid; grid-template-columns:240px 1fr; transition:grid-template-columns .18s ease; }
+    .risco-layout.consultores-recolhidos { grid-template-columns:0 1fr; }
     .risco-consultores { min-height:0; overflow-y:auto; border-right:1px solid var(--wa-border); }
+    .risco-layout.consultores-recolhidos .risco-consultores { overflow:hidden; border-right:none; }
     /* .ativo (selecionado de fato) precisa ser claramente distinto de
        :hover (só passando o mouse) — antes os dois usavam o mesmo
        background, impossível saber qual consultor está realmente
@@ -191,6 +199,7 @@
     .chat-header { flex:none; border-bottom:1px solid var(--wa-border); background:var(--wa-header); padding:12px 20px; display:none; }
     .chat-header.ativo { display:block; }
     .chat-header-top { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .chat-header-main { min-width:0; flex:1; }
     .chat-header-toggle {
       flex:none; width:26px; height:26px; border-radius:7px; border:1px solid var(--wa-border);
       background:rgba(255,255,255,.03); color:var(--wa-text-secondary); cursor:pointer;
@@ -199,13 +208,15 @@
     }
     .chat-header-toggle:hover { background:rgba(255,255,255,.08); }
     .chat-header-pesquisar {
-      flex:none; display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700;
-      border-radius:7px; border:1px solid var(--wa-border); background:rgba(0,217,163,.08);
-      color:var(--wa-accent); cursor:pointer; padding:6px 10px; white-space:nowrap;
-      transition:background .15s ease;
+      flex:none; display:flex; align-items:center; gap:8px; font-size:13px; font-weight:900;
+      border-radius:8px; border:1px solid rgba(0,217,163,.5); background:linear-gradient(135deg, #00d9a3, #18b6f6);
+      color:#061314; cursor:pointer; padding:10px 16px; white-space:nowrap;
+      box-shadow:0 0 0 1px rgba(255,255,255,.08) inset, 0 8px 22px rgba(0,217,163,.22);
+      text-transform:uppercase; letter-spacing:0;
+      transition:transform .15s ease, box-shadow .15s ease, filter .15s ease;
     }
-    .chat-header-pesquisar:hover { background:rgba(0,217,163,.16); }
-    .chat-header-pesquisar:disabled { opacity:.5; cursor:not-allowed; }
+    .chat-header-pesquisar:hover { transform:translateY(-1px); filter:saturate(1.08); box-shadow:0 0 0 1px rgba(255,255,255,.12) inset, 0 10px 26px rgba(0,217,163,.3); }
+    .chat-header-pesquisar:disabled { opacity:.55; cursor:not-allowed; transform:none; box-shadow:none; }
     .chat-header-detalhes { overflow:hidden; max-height:300px; transition:max-height .2s ease, opacity .15s ease, margin-top .2s ease; opacity:1; }
     .chat-header.recolhido .chat-header-detalhes { max-height:0; opacity:0; }
     .chat-header.recolhido .chat-header-toggle { transform:rotate(-90deg); }
@@ -214,6 +225,9 @@
     /* Uma única linha compacta: status de espera + SLA + consultor — junto
        do título, sempre visível mesmo com o cabeçalho recolhido. */
     .chat-header-linha { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:6px; }
+    .chat-header-linha .badge,
+    .chat-header-linha .chat-header-tag,
+    .chat-header-linha .chat-header-status-main { font-size:11.5px; line-height:1.25; padding:4px 8px; }
     .chat-header-pill { font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:99px; background:rgba(255,255,255,.06); color:var(--wa-text-secondary); border:1px solid var(--wa-border); white-space:nowrap; }
     .chat-header-pill strong { color:var(--wa-text); font-weight:700; }
     .chat-header-tag { font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:99px; background:rgba(255,255,255,.06); color:var(--wa-text-secondary); border:1px solid var(--wa-border); white-space:nowrap; }
@@ -501,7 +515,7 @@
 
               <div class="chat-header" id="chat-header">
                 <div class="chat-header-top">
-                  <div>
+                  <div class="chat-header-main">
                     <div class="chat-header-titulo" id="chat-header-titulo">—</div>
                     <div class="chat-header-linha" id="chat-header-linha"></div>
                   </div>
@@ -548,8 +562,9 @@
                 <button class="risco-filtro ativo" id="risco-filtro-todos" onclick="setFiltroRisco('todos')">Todos</button>
                 <button class="risco-filtro" id="risco-filtro-atraso" onclick="setFiltroRisco('em_atraso')">Em atraso</button>
                 <button class="risco-filtro" id="risco-filtro-proximo" onclick="setFiltroRisco('proximo')">Próx. vencimento</button>
+                <button class="risco-sidebar-toggle" id="risco-sidebar-toggle" type="button" onclick="toggleConsultoresRisco()">◀ Recolher consultores</button>
               </div>
-              <div class="risco-layout">
+              <div class="risco-layout" id="risco-layout">
                 <div class="risco-consultores" id="risco-consultores"></div>
                 <div class="risco-grid-col">
                   <div class="risco-grid-busca">
@@ -905,6 +920,24 @@
     }
 
     let riscoTable = null;
+    let riscoConsultoresRecolhidos = false;
+
+    function toggleConsultoresRisco() {
+      riscoConsultoresRecolhidos = !riscoConsultoresRecolhidos;
+      const layout = document.getElementById('risco-layout');
+      const btn = document.getElementById('risco-sidebar-toggle');
+      if (layout) layout.classList.toggle('consultores-recolhidos', riscoConsultoresRecolhidos);
+      if (btn) btn.textContent = riscoConsultoresRecolhidos ? '▶ Expandir consultores' : '◀ Recolher consultores';
+      if (riscoTable) setTimeout(() => riscoTable.redraw(true), 220);
+    }
+
+    function formatarDiasUteis(valor) {
+      return valor === null || valor === undefined ? '—' : `${valor}d`;
+    }
+
+    function formatarHorasDuracao(valor) {
+      return valor === null || valor === undefined ? '—' : `${valor}h`;
+    }
 
     function renderizarRiscoSla() {
       const totalAtraso = riscoCache.chamados.filter(c => c.slaPrazo === 'Em atraso').length;
@@ -968,11 +1001,17 @@
         titulo: c.titulo || c.assunto || c.breveDescricao || '(sem título)',
         cliente: c.clienteNome || '—',
         usuario: c.solicitanteNome || '—',
-        aguardando: labelSituacaoRetorno(c.situacaoRetorno) || '—',
+        aguardandoRetorno: labelSituacaoRetorno(c.situacaoRetorno) || 'Aguardando retorno não informado',
         status: c.slaPrazo || '—',
         consultor: c.tecnicoResponsavelNome || 'Sem consultor',
         previsao: c.slaDataPrevFim ? formatarDataHora(c.slaDataPrevFim) : '—',
-        duracao: c.diasDur != null ? `${c.diasDur}d` : '—',
+        duracao: formatarDiasUteis(c.diasDur),
+        horasDuracao: formatarHorasDuracao(c.hrDur),
+        diasDurSup: formatarDiasUteis(c.diasDurSup),
+        diasDurFsw: formatarDiasUteis(c.diasDurFsw),
+        diasDurDist: formatarDiasUteis(c.diasDurDist),
+        diasDurCli: formatarDiasUteis(c.diasDurCli),
+        diasDurTicli: formatarDiasUteis(c.diasDurTicli),
         ultimo: c.ultimoPosicionamentoEm ? formatarData(c.ultimoPosicionamentoEm) : '—',
       }));
 
@@ -990,11 +1029,17 @@
             { title: 'Título', field: 'titulo', width: 260 },
             { title: 'Cliente', field: 'cliente', width: 140 },
             { title: 'Usuário', field: 'usuario', width: 140 },
-            { title: 'Aguardando', field: 'aguardando', width: 120 },
+            { title: 'Aguardando retorno', field: 'aguardandoRetorno', width: 170 },
             { title: 'Status', field: 'status', width: 120, formatter: (cell) => badgeSla(cell.getValue()) },
             { title: 'Consultor', field: 'consultor', visible: false },
             { title: 'Previsão conclusão', field: 'previsao', width: 140 },
             { title: 'Duração', field: 'duracao', width: 90, hozAlign: 'right' },
+            { title: 'Horas duração', field: 'horasDuracao', width: 115, hozAlign: 'right' },
+            { title: 'Dias suporte', field: 'diasDurSup', width: 105, hozAlign: 'right' },
+            { title: 'Dias desenv.', field: 'diasDurFsw', width: 105, hozAlign: 'right' },
+            { title: 'Dias distrib.', field: 'diasDurDist', width: 105, hozAlign: 'right' },
+            { title: 'Dias cliente', field: 'diasDurCli', width: 105, hozAlign: 'right' },
+            { title: 'Dias tecn. cliente', field: 'diasDurTicli', width: 130, hozAlign: 'right' },
             { title: 'Último', field: 'ultimo', width: 100 },
           ],
         });
@@ -1014,6 +1059,8 @@
           { field: 'titulo', type: 'like', value: termo },
           { field: 'cliente', type: 'like', value: termo },
           { field: 'usuario', type: 'like', value: termo },
+          { field: 'aguardandoRetorno', type: 'like', value: termo },
+          { field: 'previsao', type: 'like', value: termo },
         ],
       ]);
     }
@@ -1450,7 +1497,7 @@
       // é a informação mínima para identificar o chamado sem expandir.
       const situacaoLabel = labelSituacaoRetorno(c.situacaoRetorno);
       const linha = [];
-      linha.push(`<span class="chat-header-status-main">⏳ ${escapeHtml(situacaoLabel || 'Aguardando retorno')}</span>`);
+      linha.push(`<span class="chat-header-status-main">⏳ ${escapeHtml(situacaoLabel || 'Aguardando retorno não informado')}</span>`);
       if (c.slaPrazo) linha.push(badgeSla(c.slaPrazo));
       if (c.tecnicoResponsavelNome) linha.push(`<span class="chat-header-tag">🧑‍💻 Consultor: ${escapeHtml(c.tecnicoResponsavelNome)}</span>`);
       document.getElementById('chat-header-linha').innerHTML = linha.join('');
@@ -1496,6 +1543,7 @@
         {
           icone: '⏱', titulo: 'SLA & prazos',
           campos: [
+            ['Aguardando retorno', labelSituacaoRetorno(c.situacaoRetorno) || 'Não informado'],
             ['SLA', c.slaPrazo || c.slaStatus],
             ['Previsão de conclusão', c.slaDataPrevFim ? formatarDataHora(c.slaDataPrevFim) : null],
             ['SLA em horas', c.slaHoras],
@@ -1504,17 +1552,6 @@
             ['Status', c.statusEncerramento],
             ['Aberto em', c.dataAbertura ? formatarData(c.dataAbertura) : null],
             ['Último posicionamento', c.ultimoPosicionamentoEm ? formatarData(c.ultimoPosicionamentoEm) : null],
-          ],
-        },
-        {
-          icone: '⏳', titulo: 'Duração do atendimento',
-          // Dias úteis por fase — view ITSM_CHAMADOS (DBO.FN_SE_ITSM_DIASUTEIS),
-          // pedido do usuário 2026-09. diasDur/hrDur é o total geral; os
-          // demais são o mesmo total fatiado por quem estava com o chamado
-          // (suporte, desenvolvimento, distribuidor, cliente, tecnologia do
-          // cliente) — por isso ficam em card separado de "SLA & prazos"
-          // (que é sobre previsão, não duração já decorrida).
-          campos: [
             ['Duração total', c.diasDur != null ? `${c.diasDur} dia(s) útil(is)` : null],
             ['Duração total em horas', c.hrDur != null ? `${c.hrDur}h` : null],
             ['Em suporte', c.diasDurSup != null ? `${c.diasDurSup} dia(s)` : null],
