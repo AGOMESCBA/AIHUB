@@ -700,27 +700,6 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
-  // ── Base histórica: consulta (painel) ─────────────────────────────────────
-  // "Aguardando indexação" aqui é só a contagem de chamados.precisa_indexacao=1
-  // (marcado pelo importador, ver migration v15) — a FILA de indexação real
-  // (Checkpoint 8+: conhecimento/chunks/FTS5/embeddings) não existe ainda
-  // nesta etapa, então este número reflete apenas o que o importador marcou.
-  app.get('/api/ia-service/base-historica/resumo', (req, res) => {
-    try {
-      const empresaId = req.svcEmpresaId;
-      res.json({
-        clientes: clienteRepo.contarClientes(empresaId),
-        usuariosCliente: clienteRepo.contarUsuariosCliente(empresaId),
-        tecnicos: clienteRepo.contarTecnicos(empresaId),
-        chamados: chamadoRepo.contarChamados(empresaId),
-        posicionamentos: chamadoRepo.contarPosicionamentos(empresaId),
-        chamadosAguardandoIndexacao: chamadoRepo.listarChamados(empresaId, { precisaIndexacao: true, limite: 5000 }).length,
-      });
-    } catch (err) {
-      _handleErro(res, err);
-    }
-  });
-
   // ── Radar de chamados (fila do analista) ────────────────────────────────
   app.get('/api/ia-service/radar/fila', async (req, res) => {
     try {

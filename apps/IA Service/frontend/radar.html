@@ -207,14 +207,22 @@
       transition:transform .15s ease, background .15s ease;
     }
     .chat-header-toggle:hover { background:rgba(255,255,255,.08); }
+    /* Ação primária do cabeçalho do chat — a única coisa aqui que o
+       analista de fato CLICA pra agir (o resto da barra é status/leitura).
+       Por isso tem peso visual próprio: fundo sólido + elevação permanente,
+       não um outline fraco igual aos badges informativos ao lado. */
     .chat-header-pesquisar {
-      flex:none; display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700;
-      border-radius:7px; border:1px solid rgba(0,217,163,.3); background:rgba(0,217,163,.08);
-      color:var(--wa-accent); cursor:pointer; padding:6px 10px; white-space:nowrap;
-      transition:background .15s ease, border-color .15s ease;
+      flex:none; display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:800;
+      border-radius:8px; border:1px solid rgba(0,217,163,.55);
+      background:linear-gradient(180deg, #00d9a3, #00b88a);
+      color:#042019; cursor:pointer; padding:8px 14px; white-space:nowrap;
+      box-shadow:0 2px 0 rgba(0,0,0,.18), 0 2px 8px rgba(0,217,163,.28);
+      transition:filter .15s ease, transform .15s ease, box-shadow .15s ease;
     }
-    .chat-header-pesquisar:hover { background:rgba(0,217,163,.16); border-color:rgba(0,217,163,.45); }
-    .chat-header-pesquisar:disabled { opacity:.5; cursor:not-allowed; }
+    .chat-header-pesquisar svg { flex:none; }
+    .chat-header-pesquisar:hover { filter:brightness(1.07); transform:translateY(-1px); box-shadow:0 3px 0 rgba(0,0,0,.18), 0 4px 12px rgba(0,217,163,.38); }
+    .chat-header-pesquisar:active { transform:translateY(1px); box-shadow:0 1px 0 rgba(0,0,0,.18), 0 2px 6px rgba(0,217,163,.3); }
+    .chat-header-pesquisar:disabled { opacity:.45; cursor:not-allowed; transform:none; filter:none; box-shadow:none; }
     .chat-header-detalhes { overflow:hidden; max-height:300px; transition:max-height .2s ease, opacity .15s ease, margin-top .2s ease; opacity:1; }
     .chat-header.recolhido .chat-header-detalhes { max-height:0; opacity:0; }
     .chat-header.recolhido .chat-header-toggle { transform:rotate(-90deg); }
@@ -533,7 +541,10 @@
                     <div class="chat-header-titulo" id="chat-header-titulo">—</div>
                     <div class="chat-header-linha" id="chat-header-linha"></div>
                   </div>
-                  <button class="chat-header-pesquisar" id="chat-header-pesquisar" type="button" title="Reenvia todo o histórico e anexos do chamado para a IA buscar uma nova solução" onclick="pesquisarSolucoes()">🔎 Pesquisar Soluções</button>
+                  <button class="chat-header-pesquisar" id="chat-header-pesquisar" type="button" title="Reenvia todo o histórico e anexos do chamado para a IA buscar uma nova solução" onclick="pesquisarSolucoes()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    Pesquisar Soluções
+                  </button>
                   <button class="chat-header-toggle" id="chat-header-toggle" type="button" title="Recolher detalhes" onclick="toggleChatHeader()">▾</button>
                 </div>
                 <div class="chat-header-detalhes" id="chat-header-detalhes">

@@ -6,6 +6,27 @@ const agenteRepo = require('../repositories/agente-local-repository');
 const cryptoEnvelope = require('./crypto-envelope');
 const provider = require('./agente-local-provider');
 const platformStore = require('../../../IAHUB/backend/platform-store');
+const armazenamentoAnexos = require('./armazenamento-anexos');
+const atendimentoRepo = require('../repositories/atendimento-repository');
+
+// Depois de "reimportar do zero"/excluir fonte, varre data/anexos/<empresa>/
+// inteiro e apaga qualquer subpasta cujo atendimentoId não existe mais na
+// tabela `atendimentos` — por EXCLUSÃO, não por uma lista de "quem eu sei
+// que apaguei" (essa segunda abordagem dependeria da query de captura
+// acertar todo caso, incluindo atendimentos que já estivessem órfãos antes
+// desta limpeza). Decisão explícita do usuário: "reimportar do zero é sumir
+// com o que tem" — zero resquício físico de qualquer execução anterior,
+// mesmo os 169 diretórios órfãos (3.56 MB) de limpezas passadas antes deste
+// fix existir. Best-effort: uma falha ao apagar um diretório não aborta o
+// restante nem a limpeza do banco, que já aconteceu antes desta chamada.
+function _limparAnexosOrfaosDaEmpresa(empresaId) {
+  try {
+    const atendimentoIdsValidos = atendimentoRepo.listarIdsPorEmpresa(empresaId);
+    return armazenamentoAnexos.limparDiretoriosOrfaos(empresaId, atendimentoIdsValidos);
+  } catch (_) {
+    return { removidos: 0 };
+  }
+}
 
 function permitirConfigLegada() {
   return process.env.SVC_ALLOW_LEGACY_CONFIG === '1';
@@ -178,13 +199,17 @@ function getFonte(empresaId, fonteId) {
 function excluirFonte(empresaId, fonteId) {
   const fonte = agenteRepo.getFonte(empresaId, fonteId);
   if (!fonte) throw new Error('Fonte histórica não encontrada.');
-  return agenteRepo.excluirFonte(empresaId, fonteId);
+  const resultado = agenteRepo.excluirFonte(empresaId, fonteId);
+  const { removidos } = _limparAnexosOrfaosDaEmpresa(empresaId);
+  return { ...resultado, diretoriosAnexosRemovidos: removidos };
 }
 
 function limparHistoricoFonte(empresaId, fonteId) {
   const fonte = agenteRepo.getFonte(empresaId, fonteId);
   if (!fonte) throw new Error('Fonte histórica não encontrada.');
-  return agenteRepo.limparHistoricoFonte(empresaId, fonteId);
+  const resultado = agenteRepo.limparHistoricoFonte(empresaId, fonteId);
+  const { removidos } = _limparAnexosOrfaosDaEmpresa(empresaId);
+  return { ...resultado, diretoriosAnexosRemovidos: removidos };
 }
 
 function listarFontes(empresaId, filtros) {

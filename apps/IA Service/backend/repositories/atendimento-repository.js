@@ -221,6 +221,16 @@ function atualizarContexto(empresaId, atendimentoId, { contextoEstruturado, cont
   return getAtendimento(empresaId, atendimentoId);
 }
 
+// Lista "crua" de IDs, sem montar o objeto de domínio inteiro — usada pela
+// varredura de limpeza de anexos órfãos (armazenamento-anexos.
+// limparDiretoriosOrfaos), que só precisa saber quais diretórios físicos
+// ainda têm atendimento vivo por trás.
+function listarIdsPorEmpresa(empresaId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const db = getDB();
+  return db.prepare(`SELECT id FROM atendimentos WHERE empresa_id = ?`).all(Number(empresaId)).map(r => r.id);
+}
+
 module.exports = {
   criarAtendimento,
   criarAtendimentoComPrimeiraMensagem,
@@ -228,6 +238,7 @@ module.exports = {
   getAtendimentoPorCodigo,
   getAtendimentoPorReferencia,
   listarAtendimentos,
+  listarIdsPorEmpresa,
   atualizarStatus,
   atualizarContexto,
 };

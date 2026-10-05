@@ -14,11 +14,6 @@
     .head-title { font-size:20px;font-weight:800;color:var(--text-hi);line-height:1.2; }
     .head-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
 
-    .metric-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; margin-bottom:16px; }
-    .metric { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; box-shadow:var(--shadow-sm); }
-    .metric span { display:block; font-size:10.5px; color:var(--text-lo); font-weight:800; text-transform:uppercase; margin-bottom:3px; }
-    .metric strong { display:block; font-size:20px; color:var(--text-hi); }
-
     .tabs { display:flex;gap:2px;border-bottom:1px solid var(--border);background:var(--bg-card);padding:0 16px;border-radius:var(--radius) var(--radius) 0 0; }
     .tab-btn { padding:10px 16px;border:none;background:transparent;color:var(--text-lo);font-size:13px;font-weight:800;border-bottom:2px solid transparent;cursor:pointer;margin-bottom:-1px; }
     .tab-btn.active { color:var(--accent);border-bottom-color:var(--accent); }
@@ -63,6 +58,23 @@
     @media (max-width: 900px) {
       .head-row { align-items:flex-start;flex-direction:column; }
     }
+
+    /* ── Help drawer (mesmo padrão do IA Command) ── */
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(480px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;padding:22px;}
+    .help-section{margin-bottom:28px;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
   </style>
 </head>
 <body>
@@ -82,6 +94,10 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
       <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Service ›</span> Base Histórica</span>
+      <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda" style="display:flex;align-items:center;gap:6px;font-size:13px;margin-left:10px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Ajuda
+      </button>
     </div>
 
     <div class="page-content">
@@ -96,23 +112,12 @@
       <div id="error-banner" class="error-banner"></div>
       <div id="info-banner" class="info-banner"></div>
 
-      <div class="metric-grid" id="resumo-grid">
-        <div class="metric"><span>Clientes</span><strong>—</strong></div>
-      </div>
-
-      <div class="callout" style="margin-bottom:12px;padding:10px 12px;border-radius:8px;background:var(--bg-base);border:1px solid var(--border);font-size:12.5px;color:var(--text-lo)">
-        A conexão com o Agente Local (URL, Token, criptografia) é configurada em <a href="/app/ia-service/config-ia.html">Configuração de IA</a>, junto com as demais credenciais sensíveis.
-      </div>
-
       <div class="tabs" role="tablist">
         <button class="tab-btn active" data-tab="tab-fontes" type="button">Fontes Históricas</button>
         <button class="tab-btn" data-tab="tab-importacoes" type="button">Importações</button>
       </div>
 
       <div id="tab-fontes" class="tab-panel active">
-        <div class="callout" style="margin-bottom:12px;padding:10px 12px;border-radius:8px;background:var(--bg-base);border:1px solid var(--border);font-size:12.5px;color:var(--text-lo)">
-          A fonte aqui é só uma REFERÊNCIA — a conexão real (host, porta, usuário, senha do SQL Server) já deve estar cadastrada diretamente no Agente Local, sob esta mesma connection_key. O IA Service nunca cadastra nem envia credencial para o agente.
-        </div>
         <div class="form-row" style="flex-direction:column;align-items:stretch;max-width:420px">
           <div class="form-field"><label>Nome</label><input type="text" id="fonte-nome" class="form-control" placeholder="SoftExpert - Chamados"></div>
           <div class="form-field">
@@ -134,19 +139,11 @@
           <div class="form-field"><label>Fonte</label><select id="importar-fonte" class="form-control"></select></div>
           <div class="form-field"><label>Data inicial</label><input type="date" id="importar-inicio" class="form-control" value="2026-01-01"></div>
           <div class="form-field"><label>Data final</label><input type="date" id="importar-fim" class="form-control" value="2026-12-31"></div>
-          <button class="btn btn-primary" id="btn-importacao-inicial" type="button" onclick="iniciarImportacao()">Importação inicial</button>
+          <button class="btn btn-primary" id="btn-importacao-inicial" type="button" onclick="iniciarImportacao()">Importação de Período</button>
           <button class="btn btn-ghost" id="btn-sincronizar-agora" type="button" onclick="sincronizarIncremental()">Sincronizar agora</button>
           <button class="btn btn-ghost" id="btn-diagnosticar-periodo" type="button" onclick="diagnosticarPeriodo()">Diagnosticar período</button>
           <button class="btn btn-ghost" id="btn-refresh-importacoes" type="button" onclick="refreshImportacoesManual()">Atualizar tela</button>
           <button class="btn btn-ghost btn-danger-soft" id="btn-reimportar-zero" type="button" onclick="reimportarDoZero()">Reimportar do zero</button>
-        </div>
-        <div class="form-hint" style="margin:-2px 0 12px">
-          Os cards de cima mostram o total atual da base histórica. O painel e a tabela abaixo mostram apenas o resultado de cada execução de importação/sincronização.
-        </div>
-        <div class="callout" style="margin:-2px 0 14px;padding:10px 12px;border-radius:8px;background:var(--bg-base);border:1px solid var(--border);font-size:12.5px;color:var(--text-lo)">
-          <strong style="color:var(--text-md)">Importação inicial</strong> usa o período definido acima e não apaga nada antes — soma sobre o que já existe. Use para a primeira carga de um intervalo ou para reprocessar um período específico.<br>
-          <strong style="color:var(--text-md)">Sincronizar agora</strong> ignora as datas acima: calcula sozinho a partir do fim da última importação <em>concluída com sucesso</em> dessa fonte (com uma pequena margem de segurança para trás) até agora. Sem nenhuma importação concluída ainda, ele só traz os últimos dias — não serve para trazer um histórico completo. Pensado para rotina do dia a dia, depois que a carga inicial já funcionou.<br>
-          <strong style="color:var(--text-md)">Reimportar do zero</strong> apaga todo o histórico da fonte (importações, chamados, posicionamentos e os atendimentos do Radar/respostas da IA gerados a partir deles) e em seguida roda uma importação inicial no período acima. Use quando uma importação anterior falhou/ficou inconsistente e você quer recomeçar limpo.
         </div>
         <div id="importacao-feedback" class="importacao-feedback"></div>
 
@@ -171,10 +168,53 @@
   </div>
 </div>
 
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — Base Histórica</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="help-drawer-body">
+    <div class="help-section">
+      <div class="help-section-title">Fontes Históricas</div>
+      <div class="help-item">
+        <div class="help-item-label">Fonte = referência, não credencial</div>
+        <div class="help-item-desc">A fonte aqui é só uma REFERÊNCIA — a conexão real (host, porta, usuário, senha do SQL Server) já deve estar cadastrada diretamente no Agente Local, sob esta mesma connection_key. O IA Service nunca cadastra nem envia credencial para o agente.</div>
+      </div>
+      <div class="help-tip">A conexão com o Agente Local (URL, Token, criptografia) é configurada em <a href="/app/ia-service/config-ia.html">Configuração de IA</a>, junto com as demais credenciais sensíveis.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Importações</div>
+      <div class="help-item">
+        <div class="help-item-label">Importação de Período</div>
+        <div class="help-item-desc">Usa o período definido acima (Data inicial/final) e não apaga nada antes — soma sobre o que já existe. Use para a primeira carga de um intervalo ou para reprocessar um período específico.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Sincronizar agora</div>
+        <div class="help-item-desc">Ignora as datas acima: calcula sozinho a partir do fim da última importação <em>concluída com sucesso</em> dessa fonte (com uma pequena margem de segurança para trás) até agora. Sem nenhuma importação concluída ainda, ele só traz os últimos dias — não serve para trazer um histórico completo. Pensado para rotina do dia a dia, depois que a carga inicial já funcionou.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Diagnosticar período</div>
+        <div class="help-item-desc">Roda consultas de contagem contra a origem para o período informado, sem importar nada — útil para entender se um período "veio zero" por falta de dado real ou por um filtro da query descartando os registros.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Reimportar do zero</div>
+        <div class="help-item-desc">Apaga todo o histórico da fonte (importações, chamados, posicionamentos e os atendimentos do Radar/respostas da IA gerados a partir deles) e em seguida roda uma importação de período no intervalo acima. Use quando uma importação anterior falhou/ficou inconsistente e você quer recomeçar limpo.</div>
+      </div>
+      <div class="help-tip">Os cards no topo da página mostram o total atual da base histórica. O painel e a tabela abaixo mostram apenas o resultado de cada execução de importação/sincronização.</div>
+    </div>
+  </div>
+</div>
+
 <script src="/js/auth.js"></script>
 <script src="/app/ia-service/js/sidebar.js"></script>
 <script>
   const impState = { rows: [], sortField: 'criadoEm', sortDir: 'desc', destaqueId: null };
+
+  function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
 
   function showError(msg) { const el = document.getElementById('error-banner'); el.textContent = msg; el.style.display = 'block'; }
   function hideError() { document.getElementById('error-banner').style.display = 'none'; }
@@ -239,19 +279,6 @@
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === id));
   }
   document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => activateTab(btn.dataset.tab)));
-
-  async function carregarResumo() {
-    const empresaId = empresaIdAtual();
-    const resumo = await api(`/api/ia-service/base-historica/resumo?empresa_id=${empresaId}`);
-    document.getElementById('resumo-grid').innerHTML = `
-      <div class="metric"><span>Clientes</span><strong>${resumo.clientes}</strong></div>
-      <div class="metric"><span>Usuários</span><strong>${resumo.usuariosCliente}</strong></div>
-      <div class="metric"><span>Técnicos</span><strong>${resumo.tecnicos}</strong></div>
-      <div class="metric"><span>Chamados</span><strong>${resumo.chamados}</strong></div>
-      <div class="metric"><span>Posicionamentos</span><strong>${resumo.posicionamentos}</strong></div>
-      <div class="metric"><span>Aguard. indexação</span><strong>${resumo.chamadosAguardandoIndexacao}</strong></div>
-    `;
-  }
 
   // Busca as connection_key já cadastradas no Agente Local para popular um
   // <select> (evita o usuário digitar de cor e errar o nome — causa real de
@@ -455,7 +482,6 @@
     try {
       const resultado = await api(`/api/ia-service/base-historica/fontes/${fonteId}/historico?empresa_id=${empresaId}`, { method: 'DELETE' });
       showInfo(`Histórico limpo. Atendimentos do Radar removidos: ${resultado.atendimentosRemovidos || 0}. Importações removidas: ${resultado.importacoesRemovidas || 0}.`);
-      await carregarResumo();
       await carregarImportacoes();
       activateTab('tab-importacoes');
     } catch (err) { showError('Não foi possível limpar o histórico da fonte: ' + err.message); }
@@ -523,7 +549,7 @@
     hideError();
     setButtonLoading('btn-refresh-importacoes', true, 'Atualizando...');
     try {
-      await Promise.all([carregarResumo(), carregarImportacoes()]);
+      await carregarImportacoes();
       const atual = impState.destaqueId ? impState.rows.find(i => i.id === impState.destaqueId) : impState.rows[0];
       if (atual) mostrarFeedbackImportacao(atual);
       showInfo('Tela atualizada com os dados mais recentes.');
@@ -549,7 +575,6 @@
     setButtonLoading('btn-reimportar-zero', true, 'Reimportando...');
     try {
       const limpeza = await api(`/api/ia-service/base-historica/fontes/${fonteId}/historico?empresa_id=${empresaId}`, { method: 'DELETE' });
-      await carregarResumo();
       await carregarImportacoes();
       await dispararImportacaoSelecionada({
         mensagemInicio: `Base zerada para esta fonte. Atendimentos removidos: ${limpeza.atendimentosRemovidos || 0}. Importações removidas: ${limpeza.importacoesRemovidas || 0}. Nova importação iniciada.`,
@@ -647,7 +672,6 @@
         if (!atual || !['pendente', 'executando'].includes(atual.status) || tentativas >= 1200) {
           clearInterval(timer);
           if (atual) mostrarFeedbackImportacao(atual);
-          carregarResumo().catch(() => {});
         }
       } catch (_) {
         if (tentativas >= 3) clearInterval(timer);
@@ -701,12 +725,12 @@
 
   async function carregarTudo() {
     try {
-      await Promise.all([carregarResumo(), carregarConexoesDoAgente(), carregarFontes(), carregarImportacoes()]);
+      await Promise.all([carregarConexoesDoAgente(), carregarFontes(), carregarImportacoes()]);
     } catch (err) { showError('Falha ao carregar a página: ' + err.message); }
   }
 
   window._iahubAuthReady?.then(carregarTudo) ?? carregarTudo();
-  setInterval(() => { carregarResumo(); carregarImportacoes(); }, 10000);
+  setInterval(() => { carregarImportacoes(); }, 10000);
 </script>
 </body>
 </html>

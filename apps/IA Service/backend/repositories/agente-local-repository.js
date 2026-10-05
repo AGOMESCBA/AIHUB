@@ -183,6 +183,7 @@ function excluirFonte(empresaId, fonteId) {
 
 function _limparHistoricoDaFonte(db, empresaId, fonteId) {
   const empresa = Number(empresaId);
+
   const atendimentosRemovidos = db.prepare(`
     DELETE FROM atendimentos
     WHERE empresa_id = ?

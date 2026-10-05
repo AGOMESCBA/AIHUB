@@ -930,6 +930,32 @@ const MIGRATIONS = [
         WHERE origem_sistema IS NOT NULL AND origem_oid IS NOT NULL;
     `,
   },
+  {
+    version: 37,
+    descricao: 'Indices dedicados (atendimento_id como 1a coluna) para o ON DELETE CASCADE de atendimentos — achado real 2026-10: "reimportar do zero" (5112 atendimentos) levou 334s porque o cascade usa so atendimento_id no predicado, e os indices existentes tem empresa_id como 1a coluna (inutilizavel por esse predicado), forcando SCAN completo de mensagens (29264 linhas) e anexos por atendimento apagado. Indices aditivos, nao substituem os existentes (que servem outras queries que de fato filtram por empresa_id primeiro).',
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_svc_mensagens_cascade_atendimento
+        ON mensagens (atendimento_id);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_anexos_cascade_atendimento
+        ON anexos (atendimento_id);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_investigacao_dossies_cascade_atendimento
+        ON investigacao_dossies (atendimento_id);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_investigacao_itens_cascade_atendimento
+        ON investigacao_itens (atendimento_id);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_investigacao_item_relacoes_cascade_atendimento
+        ON investigacao_item_relacoes (atendimento_id);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_investigacao_dossie_atualizacoes_cascade_atendimento
+        ON investigacao_dossie_atualizacoes (atendimento_id);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_investigacao_execucoes_cascade_atendimento
+        ON investigacao_execucoes (atendimento_id);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

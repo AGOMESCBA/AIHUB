@@ -163,6 +163,36 @@ function removerDiretorioAtendimento(empresaId, atendimentoId) {
   return true;
 }
 
+/**
+ * Varredura por exclusão: apaga QUALQUER subpasta de
+ * data/anexos/<empresaId>/ cujo nome (= atendimentoId) não está mais em
+ * `atendimentoIdsValidos` — usada depois de "reimportar do zero"/excluir
+ * fonte para garantir zero resquício físico, sem depender de uma lista
+ * de IDs previamente capturada por JOIN (que exige acertar toda consulta
+ * de captura; aqui não sobra margem para erro: o que não existe mais no
+ * banco, não pode continuar em disco). Decisão explícita do usuário:
+ * "reimportar do zero é sumir com o que tem" — nenhum anexo de execução
+ * anterior pode sobreviver à limpeza, nem os que já eram órfãos antes dela.
+ */
+function limparDiretoriosOrfaos(empresaId, atendimentoIdsValidos) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const dirEmpresa = path.resolve(ANEXOS_DIR, String(empresaId));
+  if (!fs.existsSync(dirEmpresa)) return { removidos: 0 };
+
+  const validos = new Set(atendimentoIdsValidos || []);
+  let removidos = 0;
+  for (const nome of fs.readdirSync(dirEmpresa)) {
+    if (validos.has(nome)) continue;
+    const alvo = path.resolve(dirEmpresa, nome);
+    if (!alvo.startsWith(`${dirEmpresa}${path.sep}`)) continue; // nunca deveria acontecer (nome vem do próprio readdir), defesa extra
+    try {
+      fs.rmSync(alvo, { recursive: true, force: true });
+      removidos += 1;
+    } catch (_) {}
+  }
+  return { removidos };
+}
+
 module.exports = {
   ANEXOS_DIR,
   MIME_PERMITIDOS,
@@ -172,4 +202,5 @@ module.exports = {
   salvarAnexo,
   substituirArquivoAnexo,
   removerDiretorioAtendimento,
+  limparDiretoriosOrfaos,
 };
