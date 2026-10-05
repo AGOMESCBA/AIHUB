@@ -956,6 +956,13 @@ const MIGRATIONS = [
         ON investigacao_execucoes (atendimento_id);
     `,
   },
+  {
+    version: 38,
+    descricao: 'Total esperado de registros da importacao (COUNT previo contra a origem, quando o adapter suporta) — pedido do usuario 2026-10: barra de progresso real na tela, nao so "lidos: N" crescendo sem saber quanto falta.',
+    sql: `
+      ALTER TABLE importacoes ADD COLUMN total_registros_esperado INTEGER DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

@@ -408,6 +408,19 @@ async function executarFullLoad(empresaId, fonteId, { periodoInicio, periodoFim,
 
   if (!importacao) throw new Error('Importação não encontrada para retomada.');
 
+  // Total esperado — COUNT prévio contra a origem, só quando o adapter
+  // suporta (contarChamadosPeriodo é opcional por contrato, ver
+  // adapters/index.js: METODOS_OBRIGATORIOS não a inclui). Pedido do
+  // usuário (2026-10): barra de progresso real na tela, em vez de só
+  // "lidos: N" crescendo sem o usuário saber quanto falta. Melhor esforço —
+  // uma falha na contagem não pode abortar a importação em si.
+  if (importacao.totalRegistrosEsperado == null && typeof adapter.contarChamadosPeriodo === 'function') {
+    try {
+      const total = await adapter.contarChamadosPeriodo(empresaId, fonte, { inicio: periodoInicio, fim: periodoFim });
+      importacao = importacaoRepo.atualizarImportacao(empresaId, importacao.id, { totalRegistrosEsperado: total });
+    } catch (_) { /* melhor esforço — segue sem total conhecido */ }
+  }
+
   const offsetInicial = importacao.checkpoint?.offset || 0;
   importacao = importacaoRepo.atualizarImportacao(empresaId, importacao.id, {
     status: 'executando',

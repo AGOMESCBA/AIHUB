@@ -63,6 +63,7 @@ function _importacaoParaDominio(row) {
     registrosErro: row.registros_erro,
     posicionamentosLidos: row.posicionamentos_lidos, posicionamentosInseridos: row.posicionamentos_inseridos,
     posicionamentosAtualizados: row.posicionamentos_atualizados,
+    totalRegistrosEsperado: row.total_registros_esperado,
     mensagemErro: row.mensagem_erro, inicioEm: row.inicio_em, terminoEm: row.termino_em,
     criadoEm: row.criado_em, atualizadoEm: row.atualizado_em,
   };
@@ -115,6 +116,7 @@ function atualizarImportacao(empresaId, importacaoId, patch) {
     posicionamentos_lidos: patch.posicionamentosLidos ?? atual.posicionamentosLidos,
     posicionamentos_inseridos: patch.posicionamentosInseridos ?? atual.posicionamentosInseridos,
     posicionamentos_atualizados: patch.posicionamentosAtualizados ?? atual.posicionamentosAtualizados,
+    total_registros_esperado: patch.totalRegistrosEsperado !== undefined ? patch.totalRegistrosEsperado : atual.totalRegistrosEsperado,
     mensagem_erro: patch.mensagemErro !== undefined ? patch.mensagemErro : atual.mensagemErro,
     inicio_em: patch.inicioEm !== undefined ? patch.inicioEm : atual.inicioEm,
     termino_em: patch.terminoEm !== undefined ? patch.terminoEm : atual.terminoEm,
@@ -124,13 +126,13 @@ function atualizarImportacao(empresaId, importacaoId, patch) {
     UPDATE importacoes SET status = ?, checkpoint_json = ?, registros_lidos = ?, registros_inseridos = ?,
       registros_atualizados = ?, registros_ignorados = ?, registros_erro = ?,
       posicionamentos_lidos = ?, posicionamentos_inseridos = ?, posicionamentos_atualizados = ?,
-      mensagem_erro = ?, inicio_em = ?, termino_em = ?, atualizado_em = ?
+      total_registros_esperado = ?, mensagem_erro = ?, inicio_em = ?, termino_em = ?, atualizado_em = ?
     WHERE id = ? AND empresa_id = ?
   `).run(
     campos.status, campos.checkpoint_json, campos.registros_lidos, campos.registros_inseridos,
     campos.registros_atualizados, campos.registros_ignorados, campos.registros_erro,
     campos.posicionamentos_lidos, campos.posicionamentos_inseridos, campos.posicionamentos_atualizados,
-    campos.mensagem_erro, campos.inicio_em, campos.termino_em, agora, importacaoId, Number(empresaId)
+    campos.total_registros_esperado, campos.mensagem_erro, campos.inicio_em, campos.termino_em, agora, importacaoId, Number(empresaId)
   );
 
   return getImportacao(empresaId, importacaoId);

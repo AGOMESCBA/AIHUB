@@ -65,6 +65,16 @@
     .apagar-dropdown button svg { flex:none; }
     .btn-icon { display:inline-flex; align-items:center; gap:6px; }
     .apagar-dropdown button { display:flex; align-items:center; gap:8px; }
+    .progresso-barra-wrap { margin:8px 0; }
+    .progresso-barra-trilho { width:100%; height:8px; background:var(--bg-hover); border-radius:99px; overflow:hidden; }
+    .progresso-barra-fill { height:100%; background:var(--accent); border-radius:99px; transition:width .4s ease; }
+    .progresso-barra-fill.indeterminado {
+      width:30% !important; animation:progresso-indeterminado 1.4s ease-in-out infinite;
+    }
+    @keyframes progresso-indeterminado {
+      0% { margin-left:-30%; } 100% { margin-left:100%; }
+    }
+    .progresso-barra-legenda { display:flex; justify-content:space-between; font-size:11.5px; color:var(--text-lo); margin-top:4px; }
     .importacao-feedback { display:none; border:1px solid var(--border); border-radius:8px; background:var(--bg-base); padding:10px 12px; margin:0 0 12px; color:var(--text-md); font-size:12.5px; }
     .importacao-feedback strong { color:var(--text-hi); }
     .importacao-feedback .warn { color:#92400e; font-weight:800; }
@@ -320,6 +330,36 @@
   function totaisImportacao(i) {
     return Number(i?.registrosLidos || 0) + Number(i?.posicionamentosLidos || 0);
   }
+
+  // Barra de progresso — pedido do usuário (2026-10): "seria bom ter uma
+  // barra mostrando a quantidade total e o número de chamados para o
+  // usuário ir vendo". totalRegistrosEsperado vem de um COUNT prévio contra
+  // a origem (ver historical-import-service.executarFullLoad), melhor
+  // esforço — nem todo adapter suporta, então cai num indicador
+  // indeterminado (listra animada) quando o total é desconhecido, em vez de
+  // mostrar 0% incorretamente ou esconder a barra.
+  function renderizarBarraProgresso(i) {
+    const emAndamento = ['pendente', 'executando'].includes(i.status);
+    if (!emAndamento) return '';
+    const total = Number(i.totalRegistrosEsperado) || 0;
+    const lidos = Number(i.registrosLidos) || 0;
+    if (total > 0) {
+      const pct = Math.min(100, Math.round((lidos / total) * 100));
+      return `
+        <div class="progresso-barra-wrap">
+          <div class="progresso-barra-trilho"><div class="progresso-barra-fill" style="width:${pct}%"></div></div>
+          <div class="progresso-barra-legenda"><span>${lidos} de ${total} chamados (${pct}%)</span><span>${escapeHtml(formatarDuracao(i.inicioEm || i.criadoEm, null))}</span></div>
+        </div>
+      `;
+    }
+    return `
+      <div class="progresso-barra-wrap">
+        <div class="progresso-barra-trilho"><div class="progresso-barra-fill indeterminado"></div></div>
+        <div class="progresso-barra-legenda"><span>${lidos} chamados lidos (total ainda não conhecido)</span><span>${escapeHtml(formatarDuracao(i.inicioEm || i.criadoEm, null))}</span></div>
+      </div>
+    `;
+  }
+
   function mostrarFeedbackImportacao(i, { iniciado = false } = {}) {
     const el = document.getElementById('importacao-feedback');
     if (!el || !i) return;
@@ -329,7 +369,8 @@
     el.style.display = 'block';
     el.innerHTML = `
       <strong>${iniciado ? 'Execução iniciada' : 'Resultado desta execução'}:</strong>
-      ${escapeHtml(i.tipo)} · <strong>${escapeHtml(i.status)}</strong> · período ${escapeHtml(i.periodoInicio || '?')} a ${escapeHtml(i.periodoFim || '?')} · tempo ${escapeHtml(tempo)}<br>
+      ${escapeHtml(i.tipo)} · <strong>${escapeHtml(i.status)}</strong> · período ${escapeHtml(i.periodoInicio || '?')} a ${escapeHtml(i.periodoFim || '?')} · tempo ${escapeHtml(tempo)}
+      ${renderizarBarraProgresso(i)}
       Chamados — lidos: ${i.registrosLidos} · inseridos: ${i.registrosInseridos} · atualizados: ${i.registrosAtualizados} · sem alteração: ${i.registrosIgnorados} · erros: ${i.registrosErro}<br>
       Posicionamentos — lidos: ${i.posicionamentosLidos} · inseridos: ${i.posicionamentosInseridos} · atualizados: ${i.posicionamentosAtualizados}
       ${zero ? '<br><span class="warn">Veio zero registro: a rotina executou corretamente, mas a origem não retornou chamados/posicionamentos para este período. Use "Diagnosticar período" para ver em qual filtro da query os registros estão sumindo.</span>' : ''}
@@ -519,11 +560,16 @@
     hideError();
     if (!confirm(`Excluir a fonte "${nome}"?\n\nISSO APAGA TAMBÉM todo o histórico de chamados, posicionamentos, atendimentos do Radar/respostas da IA, anexos e as importações registradas na aba Importações. Se quiser só corrigir o connection_key, use "Editar" em vez de excluir.`)) return;
     const empresaId = empresaIdAtual();
+    const card = [...document.querySelectorAll('.fonte-btn-excluir')].find(b => b.dataset.id === fonteId);
+    if (card) { card.disabled = true; card.dataset.textoOriginal = card.innerHTML; card.innerHTML = '⏳ Excluindo — pode levar alguns minutos…'; }
     try {
       await api(`/api/ia-service/base-historica/fontes/${fonteId}?empresa_id=${empresaId}`, { method: 'DELETE' });
       if (fonteEmEdicaoId === fonteId) cancelarEdicaoFonte();
       carregarFontes();
-    } catch (err) { showError('Não foi possível excluir a fonte: ' + err.message); }
+    } catch (err) {
+      showError('Não foi possível excluir a fonte: ' + err.message);
+      if (card) { card.disabled = false; card.innerHTML = card.dataset.textoOriginal; }
+    }
   }
 
   function toggleApagarDropdown() {
@@ -558,6 +604,27 @@
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
+  // Indicador visual de "operação longa em andamento" — pedido do usuário
+  // (2026-10): "todo lugar que processar devemos ter essa barra para o
+  // usuário poder acompanhar e ver que o sistema não está parado". Zerar
+  // Base/Limpar Log não têm total conhecido (apaga linhas, não lê de uma
+  // origem externa contável), então usam a barra indeterminada (listra
+  // animada) em vez de percentual — mas aparece ANTES da requisição
+  // terminar, não só depois, para o usuário nunca ficar sem feedback
+  // nenhum durante a espera.
+  function mostrarOperacaoEmAndamento(titulo) {
+    const el = document.getElementById('importacao-feedback');
+    el.style.display = 'block';
+    el.style.borderLeft = '4px solid var(--accent)';
+    el.innerHTML = `
+      <strong style="color:var(--accent)">${escapeHtml(titulo)}</strong>
+      <div class="progresso-barra-wrap">
+        <div class="progresso-barra-trilho"><div class="progresso-barra-fill indeterminado"></div></div>
+      </div>
+    `;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
   async function limparLog() {
     hideError();
     hideInfo();
@@ -566,6 +633,7 @@
     const fonteId = document.getElementById('importar-fonte').value;
     if (!fonteId) return showError('Selecione uma fonte para limpar o log.');
     if (!confirm('Limpar o log de importações desta fonte?\n\nIsso apaga só o histórico de execuções (status/contadores listados na tabela abaixo) — chamados, posicionamentos, atendimentos do Radar e anexos já importados continuam intactos.')) return;
+    mostrarOperacaoEmAndamento('Limpando log…');
     try {
       const resultado = await api(`/api/ia-service/base-historica/fontes/${fonteId}/historico?empresa_id=${empresaId}`, { method: 'DELETE' });
       mostrarResultadoOperacao({
@@ -594,6 +662,7 @@
     if (!fonteId) return showError('Selecione uma fonte para zerar a base.');
     if (!confirm(`Zerar a base da fonte "${fonteNome}"?\n\nIsso apaga chamados, posicionamentos, atendimentos do Radar/respostas da IA e anexos (banco e disco) já importados por ela, além do log de importações. A fonte continua cadastrada. NÃO reimporta automaticamente depois — use "Importação de Período" se quiser repopular.`)) return;
     setButtonLoading('btn-apagar', true, 'Zerando base...');
+    mostrarOperacaoEmAndamento('Zerando base — isso pode levar alguns minutos dependendo do volume…');
     try {
       const resultado = await api(`/api/ia-service/base-historica/fontes/${fonteId}/zerar-base?empresa_id=${empresaId}`, { method: 'DELETE' });
       mostrarResultadoOperacao({
@@ -699,6 +768,7 @@
     if (!confirm(`Reimportar do zero a fonte "${fonteNome}"?\n\nIsso apaga as importações anteriores, os chamados/posicionamentos históricos e os atendimentos do Radar criados a partir dessa fonte, incluindo respostas antigas da IA. Depois inicia uma nova importação do período ${inicio} a ${fim}.`)) return;
 
     setButtonLoading('btn-reimportar-zero', true, 'Reimportando...');
+    mostrarOperacaoEmAndamento('Zerando a base antes de reimportar…');
     try {
       const limpeza = await api(`/api/ia-service/base-historica/fontes/${fonteId}/zerar-base?empresa_id=${empresaId}`, { method: 'DELETE' });
       await carregarImportacoes();
@@ -726,6 +796,7 @@
         <td><span class="status-badge ${i.status}">${escapeHtml(i.status)}</span></td>
         <td>${i.periodoInicio || '?'} a ${i.periodoFim || '?'}</td>
         <td>
+          ${renderizarBarraProgresso(i)}
           Lidos: ${i.registrosLidos} · Inseridos: ${i.registrosInseridos} · Atualizados: ${i.registrosAtualizados} ·
           Sem alteração: ${i.registrosIgnorados} · Erros: ${i.registrosErro}<br>
           Posicionamentos — Lidos: ${i.posicionamentosLidos} · Inseridos: ${i.posicionamentosInseridos} · Atualizados: ${i.posicionamentosAtualizados}<br>
