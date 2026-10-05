@@ -153,6 +153,21 @@ module.exports = function registrarRotasExterno(app) {
     }
   });
 
+  // Espelho da rota interna (index.js) — usada pelo botão "Pesquisar
+  // Soluções" do Radar externo (login por telefone) antes de reenviar tudo
+  // para a IA. Faltava aqui: a rota só existia no canal interno, por isso o
+  // clique no Radar externo retornava 404 (2026-10, achado real em produção).
+  app.post('/api/ia-service-externo/radar/chamados/:chamadoId/anexos-softexpert/sincronizar', async (req, res) => {
+    try {
+      const { atendimentoId } = req.body || {};
+      if (!atendimentoId) return res.status(400).json({ error: 'atendimentoId é obrigatório.' });
+      const { sincronizados, indisponiveis } = await anexosSoftExpertService.sincronizarEValidarAnexosParaAtendimento(req.svcEmpresaId, req.params.chamadoId, atendimentoId);
+      res.json({ sincronizados: sincronizados.length, indisponiveis });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   function iniciarAnaliseRadarExterno(req, res) {
     try {
       const { atendimento, reaberto } = radarService.iniciarAnalise(req.svcEmpresaId, req.params.chamadoId, {

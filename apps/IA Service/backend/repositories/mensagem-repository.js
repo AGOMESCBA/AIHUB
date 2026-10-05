@@ -23,6 +23,7 @@ function _rowParaDominio(row) {
     model: row.model,
     origemSistema: row.origem_sistema,
     origemReferencia: row.origem_referencia,
+    origemReferenciaOid: row.origem_referencia_oid ?? null,
     origemData: row.origem_data,
     origemAutor: row.origem_autor,
   };
@@ -106,10 +107,26 @@ function listarMensagens(empresaId, atendimentoId, filtros = {}) {
   const limite = Math.min(Number(filtros.limite) || 100, 500);
 
   const rows = db.prepare(`
-    SELECT * FROM mensagens
-    WHERE empresa_id = ? AND atendimento_id = ?
-    ORDER BY criado_em ASC
-    LIMIT ?
+    SELECT m.*,
+           CASE
+             WHEN m.origem_referencia LIKE 'posicionamento:%' THEN (
+               SELECT p.oid_origem
+                 FROM posicionamentos p
+                WHERE p.empresa_id = m.empresa_id
+                  AND p.id = substr(m.origem_referencia, 16)
+             )
+             WHEN m.origem_referencia LIKE 'chamado:%' THEN (
+               SELECT c.oid_origem
+                 FROM chamados c
+                WHERE c.empresa_id = m.empresa_id
+                  AND c.id = substr(m.origem_referencia, 9)
+             )
+             ELSE NULL
+           END AS origem_referencia_oid
+      FROM mensagens m
+     WHERE m.empresa_id = ? AND m.atendimento_id = ?
+     ORDER BY m.criado_em ASC
+     LIMIT ?
   `).all(Number(empresaId), atendimentoId, limite);
 
   return rows.map(_rowParaDominio);

@@ -1609,23 +1609,19 @@
     }
 
     function anexosSoftExpertDaMensagem(m) {
-      if (!anexosSoftExpertCache.length || !m?.conteudo) return [];
-      const texto = String(m.conteudo);
-      const dataMatch = texto.match(/\[(\d{4}-\d{2}-\d{2})\]/);
-      const dataMsg = dataMatch?.[1] || null;
-      const autorMatch = texto.match(/\]\s*([^:\n]+):/);
-      const autorMsg = autorMatch?.[1]?.trim().toLowerCase() || null;
-      if (!dataMsg && !autorMsg) return [];
+      if (!anexosSoftExpertCache.length || !m?.origemReferenciaOid || !m?.origemReferencia) return [];
+      const origemReferencia = String(m.origemReferencia);
+      const origemReferenciaOid = String(m.origemReferenciaOid);
+      const origensAceitas = origemReferencia.startsWith('posicionamento:')
+        ? new Set(['posicionamento'])
+        : origemReferencia.startsWith('chamado:')
+          ? new Set(['chamado', 'anexo'])
+          : new Set();
+      if (!origensAceitas.size) return [];
 
       return anexosSoftExpertCache
-        .filter(a => a.origem !== 'chamado' && a.origem !== 'anexo')
-        .filter(a => {
-          const dataAnexo = a.referenciaData ? String(a.referenciaData).slice(0, 10) : null;
-          const autorAnexo = a.referenciaAutor ? String(a.referenciaAutor).trim().toLowerCase() : null;
-          const mesmaData = dataMsg && dataAnexo && dataMsg === dataAnexo;
-          const mesmoAutor = autorMsg && autorAnexo && (autorMsg.includes(autorAnexo) || autorAnexo.includes(autorMsg));
-          return mesmaData && (!autorMsg || !autorAnexo || mesmoAutor);
-        })
+        .filter(a => origensAceitas.has(a.origem))
+        .filter(a => a.referenciaOid && String(a.referenciaOid) === origemReferenciaOid)
         .map(a => ({ ...a, _fonte: 'softexpert' }));
     }
 
