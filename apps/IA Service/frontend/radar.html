@@ -1788,13 +1788,13 @@
       return row;
     }
 
-    function showTyping() {
+    function showTyping(mensagem = 'Analisando…') {
       hideTyping();
       const chatBody = document.getElementById('chat-body');
       const row = document.createElement('div');
       row.className = 'row in typing-row';
       row.id = 'typing-row';
-      row.innerHTML = `<div class="bubble"><span class="typing-dot"></span> Analisando…</div>`;
+      row.innerHTML = `<div class="bubble"><span class="typing-dot"></span> ${escapeHtml(mensagem)}</div>`;
       chatBody.appendChild(row);
       chatBody.scrollTop = chatBody.scrollHeight;
     }
@@ -1859,7 +1859,7 @@
     // tempo máximo — mesmo indicador visual (showTyping/hideTyping) já
     // usado para mensagens manuais do composer.
     async function aguardarPreAnalise({ maxTentativas = 20, intervaloMs = 1500 } = {}) {
-      showTyping();
+      showTyping('Analista IA Service está analisando o chamado…');
       for (let tentativa = 0; tentativa < maxTentativas; tentativa++) {
         const temResposta = await carregarMensagens();
         if (temResposta) { hideTyping(); return; }
@@ -1904,12 +1904,22 @@
     // atendimento informado ainda for o que está visível na tela — evita que
     // a resposta de um atendimento em background mexa no chat de outro
     // atendimento que o analista tenha aberto nesse meio tempo.
-    function _atualizarIndicadorProcessamento(atendimentoIdDoTurno) {
+    function _atualizarIndicadorProcessamento(atendimentoIdDoTurno, mensagemTyping) {
       if (atendimentoIdDoTurno !== atendimentoAtualId) return;
       enviando = atendimentosEmProcessamento.has(atendimentoAtualId);
-      if (enviando) showTyping(); else hideTyping();
+      if (enviando) showTyping(mensagemTyping); else hideTyping();
       const btnPesquisar = document.getElementById('chat-header-pesquisar');
       if (btnPesquisar) btnPesquisar.disabled = enviando;
+    }
+
+    // Aproximação cosmética do detector real (technical-research-service.js
+    // RE_PEDIDO_PESQUISA) — só para decidir a mensagem do indicador "...". A
+    // decisão real de pesquisar ou não continua inteiramente no backend; se
+    // essa função errar para mais ou para menos, o pior efeito é a mensagem
+    // genérica "Analisando…" aparecer quando uma pesquisa real estava
+    // rodando (ou vice-versa), nunca uma decisão de negócio equivocada.
+    function _pareceSolicitarPesquisa(texto) {
+      return /\b(pesquis\w*|procur\w*|busc\w*|consult\w*|investig\w*)\b/i.test(String(texto || ''));
     }
 
     async function enviarMensagem() {
@@ -1930,7 +1940,7 @@
       anexosPendentes = [];
       renderizarAnexosPendentes();
       atendimentosEmProcessamento.add(atendimentoIdDoTurno);
-      _atualizarIndicadorProcessamento(atendimentoIdDoTurno);
+      _atualizarIndicadorProcessamento(atendimentoIdDoTurno, _pareceSolicitarPesquisa(texto) ? 'Analista IA Service está pesquisando…' : undefined);
 
       try {
         const qs = qsEmpresa(empresaId);
@@ -1976,7 +1986,7 @@
 
       addBubble({ direcao: 'out', texto: TEXTO_PESQUISAR_SOLUCOES, criadoEm: new Date().toISOString(), papel: 'user' });
       atendimentosEmProcessamento.add(atendimentoIdDoTurno);
-      _atualizarIndicadorProcessamento(atendimentoIdDoTurno);
+      _atualizarIndicadorProcessamento(atendimentoIdDoTurno, 'Analista IA Service está pesquisando…');
       if (btn && atendimentoIdDoTurno === atendimentoAtualId) btn.disabled = true;
 
       try {

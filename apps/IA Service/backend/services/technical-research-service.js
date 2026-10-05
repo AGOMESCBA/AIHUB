@@ -664,7 +664,16 @@ function _aplicarInterpretacaoSemantica(plano, interpretacao, ctx = {}) {
   return planoNovo;
 }
 
-async function planejarPesquisaComSemantica(ctx = {}, opts = {}) {
+async function planejarPesquisaComSemantica(ctxBruto = {}, opts = {}) {
+  // Pedido explícito de pesquisa DIGITADO na conversa normal ("pesquise uma
+  // solução", "vê se tem algo publicado"...) ganha a MESMA garantia do botão
+  // "Pesquisar Soluções" (ctx.forcarPesquisa) — 2026-10, pedido do usuário:
+  // antes, esse texto só direcionava a zona semântica ('pedido_explicito_
+  // pesquisa' em _classificarPreAnaliseSemantica), que ainda podia decidir
+  // não pesquisar; menos natural que precisar clicar no botão toda vez.
+  const ctx = (!ctxBruto.forcarPesquisa && _temPedidoExplicitoPesquisa(ctxBruto.texto))
+    ? { ...ctxBruto, forcarPesquisa: true }
+    : ctxBruto;
   const plano = planejarPesquisa(ctx);
   const guard = ctx.dossieOperacional?.manifesto?.regressaoGuard || {};
   const pre = _classificarPreAnaliseSemantica({
