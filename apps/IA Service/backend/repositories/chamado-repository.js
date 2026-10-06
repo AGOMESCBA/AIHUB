@@ -30,6 +30,7 @@ function _chamadoParaDominio(row) {
     kanbanId: row.kanban_id, kanbanKey: row.kanban_key, kanbanAtributos: row.kanban_atributos, kanbanDataInicio: row.kanban_data_inicio,
     diasDur: row.dias_dur, hrDur: row.hr_dur, diasDurSup: row.dias_dur_sup, diasDurFsw: row.dias_dur_fsw,
     diasDurDist: row.dias_dur_dist, diasDurCli: row.dias_dur_cli, diasDurTicli: row.dias_dur_ticli,
+    aguardandoConsolidado: row.aguardando_consolidado,
     hashConteudo: row.hash_conteudo, precisaIndexacao: !!row.precisa_indexacao, indexadoEm: row.indexado_em,
     atualizadoOrigemEm: row.atualizado_origem_em, criadoEm: row.criado_em, atualizadoEm: row.atualizado_em,
   };
@@ -42,6 +43,7 @@ const CAMPOS_CHAMADO = [
   'solucaoAplicada', 'avaliacao', 'totalHoras', 'chamadoReferencia', 'statusEncerramento', 'slaPrazo',
   'slaDataPrevFim', 'kanbanId', 'kanbanKey', 'kanbanAtributos', 'kanbanDataInicio',
   'diasDur', 'hrDur', 'diasDurSup', 'diasDurFsw', 'diasDurDist', 'diasDurCli', 'diasDurTicli',
+  'aguardandoConsolidado',
 ];
 
 const COLUNA_POR_CAMPO = {
@@ -57,6 +59,7 @@ const COLUNA_POR_CAMPO = {
   kanbanId: 'kanban_id', kanbanKey: 'kanban_key', kanbanAtributos: 'kanban_atributos', kanbanDataInicio: 'kanban_data_inicio',
   diasDur: 'dias_dur', hrDur: 'hr_dur', diasDurSup: 'dias_dur_sup', diasDurFsw: 'dias_dur_fsw',
   diasDurDist: 'dias_dur_dist', diasDurCli: 'dias_dur_cli', diasDurTicli: 'dias_dur_ticli',
+  aguardandoConsolidado: 'aguardando_consolidado',
 };
 
 /**
@@ -110,8 +113,9 @@ function upsertChamado(empresaId, dados) {
       solucao_aplicada, avaliacao, total_horas, chamado_referencia, status_encerramento, sla_prazo, sla_data_prev_fim,
       kanban_id, kanban_key, kanban_atributos, kanban_data_inicio,
       dias_dur, hr_dur, dias_dur_sup, dias_dur_fsw, dias_dur_dist, dias_dur_cli, dias_dur_ticli,
+      aguardando_consolidado,
       hash_conteudo, precisa_indexacao, atualizado_origem_em, criado_em, atualizado_em
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
   `).run(
     id, Number(empresaId), dados.fonteId, dados.sistemaOrigem, dados.oidOrigem, dados.numero,
     dados.clienteId ?? null, dados.solicitanteId ?? null, dados.tecnicoResponsavelId ?? null, dados.dataAbertura ?? null,
@@ -126,6 +130,7 @@ function upsertChamado(empresaId, dados) {
     dados.kanbanId ?? null, dados.kanbanKey ?? null, dados.kanbanAtributos ?? null, dados.kanbanDataInicio ?? null,
     dados.diasDur ?? null, dados.hrDur ?? null, dados.diasDurSup ?? null, dados.diasDurFsw ?? null,
     dados.diasDurDist ?? null, dados.diasDurCli ?? null, dados.diasDurTicli ?? null,
+    dados.aguardandoConsolidado ?? null,
     hashAtual, dados.atualizadoOrigemEm ?? agora, agora, agora
   );
 

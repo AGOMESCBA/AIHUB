@@ -127,6 +127,11 @@ function _mapearChamado(row) {
     kanbanKey: normalizadores.textoOuNull(row.KEYKANBAN),
     kanbanAtributos: normalizadores.textoOuNull(row.ATRIBUTOSKANBAN),
     kanbanDataInicio: normalizadores.dataParaIso(row.DATAINICIOKANBA),
+    // AGUARDANDO consolidado do chamado — view ITSM_CHAMADOS, fonte oficial
+    // (decisão explícita do usuário, 2026-10: substitui o uso de
+    // posicionamentos.situacao_retorno em toda a aplicação, que podia ficar
+    // vazio se o último posicionamento não tivesse o campo preenchido).
+    aguardandoConsolidado: normalizadores.textoOuNull(row.AGUARDANDO),
     // Duração em dias úteis por fase do atendimento — view ITSM_CHAMADOS,
     // fórmulas fornecidas pelo usuário (2026-09), baseadas em
     // DBO.FN_SE_ITSM_DIASUTEIS. Campos extras, não substituem sla_prazo.
@@ -268,6 +273,7 @@ async function _processarChamado(empresaId, fonte, adapter, importacaoId, rowBru
     kanbanId: c.kanbanId, kanbanKey: c.kanbanKey, kanbanAtributos: c.kanbanAtributos, kanbanDataInicio: c.kanbanDataInicio,
     diasDur: c.diasDur, hrDur: c.hrDur, diasDurSup: c.diasDurSup, diasDurFsw: c.diasDurFsw,
     diasDurDist: c.diasDurDist, diasDurCli: c.diasDurCli, diasDurTicli: c.diasDurTicli,
+    aguardandoConsolidado: c.aguardandoConsolidado,
   });
 
   if (!c.dataAbertura && c.dataAberturaBruta) {

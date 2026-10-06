@@ -117,7 +117,18 @@ const JOIN_WFPROCESS = `
 const JOIN_ITSM_CHAMADOS = `
   LEFT JOIN ITSM_CHAMADOS ITC ON ITC.CHAMADO = D.IDPROCESS
 `;
+// AGUARDANDO (ex.: 'RETORNO - FORNECEDOR') — campo consolidado do CHAMADO
+// como um todo, sempre atualizado conforme o trâmite avança. Diferente de
+// posicionamentos.AGUARDANRETORNO (DYNITSMGRIDREGISTR), que é por
+// POSICIONAMENTO individual e pode ficar vazio se o último posicionamento
+// não tiver o campo preenchido — achado real 2026-10 (chamado #036475: UI
+// mostrava "não informado" enquanto ITSM_CHAMADOS.AGUARDANDO já tinha
+// 'RETORNO - FORNECEDOR'). Fonte preferencial agora, por decisão explícita
+// do usuário: "essa view é muito importante, é aonde consolidamos as
+// informações" — e muda a cada trâmite do chamado, então precisa vir
+// sempre da view, não só no momento em que o posicionamento foi criado.
 const COLUNAS_ITSM_CHAMADOS = [
+  'ITC.AGUARDANDO',
   'ITC.DIAS_DUR', 'ITC.HR_DUR', 'ITC.DIAS_DUR_SUP', 'ITC.DIAS_DUR_FSW',
   'ITC.DIAS_DUR_DIST', 'ITC.DIAS_DUR_CLI', 'ITC.DIAS_DUR_TICLI',
 ];

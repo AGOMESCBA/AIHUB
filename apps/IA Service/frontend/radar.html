@@ -1026,7 +1026,7 @@
         titulo: c.titulo || c.assunto || c.breveDescricao || '(sem título)',
         cliente: c.clienteNome || '—',
         usuario: c.solicitanteNome || '—',
-        aguardandoRetorno: labelSituacaoRetorno(c.situacaoRetorno) || 'Aguardando retorno não informado',
+        aguardandoRetorno: labelSituacaoRetorno(c.aguardandoConsolidado || c.situacaoRetorno) || 'Aguardando retorno não informado',
         status: c.slaPrazo || '—',
         consultor: c.tecnicoResponsavelNome || 'Sem consultor',
         previsao: c.slaDataPrevFim ? formatarDataHora(c.slaDataPrevFim) : '—',
@@ -1520,7 +1520,7 @@
       // Continua FORA de .chat-header-detalhes (bloco recolhível): mesmo
       // com o cabeçalho recolhido, essa linha precisa continuar visível —
       // é a informação mínima para identificar o chamado sem expandir.
-      const situacaoLabel = labelSituacaoRetorno(c.situacaoRetorno);
+      const situacaoLabel = labelSituacaoRetorno(c.aguardandoConsolidado || c.situacaoRetorno);
       const linha = [];
       linha.push(`<span class="chat-header-status-main">⏳ ${escapeHtml(situacaoLabel || 'Aguardando retorno não informado')}</span>`);
       if (c.slaPrazo) linha.push(badgeSla(c.slaPrazo));
@@ -1571,7 +1571,7 @@
         {
           icone: '⏱', titulo: 'SLA & prazos',
           campos: [
-            ['Aguardando retorno', labelSituacaoRetorno(c.situacaoRetorno) || 'Não informado'],
+            ['Aguardando retorno', labelSituacaoRetorno(c.aguardandoConsolidado || c.situacaoRetorno) || 'Não informado'],
             ['SLA', c.slaPrazo || c.slaStatus],
             ['Previsão de conclusão', c.slaDataPrevFim ? formatarDataHora(c.slaDataPrevFim) : null],
             ['SLA em horas', c.slaHoras],
@@ -1668,7 +1668,7 @@
 
     function renderizarDestaqueAguardando(c) {
       const dias = diasEntre(c.ultimoPosicionamentoEm || c.dataAbertura);
-      const label = labelSituacaoRetorno(c.situacaoRetorno) || 'Sem posicionamento registrado';
+      const label = labelSituacaoRetorno(c.aguardandoConsolidado || c.situacaoRetorno) || 'Sem posicionamento registrado';
       const diasTexto = dias === null ? '—' : dias === 0 ? 'Hoje' : dias === 1 ? '1 dia' : `${dias} dias`;
       return `
         <div class="destaque-aguardando">

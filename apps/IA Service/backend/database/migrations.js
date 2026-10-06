@@ -963,6 +963,13 @@ const MIGRATIONS = [
       ALTER TABLE importacoes ADD COLUMN total_registros_esperado INTEGER DEFAULT NULL;
     `,
   },
+  {
+    version: 39,
+    descricao: 'Campo AGUARDANDO consolidado do chamado (view ITSM_CHAMADOS), em chamados.aguardando_consolidado — achado real 2026-10: a UI mostrava "Aguardando retorno nao informado" (chamado #036475) usando posicionamentos.situacao_retorno (por POSICIONAMENTO individual, pode ficar vazio), enquanto ITSM_CHAMADOS.AGUARDANDO (campo do CHAMADO como um todo, atualizado a cada tramite) ja tinha "RETORNO - FORNECEDOR". Decisao explicita do usuario: essa view e a fonte consolidada oficial, deve substituir o uso de situacao_retorno onde quer que apareca.',
+    sql: `
+      ALTER TABLE chamados ADD COLUMN aguardando_consolidado TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;
