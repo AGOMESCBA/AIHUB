@@ -37,15 +37,17 @@
        mais de uma empresa — abre dropdown de troca sem pedir novo OTP
        (2026-09, mesma mecânica do IA Command). */
     .empresa-badge {
-      flex:none; display:flex; align-items:center; gap:6px;
+      flex:none; max-width:60%; position:relative;
+    }
+    .empresa-badge-toggle {
+      display:flex; align-items:center; gap:6px; width:100%;
       border:1px solid var(--wa-border); border-radius:8px;
       background:rgba(0,217,163,.1); color:var(--wa-accent);
       font-size:11.5px; font-weight:700; padding:5px 10px;
-      max-width:60%; position:relative;
       font-family:inherit; cursor:default;
     }
-    .empresa-badge.trocavel { cursor:pointer; }
-    .empresa-badge.trocavel:hover { background:rgba(0,217,163,.18); }
+    .empresa-badge.trocavel .empresa-badge-toggle { cursor:pointer; }
+    .empresa-badge.trocavel .empresa-badge-toggle:hover { background:rgba(0,217,163,.18); }
     .empresa-badge .icon { width:13px; height:13px; flex:none; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
     .empresa-badge .label { min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .empresa-badge .caret { width:10px; height:10px; flex:none; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; display:none; }
@@ -75,10 +77,10 @@
     .fila-filtros { display:flex; gap:4px; flex-wrap:wrap; }
     .fila-filtro { border:1px solid var(--wa-border); background:rgba(255,255,255,.03); padding:4px 9px; border-radius:99px; font-size:11px; font-weight:700; color:var(--wa-text-secondary); cursor:pointer; }
     .fila-filtro.ativo { background:rgba(0,217,163,.14); border-color:var(--wa-accent); color:var(--wa-accent); }
-    .fila-refresh-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:10px; }
-    .fila-refresh-row select { font-size:11px; border:1px solid var(--wa-border); border-radius:6px; padding:4px 6px; background:var(--wa-panel); color:var(--wa-text); }
-    .fila-contador { font-size:11px; color:var(--wa-text-tertiary); }
-    .fila-proxima-atualizacao { font-size:10.5px; color:var(--wa-text-tertiary); font-variant-numeric:tabular-nums; }
+    .fila-refresh-row { display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap; }
+    .fila-refresh-row select { flex:1; min-width:0; font-size:11px; border:1px solid var(--wa-border); border-radius:6px; padding:4px 6px; background:var(--wa-panel); color:var(--wa-text); }
+    .fila-contador { font-size:11px; color:var(--wa-text-tertiary); white-space:nowrap; }
+    .fila-proxima-atualizacao { font-size:10.5px; color:var(--wa-text-tertiary); font-variant-numeric:tabular-nums; white-space:nowrap; }
     .fila-preferencia-ia { display:none; align-items:center; justify-content:space-between; gap:10px; margin-top:9px; padding:8px 9px; border:1px solid var(--wa-border); border-radius:8px; background:rgba(255,255,255,.03); }
     .fila-preferencia-ia.visivel { display:flex; }
     .fila-preferencia-ia-texto { min-width:0; }
@@ -92,10 +94,9 @@
     .switch-ia input:checked + span::before { transform:translateX(16px); background:var(--wa-accent); }
 
     .fila-atualizar-btn {
-      width:100%; margin-top:8px; padding:7px 10px; border-radius:8px;
+      flex:none; width:26px; height:26px; padding:0; border-radius:7px;
       border:1px solid var(--wa-border); background:rgba(0,217,163,.08); color:var(--wa-accent);
-      font-size:12px; font-weight:700; cursor:pointer;
-      display:flex; align-items:center; justify-content:center; gap:6px;
+      cursor:pointer; display:flex; align-items:center; justify-content:center;
       transition:background .15s ease;
     }
     .fila-atualizar-btn:hover { background:rgba(0,217,163,.16); }
@@ -469,13 +470,15 @@
           <div class="fila-head">
             <div class="fila-head-top">
               <div class="fila-titulo">Fila de Chamados</div>
-              <button type="button" class="empresa-badge" id="empresa-badge" style="display:none" onclick="toggleEmpresaDropdown()">
-                <svg class="icon" id="empresa-badge-icon-fallback" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>
-                <img class="icon" id="empresa-badge-logo" alt="" style="display:none;border-radius:3px;object-fit:cover">
-                <span class="label" id="empresa-badge-label"></span>
-                <svg class="caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+              <div class="empresa-badge" id="empresa-badge" style="display:none">
+                <button type="button" class="empresa-badge-toggle" onclick="toggleEmpresaDropdown()">
+                  <svg class="icon" id="empresa-badge-icon-fallback" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>
+                  <img class="icon" id="empresa-badge-logo" alt="" style="display:none;border-radius:3px;object-fit:cover">
+                  <span class="label" id="empresa-badge-label"></span>
+                  <svg class="caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
                 <div class="empresa-dropdown" id="empresa-dropdown"></div>
-              </button>
+              </div>
             </div>
             <div class="fila-tabs">
               <button class="fila-tab" id="tab-geral" onclick="setModoFila(false)"><span class="fila-tab-dot"></span>Fila geral</button>
@@ -486,10 +489,10 @@
               <button class="fila-filtro" id="filtro-atraso" onclick="setFiltroSla('em_atraso')">Em atraso</button>
               <button class="fila-filtro" id="filtro-dia" onclick="setFiltroSla('em_dia')">Em dia</button>
             </div>
-            <button class="fila-atualizar-btn" id="fila-atualizar-btn" type="button" onclick="atualizarFilaManual()">
-              <span class="fila-atualizar-icon">↻</span> Atualizar agora
-            </button>
             <div class="fila-refresh-row">
+              <button class="fila-atualizar-btn" id="fila-atualizar-btn" type="button" title="Atualizar agora" onclick="atualizarFilaManual()">
+                <span class="fila-atualizar-icon">↻</span>
+              </button>
               <span class="fila-contador" id="fila-contador">—</span>
               <span class="fila-proxima-atualizacao" id="fila-proxima-atualizacao"></span>
               <select id="autoRefreshSelect" onchange="salvarPreferenciaAutoRefresh()">
@@ -1892,20 +1895,35 @@
       document.getElementById('typing-row')?.remove();
     }
 
-    async function carregarMensagens() {
+    // atendimentoId é capturado pelo CHAMADOR no momento em que a espera
+    // começa (ver aguardarPreAnalise) — nunca lido de novo do global
+    // atendimentoAtualId aqui dentro. Achado real (2026-10): o polling de
+    // pré-análise de um chamado A continuava rodando em background depois
+    // do analista trocar para o chamado B; como a função antes sempre lia
+    // atendimentoAtualId (já apontando para B), cada iteração do polling de
+    // A acabava buscando e sobrescrevendo a tela com as mensagens de B, e a
+    // resposta de A nunca aparecia nem ao reabri-lo depois (o polling de A
+    // já tinha "gastado" suas tentativas lendo o atendimento errado).
+    async function carregarMensagens(atendimentoId = atendimentoAtualId) {
       const empresaId = empresaIdAtual();
-      if (!empresaId || !atendimentoAtualId) return false;
+      if (!empresaId || !atendimentoId) return false;
       try {
         const qs = qsEmpresa(empresaId);
         const sufixo = qs ? '?' + qs : '';
         const [mensagens, anexosDoAtendimento] = await Promise.all([
-          api(`/atendimentos/${atendimentoAtualId}/mensagens${sufixo}`),
-          api(`/atendimentos/${atendimentoAtualId}/anexos${sufixo}`),
+          api(`/atendimentos/${atendimentoId}/mensagens${sufixo}`),
+          api(`/atendimentos/${atendimentoId}/anexos${sufixo}`),
         ]);
-        anexosAtendimentoCache = anexosDoAtendimento || [];
-        renderizarResumoAnexos();
-        const chatBody = document.getElementById('chat-body');
-        chatBody.innerHTML = '';
+        // Se o analista já trocou de chamado enquanto esta chamada estava
+        // em voo, não sobrescreve a tela com dados de um atendimento que
+        // não é mais o visível — mas ainda devolve temRespostaIa real
+        // (calculado abaixo) para o polling de quem chamou saber se pode
+        // parar, mesmo sem mexer no DOM.
+        const aindaEhOAtual = atendimentoId === atendimentoAtualId;
+        anexosAtendimentoCache = aindaEhOAtual ? (anexosDoAtendimento || []) : anexosAtendimentoCache;
+        if (aindaEhOAtual) renderizarResumoAnexos();
+        const chatBody = aindaEhOAtual ? document.getElementById('chat-body') : null;
+        if (chatBody) chatBody.innerHTML = '';
         const anexosPorMensagem = {};
         for (const a of anexosDoAtendimento) {
           if (!a.mensagemId) continue;
@@ -1917,6 +1935,7 @@
           if (m.papel === 'system') continue;
           const direcao = m.papel === 'user' ? 'out' : 'in';
           if (m.papel === 'assistant') temRespostaIa = true;
+          if (!aindaEhOAtual) { if (direcao === 'out') perguntaAnterior = m.conteudo; continue; }
           const anexosDaMensagem = [
             ...(anexosPorMensagem[m.id] || []),
             ...anexosSoftExpertDaMensagem(m),
@@ -1948,11 +1967,20 @@
     // curto mostrando "Analisando…" até a resposta chegar ou estourar o
     // tempo máximo — mesmo indicador visual (showTyping/hideTyping) já
     // usado para mensagens manuais do composer.
-    async function aguardarPreAnalise({ maxTentativas = 20, intervaloMs = 1500 } = {}) {
+    //
+    // atendimentoId é capturado AQUI (não lido do global a cada iteração) —
+    // achado real 2026-10: se o analista trocasse de chamado durante a
+    // espera, o polling passava a consultar o NOVO atendimento (variável
+    // global já outra), nunca voltando a checar o original; ao reabri-lo
+    // depois, a resposta que já tinha chegado no servidor não aparecia
+    // porque o polling daquele chamado já tinha esgotado as tentativas
+    // lendo o atendimento errado.
+    async function aguardarPreAnalise({ maxTentativas = 20, intervaloMs = 1500, atendimentoId = atendimentoAtualId } = {}) {
       showTyping('Analista IA Service está analisando o chamado…');
       for (let tentativa = 0; tentativa < maxTentativas; tentativa++) {
-        const temResposta = await carregarMensagens();
-        if (temResposta) { hideTyping(); return; }
+        if (atendimentoId !== atendimentoAtualId) { hideTyping(); return; } // analista já saiu deste chamado — para de ocupar o indicador "Analisando…" de quem está vendo agora
+        const temResposta = await carregarMensagens(atendimentoId);
+        if (temResposta && atendimentoId === atendimentoAtualId) { hideTyping(); return; }
         await new Promise(r => setTimeout(r, intervaloMs));
       }
       hideTyping();
