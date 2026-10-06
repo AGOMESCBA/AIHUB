@@ -343,12 +343,18 @@
     if (!emAndamento) return '';
     const total = Number(i.totalRegistrosEsperado) || 0;
     const lidos = Number(i.registrosLidos) || 0;
+    const totalPos = Number(i.totalPosicionamentosEsperado) || 0;
+    const lidosPos = Number(i.posicionamentosLidos) || 0;
+    const linhaPosicionamentos = totalPos > 0
+      ? `<div class="progresso-barra-legenda"><span>${lidosPos} de ${totalPos} posicionamentos</span></div>`
+      : `<div class="progresso-barra-legenda"><span>${lidosPos} posicionamentos lidos (total ainda não conhecido)</span></div>`;
     if (total > 0) {
       const pct = Math.min(100, Math.round((lidos / total) * 100));
       return `
         <div class="progresso-barra-wrap">
           <div class="progresso-barra-trilho"><div class="progresso-barra-fill" style="width:${pct}%"></div></div>
           <div class="progresso-barra-legenda"><span>${lidos} de ${total} chamados (${pct}%)</span><span>${escapeHtml(formatarDuracao(i.inicioEm || i.criadoEm, null))}</span></div>
+          ${linhaPosicionamentos}
         </div>
       `;
     }
@@ -356,6 +362,7 @@
       <div class="progresso-barra-wrap">
         <div class="progresso-barra-trilho"><div class="progresso-barra-fill indeterminado"></div></div>
         <div class="progresso-barra-legenda"><span>${lidos} chamados lidos (total ainda não conhecido)</span><span>${escapeHtml(formatarDuracao(i.inicioEm || i.criadoEm, null))}</span></div>
+        ${linhaPosicionamentos}
       </div>
     `;
   }

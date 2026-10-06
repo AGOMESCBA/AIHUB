@@ -228,6 +228,30 @@ async function contarChamadosPeriodo(empresaId, fonte, { inicio, fim }) {
 }
 
 /**
+ * COUNT prévio de posicionamentos do período — mesma lógica de
+ * listarPosicionamentosDoLote (posicionamento pertence ao CHAMADO, não à
+ * própria data do posicionamento; ver comentário de listarPosicionamentosDoChamado
+ * acima), então o filtro é "CHAMADO IN (chamados do período)", não uma
+ * condição de data direta em DYNITSMGRIDREGISTR.
+ */
+async function contarPosicionamentosPeriodo(empresaId, fonte, { inicio, fim }) {
+  const sql = `
+    SELECT COUNT(*) AS total
+    FROM DYNITSMGRIDREGISTR G
+    WHERE G.CHAMADO IN (
+      SELECT D.IDPROCESS
+      FROM DYNITSM D
+      ${JOIN_WFPROCESS}
+      WHERE D.DT >= CONVERT(datetime, @inicio, 112) AND D.DT < CONVERT(datetime, @fim, 112)
+    )
+  `;
+  const rows = await agenteLocalService.executarSelectNaFonte(empresaId, fonte.id, {
+    sql, params: { inicio, fim }, limit: 1,
+  });
+  return Number(rows?.[0]?.total || 0);
+}
+
+/**
  * Lista TODOS os posicionamentos de um chamado (via IDPROCESS), sem filtrar
  * por data do posicionamento — seção 46 do prompt: um posicionamento de
  * janeiro/2027 pertence a um chamado aberto em dezembro/2026 selecionado, e
@@ -348,6 +372,7 @@ module.exports = {
   COLUNAS_POSICIONAMENTO,
   listarChamadosPeriodo,
   contarChamadosPeriodo,
+  contarPosicionamentosPeriodo,
   listarPosicionamentosDoChamado,
   listarPosicionamentosDoLote,
   listarAnexosDoChamado,

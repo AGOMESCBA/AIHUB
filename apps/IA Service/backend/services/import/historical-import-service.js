@@ -426,6 +426,12 @@ async function executarFullLoad(empresaId, fonteId, { periodoInicio, periodoFim,
       importacao = importacaoRepo.atualizarImportacao(empresaId, importacao.id, { totalRegistrosEsperado: total });
     } catch (_) { /* melhor esforço — segue sem total conhecido */ }
   }
+  if (importacao.totalPosicionamentosEsperado == null && typeof adapter.contarPosicionamentosPeriodo === 'function') {
+    try {
+      const total = await adapter.contarPosicionamentosPeriodo(empresaId, fonte, { inicio: periodoInicio, fim: periodoFim });
+      importacao = importacaoRepo.atualizarImportacao(empresaId, importacao.id, { totalPosicionamentosEsperado: total });
+    } catch (_) { /* melhor esforço — segue sem total conhecido */ }
+  }
 
   const offsetInicial = importacao.checkpoint?.offset || 0;
   importacao = importacaoRepo.atualizarImportacao(empresaId, importacao.id, {

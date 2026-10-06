@@ -970,6 +970,13 @@ const MIGRATIONS = [
       ALTER TABLE chamados ADD COLUMN aguardando_consolidado TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 40,
+    descricao: 'Total esperado de posicionamentos da importacao (COUNT previo contra a origem), espelhando total_registros_esperado (migration 38) que ja existia so para chamados — pedido do usuario 2026-10: tela mostrava "lidos: N" de posicionamentos crescendo sem total conhecido, so chamados tinham o "X de Y".',
+    sql: `
+      ALTER TABLE importacoes ADD COLUMN total_posicionamentos_esperado INTEGER DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

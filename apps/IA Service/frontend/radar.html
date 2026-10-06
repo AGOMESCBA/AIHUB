@@ -62,6 +62,10 @@
       cursor:pointer;
     }
     .empresa-dropdown button:hover { background:var(--wa-sidebar-hover); color:var(--wa-accent); }
+    .empresa-dropdown-separador { border-top:1px solid var(--wa-border); margin:4px 0; }
+    .empresa-dropdown-sessao-atual { padding:8px 12px 4px; font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--wa-text-tertiary); }
+    .empresa-dropdown button.sair { display:flex; align-items:center; justify-content:center; color:#f87171; }
+    .empresa-dropdown button.sair:hover { background:rgba(248,113,113,.12); color:#f87171; }
     .fila-tabs { display:flex; gap:10px; padding:0 2px; margin-bottom:10px; border-bottom:1px solid var(--wa-border); background:transparent; }
     .fila-tab { flex:none; border:none; border-bottom:3px solid transparent; background:transparent; padding:9px 8px 8px; border-radius:0; font-size:12.5px; font-weight:700; color:var(--wa-text-secondary); cursor:pointer; text-align:center; display:flex; align-items:center; gap:6px; }
     .fila-tab:hover { color:var(--wa-text); border-color:var(--wa-border); }
@@ -2237,9 +2241,14 @@
 
     // Badge de empresa (tenant). Em modo logado (dentro do Hub) continua só
     // informativo — a empresa é a do Hub, sem troca aqui. Em modo externo
-    // (login por telefone) vira clicável quando /whoami retorna
-    // outrasEmpresas não-vazio (telefone com consultor em mais de uma
-    // empresa) — 2026-09, mesma mecânica de troca do IA Command.
+    // (login por telefone) SEMPRE vira clicável (2026-10: antes só abria com
+    // outrasEmpresas não-vazio, deixando o badge inerte para a maioria dos
+    // consultores que atendem uma empresa só — sem nenhum jeito de sair ou
+    // nem conferir ativamente "estou na empresa certa?" quando acessado pelo
+    // link genérico /radar-externo, sem apelido na URL. O apelido é só
+    // cosmético — empresa real sempre vem do token, nunca da URL — então o
+    // dropdown agora sempre mostra a empresa ativa e tem "Sair", reduzindo o
+    // risco de confusão entre clientes ao reusar o mesmo navegador).
     async function preencherBadgeEmpresa() {
       const badge = document.getElementById('empresa-badge');
       const label = document.getElementById('empresa-badge-label');
@@ -2252,10 +2261,8 @@
           const info = await api('/whoami');
           nome = info.empresaNome;
           logoUrl = info.empresaLogoUrl || null;
-          if (Array.isArray(info.outrasEmpresas) && info.outrasEmpresas.length > 0) {
-            badge.classList.add('trocavel');
-            montarEmpresaDropdown(info.outrasEmpresas);
-          }
+          badge.classList.add('trocavel');
+          montarEmpresaDropdown(Array.isArray(info.outrasEmpresas) ? info.outrasEmpresas : [], nome);
           preencherNomeConsultorNaAba(info.consultorNome);
         } else {
           nome = window._iahubEmpresa?.nome || window._iahubEmpresa?.razao_social || null;
@@ -2288,9 +2295,20 @@
       if (span && nomeConsultor) span.textContent = ' — ' + nomeConsultor;
     }
 
-    function montarEmpresaDropdown(outrasEmpresas) {
+    function montarEmpresaDropdown(outrasEmpresas, nomeEmpresaAtual) {
       const dropdown = document.getElementById('empresa-dropdown');
       dropdown.innerHTML = '';
+
+      const sessaoAtual = document.createElement('div');
+      sessaoAtual.className = 'empresa-dropdown-sessao-atual';
+      sessaoAtual.textContent = 'Você está em';
+      dropdown.appendChild(sessaoAtual);
+
+      const itemAtual = document.createElement('div');
+      itemAtual.style.cssText = 'padding:2px 12px 8px;font-size:13px;font-weight:800;color:var(--wa-text);';
+      itemAtual.textContent = nomeEmpresaAtual || '—';
+      dropdown.appendChild(itemAtual);
+
       outrasEmpresas.forEach(emp => {
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -2298,12 +2316,32 @@
         btn.onclick = (e) => { e.stopPropagation(); trocarEmpresaExterna(emp.id); };
         dropdown.appendChild(btn);
       });
+
+      const separador = document.createElement('div');
+      separador.className = 'empresa-dropdown-separador';
+      dropdown.appendChild(separador);
+
+      const btnSair = document.createElement('button');
+      btnSair.type = 'button';
+      btnSair.className = 'sair';
+      btnSair.title = 'Sair';
+      btnSair.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
+      btnSair.onclick = (e) => { e.stopPropagation(); sairSessaoExterna(); };
+      dropdown.appendChild(btnSair);
+    }
+
+    // Limpa a sessão externa salva localmente e volta para a tela de login
+    // por telefone — pedido do usuário (2026-10): não havia nenhuma forma de
+    // sair do radar externo além de fechar a aba, o que mantinha o token
+    // salvo no navegador indefinidamente (até expirar em 8h sozinho).
+    function sairSessaoExterna() {
+      const apelido = localStorage.getItem(LOGIN_APELIDO_KEY);
+      localStorage.removeItem(TOKEN_EXTERNO_KEY);
+      location.href = apelido ? `/entrar-servico/${encodeURIComponent(apelido)}` : '/entrar-servico';
     }
 
     function toggleEmpresaDropdown() {
       if (!modoExterno) return;
-      const badge = document.getElementById('empresa-badge');
-      if (!badge.classList.contains('trocavel')) return;
       document.getElementById('empresa-dropdown').classList.toggle('open');
     }
     document.addEventListener('click', (e) => {
