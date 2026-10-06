@@ -157,10 +157,16 @@ function _mapearChamado(row) {
  * identificado" (inconsistência 'posicionamento_sem_tecnico' registrada).
  */
 function _mapearPosicionamento(row) {
+  // HORAATUAL (Unix timestamp em segundos) é a fonte real de data+hora —
+  // DATAATUAL sempre vem com hora zerada ('00:00:00'), só serve pra
+  // confirmar o DIA. Fallback pra DATAATUAL preserva o comportamento antigo
+  // (hora 00:00:00) nos poucos registros em que HORAATUAL não vier
+  // preenchido, em vez de perder a ordenação relativa por completo.
+  const dataHoraReal = normalizadores.epochSegundosParaIso(row.HORAATUAL) ?? normalizadores.dataParaIso(row.DATAATUAL);
   return {
     oidOrigem: normalizadores.textoOuNull(row.OID),
     dataPosicionamentoBruta: row.DATAATUAL,
-    dataPosicionamento: normalizadores.dataParaIso(row.DATAATUAL),
+    dataPosicionamento: dataHoraReal,
     tecnicoIdOrigem: normalizadores.textoOuNull(row.CDUSERANA),
     tecnicoNomeOrigem: normalizadores.textoOuNull(row.ANALISTAJ2A),
     situacao: normalizadores.textoOuNull(row.SITUACAOCHAMADO),

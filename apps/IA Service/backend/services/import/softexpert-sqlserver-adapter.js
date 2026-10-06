@@ -133,8 +133,21 @@ const COLUNAS_ITSM_CHAMADOS = [
   'ITC.DIAS_DUR_DIST', 'ITC.DIAS_DUR_CLI', 'ITC.DIAS_DUR_TICLI',
 ];
 
+// HORAATUAL — achado real (2026-10, pedido do usuário): DATAATUAL é um
+// datetime do SQL Server, mas SEMPRE com hora zerada ('2022-11-08
+// 00:00:00'); a hora real do posicionamento fica em HORAATUAL, um Unix
+// timestamp em SEGUNDOS (confirmado contra dados reais: HORAATUAL=1667908560
+// → 2022-11-08T11:56:00Z, mesma data de DATAATUAL='2022-11-08'). Por isso o
+// chat ordenava as mensagens só por dia, sem respeitar a ordem real dentro
+// do mesmo dia. ORDER BY continua usando DATAATUAL como critério primário
+// (mantém o comportamento já validado em produção), HORAATUAL desempata
+// dentro do mesmo dia (não inverte para HORAATUAL puro porque registros
+// legados podem ter o campo zerado/nulo na origem — nunca deveria acontecer,
+// mas sem garantia contratual da origem) e OID (chave primária da tabela,
+// confirmado pelo usuário) desempata como critério final determinístico
+// quando duas linhas caem no mesmo segundo exato.
 const COLUNAS_POSICIONAMENTO = [
-  'OID', 'CHAMADO', 'DATAATUAL', 'EMPRESA', 'COLABCLIENTE',
+  'OID', 'CHAMADO', 'DATAATUAL', 'HORAATUAL', 'EMPRESA', 'COLABCLIENTE',
   'SITUACAOCHAMADO', 'ANALISTAJ2A', 'CDUSERANA',
   'TIPOPOSICIONAME', 'MOTIVOAPONTAMEN', 'ASSUNTO', 'DESCRICAO', 'RESULTADO',
   'HORAINI', 'HORAFIM', 'HORAINT', 'HORATOTALNUM', 'AGUARDANRETORNO',
@@ -262,7 +275,7 @@ async function listarPosicionamentosDoChamado(empresaId, fonte, idProcess) {
     SELECT ${COLUNAS_POSICIONAMENTO.join(', ')}
     FROM DYNITSMGRIDREGISTR
     WHERE CHAMADO = @idProcess
-    ORDER BY DATAATUAL
+    ORDER BY DATAATUAL, HORAATUAL, OID
   `;
   return agenteLocalService.executarSelectNaFonte(empresaId, fonte.id, {
     sql, params: { idProcess }, limit: 5000,
@@ -297,7 +310,7 @@ async function listarPosicionamentosDoLote(empresaId, fonte, idProcessList) {
     SELECT ${COLUNAS_POSICIONAMENTO.join(', ')}
     FROM DYNITSMGRIDREGISTR
     WHERE CHAMADO IN (${valoresEscapados.join(', ')})
-    ORDER BY CHAMADO, DATAATUAL
+    ORDER BY CHAMADO, DATAATUAL, HORAATUAL, OID
   `;
   const rows = await agenteLocalService.executarSelectNaFonte(empresaId, fonte.id, {
     sql, params: {}, limit: 50000,

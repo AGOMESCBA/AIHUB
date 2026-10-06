@@ -63,11 +63,30 @@ function dataParaIso(valorBruto) {
   return null; // não reconhecido — quem chamar decide se isso é uma inconsistência a registrar
 }
 
+/**
+ * HORAATUAL (DYNITSMGRIDREGISTR) — Unix timestamp em SEGUNDOS, confirmado
+ * contra dados reais (2026-10): HORAATUAL=1667908560 → 2022-11-08T11:56:00Z,
+ * mesma data do DATAATUAL='2022-11-08 00:00:00' (correspondente, mas sempre
+ * com hora zerada). Pedido do usuário: o chat ordenava mensagens só por dia
+ * porque DATAATUAL nunca carrega a hora real — HORAATUAL é a fonte correta
+ * de data+hora do posicionamento. epochSegundosParaIso(0) e valores não
+ * numéricos retornam null (0 nunca é um timestamp real do SoftExpert, trata
+ * como "não informado" em vez de 1970-01-01).
+ */
+function epochSegundosParaIso(valorBruto) {
+  const segundos = Number(valorBruto);
+  if (!Number.isFinite(segundos) || segundos <= 0) return null;
+  const d = new Date(segundos * 1000);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 module.exports = {
   normalizarCnpj,
   cnpjPareceValido,
   pareceConterEmail,
   textoOuNull,
+  epochSegundosParaIso,
   numeroOuNull,
   dataParaIso,
 };

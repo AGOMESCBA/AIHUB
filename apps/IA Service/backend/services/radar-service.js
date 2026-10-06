@@ -150,7 +150,7 @@ function _formatarConteudoBruto(chamado, posicionamentos) {
   ].filter(l => l !== null);
 
   for (const p of posicionamentos) {
-    const data = p.dataPosicionamento ? p.dataPosicionamento.slice(0, 10) : '(sem data)';
+    const data = p.dataPosicionamento ? _formatarDataHoraPosicionamento(p.dataPosicionamento) : '(sem data)';
     const autor = p.tecnicoNomeOrigem || 'Analista não identificado';
     const texto = p.descricao || p.assunto || '(sem descrição)';
     linhas.push(`- [${data}] ${autor}: ${texto}`);
@@ -187,6 +187,22 @@ function _autorPosicionamento(p) {
   return p.tecnicoNomeOrigem || 'Autor não identificado';
 }
 
+// Pedido explícito do usuário (2026-10): mostrar data E hora juntas no texto
+// da mensagem ("01/10/2026 - 14:32:00"), não só a data — antes só aparecia
+// o dia (dataPosicionamentoIso.slice(0, 10)) porque a hora real nunca tinha
+// sido capturada da origem (ver HORAATUAL em historical-import-service.js/
+// softexpert-sqlserver-adapter.js). dataPosicionamentoIso já vem em UTC
+// (epochSegundosParaIso) — toLocaleString teria que escolher um fuso, então
+// extrai os componentes do próprio ISO diretamente, sem conversão de fuso
+// (mesmo horário "de parede" que veio do SoftExpert).
+function _formatarDataHoraPosicionamento(dataPosicionamentoIso) {
+  if (!dataPosicionamentoIso) return 'sem data';
+  const m = String(dataPosicionamentoIso).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+  if (!m) return dataPosicionamentoIso.slice(0, 10);
+  const [, ano, mes, dia, hh, mm, ss] = m;
+  return `${dia}/${mes}/${ano} - ${hh}:${mm}:${ss}`;
+}
+
 function _papelPosicionamento(chamado, p) {
   if (p.tecnicoId) return 'user';
   if (p.usuarioClienteId) return 'customer';
@@ -220,7 +236,7 @@ function _gravarHistoricoComoMensagens(empresaId, atendimentoId, chamado, posici
   }
 
   for (const p of posicionamentos) {
-    const data = p.dataPosicionamento ? p.dataPosicionamento.slice(0, 10) : 'sem data';
+    const data = _formatarDataHoraPosicionamento(p.dataPosicionamento);
     const autor = _autorPosicionamento(p);
     const papel = _papelPosicionamento(chamado, p);
     mensagemRepo.salvarMensagem(empresaId, atendimentoId, {

@@ -384,14 +384,18 @@
                     </select>
                   </div>
                   <div class="form-group">
-                    <label class="form-label" id="label-hora">Horario</label>
-                    <div class="quick-row" style="gap:8px">
-                      <input id="f-hora" type="time" class="form-control" value="08:00" style="flex:1;min-width:120px" onchange="atualizarResumo()">
-                      <button class="btn btn-ghost d-none" id="btn-add-horario" type="button" onclick="adicionarHorario()">+ Adicionar horario</button>
-                    </div>
-                    <div class="time-chips d-none" id="time-chips"></div>
-                    <div class="form-help d-none" id="hint-horarios">O job roda em cada horario listado, nos dias configurados abaixo.</div>
+                    <label class="form-label">Horario</label>
+                    <input id="f-hora" type="time" class="form-control" value="08:00" onchange="atualizarResumo()">
                   </div>
+                </div>
+                <div class="form-group d-none" id="grp-add-horario">
+                  <label class="form-label">Outros horarios (opcional)</label>
+                  <div class="quick-row" style="gap:8px">
+                    <input id="f-hora-extra" type="time" class="form-control" style="flex:1;min-width:120px">
+                    <button class="btn btn-ghost" id="btn-add-horario" type="button" onclick="adicionarHorario()">+ Adicionar horario</button>
+                  </div>
+                  <div class="time-chips d-none" id="time-chips"></div>
+                  <div class="form-help d-none" id="hint-horarios">O job roda no horario acima e em cada horario adicionado aqui, nos dias configurados.</div>
                 </div>
                 <div class="form-row" id="row-primeira">
                   <div class="form-group">
@@ -1224,6 +1228,7 @@ SELECT * FROM dados;</code></div>
     document.getElementById('f-ativo').value = '1';
     document.getElementById('f-schedule-tipo').value = 'manual';
     document.getElementById('f-hora').value = '08:00';
+    document.getElementById('f-hora-extra').value = '';
     document.getElementById('f-data').value = hojeIsoDate();
     document.getElementById('f-timezone').value = 'America/Manaus';
     document.getElementById('f-dia-mes').value = '1';
@@ -1267,6 +1272,7 @@ SELECT * FROM dados;</code></div>
     document.querySelectorAll('input[name="dias"]').forEach(c => c.checked = dias.has(c.value));
     const horaAtual = document.getElementById('f-hora').value;
     horariosExtras = [...new Set(sj.times || [])].filter(h => h && h !== horaAtual).sort();
+    document.getElementById('f-hora-extra').value = '';
     trocarAbaJob('pergunta');
     aplicarAlturaSqlFixo();
     onAgendaChange();
@@ -1441,8 +1447,7 @@ SELECT * FROM dados;</code></div>
     document.getElementById('grp-weekly').classList.toggle('d-none', tipo !== 'weekly');
     document.getElementById('grp-monthly').classList.toggle('d-none', tipo !== 'monthly');
     document.getElementById('row-primeira').classList.toggle('d-none', tipo === 'manual');
-    document.getElementById('btn-add-horario').classList.toggle('d-none', !permiteMultiplos);
-    document.getElementById('label-hora').textContent = permiteMultiplos ? 'Primeiro horario' : 'Horario';
+    document.getElementById('grp-add-horario').classList.toggle('d-none', !permiteMultiplos);
     if (!permiteMultiplos) horariosExtras = [];
     renderHorarios();
     atualizarResumo();
@@ -1459,14 +1464,17 @@ SELECT * FROM dados;</code></div>
   }
 
   function adicionarHorario() {
-    const valor = document.getElementById('f-hora').value;
+    const campoExtra = document.getElementById('f-hora-extra');
+    const valor = campoExtra.value;
     if (!valor) return;
-    const primeiro = document.getElementById('f-hora').value;
-    if (valor === primeiro || horariosExtras.includes(valor)) return;
-    horariosExtras.push(valor);
-    horariosExtras.sort();
-    renderHorarios();
-    atualizarResumo();
+    const principal = document.getElementById('f-hora').value;
+    if (valor !== principal && !horariosExtras.includes(valor)) {
+      horariosExtras.push(valor);
+      horariosExtras.sort();
+      renderHorarios();
+      atualizarResumo();
+    }
+    campoExtra.value = '';
   }
 
   function removerHorario(index) {
