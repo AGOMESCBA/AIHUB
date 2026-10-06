@@ -40,17 +40,17 @@
       flex:none; max-width:60%; position:relative;
     }
     .empresa-badge-toggle {
-      display:flex; align-items:center; gap:6px; width:100%;
+      display:flex; align-items:center; gap:8px; width:100%;
       border:1px solid var(--wa-border); border-radius:8px;
       background:rgba(0,217,163,.1); color:var(--wa-accent);
-      font-size:11.5px; font-weight:700; padding:5px 10px;
+      font-size:15px; font-weight:700; padding:7px 12px;
       font-family:inherit; cursor:default;
     }
     .empresa-badge.trocavel .empresa-badge-toggle { cursor:pointer; }
     .empresa-badge.trocavel .empresa-badge-toggle:hover { background:rgba(0,217,163,.18); }
-    .empresa-badge .icon { width:13px; height:13px; flex:none; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+    .empresa-badge .icon { width:20px; height:20px; flex:none; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
     .empresa-badge .label { min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .empresa-badge .caret { width:10px; height:10px; flex:none; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; display:none; }
+    .empresa-badge .caret { width:12px; height:12px; flex:none; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; display:none; }
     .empresa-badge.trocavel .caret { display:block; }
     .empresa-dropdown {
       display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:20;
@@ -538,11 +538,11 @@
             <button class="view-tab" id="tab-informacoes" type="button" role="tab" aria-selected="false" onclick="trocarAbaChat('informacoes')">
               <span class="badge-dot"></span> Detalhes do Chamado
             </button>
-            <button class="view-tab" id="tab-banco-conhecimento" type="button" role="tab" aria-selected="false" onclick="trocarAbaChat('banco-conhecimento')">
-              <span class="badge-dot"></span> Banco de Conhecimento
-            </button>
             <button class="view-tab" id="tab-risco" type="button" role="tab" aria-selected="false" onclick="trocarAbaChat('risco')">
               <span class="badge-dot"></span> Risco SLA
+            </button>
+            <button class="view-tab" id="tab-banco-conhecimento" type="button" role="tab" aria-selected="false" onclick="trocarAbaChat('banco-conhecimento')">
+              <span class="badge-dot"></span> Banco de Conhecimento
             </button>
           </div>
 

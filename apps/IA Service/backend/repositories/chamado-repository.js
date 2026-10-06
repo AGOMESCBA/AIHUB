@@ -215,6 +215,15 @@ const COLUNA_POR_CAMPO_POS = {
   resultado: 'resultado', horaInicio: 'hora_inicio', horaFim: 'hora_fim', horaIntervalo: 'hora_intervalo',
   totalHoras: 'total_horas', aguardandoRetorno: 'aguardando_retorno', situacaoRetorno: 'situacao_retorno',
 };
+// dataPosicionamento é setado à parte no UPDATE (fora do loop de CAMPOS_POSICIONAMENTO,
+// já que tecnicoId/tecnicoNomeOrigem/usuarioClienteId também são) — mas PRECISA entrar
+// no hash de comparação, senão uma correção só na hora (ex.: HORAATUAL passando a ser
+// coletado da origem) nunca é persistida: os outros 12 campos continuam idênticos, o
+// hash bate com o anterior, e o UPDATE inteiro (incluindo data_posicionamento) é pulado
+// por resultado='sem_alteracao'. Bug real encontrado em produção (2026-10): reimportar
+// um chamado já existente não atualizava data_posicionamento mesmo após o fix de
+// HORAATUAL em softexpert-sqlserver-adapter.js.
+const CAMPOS_HASH_POSICIONAMENTO = [...CAMPOS_POSICIONAMENTO, 'dataPosicionamento'];
 
 function upsertPosicionamento(empresaId, dados) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
@@ -224,7 +233,7 @@ function upsertPosicionamento(empresaId, dados) {
 
   const db = getDB();
   const agora = new Date().toISOString();
-  const hashAtual = hashConteudo(Object.fromEntries(CAMPOS_POSICIONAMENTO.map(c => [c, dados[c] ?? null])));
+  const hashAtual = hashConteudo(Object.fromEntries(CAMPOS_HASH_POSICIONAMENTO.map(c => [c, dados[c] ?? null])));
 
   const existente = db.prepare(`
     SELECT * FROM posicionamentos WHERE empresa_id = ? AND fonte_id = ? AND oid_origem = ?
