@@ -1983,7 +1983,27 @@
         if (temResposta && atendimentoId === atendimentoAtualId) { hideTyping(); return; }
         await new Promise(r => setTimeout(r, intervaloMs));
       }
+      // Estourou a janela "rápida" (30s) sem resposta — achado real 2026-10:
+      // chamados com mais contexto (anexos, histórico extenso) podem levar
+      // mais que isso, e o usuário só via a resposta depois de sair e voltar
+      // manualmente ao chamado (forçando um novo carregarMensagens do zero).
+      // Em vez de desistir, continua verificando em retaguarda, bem mais
+      // espaçado, por até mais alguns minutos — se o usuário ainda estiver
+      // neste mesmo chamado quando a resposta chegar, ela aparece sozinha,
+      // sem precisar de ação nenhuma; se ele já tiver saído, a checagem
+      // simplesmente para (atendimentoId !== atendimentoAtualId) sem
+      // incomodar a tela que ele está vendo agora.
       hideTyping();
+      _continuarAguardandoEmRetaguarda(atendimentoId);
+    }
+
+    async function _continuarAguardandoEmRetaguarda(atendimentoId, { maxTentativas = 24, intervaloMs = 10000 } = {}) {
+      for (let tentativa = 0; tentativa < maxTentativas; tentativa++) {
+        await new Promise(r => setTimeout(r, intervaloMs));
+        if (atendimentoId !== atendimentoAtualId) return; // usuário já saiu — não mexe na tela de outro chamado
+        const temResposta = await carregarMensagens(atendimentoId);
+        if (temResposta) return;
+      }
     }
 
     document.getElementById('anexo-input').addEventListener('change', async (e) => {
