@@ -1992,22 +1992,29 @@
       // mais que isso, e o usuário só via a resposta depois de sair e voltar
       // manualmente ao chamado (forçando um novo carregarMensagens do zero).
       // Em vez de desistir, continua verificando em retaguarda, bem mais
-      // espaçado, por até mais alguns minutos — se o usuário ainda estiver
+      // espaçado, por até vários minutos — se o usuário ainda estiver
       // neste mesmo chamado quando a resposta chegar, ela aparece sozinha,
       // sem precisar de ação nenhuma; se ele já tiver saído, a checagem
       // simplesmente para (atendimentoId !== atendimentoAtualId) sem
-      // incomodar a tela que ele está vendo agora.
-      hideTyping();
+      // incomodar a tela que ele está vendo agora. NÃO esconde o indicador
+      // aqui (ver _continuarAguardandoEmRetaguarda) — achado real 2026-10,
+      // chamado com anexos/imagens: o pipeline de pré-análise pode rodar até
+      // 3 chamadas sequenciais à IA (inicial + retry de Quality Gate +
+      // reescrita final), cada uma com timeout escalado por nº de imagens
+      // (investigacao-service.js: 45s + 15s/imagem) — esconder "Analisando…"
+      // aos 30s passava a falsa impressão de que tinha parado, levando o
+      // usuário a desistir e trocar de chamado antes da resposta pronta.
       _continuarAguardandoEmRetaguarda(atendimentoId);
     }
 
-    async function _continuarAguardandoEmRetaguarda(atendimentoId, { maxTentativas = 24, intervaloMs = 10000 } = {}) {
+    async function _continuarAguardandoEmRetaguarda(atendimentoId, { maxTentativas = 60, intervaloMs = 10000 } = {}) {
       for (let tentativa = 0; tentativa < maxTentativas; tentativa++) {
         await new Promise(r => setTimeout(r, intervaloMs));
-        if (atendimentoId !== atendimentoAtualId) return; // usuário já saiu — não mexe na tela de outro chamado
+        if (atendimentoId !== atendimentoAtualId) { hideTyping(); return; } // usuário já saiu — não mexe na tela de outro chamado
         const temResposta = await carregarMensagens(atendimentoId);
-        if (temResposta) return;
+        if (temResposta) { hideTyping(); return; }
       }
+      hideTyping(); // esgotou ~10min no total (30s + 60×10s) — desiste de vez, mas só aqui
     }
 
     document.getElementById('anexo-input').addEventListener('change', async (e) => {
