@@ -323,36 +323,43 @@ function iniciarAnalise(empresaId, chamadoId, { usuarioIdIahub, consultorId, pre
   const chamado = chamadoRepo.getChamado(empresaId, chamadoId);
   if (!chamado) throw new Error('Chamado não encontrado.');
 
-  const existente = atendimentoRepo.getAtendimentoPorReferencia(empresaId, {
-    origem: chamado.sistemaOrigem || SISTEMA_ORIGEM_PADRAO,
-    referenciaExterna: chamado.numero,
-  });
   const consultor = _resolverConsultorDaAbertura(empresaId, { usuarioIdIahub, consultorId });
   const preAnaliseLigada = _preAnaliseHabilitada(consultor, preAnaliseAutomatica);
-
-  if (existente) {
-    const posicionamentos = chamadoRepo.listarPosicionamentosDoChamado(empresaId, chamadoId);
-    _sincronizarHistoricoImportado(empresaId, existente.id, chamado, posicionamentos, usuarioIdIahub);
-    const mensagens = mensagemRepo.listarMensagens(empresaId, existente.id, { limite: 500 });
-    const jaTemRespostaIa = mensagens.some(m => m.papel === 'assistant');
-    const preAnaliseDisparada = preAnaliseLigada && !jaTemRespostaIa;
-    if (preAnaliseDisparada) {
-      _dispararPreAnaliseEmBackground(empresaId, chamado, existente, { chamadoId, preAnaliseHabilitada: true });
-    }
-    return { atendimento: existente, reaberto: true, preAnaliseDisparada };
-  }
-
   const posicionamentos = chamadoRepo.listarPosicionamentosDoChamado(empresaId, chamadoId);
-  const conteudoBruto = _formatarConteudoBruto(chamado, posicionamentos);
 
-  const atendimento = atendimentoRepo.criarAtendimento(empresaId, {
+  // Busca-ou-cria ATÔMICO (atendimento-repository.buscarOuCriarAtendimentoPorReferencia)
+  // — corrige condição de corrida real encontrada em produção (2026-10):
+  // esta função roda tanto pelo clique manual do analista quanto pela
+  // sincronização de fundo da fila (radar-refresh-service), e as duas podiam
+  // rodar quase ao mesmo tempo para o mesmo chamado. Antes, getAtendimentoPorReferencia
+  // + criarAtendimento em dois passos separados deixava uma janela onde
+  // ambas as chamadas viam "não existe" e criavam DOIS atendimentos — a
+  // pré-análise da IA disparada por uma delas gravava a resposta num
+  // atendimento que a tela podia nunca mais voltar a consultar (reproduzido
+  // deterministicamente). A busca+criação agora acontece dentro de uma única
+  // transação SQLite (serializada pelo próprio better-sqlite3), eliminando a
+  // janela de corrida.
+  const { atendimento, criado } = atendimentoRepo.buscarOuCriarAtendimentoPorReferencia(empresaId, {
     origem: chamado.sistemaOrigem || SISTEMA_ORIGEM_PADRAO,
-    canalEntrada: 'radar',
     referenciaExterna: chamado.numero,
-    conteudoBruto,
+  }, {
+    canalEntrada: 'radar',
+    conteudoBruto: _formatarConteudoBruto(chamado, posicionamentos),
     criadoPorUsuarioId: usuarioIdIahub ?? null,
     consultorId: consultor?.id ?? null,
   });
+
+  if (!criado) {
+    _sincronizarHistoricoImportado(empresaId, atendimento.id, chamado, posicionamentos, usuarioIdIahub);
+    const mensagens = mensagemRepo.listarMensagens(empresaId, atendimento.id, { limite: 500 });
+    const jaTemRespostaIa = mensagens.some(m => m.papel === 'assistant');
+    const preAnaliseDisparada = preAnaliseLigada && !jaTemRespostaIa;
+    if (preAnaliseDisparada) {
+      _dispararPreAnaliseEmBackground(empresaId, chamado, atendimento, { chamadoId, preAnaliseHabilitada: true });
+    }
+    return { atendimento, reaberto: true, preAnaliseDisparada };
+  }
+
   _gravarHistoricoComoMensagens(empresaId, atendimento.id, chamado, posicionamentos, usuarioIdIahub);
 
   // Sincroniza anexos do SoftExpert (prints, planilhas, logs já anexados ao

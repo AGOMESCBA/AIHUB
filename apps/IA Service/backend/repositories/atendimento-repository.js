@@ -162,6 +162,48 @@ function getAtendimentoPorReferencia(empresaId, { origem, referenciaExterna }) {
   return _rowParaDominio(row);
 }
 
+/**
+ * Busca-ou-cria ATÔMICO por referência externa — corrige condição de corrida
+ * real encontrada em produção (2026-10): a sincronização de fundo da fila
+ * (radar-refresh-service.sincronizarAntesDaFila, acionada ao abrir/atualizar
+ * a fila) e o clique manual do analista no mesmo chamado podiam rodar quase
+ * simultaneamente; ambos chamavam getAtendimentoPorReferencia (não encontrava
+ * nada ainda) e depois criarAtendimento, cada um sem saber do outro — sem
+ * UNIQUE constraint (removido na migration v5 para permitir múltiplos
+ * atendimentos manuais na mesma referência), nada impedia a criação de DOIS
+ * atendimentos para o mesmo chamado SoftExpert. Reproduzido deterministicamente
+ * com duas chamadas concorrentes reais. A pré-análise da IA disparada pelo
+ * clique do analista gravava a resposta no atendimento dele, mas
+ * getAtendimentoPorReferencia (ORDER BY criado_em DESC) podia passar a
+ * devolver o OUTRO atendimento (criado depois, sem resposta) na consulta
+ * seguinte — a resposta "sumia" da tela sem nunca ter sido perdida de fato.
+ * better-sqlite3 é síncrono; busca+criação dentro da MESMA db.transaction()
+ * são serializadas pelo próprio SQLite contra qualquer outra escrita
+ * concorrente deste processo — elimina a janela de corrida sem precisar de
+ * lock em memória nem reintroduzir UNIQUE (que quebraria o caso manual).
+ */
+function buscarOuCriarAtendimentoPorReferencia(empresaId, { origem, referenciaExterna }, dadosSeNovo) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!referenciaExterna) throw new Error('referenciaExterna é obrigatória.');
+  const db = getDB();
+
+  const executar = db.transaction(() => {
+    const existenteRow = db.prepare(`
+      SELECT * FROM atendimentos
+      WHERE empresa_id = ? AND origem = ? AND referencia_externa = ?
+      ORDER BY criado_em DESC
+      LIMIT 1
+    `).get(Number(empresaId), origem, referenciaExterna);
+    if (existenteRow) return { id: existenteRow.id, criado: false };
+
+    const id = _inserirAtendimento(db, empresaId, { origem, referenciaExterna, ...dadosSeNovo });
+    return { id, criado: true };
+  });
+
+  const { id, criado } = executar();
+  return { atendimento: getAtendimento(empresaId, id), criado };
+}
+
 function listarAtendimentos(empresaId, filtros = {}) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
@@ -237,6 +279,7 @@ module.exports = {
   getAtendimento,
   getAtendimentoPorCodigo,
   getAtendimentoPorReferencia,
+  buscarOuCriarAtendimentoPorReferencia,
   listarAtendimentos,
   listarIdsPorEmpresa,
   atualizarStatus,
