@@ -117,6 +117,10 @@
     .macro-chip { border:1px solid var(--border);border-radius:5px;background:var(--bg-card);color:var(--text-hi);font-family:Consolas,'Courier New',monospace;font-size:11px;padding:3px 7px;cursor:pointer;line-height:1.4; }
     .macro-chip:hover { border-color:var(--accent);color:var(--accent);background:var(--accent-glow); }
     .macro-chip:active { transform:translateY(1px); }
+    .time-chips { display:flex;flex-wrap:wrap;gap:6px;margin-top:8px; }
+    .time-chip { display:flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:5px;background:var(--bg-card);color:var(--text-hi);font-size:12px;font-weight:600;padding:4px 6px 4px 10px; }
+    .time-chip button { border:none;background:transparent;color:var(--text-lo);cursor:pointer;font-size:14px;line-height:1;padding:2px; }
+    .time-chip button:hover { color:#dc2626; }
     .recipient-list { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg-base); }
     .recipient-item { display:flex;align-items:flex-start;gap:8px;border:1px solid var(--border);border-radius:8px;padding:9px;background:var(--bg-card);cursor:pointer; }
     .recipient-item:hover { border-color:var(--accent-light); }
@@ -380,8 +384,13 @@
                     </select>
                   </div>
                   <div class="form-group">
-                    <label class="form-label">Horario</label>
-                    <input id="f-hora" type="time" class="form-control" value="08:00" onchange="atualizarResumo()">
+                    <label class="form-label" id="label-hora">Horario</label>
+                    <div class="quick-row" style="gap:8px">
+                      <input id="f-hora" type="time" class="form-control" value="08:00" style="flex:1;min-width:120px" onchange="atualizarResumo()">
+                      <button class="btn btn-ghost d-none" id="btn-add-horario" type="button" onclick="adicionarHorario()">+ Adicionar horario</button>
+                    </div>
+                    <div class="time-chips d-none" id="time-chips"></div>
+                    <div class="form-help d-none" id="hint-horarios">O job roda em cada horario listado, nos dias configurados abaixo.</div>
                   </div>
                 </div>
                 <div class="form-row" id="row-primeira">
@@ -642,6 +651,7 @@ SELECT * FROM dados;</code></div>
   let editId = null;
   let selectedRecipients = new Set();
   let selectedGroups = new Set();
+  let horariosExtras = [];
   let table = null;
   let empresasCache = null;
   let executorAutoTimer = null;
@@ -666,6 +676,7 @@ SELECT * FROM dados;</code></div>
     edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
     history:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/><path d="M12 7v5l3 2"/></svg>',
     trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>',
+    copy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
   };
   const groupState = { fields: [], open: false };
 
@@ -1038,7 +1049,7 @@ SELECT * FROM dados;</code></div>
         { title:'Proxima execucao', field:'next_run_at', width:160, sorter:'datetime', headerFilter:true, formatter:c=>esc(fmtData(c.getValue())) },
         { title:'Destinatarios', field:'destinatarios_count', width:125, hozAlign:'right', headerFilter:true, formatter:c=>`${Number(c.getValue() || 0)} numero(s)` },
         { title:'Ultimo status', field:'ultimo_status_label', width:130, headerFilter:true },
-        { title:'Acoes', field:'id', width:200, hozAlign:'right', headerSort:false, headerFilter:false, groupable:false, formatter:c=>{
+        { title:'Acoes', field:'id', width:235, hozAlign:'right', headerSort:false, headerFilter:false, groupable:false, formatter:c=>{
           const row = c.getRow().getData();
           const statusIcon = row.ativo ? ICONS.pause : ICONS.play;
           const disabled = row._manual_running ? ' disabled' : '';
@@ -1046,6 +1057,7 @@ SELECT * FROM dados;</code></div>
             <button class="btn-icon" title="${row.ativo ? 'Pausar' : 'Ativar'}" aria-label="${row.ativo ? 'Pausar' : 'Ativar'}"${disabled} onclick="event.stopPropagation();alternarStatus('${esc(row.id)}','${row.ativo ? 'pausado' : 'ativo'}')">${statusIcon}</button>
             <button class="btn-icon" title="Historico de execucoes" aria-label="Historico de execucoes" onclick="event.stopPropagation();abrirHistorico('${esc(row.id)}')">${ICONS.history}</button>
             <button class="btn-icon" title="Editar" aria-label="Editar"${disabled} onclick="event.stopPropagation();abrirFormulario('${esc(row.id)}')">${ICONS.edit}</button>
+            <button class="btn-icon" title="Duplicar job" aria-label="Duplicar job" onclick="event.stopPropagation();duplicarJob('${esc(row.id)}')">${ICONS.copy}</button>
             <button class="btn-icon danger" title="Excluir" aria-label="Excluir"${disabled} onclick="event.stopPropagation();excluirJob('${esc(row.id)}')">${ICONS.trash}</button>`;
         }},
       ],
@@ -1112,6 +1124,29 @@ SELECT * FROM dados;</code></div>
       renderDestinatarios();
       renderRuns([]);
     }
+    atualizarResumo();
+  }
+
+  async function duplicarJob(id) {
+    const job = await api(`/api/ia-command/admin/agendamento/jobs/${encodeURIComponent(id)}`);
+    await abrirFormulario(null);
+    preencherForm(job);
+    document.getElementById('f-nome').value = `Copia de ${job.nome || ''}`.trim();
+    document.getElementById('form-title').textContent = `Copia de ${job.nome || 'Job'}`;
+    document.getElementById('f-data').value = hojeIsoDate();
+    const validos = new Set(destinatarios.map(d => String(d.id)));
+    (job.destinatarios || [])
+      .filter(r => String(r.origem || 'direto') === 'direto')
+      .map(r => String(r.numero_id))
+      .filter(numeroId => validos.has(numeroId))
+      .forEach(numeroId => selectedRecipients.add(numeroId));
+    const gruposValidos = new Set(gruposDestinatarios.map(g => String(g.id)));
+    (job.grupos || [])
+      .map(g => String(g.grupo_id || g.id))
+      .filter(grupoId => gruposValidos.has(grupoId))
+      .forEach(grupoId => selectedGroups.add(grupoId));
+    renderGrupos();
+    renderDestinatarios();
     atualizarResumo();
   }
 
@@ -1196,6 +1231,7 @@ SELECT * FROM dados;</code></div>
     document.getElementById('f-retry-interval').value = '15';
     document.querySelectorAll('input[name="dias"]').forEach(c => c.checked = false);
     document.getElementById('q-dest').value = '';
+    horariosExtras = [];
     trocarAbaJob('pergunta');
     aplicarAlturaSqlFixo();
     onAgendaChange();
@@ -1229,6 +1265,8 @@ SELECT * FROM dados;</code></div>
     }
     const dias = new Set((sj.weekdays || []).map(String));
     document.querySelectorAll('input[name="dias"]').forEach(c => c.checked = dias.has(c.value));
+    const horaAtual = document.getElementById('f-hora').value;
+    horariosExtras = [...new Set(sj.times || [])].filter(h => h && h !== horaAtual).sort();
     trocarAbaJob('pergunta');
     aplicarAlturaSqlFixo();
     onAgendaChange();
@@ -1399,16 +1437,49 @@ SELECT * FROM dados;</code></div>
 
   function onAgendaChange() {
     const tipo = document.getElementById('f-schedule-tipo').value;
+    const permiteMultiplos = ['daily', 'weekly', 'monthly'].includes(tipo);
     document.getElementById('grp-weekly').classList.toggle('d-none', tipo !== 'weekly');
     document.getElementById('grp-monthly').classList.toggle('d-none', tipo !== 'monthly');
     document.getElementById('row-primeira').classList.toggle('d-none', tipo === 'manual');
+    document.getElementById('btn-add-horario').classList.toggle('d-none', !permiteMultiplos);
+    document.getElementById('label-hora').textContent = permiteMultiplos ? 'Primeiro horario' : 'Horario';
+    if (!permiteMultiplos) horariosExtras = [];
+    renderHorarios();
+    atualizarResumo();
+  }
+
+  function renderHorarios() {
+    const wrap = document.getElementById('time-chips');
+    const hint = document.getElementById('hint-horarios');
+    wrap.classList.toggle('d-none', horariosExtras.length === 0);
+    hint.classList.toggle('d-none', horariosExtras.length === 0);
+    wrap.innerHTML = horariosExtras.map((h, i) =>
+      `<span class="time-chip">${esc(h)}<button type="button" title="Remover horario" aria-label="Remover horario ${esc(h)}" onclick="removerHorario(${i})">&times;</button></span>`
+    ).join('');
+  }
+
+  function adicionarHorario() {
+    const valor = document.getElementById('f-hora').value;
+    if (!valor) return;
+    const primeiro = document.getElementById('f-hora').value;
+    if (valor === primeiro || horariosExtras.includes(valor)) return;
+    horariosExtras.push(valor);
+    horariosExtras.sort();
+    renderHorarios();
+    atualizarResumo();
+  }
+
+  function removerHorario(index) {
+    horariosExtras.splice(index, 1);
+    renderHorarios();
     atualizarResumo();
   }
 
   function montarAgenda() {
     const tipo = document.getElementById('f-schedule-tipo').value;
     const time = document.getElementById('f-hora').value || '08:00';
-    const schedule = { tipo, time };
+    const times = [...new Set([time, ...horariosExtras])].sort();
+    const schedule = { tipo, time, times };
     if (tipo === 'weekly') schedule.weekdays = [...document.querySelectorAll('input[name="dias"]:checked')].map(c => Number(c.value));
     if (tipo === 'monthly') schedule.month_day = Number(document.getElementById('f-dia-mes').value || 1);
     let next_run_at = null;
@@ -1425,10 +1496,11 @@ SELECT * FROM dados;</code></div>
     const tipo = document.getElementById('f-schedule-tipo')?.value || 'manual';
     const labels = { manual:'Manual', once:'Uma vez', daily:'Diario', weekly:'Semanal', monthly:'Mensal' };
     const hora = document.getElementById('f-hora')?.value || '08:00';
+    const horariosLabel = horariosExtras.length ? ` (+${horariosExtras.length} horario${horariosExtras.length > 1 ? 's' : ''})` : '';
     const sqlFixo = document.getElementById('f-sql-fixo')?.value.trim();
     document.getElementById('s-nome').textContent = nome;
     document.getElementById('s-canal').textContent = canal ? canal.nome : '-';
-    document.getElementById('s-agenda').textContent = `${tipo === 'manual' ? 'Manual' : `${labels[tipo] || tipo} as ${hora}`}${sqlFixo ? ' | SQL fixo' : ''}`;
+    document.getElementById('s-agenda').textContent = `${tipo === 'manual' ? 'Manual' : `${labels[tipo] || tipo} as ${hora}${horariosLabel}`}${sqlFixo ? ' | SQL fixo' : ''}`;
     const gruposInfo = selectedGroups.size ? ` + ${selectedGroups.size} grupo(s)` : '';
     document.getElementById('s-dest').textContent = `${selectedRecipients.size}${gruposInfo}`;
   }

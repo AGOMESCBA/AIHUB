@@ -44,6 +44,14 @@ function parseTime(value) {
   };
 }
 
+function parseTimes(scheduleJson) {
+  const raw = Array.isArray(scheduleJson?.times) && scheduleJson.times.length
+    ? scheduleJson.times
+    : [scheduleJson?.time || '08:00'];
+  const parsed = raw.map(parseTime).sort((a, b) => (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute));
+  return parsed.length ? parsed : [{ hour: 8, minute: 0 }];
+}
+
 function safeTimeZone(value) {
   const timeZone = String(value || 'America/Manaus').trim() || 'America/Manaus';
   try {
@@ -111,19 +119,21 @@ function lastDayOfMonth(year, month) {
 
 function nextDaily(job, from) {
   const timeZone = safeTimeZone(job.timezone);
-  const time = parseTime(job.schedule_json?.time);
+  const times = parseTimes(job.schedule_json);
   const now = partsInZone(from, timeZone);
   for (let add = 0; add <= 370; add++) {
     const day = addDaysParts(now, add);
-    const candidate = zonedDateToUtc({ ...day, ...time }, timeZone);
-    if (candidate.getTime() > from.getTime()) return iso(candidate);
+    for (const time of times) {
+      const candidate = zonedDateToUtc({ ...day, ...time }, timeZone);
+      if (candidate.getTime() > from.getTime()) return iso(candidate);
+    }
   }
   return null;
 }
 
 function nextWeekly(job, from) {
   const timeZone = safeTimeZone(job.timezone);
-  const time = parseTime(job.schedule_json?.time);
+  const times = parseTimes(job.schedule_json);
   const selected = (job.schedule_json?.weekdays || []).map(Number).filter(v => v >= 0 && v <= 6);
   const weekdays = selected.length ? selected : [partsInZone(from, timeZone).weekday];
   const now = partsInZone(from, timeZone);
@@ -132,15 +142,17 @@ function nextWeekly(job, from) {
     const noon = zonedDateToUtc({ ...day, hour: 12, minute: 0 }, timeZone);
     const weekday = partsInZone(noon, timeZone).weekday;
     if (!weekdays.includes(weekday)) continue;
-    const candidate = zonedDateToUtc({ ...day, ...time }, timeZone);
-    if (candidate.getTime() > from.getTime()) return iso(candidate);
+    for (const time of times) {
+      const candidate = zonedDateToUtc({ ...day, ...time }, timeZone);
+      if (candidate.getTime() > from.getTime()) return iso(candidate);
+    }
   }
   return null;
 }
 
 function nextMonthly(job, from) {
   const timeZone = safeTimeZone(job.timezone);
-  const time = parseTime(job.schedule_json?.time);
+  const times = parseTimes(job.schedule_json);
   const wantedDay = Math.max(1, Math.min(31, Number(job.schedule_json?.month_day || 1)));
   const now = partsInZone(from, timeZone);
   for (let add = 0; add <= 48; add++) {
@@ -148,8 +160,10 @@ function nextMonthly(job, from) {
     const year = now.year + Math.floor(monthIndex / 12);
     const month = (monthIndex % 12) + 1;
     const day = Math.min(wantedDay, lastDayOfMonth(year, month));
-    const candidate = zonedDateToUtc({ year, month, day, ...time }, timeZone);
-    if (candidate.getTime() > from.getTime()) return iso(candidate);
+    for (const time of times) {
+      const candidate = zonedDateToUtc({ year, month, day, ...time }, timeZone);
+      if (candidate.getTime() > from.getTime()) return iso(candidate);
+    }
   }
   return null;
 }
