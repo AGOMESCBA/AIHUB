@@ -682,6 +682,7 @@
     // mostrar aqui, mas o login continua 100% por telefone, nunca trava nem
     // pré-seleciona a empresa de fato.
     const LOGIN_APELIDO_KEY = 'svc_login_apelido';
+    const LOGIN_TELEFONE_KEY = 'svc_login_telefone';
     (function carregarIdentidadePorApelido() {
       const partes = location.pathname.split('/').filter(Boolean);
       const apelido = partes.length > 1 ? partes[partes.length - 1] : null;
@@ -795,6 +796,11 @@
         codeInputs.forEach(i => { i.value = ''; });
         show('code');
         setStatus('Código enviado. Confira seu WhatsApp.', 'ok');
+        // Lembra o telefone (não o código — o OTP expira em 5min e nunca é
+        // reaproveitável, só a sessão de 8h é que expira e traz o usuário de
+        // volta pra cá) para pré-preencher na próxima vez que precisar
+        // entrar de novo, poupando o passo de redigitar o número do zero.
+        localStorage.setItem(LOGIN_TELEFONE_KEY, telefone);
       } catch (err) {
         setStatus(err.message, 'error');
       } finally {
@@ -909,6 +915,17 @@
         codeInputs[next].focus();
       });
     });
+
+    // Pré-preenche o telefone do último acesso bem-sucedido — pedido do
+    // usuário (2026-10): quando a sessão de 8h expira e o radar manda
+    // logar de novo, poupa redigitar o número do zero; o usuário só clica
+    // "Enviar código" e confere o WhatsApp. Nunca pré-preenche/reaproveita
+    // o CÓDIGO em si (expira em 5min, nunca reutilizável — ver enviarCodigo).
+    (function preencherTelefoneLembrado() {
+      const telefoneSalvo = localStorage.getItem(LOGIN_TELEFONE_KEY);
+      if (!telefoneSalvo) return;
+      $('phone').value = formatPhone(telefoneSalvo);
+    })();
 
     show('phone');
   </script>
