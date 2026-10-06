@@ -123,12 +123,18 @@
     .risco-filtros { flex:none; display:flex; align-items:center; gap:5px; padding:10px 12px 8px; border-bottom:1px solid var(--wa-border); background:rgba(0,0,0,.12); }
     .risco-filtro { border:1px solid var(--wa-border); background:rgba(255,255,255,.03); padding:5px 9px; border-radius:7px; font-size:11px; font-weight:800; color:var(--wa-text-secondary); cursor:pointer; }
     .risco-filtro.ativo { background:rgba(0,217,163,.13); color:var(--wa-accent); border-color:rgba(0,217,163,.32); }
-    .risco-sidebar-toggle {
-      margin-left:auto; border:1px solid rgba(0,217,163,.28); background:rgba(0,217,163,.09);
-      color:var(--wa-accent); border-radius:7px; padding:5px 9px; font-size:11px; font-weight:900;
-      cursor:pointer; display:flex; align-items:center; gap:6px; white-space:nowrap;
+    .risco-filtro-select {
+      border:1px solid var(--wa-border); background:rgba(255,255,255,.03); color:var(--wa-text-secondary);
+      padding:5px 9px; border-radius:7px; font-size:11px; font-weight:800; cursor:pointer; font-family:inherit;
     }
-    .risco-sidebar-toggle:hover { background:rgba(0,217,163,.16); }
+    .risco-sidebar-toggle {
+      margin-left:auto; flex:none; width:26px; height:26px; border-radius:7px; border:1px solid var(--wa-border);
+      background:rgba(255,255,255,.03); color:var(--wa-text-secondary); cursor:pointer;
+      display:flex; align-items:center; justify-content:center; font-size:13px;
+      transition:transform .15s ease, background .15s ease;
+    }
+    .risco-sidebar-toggle:hover { background:rgba(255,255,255,.08); }
+    .risco-sidebar-toggle.recolhido { transform:rotate(-90deg); }
     .risco-layout { flex:1; min-height:0; display:grid; grid-template-columns:240px 1fr; transition:grid-template-columns .18s ease; }
     .risco-layout.consultores-recolhidos { grid-template-columns:0 1fr; }
     .risco-consultores { min-height:0; overflow-y:auto; border-right:1px solid var(--wa-border); }
@@ -141,7 +147,7 @@
     .risco-consultor:hover { background:rgba(255,255,255,.04); }
     .risco-consultor.ativo { background:rgba(0,217,163,.1); border-left-color:var(--wa-accent); }
     .risco-consultor.ativo .risco-consultor-nome { color:var(--wa-accent); }
-    .risco-consultor-nome { font-size:12px; font-weight:900; line-height:1.25; }
+    .risco-consultor-nome { font-size:14px; font-weight:900; line-height:1.25; }
     .risco-consultor-meta { display:flex; gap:5px; flex-wrap:wrap; margin-top:5px; color:var(--wa-text-tertiary); font-size:10.5px; }
     .risco-empty { color:var(--wa-text-tertiary); padding:18px; font-size:12.5px; line-height:1.45; }
 
@@ -605,7 +611,13 @@
                 <button class="risco-filtro ativo" id="risco-filtro-todos" onclick="setFiltroRisco('todos')">Todos</button>
                 <button class="risco-filtro" id="risco-filtro-atraso" onclick="setFiltroRisco('em_atraso')">Em atraso</button>
                 <button class="risco-filtro" id="risco-filtro-proximo" onclick="setFiltroRisco('proximo')">Próx. vencimento</button>
-                <button class="risco-sidebar-toggle" id="risco-sidebar-toggle" type="button" onclick="toggleConsultoresRisco()">◀ Recolher consultores</button>
+                <select class="risco-filtro-select" id="risco-filtro-aguardando" onchange="setFiltroAguardandoRisco(this.value)">
+                  <option value="todos">Aguardando: todos</option>
+                  <option value="Aguardando Atendente">Aguardando Atendente</option>
+                  <option value="Aguardando Cliente">Aguardando Cliente</option>
+                  <option value="Aguardando Fornecedor">Aguardando Fornecedor</option>
+                </select>
+                <button class="risco-sidebar-toggle" id="risco-sidebar-toggle" type="button" onclick="toggleConsultoresRisco()" title="Recolher consultores">▾</button>
               </div>
               <div class="risco-layout" id="risco-layout">
                 <div class="risco-consultores" id="risco-consultores"></div>
@@ -686,6 +698,7 @@
     let modoMinhaFila = true; // padrão: analista abre já na própria fila, não na fila geral de todos
     let filtroSlaAtual = 'todos';
     let filtroRiscoAtual = 'todos';
+    let riscoAguardandoFiltro = 'todos';
     let riscoConsultorSelecionado = 'todos';
     let riscoCache = { consultores: [], chamados: [] };
     let timerAutoRefresh = null;
@@ -859,6 +872,19 @@
       carregarRiscoSla();
     }
 
+    // Filtro por conteúdo do campo "Aguardando retorno" (AGUARDANDO
+    // consolidado da view ITSM_CHAMADOS / situacao_retorno) — pedido do
+    // usuário (2026-10): além de SLA (Todos/Em atraso/Próx. vencimento),
+    // poder restringir a grade a quem o chamado está aguardando agora
+    // (Atendente/Cliente/Fornecedor). Filtra client-side sobre o mesmo
+    // riscoCache já carregado (mesmo padrão do filtro de consultor), usando
+    // o rótulo já normalizado por labelSituacaoRetorno — não precisa ida ao
+    // servidor nem duplicar a lógica de normalização de texto bruto.
+    function setFiltroAguardandoRisco(valor) {
+      riscoAguardandoFiltro = valor;
+      montarGridRisco();
+    }
+
     async function carregarFila({ forceSync = false } = {}) {
       const empresaId = empresaIdAtual();
       if (!empresaId) return;
@@ -970,7 +996,10 @@
       const layout = document.getElementById('risco-layout');
       const btn = document.getElementById('risco-sidebar-toggle');
       if (layout) layout.classList.toggle('consultores-recolhidos', riscoConsultoresRecolhidos);
-      if (btn) btn.textContent = riscoConsultoresRecolhidos ? '▶ Expandir consultores' : '◀ Recolher consultores';
+      if (btn) {
+        btn.classList.toggle('recolhido', riscoConsultoresRecolhidos);
+        btn.title = riscoConsultoresRecolhidos ? 'Expandir consultores' : 'Recolher consultores';
+      }
       if (riscoTable) setTimeout(() => riscoTable.redraw(true), 220);
     }
 
@@ -1020,9 +1049,12 @@
     }
 
     async function montarGridRisco() {
-      const chamados = riscoConsultorSelecionado === 'todos'
+      let chamados = riscoConsultorSelecionado === 'todos'
         ? riscoCache.chamados
         : riscoCache.chamados.filter(c => (c.tecnicoResponsavelId || '__sem_consultor__') === riscoConsultorSelecionado);
+      if (riscoAguardandoFiltro !== 'todos') {
+        chamados = chamados.filter(c => labelSituacaoRetorno(c.aguardandoConsolidado || c.situacaoRetorno) === riscoAguardandoFiltro);
+      }
 
       const gridEl = document.getElementById('risco-grid-wrap');
       if (!chamados.length) {
