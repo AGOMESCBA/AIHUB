@@ -301,11 +301,40 @@ function _textoBuscaChamado(chamado, posicionamentos = []) {
   ].filter(Boolean).join(' ').toLowerCase();
 }
 
+// Tokens extraídos SÓ do conteúdo específico do problema (assunto/
+// breveDescricao/descricao, e a parte do TÍTULO após o padrão
+// "CLIENTE | Produto | ..." quando existir) — categoria estrutural
+// (produto/módulo/etc.) é tratada à parte como match exato, não entra
+// aqui. Revisão 2026-10 (achado real testando contra dados de produção):
+// o título inteiro incluía nome do CLIENTE (ex.: "FUNDAÇÃO MT") e nome
+// do PRODUTO (ex.: "Protheus") como tokens — nome de cliente é ruído puro
+// (aparece em todo chamado daquele cliente, não indica problema parecido)
+// e produto já é comparado separadamente em _pontuarSimilaridade, usá-lo
+// de novo aqui infla score de texto sem sinal real. _tituloSemPrefixo
+// extrai só a parte útil do título (ex.: "Erro na aprovação de pedido de
+// compras pelo sistema"), descartando cliente/produto do prefixo.
+// Stopword list expandida com conectores genéricos de texto livre
+// (mensagem, segue, anexo, logo, sequencia, mostra, pelo, favor, etc.) e
+// os dois produtos do domínio (protheus, softexpert) — confirmado
+// contra dados reais que esses termos apareciam em "X termo(s) em comum"
+// mesmo entre chamados de problemas completamente diferentes.
+function _tituloSemPrefixo(titulo) {
+  if (!titulo) return '';
+  const partes = titulo.split('|');
+  return partes.length >= 3 ? partes.slice(2).join('|').trim() : titulo;
+}
+
+const STOPWORDS_BUSCA = new Set([
+  'para', 'com', 'sem', 'erro', 'chamado', 'problema', 'sistema', 'cliente',
+  'usuario', 'usuarios', 'tela', 'processo', 'protheus', 'softexpert',
+  'pelo', 'pela', 'pelos', 'pelas', 'esta', 'estao', 'sendo', 'pode', 'podem',
+  'favor', 'segue', 'anexo', 'anexos', 'logo', 'sequencia', 'mostra', 'mensagem',
+  'bom', 'dia', 'tarde', 'noite', 'gostaria', 'poderia', 'obrigado', 'atenciosamente',
+]);
+
 function _tokensDeBusca(chamado) {
   const texto = [
-    chamado.produto, chamado.familia, chamado.modulo, chamado.servico,
-    chamado.tipoChamado, chamado.tipoChamadoFinal, chamado.natureza,
-    chamado.titulo, chamado.assunto, chamado.breveDescricao, chamado.descricao,
+    _tituloSemPrefixo(chamado.titulo), chamado.assunto, chamado.breveDescricao, chamado.descricao,
   ].filter(Boolean).join(' ').toLowerCase();
 
   return [...new Set(texto
@@ -313,8 +342,68 @@ function _tokensDeBusca(chamado) {
     .replace(/[^a-z0-9]+/g, ' ')
     .split(/\s+/)
     .filter(t => t.length >= 4)
-    .filter(t => !new Set(['para', 'com', 'sem', 'erro', 'chamado', 'problema', 'sistema', 'cliente', 'usuario', 'usuarios', 'tela', 'processo']).has(t))
-  )].slice(0, 16);
+    .filter(t => !STOPWORDS_BUSCA.has(t))
+  )].slice(0, 24);
+}
+
+/**
+ * Score de similaridade entre chamados — revisado 2026-10 a pedido do
+ * usuário, após auditoria encontrar dois problemas reais com dados de
+ * produção (não hipotéticos):
+ *
+ * 1) BUG: `if (candidato.solucaoAplicada)` tratava a string como truthy
+ *    sempre que não-vazia — mas o campo é categórico 'Sim'/'Não' vindo do
+ *    SoftExpert, não o texto da solução. Confirmado contra o banco real:
+ *    1634 chamados, 1402 com o campo = 'Não' e só 232 = 'Sim' — o bônus
+ *    estava sendo dado a 86% dos chamados que o SoftExpert explicitamente
+ *    marca como SEM solução aplicada. Corrigido para comparar o valor
+ *    exato 'Sim'.
+ *
+ * 2) PESO DESBALANCEADO: produto+família+módulo+serviço+tipo somavam até
+ *    70 pontos SÓ por categoria estrutural igual, contra até 30 pontos de
+ *    correspondência real de texto do problema — na prática, qualquer
+ *    chamado da mesma categoria (ex.: todo chamado de Compras/Protheus)
+ *    já entrava com score alto antes de qualquer sinal sobre o PROBLEMA
+ *    em si. Rebalanceado: estrutural cai para até 25 pontos (serve de
+ *    desempate/contexto, não de critério dominante), texto sobe para até
+ *    60 pontos (passa a ser o fator decisivo, como pedido pelo usuário:
+ *    "chamados com o mesmo problema técnico").
+ *
+ * 3) CORTE MÍNIMO: antes, score > 0 bastava para entrar na lista — um
+ *    candidato podia aparecer só por "está encerrado" (+6), sem nenhuma
+ *    correspondência real de categoria OU texto. Agora exige pelo menos 1
+ *    token de texto em comum OU (módulo E serviço) iguais — nunca entra só
+ *    por ser um chamado genérico encerrado com solução.
+ */
+function _pontuarSimilaridade(atual, candidato, tokens, textoCandidato) {
+  let scoreEstrutural = 0;
+  let scoreTexto = 0;
+  const motivos = [];
+
+  if (atual.modulo && candidato.modulo === atual.modulo) { scoreEstrutural += 8; motivos.push(`Módulo: ${candidato.modulo}`); }
+  if (atual.servico && candidato.servico === atual.servico) { scoreEstrutural += 6; motivos.push(`Serviço: ${candidato.servico}`); }
+  if (atual.produto && candidato.produto === atual.produto) { scoreEstrutural += 5; motivos.push(`Produto: ${candidato.produto}`); }
+  if (atual.familia && candidato.familia === atual.familia) { scoreEstrutural += 4; motivos.push(`Família: ${candidato.familia}`); }
+  if (atual.tipoChamadoFinal && candidato.tipoChamadoFinal === atual.tipoChamadoFinal) { scoreEstrutural += 2; motivos.push(`Tipo: ${candidato.tipoChamadoFinal}`); }
+
+  let tokensEncontrados = 0;
+  for (const token of tokens) {
+    if (textoCandidato.includes(token)) tokensEncontrados++;
+  }
+  if (tokensEncontrados) {
+    scoreTexto += Math.min(tokensEncontrados * 6, 60);
+    motivos.push(`${tokensEncontrados} termo(s) do problema em comum`);
+  }
+
+  const matchModuloEServico = atual.modulo && atual.servico && candidato.modulo === atual.modulo && candidato.servico === atual.servico;
+  const elegivel = tokensEncontrados > 0 || matchModuloEServico;
+  if (!elegivel) return null;
+
+  const temSolucaoAplicada = candidato.solucaoAplicada === 'Sim';
+  if (temSolucaoAplicada) motivos.push('Possui solução aplicada');
+  if (candidato.statusEncerramento === 'Encerrado') { scoreEstrutural += 3; motivos.push('Chamado encerrado'); }
+
+  return { score: scoreEstrutural + scoreTexto, temSolucaoAplicada, motivos };
 }
 
 function listarChamadosRelacionados(empresaId, chamadoId, { limite = 8 } = {}) {
@@ -341,31 +430,14 @@ function listarChamadosRelacionados(empresaId, chamadoId, { limite = 8 } = {}) {
     const texto = _textoBuscaChamado(candidato, posicionamentos)
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-    let score = 0;
-    const motivos = [];
+    const resultado = _pontuarSimilaridade(atual, candidato, tokens, texto);
+    if (!resultado) continue;
 
-    if (atual.produto && candidato.produto === atual.produto) { score += 18; motivos.push(`Produto: ${candidato.produto}`); }
-    if (atual.familia && candidato.familia === atual.familia) { score += 14; motivos.push(`Família: ${candidato.familia}`); }
-    if (atual.modulo && candidato.modulo === atual.modulo) { score += 22; motivos.push(`Módulo: ${candidato.modulo}`); }
-    if (atual.servico && candidato.servico === atual.servico) { score += 10; motivos.push(`Serviço: ${candidato.servico}`); }
-    if (atual.tipoChamadoFinal && candidato.tipoChamadoFinal === atual.tipoChamadoFinal) { score += 6; motivos.push(`Tipo: ${candidato.tipoChamadoFinal}`); }
-    if (candidato.solucaoAplicada) { score += 8; motivos.push('Possui solução aplicada'); }
-    if (candidato.statusEncerramento === 'Encerrado') { score += 6; motivos.push('Chamado encerrado'); }
-
-    let tokensEncontrados = 0;
-    for (const token of tokens) {
-      if (texto.includes(token)) tokensEncontrados++;
-    }
-    if (tokensEncontrados) {
-      score += Math.min(tokensEncontrados * 3, 30);
-      motivos.push(`${tokensEncontrados} termo(s) em comum`);
-    }
-
-    if (score <= 0) continue;
     pontuados.push({
       chamado: candidato,
-      score,
-      motivos: motivos.slice(0, 5),
+      score: resultado.score,
+      temSolucaoAplicada: resultado.temSolucaoAplicada,
+      motivos: resultado.motivos.slice(0, 5),
       posicionamentos: posicionamentos.slice(-8),
     });
   }

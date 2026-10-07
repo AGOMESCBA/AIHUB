@@ -343,6 +343,7 @@
     .pesquisa-card-title { font-size:12px; font-weight:800; color:var(--wa-text); margin-bottom:6px; }
     .pesquisa-meta { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:7px; }
     .pesquisa-pill { font-size:10px; font-weight:800; padding:2px 7px; border-radius:99px; background:rgba(0,217,163,.11); color:var(--wa-accent); border:1px solid rgba(0,217,163,.25); }
+    .pesquisa-pill-solucao { background:rgba(0,217,163,.22); border-color:rgba(0,217,163,.55); }
     .pesquisa-text { font-size:11.5px; color:var(--wa-text-secondary); line-height:1.45; white-space:pre-wrap; }
     .pesquisa-link { display:block; color:var(--wa-accent); font-size:11.5px; font-weight:700; text-decoration:none; line-height:1.35; margin-top:6px; word-break:break-word; }
     .pesquisa-link:hover { text-decoration:underline; }
@@ -1803,7 +1804,15 @@
           r.score != null ? `score ${escapeHtml(r.score)}` : null,
           c.produto || c.familia || c.modulo ? escapeHtml([c.produto, c.familia, c.modulo].filter(Boolean).join(' / ')) : null,
         ].filter(Boolean).map(v => `<span class="pesquisa-pill">${v}</span>`).join('');
-        const descricao = c.solucaoAplicada || c.descricao || c.breveDescricao || c.assunto || '';
+        // BUG CORRIGIDO (2026-10): solucaoAplicada é um campo categórico
+        // 'Sim'/'Não' do SoftExpert (não o texto da solução) — usá-lo como
+        // fallback de descrição fazia a tela mostrar literalmente "Sim" ou
+        // "Não" no lugar do problema real sempre que o campo vinha
+        // preenchido (quase todos: 1634/1634 no banco real). O selo
+        // "Possui solução aplicada" (badge, não texto) já é calculado no
+        // backend (r.temSolucaoAplicada) a partir do valor exato 'Sim'.
+        const descricao = c.descricao || c.breveDescricao || c.assunto || '';
+        const seloSolucao = r.temSolucaoAplicada ? '<span class="pesquisa-pill pesquisa-pill-solucao">✓ Possui solução aplicada</span>' : '';
         const motivos = r.motivos?.length ? `<div class="pesquisa-text"><strong>Similaridade:</strong> ${escapeHtml(r.motivos.join('; '))}</div>` : '';
         const pos = (r.posicionamentos || []).slice(0, 4).map(p => `
           <div class="pesquisa-pos-item">
@@ -1814,7 +1823,7 @@
         return `
           <div class="pesquisa-card">
             <div class="pesquisa-card-title">${escapeHtml(titulo)}</div>
-            <div class="pesquisa-meta">${meta}</div>
+            <div class="pesquisa-meta">${meta}${seloSolucao}</div>
             ${descricao ? `<div class="pesquisa-text">${escapeHtml(descricao)}</div>` : ''}
             ${motivos}
             ${pos ? `<div class="pesquisa-pos">${pos}</div>` : ''}
