@@ -718,8 +718,11 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     try {
       const empresaId = req.svcEmpresaId;
       const { apenas_minha, filtro_sla, limite, force_sync } = req.query || {};
+      // aguardarMs: 0 — nao bloqueia a resposta esperando a sincronizacao com
+      // o SoftExpert (ver mesmo ajuste em routes/externo-routes.js).
       const sincronizacao = await radarRefreshService.sincronizarAntesDaFila(empresaId, {
         force: force_sync === 'true',
+        aguardarMs: 0,
       });
       const resultado = radarService.getFila(empresaId, req.session?.user_id || null, {
         apenasMinha: apenas_minha === 'true',
@@ -738,6 +741,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       const { apenas_minha, filtro, limite, force_sync } = req.query || {};
       const sincronizacao = await radarRefreshService.sincronizarAntesDaFila(empresaId, {
         force: force_sync === 'true',
+        aguardarMs: 0,
       });
       const resultado = radarService.getRiscoSlaUsuario(empresaId, req.session?.user_id || null, {
         apenasMinha: apenas_minha === 'true',

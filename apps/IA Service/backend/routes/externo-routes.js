@@ -98,8 +98,14 @@ module.exports = function registrarRotasExterno(app) {
   app.get('/api/ia-service-externo/radar/fila', async (req, res) => {
     try {
       const { filtro_sla, limite, force_sync } = req.query || {};
+      // aguardarMs: 0 — a fila nunca espera a sincronizacao com o SoftExpert
+      // terminar (podia levar ate 8s, sentido como lentidao pelo usuario a
+      // cada carregamento/auto-refresh). Dispara a sincronizacao em paralelo
+      // e responde na hora com o que ja esta no banco local; o resultado
+      // atualizado aparece no PROXIMO carregamento/auto-refresh.
       const sincronizacao = await radarRefreshService.sincronizarAntesDaFila(req.svcEmpresaId, {
         force: force_sync === 'true',
+        aguardarMs: 0,
       });
       const resultado = radarService.getFilaPorConsultorId(req.svcEmpresaId, req.svcConsultorExterno, {
         filtroSla: filtro_sla || 'todos',
@@ -124,6 +130,7 @@ module.exports = function registrarRotasExterno(app) {
       const { filtro, limite, force_sync } = req.query || {};
       const sincronizacao = await radarRefreshService.sincronizarAntesDaFila(req.svcEmpresaId, {
         force: force_sync === 'true',
+        aguardarMs: 0,
       });
       const resultado = radarService.getRiscoSla(req.svcEmpresaId, {
         filtroRisco: filtro || 'todos',

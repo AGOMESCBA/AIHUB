@@ -579,7 +579,7 @@ button.loading .loader { display: block; }
 .case-top-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .case-title-block { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .case-title-block h1 { margin: 0; font-size: 15px; font-weight: 800; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.case-number { color: var(--brand); font-weight: 800; font-size: 12.5px; flex: none; }
+.case-number { color: var(--brand); font-weight: 800; font-size: 15px; flex: none; }
 .case-actions { display: flex; align-items: center; gap: 6px; flex: none; }
 .case-actions .icon-button {
   min-height: 30px;
@@ -767,12 +767,16 @@ button.loading .loader { display: block; }
 }
 .info-card h3, .summary-card h3, .knowledge-card h3 {
   margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: .03em;
   color: var(--muted);
 }
+.info-card-icon { font-size: 13px; }
 .info-grid { display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); gap: 9px; }
 .info-item span { display: block; color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
 .info-item strong { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }

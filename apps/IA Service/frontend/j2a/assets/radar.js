@@ -487,7 +487,6 @@
       ['Usuario', [c.solicitanteNome, c.solicitanteEmail].filter(Boolean).join(' - ')],
       ['Produto', c.produto],
       ['Previsao', c.slaDataPrevFim ? formatDateTime(c.slaDataPrevFim) : null],
-      ['SLA', c.slaPrazo || c.slaStatus],
     ].map(([k, v]) => `<div><span>${escapeHtml(k)}</span><strong>${escapeHtml(text(v))}</strong></div>`).join('');
     $('messages').innerHTML = '<div class="empty-block">Carregando conversa...</div>';
     renderDescription();
@@ -791,23 +790,42 @@
     const c = state.selected;
     if (!c) return;
     const groups = [
-      ['Identificação', [
+      ['📄', 'Identificação', [
         ['Cliente', c.clienteNome],
         ['Usuário', [c.solicitanteNome, c.solicitanteEmail].filter(Boolean).join(' - ')],
         ['Consultor', c.tecnicoResponsavelNome],
+        ['Chamado de referência', c.chamadoReferencia ? `#${c.chamadoReferencia}` : null],
+      ], true],
+      ['⏱', 'SLA & prazos', slaPrazosFields(c), true],
+      ['🏷', 'Classificação', [
         ['Produto', c.produto],
         ['Família', c.familia],
         ['Módulo', c.modulo],
         ['Serviço', c.servico],
         ['Tipo', c.tipoChamadoFinal || c.tipoChamado],
-      ]],
-      ['SLA e prazos', slaPrazosFields(c)],
+        ['Natureza', c.natureza],
+        ['Nível', c.nivel],
+      ], true],
+      ['📋', 'Kanban — atividade de desenvolvimento', [
+        ['ID Kanban', c.kanbanId],
+        ['Chave', c.kanbanKey],
+        ['Atributos', c.kanbanAtributos],
+        ['Início', c.kanbanDataInicio ? formatDateTime(c.kanbanDataInicio) : null],
+      ], !!c.kanbanId],
     ];
-    $('details-content').innerHTML = groups.map(([title, fields]) => `
-      <div class="info-card"><h3>${escapeHtml(title)}</h3><div class="info-grid">${
-        fields.filter(([, v]) => v !== null && v !== undefined && v !== '').map(([k, v]) => `<div class="info-item"><span>${escapeHtml(k)}</span><strong>${escapeHtml(v)}</strong></div>`).join('')
-      }</div></div>
-    `).join('');
+    $('details-content').innerHTML = groups
+      .filter(([, , , visivel]) => visivel)
+      .map(([icon, title, fields]) => {
+        const preenchidos = fields.filter(([, v]) => v !== null && v !== undefined && v !== '');
+        if (!preenchidos.length) return '';
+        return `
+          <div class="info-card"><h3><span class="info-card-icon">${icon}</span>${escapeHtml(title)}</h3><div class="info-grid">${
+            preenchidos.map(([k, v]) => `<div class="info-item"><span>${escapeHtml(k)}</span><strong>${escapeHtml(v)}</strong></div>`).join('')
+          }</div></div>
+        `;
+      })
+      .filter(Boolean)
+      .join('');
   }
 
   function dossieText() {
