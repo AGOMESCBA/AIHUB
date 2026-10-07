@@ -233,6 +233,14 @@
     return `Aguardando: ${value}`;
   }
 
+  function diasEntre(dataIso) {
+    if (!dataIso) return null;
+    const inicio = new Date(dataIso);
+    if (Number.isNaN(inicio.getTime())) return null;
+    const ms = Date.now() - inicio.getTime();
+    return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
+  }
+
   function slaBadge(value) {
     const label = text(value, '');
     if (!label) return '';
@@ -470,6 +478,7 @@
       slaBadge(c.slaPrazo),
       c.tecnicoResponsavelNome ? `<span class="badge">Consultor: ${escapeHtml(c.tecnicoResponsavelNome)}</span>` : '',
     ].filter(Boolean).join('');
+    renderWaitingHighlight(c);
     $('case-meta').innerHTML = [
       ['Cliente', c.clienteNome],
       ['Usuario', [c.solicitanteNome, c.solicitanteEmail].filter(Boolean).join(' - ')],
@@ -481,6 +490,23 @@
     renderDescription();
     renderDetails();
     renderSummary();
+  }
+
+  function renderWaitingHighlight(c) {
+    const el = $('case-waiting-highlight');
+    const dias = diasEntre(c.ultimoPosicionamentoEm || c.dataAbertura);
+    const label = waitingLabel(c.aguardandoConsolidado || c.situacaoRetorno);
+    if (!label || dias === null) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    const diasTexto = dias === 0 ? 'Hoje' : dias === 1 ? '1 dia' : `${dias} dias`;
+    el.innerHTML = `
+      <div class="waiting-highlight-label">${escapeHtml(label)}</div>
+      <div class="waiting-highlight-days">${escapeHtml(diasTexto)}</div>
+      <div class="waiting-highlight-sub">desde o último posicionamento em ${escapeHtml(formatDate(c.ultimoPosicionamentoEm || c.dataAbertura))}</div>
+    `;
   }
 
   function renderDescription() {

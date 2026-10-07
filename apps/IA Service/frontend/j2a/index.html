@@ -194,6 +194,7 @@
                 <div id="case-badges" class="case-badges"></div>
                 <div class="case-meta" id="case-meta"></div>
               </div>
+              <div id="case-waiting-highlight" class="waiting-highlight" hidden></div>
             </header>
 
             <section id="case-description" class="case-description collapsed">
@@ -246,9 +247,14 @@
                 <input id="risk-search" type="search" placeholder="Buscar por número, cliente, usuário...">
               </div>
               <div class="risk-layout" id="risk-layout">
-                <aside class="risk-consultants" id="risk-consultants"></aside>
+                <aside class="risk-consultants-wrap">
+                  <div class="risk-consultants-head">
+                    <span>Consultores</span>
+                    <button id="toggle-risk-consultants" class="icon-button ghost-icon" title="Recolher lista">⇤</button>
+                  </div>
+                  <div class="risk-consultants" id="risk-consultants"></div>
+                </aside>
                 <div class="risk-grid-wrap">
-                  <button id="toggle-risk-consultants" class="secondary-button">Consultores</button>
                   <div id="risk-grid" class="risk-grid"></div>
                 </div>
               </div>
