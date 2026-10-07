@@ -457,11 +457,13 @@
   }
 
   function backToRadar() {
-    state.selected = null;
-    state.atendimentoId = null;
+    if (state.selected) {
+      setPanel('conversation');
+      setMobileTarget('conversation');
+      return;
+    }
     $('empty-state').hidden = false;
     $('case-view').hidden = true;
-    document.querySelectorAll('.ticket.active').forEach((el) => el.classList.remove('active'));
     document.querySelectorAll('[data-panel-tab]').forEach((btn) => btn.classList.remove('active'));
     $('nav-radar-btn').classList.add('active');
     setMobileTarget('queue');
@@ -478,7 +480,6 @@
       slaBadge(c.slaPrazo),
       c.tecnicoResponsavelNome ? `<span class="badge">Consultor: ${escapeHtml(c.tecnicoResponsavelNome)}</span>` : '',
     ].filter(Boolean).join('');
-    renderWaitingHighlight(c);
     $('case-meta').innerHTML = [
       ['Cliente', c.clienteNome],
       ['Usuario', [c.solicitanteNome, c.solicitanteEmail].filter(Boolean).join(' - ')],
@@ -492,23 +493,6 @@
     renderSummary();
   }
 
-  function renderWaitingHighlight(c) {
-    const el = $('case-waiting-highlight');
-    const dias = diasEntre(c.ultimoPosicionamentoEm || c.dataAbertura);
-    const label = waitingLabel(c.aguardandoConsolidado || c.situacaoRetorno);
-    if (!label || dias === null) {
-      el.hidden = true;
-      return;
-    }
-    el.hidden = false;
-    const diasTexto = dias === 0 ? 'Hoje' : dias === 1 ? '1 dia' : `${dias} dias`;
-    el.innerHTML = `
-      <div class="waiting-highlight-label">${escapeHtml(label)}</div>
-      <div class="waiting-highlight-days">${escapeHtml(diasTexto)}</div>
-      <div class="waiting-highlight-sub">desde o último posicionamento em ${escapeHtml(formatDate(c.ultimoPosicionamentoEm || c.dataAbertura))}</div>
-    `;
-  }
-
   function renderDescription() {
     const c = state.selected;
     const desc = text(c.descricao || c.breveDescricao || '', '').trim();
@@ -518,6 +502,7 @@
       return;
     }
     section.hidden = false;
+    section.classList.remove('collapsed');
     $('description-body').textContent = desc;
   }
 
@@ -780,6 +765,26 @@
     }).join('') || '<div class="empty-block">Nenhum chamado semelhante encontrado.</div>';
   }
 
+  function slaPrazosFields(c) {
+    return [
+      ['Aguardando retorno', waitingLabel(c.aguardandoConsolidado || c.situacaoRetorno)],
+      ['SLA', c.slaPrazo || c.slaStatus],
+      ['Previsão de conclusão', c.slaDataPrevFim ? formatDateTime(c.slaDataPrevFim) : null],
+      ['SLA em horas', c.slaHoras],
+      ['SLA inicial', c.slaInicial],
+      ['SLA anterior', c.slaAnterior],
+      ['Aberto em', formatDate(c.dataAbertura)],
+      ['Último posicionamento', formatDate(c.ultimoPosicionamentoEm)],
+      ['Duração total', formatDays(c.diasDur)],
+      ['Duração total em horas', formatHours(c.hrDur)],
+      ['Em suporte', formatDays(c.diasDurSup)],
+      ['Em desenvolvimento', formatDays(c.diasDurFsw)],
+      ['Com o distribuidor', formatDays(c.diasDurDist)],
+      ['Com o cliente', formatDays(c.diasDurCli)],
+      ['Com a tecnologia do cliente', formatDays(c.diasDurTicli)],
+    ];
+  }
+
   function renderDetails() {
     const c = state.selected;
     if (!c) return;
@@ -794,23 +799,7 @@
         ['Serviço', c.servico],
         ['Tipo', c.tipoChamadoFinal || c.tipoChamado],
       ]],
-      ['SLA e prazos', [
-        ['Aguardando retorno', waitingLabel(c.aguardandoConsolidado || c.situacaoRetorno)],
-        ['SLA', c.slaPrazo || c.slaStatus],
-        ['Previsão de conclusão', c.slaDataPrevFim ? formatDateTime(c.slaDataPrevFim) : null],
-        ['SLA em horas', c.slaHoras],
-        ['SLA inicial', c.slaInicial],
-        ['SLA anterior', c.slaAnterior],
-        ['Aberto em', formatDate(c.dataAbertura)],
-        ['Último posicionamento', formatDate(c.ultimoPosicionamentoEm)],
-        ['Duração total', formatDays(c.diasDur)],
-        ['Duração total em horas', formatHours(c.hrDur)],
-        ['Em suporte', formatDays(c.diasDurSup)],
-        ['Em desenvolvimento', formatDays(c.diasDurFsw)],
-        ['Com o distribuidor', formatDays(c.diasDurDist)],
-        ['Com o cliente', formatDays(c.diasDurCli)],
-        ['Com a tecnologia do cliente', formatDays(c.diasDurTicli)],
-      ]],
+      ['SLA e prazos', slaPrazosFields(c)],
     ];
     $('details-content').innerHTML = groups.map(([title, fields]) => `
       <div class="info-card"><h3>${escapeHtml(title)}</h3><div class="info-grid">${
@@ -833,16 +822,33 @@
     const elapsed = Number(c.hrDur || 0);
     const goal = Number(c.slaHoras || 0);
     const pct = goal > 0 ? Math.min(100, Math.round((elapsed / goal) * 100)) : 0;
+    const dias = diasEntre(c.ultimoPosicionamentoEm || c.dataAbertura);
+    const waitHighlight = waitingLabel(c.aguardandoConsolidado || c.situacaoRetorno) && dias !== null
+      ? `<div class="waiting-highlight waiting-highlight-compact">
+          <div class="waiting-highlight-label">${escapeHtml(waitingLabel(c.aguardandoConsolidado || c.situacaoRetorno))}</div>
+          <div class="waiting-highlight-days">${escapeHtml(dias === 0 ? 'Hoje' : dias === 1 ? '1 dia' : `${dias} dias`)}</div>
+          <div class="waiting-highlight-sub">desde o último posicionamento em ${escapeHtml(formatDate(c.ultimoPosicionamentoEm || c.dataAbertura))}</div>
+        </div>`
+      : '';
+    const slaPrazosHtml = slaPrazosFields(c)
+      .filter(([, v]) => v !== null && v !== undefined && v !== '')
+      .map(([k, v]) => `<div class="summary-item"><span>${escapeHtml(k)}</span><strong>${escapeHtml(v)}</strong></div>`)
+      .join('');
+    const waitingItem = waitHighlight
+      ? ''
+      : `<div class="summary-item"><span>Aguardando retorno</span><strong>${escapeHtml(waitingLabel(c.aguardandoConsolidado || c.situacaoRetorno) || 'Não informado')}</strong></div>`;
     $('summary-content').innerHTML = `
       <div class="summary-card"><h3>Chamado</h3><div class="summary-list">
         <div class="summary-item"><span>Problema identificado</span><strong>${escapeHtml(currentTicketTitle(c))}</strong></div>
         <div class="summary-item"><span>SLA</span><strong>${escapeHtml(c.slaPrazo || c.slaStatus || '-')}</strong></div>
         <div class="summary-item"><span>Previsão</span><strong>${escapeHtml(c.slaDataPrevFim ? formatDateTime(c.slaDataPrevFim) : '-')}</strong></div>
-        <div class="summary-item"><span>Aguardando retorno</span><strong>${escapeHtml(waitingLabel(c.aguardandoConsolidado || c.situacaoRetorno) || 'Não informado')}</strong></div>
+        ${waitingItem}
+        ${waitHighlight}
         <div class="summary-item"><span>Dossiê</span><div>${escapeHtml(dossieText() || 'Sem resumo estruturado disponível.')}</div></div>
       </div></div>
       <div class="summary-card"><h3>Pesquisa Técnica</h3><div class="summary-item"><strong>${escapeHtml(String((state.research?.relacionados || []).length))} similar(es)</strong><div>${escapeHtml(String((state.research?.pesquisa?.resultados || state.research?.pesquisa?.links || []).length))} fonte(s)/trilha(s)</div></div></div>
       <div class="summary-card"><h3>Risco SLA</h3><div class="summary-item"><span>Status</span><strong>${escapeHtml(c.slaPrazo || '-')}</strong></div><div class="progress" title="${pct}%"><span style="--value:${pct}%"></span></div><div class="summary-item"><span>Previsão</span><strong>${escapeHtml(c.slaDataPrevFim ? formatDateTime(c.slaDataPrevFim) : '-')}</strong></div></div>
+      <div class="summary-card"><h3>SLA e Prazos</h3><div class="summary-list">${slaPrazosHtml}</div></div>
     `;
   }
 
@@ -918,6 +924,7 @@
       const el = $(`panel-${name}`);
       if (el) el.classList.toggle('active', name === panel);
     });
+    $('radar-layout').classList.toggle('summary-auto-collapsed', panel !== 'conversation');
     if (panel === 'risk') loadRisk();
     if (panel === 'knowledge') renderKnowledge();
   }
@@ -1067,9 +1074,19 @@
       renderRisk();
     });
     $('toggle-risk-consultants').addEventListener('click', () => $('risk-layout').classList.toggle('consultants-collapsed'));
-    $('toggle-summary-btn').addEventListener('click', () => $('radar-layout').classList.toggle('summary-collapsed'));
-    $('close-summary-btn').addEventListener('click', () => $('radar-layout').classList.toggle('summary-collapsed'));
-    $('toggle-queue-btn').addEventListener('click', () => $('radar-layout').classList.toggle('queue-collapsed'));
+    $('toggle-summary-btn').addEventListener('click', () => {
+      const layout = $('radar-layout');
+      const collapsed = layout.classList.contains('summary-collapsed') || layout.classList.contains('summary-auto-collapsed');
+      layout.classList.remove('summary-auto-collapsed');
+      layout.classList.toggle('summary-collapsed', !collapsed);
+    });
+    $('close-summary-btn').addEventListener('click', () => {
+      $('radar-layout').classList.remove('summary-auto-collapsed');
+      $('radar-layout').classList.add('summary-collapsed');
+    });
+    $('summary-reopen-rail').addEventListener('click', () => {
+      $('radar-layout').classList.remove('summary-collapsed', 'summary-auto-collapsed');
+    });
     $('description-toggle').addEventListener('click', () => $('case-description').classList.toggle('collapsed'));
     $('research-btn').addEventListener('click', researchSolutions);
     $('composer').addEventListener('submit', sendMessage);

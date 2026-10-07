@@ -185,19 +185,17 @@
                   <span id="case-number" class="case-number"></span>
                 </div>
                 <div class="case-actions">
-                  <button id="toggle-queue-btn" class="icon-button ghost-icon" title="Recolher fila">☰</button>
                   <button id="research-btn" class="primary-button">🔎 Pesquisar Soluções</button>
-                  <button id="toggle-summary-btn" class="icon-button ghost-icon" title="Recolher resumo">ⓘ</button>
+                  <button id="toggle-summary-btn" class="icon-button ghost-icon" title="Mostrar/ocultar resumo">▥</button>
                 </div>
               </div>
               <div class="case-second-row">
                 <div id="case-badges" class="case-badges"></div>
                 <div class="case-meta" id="case-meta"></div>
               </div>
-              <div id="case-waiting-highlight" class="waiting-highlight" hidden></div>
             </header>
 
-            <section id="case-description" class="case-description collapsed">
+            <section id="case-description" class="case-description">
               <button type="button" id="description-toggle" class="description-toggle">
                 <span class="description-label">Descrição do problema</span>
                 <span class="description-chevron">▾</span>
@@ -274,6 +272,8 @@
             <div class="empty-block">Selecione um chamado para carregar dossiê, pesquisa e risco.</div>
           </div>
         </aside>
+
+        <button id="summary-reopen-rail" class="summary-reopen-rail" title="Mostrar resumo da investigação" hidden>◂</button>
       </main>
 
       <nav class="mobile-nav" aria-label="Navegação mobile">
