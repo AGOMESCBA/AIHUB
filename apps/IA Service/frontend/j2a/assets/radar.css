@@ -590,7 +590,9 @@ button.loading .loader { display: block; }
   align-items: center;
   justify-content: center;
 }
-.case-actions .primary-button { min-height: 30px; padding: 0 14px; font-size: 12.5px; border-radius: 7px; }
+.case-actions .primary-button { min-height: 30px; padding: 0 14px; font-size: 12.5px; border-radius: 7px; gap: 5px; display: inline-flex; align-items: center; }
+.chevron-toggle svg { transition: transform .18s ease; }
+.chevron-toggle.collapsed svg { transform: rotate(180deg); }
 .case-header-extra { display: contents; }
 .case-header.collapsed .case-header-extra { display: none; }
 .case-view.header-collapsed .case-description { display: none; }
@@ -956,6 +958,8 @@ button.loading .loader { display: block; }
   .case-top-row { flex-wrap: wrap; }
   .case-title-block { min-width: 100%; }
   .case-actions { justify-content: flex-end; }
+  .research-btn-label { display: none; }
+  .case-actions .primary-button { padding: 0 10px; }
   .messages { padding: 12px; }
   .message { max-width: 90%; }
   .composer { padding: 10px 12px; }

@@ -1126,10 +1126,6 @@
       layout.classList.remove('summary-auto-collapsed');
       layout.classList.toggle('summary-collapsed', !collapsed);
     });
-    $('close-summary-btn').addEventListener('click', () => {
-      $('radar-layout').classList.remove('summary-auto-collapsed');
-      $('radar-layout').classList.add('summary-collapsed');
-    });
     $('summary-reopen-rail').addEventListener('click', () => {
       $('radar-layout').classList.remove('summary-collapsed', 'summary-auto-collapsed');
     });
@@ -1137,7 +1133,7 @@
     $('toggle-header-btn').addEventListener('click', () => {
       const collapsed = $('case-header').classList.toggle('collapsed');
       $('case-view').classList.toggle('header-collapsed', collapsed);
-      $('toggle-header-btn').textContent = collapsed ? '▾' : '▴';
+      $('toggle-header-btn').classList.toggle('collapsed', collapsed);
       $('toggle-header-btn').title = collapsed ? 'Mostrar detalhes do chamado' : 'Ocultar detalhes do chamado';
     });
     $('research-btn').addEventListener('click', researchSolutions);

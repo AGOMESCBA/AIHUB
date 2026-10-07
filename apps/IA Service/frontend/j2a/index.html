@@ -179,15 +179,20 @@
           </div>
 
           <article id="case-view" class="case-view" hidden>
-            <header class="case-header">
+            <header id="case-header" class="case-header">
               <div class="case-top-row">
                 <div class="case-title-block">
                   <span id="case-number" class="case-number"></span>
                   <h1 id="case-title">Chamado</h1>
                 </div>
                 <div class="case-actions">
-                  <button id="research-btn" class="primary-button">🔎 Pesquisar Soluções</button>
-                  <button id="toggle-header-btn" class="icon-button ghost-icon" title="Mostrar/ocultar detalhes do chamado">▴</button>
+                  <button id="research-btn" class="primary-button">🔎 <span class="research-btn-label">Pesquisar Soluções</span></button>
+                  <button id="toggle-header-btn" class="icon-button ghost-icon chevron-toggle" title="Mostrar/ocultar detalhes do chamado">
+                    <svg viewBox="0 0 20 20" width="16" height="16" fill="none" aria-hidden="true">
+                      <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.4"/>
+                      <path d="M6.5 11.5L10 8l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
                   <button id="toggle-summary-btn" class="icon-button ghost-icon" title="Mostrar/ocultar resumo">▥</button>
                 </div>
               </div>
@@ -270,7 +275,6 @@
               <h2>Resumo da Investigação</h2>
               <p id="summary-status">Dados reais do atendimento</p>
             </div>
-            <button id="close-summary-btn" class="icon-button ghost-icon" title="Recolher painel">⇥</button>
           </div>
           <div id="summary-content" class="summary-content">
             <div class="empty-block">Selecione um chamado para carregar dossiê, pesquisa e risco.</div>
