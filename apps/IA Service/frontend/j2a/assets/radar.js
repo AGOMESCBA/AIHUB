@@ -164,7 +164,9 @@
   function applyTheme(value) {
     const theme = value || localStorage.getItem(THEME_KEY) || 'system';
     document.documentElement.dataset.theme = theme;
-    $('theme-select').value = theme;
+    document.querySelectorAll('#theme-switch [data-theme-option]').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.themeOption === theme);
+    });
     localStorage.setItem(THEME_KEY, theme);
   }
 
@@ -1025,7 +1027,10 @@
       state.token = '';
       showAccess('Sessao encerrada.');
     });
-    $('theme-select').addEventListener('change', (e) => applyTheme(e.target.value));
+    $('theme-switch').addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-theme-option]');
+      if (btn) applyTheme(btn.dataset.themeOption);
+    });
     $('refresh-queue-btn').addEventListener('click', () => {
       loadQueue({ forceSync: true });
       const seconds = Number($('auto-refresh-select').value || 0);
@@ -1054,7 +1059,10 @@
       const open = event.target.closest('[data-open-url]');
       if (open) openAttachment(open.dataset.openUrl);
     });
-    document.querySelectorAll('[data-panel-tab]').forEach((btn) => btn.addEventListener('click', () => setPanel(btn.dataset.panelTab)));
+    document.querySelectorAll('[data-panel-tab]').forEach((btn) => btn.addEventListener('click', () => {
+      setPanel(btn.dataset.panelTab);
+      if (state.selected && (state.mobileTarget === 'queue' || state.mobileTarget === 'summary')) setMobileTarget('conversation');
+    }));
     document.querySelectorAll('[data-knowledge-tab]').forEach((btn) => btn.addEventListener('click', () => {
       state.knowledgeTab = btn.dataset.knowledgeTab;
       document.querySelectorAll('[data-knowledge-tab]').forEach((b) => b.classList.toggle('active', b === btn));

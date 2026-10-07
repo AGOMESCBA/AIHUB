@@ -121,11 +121,11 @@
             <span>Empresa</span>
             <strong id="company-name">-</strong>
           </div>
-          <select id="theme-select" title="Tema">
-            <option value="system">Sistema</option>
-            <option value="light">Claro</option>
-            <option value="dark">Escuro</option>
-          </select>
+          <div class="theme-switch" id="theme-switch" role="group" aria-label="Tema">
+            <button type="button" data-theme-option="system" title="Tema do sistema">🖥️</button>
+            <button type="button" data-theme-option="light" title="Tema claro">☀️</button>
+            <button type="button" data-theme-option="dark" title="Tema escuro">🌙</button>
+          </div>
           <button id="logout-btn" class="icon-button" title="Sair">Sair</button>
           <div class="user-chip">
             <span id="user-initials">IA</span>

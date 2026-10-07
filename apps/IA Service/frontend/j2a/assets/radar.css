@@ -322,16 +322,31 @@ button.loading .loader { display: block; }
   font-weight: 900;
   font-size: 11px;
 }
-#theme-select {
-  height: 28px;
-  font-size: 11px;
+.theme-switch {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
   border: 1px solid rgba(255,255,255,.16);
-  border-radius: 7px;
-  background: rgba(255,255,255,.09);
-  color: #fff;
-  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.06);
 }
-#theme-select option { color: #111; }
+.theme-switch button {
+  border: 0;
+  border-radius: 999px;
+  width: 26px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  background: transparent;
+  opacity: .55;
+  filter: grayscale(.4);
+  transition: background .12s ease, opacity .12s ease;
+}
+.theme-switch button:hover { opacity: .8; }
+.theme-switch button.active { background: rgba(255,255,255,.16); opacity: 1; filter: none; }
 .topbar-actions #logout-btn {
   min-height: 28px;
   height: 28px;
@@ -635,24 +650,6 @@ button.loading .loader { display: block; }
   overflow-wrap: anywhere;
 }
 
-.tabs {
-  display: flex;
-  gap: 14px;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--line);
-  overflow: auto;
-}
-.tabs button {
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--muted);
-  padding: 10px 0 8px;
-  font-weight: 700;
-  font-size: 12.5px;
-  white-space: nowrap;
-}
-.tabs button.active { color: var(--brand); border-color: var(--brand); }
 .tab-panel { display: none; min-height: 0; overflow: auto; }
 .tab-panel.active { display: block; }
 #panel-conversation.active {
@@ -932,7 +929,7 @@ button.loading .loader { display: block; }
   .access-form-wrap { padding: 24px; }
   .radar-screen { min-height: 100vh; height: auto; grid-template-rows: 54px 1fr 48px; }
   .topbar { grid-template-columns: auto 1fr auto; padding: 0 12px; gap: 8px; }
-  .company-chip, #theme-select, #logout-btn, .user-chip strong { display: none; }
+  .company-chip, .theme-switch, #logout-btn, .user-chip strong { display: none; }
   .topbar-brand { min-width: 0; }
   .topbar-nav { min-width: 0; }
   .radar-layout {
@@ -952,7 +949,6 @@ button.loading .loader { display: block; }
   .case-top-row { flex-wrap: wrap; }
   .case-title-block { min-width: 100%; }
   .case-actions { justify-content: flex-end; }
-  .tabs { gap: 14px; padding: 0 12px; }
   .messages { padding: 12px; }
   .message { max-width: 90%; }
   .composer { padding: 10px 12px; }
