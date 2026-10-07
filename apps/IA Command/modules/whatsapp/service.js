@@ -4289,11 +4289,17 @@ class IACWhatsAppService extends EventEmitter {
     const status = {
       ok: !/^(nao consegui|nÃ£o consegui|nao foi possivel|nÃ£o foi possivel|ocorreu um erro|erro\b)/i.test(corpo),
       error_detail: null,
+      rows_count: null,
+      no_data: false,
     };
     if (!logId) return status;
     try {
       const log = interpretationLog.obterPorId(logId, empresaId);
       if (log?.resultado_tipo === 'erro') status.ok = false;
+      if (log?.rows_count !== null && log?.rows_count !== undefined) {
+        status.rows_count = Number(log.rows_count);
+        status.no_data = status.ok && status.rows_count === 0;
+      }
       const sqlComErro = log?.sql_gerado || log?.sql_final_executado || '';
       const match = String(sqlComErro).match(/--\s*ERRO:\s*([\s\S]+)$/i);
       if (match?.[1]) status.error_detail = match[1].trim();
@@ -4338,6 +4344,8 @@ class IACWhatsAppService extends EventEmitter {
       resposta,
       ok: statusExecucao.ok,
       error_detail: statusExecucao.error_detail,
+      rows_count: statusExecucao.rows_count,
+      no_data: statusExecucao.no_data,
       interpretation_log_id: timingCtx.logId || null,
       duration_ms: Date.now() - t0,
     };

@@ -591,6 +591,9 @@ button.loading .loader { display: block; }
   justify-content: center;
 }
 .case-actions .primary-button { min-height: 30px; padding: 0 14px; font-size: 12.5px; border-radius: 7px; }
+.case-header-extra { display: contents; }
+.case-header.collapsed .case-header-extra { display: none; }
+.case-view.header-collapsed .case-description { display: none; }
 .case-second-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .case-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .case-badges .badge { font-size: 10.5px; padding: 3px 8px; }

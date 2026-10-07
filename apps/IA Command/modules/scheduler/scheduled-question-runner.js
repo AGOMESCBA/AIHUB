@@ -385,6 +385,16 @@ function statusExecucaoSql(resultado, resposta) {
   };
 }
 
+function resultadoSemDados(resultado) {
+  if (!resultado || resultado.ok === false) return false;
+  if (resultado.no_data === true) return true;
+  if (Array.isArray(resultado.rows)) return resultado.rows.length === 0;
+  if (resultado.rows_count !== undefined && resultado.rows_count !== null) {
+    return Number(resultado.rows_count) === 0;
+  }
+  return false;
+}
+
 // Descobre a qual sistema (erp) pertence o modulo do job, a partir das intentions reais da
 // empresa (mesma fonte usada em modulosDisponiveis(), sem lista fixa por sistema).
 function _erpDoModulo(empresaId, modulo) {
@@ -644,6 +654,13 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
             const resultadoDest = sqlTemMacroDestinatario(sqlFixo(job))
               ? await executarSqlFixoUmaVez(empresaId, job, [dest])
               : (resultado || (resultado = await executarSqlFixoUmaVez(empresaId, job, destinatarios)));
+            if (resultadoSemDados(resultadoDest)) {
+              sucessos++;
+              resumo.push(`${dest.nome || dest.numero}: sem dados - mensagem nao enviada`);
+              store.atualizarDelivery(deliveryId, { status: 'sem_dados', erro: 'Consulta sem dados; mensagem nao enviada.' });
+              if (!resultado) resultado = resultadoDest;
+              continue;
+            }
             await _enviarViaWorker(canal.worker_port, empresaId, dest.numero, resultadoDest.resposta, resultadoDest.ok, job.nome, true);
             if (resultadoDest.ok === false) falhas++;
             else sucessos++;
@@ -661,13 +678,19 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
         // Pergunta IA: worker executa e envia em uma chamada (apenas primeiro destinatário)
         resultado = await _executarViaWorker(canal.worker_port, empresaId, destinatarios[0]?.numero, job.pergunta, job.nome, job.modulo || null);
         const { dest, deliveryId } = entregas[0];
-        if (resultado.ok === false) falhas++;
-        else sucessos++;
-        resumo.push(`${dest.nome || dest.numero}: ${resultado.ok === false ? (resultado.error_detail || 'executado com erro na consulta') : 'enviado'}`);
-        store.atualizarDelivery(deliveryId, { status: 'sucesso', sent_at: new Date().toISOString(), erro: null });
+        if (resultadoSemDados(resultado)) {
+          sucessos++;
+          resumo.push(`${dest.nome || dest.numero}: sem dados - mensagem nao enviada`);
+          store.atualizarDelivery(deliveryId, { status: 'sem_dados', erro: 'Consulta sem dados; mensagem nao enviada.' });
+        } else {
+          if (resultado.ok === false) falhas++;
+          else sucessos++;
+          resumo.push(`${dest.nome || dest.numero}: ${resultado.ok === false ? (resultado.error_detail || 'executado com erro na consulta') : 'enviado'}`);
+          store.atualizarDelivery(deliveryId, { status: 'sucesso', sent_at: new Date().toISOString(), erro: null });
+        }
       }
       const statusDelivery = sucessos && !falhas ? 'sucesso' : sucessos ? 'parcial' : 'erro';
-      if (resultado?.interpretation_log_id) {
+      if (resultado?.interpretation_log_id && resumo.some(x => x.endsWith(': enviado'))) {
         try { interpretationLog.atualizarEntregue(resultado.interpretation_log_id, Date.now() - started); } catch (_) {}
       }
       store.atualizarRun(empresaId, run.id, {
@@ -760,6 +783,12 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
         : resultadoUnico;
       if (!primeiroLogId) primeiroLogId = resultadoDest.interpretation_log_id || null;
       if (!primeiraResposta) primeiraResposta = resultadoDest.resposta || null;
+      if (resultadoSemDados(resultadoDest)) {
+        sucessos++;
+        resumo.push(`${dest.nome || dest.numero}: sem dados - mensagem nao enviada`);
+        store.atualizarDelivery(deliveryId, { status: 'sem_dados', erro: 'Consulta sem dados; mensagem nao enviada.' });
+        continue;
+      }
       await svc.sendScheduledQuestionDelivery({
         empresaId,
         numero: dest.numero,
@@ -782,7 +811,7 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
   }
 
   const status = sucessos && !falhas ? 'sucesso' : sucessos ? 'parcial' : 'erro';
-  if (primeiroLogId) {
+  if (primeiroLogId && resumo.some(x => x.endsWith(': enviado'))) {
     try { interpretationLog.atualizarEntregue(primeiroLogId, Date.now() - started); } catch (_) {}
   }
   const run_atualizado = store.atualizarRun(empresaId, run.id, {
@@ -817,6 +846,7 @@ module.exports = {
     validarSqlFixoBasico,
     erroSqlFixoPermiteRetryIA,
     tentarRetryIaAposSqlFixo,
+    resultadoSemDados,
     _formatarSqlFixoGenerico,
     macrosDataSql,
     resolverMacroDataSql,

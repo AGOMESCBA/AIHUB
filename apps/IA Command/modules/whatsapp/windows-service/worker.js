@@ -251,10 +251,14 @@ const server = http.createServer((req, res) => {
           return res.end(JSON.stringify({ erro: 'empresaId, numero e pergunta são obrigatórios.' }));
         }
         const resultado = await svc.executeScheduledQuestionOnce({ empresaId, numero, pergunta, modulo });
-        await svc.sendScheduledQuestionDelivery({ empresaId, numero, resposta: resultado.resposta, ok: resultado.ok });
         const statusEmoji = resultado.ok === false ? '⚠️' : '✅';
         const nomeJob = jobNome ? `"${jobNome}"` : 'Agendamento';
-        _enfileirar('iac-log', { tipo: resultado.ok === false ? 'warning' : 'success', msg: `${statusEmoji} ${nomeJob} enviado → ${numero}` });
+        if (resultado.no_data === true) {
+          _enfileirar('iac-log', { tipo: 'info', msg: `ℹ️ ${nomeJob} sem dados; mensagem nao enviada → ${numero}` });
+        } else {
+          await svc.sendScheduledQuestionDelivery({ empresaId, numero, resposta: resultado.resposta, ok: resultado.ok });
+          _enfileirar('iac-log', { tipo: resultado.ok === false ? 'warning' : 'success', msg: `${statusEmoji} ${nomeJob} enviado → ${numero}` });
+        }
         res.writeHead(200);
         res.end(JSON.stringify(resultado));
       } catch (err) {

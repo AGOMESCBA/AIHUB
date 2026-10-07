@@ -503,7 +503,6 @@
       return;
     }
     section.hidden = false;
-    section.classList.remove('collapsed');
     $('description-body').textContent = desc;
   }
 
@@ -1114,6 +1113,12 @@
       $('radar-layout').classList.remove('summary-collapsed', 'summary-auto-collapsed');
     });
     $('description-toggle').addEventListener('click', () => $('case-description').classList.toggle('collapsed'));
+    $('toggle-header-btn').addEventListener('click', () => {
+      const collapsed = $('case-header').classList.toggle('collapsed');
+      $('case-view').classList.toggle('header-collapsed', collapsed);
+      $('toggle-header-btn').textContent = collapsed ? '▾' : '▴';
+      $('toggle-header-btn').title = collapsed ? 'Mostrar detalhes do chamado' : 'Ocultar detalhes do chamado';
+    });
     $('research-btn').addEventListener('click', researchSolutions);
     $('composer').addEventListener('submit', sendMessage);
     $('file-input').addEventListener('change', (event) => {
