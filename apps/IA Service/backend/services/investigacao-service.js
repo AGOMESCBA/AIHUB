@@ -199,7 +199,7 @@ async function _classificarTurno(texto, { keys, cfg }) {
  * IA que analise o que já está no histórico. `texto` vira uma instrução
  * fixa, não uma mensagem do analista.
  */
-async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anexoIds = [], automatico = false, anexosComoContexto = false, forcarPesquisa = false }) {
+async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anexoIds = [], automatico = false, anexosComoContexto = false, forcarPesquisa = false, analistaAtualNome = null }) {
   const atendimento = mensagemService.getAtendimento(empresaId, atendimentoId);
   if (!atendimento) throw new Error('Atendimento não encontrado nesta empresa.');
 
@@ -217,6 +217,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
       papel: 'user',
       conteudo: texto,
       usuarioId,
+      origemAutor: analistaAtualNome || null,
     });
     historico = mensagemRepo.listarMensagens(empresaId, atendimentoId)
       .filter(m => m.id !== mensagemUsuario.id); // histórico ANTERIOR a este turno
@@ -358,6 +359,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     systemPrompt: promptBuilder.SYSTEM_PROMPT,
     cfg,
     dossieOperacionalPrecarregado: dossieOperacionalTurno,
+    analistaAtualNome,
   });
   let userPrompt = contexto.userPrompt;
 
@@ -487,6 +489,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
           cfg,
           evidenciaForcadaIds: idsForcados,
           dossieOperacionalPrecarregado: dossieOperacionalTurno,
+          analistaAtualNome,
         });
         userPrompt = contexto.userPrompt;
         const payloadVisualRetry = await _carregarPayloadVisual(contexto);

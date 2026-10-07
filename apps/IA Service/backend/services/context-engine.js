@@ -219,6 +219,7 @@ function montarContextoInvestigacao({
   cfg = {},
   evidenciaForcadaIds = [],
   dossieOperacionalPrecarregado = null,
+  analistaAtualNome = null,
 } = {}) {
   const termos = _termos([mensagemAtual, atendimento?.conteudoBruto].filter(Boolean).join('\n'));
   const contextoCustomizacao = _pareceContextoCustomizacao([mensagemAtual, atendimento?.conteudoBruto].filter(Boolean).join('\n'));
@@ -416,6 +417,7 @@ function montarContextoInvestigacao({
 
   const partes = [];
   partes.push(`## Atendimento ${atendimento.codigo}`);
+  if (analistaAtualNome) partes.push(`Analista que esta conversando com voce agora (autor da "Mensagem atual do analista" abaixo): ${analistaAtualNome}. Mensagens antigas rotuladas apenas como "Analista" no historico podem ser de outro analista — nao presuma que sao da mesma pessoa.`);
   if (atendimento.contextoEstruturado) partes.push(`Contexto conhecido: ${JSON.stringify(atendimento.contextoEstruturado)}`);
   partes.push('\n## Manifesto de evidencias desta chamada');
   partes.push(`Mensagens disponiveis: ${manifesto.mensagensDisponiveis}; selecionadas: ${manifesto.mensagensSelecionadas}.`);

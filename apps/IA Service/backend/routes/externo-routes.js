@@ -329,12 +329,14 @@ module.exports = function registrarRotasExterno(app) {
       if (!texto || !String(texto).trim()) {
         return res.status(400).json({ error: 'texto é obrigatório.' });
       }
+      const analistaAtualNome = consultorService.getNomeExibicao(empresaId, req.svcConsultorExterno);
       const mensagemAssistente = await investigacaoService.processarTurno(empresaId, atendimentoId, {
         texto: String(texto).trim(),
         usuarioId: null,
         anexoIds: Array.isArray(anexoIds) ? anexoIds : [],
         anexosComoContexto: anexosComoContexto === true,
         forcarPesquisa: forcarPesquisa === true,
+        analistaAtualNome,
       });
       res.status(201).json(mensagemAssistente);
     } catch (err) {

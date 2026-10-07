@@ -53,6 +53,15 @@ function getConsultorPorUsuario(empresaId, usuarioIdIahub) {
   return consultorRepo.getConsultorPorUsuario(empresaId, usuarioIdIahub);
 }
 
+// Caminho inverso de getNomeExibicao: usado na tela de sessão por cookie
+// (analista interno logado com usuário/senha do IAHub), onde já se tem o
+// usuarioIdIahub da sessão e nenhum consultorId SoftExpert à mão.
+function getNomeExibicaoPorUsuarioIahub(usuarioIdIahub) {
+  if (!usuarioIdIahub) return null;
+  const usuario = usuariosDb.buscarPorId(usuarioIdIahub);
+  return usuario?.nome || null;
+}
+
 function listarConsultores(empresaId, filtros) {
   return consultorRepo.listarConsultores(empresaId, filtros);
 }
@@ -70,6 +79,7 @@ module.exports = {
   getConsultor,
   getConsultorPorUsuario,
   getNomeExibicao,
+  getNomeExibicaoPorUsuarioIahub,
   listarConsultores,
   atualizarConsultor,
   excluirConsultor,

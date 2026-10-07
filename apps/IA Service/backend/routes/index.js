@@ -179,12 +179,14 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       if (!texto || !String(texto).trim()) {
         return res.status(400).json({ error: 'texto é obrigatório.' });
       }
+      const analistaAtualNome = consultorService.getNomeExibicaoPorUsuarioIahub(req.session?.user_id || null);
       const mensagemAssistente = await investigacaoService.processarTurno(empresaId, atendimentoId, {
         texto: String(texto).trim(),
         usuarioId: req.session?.user_id || null,
         anexoIds: Array.isArray(anexoIds) ? anexoIds : [],
         anexosComoContexto: anexosComoContexto === true,
         forcarPesquisa: forcarPesquisa === true,
+        analistaAtualNome,
       });
       res.status(201).json(mensagemAssistente);
     } catch (err) {
