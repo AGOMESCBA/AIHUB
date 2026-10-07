@@ -30,6 +30,8 @@
     investigations: [],
     processing: new Set(),
     autoTimer: null,
+    countdownTimer: null,
+    nextRefreshAt: 0,
   };
 
   function escapeHtml(value) {
@@ -446,6 +448,17 @@
     }
   }
 
+  function backToRadar() {
+    state.selected = null;
+    state.atendimentoId = null;
+    $('empty-state').hidden = false;
+    $('case-view').hidden = true;
+    document.querySelectorAll('.ticket.active').forEach((el) => el.classList.remove('active'));
+    document.querySelectorAll('[data-panel-tab]').forEach((btn) => btn.classList.remove('active'));
+    $('nav-radar-btn').classList.add('active');
+    setMobileTarget('queue');
+  }
+
   function renderCaseShell() {
     $('empty-state').hidden = true;
     $('case-view').hidden = false;
@@ -465,8 +478,21 @@
       ['SLA', c.slaPrazo || c.slaStatus],
     ].map(([k, v]) => `<div><span>${escapeHtml(k)}</span><strong>${escapeHtml(text(v))}</strong></div>`).join('');
     $('messages').innerHTML = '<div class="empty-block">Carregando conversa...</div>';
+    renderDescription();
     renderDetails();
     renderSummary();
+  }
+
+  function renderDescription() {
+    const c = state.selected;
+    const desc = text(c.descricao || c.breveDescricao || '', '').trim();
+    const section = $('case-description');
+    if (!desc) {
+      section.hidden = true;
+      return;
+    }
+    section.hidden = false;
+    $('description-body').textContent = desc;
   }
 
   function renderAllCaseData() {
@@ -526,14 +552,35 @@
   }
 
   function messageRole(m) {
+    const autor = text(m.origemAutor, '').trim();
     if (m.papel === 'assistant') return 'IA Service';
-    if (m.papel === 'customer') return 'Cliente';
+    if (m.papel === 'customer') return autor ? `Cliente - ${autor}` : 'Cliente';
     if (m.papel === 'system') return 'Sistema';
-    return m.direcao === 'out' ? 'Analista' : 'Mensagem';
+    const base = m.direcao === 'out' ? 'Analista' : 'Mensagem';
+    return autor ? `${base} - ${autor}` : base;
+  }
+
+  function messageAvatar(m) {
+    if (m.papel === 'assistant') return '🤖';
+    if (m.papel === 'customer') return '👤';
+    if (m.papel === 'system') return '⚙️';
+    return '🎧';
+  }
+
+  function messageSide(m) {
+    return m.papel === 'customer' ? 'left' : 'right';
   }
 
   function messageText(m) {
     return m.conteudo || m.texto || m.resposta || '';
+  }
+
+  function messageTimestamp(m) {
+    return m.criadoEm || m.createdAt || m.dataCriacao || '';
+  }
+
+  function messageAttachments(m) {
+    return state.localAttachments.filter((a) => a.mensagemId != null && String(a.mensagemId) === String(m.id));
   }
 
   function renderMessages() {
@@ -541,14 +588,23 @@
       $('messages').innerHTML = '<div class="empty-block">Sem mensagens neste atendimento.</div>';
       return;
     }
-    $('messages').innerHTML = state.messages.map((m) => {
+    const sorted = [...state.messages].sort((a, b) => new Date(messageTimestamp(a)) - new Date(messageTimestamp(b)));
+    $('messages').innerHTML = sorted.map((m) => {
       const assistant = m.papel === 'assistant';
+      const side = messageSide(m);
+      const attachments = messageAttachments(m);
+      const attachmentsHtml = attachments.length ? `
+        <div class="message-attachments">${attachments.map((a) => `
+          <a class="message-attachment" href="${escapeHtml(ext(`/anexos/${encodeURIComponent(a.id)}/download`))}" target="_blank" rel="noopener">📎 ${escapeHtml(a.nome || a.nomeOriginal || 'Anexo')}</a>
+        `).join('')}</div>
+      ` : '';
       return `
-        <article class="message ${assistant ? 'assistant' : ''}">
-          <div class="message-avatar">${assistant ? 'IA' : 'AS'}</div>
+        <article class="message message-${side} ${assistant ? 'assistant' : ''}">
+          <div class="message-avatar">${escapeHtml(messageAvatar(m))}</div>
           <div class="message-card">
-            <div class="message-head"><strong>${escapeHtml(messageRole(m))}</strong><span>${escapeHtml(formatDateTime(m.criadoEm || m.createdAt || m.dataCriacao))}</span></div>
+            <div class="message-head"><strong>${escapeHtml(messageRole(m))}</strong><span>${escapeHtml(formatDateTime(messageTimestamp(m)))}</span></div>
             <div class="message-text">${escapeHtml(messageText(m))}</div>
+            ${attachmentsHtml}
           </div>
         </article>
       `;
@@ -744,21 +800,21 @@
 
   function renderSummary() {
     if (!state.selected) {
-      $('summary-content').innerHTML = '<div class="empty-block">Selecione um chamado para carregar dossiê, anexos, pesquisa e risco.</div>';
+      $('summary-content').innerHTML = '<div class="empty-block">Selecione um chamado para carregar dossiê, pesquisa e risco.</div>';
       return;
     }
     const c = state.selected;
-    const totalAttach = state.softAttachments.length + state.localAttachments.length;
     const elapsed = Number(c.hrDur || 0);
     const goal = Number(c.slaHoras || 0);
     const pct = goal > 0 ? Math.min(100, Math.round((elapsed / goal) * 100)) : 0;
     $('summary-content').innerHTML = `
       <div class="summary-card"><h3>Chamado</h3><div class="summary-list">
         <div class="summary-item"><span>Problema identificado</span><strong>${escapeHtml(currentTicketTitle(c))}</strong></div>
+        <div class="summary-item"><span>SLA</span><strong>${escapeHtml(c.slaPrazo || c.slaStatus || '-')}</strong></div>
+        <div class="summary-item"><span>Previsão</span><strong>${escapeHtml(c.slaDataPrevFim ? formatDateTime(c.slaDataPrevFim) : '-')}</strong></div>
         <div class="summary-item"><span>Aguardando retorno</span><strong>${escapeHtml(waitingLabel(c.aguardandoConsolidado || c.situacaoRetorno) || 'Não informado')}</strong></div>
         <div class="summary-item"><span>Dossiê</span><div>${escapeHtml(dossieText() || 'Sem resumo estruturado disponível.')}</div></div>
       </div></div>
-      <div class="summary-card"><h3>Anexos</h3><div class="summary-item"><strong>${totalAttach} arquivo(s)</strong><div>${state.softAttachments.length} SoftExpert · ${state.localAttachments.length} atendimento</div></div></div>
       <div class="summary-card"><h3>Pesquisa Técnica</h3><div class="summary-item"><strong>${escapeHtml(String((state.research?.relacionados || []).length))} similar(es)</strong><div>${escapeHtml(String((state.research?.pesquisa?.resultados || state.research?.pesquisa?.links || []).length))} fonte(s)/trilha(s)</div></div></div>
       <div class="summary-card"><h3>Risco SLA</h3><div class="summary-item"><span>Status</span><strong>${escapeHtml(c.slaPrazo || '-')}</strong></div><div class="progress" title="${pct}%"><span style="--value:${pct}%"></span></div><div class="summary-item"><span>Previsão</span><strong>${escapeHtml(c.slaDataPrevFim ? formatDateTime(c.slaDataPrevFim) : '-')}</strong></div></div>
     `;
@@ -831,6 +887,7 @@
   function setPanel(panel) {
     state.activePanel = panel;
     document.querySelectorAll('[data-panel-tab]').forEach((btn) => btn.classList.toggle('active', btn.dataset.panelTab === panel));
+    $('nav-radar-btn').classList.remove('active');
     ['conversation', 'evidence', 'knowledge', 'details', 'risk'].forEach((name) => {
       const el = $(`panel-${name}`);
       if (el) el.classList.toggle('active', name === panel);
@@ -858,12 +915,31 @@
 
   function setupAutoRefresh() {
     clearInterval(state.autoTimer);
+    clearInterval(state.countdownTimer);
     const seconds = Number($('auto-refresh-select').value || 0);
-    if (!seconds) return;
+    const countdownEl = $('refresh-countdown');
+    if (!seconds) {
+      countdownEl.hidden = true;
+      return;
+    }
+    state.nextRefreshAt = Date.now() + seconds * 1000;
+    countdownEl.hidden = false;
+    renderCountdown();
+    state.countdownTimer = setInterval(renderCountdown, 1000);
     state.autoTimer = setInterval(() => {
       loadQueue().catch(() => null);
       if (state.activePanel === 'risk') loadRisk().catch(() => null);
+      state.nextRefreshAt = Date.now() + seconds * 1000;
     }, seconds * 1000);
+  }
+
+  function renderCountdown() {
+    const countdownEl = $('refresh-countdown');
+    if (!countdownEl || countdownEl.hidden) return;
+    const remaining = Math.max(0, Math.round((state.nextRefreshAt - Date.now()) / 1000));
+    const mm = Math.floor(remaining / 60);
+    const ss = remaining % 60;
+    countdownEl.textContent = mm > 0 ? `${mm}m ${String(ss).padStart(2, '0')}s` : `${ss}s`;
   }
 
   function bindEvents() {
@@ -917,7 +993,11 @@
       showAccess('Sessao encerrada.');
     });
     $('theme-select').addEventListener('change', (e) => applyTheme(e.target.value));
-    $('refresh-queue-btn').addEventListener('click', () => loadQueue({ forceSync: true }));
+    $('refresh-queue-btn').addEventListener('click', () => {
+      loadQueue({ forceSync: true });
+      const seconds = Number($('auto-refresh-select').value || 0);
+      if (seconds) state.nextRefreshAt = Date.now() + seconds * 1000;
+    });
     $('queue-search').addEventListener('input', renderQueue);
     document.querySelectorAll('[data-queue-filter]').forEach((btn) => btn.addEventListener('click', () => {
       state.queueFilter = btn.dataset.queueFilter;
@@ -926,6 +1006,7 @@
     }));
     $('auto-refresh-select').addEventListener('change', setupAutoRefresh);
     $('pre-analysis-toggle').addEventListener('change', savePreferences);
+    $('nav-radar-btn').addEventListener('click', backToRadar);
     $('queue-list').addEventListener('click', (event) => {
       const btn = event.target.closest('[data-ticket-id]');
       if (btn) selectTicket(btn.dataset.ticketId);
@@ -961,8 +1042,9 @@
     });
     $('toggle-risk-consultants').addEventListener('click', () => $('risk-layout').classList.toggle('consultants-collapsed'));
     $('toggle-summary-btn').addEventListener('click', () => $('radar-layout').classList.toggle('summary-collapsed'));
-    $('close-summary-btn').addEventListener('click', () => $('radar-layout').classList.add('summary-collapsed'));
+    $('close-summary-btn').addEventListener('click', () => $('radar-layout').classList.toggle('summary-collapsed'));
     $('toggle-queue-btn').addEventListener('click', () => $('radar-layout').classList.toggle('queue-collapsed'));
+    $('description-toggle').addEventListener('click', () => $('case-description').classList.toggle('collapsed'));
     $('research-btn').addEventListener('click', researchSolutions);
     $('composer').addEventListener('submit', sendMessage);
     $('file-input').addEventListener('change', (event) => {

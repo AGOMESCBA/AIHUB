@@ -109,10 +109,12 @@
           </div>
         </div>
         <nav class="topbar-nav" aria-label="Áreas do Radar">
-          <button class="nav-item active" data-mobile-target="queue">Radar</button>
-          <button class="nav-item" data-panel-tab="knowledge">Base de Conhecimento</button>
+          <button class="nav-item active" id="nav-radar-btn">Radar</button>
+          <button class="nav-item" data-panel-tab="conversation">Conversa</button>
+          <button class="nav-item" data-panel-tab="evidence">Evidências</button>
           <button class="nav-item" data-panel-tab="details">Detalhes</button>
           <button class="nav-item" data-panel-tab="risk">Risco SLA</button>
+          <button class="nav-item" data-panel-tab="knowledge">Base de Conhecimento</button>
         </nav>
         <div class="topbar-actions">
           <div class="company-chip">
@@ -137,9 +139,7 @@
           <div class="panel-head">
             <div>
               <h2>Fila de Chamados</h2>
-              <p id="queue-subtitle">Fila pessoal do consultor</p>
             </div>
-            <button id="refresh-queue-btn" class="icon-button" title="Atualizar fila">↻</button>
           </div>
           <div class="queue-tools">
             <input id="queue-search" type="search" placeholder="Buscar por chamado, cliente ou assunto...">
@@ -150,16 +150,20 @@
             </div>
             <div class="queue-options">
               <span id="queue-count">0 chamado(s)</span>
-              <select id="auto-refresh-select">
-                <option value="0">Manual</option>
-                <option value="30">30s</option>
-                <option value="60" selected>1 min</option>
-                <option value="300">5 min</option>
-                <option value="900">15 min</option>
-              </select>
+              <div class="queue-refresh-group">
+                <button id="refresh-queue-btn" class="icon-button ghost-icon" title="Atualizar fila agora">↻</button>
+                <span id="refresh-countdown" class="refresh-countdown" hidden></span>
+                <select id="auto-refresh-select">
+                  <option value="0">Manual</option>
+                  <option value="30">30s</option>
+                  <option value="60" selected>1 min</option>
+                  <option value="300">5 min</option>
+                  <option value="900">15 min</option>
+                </select>
+              </div>
             </div>
             <label class="switch-row">
-              <span><strong>Pré-análise IA</strong><small>Ao iniciar análise</small></span>
+              <span class="switch-label"><strong>Pré-análise IA</strong><small>Ao iniciar análise</small></span>
               <input id="pre-analysis-toggle" type="checkbox" checked>
             </label>
           </div>
@@ -175,28 +179,30 @@
 
           <article id="case-view" class="case-view" hidden>
             <header class="case-header">
-              <div class="case-title-block">
-                <div class="case-line">
+              <div class="case-top-row">
+                <div class="case-title-block">
                   <h1 id="case-title">Chamado</h1>
                   <span id="case-number" class="case-number"></span>
                 </div>
+                <div class="case-actions">
+                  <button id="toggle-queue-btn" class="icon-button ghost-icon" title="Recolher fila">☰</button>
+                  <button id="research-btn" class="primary-button">🔎 Pesquisar Soluções</button>
+                  <button id="toggle-summary-btn" class="icon-button ghost-icon" title="Recolher resumo">ⓘ</button>
+                </div>
+              </div>
+              <div class="case-second-row">
                 <div id="case-badges" class="case-badges"></div>
+                <div class="case-meta" id="case-meta"></div>
               </div>
-              <div class="case-actions">
-                <button id="toggle-queue-btn" class="secondary-button" title="Recolher fila">Fila</button>
-                <button id="research-btn" class="primary-button">Pesquisar Soluções</button>
-                <button id="toggle-summary-btn" class="secondary-button" title="Recolher resumo">Resumo</button>
-              </div>
-              <div class="case-meta" id="case-meta"></div>
             </header>
 
-            <div class="tabs" role="tablist">
-              <button class="active" data-panel-tab="conversation">Conversa</button>
-              <button data-panel-tab="evidence">Evidências</button>
-              <button data-panel-tab="knowledge">Pesquisa Técnica</button>
-              <button data-panel-tab="details">Detalhes</button>
-              <button data-panel-tab="risk">Risco SLA</button>
-            </div>
+            <section id="case-description" class="case-description collapsed">
+              <button type="button" id="description-toggle" class="description-toggle">
+                <span class="description-label">Descrição do problema</span>
+                <span class="description-chevron">▾</span>
+              </button>
+              <div id="description-body" class="description-body"></div>
+            </section>
 
             <section id="panel-conversation" class="tab-panel active">
               <div id="messages" class="messages"></div>
@@ -207,10 +213,13 @@
                   <div id="pending-files" class="pending-files"></div>
                   <textarea id="message-input" rows="1" placeholder="Digite sua mensagem para a IA Service..."></textarea>
                 </div>
-                <button id="send-btn" type="submit">Enviar</button>
+                <button id="send-btn" type="submit">➤</button>
               </form>
             </section>
 
+            <section id="panel-details" class="tab-panel">
+              <div id="details-content" class="section-stack"></div>
+            </section>
             <section id="panel-evidence" class="tab-panel">
               <div id="evidence-content" class="section-stack"></div>
             </section>
@@ -220,9 +229,6 @@
                 <button data-knowledge-tab="technical">Pesquisa técnica</button>
               </div>
               <div id="knowledge-content" class="section-stack"></div>
-            </section>
-            <section id="panel-details" class="tab-panel">
-              <div id="details-content" class="section-stack"></div>
             </section>
             <section id="panel-risk" class="tab-panel">
               <div class="risk-toolbar">
@@ -256,10 +262,10 @@
               <h2>Resumo da Investigação</h2>
               <p id="summary-status">Dados reais do atendimento</p>
             </div>
-            <button id="close-summary-btn" class="icon-button" title="Recolher resumo">×</button>
+            <button id="close-summary-btn" class="icon-button ghost-icon" title="Recolher painel">⇥</button>
           </div>
           <div id="summary-content" class="summary-content">
-            <div class="empty-block">Selecione um chamado para carregar dossiê, anexos, pesquisa e risco.</div>
+            <div class="empty-block">Selecione um chamado para carregar dossiê, pesquisa e risco.</div>
           </div>
         </aside>
       </main>
