@@ -33,20 +33,26 @@ function getConsultor(empresaId, consultorId) {
   return consultorRepo.getConsultor(empresaId, consultorId);
 }
 
-// Resolve o nome de exibição do consultor: usuário IAHub vinculado (se
-// houver) como primeira fonte, senão o técnico importado do SoftExpert
-// correspondente ao id_softexpert do consultor (ver nota em
-// consultor-repository.getNomeTecnicoPorIdOrigem) — cobre o caso
-// predominante hoje, consultor cadastrado só com telefone, sem vínculo de
-// login IAHub.
+// Resolve o nome de exibição do consultor: SEMPRE o nome do cadastro de
+// números autorizados (técnico importado do SoftExpert, via id_softexpert
+// — ver nota em consultor-repository.getNomeTecnicoPorIdOrigem), mesmo
+// quando há usuarioIdIahub vinculado. Decisão explícita do usuário
+// (2026-10): o nome exibido no login por telefone deve refletir sempre o
+// cadastro do WhatsApp, não o nome do usuário de login do IAHub — o
+// vínculo com usuarioIdIahub existe por outros motivos (ex. permissões),
+// não para sobrepor o nome de exibição. Cai para o usuário IAHub só se o
+// SoftExpert não tiver nome algum (consultor sem id_softexpert ainda
+// visto numa importação).
 function getNomeExibicao(empresaId, consultorId) {
   const consultor = consultorRepo.getConsultor(empresaId, consultorId);
   if (!consultor) return null;
+  const nomeTecnico = consultorRepo.getNomeTecnicoPorIdOrigem(empresaId, consultor.idSoftexpert);
+  if (nomeTecnico) return nomeTecnico;
   if (consultor.usuarioIdIahub) {
     const usuario = usuariosDb.buscarPorId(consultor.usuarioIdIahub);
     if (usuario?.nome) return usuario.nome;
   }
-  return consultorRepo.getNomeTecnicoPorIdOrigem(empresaId, consultor.idSoftexpert);
+  return null;
 }
 
 function getConsultorPorUsuario(empresaId, usuarioIdIahub) {

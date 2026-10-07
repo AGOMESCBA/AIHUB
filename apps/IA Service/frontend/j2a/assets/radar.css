@@ -576,8 +576,8 @@ button.loading .loader { display: block; }
 .empty-icon { font-size: 42px; }
 .case-view { min-height: 0; display: grid; grid-template-rows: auto auto 1fr; }
 .case-header { padding: 10px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
-.case-top-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.case-title-block { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.case-top-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.case-title-block { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
 .case-title-block h1 { margin: 0; font-size: 15px; font-weight: 800; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .case-number { color: var(--brand); font-weight: 800; font-size: 15px; flex: none; }
 .case-actions { display: flex; align-items: center; gap: 6px; flex: none; }

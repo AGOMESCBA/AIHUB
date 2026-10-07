@@ -1135,6 +1135,9 @@
       $('case-view').classList.toggle('header-collapsed', collapsed);
       $('toggle-header-btn').classList.toggle('collapsed', collapsed);
       $('toggle-header-btn').title = collapsed ? 'Mostrar detalhes do chamado' : 'Ocultar detalhes do chamado';
+      const layout = $('radar-layout');
+      layout.classList.remove('summary-auto-collapsed');
+      layout.classList.toggle('summary-collapsed', collapsed);
     });
     $('research-btn').addEventListener('click', researchSolutions);
     $('composer').addEventListener('submit', sendMessage);
