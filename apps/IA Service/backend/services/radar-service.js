@@ -203,12 +203,12 @@ function _formatarDataHoraPosicionamento(dataPosicionamentoIso) {
   return `${dia}/${mes}/${ano} - ${hh}:${mm}:${ss}`;
 }
 
-function _papelPosicionamento(chamado, p) {
+function _papelPosicionamento(chamado, p, tecnicoResponsavelNome) {
   if (p.tecnicoId) return 'user';
   if (p.usuarioClienteId) return 'customer';
   if (p.tecnicoId && chamado.tecnicoResponsavelId && p.tecnicoId === chamado.tecnicoResponsavelId) return 'user';
   const autor = _normalizarNome(_autorPosicionamento(p));
-  const responsavel = _normalizarNome(chamado.tecnicoResponsavelNome);
+  const responsavel = _normalizarNome(tecnicoResponsavelNome);
   return responsavel && autor === responsavel ? 'user' : 'customer';
 }
 
@@ -220,28 +220,37 @@ function _dataMensagemOrigem(dataOrigem, indice) {
 }
 
 function _gravarHistoricoComoMensagens(empresaId, atendimentoId, chamado, posicionamentos, usuarioIdIahub) {
+  // chamado.solicitanteId/tecnicoResponsavelId são as únicas referências ao
+  // solicitante/técnico presentes no objeto retornado por chamadoRepo.getChamado
+  // (sem join) — solicitanteNome/tecnicoResponsavelNome nunca existiram nesse
+  // objeto, então resolvidos aqui via join explícito (achado real 2026-10,
+  // chamado #035988: nome do solicitante presente e correto na origem/base,
+  // mas a mensagem de abertura sempre caía no fallback "não identificado"
+  // porque lia um campo que nunca foi populado neste fluxo).
+  const solicitante = clienteRepo.getUsuarioClientePorId(empresaId, chamado.solicitanteId);
+  const tecnicoResponsavel = clienteRepo.getTecnicoPorId(empresaId, chamado.tecnicoResponsavelId);
+
   let indice = 0;
   const abertura = _textoAberturaChamado(chamado);
   if (abertura) {
     mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
       papel: 'customer',
-      conteudo: `Abertura do chamado por ${chamado.solicitanteNome || 'solicitante não identificado'}\n\n${abertura}`,
+      conteudo: `Abertura do chamado por ${solicitante?.nome || 'solicitante não identificado'}\n\n${abertura}`,
       usuarioId: null,
       criadoEm: _dataMensagemOrigem(chamado.dataAbertura, indice++),
       origemSistema: 'softexpert',
       origemReferencia: `chamado:${chamado.id}`,
       origemData: chamado.dataAbertura ?? null,
-      origemAutor: chamado.solicitanteNome || null,
+      origemAutor: solicitante?.nome || null,
     });
   }
 
   for (const p of posicionamentos) {
-    const data = _formatarDataHoraPosicionamento(p.dataPosicionamento);
     const autor = _autorPosicionamento(p);
-    const papel = _papelPosicionamento(chamado, p);
+    const papel = _papelPosicionamento(chamado, p, tecnicoResponsavel?.nome);
     mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
       papel,
-      conteudo: `[${data}] ${autor}\n\n${_textoPosicionamento(p)}`,
+      conteudo: _textoPosicionamento(p),
       usuarioId: papel === 'user' ? (usuarioIdIahub ?? null) : null,
       criadoEm: _dataMensagemOrigem(p.dataPosicionamento, indice++),
       origemSistema: 'softexpert',

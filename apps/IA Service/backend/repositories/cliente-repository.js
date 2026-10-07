@@ -76,6 +76,14 @@ function _usuarioParaDominio(row) {
   };
 }
 
+function getUsuarioClientePorId(empresaId, id) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!id) return null;
+  const db = getDB();
+  const row = db.prepare(`SELECT * FROM usuarios_cliente WHERE id = ? AND empresa_id = ?`).get(id, Number(empresaId));
+  return _usuarioParaDominio(row);
+}
+
 /**
  * Upsert por (empresa, sistema_origem, id_origem) quando id_origem existe;
  * senão sempre cria (não há chave natural confiável para deduplicar).
@@ -175,8 +183,15 @@ function getTecnicoPorOrigem(empresaId, sistemaOrigem, idOrigem) {
   `).get(Number(empresaId), sistemaOrigem, idOrigem));
 }
 
+function getTecnicoPorId(empresaId, id) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!id) return null;
+  const db = getDB();
+  return _tecnicoParaDominio(db.prepare(`SELECT * FROM tecnicos WHERE id = ? AND empresa_id = ?`).get(id, Number(empresaId)));
+}
+
 module.exports = {
   upsertCliente, getClientePorCnpj, listarClientes, contarClientes,
-  upsertUsuarioCliente, contarUsuariosCliente,
-  upsertTecnico, contarTecnicos, getTecnicoPorOrigem,
+  upsertUsuarioCliente, getUsuarioClientePorId, contarUsuariosCliente,
+  upsertTecnico, contarTecnicos, getTecnicoPorOrigem, getTecnicoPorId,
 };
