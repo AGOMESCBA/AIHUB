@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IA Service - Mockup UX</title>
+  <style>
+    :root {
+      --bg: #eef3f8;
+      --panel: #ffffff;
+      --panel-2: #f7f9fc;
+      --text: #102033;
+      --muted: #64758a;
+      --line: #d9e2ee;
+      --brand: #006bd6;
+      --brand-2: #00b894;
+      --danger: #ff4d57;
+      --warn: #f2a21b;
+      --ok: #17b26a;
+      --shadow: 0 16px 38px rgba(18, 36, 58, .12);
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+    }
+    [data-theme="dark"] {
+      --bg: #081620;
+      --panel: #122633;
+      --panel-2: #0d1d28;
+      --text: #eef7ff;
+      --muted: #9fb2c9;
+      --line: #294250;
+      --brand: #2f8cff;
+      --brand-2: #00d7a7;
+      --shadow: 0 16px 38px rgba(0, 0, 0, .28);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    .topbar { height: 58px; display: flex; align-items: center; gap: 20px; padding: 0 24px; background: linear-gradient(90deg, #08223b, #0c3358); color: #fff; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 17px; }
+    .mark { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: #fff; color: #113e66; font-weight: 900; }
+    .nav { display: flex; gap: 8px; flex: 1; }
+    .nav span { padding: 8px 12px; border-radius: 7px; color: #c8d7e9; font-size: 13px; }
+    .nav .on { color: #fff; background: rgba(47, 140, 255, .26); }
+    .company { background: rgba(255,255,255,.08); padding: 8px 14px; border-radius: 7px; font-size: 12px; min-width: 190px; }
+    .user { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    .avatar { width: 34px; height: 34px; border-radius: 50%; background: #fff; color: #0d58a6; display: grid; place-items: center; font-weight: 800; }
+    .shell { height: calc(100vh - 58px); display: grid; grid-template-columns: 336px minmax(480px, 1fr) 360px; gap: 14px; padding: 14px; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); overflow: hidden; }
+    .queue { display: flex; flex-direction: column; min-width: 0; }
+    .head { padding: 16px; border-bottom: 1px solid var(--line); }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .title { font-weight: 800; font-size: 18px; }
+    .pill { border-radius: 999px; padding: 4px 9px; font-size: 11px; font-weight: 800; background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
+    .pill.danger { background: rgba(255,77,87,.13); color: var(--danger); border-color: rgba(255,77,87,.22); }
+    .pill.warn { background: rgba(242,162,27,.16); color: var(--warn); border-color: rgba(242,162,27,.25); }
+    .pill.ok { background: rgba(23,178,106,.14); color: var(--ok); border-color: rgba(23,178,106,.22); }
+    .search { margin-top: 14px; height: 38px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); display: flex; align-items: center; padding: 0 12px; font-size: 13px; }
+    .filters { display: flex; gap: 6px; margin-top: 12px; }
+    .filters span { padding: 7px 10px; border-radius: 6px; border: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+    .filters .on { background: var(--brand); color: #fff; border-color: var(--brand); }
+    .tickets { overflow: auto; }
+    .ticket { padding: 15px 16px; border-bottom: 1px solid var(--line); border-left: 4px solid transparent; }
+    .ticket.on { background: rgba(0, 107, 214, .08); border-left-color: var(--brand); }
+    .ticket .num { font-weight: 900; font-size: 13px; }
+    .ticket h3 { margin: 8px 0 6px; font-size: 14px; line-height: 1.25; }
+    .ticket p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.35; }
+    .work { display: grid; grid-template-rows: auto auto 1fr auto; min-width: 0; }
+    .casebar { padding: 18px 18px 14px; border-bottom: 1px solid var(--line); }
+    .casebar h1 { margin: 0 0 12px; font-size: 19px; line-height: 1.25; }
+    .meta { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; font-size: 12px; }
+    .meta b { display: block; font-size: 13px; margin-top: 4px; }
+    .tabs { display: flex; gap: 22px; padding: 0 18px; border-bottom: 1px solid var(--line); }
+    .tabs span { padding: 12px 0; font-size: 13px; font-weight: 700; color: var(--muted); border-bottom: 3px solid transparent; }
+    .tabs .on { color: var(--brand); border-color: var(--brand); }
+    .chat { padding: 18px; overflow: auto; background: linear-gradient(180deg, rgba(47,140,255,.05), transparent 42%); }
+    .msg { display: grid; grid-template-columns: 42px 1fr; gap: 10px; margin-bottom: 16px; }
+    .bubble { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 12px; line-height: 1.45; font-size: 14px; }
+    .solution { margin-top: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 12px; }
+    .solution b { color: var(--ok); }
+    .accordions { margin-top: 10px; display: grid; gap: 8px; }
+    .acc { border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; background: var(--panel); font-weight: 700; font-size: 13px; display: flex; justify-content: space-between; }
+    .composer { padding: 12px 18px; border-top: 1px solid var(--line); display: grid; grid-template-columns: 40px 1fr 52px; gap: 10px; }
+    .input { border: 1px solid var(--line); background: var(--panel-2); border-radius: 7px; display: flex; align-items: center; padding: 0 12px; color: var(--muted); font-size: 13px; }
+    .iconbtn, .send { border: 1px solid var(--line); background: var(--panel-2); border-radius: 7px; display: grid; place-items: center; font-weight: 800; }
+    .send { background: var(--brand); color: #fff; border-color: var(--brand); }
+    .side { display: flex; flex-direction: column; overflow: hidden; }
+    .block { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+    .block h2 { margin: 0 0 12px; font-size: 15px; }
+    .fact { margin: 10px 0; font-size: 13px; color: var(--muted); line-height: 1.35; }
+    .fact b { display: block; color: var(--text); margin-bottom: 3px; }
+    .progress { height: 10px; border-radius: 999px; background: var(--panel-2); overflow: hidden; border: 1px solid var(--line); }
+    .bar { height: 100%; width: 56%; background: var(--danger); }
+    .file { display: grid; grid-template-columns: 24px 1fr auto; gap: 9px; align-items: center; font-size: 12px; margin: 9px 0; }
+    .primary { height: 40px; padding: 0 18px; border: 0; border-radius: 7px; background: linear-gradient(90deg, var(--brand), #004fb8); color: #fff; font-weight: 800; box-shadow: 0 10px 22px rgba(0,107,214,.24); }
+    .badge-num { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--brand); color: #fff; font-weight: 900; margin-left: 6px; }
+    .mobilebar { display: none; }
+    @media (max-width: 700px) {
+      .topbar { height: 54px; padding: 0 14px; }
+      .nav, .company, .user span { display: none; }
+      .shell { height: calc(100vh - 54px); display: block; padding: 0; }
+      .queue { height: 46vh; border-radius: 0; box-shadow: none; border-left: 0; border-right: 0; }
+      .work { height: 54vh; border-radius: 0; box-shadow: none; border-left: 0; border-right: 0; }
+      .side { display: none; }
+      .casebar { padding: 12px; }
+      .casebar h1 { font-size: 15px; }
+      .meta { grid-template-columns: repeat(2, 1fr); }
+      .tabs { gap: 18px; overflow: auto; padding: 0 12px; }
+      .chat { padding: 12px; }
+      .composer { padding: 10px 12px; grid-template-columns: 36px 1fr 44px; }
+      .bubble { font-size: 13px; }
+      .mobilebar { display: flex; position: fixed; bottom: 0; left: 0; right: 0; height: 46px; background: var(--panel); border-top: 1px solid var(--line); z-index: 3; }
+      .mobilebar span { flex: 1; display: grid; place-items: center; font-size: 12px; color: var(--muted); }
+      .mobilebar .on { color: var(--brand); font-weight: 800; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><div class="mark">IA</div> IA Service</div>
+    <div class="nav"><span class="on">Radar de Chamados</span><span>Base de Conhecimento</span><span>Configurações</span><span>Guia de Uso</span></div>
+    <div class="company">Empresa<br><b>Grupo Exemplo</b></div>
+    <div class="user"><div class="avatar">AS</div><span>Ana Silva<br><small>Analista de Suporte</small></span></div>
+  </div>
+  <main class="shell">
+    <section class="panel queue">
+      <div class="head">
+        <div class="row"><div class="title">Fila de Chamados <span class="pill">24</span></div><button class="iconbtn" style="width:34px;height:34px;">↻</button></div>
+        <div class="search">🔎 Buscar por chamado, cliente ou assunto...</div>
+        <div class="filters"><span class="on">Todos 24</span><span>Críticos 3</span><span>No prazo 15</span><span>Atenção 6</span></div>
+      </div>
+      <div class="tickets">
+        <div class="ticket on"><div class="row"><span class="num">SE-12345</span><span class="pill danger">Crítico</span></div><h3>Erro na geração do CNAB</h3><p>Grupo Exemplo · Financeiro · 2h 15min de SLA</p></div>
+        <div class="ticket"><div class="row"><span class="num">SE-12346</span><span class="pill warn">Atenção</span></div><h3>Impostos não calculados</h3><p>Loja Exemplo · Fiscal · 6h 30min</p></div>
+        <div class="ticket"><div class="row"><span class="num">SE-12347</span><span class="pill ok">No prazo</span></div><h3>Dúvida configuração de parâmetro</h3><p>Franquia Exemplo · Protheus · 1 dia</p></div>
+        <div class="ticket"><div class="row"><span class="num">SE-12348</span><span class="pill ok">No prazo</span></div><h3>Erro no relatório gerencial</h3><p>Matriz · BI · 1 dia</p></div>
+      </div>
+    </section>
+    <section class="panel work">
+      <div class="casebar">
+        <div class="row"><h1>SE-12345 <span class="pill danger">Crítico</span> Erro na geração do CNAB <span class="badge-num">1</span></h1><button class="primary">🔎 Pesquisar Soluções</button></div>
+        <div class="meta"><span>Empresa<b>Grupo Exemplo</b></span><span>Área/Sistema<b>Financeiro</b></span><span>Aberto em<b>06/10/2026 09:12</b></span><span>SLA<b style="color:var(--danger)">2h 15min</b></span><span>Status<b>Em atendimento</b></span></div>
+      </div>
+      <div class="tabs"><span class="on">Conversa</span><span>Evidências</span><span>Pesquisa Técnica</span><span>Detalhes</span><span>Risco SLA</span></div>
+      <div class="chat">
+        <div class="msg"><div class="avatar">AS</div><div class="bubble">Ao gerar o CNAB o sistema apresenta erro de validação de layout. Segue o log e a tela com o erro.</div></div>
+        <div class="msg"><div class="avatar" style="background:#092f52;color:white">IA</div><div class="bubble">Analisei o erro apresentado e identifiquei relação com o parâmetro de layout do CNAB.<div class="solution"><b>✓ Solução sugerida</b><br>1. Verificar o parâmetro F12 - Layout CNAB<br>2. Conferir se o layout configurado corresponde ao banco utilizado<br>3. Gerar novo arquivo após ajuste</div><div class="accordions"><div class="acc">Evidências utilizadas (3)<span>⌄</span></div><div class="acc">Pesquisa técnica (2 fontes)<span>⌄</span></div><div class="acc">Quality Gate <span class="pill ok">Alta confiança</span></div></div></div></div>
+      </div>
+      <div class="composer"><button class="iconbtn">📎</button><div class="input">Digite sua mensagem para a IA Service...</div><button class="send">➤</button></div>
+    </section>
+    <aside class="panel side">
+      <div class="block"><div class="row"><h2>Resumo da Investigação <span class="badge-num">7</span></h2><span class="pill ok">Em andamento</span></div><div class="fact"><b>Problema identificado</b>Erro na geração do CNAB por falha na validação de layout do arquivo.</div><div class="fact"><b>Hipótese atual</b>Configuração incorreta do layout CNAB para o banco utilizado.</div><div class="fact"><b>Já testado</b>Verificação do parâmetro F12; análise do log; geração com layout alternativo.</div><div class="fact"><b>Próxima ação</b>Ajustar o layout CNAB conforme banco configurado e realizar nova geração.</div></div>
+      <div class="block"><div class="row"><h2>Anexos do Chamado (5)</h2><span style="color:var(--brand);font-size:12px;">Ver todos</span></div><div class="file">🖼️<span>erro_cnab.png<br><small>342 KB · Imagem</small></span><span class="pill">Visualizar</span></div><div class="file">📄<span>log_cnab.txt<br><small>12 KB · Texto</small></span><span class="pill">Visualizar</span></div><div class="file">📕<span>manual_cnab.pdf<br><small>1.2 MB · PDF</small></span><span class="pill">Baixar</span></div></div>
+      <div class="block"><div class="row"><h2>Pesquisa Técnica <span class="badge-num">9</span></h2><span style="color:var(--brand);font-size:12px;">Ver todas</span></div><div class="fact"><b>TDN - Configuração de Layout CNAB</b>Fonte oficial</div><div class="fact"><b>Erro na geração do CNAB - Solução</b>Fonte externa</div></div>
+      <div class="block"><div class="row"><h2>Risco SLA <span class="badge-num">10</span></h2><span class="pill danger">Alto risco</span></div><div class="progress"><div class="bar"></div></div><div class="row" style="margin-top:8px;font-size:12px;color:var(--muted);"><span>2h 15min decorridos</span><b>Meta: 4h</b></div></div>
+    </aside>
+  </main>
+  <div class="mobilebar"><span class="on">Fila</span><span>Conversa</span><span>Resumo</span><span>Mais</span></div>
+  <script>
+    const p = new URLSearchParams(location.search);
+    document.documentElement.dataset.theme = p.get('theme') || 'light';
+  </script>
+</body>
+</html>

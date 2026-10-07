@@ -130,6 +130,23 @@ module.exports = function registrarRotasLoginExterno(app) {
     res.sendFile(require('path').join(__dirname, '..', '..', 'frontend', 'radar.html'));
   });
 
+  // Novo frontend paralelo de homologação (2026-10): mesma autenticação
+  // externa WhatsApp/OTP e mesmos endpoints do Radar, servido isolado da V1.
+  const j2aDir = require('path').join(__dirname, '..', '..', 'frontend', 'j2a');
+  app.use('/iaservice/j2a/assets', require('express').static(require('path').join(j2aDir, 'assets'), {
+    etag: true,
+    lastModified: true,
+    setHeaders(res) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+      res.setHeader('Referrer-Policy', 'no-referrer');
+    },
+  }));
+  app.get(['/iaservice/j2a', '/iaservice/j2a/acesso', '/iaservice/j2a/radar'], (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.sendFile(require('path').join(j2aDir, 'index.html'));
+  });
+
   app.post('/api/ia-service-publico/login/iniciar', rateLimitLoginExterno, async (req, res) => {
     let resultado;
     try {

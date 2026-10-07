@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IA Service - Radar de Chamados</title>
+  <link rel="stylesheet" href="/iaservice/j2a/assets/radar.css">
+</head>
+<body>
+  <div id="app" class="app-shell" data-view="loading">
+    <section id="access-screen" class="access-screen" hidden>
+      <div class="access-card">
+        <section class="access-hero">
+          <div class="access-brand">
+            <div class="brand-mark">IA</div>
+            <div>
+              <h1>Acesso IA Service</h1>
+              <p>Radar de Chamados via WhatsApp</p>
+            </div>
+          </div>
+          <div class="hero-copy">
+            <h2>Acesso direto ao Radar, sem senha.</h2>
+            <p>Entre pelo telefone cadastrado como consultor. O IA Service valida o número por WhatsApp e abre o Radar de Chamados já com sua fila pessoal.</p>
+          </div>
+          <div class="access-flow" aria-label="Fluxo de autenticação">
+            <div class="flow-item"><span class="flow-num">1</span><div><div class="flow-title">Telefone cadastrado</div><div class="flow-text">Use o mesmo número cadastrado no seu perfil de consultor.</div></div></div>
+            <div class="flow-item"><span class="flow-num">2</span><div><div class="flow-title">Código no WhatsApp</div><div class="flow-text">O código é temporário e confirma que o telefone pertence a você.</div></div></div>
+            <div class="flow-item"><span class="flow-num">3</span><div><div class="flow-title">Radar liberado</div><div class="flow-text">A sessão abre já na sua fila pessoal de chamados.</div></div></div>
+          </div>
+          <div class="otp-visual" aria-hidden="true">
+            <div class="visual-top"><span>WhatsApp</span><strong>código seguro</strong></div>
+            <div class="phone-mock">
+              <div class="bubble">Seu código IA Service chegou.</div>
+              <div class="bubble out">Confirmação de acesso</div>
+              <div class="otp-preview"><span>4</span><span>8</span><span>2</span><span>1</span><span>0</span><span>7</span></div>
+              <div class="visual-foot">Nunca compartilhe este código fora desta tela.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="access-form-wrap">
+          <div class="stepper" aria-hidden="true">
+            <div class="step-pill active" id="pill-phone"><span class="step-dot">1</span>Telefone</div>
+            <div class="step-pill" id="pill-code"><span class="step-dot">2</span>Código</div>
+          </div>
+          <div class="auth-panel">
+            <div class="panel-head-auth">
+              <div class="eyebrow">Acesso Web</div>
+              <h2 id="access-panel-title">Identifique seu WhatsApp</h2>
+              <p id="access-panel-subtitle">Informe o número com DDI e DDD para receber o código de entrada.</p>
+            </div>
+            <div class="panel-body-auth">
+              <form id="phone-form" class="auth-step active">
+                <label for="phone-input">Número do WhatsApp</label>
+                <div class="input-wrap">
+                  <span class="prefix" aria-hidden="true">☎</span>
+                  <input id="phone-input" type="tel" autocomplete="tel" inputmode="tel" placeholder="+55 65 99987-5116" required>
+                </div>
+                <p class="hint">Use o número cadastrado no seu perfil de consultor. Apenas números ativos conseguem receber o código.</p>
+                <div class="actions right">
+                  <button id="request-code-btn" type="submit"><span class="loader" aria-hidden="true"></span><span>Enviar código</span></button>
+                </div>
+              </form>
+
+              <form id="code-form" class="auth-step" hidden>
+                <div class="summary">
+                  <div><div class="summary-label">Código enviado para</div><div class="summary-value" id="phone-summary">-</div></div>
+                </div>
+                <label for="code-row-first">Código de verificação</label>
+                <input id="code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" hidden>
+                <div class="code-row" id="code-row" aria-label="Código de verificação">
+                  <input id="code-row-first" maxlength="1" inputmode="numeric" aria-label="Dígito 1">
+                  <input maxlength="1" inputmode="numeric" aria-label="Dígito 2">
+                  <input maxlength="1" inputmode="numeric" aria-label="Dígito 3">
+                  <input maxlength="1" inputmode="numeric" aria-label="Dígito 4">
+                  <input maxlength="1" inputmode="numeric" aria-label="Dígito 5">
+                  <input maxlength="1" inputmode="numeric" aria-label="Dígito 6">
+                </div>
+                <p class="hint" id="code-destination">Digite ou cole o código recebido no WhatsApp. Ele expira em poucos minutos.</p>
+                <div class="actions">
+                  <button class="ghost" id="back-to-phone-btn" type="button">Trocar número</button>
+                  <button id="verify-code-btn" type="submit"><span class="loader" aria-hidden="true"></span><span>Confirmar e entrar</span></button>
+                </div>
+              </form>
+
+              <form id="company-form" class="auth-step" hidden>
+                <p class="hint">Este telefone está vinculado a mais de uma empresa. Escolha qual acessar.</p>
+                <div id="company-list" class="company-list"></div>
+                <div class="actions right">
+                  <button class="ghost" id="back-company-btn" type="button">Trocar número</button>
+                </div>
+              </form>
+              <div id="access-status" class="status-line" role="status"></div>
+              <div class="footnote">Este acesso não cria uma nova senha. A identidade vem do telefone validado e as permissões continuam sendo as do seu cadastro de consultor.</div>
+            </div>
+          </div>
+          <p class="copyright">IA Service. Todos os direitos reservados.</p>
+        </section>
+      </div>
+    </section>
+
+    <section id="radar-screen" class="radar-screen" hidden>
+      <header class="topbar">
+        <div class="topbar-brand">
+          <div class="brand-mark">IA</div>
+          <div>
+            <strong>IA Service</strong>
+            <span>Radar de Chamados</span>
+          </div>
+        </div>
+        <nav class="topbar-nav" aria-label="Áreas do Radar">
+          <button class="nav-item active" data-mobile-target="queue">Radar</button>
+          <button class="nav-item" data-panel-tab="knowledge">Base de Conhecimento</button>
+          <button class="nav-item" data-panel-tab="details">Detalhes</button>
+          <button class="nav-item" data-panel-tab="risk">Risco SLA</button>
+        </nav>
+        <div class="topbar-actions">
+          <div class="company-chip">
+            <span>Empresa</span>
+            <strong id="company-name">-</strong>
+          </div>
+          <select id="theme-select" title="Tema">
+            <option value="system">Sistema</option>
+            <option value="light">Claro</option>
+            <option value="dark">Escuro</option>
+          </select>
+          <button id="logout-btn" class="icon-button" title="Sair">Sair</button>
+          <div class="user-chip">
+            <span id="user-initials">IA</span>
+            <strong id="consultant-name">Consultor</strong>
+          </div>
+        </div>
+      </header>
+
+      <main class="radar-layout" id="radar-layout">
+        <aside class="queue-panel panel" id="queue-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Fila de Chamados</h2>
+              <p id="queue-subtitle">Fila pessoal do consultor</p>
+            </div>
+            <button id="refresh-queue-btn" class="icon-button" title="Atualizar fila">↻</button>
+          </div>
+          <div class="queue-tools">
+            <input id="queue-search" type="search" placeholder="Buscar por chamado, cliente ou assunto...">
+            <div class="segmented" role="group" aria-label="Filtro de SLA da fila">
+              <button class="active" data-queue-filter="todos">Todos</button>
+              <button data-queue-filter="em_atraso">Em atraso</button>
+              <button data-queue-filter="em_dia">Em dia</button>
+            </div>
+            <div class="queue-options">
+              <span id="queue-count">0 chamado(s)</span>
+              <select id="auto-refresh-select">
+                <option value="0">Manual</option>
+                <option value="30">30s</option>
+                <option value="60" selected>1 min</option>
+                <option value="300">5 min</option>
+                <option value="900">15 min</option>
+              </select>
+            </div>
+            <label class="switch-row">
+              <span><strong>Pré-análise IA</strong><small>Ao iniciar análise</small></span>
+              <input id="pre-analysis-toggle" type="checkbox" checked>
+            </label>
+          </div>
+          <div id="queue-list" class="queue-list"></div>
+        </aside>
+
+        <section class="workspace panel" id="workspace">
+          <div id="empty-state" class="empty-state">
+            <div class="empty-icon">💬</div>
+            <h2>Selecione um chamado</h2>
+            <p>Abra um item da fila pessoal ou da aba Risco SLA para iniciar ou continuar a investigação.</p>
+          </div>
+
+          <article id="case-view" class="case-view" hidden>
+            <header class="case-header">
+              <div class="case-title-block">
+                <div class="case-line">
+                  <h1 id="case-title">Chamado</h1>
+                  <span id="case-number" class="case-number"></span>
+                </div>
+                <div id="case-badges" class="case-badges"></div>
+              </div>
+              <div class="case-actions">
+                <button id="toggle-queue-btn" class="secondary-button" title="Recolher fila">Fila</button>
+                <button id="research-btn" class="primary-button">Pesquisar Soluções</button>
+                <button id="toggle-summary-btn" class="secondary-button" title="Recolher resumo">Resumo</button>
+              </div>
+              <div class="case-meta" id="case-meta"></div>
+            </header>
+
+            <div class="tabs" role="tablist">
+              <button class="active" data-panel-tab="conversation">Conversa</button>
+              <button data-panel-tab="evidence">Evidências</button>
+              <button data-panel-tab="knowledge">Pesquisa Técnica</button>
+              <button data-panel-tab="details">Detalhes</button>
+              <button data-panel-tab="risk">Risco SLA</button>
+            </div>
+
+            <section id="panel-conversation" class="tab-panel active">
+              <div id="messages" class="messages"></div>
+              <form id="composer" class="composer">
+                <label class="attach-button" for="file-input" title="Anexar arquivo">📎</label>
+                <input id="file-input" type="file" multiple hidden>
+                <div class="composer-main">
+                  <div id="pending-files" class="pending-files"></div>
+                  <textarea id="message-input" rows="1" placeholder="Digite sua mensagem para a IA Service..."></textarea>
+                </div>
+                <button id="send-btn" type="submit">Enviar</button>
+              </form>
+            </section>
+
+            <section id="panel-evidence" class="tab-panel">
+              <div id="evidence-content" class="section-stack"></div>
+            </section>
+            <section id="panel-knowledge" class="tab-panel">
+              <div class="subtabs">
+                <button class="active" data-knowledge-tab="internal">Base interna</button>
+                <button data-knowledge-tab="technical">Pesquisa técnica</button>
+              </div>
+              <div id="knowledge-content" class="section-stack"></div>
+            </section>
+            <section id="panel-details" class="tab-panel">
+              <div id="details-content" class="section-stack"></div>
+            </section>
+            <section id="panel-risk" class="tab-panel">
+              <div class="risk-toolbar">
+                <div class="segmented">
+                  <button class="active" data-risk-filter="todos">Todos</button>
+                  <button data-risk-filter="em_atraso">Em atraso</button>
+                  <button data-risk-filter="proximo">Próx. vencimento</button>
+                </div>
+                <select id="risk-waiting-filter">
+                  <option value="todos">Aguardando: todos</option>
+                  <option value="Aguardando Atendente">Aguardando Atendente</option>
+                  <option value="Aguardando Cliente">Aguardando Cliente</option>
+                  <option value="Aguardando Fornecedor">Aguardando Fornecedor</option>
+                </select>
+                <input id="risk-search" type="search" placeholder="Buscar por número, cliente, usuário...">
+              </div>
+              <div class="risk-layout" id="risk-layout">
+                <aside class="risk-consultants" id="risk-consultants"></aside>
+                <div class="risk-grid-wrap">
+                  <button id="toggle-risk-consultants" class="secondary-button">Consultores</button>
+                  <div id="risk-grid" class="risk-grid"></div>
+                </div>
+              </div>
+            </section>
+          </article>
+        </section>
+
+        <aside class="summary-panel panel" id="summary-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Resumo da Investigação</h2>
+              <p id="summary-status">Dados reais do atendimento</p>
+            </div>
+            <button id="close-summary-btn" class="icon-button" title="Recolher resumo">×</button>
+          </div>
+          <div id="summary-content" class="summary-content">
+            <div class="empty-block">Selecione um chamado para carregar dossiê, anexos, pesquisa e risco.</div>
+          </div>
+        </aside>
+      </main>
+
+      <nav class="mobile-nav" aria-label="Navegação mobile">
+        <button class="active" data-mobile-target="queue">Fila</button>
+        <button data-mobile-target="conversation">Conversa</button>
+        <button data-mobile-target="summary">Resumo</button>
+        <button data-mobile-target="more">Mais</button>
+      </nav>
+    </section>
+
+    <div id="toast" class="toast" role="status"></div>
+  </div>
+  <script src="/iaservice/j2a/assets/radar.js"></script>
+</body>
+</html>

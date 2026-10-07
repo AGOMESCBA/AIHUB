@@ -26,6 +26,8 @@ const consultorService = require('../services/consultor-service');
 const loginExternoService = require('../services/login-externo-service');
 const technicalResearchService = require('../services/technical-research-service');
 const radarRefreshService = require('../services/radar-refresh-service');
+const investigacaoExecucaoRepo = require('../repositories/investigacao-execucao-repository');
+const investigacaoDossieService = require('../services/investigacao-dossie-service');
 const crud = require('../../../IAHUB/backend/crud');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: armazenamento.TAMANHO_MAXIMO_BYTES } });
@@ -231,6 +233,27 @@ module.exports = function registrarRotasExterno(app) {
   app.get('/api/ia-service-externo/atendimentos/:id/anexos', (req, res) => {
     try {
       res.json(atendimentoService.listarAnexos(req.svcEmpresaId, req.params.id));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service-externo/atendimentos/:id/investigacoes', (req, res) => {
+    try {
+      const atendimento = atendimentoService.getAtendimento(req.svcEmpresaId, req.params.id);
+      if (!atendimento) return res.status(404).json({ error: 'Atendimento não encontrado.' });
+      const limite = Math.min(Number(req.query?.limite) || 20, 100);
+      res.json({ execucoes: investigacaoExecucaoRepo.listarPorAtendimento(req.svcEmpresaId, req.params.id, { limite }) });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service-externo/atendimentos/:id/dossie', (req, res) => {
+    try {
+      const atendimento = atendimentoService.getAtendimento(req.svcEmpresaId, req.params.id);
+      if (!atendimento) return res.status(404).json({ error: 'Atendimento não encontrado.' });
+      res.json(investigacaoDossieService.obterEstadoCompleto(req.svcEmpresaId, req.params.id));
     } catch (err) {
       _handleErro(res, err);
     }

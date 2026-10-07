@@ -1,0 +1,427 @@
+{
+  "desktop-1920x1080": {
+    "title": "Radar de Chamados - IA Service",
+    "path": "/radar-externo",
+    "filaItems": 0,
+    "visibleText": "Fila de Chamados\nJ2A Consultoria\nMinha fila\n— Administrador\nTodos\nEm atraso\nEm dia\n↻\n—\npróxima em 54s\nManual\n30s\n1 min\n5 min\n15 min\nPré-análise IA\nAo iniciar análise\nCarregando…\nConversa\nDetalhes do Chamado\nRisco SLA\nBanco de Conhecimento\n💬\nSelecione um chamado na fila (ou na aba Risco SLA) para iniciar ou continuar a conversa com a IA.",
+    "tabs": [
+      "Conversa",
+      "Detalhes do Chamado",
+      "Risco SLA",
+      "Banco de Conhecimento"
+    ],
+    "buttons": [
+      {
+        "id": null,
+        "text": "J2A Consultoria",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "tab-minha",
+        "text": "Minha fila — Administrador",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "filtro-todos",
+        "text": "Todos",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "filtro-atraso",
+        "text": "Em atraso",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "filtro-dia",
+        "text": "Em dia",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "fila-atualizar-btn",
+        "text": "↻",
+        "title": "Atualizar agora",
+        "visible": true
+      },
+      {
+        "id": "tab-conversa",
+        "text": "Conversa",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "tab-informacoes",
+        "text": "Detalhes do Chamado",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "tab-risco",
+        "text": "Risco SLA",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "tab-banco-conhecimento",
+        "text": "Banco de Conhecimento",
+        "title": null,
+        "visible": true
+      }
+    ],
+    "errors": [],
+    "consoleLogs": [
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+  },
+  "desktop-1366x768": {
+    "title": "Radar de Chamados - IA Service",
+    "path": "/radar-externo",
+    "filaItems": 0,
+    "visibleText": "Fila de Chamados\nJ2A Consultoria\nMinha fila\n— Administrador\nTodos\nEm atraso\nEm dia\n↻\n—\npróxima em 54s\nManual\n30s\n1 min\n5 min\n15 min\nPré-análise IA\nAo iniciar análise\nCarregando…\nConversa\nDetalhes do Chamado\nRisco SLA\nBanco de Conhecimento\n💬\nSelecione um chamado na fila (ou na aba Risco SLA) para iniciar ou continuar a conversa com a IA.",
+    "tabs": [
+      "Conversa",
+      "Detalhes do Chamado",
+      "Risco SLA",
+      "Banco de Conhecimento"
+    ],
+    "buttons": [
+      {
+        "id": null,
+        "text": "J2A Consultoria",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "tab-minha",
+        "text": "Minha fila — Administrador",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "filtro-todos",
+        "text": "Todos",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "filtro-atraso",
+        "text": "Em atraso",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "filtro-dia",
+        "text": "Em dia",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "fila-atualizar-btn",
+        "text": "↻",
+        "title": "Atualizar agora",
+        "visible": true
+      },
+      {
+        "id": "tab-conversa",
+        "text": "Conversa",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "tab-informacoes",
+        "text": "Detalhes do Chamado",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "tab-risco",
+        "text": "Risco SLA",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "tab-banco-conhecimento",
+        "text": "Banco de Conhecimento",
+        "title": null,
+        "visible": true
+      }
+    ],
+    "errors": [],
+    "consoleLogs": []
+  },
+  "desktop-1280x720": {
+    "title": "Radar de Chamados - IA Service",
+    "path": "/radar-externo",
+    "filaItems": 8,
+    "visibleText": "Fila de Chamados\nJ2A Consultoria\nMinha fila\n— Administrador\nTodos\nEm atraso\nEm dia\n↻\n8 chamado(s)\npróxima em 35s\nManual\n30s\n1 min\n5 min\n15 min\nPré-análise IA\nAo iniciar análise\n#035988\nEM ATRASO\nCOABRA | Protheus | Regra de saldo contrato\nAberto em 03/08/2026\n#036475\nEM DIA\nFUNDAÇÃO MT | Protheus | Pedido de compras nao esta mudando o status\nAberto em 15/09/2026\n#036570\nEM ATRASO\nFUNDAÇÃO MT | Protheus | Erro na importação da planilha orçamentaria\nAberto em 23/09/2026\n#036583\nEM DIA\nCAIEIRA | Protheus | Impressão de nota fiscal - Transguia\nAberto em 24/09/2026\n#036596\nEM ATRASO\nFIERO | Protheus | RATEIO DE NOTAS COM ERRO\nAberto em 25/09/2026\n#036636\nEM DIA\nNovapec | Protheus | abertura de usuario\nAberto em 29/09/2026\n#036668\nEM ATRASO\nSETA | Protheus | Verificar data de vencimento orçamento\nAberto em 01/10/2026\n#036670\nEM DIA\nCAIEIRA | Protheus | Empresa Transguia\nAberto em 01/10/2026\nConversa\nDetalhes do Chamado\nRisco SLA\nBanco de Conhecimento\nTodos\nEm atraso\nPróx. vencimento\nAguardando: todos\nAguardando Atendente\nAguardando Cliente\nAguardando Fornecedor\n▾\nTodos os consultores\n63 chamado(s)\n21 atraso\n7 próx.\n \nGuilherme Almeida\n6 chamado(s)\n4 atraso\n1 próx.\n \nMaria Eduarda Almeida\n8 chamado(s)\n4 atraso\n0 próx.\n \nEdson Assis\n4 chamado(s)\n3 atraso\n1 próx.\n \nFernan Hudson\n2 chamado(s)\n2 atraso\n0 próx.\n \nLucas Jordan Souza\n6 chamado(s)\n2 atraso\n0 próx.\n \nMatheus Marcondes\n3 chamado(s)\n2 atraso\n0 próx.\n \nRobison Santiago\n10 chamado(s)\n2 atraso\n0 próx.\n \nKelbyr Cruz\n8 chamado(s)\n1 atraso\n3 próx.\n \nHenrique Simões\n14 chamado(s)\n1 atraso\n2 próx.\n \nSem consultor\n2 chamado(s)\n0 atraso\n0 próx.\nCHAMADO\nTÍTULO\nCLIENTE\nUSUÁRIO\nAGUARDANDO RETORNO\nSTATUS\nPREVISÃO CONCLUSÃO\nDURAÇÃO\nHORAS DURAÇÃO\nDIAS SUPORTE\nDIAS DESENV.\nDIAS DISTRIB.\nDIAS CLIENTE\nDIAS TECN. CLIENTE\nÚLTIMO\n\n\nEdson Assis (4 chamados)\n#036407SETA | Protheus | Divergência no caldulo de provisão para funcionários que recebem gratificação - verba 743SETAAderson NetoAguardando ClienteEM ATRASO18/09/2026, 11:0410.1d80.8h10.1d0d9.8d1.6d0d06/10/2026\n#036504Parametrização para emissão de nota fiscalSETAPatricia MachadoAguardando AtendenteEM ATRASO22/09/2026, 08:1212.9d103.2h12.9d0d0d0d0d29/09/2026\n#036566CAIEIRA | Protheus | Rotina manutenção de arquivos DIRF em brancoCAIEIRAIria BerwangerAguardando AtendenteEM ATRASO28/09/2026, 08:359.9d79.2h9.9d0d0d0.1d0d06/10/2026\n#036699CONTABILIZACAO DEVOLUCAO DE COMPRAS EM DOLARCOOPERFIBRATiago ConceicaoAguardando AtendentePRÓX. VENCIMENTO07/10/2026, 23:241d8h1d0d0d0d0d06/10/2026\nFernan Hudson (2 chamados)\n#036694FIETO | Protheus | Baixar fontes de relatórios descontinuados / realizar a compilaçãoFIETOAna Clara da Conceição Macedo da SilvaAguardando AtendenteEM ATRASO07/10/2026, 02:481.1d8.8h1.1d0d0d0.2d0d06/10/2026\n#036703PLANTIVO | Protheus | ERRO SMARTVIEW - KARDEXPLANTIVORafael Bernardes Ferreira LimaAguardando AtendenteEM ATRASO07/10/2026, 04:450.7d5.6h0.7d0d0d0.1d0d06/10/2026\nGuilherme Almeida (6 chamados)\n#036537APROSOJA | Protheus | ALTERAÇÃO PERIODO AQUISITIVO FERIAS - ELUANA DOMINGUES GONCALVESAPROSOJARodrigo de Araujo AlmeidaAguardando AtendenteEM ATRASO23/09/2026, 05:5411.700000000000001d93.60000000000001h11.700000000000001d0d0d0.5d0d30/09/2026\n#036609Importação arquivo consignando do trabalhadorNovapecCleide Meire Santos SilvaAguardando ClienteEM ATRASO30/09/2026, 02:482.7d21.6h2.7d0d0d3.8d0d30/09/2026\n#036628e conseguindoNovapecCleide Meire Santos SilvaAguardando AtendenteEM ATRASO01/10/2026, 08:595.8999999999999995d47.199999999999996h5.8999999999999995d0d0d0d0d29/09/2026\n#036638EVENTO S 1210 DA FOLHA APROSOJA, NAO ESTA SENDO GERADO PARA COLABORADORES DEMITIDOSAPROSOJARodrigo de Araujo AlmeidaAguardando AtendenteEM ATRASO02/10/2026, 10:305.7d45.6h5.7d0d0d0d0d30/09/2026\n#036696ACESSO AO APLICATIVO MEU RH GIOVANNA CHAVESAPROSOJARodrigo de Araujo AlmeidaAguardando AtendentePRÓX. VENCIMENTO07/10/2026, 14:041.4d11.2h1.4d0d0d0d0d06/10/2026\n#036618FUNDAÇÃO MT | Protheus | MUDANÇAS DESCONTO ECONSIGNADO RESCISÃOFUNDAÇÃO MTJeferson LovoAguard",
+    "tabs": [
+      "Conversa",
+      "Detalhes do Chamado",
+      "Risco SLA",
+      "Banco de Conhecimento"
+    ],
+    "buttons": [
+      {
+        "id": null,
+        "text": "J2A Consultoria",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "tab-minha",
+        "text": "Minha fila — Administrador",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "filtro-todos",
+        "text": "Todos",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "filtro-atraso",
+        "text": "Em atraso",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "filtro-dia",
+        "text": "Em dia",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "fila-atualizar-btn",
+        "text": "↻",
+        "title": "Atualizar agora",
+        "visible": true
+      },
+      {
+        "id": "tab-conversa",
+        "text": "Conversa",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "tab-informacoes",
+        "text": "Detalhes do Chamado",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "tab-risco",
+        "text": "Risco SLA",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "tab-banco-conhecimento",
+        "text": "Banco de Conhecimento",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "risco-filtro-todos",
+        "text": "Todos",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "risco-filtro-atraso",
+        "text": "Em atraso",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "risco-filtro-proximo",
+        "text": "Próx. vencimento",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "risco-sidebar-toggle",
+        "text": "▾",
+        "title": "Recolher consultores",
+        "visible": true
+      },
+      {
+        "id": null,
+        "text": "Todos os consultores\n          63 chamado(s)21 atraso7 próx.",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": null,
+        "text": "Guilherme Almeida\n          6 chamado(s)4 atraso1 próx.",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": null,
+        "text": "Maria Eduarda Almeida\n          8 chamado(s)4 atraso0 próx.",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": null,
+        "text": "Edson Assis\n          4 chamado(s)3 atraso1 próx.",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": null,
+        "text": "Fernan Hudson\n          2 chamado(s)2 atraso0 próx.",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": null,
+        "text": "Lucas Jordan Souza\n          6 chamado(s)2 atraso0 próx.",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": null,
+        "text": "Matheus Marcondes\n          3 chamado(s)2 atraso0 próx.",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": null,
+        "text": "Robison Santiago\n          10 chamado(s)2 atraso0 próx.",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": null,
+        "text": "Kelbyr Cruz\n          8 chamado(s)1 atraso3 próx.",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": null,
+        "text": "Henrique Simões\n          14 chamado(s)1 atraso2 próx.",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": null,
+        "text": "Sem consultor\n          2 chamado(s)0 atraso0 próx.",
+        "title": null,
+        "visible": true
+      }
+    ],
+    "errors": [],
+    "consoleLogs": []
+  },
+  "mobile-390x844": {
+    "title": "Radar de Chamados - IA Service",
+    "path": "/radar-externo",
+    "filaItems": 8,
+    "visibleText": "Fila de Chamados\nJ2A Consultoria\nMinha fila\n— Administrador\nTodos\nEm atraso\nEm dia\n↻\n8 chamado(s)\npróxima em 35s\nManual\n30s\n1 min\n5 min\n15 min\nPré-análise IA\nAo iniciar análise\n#035988\nEM ATRASO\nCOABRA | Protheus | Regra de saldo contrato\nAberto em 03/08/2026\n#036475\nEM DIA\nFUNDAÇÃO MT | Protheus | Pedido de compras nao esta mudando o status\nAberto em 15/09/2026\n#036570\nEM ATRASO\nFUNDAÇÃO MT | Protheus | Erro na importação da planilha orçamentaria\nAberto em 23/09/2026\n#036583\nEM DIA\nCAIEIRA | Protheus | Impressão de nota fiscal - Transguia\nAberto em 24/09/2026\n#036596\nEM ATRASO\nFIERO | Protheus | RATEIO DE NOTAS COM ERRO\nAberto em 25/09/2026\n#036636\nEM DIA\nNovapec | Protheus | abertura de usuario\nAberto em 29/09/2026\n#036668\nEM ATRASO\nSETA | Protheus | Verificar data de vencimento orçamento\nAberto em 01/10/2026\n#036670\nEM DIA\nCAIEIRA | Protheus | Empresa Transguia\nAberto em 01/10/2026\nConversa\nDetalhes do Chamado\nRisco SLA\nBanco de Conhecimento\nTodos\nEm atraso\nPróx. vencimento\nAguardando: todos\nAguardando Atendente\nAguardando Cliente\nAguardando Fornecedor\n▾\nCarregando chamados em risco…",
+    "tabs": [
+      "Conversa",
+      "Detalhes do Chamado",
+      "Risco SLA",
+      "Banco de Conhecimento"
+    ],
+    "buttons": [
+      {
+        "id": null,
+        "text": "J2A Consultoria",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "tab-minha",
+        "text": "Minha fila — Administrador",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "filtro-todos",
+        "text": "Todos",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "filtro-atraso",
+        "text": "Em atraso",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "filtro-dia",
+        "text": "Em dia",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "fila-atualizar-btn",
+        "text": "↻",
+        "title": "Atualizar agora",
+        "visible": true
+      },
+      {
+        "id": "tab-conversa",
+        "text": "Conversa",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "tab-informacoes",
+        "text": "Detalhes do Chamado",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "tab-risco",
+        "text": "Risco SLA",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "tab-banco-conhecimento",
+        "text": "Banco de Conhecimento",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "risco-filtro-todos",
+        "text": "Todos",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "risco-filtro-atraso",
+        "text": "Em atraso",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "risco-filtro-proximo",
+        "text": "Próx. vencimento",
+        "title": null,
+        "visible": true
+      },
+      {
+        "id": "risco-sidebar-toggle",
+        "text": "▾",
+        "title": "Recolher consultores",
+        "visible": true
+      }
+    ],
+    "errors": [],
+    "consoleLogs": []
+  },
+  "login": {
+    "status": "Não foi possível enviar o código agora — o WhatsApp de atendimento está indisponível. Tente novamente em instantes ou contate o administrador.",
+    "activePanel": [],
+    "visibleText": "IA\nIA Service\n\nChat de chamados via WhatsApp\n\nAcesso direto ao chat, sem senha.\n\nEntre pelo telefone cadastrado como consultor. O IA Service valida o número por WhatsApp e abre o radar de chamados já com sua fila pessoal.\n\n1\nTelefone cadastrado\nUse o mesmo número cadastrado no seu perfil de consultor.\n2\nCódigo no WhatsApp\nO código é temporário e confirma que o telefone pertence a você.\n3\nRadar liberado\nA sessão abre já na sua fila de chamados.\nWhatsApp\ncódigo seguro\nSeu código IA Service chegou.\nConfirmação de acesso\n4\n8\n2\n1\n0\n7\nNunca compartilhe este código fora desta tela.\n1\nTelefone\n2\nCódigo\nACESSO WEB\nIdentifique seu WhatsApp\n\nInforme o número com DDI e DDD para receber o código de entrada.\n\nNÚMERO DO WHATSAPP\n\nUse o número cadastrado no seu perfil de consultor. Apenas números ativos conseguem receber o código.\n\nEnviar código\nNão foi possível enviar o código agora — o WhatsApp de atendimento está indisponível. Tente novamente em instantes ou contate o administrador.\nEste acesso não cria uma nova senha. A identidade vem do telefone validado e as permissões continuam sendo as do seu cadastro de consultor.\n\nIA Service. Todos os direitos reservados."
+  }
+}
