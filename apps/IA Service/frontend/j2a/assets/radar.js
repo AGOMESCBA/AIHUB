@@ -373,6 +373,12 @@
   async function loadPreferences() {
     const pref = await request(ext('/radar/minhas-preferencias'));
     $('pre-analysis-toggle').checked = pref.preAnaliseAutomatica !== false;
+    try {
+      const config = await request(ext('/radar/config'));
+      if (config?.autoRefreshSegundos != null) $('auto-refresh-select').value = String(config.autoRefreshSegundos);
+    } catch (_) {
+      // Mantem o valor padrao do <select> (900s) se a config ainda nao existir/falhar.
+    }
   }
 
   async function savePreferences() {
@@ -384,6 +390,18 @@
       toast('Preferencia salva.');
     } catch (err) {
       toast(`Nao foi possivel salvar: ${err.message}`);
+    }
+  }
+
+  async function saveAutoRefreshConfig() {
+    try {
+      const autoRefreshSegundos = Number($('auto-refresh-select').value || 0);
+      await request(ext('/radar/config'), {
+        method: 'PUT',
+        body: JSON.stringify({ autoRefreshSegundos }),
+      });
+    } catch (err) {
+      toast(`Nao foi possivel salvar o intervalo: ${err.message}`);
     }
   }
 
@@ -1059,7 +1077,10 @@
       document.querySelectorAll('[data-queue-filter]').forEach((b) => b.classList.toggle('active', b === btn));
       loadQueue();
     }));
-    $('auto-refresh-select').addEventListener('change', setupAutoRefresh);
+    $('auto-refresh-select').addEventListener('change', () => {
+      setupAutoRefresh();
+      saveAutoRefreshConfig();
+    });
     $('pre-analysis-toggle').addEventListener('change', savePreferences);
     $('nav-radar-btn').addEventListener('click', backToRadar);
     $('queue-list').addEventListener('click', (event) => {
