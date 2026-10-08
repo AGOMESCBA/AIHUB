@@ -310,6 +310,48 @@ function resolverEmpresaDoCanal({ channelId, sender, texto, sessaoEmpresaId = nu
   const isAllKeyword = ['ambas', 'todas', 'tudo', 'all', '1'].includes(textoTrim.toLowerCase());
   if (pending && isAllKeyword) return { status: 'all', empresas };
 
+  if (pending && /\d+\s*(?:,|\/|&|\+|\be\b)\s*\d+/i.test(textoTrim)) {
+    const numeros = textoTrim.match(/\d+/g).map(Number).filter(Number.isFinite);
+    const unicos = [...new Set(numeros)];
+    if (unicos.length >= 2 && !unicos.includes(1)) {
+      const escolhidas = unicos.map(n => empresas[n - 2]).filter(Boolean);
+      if (escolhidas.length === unicos.length) {
+        return { status: 'multi', empresas: escolhidas, origem: 'clarificacao_multi' };
+      }
+    }
+  }
+
+  if (pending && /(?:,|\/|&|\+|\be\b)/i.test(busca)) {
+    const partes = busca.split(/\s*(?:,|\/|&|\+|\be\b)\s*/i).map(p => p.trim()).filter(p => p.length >= 2);
+    const escolhidas = [];
+    const vistos = new Set();
+    let algumaAmbigua = false;
+    for (const parte of partes) {
+      const candidatosParte = empresas.map(e => {
+        const termos = [e.nome, ...(String(e.aliases || '').split(',').map(x => x.trim()))]
+          .filter(t => t && normalizarBusca(t).length >= 2)
+          .map(normalizarBusca);
+        let score = 0;
+        if (termos.some(t => t === parte)) score = 3;
+        else if (termos.some(t => t.includes(parte))) score = 2;
+        else if (termos.some(t => parte.includes(t))) score = 1;
+        return { empresa: e, score };
+      }).filter(x => x.score > 0).sort((a, b) => b.score - a.score);
+      const topScore = candidatosParte[0]?.score || 0;
+      const termMatches = candidatosParte.filter(x => x.score === topScore).map(x => x.empresa);
+      if (termMatches.length > 1) algumaAmbigua = true;
+      if (termMatches.length === 1) {
+        const id = String(termMatches[0].empresa_id);
+        if (!vistos.has(id)) {
+          vistos.add(id);
+          escolhidas.push(termMatches[0]);
+        }
+      }
+    }
+    if (algumaAmbigua) return { status: 'ambiguous', empresas };
+    if (escolhidas.length >= 2) return { status: 'multi', empresas: escolhidas, origem: 'texto_multi' };
+  }
+
   const matches = empresas.filter(e => {
     const termos = [e.nome, ...(String(e.aliases || '').split(',').map(x => x.trim()))]
       .filter(t => t && normalizarBusca(t).length >= 2)

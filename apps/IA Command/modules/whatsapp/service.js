@@ -1558,14 +1558,23 @@ class IACWhatsAppService extends EventEmitter {
 
     const resolvidas = [];
     const naoResolvidos = [];
+    const ambiguos = [];
     const usados = new Set();
     for (const termo of termos) {
       const candidatos = (empresas || [])
         .map(empresa => ({ empresa, score: _scoreEmpresaTexto(termo, empresa) }))
         .filter(x => x.score >= 0.75)
         .sort((a, b) => b.score - a.score);
-      if (!candidatos.length || (candidatos.length > 1 && candidatos[0].score === candidatos[1].score)) {
+      if (!candidatos.length) {
         naoResolvidos.push(termo);
+        continue;
+      }
+      if (candidatos.length > 1 && candidatos[0].score === candidatos[1].score) {
+        naoResolvidos.push(termo);
+        ambiguos.push({
+          termo,
+          empresas: candidatos.map(c => c.empresa),
+        });
         continue;
       }
       const empresaId = String(candidatos[0].empresa.empresa_id);
@@ -1584,6 +1593,7 @@ class IACWhatsAppService extends EventEmitter {
       resolvidas,
       termos,
       naoResolvidos,
+      ambiguos,
     };
   }
 
@@ -2675,6 +2685,135 @@ class IACWhatsAppService extends EventEmitter {
     });
   }
 
+  _dedupeEmpresasPorId(empresas = []) {
+    const vistos = new Set();
+    const out = [];
+    for (const empresa of empresas || []) {
+      const id = String(empresa?.empresa_id || '');
+      if (!id || vistos.has(id)) continue;
+      vistos.add(id);
+      out.push(empresa);
+    }
+    return out;
+  }
+
+  _formatarPerguntaMultiEmpresaAmbigua(ambiguidade = {}) {
+    const termo = String(ambiguidade.termo || 'empresa').trim();
+    const empresas = Array.isArray(ambiguidade.empresas) ? ambiguidade.empresas : [];
+    const opcoes = empresas.map((e, idx) => `${idx + 1}. ${e.nome || `#${e.empresa_id}`}`).join('\n');
+    return `Encontrei mais de uma empresa para *${termo}*:\n\n${opcoes}\n\nResponda com o numero ou nome da empresa.`;
+  }
+
+  _resolverEscolhaEmpresaAmbigua(texto, empresas = []) {
+    const resposta = String(texto || '').trim();
+    const idx = /^\d+$/.test(resposta) ? Number(resposta) - 1 : -1;
+    if (idx >= 0 && empresas[idx]) return empresas[idx];
+
+    const busca = _normalizarBuscaEmpresa(resposta);
+    if (!busca) return null;
+    const candidatos = (empresas || []).map(empresa => {
+      const termos = [
+        empresa?.nome,
+        ...(String(empresa?.aliases || '').split(',').map(x => x.trim())),
+      ].filter(Boolean).map(_normalizarBuscaEmpresa);
+      let score = 0;
+      if (termos.some(t => t === busca)) score = 3;
+      else if (termos.some(t => t.includes(busca))) score = 2;
+      else if (termos.some(t => busca.includes(t))) score = 1;
+      return { empresa, score };
+    }).filter(x => x.score > 0).sort((a, b) => b.score - a.score);
+    const topScore = candidatos[0]?.score || 0;
+    const matches = candidatos.filter(x => x.score === topScore).map(x => x.empresa);
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  _armarMultiEmpresaPendente(sender, textoOriginal, empresasQualificadas) {
+    const ambiguidades = Array.isArray(empresasQualificadas?.ambiguos)
+      ? empresasQualificadas.ambiguos.filter(a => Array.isArray(a.empresas) && a.empresas.length)
+      : [];
+    if (!ambiguidades.length) return null;
+    const pendente = {
+      textoOriginal,
+      termos: empresasQualificadas.termos || [],
+      resolvidas: empresasQualificadas.resolvidas || [],
+      empresasResolvidas: empresasQualificadas.empresas || [],
+      ambiguidades,
+    };
+    this._setSenderContext(sender, {
+      _multiEmpresaPendente: pendente,
+      empresaId: null,
+      pendingText: null,
+    });
+    return this._formatarPerguntaMultiEmpresaAmbigua(ambiguidades[0]);
+  }
+
+  async _responderMultiEmpresaPendente(sender, texto, opts = {}) {
+    const ctx = this._getSenderContext(sender);
+    const pendente = ctx?._multiEmpresaPendente;
+    if (!pendente || !Array.isArray(pendente.ambiguidades) || !pendente.ambiguidades.length) return null;
+
+    if (_textoCancelaPendente(texto)) {
+      this._setSenderContext(sender, { _multiEmpresaPendente: null });
+      return 'Escolha anterior cancelada. Pode enviar a nova pergunta.';
+    }
+    if (_textoPareceNovaConsulta(texto)) {
+      this._setSenderContext(sender, { _multiEmpresaPendente: null });
+      return null;
+    }
+
+    const [ambiguidadeAtual, ...restantes] = pendente.ambiguidades;
+    const escolhida = this._resolverEscolhaEmpresaAmbigua(texto, ambiguidadeAtual.empresas || []);
+    if (!escolhida) {
+      return `Nao consegui identificar a empresa para *${ambiguidadeAtual.termo}*.\n\n${this._formatarPerguntaMultiEmpresaAmbigua(ambiguidadeAtual)}`;
+    }
+
+    const resolvidas = [
+      ...(pendente.resolvidas || []),
+      {
+        empresa: escolhida,
+        empresaId: escolhida.empresa_id,
+        termo: ambiguidadeAtual.termo,
+        score: 1,
+      },
+    ];
+    const empresas = this._dedupeEmpresasPorId([
+      ...(pendente.empresasResolvidas || []),
+      escolhida,
+    ]);
+
+    if (restantes.length) {
+      const novoPendente = {
+        ...pendente,
+        resolvidas,
+        empresasResolvidas: empresas,
+        ambiguidades: restantes,
+      };
+      this._setSenderContext(sender, { _multiEmpresaPendente: novoPendente });
+      return this._formatarPerguntaMultiEmpresaAmbigua(restantes[0]);
+    }
+
+    this._setSenderContext(sender, {
+      _multiEmpresaPendente: null,
+      empresaId: empresas.length === 1 ? empresas[0].empresa_id : '__all__',
+      pendingText: null,
+    });
+    this.log(`[resolverEmpresa] lista textual resolvida apos desambiguacao: ${resolvidas.map(e => `${e.termo}->#${e.empresaId}`).join(', ')}`, 'info');
+    if (empresas.length === 1) {
+      return await this._pipeline(pendente.textoOriginal, sender, {
+        _recebidoEm: opts._recebidoEm,
+        _timingCtx: opts._timingCtx || null,
+        _empresaIdFixa: empresas[0].empresa_id,
+        _skipChannelTenantResolution: true,
+      });
+    }
+    return await this._pipelineAll(pendente.textoOriginal, empresas, sender, {
+      empresasMencionadasTextos: pendente.termos || resolvidas.map(e => e.termo),
+      empresasMencionadasIds: resolvidas.map(e => e.empresaId),
+      _recebidoEm: opts._recebidoEm,
+      _timingCtx: opts._timingCtx || null,
+    });
+  }
+
   _rotuloMotor(intent = {}) {
     if (intent._contextoAplicado) {
       return 'IA interna do sistema (contexto da conversa)';
@@ -3691,13 +3830,25 @@ class IACWhatsAppService extends EventEmitter {
     const empresaPendente = Number(empresaCandidata);
     if (!Number.isFinite(empresaPendente) || empresaPendente <= 0) return null;
 
+    const tipoEscolhida = String(escolhida?.tipo || '').trim().toLowerCase();
+    const filtrosPendentes = ctx._intentPendente?.filtros || {};
+    const explicitosPendentes = ctx._intentPendente?._filtroEntidadeExplicitaMensagem || {};
+    const termoBuscaOriginal = String(
+      escolhida?.termoBusca
+      || explicitosPendentes[tipoEscolhida]
+      || filtrosPendentes[tipoEscolhida]
+      || ''
+    ).trim();
+    const escolhidaResolvida = termoBuscaOriginal
+      ? { ...escolhida, termoBusca: termoBuscaOriginal, texto: termoBuscaOriginal }
+      : escolhida;
+
     const entidadesPendentes = Array.isArray(ctx._intentPendente._entidadesResolvidas)
       ? ctx._intentPendente._entidadesResolvidas
       : [];
-    const tipoEscolhida = String(escolhida?.tipo || '').trim().toLowerCase();
     const entidadesAtualizadas = [
       ...entidadesPendentes.filter(e => !tipoEscolhida || String(e?.tipo || '').trim().toLowerCase() !== tipoEscolhida),
-      escolhida,
+      escolhidaResolvida,
     ];
 
     const intentPendente = {
@@ -4457,6 +4608,9 @@ class IACWhatsAppService extends EventEmitter {
     const respostaClimaPendente = await this._responderClimaPendenteLocal(sender, textoExecucao, opts._msg || null, empresaId, _t0);
     if (respostaClimaPendente) return respostaClimaPendente;
 
+    const respostaMultiEmpresaPendente = await this._responderMultiEmpresaPendente(sender, textoExecucao, { _recebidoEm: opts._recebidoEm, _timingCtx });
+    if (respostaMultiEmpresaPendente) return respostaMultiEmpresaPendente;
+
     const respostaConversacionalDinamica = await this._tentarResponderTurnoConversacionalDinamico({
       texto: textoExecucao,
       sender,
@@ -4630,6 +4784,8 @@ class IACWhatsAppService extends EventEmitter {
       const empresasQualificadas = this._resolverEmpresasQualificadasNoTexto(textoExecucao, empresasDoSender);
       if (empresasQualificadas && empresasQualificadas.termos.length >= 2) {
         if (empresasQualificadas.naoResolvidos.length) {
+          const perguntaAmbigua = this._armarMultiEmpresaPendente(sender, textoExecucao, empresasQualificadas);
+          if (perguntaAmbigua) return perguntaAmbigua;
           return `Encontrei pedido para mais de uma empresa, mas nao consegui identificar: *${empresasQualificadas.naoResolvidos.join(', ')}*.\n\nEmpresas disponiveis: ${empresasDoSender.map(e => `*${e.nome || `#${e.empresa_id}`}*`).join(', ')}.`;
         }
         if (empresasQualificadas.empresas.length >= 2) {
@@ -4647,19 +4803,14 @@ class IACWhatsAppService extends EventEmitter {
       }
       const empresaQualificada = this._resolverEmpresaQualificadaNoTexto(textoExecucao, empresasDoSender)
         || this._resolverEmpresaPorAliasIsolado(textoExecucao, empresasDoSender);
-      // Múltiplos aliases isolados reconhecidos (ex: "J2A e C3I") → multi-tenant direto,
-      // não é ambiguidade real: o usuário mencionou explicitamente as duas empresas.
       if (empresaQualificada?.status === 'ambiguous' && Array.isArray(empresaQualificada.empresas) && empresaQualificada.empresas.length >= 2) {
-        if (ctx?.lastIntent && String(ctx.lastIntentChannelId || '') === String(this._channelId || '')) {
-          this._saveLastIntent(sender, ctx.lastIntent, '__all__');
-        }
-        this._setSenderContext(sender, { empresaId: '__all__', pendingText: null });
-        this.log(`[resolverEmpresa] multi-alias resolvido: ${empresaQualificada.empresas.map(e => e.nome || e.empresa_id).join(', ')}`, 'info');
-        return await this._pipelineAll(textoExecucao, empresaQualificada.empresas, sender, {
-          empresasMencionadasTextos: empresaQualificada.empresas.map(e => e.nome || e.alias || String(e.empresa_id)),
-          empresasMencionadasIds: empresaQualificada.empresas.map(e => e.empresa_id),
-          _recebidoEm: opts._recebidoEm, _timingCtx,
+        const perguntaAmbigua = this._armarMultiEmpresaPendente(sender, textoExecucao, {
+          termos: [empresaQualificada.termo],
+          resolvidas: [],
+          empresas: [],
+          ambiguos: [{ termo: empresaQualificada.termo, empresas: empresaQualificada.empresas }],
         });
+        if (perguntaAmbigua) return perguntaAmbigua;
       }
       if (empresaQualificada?.status === 'not_found') {
         // "empresa X" mencionado mas X não é um tenant do canal → X é uma entidade cadastral
@@ -4715,6 +4866,22 @@ class IACWhatsAppService extends EventEmitter {
       }
 
       const wasReset = ctx?.pendingText === '__trocar__';
+
+      if (resolucao.status === 'multi') {
+        if (ctx?.lastIntent && String(ctx.lastIntentChannelId || '') === String(this._channelId || '')) {
+          this._saveLastIntent(sender, ctx.lastIntent, '__all__');
+        }
+        this._setSenderContext(sender, { empresaId: '__all__', pendingText: null });
+        this.log(`[resolverEmpresa] selecao multiempresa por clarificacao: ${resolucao.empresas.map(e => e.nome || e.empresa_id).join(', ')}`, 'info');
+        if (wasReset) return `✅ Agora consultando *${resolucao.empresas.map(e => e.nome || `#${e.empresa_id}`).join(' e ')}*.\nPode fazer sua pergunta.`;
+        if (ctx?.pendingText) textoExecucao = ctx.pendingText;
+        return await this._pipelineAll(textoExecucao, resolucao.empresas, sender, {
+          empresasMencionadasTextos: resolucao.empresas.map(e => e.nome || String(e.empresa_id)),
+          empresasMencionadasIds: resolucao.empresas.map(e => e.empresa_id),
+          _recebidoEm: opts._recebidoEm,
+          _timingCtx,
+        });
+      }
 
       if (resolucao.status === 'all') {
         if (ctx?.empresaId !== '__all__' && !this._devePreservarContextoAnalitico(ctx, textoExecucao)) {

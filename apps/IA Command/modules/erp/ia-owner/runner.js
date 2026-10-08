@@ -1356,9 +1356,11 @@ function entidadeResolvidaCompativel(termo, entidades = []) {
   if (!texto) return false;
   return (entidades || []).some(entidade => {
     const tipoEntidade = String(entidade?.tipo || '').trim().toLowerCase();
+    const termoBusca = normalizarTextoEntidade(entidade?.termoBusca);
     const nomeBase = _normalizarNomeEntidadeBase(entidade?.nome || entidade?.texto || entidade?.descricao);
     const nome = normalizarTextoEntidade(entidade?.nome || entidade?.texto || entidade?.descricao);
-    const nomeMatch = (nomeBase && (nomeBase.includes(texto) || texto.includes(nomeBase)))
+    const nomeMatch = (termoBusca && (termoBusca.includes(texto) || texto.includes(termoBusca)))
+        || (nomeBase && (nomeBase.includes(texto) || texto.includes(nomeBase)))
         || (nome && (nome.includes(texto) || texto.includes(nome)));
     if (!nomeMatch) return false;
     // Usuário escolheu "_todos" para esta entidade: resolvida independente do tipo extraído
@@ -1377,6 +1379,7 @@ function mensagemMencionaValorEntidade(mensagem, valor) {
 
 function mensagemMencionaEntidadeResolvida(mensagem, entidade = {}) {
   return [
+    entidade.termoBusca,
     entidade.nome,
     entidade.texto,
     entidade.descricao,

@@ -256,6 +256,44 @@ ok('contrato undefined → retorna null', () => {
   assert.strictEqual(sanitizarContratoHistorico(undefined), null);
 });
 
+// ─── 4. Regressão: escolha numérica de entidade não pode reabrir a mesma pergunta ───
+console.log('\n[4] Regressão — entidade escolhida por número permanece resolvida');
+
+const runnerTest = require(path.join(ROOT, 'modules/erp/ia-owner/runner'))._test;
+const fornecedorGracyeneEscolhido = {
+  tipo: 'fornecedor',
+  rotuloTipo: 'fornecedor',
+  tabelaBase: 'SA2',
+  codigo: '000787',
+  loja: '02',
+  nome: 'GRACYENE ELLEN MORAES PINTO GOMES - PJ',
+  termoBusca: 'Gracyene',
+};
+
+ok('limpeza de filtros preserva entidade escolhida quando mensagem só cita apelido', () => {
+  const spec = { entityCatalog: { DEFINICOES: { fornecedor: {} } } };
+  const intent = {
+    filtros: { fornecedor: 'Gracyene' },
+    _entidadesResolvidas: [fornecedorGracyeneEscolhido],
+  };
+  const limpo = runnerTest.limparFiltrosEntidadeHerdadosDaConsultaAtual(
+    spec,
+    intent,
+    'Contas a pagar do fornecedor Gracyene'
+  );
+  assert.strictEqual(limpo._entidadesResolvidas.length, 1, 'entidade escolhida nao deve ser removida');
+  assert.strictEqual(limpo._entidadesResolvidas[0].codigo, '000787');
+});
+
+ok('deduplicacao reconhece termoBusca da entidade escolhida manualmente', () => {
+  const pendentes = runnerTest.deduplicarTermosEntidade(
+    [{ texto: 'Gracyene', tipo: 'fornecedor', tipo_sugerido: 'fornecedor' }],
+    {},
+    [fornecedorGracyeneEscolhido]
+  );
+  assert.deepStrictEqual(pendentes, [], 'termo ja resolvido nao deve gerar nova pergunta_entidade');
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 console.log(`\n${'─'.repeat(60)}`);
 if (falhou === 0) {

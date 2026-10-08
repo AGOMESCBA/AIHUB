@@ -37,6 +37,30 @@ assert.deepStrictEqual(
   'deve escolher somente J2A e C3I pelo texto'
 );
 assert.deepStrictEqual(matchEmpresas.naoResolvidos, [], 'lista J2A e C3I deve resolver sem pendencias');
+assert.deepStrictEqual(matchEmpresas.ambiguos, [], 'lista resolvida nao deve marcar ambiguidades');
+
+const empresasComJ2ATeste = [
+  { empresa_id: 1, nome: 'C3i Systems', aliases: 'c3i,c3i systems' },
+  { empresa_id: 2, nome: 'J2A Consultoria', aliases: 'j2a consultoria' },
+  { empresa_id: 3, nome: 'J2A TESTE', aliases: 'j2a teste' },
+];
+const matchEmpresasJ2AAmbiguo = svc._resolverEmpresasQualificadasNoTexto(
+  'contas a receber do mes das empresas J2A e C3I',
+  empresasComJ2ATeste,
+);
+assert(matchEmpresasJ2AAmbiguo, 'deve reconhecer pedido multiempresa mesmo com um termo ambiguo');
+assert.deepStrictEqual(
+  matchEmpresasJ2AAmbiguo.empresas.map(e => e.empresa_id),
+  [1],
+  'deve manter C3I resolvida enquanto J2A fica pendente'
+);
+assert.deepStrictEqual(matchEmpresasJ2AAmbiguo.naoResolvidos, ['J2A'], 'J2A ambiguo deve virar pendencia');
+assert.strictEqual(matchEmpresasJ2AAmbiguo.ambiguos.length, 1, 'deve expor candidatos ambiguos para pergunta de esclarecimento');
+assert.deepStrictEqual(
+  matchEmpresasJ2AAmbiguo.ambiguos[0].empresas.map(e => e.empresa_id).sort(),
+  [2, 3],
+  'deve limitar a pergunta aos candidatos J2A'
+);
 
 const matchEmpresasPerguntaUsuario = svc._resolverEmpresasQualificadasNoTexto(
   'Faturamento do ano, por mes e por produto com valor total, quantidade e ticket medio para as empresas J2A e C3I.',
