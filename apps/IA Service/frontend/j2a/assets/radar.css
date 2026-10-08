@@ -420,6 +420,28 @@ button.loading .loader { display: block; }
   font-weight: 900;
   box-shadow: 0 12px 28px rgba(0, 107, 214, .25);
 }
+/* Botao so-icone (ex. "Pesquisar Solucoes"): largura fixa, nunca deve
+   crescer para acomodar texto — setBusy() so alterna .loading aqui, sem
+   trocar o conteudo (ver radar.js). Spinner com borda clara, contraste
+   adequado ao fundo azul escuro do primary-button. */
+.primary-button.icon-only {
+  width: 42px;
+  padding: 0;
+  position: relative;
+}
+.primary-button.icon-only .loader {
+  display: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, .3);
+  border-top-color: #fff;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin: -8px 0 0 -8px;
+}
+.primary-button.icon-only.loading .loader { display: block; }
+.primary-button.icon-only.loading .icon-label { visibility: hidden; }
 
 .queue-panel { display: grid; grid-template-rows: auto auto 1fr; }
 .queue-tools {
@@ -718,6 +740,24 @@ button.loading .loader { display: block; }
 .message-right .message-card { background: rgba(0, 107, 214, .1); border-top-right-radius: 3px; }
 .message-head { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 11px; margin-bottom: 4px; }
 .message-text { white-space: pre-wrap; line-height: 1.45; overflow-wrap: anywhere; font-size: 13px; }
+
+/* Indicador de progresso dentro do chat (nao no botao) — a IA esta
+   processando com base em todo o historico, nao travada. */
+.chat-status-card { display: flex; align-items: center; gap: 8px; }
+.chat-status-text { color: var(--muted); font-size: 12px; font-style: italic; }
+.chat-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: chat-status-pulse 1.2s infinite ease-in-out;
+}
+.chat-status-dot:nth-child(2) { animation-delay: .15s; }
+.chat-status-dot:nth-child(3) { animation-delay: .3s; }
+@keyframes chat-status-pulse {
+  0%, 60%, 100% { opacity: .25; transform: scale(.85); }
+  30% { opacity: 1; transform: scale(1); }
+}
 .message-attachments { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .message-attachment {
   display: inline-flex;

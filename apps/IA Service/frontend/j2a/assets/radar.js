@@ -55,6 +55,17 @@
 
   function setBusy(button, busy, label) {
     if (!button) return;
+    // Botao so-icone (ex. research-btn, sem texto visivel por design — ver
+    // "Remove texto do botao Pesquisar Solucoes") nunca deve ter o conteudo
+    // substituido por um label de texto: isso estoura a largura fixa do
+    // botao e vaza por cima dos elementos vizinhos no cabecalho. Para esses
+    // casos so alterna o estado visual (spinner via .loading), sem tocar no
+    // innerHTML.
+    if (button.classList.contains('icon-only')) {
+      button.classList.toggle('loading', !!busy);
+      button.disabled = !!busy;
+      return;
+    }
     if (busy) {
       button.dataset.originalHtml = button.innerHTML;
       const labelEl = button.querySelector('span:last-child');
@@ -612,6 +623,34 @@
     return state.localAttachments.filter((a) => a.mensagemId != null && String(a.mensagemId) === String(m.id));
   }
 
+  // Indicador de progresso dentro do corpo do chat (nao no botao, que tem
+  // largura fixa e so comporta um icone) — pedido do usuario: deixar claro
+  // que a IA esta processando com base em todo o historico, nao travada.
+  function showChatStatus(texto) {
+    hideChatStatus();
+    const container = $('messages');
+    if (!container) return;
+    const row = document.createElement('article');
+    row.className = 'message message-left chat-status-row';
+    row.id = 'chat-status-row';
+    row.innerHTML = `
+      <div class="message-avatar">🤖</div>
+      <div class="message-card chat-status-card">
+        <span class="chat-status-dot"></span>
+        <span class="chat-status-dot"></span>
+        <span class="chat-status-dot"></span>
+        <span class="chat-status-text">${escapeHtml(texto || 'Processando...')}</span>
+      </div>
+    `;
+    container.appendChild(row);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function hideChatStatus() {
+    const row = $('chat-status-row');
+    if (row) row.remove();
+  }
+
   function renderMessages() {
     if (!state.messages.length) {
       $('messages').innerHTML = '<div class="empty-block">Sem mensagens neste atendimento.</div>';
@@ -691,7 +730,8 @@
     if (!state.atendimentoId || !state.selected || state.processing.has(state.atendimentoId)) return;
     const atendimentoId = state.atendimentoId;
     state.processing.add(atendimentoId);
-    setBusy($('research-btn'), true, 'Pesquisando...');
+    setBusy($('research-btn'), true);
+    showChatStatus('Pesquisando no histórico completo do chamado...');
     try {
       await request(ext(`/radar/chamados/${encodeURIComponent(state.selected.id)}/anexos-softexpert/sincronizar`), {
         method: 'POST',
@@ -715,6 +755,7 @@
     } finally {
       state.processing.delete(atendimentoId);
       setBusy($('research-btn'), false);
+      hideChatStatus();
     }
   }
 
