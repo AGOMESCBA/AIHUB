@@ -9,6 +9,30 @@ const path = require('path');
 const anexoRepo = require('../repositories/anexo-repository');
 const armazenamento = require('./armazenamento-anexos');
 
+function _nomeCorrigido(nomeOriginal) {
+  const ext = path.extname(nomeOriginal || '');
+  const base = ext ? String(nomeOriginal).slice(0, -ext.length) : String(nomeOriginal || 'fonte');
+  return `${base} (corrigido)${ext || '.txt'}`;
+}
+
+function validarConteudoCorrigido(conteudoCorrigido, { respostaTruncada = false } = {}) {
+  const texto = String(conteudoCorrigido || '');
+  const trimmed = texto.trim();
+  if (respostaTruncada) {
+    return { ok: false, motivo: 'A resposta da IA foi truncada; o fonte corrigido pode estar incompleto.' };
+  }
+  if (!trimmed) {
+    return { ok: false, motivo: 'A secao Fonte corrigido esta vazia.' };
+  }
+  if (trimmed.length < 8) {
+    return { ok: false, motivo: 'A secao Fonte corrigido e curta demais para ser entregue como arquivo.' };
+  }
+  if (/resposta cortada|conte[uú]do truncado|continua(?:r)?$/i.test(trimmed)) {
+    return { ok: false, motivo: 'Ha indicios de que o fonte corrigido nao esta completo.' };
+  }
+  return { ok: true, motivo: null };
+}
+
 /**
  * Cria uma nova versão corrigida de um anexo de código já existente. O
  * conteúdo corrigido é gravado em disco como um novo arquivo (mesmo diretório
@@ -20,6 +44,10 @@ function criarVersaoCorrigida(empresaId, { anexoOriginalId, atendimentoId, mensa
   const original = anexoRepo.getAnexo(empresaId, anexoOriginalId);
   if (!original) throw new Error('Anexo original não encontrado nesta empresa.');
   if (!original.eCodigo) throw new Error('Só é possível versionar anexos identificados como código.');
+  if (String(original.atendimentoId) !== String(atendimentoId)) throw new Error('Anexo original não pertence a este atendimento.');
+
+  const validacao = validarConteudoCorrigido(conteudoCorrigido);
+  if (!validacao.ok) throw new Error(validacao.motivo);
 
   const nomeInterno = `${crypto.randomUUID()}${path.extname(original.nomeOriginal) || '.txt'}`;
   const dirEmpresaAtendimento = path.join(armazenamento.ANEXOS_DIR, String(empresaId), String(atendimentoId));
@@ -30,7 +58,7 @@ function criarVersaoCorrigida(empresaId, { anexoOriginalId, atendimentoId, mensa
   const caminhoRelativo = path.relative(armazenamento.ANEXOS_DIR, caminhoAbsoluto).split(path.sep).join('/');
 
   return anexoRepo.salvarMetadadosAnexo(empresaId, atendimentoId, {
-    nomeOriginal: `${original.nomeOriginal} (corrigido)`,
+    nomeOriginal: _nomeCorrigido(original.nomeOriginal),
     nomeInterno,
     mimeType: original.mimeType,
     tamanho: Buffer.byteLength(conteudoCorrigido, 'utf8'),
@@ -90,4 +118,4 @@ function calcularDiff(textoOriginal, textoCorrigido) {
   return linhas;
 }
 
-module.exports = { criarVersaoCorrigida, listarVersoes, calcularDiff };
+module.exports = { criarVersaoCorrigida, listarVersoes, calcularDiff, validarConteudoCorrigido };

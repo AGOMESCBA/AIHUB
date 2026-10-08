@@ -25,8 +25,10 @@ const chamadoRepo = require('../../repositories/chamado-repository');
 const importacaoRepo = require('../../repositories/importacao-repository');
 const agenteRepo = require('../../repositories/agente-local-repository');
 const atendimentoRepo = require('../../repositories/atendimento-repository');
+const mensagemRepo = require('../../repositories/mensagem-repository');
 const anexosSoftExpertService = require('../anexos-softexpert-service');
 const radarService = require('../radar-service');
+const validacaoSolucaoService = require('../validacao-solucao-service');
 
 const TAMANHO_LOTE_PADRAO = 500;
 const SISTEMA_ORIGEM = 'softexpert';
@@ -263,7 +265,7 @@ async function _processarChamado(empresaId, fonte, adapter, importacaoId, rowBru
     tecnicoResponsavelId = tecnico.id;
   }
 
-  const { chamado, resultado } = chamadoRepo.upsertChamado(empresaId, {
+  const { chamado, resultado, statusEncerramentoTransicao } = chamadoRepo.upsertChamado(empresaId, {
     fonteId: fonte.id, sistemaOrigem: SISTEMA_ORIGEM, oidOrigem: c.oidOrigem, numero: c.numero || c.oidOrigem,
     clienteId, solicitanteId, tecnicoResponsavelId, dataAbertura: c.dataAbertura,
     produto: c.produto, familia: c.familia, modulo: c.modulo, servico: c.servico,
@@ -333,10 +335,12 @@ async function _processarChamado(empresaId, fonte, adapter, importacaoId, rowBru
 
   const anexos = await _sincronizarAnexosSeAtendimentoExistente(empresaId, chamado);
   await _dispararPreAnaliseSePrimeiroContato(empresaId, chamado);
+  const evidenciaValidacao = await _registrarEvidenciaExternaSeAplicavel(empresaId, chamado, statusEncerramentoTransicao);
 
   return {
     resultado, inconsistencias, chamadoId: chamado.id,
     anexos,
+    evidenciaValidacao,
     posicionamentos: { total: posicionamentosBrutos.length, inseridos: posInseridos, atualizados: posAtualizados, semAlteracao: posSemAlteracao },
   };
 }
@@ -383,6 +387,43 @@ async function _dispararPreAnaliseSePrimeiroContato(empresaId, chamado) {
     radarService.iniciarAnalise(empresaId, chamado.id, { preAnaliseAutomatica: false });
   } catch (err) {
     console.error(`[IA Service] Falha ao avaliar pré-análise automática (chamado ${chamado.numero}):`, err.message);
+  }
+}
+
+/**
+ * Fase 3, seção 5 — registra evidência externa quando a sincronização
+ * detecta transição de status_encerramento (chamadoRepo.upsertChamado já
+ * expõe `statusEncerramentoTransicao`, capturado sem SELECT extra). Best-effort,
+ * mesmo padrão de _sincronizarAnexosSeAtendimentoExistente /
+ * _dispararPreAnaliseSePrimeiroContato: nunca propaga erro, a importação não
+ * pode falhar por causa disso. Só age quando já existe atendimento E pelo
+ * menos uma orientação da IA (mensagem assistant) para vincular a evidência —
+ * sem isso não há "orientação avaliada" para anotar (seção 3: toda validação
+ * fica vinculada a uma ação/resposta específica, nunca ao atendimento como um
+ * todo).
+ */
+async function _registrarEvidenciaExternaSeAplicavel(empresaId, chamado, statusEncerramentoTransicao) {
+  if (!statusEncerramentoTransicao) return { registrado: false, motivo: 'sem_transicao' };
+  try {
+    const atendimento = atendimentoRepo.getAtendimentoPorReferencia(empresaId, {
+      origem: chamado.sistemaOrigem || SISTEMA_ORIGEM,
+      referenciaExterna: chamado.numero,
+    });
+    if (!atendimento) return { registrado: false, motivo: 'sem_atendimento' };
+
+    const ultimaOrientacao = mensagemRepo.getUltimaMensagemAssistente(empresaId, atendimento.id);
+    if (!ultimaOrientacao) return { registrado: false, motivo: 'sem_orientacao_da_ia' };
+
+    const { registro, duplicado } = validacaoSolucaoService.registrarEvidenciaExternaDeChamado(empresaId, {
+      atendimentoId: atendimento.id,
+      mensagemAssistenteId: ultimaOrientacao.id,
+      chamadoId: chamado.id,
+      statusEncerramentoTransicao,
+    });
+    return { registrado: !!registro, duplicado, registro };
+  } catch (err) {
+    console.error(`[IA Service] Falha ao registrar evidência externa de validação (chamado ${chamado.numero}):`, err.message);
+    return { registrado: false, erro: err.message };
   }
 }
 
@@ -529,6 +570,6 @@ async function executarFullLoad(empresaId, fonteId, { periodoInicio, periodoFim,
 
 module.exports = {
   TAMANHO_LOTE_PADRAO,
-  _mapearChamado, _mapearPosicionamento, _processarChamado, // exportados para teste unitário do mapeamento
+  _mapearChamado, _mapearPosicionamento, _processarChamado, _registrarEvidenciaExternaSeAplicavel, // exportados para teste unitário/regressão
   executarFullLoad,
 };

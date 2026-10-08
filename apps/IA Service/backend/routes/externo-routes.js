@@ -28,11 +28,15 @@ const technicalResearchService = require('../services/technical-research-service
 const radarRefreshService = require('../services/radar-refresh-service');
 const investigacaoExecucaoRepo = require('../repositories/investigacao-execucao-repository');
 const investigacaoDossieService = require('../services/investigacao-dossie-service');
+const respostaOperacionalService = require('../services/resposta-operacional-service');
+const validacaoSolucaoService = require('../services/validacao-solucao-service');
+const validacaoSolucaoRepo = require('../repositories/validacao-solucao-repository');
 const crud = require('../../../IAHUB/backend/crud');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: armazenamento.TAMANHO_MAXIMO_BYTES } });
 
 function _erroParaStatus(err) {
+  if (err.status) return err.status;
   if (/não encontrado|not found/i.test(err.message)) return 404;
   if (/obrigatóri|inválid|Já existe|não permitid|excede o limite|vazio/i.test(err.message)) return 400;
   return 500;
@@ -92,6 +96,15 @@ module.exports = function registrarRotasExterno(app) {
       res.json({ ok: true, token: resultado.token, expiraEm: resultado.expiraEm });
     } catch (err) {
       res.status(400).json({ error: err.message });
+    }
+  });
+
+  // Fase 3, seção 6 — mesmo resumo agregado disponível no namespace interno.
+  app.get('/api/ia-service-externo/radar/validacoes-pendentes', (req, res) => {
+    try {
+      res.json(validacaoSolucaoService.obterResumoPendencias(req.svcEmpresaId));
+    } catch (err) {
+      _handleErro(res, err);
     }
   });
 
@@ -231,7 +244,45 @@ module.exports = function registrarRotasExterno(app) {
 
   app.get('/api/ia-service-externo/atendimentos/:id/mensagens', (req, res) => {
     try {
-      res.json(atendimentoService.listarMensagens(req.svcEmpresaId, req.params.id));
+      const mensagens = atendimentoService.listarMensagens(req.svcEmpresaId, req.params.id);
+      const idsAssistente = mensagens.filter(m => m.papel === 'assistant').map(m => m.id);
+      const estadosValidacao = validacaoSolucaoRepo.obterEstadoAtualPorMensagens(req.svcEmpresaId, idsAssistente);
+      res.json(mensagens.map(m => respostaOperacionalService.anexarFichaOperacional(m, {
+        validacaoSolucao: estadosValidacao[m.id] || null,
+      })));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // Fase 3 — confirmação explícita pelo mesmo analista logado no canal
+  // externo (telefone/WhatsApp). Amplia deliberadamente a "superfície
+  // mínima" original deste namespace (nota do cabeçalho do arquivo) porque a
+  // especificação da Fase 3 exige confirmação discreta tanto no Atendimento
+  // V1 quanto no Radar, e o Radar roda neste namespace quando acessado via
+  // login externo. Identidade vem de req.svcConsultorExterno (nunca do
+  // corpo da requisição — seção 10).
+  app.post('/api/ia-service-externo/atendimentos/:id/mensagens/:mensagemId/validacao', async (req, res) => {
+    try {
+      if (!req.svcConsultorExterno) return res.status(401).json({ error: 'Consultor não identificado para confirmar solução.' });
+      const { resultado, comentario, anexoVersaoId } = req.body || {};
+      const { evento, estadoAtual } = await validacaoSolucaoService.confirmarSolucao(req.svcEmpresaId, {
+        atendimentoId: req.params.id,
+        mensagemAssistenteId: req.params.mensagemId,
+        anexoVersaoId: anexoVersaoId || null,
+        resultado,
+        comentario: comentario || null,
+        usuarioId: req.svcConsultorExterno,
+      });
+      res.status(201).json({ evento, estadoAtual });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service-externo/atendimentos/:id/mensagens/:mensagemId/validacao', (req, res) => {
+    try {
+      res.json(validacaoSolucaoService.obterEstadoValidacao(req.svcEmpresaId, req.params.mensagemId, req.params.id));
     } catch (err) {
       _handleErro(res, err);
     }

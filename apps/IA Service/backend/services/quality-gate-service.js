@@ -4,7 +4,7 @@ const investigativeDiscipline = require('./investigative-discipline-service');
 
 function _temRespostaGenerica(texto) {
   const s = String(texto || '').toLowerCase();
-  if (s.length < 450) return true;
+  if (s.length < 450) return !_temRespostaCurtaObjetiva(texto);
   const genericos = [
     'verifique os logs',
     'envie mais informacoes',
@@ -14,6 +14,18 @@ function _temRespostaGenerica(texto) {
     'recomendo verificar',
   ];
   return genericos.filter(g => s.includes(g)).length >= 2 && !/\*\*evid[eê]ncias\*\*|fonte corrigido|linha|stack|exception|erro/i.test(texto || '');
+}
+
+function _temAcaoOuProximoPasso(texto) {
+  return /\b(apli(?:que|car|cado|cada|ca[cç][aã]o)|execut(?:e|ar|ado|ada)|valid(?:e|ar|ado|ada|a[cç][aã]o)|envi(?:e|ar|ado|ada)|anex(?:e|ar|ado|ada)|corrij\w*|corrig\w*|corre[cç][aã]o|test(?:e|ar|ado|ada)|compar(?:e|ar|ado|ada)|verifi(?:que|car|cado|cada)|colet(?:e|ar|ado|ada))\b/i.test(texto || '');
+}
+
+function _temRespostaCurtaObjetiva(texto) {
+  const s = _normalizar(texto);
+  const temEvidenciaTecnica = /\b(evidencia|log|fonte|print|anexo|trecho|linha|stack|exception|erro|rotina|campo|tabela|parametro|advpl|prw|tlpp|array|indice)\b/i.test(s);
+  const pedeEvidenciaEspecifica = /\b(evidencia insuficiente|faltam?|preciso|envie|enviar|anexe|anexar|colete|coletar)\b/i.test(s) && /\b(log|fonte|print|anexo|trecho|linha|stack|rotina|campo|passo|reproducao)\b/i.test(s);
+  const temValidacao = /\b(valid\w*|homologa\w*|teste\w*|reteste\w*|reproduz\w*|compil\w*)\b/i.test(s);
+  return (temEvidenciaTecnica && _temAcaoOuProximoPasso(texto) && temValidacao) || (pedeEvidenciaEspecifica && _temAcaoOuProximoPasso(texto));
 }
 
 function _usaTemplateFormalRobotico(texto) {
@@ -146,7 +158,7 @@ function _avaliarRegressaoInvestigativa(textoResposta, manifesto) {
 
   for (const solucao of guard.solucoesFalhas || []) {
     const termos = _normalizar(solucao.descricao || '').split(/\s+/).filter(t => t.length >= 4).slice(0, 8);
-    if (termos.length && termos.some(t => resposta.includes(t)) && /\b(aplicar|aplique|solucao|corrigir)\b/i.test(resposta) && !justificavel) {
+    if (termos.length && termos.some(t => resposta.includes(t)) && /\b(aplicar|aplique|solucao|corrig\w*|corrij\w*)\b/i.test(resposta) && !justificavel) {
       falhas.push({
         codigo: 'REGRESSAO_INVESTIGATIVA_SOLUCAO_FALHA',
         severidade: 'media',
@@ -221,6 +233,30 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
       severidade: 'media',
       detalhe: 'resposta descartou customizacao sem fonte/log/configuracao suficiente para sustentar a conclusao',
       acaoCorretiva: 'rebaixar_para_hipotese_e_pedir_fonte_ou_log_especifico',
+    });
+  }
+  if (/\b(causa confirmada|diagn[oó]stico confirmado|com certeza|definitivamente)\b/i.test(resposta) && !/\b(evid[eê]ncia|log|fonte|print|anexo|trecho|linha|stack)\b/i.test(resposta)) {
+    falhas.push({
+      codigo: 'CERTAINTY_WITHOUT_EVIDENCE',
+      severidade: 'media',
+      detalhe: 'resposta afirmou certeza sem explicitar evidencia tecnica',
+      acaoCorretiva: 'explicitar_evidencia_ou_rebaixar_para_hipotese',
+    });
+  }
+  if (/\b(corrig|corre[cç][aã]o|aplicar|ajuste|alterar)\b/i.test(resposta) && !/\b(valid\w*|homologa\w*|teste\w*|reteste\w*|reproduz\w*|compil\w*)\b/i.test(resposta)) {
+    falhas.push({
+      codigo: 'CORRECTION_WITHOUT_VALIDATION',
+      severidade: 'media',
+      detalhe: 'resposta propos correcao sem orientar validacao',
+      acaoCorretiva: 'incluir_validacao_objetiva_da_correcao',
+    });
+  }
+  if ((analisados.length > 0 || paginasComConteudo.length > 0) && /\b(evid[eê]ncia|log|fonte|print|anexo)\b/i.test(resposta) && !_temAcaoOuProximoPasso(resposta)) {
+    falhas.push({
+      codigo: 'EVIDENCE_WITHOUT_NEXT_ACTION',
+      severidade: 'media',
+      detalhe: 'resposta citou evidencia mas nao deixou uma acao/proximo passo claro',
+      acaoCorretiva: 'informar_acao_recomendada_ou_evidencia_faltante',
     });
   }
   if (imagensAnalisadas.length > 0 && /imagem|imagens|print|screenshot|tela/i.test(resposta)) {

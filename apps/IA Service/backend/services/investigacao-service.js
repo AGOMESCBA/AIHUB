@@ -12,6 +12,7 @@ const aiConfigService = require('./ai-config-service');
 const aiProviderClient = require('./ai-provider-client');
 const promptBuilder = require('./prompt-builder');
 const versaoFonteService = require('./versao-fonte-service');
+const respostaOperacionalService = require('./resposta-operacional-service');
 const chamadoRepo = require('../repositories/chamado-repository');
 const technicalResearchService = require('./technical-research-service');
 const contextEngine = require('./context-engine');
@@ -697,16 +698,46 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
   // neste turno para servir de "original", versiona automaticamente (seção 9
   // do prompt: nunca sobrescrever, sempre nova versão vinculada).
   const anexosCodigoDoTurno = anexosDoTurno.filter(a => a.eCodigo);
-  if (fonteCorrigidoTexto && anexosCodigoDoTurno.length === 1) {
-    versaoFonteService.criarVersaoCorrigida(empresaId, {
-      anexoOriginalId: anexosCodigoDoTurno[0].id,
-      atendimentoId,
-      mensagemOrigemId: mensagemAssistente.id,
-      conteudoCorrigido: fonteCorrigidoTexto,
-      explicacaoAlteracao: secoes?.['Alterações realizadas'] || null,
-      usuarioId: null,
+  mensagemAssistente.fontesCorrigidos = [];
+  mensagemAssistente.avisosFonteCorrigido = [];
+  if (fonteCorrigidoTexto) {
+    const validacaoFonte = versaoFonteService.validarConteudoCorrigido(fonteCorrigidoTexto, {
+      respostaTruncada: !!resultado.truncado,
     });
+
+    if (!validacaoFonte.ok) {
+      mensagemAssistente.avisosFonteCorrigido.push(validacaoFonte.motivo);
+    } else if (anexosCodigoDoTurno.length === 1) {
+      const versaoCorrigida = versaoFonteService.criarVersaoCorrigida(empresaId, {
+        anexoOriginalId: anexosCodigoDoTurno[0].id,
+        atendimentoId,
+        mensagemOrigemId: mensagemAssistente.id,
+        conteudoCorrigido: fonteCorrigidoTexto,
+        explicacaoAlteracao: secoes?.['Alterações realizadas'] || null,
+        usuarioId: null,
+      });
+      mensagemAssistente.fontesCorrigidos.push({
+        versao: versaoCorrigida,
+        original: anexosCodigoDoTurno[0],
+        status: 'Correção proposta — aguardando validação',
+      });
+    } else if (anexosCodigoDoTurno.length > 1) {
+      mensagemAssistente.avisosFonteCorrigido.push('Ha mais de um anexo de codigo no turno; nenhuma versao corrigida foi gerada automaticamente.');
+    } else {
+      mensagemAssistente.avisosFonteCorrigido.push('A resposta trouxe Fonte corrigido, mas nenhum anexo de codigo do turno foi identificado como original.');
+    }
   }
+  if (mensagemAssistente.avisosFonteCorrigido.length) {
+    mensagemRepo.atualizarAvisosFonteCorrigido(empresaId, mensagemAssistente.id, mensagemAssistente.avisosFonteCorrigido);
+  }
+
+  mensagemAssistente.respostaOperacional = respostaOperacionalService.construirFichaOperacional({
+    diagnostico: mensagemAssistente.diagnostico,
+    nivelConfianca: mensagemAssistente.nivelConfianca,
+    conteudo: mensagemAssistente.conteudo,
+    fontesCorrigidos: mensagemAssistente.fontesCorrigidos,
+    avisosFonteCorrigido: mensagemAssistente.avisosFonteCorrigido,
+  });
 
   return mensagemAssistente;
 }

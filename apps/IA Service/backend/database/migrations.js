@@ -977,6 +977,83 @@ const MIGRATIONS = [
       ALTER TABLE importacoes ADD COLUMN total_posicionamentos_esperado INTEGER DEFAULT NULL;
     `,
   },
+  {
+    version: 41,
+    descricao: 'Fase 3 — Confirmacao das solucoes: tabela de eventos de validacao (append-only, nunca UPDATE/DELETE de evento anterior) vinculada a uma mensagem especifica do assistente (nao ao atendimento inteiro), com origem distinta entre confirmacao explicita do analista e evidencia externa do SoftExpert. Estado atual de uma orientacao = ultimo evento por mensagem_assistente_id (ORDER BY criado_em DESC LIMIT 1) — historico completo preservado por design, nunca se apaga um evento anterior. Tambem adiciona rastro de transicao de status_encerramento em chamados, necessario para detectar reabertura (Encerrado -> outro valor) sem SELECT extra no momento do upsert.',
+    sql: `
+      -- Eventos de validacao da orientacao da IA. Cada linha e um evento imutavel:
+      -- uma nova confirmacao do analista ou uma nova evidencia externa do
+      -- SoftExpert sobre o MESMO atendimento geram uma linha NOVA, nunca um
+      -- UPDATE na linha anterior (secao 7/8 da especificacao da Fase 3: nunca
+      -- apagar historico, permitir reavaliacao, preservar evidencias antigas).
+      CREATE TABLE IF NOT EXISTS validacoes_solucao (
+        id                    TEXT PRIMARY KEY,
+        empresa_id            INTEGER NOT NULL,
+        atendimento_id        TEXT NOT NULL REFERENCES atendimentos(id) ON DELETE CASCADE,
+        mensagem_assistente_id TEXT NOT NULL REFERENCES mensagens(id) ON DELETE CASCADE,
+        anexo_versao_id       TEXT DEFAULT NULL REFERENCES anexos(id) ON DELETE SET NULL,
+        dossie_id             TEXT DEFAULT NULL REFERENCES investigacao_dossies(id) ON DELETE SET NULL,
+
+        -- 'confirmacao_analista' = ação humana explícita via UI (seção 4).
+        -- 'evidencia_externa'    = inferido do ciclo de vida do chamado no
+        --                          SoftExpert (seção 5) — NUNCA confirmação.
+        origem                TEXT NOT NULL,
+
+        -- RESOLVEU | NAO_RESOLVEU | PARCIALMENTE | NAO_TESTADO (origem
+        -- confirmacao_analista) ou EVIDENCIA_EXTERNA (origem evidencia_externa,
+        -- resultado real desconhecido — so registra que ALGO aconteceu no
+        -- chamado, nunca interpreta isso como sucesso/falha da IA).
+        resultado             TEXT NOT NULL,
+
+        comentario            TEXT DEFAULT NULL,
+
+        -- Preenchido somente quando origem = evidencia_externa: de onde veio o
+        -- sinal (ex. 'softexpert_status_encerramento',
+        -- 'softexpert_reabertura') e o payload minimo que motivou o registro —
+        -- nunca usado para inferir sucesso/falha automaticamente (secao 5).
+        evidencia_fonte       TEXT DEFAULT NULL,
+        evidencia_detalhe_json TEXT DEFAULT NULL,
+
+        -- Idempotencia de eventos sincronizados (origem evidencia_externa):
+        -- chave deterministica (ex. hash de chamado_id+status_encerramento+
+        -- oid_origem), nunca aleatoria, para que uma re-sincronizacao do
+        -- mesmo chamado nao duplique o mesmo evento de evidencia. NULL para
+        -- origem confirmacao_analista (cada clique e um evento novo legitimo,
+        -- nao ha nada a deduplicar).
+        chave_idempotencia    TEXT DEFAULT NULL,
+
+        usuario_id            INTEGER DEFAULT NULL,
+        criado_em             TEXT NOT NULL
+      );
+
+      -- Consulta mais frequente: "estado atual de uma orientacao" = ultimo
+      -- evento por mensagem_assistente_id. empresa_id primeiro (mesmo padrao
+      -- de todo o schema) para isolamento multiempresa eficiente. NOTA: "ultimo"
+      -- aqui e por PRECEDENCIA DE ORIGEM (confirmacao_analista > evidencia_externa),
+      -- nao apenas por criado_em mais recente — um evento de evidencia_externa
+      -- posterior NUNCA sobrescreve uma confirmacao_analista anterior na leitura
+      -- do estado atual (ver validacao-solucao-service.js:obterEstadoAtual).
+      -- Resolvido em JS, nao em SQL, para manter a regra legivel e testavel.
+      CREATE INDEX IF NOT EXISTS idx_svc_validacoes_mensagem
+        ON validacoes_solucao (empresa_id, mensagem_assistente_id, criado_em);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_validacoes_atendimento
+        ON validacoes_solucao (empresa_id, atendimento_id, criado_em);
+
+      -- Idempotencia por empresa: mesma chave nunca gera 2 linhas (proteção
+      -- contra sincronizacao repetida do SoftExpert, secao 7/11.13 da spec).
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_svc_validacoes_idempotencia
+        ON validacoes_solucao (empresa_id, chave_idempotencia)
+        WHERE chave_idempotencia IS NOT NULL;
+
+      -- status_encerramento_anterior: capturado no momento do upsertChamado
+      -- (chamado-repository.js ja le a linha 'existente' completa antes do
+      -- UPDATE, sem SELECT extra) para permitir detectar reabertura
+      -- (Encerrado -> Andamento/Pendente) na sincronizacao seguinte, sem
+      -- precisar de uma tabela de historico de status completa.
+      ALTER TABLE chamados ADD COLUMN status_encerramento_anterior TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

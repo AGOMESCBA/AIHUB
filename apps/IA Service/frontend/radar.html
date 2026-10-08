@@ -73,6 +73,8 @@
     .fila-tab:hover { color:var(--wa-text); border-color:var(--wa-border); }
     .fila-tab.ativo { background:transparent; color:var(--wa-text); border-color:var(--wa-accent); }
     .fila-tab-dot { display:none; width:6px; height:6px; border-radius:50%; background:var(--wa-accent); flex:none; }
+    .validacoes-pendentes-resumo { font-size:11px; color:var(--wa-text-tertiary); padding:4px 2px 8px; }
+    .validacoes-pendentes-label { font-weight:800; color:var(--wa-text-secondary); text-transform:uppercase; letter-spacing:.03em; margin-right:4px; }
     .fila-tab.ativo .fila-tab-dot { display:inline-block; }
     .fila-filtros { display:flex; gap:4px; flex-wrap:wrap; }
     .fila-filtro { border:1px solid var(--wa-border); background:rgba(255,255,255,.03); padding:4px 9px; border-radius:99px; font-size:11px; font-weight:700; color:var(--wa-text-secondary); cursor:pointer; }
@@ -312,6 +314,40 @@
     .diagnostico-secao { margin-bottom:8px; }
     .diagnostico-secao-titulo { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--wa-accent); margin-bottom:3px; }
     .nivel-confianca-badge { display:inline-block; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:20px; background:rgba(255,255,255,.08); color:var(--wa-text-secondary); margin-bottom:6px; }
+    .ficha-operacional { margin-top:8px; border-top:1px solid rgba(255,255,255,.08); padding-top:8px; white-space:normal; }
+    .ficha-operacional-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+    .ficha-operacional-badge { display:inline-flex; align-items:center; min-height:22px; padding:2px 8px; border-radius:999px; background:rgba(0,217,163,.12); color:var(--wa-accent); border:1px solid rgba(0,217,163,.24); font-size:10.5px; font-weight:900; text-transform:uppercase; letter-spacing:.035em; }
+    .ficha-operacional-grid { display:grid; gap:8px; }
+    .ficha-operacional-item { border-left:3px solid rgba(0,217,163,.32); padding-left:9px; }
+    .ficha-operacional-label { font-size:10.5px; font-weight:900; text-transform:uppercase; letter-spacing:.035em; color:var(--wa-accent); margin-bottom:2px; }
+    .ficha-operacional-value { color:var(--wa-text); line-height:1.45; }
+    .ficha-operacional-details { margin-top:10px; border-top:1px solid rgba(255,255,255,.08); padding-top:8px; }
+    .ficha-operacional-details summary { cursor:pointer; color:var(--wa-text-secondary); font-size:12px; font-weight:800; }
+    .ficha-operacional-detalhe { margin-top:8px; }
+    .ficha-operacional-validacao { margin-top:10px; border-top:1px solid rgba(255,255,255,.08); padding-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .validacao-pergunta { font-size:12px; color:var(--wa-text-secondary); font-weight:700; }
+    .validacao-opcoes { display:flex; flex-wrap:wrap; gap:6px; }
+    .validacao-opcoes button { font-size:11.5px; padding:4px 9px; border:1px solid var(--wa-border); background:rgba(255,255,255,.04); color:var(--wa-text); border-radius:7px; font-weight:700; cursor:pointer; }
+    .validacao-badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:999px; font-size:10.5px; font-weight:900; text-transform:uppercase; letter-spacing:.03em; }
+    .validacao-badge-ok { background:rgba(34,197,94,.16); color:#86efac; border:1px solid rgba(34,197,94,.3); }
+    .validacao-badge-falha { background:rgba(239,68,68,.16); color:#fecaca; border:1px solid rgba(239,68,68,.3); }
+    .validacao-badge-parcial { background:rgba(234,179,8,.16); color:#fde68a; border:1px solid rgba(234,179,8,.3); }
+    .validacao-badge-pendente { background:rgba(255,255,255,.06); color:var(--wa-text-tertiary); border:1px solid var(--wa-border); }
+    .validacao-link { font-size:11px; background:none; border:none; color:var(--wa-accent); cursor:pointer; text-decoration:underline; padding:0; }
+    .validacao-evidencia-hint { font-size:11.5px; color:var(--wa-text-tertiary); width:100%; }
+    .fonte-corrigido-card { margin-top:10px; padding:10px; border:1px solid rgba(0,217,163,.28); border-radius:8px; background:rgba(0,217,163,.08); white-space:normal; }
+    .fonte-corrigido-title { font-size:11.5px; font-weight:900; color:var(--wa-accent); text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px; }
+    .fonte-corrigido-meta { font-size:12px; color:var(--wa-text-secondary); line-height:1.45; }
+    .fonte-corrigido-status { display:inline-flex; margin-top:6px; padding:3px 7px; border-radius:99px; background:rgba(234,179,8,.13); color:#fde68a; border:1px solid rgba(234,179,8,.26); font-size:10.5px; font-weight:900; }
+    .fonte-corrigido-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .fonte-corrigido-actions button { border:1px solid var(--wa-border); border-radius:7px; background:rgba(255,255,255,.04); color:var(--wa-accent); font-size:11px; font-weight:800; padding:6px 8px; cursor:pointer; }
+    .fonte-corrigido-historico { margin-top:8px; font-size:11.5px; color:var(--wa-text-tertiary); }
+    .fonte-corrigido-aviso { margin-top:8px; padding:8px; border:1px solid rgba(234,179,8,.28); border-radius:8px; background:rgba(234,179,8,.08); color:#fde68a; font-size:12px; white-space:normal; }
+    .diff-line { display:grid; grid-template-columns:28px 1fr; gap:8px; font-family:ui-monospace,Consolas,monospace; font-size:12px; line-height:1.45; padding:2px 6px; border-radius:4px; white-space:pre-wrap; word-break:break-word; }
+    .diff-line.adicionada { background:rgba(34,197,94,.18); color:#bbf7d0; }
+    .diff-line.removida { background:rgba(239,68,68,.16); color:#fecaca; }
+    .diff-line.modificada { background:rgba(234,179,8,.15); color:#fde68a; }
+    .diff-line.igual { color:var(--wa-text-tertiary); }
 
     /* Rodapé de card: contagem + ação, equivalente a "N registros · Ver na aba Dados →" */
     .bubble-rodape { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,.08); font-size:11px; color:var(--wa-text-tertiary); }
@@ -502,6 +538,7 @@
               <button class="fila-tab" id="tab-geral" onclick="setModoFila(false)"><span class="fila-tab-dot"></span>Fila geral</button>
               <button class="fila-tab ativo" id="tab-minha" onclick="setModoFila(true)"><span class="fila-tab-dot"></span>Minha fila<span id="tab-minha-nome"></span></button>
             </div>
+            <div class="validacoes-pendentes-resumo" id="validacoes-pendentes-resumo" style="display:none"></div>
             <div class="fila-filtros" id="fila-filtros">
               <button class="fila-filtro ativo" id="filtro-todos" onclick="setFiltroSla('todos')">Todos</button>
               <button class="fila-filtro" id="filtro-atraso" onclick="setFiltroSla('em_atraso')">Em atraso</button>
@@ -884,6 +921,28 @@
     function setFiltroAguardandoRisco(valor) {
       riscoAguardandoFiltro = valor;
       montarGridRisco();
+    }
+
+    // Fase 3, seção 6 — resumo discreto de pendências de validação. Best-effort:
+    // nunca bloqueia nem interrompe o carregamento da fila (erro é silenciado,
+    // o indicador simplesmente não aparece).
+    async function carregarResumoValidacoes() {
+      try {
+        const resumo = await api('/radar/validacoes-pendentes');
+        const el = document.getElementById('validacoes-pendentes-resumo');
+        if (!el) return;
+        const partes = [];
+        if (resumo.NAO_TESTADO > 0) partes.push(`${resumo.NAO_TESTADO} ainda não testada(s)`);
+        if (resumo.EVIDENCIA_EXTERNA > 0) partes.push(`${resumo.EVIDENCIA_EXTERNA} com evidência externa`);
+        if (resumo.NAO_RESOLVEU > 0) partes.push(`${resumo.NAO_RESOLVEU} não resolveu`);
+        if (resumo.PARCIALMENTE > 0) partes.push(`${resumo.PARCIALMENTE} parcial`);
+        if (resumo.RESOLVEU > 0) partes.push(`${resumo.RESOLVEU} resolvida(s)`);
+        if (!partes.length) { el.style.display = 'none'; return; }
+        el.innerHTML = `<span class="validacoes-pendentes-label">Validações:</span> ${partes.join(' · ')}`;
+        el.style.display = '';
+      } catch (_) {
+        // best-effort — nunca interrompe a fila por causa deste indicador.
+      }
     }
 
     async function carregarFila({ forceSync = false } = {}) {
@@ -1884,13 +1943,212 @@
       return html;
     }
 
+    const ROTULO_VALIDACAO = {
+      RESOLVEU: 'Resolveu',
+      NAO_RESOLVEU: 'Não resolveu',
+      PARCIALMENTE: 'Resolveu parcialmente',
+      NAO_TESTADO: 'Ainda não testei',
+      EVIDENCIA_EXTERNA: 'Evidência externa (sem confirmação do analista)',
+      AGUARDANDO_VALIDACAO: 'Aguardando validação',
+    };
+
+    // Correção preventiva pré-publicação (seção 3): comentário de validação é
+    // texto do analista, NUNCA HTML confiável — persistido sem sanitização
+    // (preserva o texto original no banco) e sem exibição hoje, mas qualquer
+    // UI futura que vier a mostrá-lo DEVE passar por esta função, nunca
+    // interpolar `comentario` direto em innerHTML/template string. Reaproveita
+    // o mesmo escapeHtml já usado em toda a ficha operacional — não há
+    // segurança adicional "pela ausência de uso"; esta é a única barreira e
+    // deve ser tratada como obrigatória, não opcional.
+    function renderizarComentarioValidacao(comentario) {
+      const texto = String(comentario ?? '').trim();
+      if (!texto) return '';
+      return escapeHtml(texto).replace(/\n/g, '<br>');
+    }
+
+    // Fase 3 — confirmação discreta de solução, integrada à ficha operacional.
+    // Nunca bloqueia o atendimento; comentário é opcional e só relevante para
+    // falha/parcial (seção 4 da especificação).
+    function renderizarValidacaoSolucao(mensagemId, validacaoSolucao) {
+      if (!mensagemId) return '';
+      const status = validacaoSolucao?.status || 'AGUARDANDO_VALIDACAO';
+      const confirmadoPeloAnalista = !!validacaoSolucao?.ultimaConfirmacao;
+      const badgeClasse = {
+        RESOLVEU: 'validacao-badge-ok', NAO_RESOLVEU: 'validacao-badge-falha',
+        PARCIALMENTE: 'validacao-badge-parcial', NAO_TESTADO: 'validacao-badge-pendente',
+        EVIDENCIA_EXTERNA: 'validacao-badge-pendente', AGUARDANDO_VALIDACAO: 'validacao-badge-pendente',
+      }[status] || 'validacao-badge-pendente';
+      const statusHtml = `<span class="validacao-badge ${badgeClasse}">${escapeHtml(ROTULO_VALIDACAO[status] || status)}</span>`;
+      const pergunta = confirmadoPeloAnalista
+        ? `${statusHtml} <button type="button" class="validacao-link" onclick="abrirValidacaoSolucao('${escapeHtml(mensagemId)}')">reavaliar</button>`
+        : `<span class="validacao-pergunta">A orientação resolveu o problema?</span>
+           <div class="validacao-opcoes" id="validacao-opcoes-${escapeHtml(mensagemId)}">
+             <button type="button" onclick="confirmarValidacaoSolucao('${escapeHtml(mensagemId)}','RESOLVEU')">Sim, resolveu</button>
+             <button type="button" onclick="confirmarValidacaoSolucao('${escapeHtml(mensagemId)}','NAO_RESOLVEU')">Não resolveu</button>
+             <button type="button" onclick="confirmarValidacaoSolucao('${escapeHtml(mensagemId)}','PARCIALMENTE')">Resolveu parcialmente</button>
+             <button type="button" onclick="confirmarValidacaoSolucao('${escapeHtml(mensagemId)}','NAO_TESTADO')">Ainda não testei</button>
+           </div>
+           ${status === 'EVIDENCIA_EXTERNA' ? `<div class="validacao-evidencia-hint">${statusHtml} — o chamado teve movimento no SoftExpert, mas isso não confirma se a orientação da IA resolveu.</div>` : ''}`;
+      return `<div class="ficha-operacional-validacao" id="validacao-card-${escapeHtml(mensagemId)}">${pergunta}</div>`;
+    }
+
+    function renderizarRespostaOperacional(ficha, diagnostico, nivelConfianca, texto, mensagemId) {
+      if (!ficha?.temEstrutura) return diagnostico ? renderizarDiagnostico(diagnostico, nivelConfianca) : renderizarTextoComCodigo(texto);
+      const itens = [
+        ['Diagnostico', ficha.diagnostico],
+        ['Acao recomendada', ficha.acaoRecomendada],
+        ['Evidencia', ficha.evidencia],
+        ['Validacao', ficha.validacao],
+        ['Proximo passo', ficha.proximoPasso],
+      ].filter(([, valor]) => String(valor || '').trim());
+      const detalhes = (ficha.detalhes || [])
+        .filter(d => d?.titulo && d?.conteudo)
+        .map(d => `<div class="ficha-operacional-detalhe"><div class="diagnostico-secao-titulo">${escapeHtml(d.titulo)}</div>${renderizarTextoComCodigo(d.conteudo)}</div>`)
+        .join('');
+      const arquivo = ficha.possuiArquivoCorrigido
+        ? '<div class="ficha-operacional-item"><div class="ficha-operacional-label">Arquivo corrigido</div><div class="ficha-operacional-value">Fonte corrigido disponivel abaixo.</div></div>'
+        : '';
+      return `
+        <div class="ficha-operacional">
+          <div class="ficha-operacional-head">
+            <span class="ficha-operacional-badge">${escapeHtml(ficha.rotuloDiagnostico || 'Resposta objetiva')}</span>
+            ${nivelConfianca ? `<span class="nivel-confianca-badge">${escapeHtml(nivelConfianca)}</span>` : ''}
+          </div>
+          <div class="ficha-operacional-grid">
+            ${itens.map(([label, valor]) => `<div class="ficha-operacional-item"><div class="ficha-operacional-label">${escapeHtml(label)}</div><div class="ficha-operacional-value">${renderizarTextoComCodigo(valor)}</div></div>`).join('')}
+            ${arquivo}
+          </div>
+          ${detalhes ? `<details class="ficha-operacional-details"><summary>Analise completa, evidencias e historico</summary>${detalhes}</details>` : ''}
+          ${renderizarValidacaoSolucao(mensagemId, ficha.validacaoSolucao)}
+        </div>
+      `;
+    }
+
+    async function confirmarValidacaoSolucao(mensagemId, resultado) {
+      const card = document.getElementById(`validacao-card-${mensagemId}`);
+      if (!card) return;
+      let comentario = null;
+      if (resultado === 'NAO_RESOLVEU' || resultado === 'PARCIALMENTE') {
+        // Mesmo limite validado no backend (COMENTARIO_MAX_CHARS em
+        // validacao-solucao-service.js) — truncar aqui é só UX preventiva;
+        // a rejeição real (400) continua sendo feita no servidor.
+        comentario = window.prompt('Comentário (opcional) — o que aconteceu?')?.slice(0, 2000) || null;
+      }
+      try {
+        const resp = await api(`/atendimentos/${atendimentoAtualId}/mensagens/${mensagemId}/validacao`, {
+          method: 'POST',
+          body: JSON.stringify({ resultado, comentario }),
+        });
+        card.outerHTML = renderizarValidacaoSolucao(mensagemId, resp.estadoAtual);
+      } catch (err) {
+        showError('Não foi possível registrar a validação: ' + err.message);
+      }
+    }
+
+    async function abrirValidacaoSolucao(mensagemId) {
+      const card = document.getElementById(`validacao-card-${mensagemId}`);
+      if (!card) return;
+      card.outerHTML = renderizarValidacaoSolucao(mensagemId, { status: 'AGUARDANDO_VALIDACAO', ultimaConfirmacao: null });
+    }
+
+    function numeroVersaoFonte(item, historico) {
+      const idx = (historico || []).findIndex(v => String(v.id) === String(item?.id));
+      return idx >= 0 ? idx + 1 : (item?.numeroVersao || '?');
+    }
+
+    function montarFontesCorrigidosPorMensagem(anexos) {
+      const porId = new Map((anexos || []).map(a => [String(a.id), a]));
+      const porOriginal = new Map();
+      for (const a of anexos || []) {
+        const raiz = String(a.anexoOriginalId || a.id);
+        if (!porOriginal.has(raiz)) porOriginal.set(raiz, []);
+        porOriginal.get(raiz).push(a);
+      }
+      for (const lista of porOriginal.values()) {
+        lista.sort((a, b) => String(a.criadoEm || '').localeCompare(String(b.criadoEm || '')));
+      }
+      const porMensagem = {};
+      for (const versao of (anexos || []).filter(a => a.anexoOriginalId && a.mensagemOrigemId)) {
+        const original = porId.get(String(versao.anexoOriginalId));
+        if (!original) continue;
+        (porMensagem[versao.mensagemOrigemId] ||= []).push({
+          versao,
+          original,
+          historico: porOriginal.get(String(versao.anexoOriginalId)) || [original, versao],
+        });
+      }
+      return porMensagem;
+    }
+
+    function renderizarFonteCorrigidoCard(item) {
+      const versao = item.versao || item;
+      const original = item.original || {};
+      const historico = item.historico || [];
+      const nVersao = numeroVersaoFonte(versao, historico);
+      const historicoHtml = historico.length
+        ? `<div class="fonte-corrigido-historico">Historico: ${historico.map(v => `v${numeroVersaoFonte(v, historico)} ${escapeHtml(v.nomeOriginal || 'arquivo')}`).join(' -> ')}</div>`
+        : '';
+      return `
+        <div class="fonte-corrigido-card">
+          <div class="fonte-corrigido-title">Fonte corrigido gerado</div>
+          <div class="fonte-corrigido-meta">
+            <div><strong>Arquivo:</strong> ${escapeHtml(versao.nomeOriginal || 'Fonte corrigido')}</div>
+            <div><strong>Versao:</strong> v${escapeHtml(nVersao)}</div>
+            <div><strong>Original:</strong> ${escapeHtml(original.nomeOriginal || 'Nao identificado')}</div>
+          </div>
+          <span class="fonte-corrigido-status">Correcao proposta - aguardando validacao</span>
+          <div class="fonte-corrigido-actions">
+            <button type="button" onclick="baixarAnexoLocal('${escapeHtml(versao.id)}')">Baixar fonte corrigido</button>
+            <button type="button" onclick="compararFonteCorrigido('${escapeHtml(original.id)}','${escapeHtml(versao.id)}')">Comparar alteracoes</button>
+          </div>
+          ${historicoHtml}
+        </div>
+      `;
+    }
+
+    function renderizarAvisosFonteCorrigido(avisos) {
+      if (!avisos?.length) return '';
+      return avisos.map(a => `<div class="fonte-corrigido-aviso">${escapeHtml(a)}</div>`).join('');
+    }
+
+    function renderizarDiffFonte(linhas) {
+      const saida = [];
+      for (let i = 0; i < (linhas || []).length; i++) {
+        const atual = linhas[i];
+        const proxima = linhas[i + 1];
+        if (atual.tipo === 'removida' && proxima?.tipo === 'adicionada') {
+          saida.push(`<div class="diff-line modificada"><span>~</span><span>${escapeHtml(atual.texto)}\n${escapeHtml(proxima.texto)}</span></div>`);
+          i++;
+          continue;
+        }
+        const sinal = atual.tipo === 'adicionada' ? '+' : atual.tipo === 'removida' ? '-' : ' ';
+        saida.push(`<div class="diff-line ${escapeHtml(atual.tipo)}"><span>${sinal}</span><span>${escapeHtml(atual.texto)}</span></div>`);
+      }
+      return saida.join('') || '<div class="pesquisa-empty">Nenhuma diferenca identificada.</div>';
+    }
+
+    async function compararFonteCorrigido(originalId, versaoId) {
+      try {
+        const empresaId = empresaIdAtual();
+        const qs = qsEmpresa(empresaId);
+        const resultado = await api(`/anexos/${originalId}/diff/${versaoId}${qs ? '?' + qs : ''}`);
+        abrirModalAnexos({
+          titulo: 'Comparar alteracoes',
+          subtitulo: `${resultado.original?.nomeOriginal || 'Original'} x ${resultado.versao?.nomeOriginal || 'Versao corrigida'}`,
+          html: renderizarDiffFonte(resultado.diff),
+        });
+      } catch (err) {
+        showError('Nao foi possivel comparar as alteracoes: ' + err.message);
+      }
+    }
+
     /**
      * Card de mensagem no padrão "Pergunta → Resposta" do protheus-chat.html
      * (função addBubble original) — respostas da IA (direcao='in') trazem um
      * rótulo com a pergunta que originou aquela resposta em destaque, e um
      * rodapé com nível de confiança quando houver diagnóstico estruturado.
      */
-    function addBubble({ direcao, texto, anexos, diagnostico, nivelConfianca, perguntaContexto, criadoEm, papel }) {
+    function addBubble({ id, direcao, texto, anexos, diagnostico, nivelConfianca, perguntaContexto, criadoEm, papel, fontesCorrigidos, avisosFonteCorrigido, respostaOperacional }) {
       const chatBody = document.getElementById('chat-body');
       const row = document.createElement('div');
       row.className = `row ${direcao}`;
@@ -1904,11 +2162,12 @@
         ? `<div class="bubble-question-context">Pergunta: ${escapeHtml(perguntaContexto).slice(0, 140)}</div>`
         : '';
 
-      const corpo = diagnostico
-        ? renderizarDiagnostico(diagnostico, nivelConfianca)
+      const corpo = direcao === 'in' && (respostaOperacional || diagnostico)
+        ? renderizarRespostaOperacional(respostaOperacional, diagnostico, nivelConfianca, texto, id)
         : renderizarTextoComCodigo(texto);
 
-      bubble.innerHTML = cabecalhoMensagem + cabecalhoPergunta + corpo;
+      const fontesHtml = (fontesCorrigidos || []).map(renderizarFonteCorrigidoCard).join('');
+      bubble.innerHTML = cabecalhoMensagem + cabecalhoPergunta + corpo + fontesHtml + renderizarAvisosFonteCorrigido(avisosFonteCorrigido);
 
       if (anexos && anexos.length) {
         const chaveAnexos = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -1970,6 +2229,7 @@
         const chatBody = aindaEhOAtual ? document.getElementById('chat-body') : null;
         if (chatBody) chatBody.innerHTML = '';
         const anexosPorMensagem = {};
+        const fontesCorrigidosPorMensagem = montarFontesCorrigidosPorMensagem(anexosDoAtendimento);
         for (const a of anexosDoAtendimento) {
           if (!a.mensagemId) continue;
           (anexosPorMensagem[a.mensagemId] ||= []).push(a);
@@ -1986,6 +2246,7 @@
             ...anexosSoftExpertDaMensagem(m),
           ];
           addBubble({
+            id: m.id,
             direcao,
             texto: m.conteudo,
             anexos: anexosDaMensagem,
@@ -1994,6 +2255,8 @@
             perguntaContexto: m.papel === 'assistant' ? perguntaAnterior : null,
             criadoEm: m.criadoEm,
             papel: m.papel,
+            fontesCorrigidos: fontesCorrigidosPorMensagem[m.id],
+            respostaOperacional: m.respostaOperacional,
           });
           if (direcao === 'out') perguntaAnterior = m.conteudo;
         }
@@ -2142,7 +2405,7 @@
         if (atendimentoIdDoTurno === atendimentoAtualId) {
           hideTyping();
           enviando = false;
-          addBubble({ direcao: 'in', texto: resposta.conteudo, diagnostico: resposta.diagnostico, nivelConfianca: resposta.nivelConfianca, perguntaContexto: texto, criadoEm: resposta.criadoEm, papel: 'assistant' });
+          addBubble({ id: resposta.id, direcao: 'in', texto: resposta.conteudo, diagnostico: resposta.diagnostico, nivelConfianca: resposta.nivelConfianca, perguntaContexto: texto, criadoEm: resposta.criadoEm, papel: 'assistant', fontesCorrigidos: resposta.fontesCorrigidos, avisosFonteCorrigido: resposta.avisosFonteCorrigido, respostaOperacional: resposta.respostaOperacional });
         }
         // Atendimento não está mais visível: a mensagem já foi persistida
         // pelo backend e aparecerá normalmente via carregarMensagens() na
@@ -2206,7 +2469,7 @@
         if (atendimentoIdDoTurno === atendimentoAtualId) {
           hideTyping();
           enviando = false;
-          addBubble({ direcao: 'in', texto: resposta.conteudo, diagnostico: resposta.diagnostico, nivelConfianca: resposta.nivelConfianca, perguntaContexto: TEXTO_PESQUISAR_SOLUCOES, criadoEm: resposta.criadoEm, papel: 'assistant' });
+          addBubble({ id: resposta.id, direcao: 'in', texto: resposta.conteudo, diagnostico: resposta.diagnostico, nivelConfianca: resposta.nivelConfianca, perguntaContexto: TEXTO_PESQUISAR_SOLUCOES, criadoEm: resposta.criadoEm, papel: 'assistant', fontesCorrigidos: resposta.fontesCorrigidos, avisosFonteCorrigido: resposta.avisosFonteCorrigido, respostaOperacional: resposta.respostaOperacional });
         }
       } catch (err) {
         atendimentosEmProcessamento.delete(atendimentoIdDoTurno);
@@ -2488,6 +2751,7 @@
       await restaurarPreferenciaAutoRefresh();
       await restaurarPreferenciaPreAnalise();
       carregarFila();
+      carregarResumoValidacoes();
     }
 
     window._iahubAuthReady?.then(iniciar) ?? iniciar();

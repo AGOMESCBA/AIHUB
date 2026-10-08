@@ -6,9 +6,32 @@ const crypto = require('crypto');
 const { getDB } = require('../database');
 
 const PAPEIS_VALIDOS = new Set(['user', 'assistant', 'system', 'customer']);
+const META_AVISOS_FONTE_CORRIGIDO = '__avisosFonteCorrigido';
+
+function _parseDiagnostico(json) {
+  if (!json) return { diagnostico: null, avisosFonteCorrigido: [] };
+  const parsed = JSON.parse(json);
+  const avisosFonteCorrigido = Array.isArray(parsed?.[META_AVISOS_FONTE_CORRIGIDO])
+    ? parsed[META_AVISOS_FONTE_CORRIGIDO]
+    : [];
+  if (parsed && typeof parsed === 'object') delete parsed[META_AVISOS_FONTE_CORRIGIDO];
+  return {
+    diagnostico: parsed && Object.keys(parsed).length ? parsed : null,
+    avisosFonteCorrigido,
+  };
+}
+
+function _serializarDiagnostico(diagnostico, avisosFonteCorrigido = []) {
+  const payload = { ...(diagnostico || {}) };
+  if (Array.isArray(avisosFonteCorrigido) && avisosFonteCorrigido.length) {
+    payload[META_AVISOS_FONTE_CORRIGIDO] = avisosFonteCorrigido;
+  }
+  return Object.keys(payload).length ? JSON.stringify(payload) : null;
+}
 
 function _rowParaDominio(row) {
   if (!row) return null;
+  const { diagnostico, avisosFonteCorrigido } = _parseDiagnostico(row.diagnostico_json);
   return {
     id: row.id,
     empresaId: row.empresa_id,
@@ -17,7 +40,8 @@ function _rowParaDominio(row) {
     conteudo: row.conteudo,
     usuarioId: row.usuario_id,
     criadoEm: row.criado_em,
-    diagnostico: row.diagnostico_json ? JSON.parse(row.diagnostico_json) : null,
+    diagnostico,
+    avisosFonteCorrigido,
     nivelConfianca: row.nivel_confianca,
     provider: row.provider,
     model: row.model,
@@ -61,7 +85,7 @@ function salvarMensagem(empresaId, atendimentoId, dados) {
     dados.conteudo,
     dados.usuarioId ?? null,
     agora,
-    dados.diagnostico ? JSON.stringify(dados.diagnostico) : null,
+    _serializarDiagnostico(dados.diagnostico, dados.avisosFonteCorrigido),
     dados.nivelConfianca ?? null,
     dados.provider ?? null,
     dados.model ?? null,
@@ -72,6 +96,21 @@ function salvarMensagem(empresaId, atendimentoId, dados) {
   );
 
   return _rowParaDominio(db.prepare('SELECT * FROM mensagens WHERE id = ?').get(id));
+}
+
+function atualizarAvisosFonteCorrigido(empresaId, mensagemId, avisosFonteCorrigido = []) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!mensagemId) throw new Error('mensagemId é obrigatório.');
+  const db = getDB();
+  const row = db.prepare(`SELECT diagnostico_json FROM mensagens WHERE id = ? AND empresa_id = ?`).get(mensagemId, Number(empresaId));
+  if (!row) throw new Error('Mensagem não encontrada nesta empresa.');
+  const { diagnostico } = _parseDiagnostico(row.diagnostico_json);
+  db.prepare(`
+    UPDATE mensagens
+       SET diagnostico_json = ?
+     WHERE id = ? AND empresa_id = ?
+  `).run(_serializarDiagnostico(diagnostico, avisosFonteCorrigido), mensagemId, Number(empresaId));
+  return getMensagem(empresaId, mensagemId);
 }
 
 function removerHistoricoImportado(empresaId, atendimentoId) {
@@ -139,4 +178,20 @@ function getMensagem(empresaId, mensagemId) {
   return _rowParaDominio(row);
 }
 
-module.exports = { salvarMensagem, listarMensagens, getMensagem, removerHistoricoImportado, PAPEIS_VALIDOS };
+function getUltimaMensagemAssistente(empresaId, atendimentoId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!atendimentoId) throw new Error('atendimentoId é obrigatório.');
+  const db = getDB();
+  const row = db.prepare(`
+    SELECT * FROM mensagens
+     WHERE empresa_id = ?
+       AND atendimento_id = ?
+       AND papel = 'assistant'
+       AND TRIM(COALESCE(conteudo, '')) <> ''
+     ORDER BY criado_em DESC, rowid DESC
+     LIMIT 1
+  `).get(Number(empresaId), atendimentoId);
+  return _rowParaDominio(row);
+}
+
+module.exports = { salvarMensagem, listarMensagens, getMensagem, getUltimaMensagemAssistente, removerHistoricoImportado, atualizarAvisosFonteCorrigido, PAPEIS_VALIDOS };

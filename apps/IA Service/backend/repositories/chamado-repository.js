@@ -31,6 +31,7 @@ function _chamadoParaDominio(row) {
     diasDur: row.dias_dur, hrDur: row.hr_dur, diasDurSup: row.dias_dur_sup, diasDurFsw: row.dias_dur_fsw,
     diasDurDist: row.dias_dur_dist, diasDurCli: row.dias_dur_cli, diasDurTicli: row.dias_dur_ticli,
     aguardandoConsolidado: row.aguardando_consolidado,
+    statusEncerramentoAnterior: row.status_encerramento_anterior,
     hashConteudo: row.hash_conteudo, precisaIndexacao: !!row.precisa_indexacao, indexadoEm: row.indexado_em,
     atualizadoOrigemEm: row.atualizado_origem_em, criadoEm: row.criado_em, atualizadoEm: row.atualizado_em,
   };
@@ -85,8 +86,15 @@ function upsertChamado(empresaId, dados) {
 
   if (existente) {
     if (existente.hash_conteudo === hashAtual) {
-      return { chamado: _chamadoParaDominio(existente), resultado: 'sem_alteracao' };
+      return { chamado: _chamadoParaDominio(existente), resultado: 'sem_alteracao', statusEncerramentoTransicao: null };
     }
+
+    // Captura o status ANTES do UPDATE (ja temos a row completa em `existente`,
+    // sem SELECT extra) para permitir detectar reabertura (Encerrado -> outro
+    // valor) na camada de servico, sem depender de uma tabela de historico de
+    // status completa — Fase 3, secao 5 (cenario C: chamado reaberto).
+    const statusAnterior = existente.status_encerramento ?? null;
+    const statusNovo = dados.statusEncerramento ?? null;
 
     const sets = CAMPOS_CHAMADO.map(c => `${COLUNA_POR_CAMPO[c]} = ?`).join(', ');
     const valores = CAMPOS_CHAMADO.map(c => dados[c] ?? null);
@@ -94,12 +102,23 @@ function upsertChamado(empresaId, dados) {
       UPDATE chamados
          SET ${sets}, cliente_id = ?, solicitante_id = ?, tecnico_responsavel_id = ?,
              data_abertura = ?, hash_conteudo = ?, precisa_indexacao = 1,
-             atualizado_origem_em = ?, atualizado_em = ?
+             status_encerramento_anterior = ?, atualizado_origem_em = ?, atualizado_em = ?
        WHERE id = ?
     `).run(...valores, dados.clienteId ?? null, dados.solicitanteId ?? null, dados.tecnicoResponsavelId ?? null,
-      dados.dataAbertura ?? null, hashAtual, dados.atualizadoOrigemEm ?? agora, agora, existente.id);
+      dados.dataAbertura ?? null, hashAtual, statusAnterior, dados.atualizadoOrigemEm ?? agora, agora, existente.id);
 
-    return { chamado: _chamadoParaDominio(db.prepare(`SELECT * FROM chamados WHERE id = ?`).get(existente.id)), resultado: 'atualizado' };
+    // Transicao relevante para a Fase 3: só sinaliza quando o status
+    // REALMENTE mudou de um valor conhecido para outro diferente (não no
+    // primeiro upsert, onde statusAnterior é null).
+    const statusEncerramentoTransicao = (statusAnterior && statusNovo && statusAnterior !== statusNovo)
+      ? { de: statusAnterior, para: statusNovo, reabertura: statusAnterior === 'Encerrado' && statusNovo !== 'Encerrado' }
+      : null;
+
+    return {
+      chamado: _chamadoParaDominio(db.prepare(`SELECT * FROM chamados WHERE id = ?`).get(existente.id)),
+      resultado: 'atualizado',
+      statusEncerramentoTransicao,
+    };
   }
 
   const id = crypto.randomUUID();
@@ -134,7 +153,7 @@ function upsertChamado(empresaId, dados) {
     hashAtual, dados.atualizadoOrigemEm ?? agora, agora, agora
   );
 
-  return { chamado: _chamadoParaDominio(db.prepare(`SELECT * FROM chamados WHERE id = ?`).get(id)), resultado: 'inserido' };
+  return { chamado: _chamadoParaDominio(db.prepare(`SELECT * FROM chamados WHERE id = ?`).get(id)), resultado: 'inserido', statusEncerramentoTransicao: null };
 }
 
 function getChamadoPorOid(empresaId, fonteId, oidOrigem) {

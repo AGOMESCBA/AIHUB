@@ -15,6 +15,7 @@ const extracaoConteudo = require('../services/extracao-conteudo');
 const anexoRepo = require('../repositories/anexo-repository');
 const investigacaoService = require('../services/investigacao-service');
 const versaoFonteService = require('../services/versao-fonte-service');
+const respostaOperacionalService = require('../services/resposta-operacional-service');
 const aiConfigService = require('../services/ai-config-service');
 const aiProviderClient = require('../services/ai-provider-client');
 const agenteLocalService = require('../services/agente-local-service');
@@ -30,6 +31,8 @@ const radarRefreshService = require('../services/radar-refresh-service');
 const investigacaoExecucaoRepo = require('../repositories/investigacao-execucao-repository');
 const investigacaoDossieService = require('../services/investigacao-dossie-service');
 const turnoLockService = require('../services/turno-lock-service');
+const validacaoSolucaoService = require('../services/validacao-solucao-service');
+const validacaoSolucaoRepo = require('../repositories/validacao-solucao-repository');
 
 // multer com storage em memória — o binário só vai para disco depois da
 // validação (armazenamento.validarAnexo), nunca antes. Limite de tamanho
@@ -37,6 +40,7 @@ const turnoLockService = require('../services/turno-lock-service');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: armazenamento.TAMANHO_MAXIMO_BYTES } });
 
 function _erroParaStatus(err) {
+  if (err.status) return err.status;
   if (err.code === 'CONFLITO_VERSAO_DOSSIE' || err.status === 409) return 409;
   if (/não encontrado|not found/i.test(err.message)) return 404;
   if (/obrigatóri|inválid|Já existe|não permitid|excede o limite|vazio/i.test(err.message)) return 400;
@@ -48,6 +52,23 @@ function _erroParaStatus(err) {
 function _handleErro(res, err) {
   const status = _erroParaStatus(err);
   res.status(status).json({ error: err.message });
+}
+
+function _validarRelacaoVersao(original, versao) {
+  if (!original || !versao) return false;
+  if (String(original.empresaId) !== String(versao.empresaId)) return false;
+  if (String(original.atendimentoId) !== String(versao.atendimentoId)) return false;
+  if (!versao.anexoOriginalId) return false;
+  return String(versao.anexoOriginalId) === String(original.id);
+}
+
+function _resolverCaminhoAnexoSeguro(caminhoRelativo) {
+  const base = path.resolve(armazenamento.ANEXOS_DIR);
+  const destino = path.resolve(base, String(caminhoRelativo || ''));
+  if (destino !== base && !destino.startsWith(base + path.sep)) {
+    throw new Error('Caminho de anexo invalido.');
+  }
+  return destino;
 }
 
 module.exports = function registrarRotas(app, { requireAuth, requireIaService }) {
@@ -129,7 +150,48 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     try {
       const empresaId = req.svcEmpresaId;
       const mensagens = atendimentoService.listarMensagens(empresaId, req.params.id);
-      res.json(mensagens);
+      const idsAssistente = mensagens.filter(m => m.papel === 'assistant').map(m => m.id);
+      const estadosValidacao = validacaoSolucaoRepo.obterEstadoAtualPorMensagens(empresaId, idsAssistente);
+      res.json(mensagens.map(m => respostaOperacionalService.anexarFichaOperacional(m, {
+        validacaoSolucao: estadosValidacao[m.id] || null,
+      })));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // Fase 3 — Confirmação explícita do analista (seção 3/4): sempre cria um
+  // evento novo em validacoes_solucao, nunca sobrescreve o anterior. Exige
+  // usuário autenticado (nunca confia em ID enviado pelo corpo da requisição
+  // para identificar quem confirmou — seção 10).
+  app.post('/api/ia-service/atendimentos/:id/mensagens/:mensagemId/validacao', async (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const usuarioId = req.session?.user_id;
+      if (!usuarioId) return res.status(401).json({ error: 'Usuário não identificado para confirmar solução.' });
+      const { resultado, comentario, anexoVersaoId } = req.body || {};
+      const { evento, estadoAtual } = await validacaoSolucaoService.confirmarSolucao(empresaId, {
+        atendimentoId: req.params.id,
+        mensagemAssistenteId: req.params.mensagemId,
+        anexoVersaoId: anexoVersaoId || null,
+        resultado,
+        comentario: comentario || null,
+        usuarioId,
+      });
+      res.status(201).json({ evento, estadoAtual });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // Histórico completo de validações de uma orientação (nunca apagado —
+  // seção 7: "registrar alterações posteriores de resultado sem apagar o
+  // histórico anterior").
+  app.get('/api/ia-service/atendimentos/:id/mensagens/:mensagemId/validacao', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const estadoAtual = validacaoSolucaoService.obterEstadoValidacao(empresaId, req.params.mensagemId, req.params.id);
+      res.json(estadoAtual);
     } catch (err) {
       _handleErro(res, err);
     }
@@ -252,7 +314,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     try {
       const empresaId = req.svcEmpresaId;
       const versoes = versaoFonteService.listarVersoes(empresaId, req.params.id);
-      res.json(versoes);
+      res.json(versoes.map((v, i) => ({ ...v, numeroVersao: i + 1 })));
     } catch (err) {
       _handleErro(res, err);
     }
@@ -264,8 +326,9 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       const original = anexoRepo.getAnexo(empresaId, req.params.id);
       const versao = anexoRepo.getAnexo(empresaId, req.params.versaoId);
       if (!original || !versao) return res.status(404).json({ error: 'Anexo ou versão não encontrados.' });
+      if (!_validarRelacaoVersao(original, versao)) return res.status(400).json({ error: 'Versão corrigida não pertence ao anexo original informado.' });
       const diff = versaoFonteService.calcularDiff(original.conteudoExtraido, versao.conteudoExtraido);
-      res.json({ diff });
+      res.json({ original, versao, diff });
     } catch (err) {
       _handleErro(res, err);
     }
@@ -280,7 +343,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       const anexo = anexoRepo.getAnexo(empresaId, req.params.id);
       if (!anexo) return res.status(404).json({ error: 'Anexo não encontrado.' });
 
-      const caminhoAbsoluto = path.join(armazenamento.ANEXOS_DIR, anexo.caminhoRelativo);
+      const caminhoAbsoluto = _resolverCaminhoAnexoSeguro(anexo.caminhoRelativo);
       if (!fs.existsSync(caminhoAbsoluto)) return res.status(404).json({ error: 'Arquivo não encontrado em disco.' });
 
       res.setHeader('Content-Type', anexo.mimeType || 'application/octet-stream');
@@ -710,6 +773,18 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     try {
       const empresaId = req.svcEmpresaId;
       res.json(importacaoRepo.listarInconsistencias(empresaId, req.params.id));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // Fase 3, seção 6 — resumo agregado de pendências de validação para o
+  // Radar: quantidade aguardando validação/resolvida/não resolveu/parcial.
+  // Leitura leve (sem sincronizar com SoftExpert), pensada para um indicador
+  // discreto no topo da fila, não uma tela administrativa nova.
+  app.get('/api/ia-service/radar/validacoes-pendentes', (req, res) => {
+    try {
+      res.json(validacaoSolucaoService.obterResumoPendencias(req.svcEmpresaId));
     } catch (err) {
       _handleErro(res, err);
     }

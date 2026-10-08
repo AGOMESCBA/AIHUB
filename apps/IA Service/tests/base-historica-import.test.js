@@ -257,8 +257,8 @@ async function main() {
     papel: 'assistant',
     conteudo: 'Resposta antiga da IA que nao pode sobreviver ao reset da fonte.',
   });
-  const limpeza = agenteRepo.limparHistoricoFonte(EMPRESA, fonte.id);
-  assert.strictEqual(limpeza.limpa, true, 'limpeza da fonte deve confirmar execucao');
+  const limpeza = await agenteRepo.zerarBaseFonte(EMPRESA, fonte.id);
+  assert.strictEqual(limpeza.zerada, true, 'zerar base da fonte deve confirmar execucao');
   assert.ok(limpeza.importacoesRemovidas >= 1, 'reset deve remover importacoes da fonte');
   assert.ok(limpeza.atendimentosRemovidos >= 1, 'reset deve remover atendimentos do Radar vinculados aos chamados da fonte');
   assert.strictEqual(atendimentoRepo.getAtendimento(EMPRESA, atendimentoRadar.id), null, 'atendimento do Radar e suas respostas antigas da IA devem ser removidos no reset');
