@@ -312,6 +312,78 @@ function _avaliarRepeticaoDeRespostaAnterior(textoResposta, historicoMensagens) 
   return [];
 }
 
+function _temReconhecimentoOperacional(texto, regexAcao) {
+  const s = _normalizar(texto);
+  const match = s.match(regexAcao);
+  if (!match || match.index === undefined) return false;
+  const ini = Math.max(0, match.index - 120);
+  const fim = Math.min(s.length, match.index + match[0].length + 120);
+  const janela = s.slice(ini, fim);
+  return /\b(ja|foi|realizad|feito|abert|encaminhad|retornad|aguard|acompanhar|acompanhe|pendente|em andamento)\b/i.test(janela);
+}
+
+function _temJustificativaTecnicaNova(texto) {
+  const s = _normalizar(texto);
+  return /\b(nov[ao]s?|mudou|alterou|diferente|apos|depois|reproduz|reproducao|evidencia|erro|log|fonte|print|anexo|validacao|teste|resultado|retorno|confirmacao|campo|rotina)\b[\s\S]{0,120}\b(tecnic|especific|novo|nova|complementar|validar|demonstrar|alinhar|reproduzir|confirmar)\b/i.test(s)
+    || /\b(tecnic|especific|novo|nova|complementar|validar|demonstrar|alinhar|reproduzir|confirmar)\b[\s\S]{0,120}\b(nov[ao]s?|mudou|alterou|diferente|apos|depois|reproduz|reproducao|evidencia|erro|log|fonte|print|anexo|validacao|teste|resultado|retorno|confirmacao|campo|rotina)\b/i.test(s);
+}
+
+function _avaliarAcaoOperacionalRedundante(textoResposta, historicoMensagens) {
+  const historico = _normalizar((historicoMensagens || []).map(m => m.conteudo || '').join('\n'));
+  if (!historico.trim()) return [];
+
+  const resposta = _normalizar(textoResposta);
+  const acoes = [
+    {
+      codigo: 'REDUNDANT_OPERATIONAL_MEETING',
+      historico: /\b(meet|video\s*conferencia|videoconferencia|videochamada|chamada via google meet)\b[\s\S]{0,120}\b(realizad|demonstrar|verificar|analisarmos|agenda|agendar|marcar|solicitar)\b|\b(realizad|demonstrar|verificar|analisarmos|agenda|agendar|marcar|solicitar)\b[\s\S]{0,120}\b(meet|video\s*conferencia|videoconferencia|videochamada|chamada via google meet)\b/i,
+      resposta: /\b(agend|marc|realiz|solicit)\w*[\s\S]{0,80}\b(meet|video\s*conferencia|videoconferencia|videochamada)\b|\b(meet|video\s*conferencia|videoconferencia|videochamada)\b[\s\S]{0,80}\b(agend|marc|realiz|solicit)\w*/i,
+      detalhe: 'resposta recomenda reuniao/videoconferencia como proximo passo, mas o historico ja registra essa acao operacional',
+      acaoCorretiva: 'reconhecer_reuniao_ja_realizada_ou_solicitada_e_avancar_para_proxima_pendencia',
+    },
+    {
+      codigo: 'REDUNDANT_OPERATIONAL_ESCALATION',
+      historico: /\b(fabrica|desenvolvimento|fornecedor)\b[\s\S]{0,120}\b(abert|abrir|retorn|encaminh|acompanhar|aguard)\w*|\b(abert|abrir|retorn|encaminh|acompanhar|aguard)\w*[\s\S]{0,120}\b(fabrica|desenvolvimento|fornecedor)\b/i,
+      resposta: /\b(abrir|encaminh|retorn|acion|solicit)\w*[\s\S]{0,100}\b(fabrica|desenvolvimento|equipe de desenvolvimento|fornecedor)\b|\b(fabrica|desenvolvimento|equipe de desenvolvimento|fornecedor)\b[\s\S]{0,100}\b(abrir|encaminh|retorn|acion|solicit)\w*/i,
+      detalhe: 'resposta recomenda encaminhamento operacional ja registrado no historico',
+      acaoCorretiva: 'distinguir_encaminhamento_em_andamento_de_correcao_concluida_e_orientar_acompanhamento_ou_evidencia_tecnica_faltante',
+    },
+  ];
+
+  const falhas = [];
+  for (const acao of acoes) {
+    if (!acao.historico.test(historico)) continue;
+    if (!acao.resposta.test(resposta)) continue;
+    if (acao.codigo === 'REDUNDANT_OPERATIONAL_MEETING' && _temJustificativaTecnicaNova(resposta)) continue;
+    if (_temReconhecimentoOperacional(resposta, acao.resposta)) continue;
+    falhas.push({
+      codigo: acao.codigo,
+      severidade: 'media',
+      detalhe: acao.detalhe,
+      acaoCorretiva: acao.acaoCorretiva,
+    });
+  }
+  return falhas;
+}
+
+function _avaliarEncaminhamentoComoResolucao(textoResposta, historicoMensagens) {
+  const historico = _normalizar((historicoMensagens || []).map(m => m.conteudo || '').join('\n'));
+  if (!/\b(fabrica|desenvolvimento|fornecedor)\b[\s\S]{0,120}\b(abert|abrir|retorn|encaminh|acompanhar|aguard)\w*|\b(abert|abrir|retorn|encaminh|acompanhar|aguard)\w*[\s\S]{0,120}\b(fabrica|desenvolvimento|fornecedor)\b/i.test(historico)) {
+    return [];
+  }
+  const resposta = _normalizar(textoResposta);
+  const trataComoResolvido = /\b(encaminh|retorn|abert|acionad)\w*[\s\S]{0,120}\b(resolvid|solucionad|concluid|corrigid|finalizad)\w*|\b(resolvid|solucionad|concluid|corrigid|finalizad)\w*[\s\S]{0,120}\b(encaminh|retorn|abert|acionad)\w*/i.test(resposta);
+  if (!trataComoResolvido) return [];
+  const ressalva = /\b(nao|sem|ainda nao|nao comprova|nao significa|nao garante|pendente|aguard)\b[\s\S]{0,80}\b(resolvid|solucionad|concluid|corrigid|finalizad)\w*/i.test(resposta);
+  if (ressalva) return [];
+  return [{
+    codigo: 'OPERATIONAL_ESCALATION_TREATED_AS_RESOLUTION',
+    severidade: 'media',
+    detalhe: 'resposta interpretou encaminhamento operacional como resolucao/correcao concluida sem confirmacao no historico',
+    acaoCorretiva: 'diferenciar_encaminhamento_de_solucao_confirmada',
+  }];
+}
+
 function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRetry = false, historicoMensagens = [] } = {}) {
   const falhas = [];
   const resposta = String(textoResposta || '');
@@ -429,6 +501,8 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
   }));
   falhas.push(..._avaliarRegressaoInvestigativa(resposta, manifesto));
   falhas.push(..._avaliarRepeticaoDeRespostaAnterior(resposta, historicoMensagens));
+  falhas.push(..._avaliarAcaoOperacionalRedundante(resposta, historicoMensagens));
+  falhas.push(..._avaliarEncaminhamentoComoResolucao(resposta, historicoMensagens));
   if (/pesquis|tdn|totvs|softexpert|documenta[cç][aã]o|fonte oficial/i.test(perguntaTexto)) {
     if (!pesquisa?.configurado) falhas.push({ codigo: 'RESEARCH_REQUIRED_NOT_EXECUTED', legado: 'PESQUISA_NAO_CONFIGURADA', severidade: 'media', acaoCorretiva: 'informar_pesquisa_indisponivel' });
     else if (pesquisa?.modo !== 'web') falhas.push({ codigo: 'RESEARCH_CONFIGURED_WITHOUT_RESULTS', legado: 'PESQUISA_CONFIGURADA_SEM_RESULTADO', severidade: 'media', acaoCorretiva: 'executar_pesquisa_solicitada_ou_declarar_limite' });

@@ -481,7 +481,7 @@
         loadInvestigations(),
       ]);
       renderAllCaseData();
-      if (open.preAnaliseDisparada) pollMessages(12, 1600);
+      if (open.preAnaliseDisparada) pollMessages(60, 3000, 'Aguardando pre-analise automatica da IA...');
     } catch (err) {
       toast(`Nao foi possivel abrir o chamado: ${err.message}`);
     }
@@ -759,12 +759,17 @@
     }
   }
 
-  async function pollMessages(times, interval) {
-    for (let i = 0; i < times; i += 1) {
-      await new Promise((resolve) => setTimeout(resolve, interval));
-      const before = state.messages.length;
-      await loadMessages().catch(() => null);
-      if (state.messages.length > before) break;
+  async function pollMessages(times, interval, statusTexto) {
+    if (statusTexto) showChatStatus(statusTexto);
+    try {
+      for (let i = 0; i < times; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, interval));
+        const before = state.messages.length;
+        await loadMessages().catch(() => null);
+        if (state.messages.length > before) break;
+      }
+    } finally {
+      if (statusTexto) hideChatStatus();
     }
   }
 

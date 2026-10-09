@@ -267,6 +267,72 @@ async function main() {
     });
     assert.ok(gateErroEspecificoIgnorado.falhas.some(f => f.codigo === 'SPECIFIC_ERROR_NOT_PRIORITIZED'), 'erro especifico de modo de edicao deve guiar a primeira acao antes de parametro generico');
 
+    const historicoOperacional036596 = [
+      { papel: 'user', conteudo: 'Abrir Fabrica e acompanhar retorno, esse desenvolvimento e de alta complexidade.' },
+      { papel: 'user', conteudo: 'Favor Analista, solicitar uma agenda para video conferencia com o Cliente para analisarmos o problema.' },
+      { papel: 'customer', conteudo: 'Foi realizado uma chamada via google meet na data de 28/09/2026, para demonstrar o problema relatado.' },
+      { papel: 'user', conteudo: 'Retornando chamado para fabrica' },
+    ];
+    const gateAcaoOperacionalRedundante = qualityGate.avaliarResposta({
+      textoResposta: 'Se o erro persistir depois das verificacoes, recomendo abrir uma solicitacao para a equipe de desenvolvimento e agendar uma videochamada com o cliente.',
+      manifesto: { selecionados: [{ status: 'ANALISADA', tipo: 'imagem', nome: 'rateio.png' }], omitidos: [] },
+      pesquisa: { configurado: true, modo: 'web', paginasLidas: [{ status: 'lida' }] },
+      pergunta: 'analise os prints e o historico',
+      historicoMensagens: historicoOperacional036596,
+    });
+    assert.ok(gateAcaoOperacionalRedundante.falhas.some(f => f.codigo === 'REDUNDANT_OPERATIONAL_ESCALATION'), 'encaminhamento ja feito a Fabrica/desenvolvimento nao deve ser recomendado como se fosse novo');
+    assert.ok(gateAcaoOperacionalRedundante.falhas.some(f => f.codigo === 'REDUNDANT_OPERATIONAL_MEETING'), 'meet ja realizado nao deve ser recomendado como se fosse novo');
+    assert.strictEqual(gateAcaoOperacionalRedundante.deveRetry, true, 'reprovacao operacional media deve acionar retry corretivo normal do Quality Gate');
+
+    const gateAcompanhamentoOperacional = qualityGate.avaliarResposta({
+      textoResposta: 'Como o chamado ja foi retornado para Fabrica e a chamada via meet ja foi realizada, eu nao trataria isso como correcao concluida. O proximo passo e acompanhar o retorno da Fabrica e, tecnicamente, revisar o ponto de entrada/validacao que tenta atribuir % Rateio em modo protegido.',
+      manifesto: { selecionados: [{ status: 'ANALISADA', tipo: 'imagem', nome: 'rateio.png' }], omitidos: [] },
+      pesquisa: { configurado: true, modo: 'web', paginasLidas: [{ status: 'lida' }] },
+      pergunta: 'analise os prints e o historico',
+      historicoMensagens: historicoOperacional036596,
+    });
+    assert.ok(!gateAcompanhamentoOperacional.falhas.some(f => f.codigo === 'REDUNDANT_OPERATIONAL_ESCALATION' || f.codigo === 'REDUNDANT_OPERATIONAL_MEETING'), 'reconhecer acao operacional ja feita e acompanhar pendencia deve ser permitido');
+
+    const gateConfirmarFormalizacao = qualityGate.avaliarResposta({
+      textoResposta: 'Antes de tratar como em desenvolvimento, eu confirmaria se a demanda foi formalizada com a Fabrica e qual protocolo ficou vinculado. Isso nao repete a abertura: valida a rastreabilidade do encaminhamento.',
+      manifesto: { selecionados: [{ status: 'ANALISADA', tipo: 'imagem', nome: 'rateio.png' }], omitidos: [] },
+      pesquisa: { configurado: true, modo: 'web', paginasLidas: [{ status: 'lida' }] },
+      pergunta: 'analise os prints e o historico',
+      historicoMensagens: [
+        { papel: 'user', conteudo: 'Uma fabrica ira ser aberta.' },
+      ],
+    });
+    assert.ok(!gateConfirmarFormalizacao.falhas.some(f => f.codigo === 'REDUNDANT_OPERATIONAL_ESCALATION'), 'confirmar formalizacao nao comprovada deve ser permitido');
+
+    const gateNovaReuniaoJustificada = qualityGate.avaliarResposta({
+      textoResposta: 'A chamada via meet ja foi realizada, mas apareceu uma evidencia tecnica nova no print: o erro FWWHEN no campo % Rateio. Se o analista precisar reproduzir com o cliente, uma nova reuniao curta deve ser focada somente nesse passo e no log do momento da falha.',
+      manifesto: { selecionados: [{ status: 'ANALISADA', tipo: 'imagem', nome: 'rateio.png' }], omitidos: [] },
+      pesquisa: { configurado: true, modo: 'web', paginasLidas: [{ status: 'lida' }] },
+      pergunta: 'analise os prints e o historico',
+      historicoMensagens: historicoOperacional036596,
+    });
+    assert.ok(!gateNovaReuniaoJustificada.falhas.some(f => f.codigo === 'REDUNDANT_OPERATIONAL_MEETING'), 'nova reuniao com justificativa tecnica nova deve ser permitida');
+
+    const gateSemEncaminhamentoPrevio = qualityGate.avaliarResposta({
+      textoResposta: 'Como nao ha indicio de encaminhamento anterior e o print mostra erro FWWHEN no % Rateio, se nao houver fonte/log disponivel eu abriria uma demanda para a Fabrica com os prints e o passo de reproducao.',
+      manifesto: { selecionados: [{ status: 'ANALISADA', tipo: 'imagem', nome: 'rateio.png' }], omitidos: [] },
+      pesquisa: { configurado: true, modo: 'web', paginasLidas: [{ status: 'lida' }] },
+      pergunta: 'analise os prints e o historico',
+      historicoMensagens: [
+        { papel: 'customer', conteudo: 'O rateio fica incorreto e aparece erro no percentual.' },
+      ],
+    });
+    assert.ok(!gateSemEncaminhamentoPrevio.falhas.some(f => f.codigo === 'REDUNDANT_OPERATIONAL_ESCALATION'), 'historico sem encaminhamento previo deve permitir recomendar encaminhamento');
+
+    const gateEncaminhamentoNaoResolve = qualityGate.avaliarResposta({
+      textoResposta: 'Como o chamado foi retornado para Fabrica, considero o problema solucionado e basta avisar o cliente.',
+      manifesto: { selecionados: [{ status: 'ANALISADA', tipo: 'imagem', nome: 'rateio.png' }], omitidos: [] },
+      pesquisa: { configurado: true, modo: 'web', paginasLidas: [{ status: 'lida' }] },
+      pergunta: 'analise os prints e o historico',
+      historicoMensagens: historicoOperacional036596,
+    });
+    assert.ok(gateEncaminhamentoNaoResolve.falhas.some(f => f.codigo === 'OPERATIONAL_ESCALATION_TREATED_AS_RESOLUTION'), 'encaminhamento sem resolucao comprovada nao pode ser tratado como problema solucionado');
+
     const gateIdsInternos = qualityGate.avaliarResposta({
       textoResposta: 'Mensagens de log 979745a0-c8f4-4de7-916f-954bd8a6cc72 confirmam que o erro veio do Protheus.',
       manifesto: { selecionados: [{ status: 'ANALISADA', tipo: 'imagem', nome: 'rateio.png' }], omitidos: [] },
