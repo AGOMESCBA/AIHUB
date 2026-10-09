@@ -5,12 +5,18 @@ const SENSITIVE_QUERY_KEYS = new Set([
   'secret', 'session', 'sessionid', 'sid', 'auth', 'authorization', 'cookie',
 ]);
 
+// CPF/CNPJ usam o mesmo padrao de technical-research-service.js:sanitizarConsultaExterna
+// (mantido em dois lugares deliberadamente: aqui mascara para [REDACTED] preservando
+// o formato da frase; na pesquisa externa remove para nao poluir a query de busca).
 function redigirTexto(texto) {
   return String(texto || '')
     .replace(/\b(Authorization\s*:\s*Bearer)\s+[A-Za-z0-9._~+/=-]+/gi, '$1 [REDACTED]')
     .replace(/\b(Bearer)\s+[A-Za-z0-9._~+/=-]{4,}/gi, '$1 [REDACTED]')
     .replace(/\b(api[_-]?key|token|senha|password|secret|session(?:[_-]?(?:id|token))?|sid)(\s*[:=]\s*)["']?[^"'\s&;]{4,}/gi, '$1$2[REDACTED]')
-    .replace(/\b(cookie\s*:\s*)[^\r\n]+/gi, '$1[REDACTED]');
+    .replace(/\b(cookie\s*:\s*)[^\r\n]+/gi, '$1[REDACTED]')
+    .replace(/\b\d{2}\.?\d{3}\.?\d{3}\/\d{4}-?\d{2}\b/g, '[REDACTED:CNPJ]')
+    .replace(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g, '[REDACTED:CPF]')
+    .replace(/\bcpf\s*[:=]?\s*\d{11}\b/gi, 'cpf: [REDACTED:CPF]');
 }
 
 function redigirUrl(url) {

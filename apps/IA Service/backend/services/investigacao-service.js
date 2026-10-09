@@ -23,6 +23,7 @@ const pdfVisualService = require('./pdf-visual-service');
 const investigacaoDossieService = require('./investigacao-dossie-service');
 const investigacaoDossieAtualizador = require('./investigacao-dossie-atualizador-service');
 const dossieContextService = require('./dossie-context-service');
+const { redigirValor } = require('./redaction-service');
 
 const MAX_TENTATIVAS_TIMEOUT = 2;
 
@@ -124,7 +125,9 @@ async function _registrarErroVisual({ empresaId, atendimentoId, mensagemUsuario,
   ];
   const nomes = [...falhasImagem, ...falhasPdfVisual.map(f => f.nome)].join(', ');
   const mensagemErro = `NÃ£o foi possÃ­vel carregar ${falhas.length} evidÃªncia(s) visual(is) para anÃ¡lise (${nomes}) â€” a investigaÃ§Ã£o foi interrompida para nÃ£o gerar um diagnÃ³stico sem considerar essas evidÃªncias. Tente novamente; se persistir, reenvie o(s) arquivo(s).`;
-  const msgErro = mensagemRepo.salvarMensagem(empresaId, atendimentoId, { papel: 'assistant', conteudo: mensagemErro, usuarioId: null });
+  // erroInfraestrutura: true evita que o Context Engine trate esta mensagem como
+  // tentativa de diagnostico ao montar o historico do proximo turno.
+  const msgErro = mensagemRepo.salvarMensagem(empresaId, atendimentoId, { papel: 'assistant', conteudo: mensagemErro, usuarioId: null, diagnostico: { erroInfraestrutura: true } });
   try {
     execucaoRepo.salvarExecucao(empresaId, {
       atendimentoId,
@@ -150,9 +153,9 @@ async function _registrarErroVisual({ empresaId, atendimentoId, mensagemUsuario,
 
 const SYSTEM_PROMPT_CLASSIFICACAO_TURNO = `Você classifica uma única mensagem de um analista de suporte técnico dentro de um chat de investigação. Responda APENAS com um JSON: {"tipo": "pergunta_processo" | "investigacao"}.
 
-"pergunta_processo": a mensagem pergunta sobre VOCÊ (a IA) ou sobre O PROCESSO de atendimento — sua capacidade, limites, próximos passos administrativos, prazos, ou pede uma confirmação pontual — SEM trazer nenhuma evidência técnica nova (erro, log, anexo, resposta a um pedido seu). Exemplos: "se eu te enviar o fonte, você consegue corrigir?", "você consegue ver vídeo?", "precisa abrir chamado na TOTVS também?", "em quanto tempo você responde?", "o que você precisa de mim agora?".
+"pergunta_processo": a mensagem é sobre VOCÊ (a IA) ou sobre O PROCESSO administrativo de atendimento — sua capacidade, limites, próximos passos administrativos, prazos, ou se um passo administrativo é necessário. NÃO envolve nenhum conceito técnico do domínio do chamado (regra de negócio, campo, rotina, cálculo, comportamento esperado do sistema). Exemplos: "se eu te enviar o fonte, você consegue corrigir?", "você consegue ver vídeo?", "precisa abrir chamado na TOTVS também?", "em quanto tempo você responde?", "o que você precisa de mim agora?".
 
-"investigacao": a mensagem traz (ou pede para usar) evidência técnica — descrição de erro, log, trecho de código, resultado de teste, confirmação/negação de uma hipótese técnica, ou pede explicitamente para investigar/corrigir/pesquisar algo concreto.
+"investigacao": a mensagem pergunta sobre o PROBLEMA TÉCNICO em si — isso inclui perguntar sobre uma REGRA DE NEGÓCIO ou COMPORTAMENTO ESPERADO do sistema (ex.: "esse campo deveria somar ou subtrair?", "qual a regra para X?"), trazer evidência técnica nova (erro, log, trecho de código, resultado de teste), ou pedir para investigar/corrigir/pesquisar algo concreto do domínio do chamado. Perguntas sobre REGRA DE NEGÓCIO SEMPRE são "investigacao", mesmo que pareçam pedidos de confirmação ou esclarecimento pontual — elas exigem evidência técnica do caso para responder com segurança, não são sobre o processo de atendimento.
 
 Na dúvida entre os dois, responda "investigacao" (nunca deixe de investigar uma evidência técnica real por classificar errado).`;
 
@@ -258,10 +261,14 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     const { keys: keysClassificacao, cfg: cfgClassificacao } = aiConfigService.resolverKeysEOrdem(empresaId);
     const tipoTurno = await _classificarTurno(texto, { keys: keysClassificacao, cfg: cfgClassificacao });
     if (tipoTurno === 'pergunta_processo') {
+      // redigirValor: este atalho curto NUNCA passa pelo Context Engine (que
+      // aplica a redacao no fluxo principal) — sem isso, CPF/senha/token do
+      // historico iam em texto claro para o provider sempre que o turno fosse
+      // classificado como pergunta_processo (achado real, homologacao 2026-10).
       const historicoRecente = historico.slice(-8)
-        .map(m => `[${m.papel === 'user' ? 'Analista' : 'Você'}]: ${String(m.conteudo || '').slice(0, 600)}`)
+        .map(m => `[${m.papel === 'user' ? 'Analista' : 'Você'}]: ${redigirValor(String(m.conteudo || '').slice(0, 600))}`)
         .join('\n');
-      const promptCurto = `## Contexto recente da conversa\n${historicoRecente}\n\n## Pergunta atual do analista\n${texto}\n\nResponda SOMENTE essa pergunta, de forma direta e breve (poucas frases). Não reabra nem repita o diagnóstico técnico já dado nas mensagens anteriores.`;
+      const promptCurto = `## Contexto recente da conversa\n${historicoRecente}\n\n## Pergunta atual do analista\n${redigirValor(texto)}\n\nResponda SOMENTE essa pergunta, de forma direta e breve (poucas frases). Não reabra nem repita o diagnóstico técnico já dado nas mensagens anteriores.`;
       try {
         const resultadoCurto = await aiProviderClient.chamarIA(
           keysClassificacao, cfgClassificacao, promptBuilder.SYSTEM_PROMPT, promptCurto, [],
@@ -282,8 +289,9 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
   let pesquisaTecnica = null;
   let relacionados = [];
   let dossieOperacionalTurno = null;
+  let chamado = null;
   try {
-    const chamado = atendimento.referenciaExterna
+    chamado = atendimento.referenciaExterna
       ? chamadoRepo.getChamadoPorNumero(empresaId, atendimento.referenciaExterna, atendimento.origem)
       : null;
     relacionados = chamado
@@ -361,6 +369,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     cfg,
     dossieOperacionalPrecarregado: dossieOperacionalTurno,
     analistaAtualNome,
+    chamado,
   });
   let userPrompt = contexto.userPrompt;
 
@@ -421,7 +430,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     ];
     const nomes = [...falhasImagem, ...falhasPdfVisual.map(f => f.nome)].join(', ');
     const mensagemErro = `Não foi possível carregar ${falhas.length} evidência(s) visual(is) para análise (${nomes}) — a investigação foi interrompida para não gerar um diagnóstico sem considerar essas evidências. Tente novamente; se persistir, reenvie o(s) arquivo(s).`;
-    const msgErro = mensagemRepo.salvarMensagem(empresaId, atendimentoId, { papel: 'assistant', conteudo: mensagemErro, usuarioId: null });
+    const msgErro = mensagemRepo.salvarMensagem(empresaId, atendimentoId, { papel: 'assistant', conteudo: mensagemErro, usuarioId: null, diagnostico: { erroInfraestrutura: true } });
     try {
       execucaoRepo.salvarExecucao(empresaId, {
         atendimentoId,
@@ -472,6 +481,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
       pesquisa: pesquisaTecnica,
       pergunta: texto,
       houveRetry: false,
+      historicoMensagens: historico,
     });
     if (qualityGate.deveRetry) {
       retryDeQualityGate = true;
@@ -491,6 +501,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
           evidenciaForcadaIds: idsForcados,
           dossieOperacionalPrecarregado: dossieOperacionalTurno,
           analistaAtualNome,
+          chamado,
         });
         userPrompt = contexto.userPrompt;
         const payloadVisualRetry = await _carregarPayloadVisual(contexto);
@@ -513,9 +524,17 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
         acoesRetry.push({ tipo: 'reforco_evidencias_especificas' });
       }
       promptUsado = `${userPrompt}\n\n## Reprocessamento por Quality Gate\n${qualityGateService.montarInstrucaoRetry(qualityGate)}`;
+      // maxProviderRounds:1 — teto global de tentativas por investigacao: a
+      // primeira chamada ja varreu todos os providers elegiveis em ate 3
+      // rodadas; repetir rodadas completas tambem no retry do Quality Gate
+      // multiplicava o pior caso teorico para ~45 tentativas HTTP numa unica
+      // investigacao sem nenhum limite agregado (achado real, auditoria do
+      // fallback multi-provider 2026-10). Uma rodada aqui ainda tenta TODOS
+      // os providers elegiveis uma vez, so nao reinsiste em erro transitorio.
       resultado = await aiProviderClient.chamarIA(keys, cfg, promptBuilder.SYSTEM_PROMPT, promptUsado, imagens, {
         maxTokens: 6000,
         timeoutMs,
+        maxProviderRounds: 1,
       });
       qualityGate = qualityGateService.avaliarResposta({
         textoResposta: resultado.texto,
@@ -523,6 +542,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
         pesquisa: pesquisaTecnica,
         pergunta: texto,
         houveRetry: true,
+        historicoMensagens: historico,
       });
       const codigosReescritaFinal = new Set([
         'ROBOTIC_TEMPLATE_RESPONSE',
@@ -569,6 +589,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
         resultado = await aiProviderClient.chamarIA(keys, cfg, promptBuilder.SYSTEM_PROMPT, promptUsado, [], {
           maxTokens: 2200,
           timeoutMs: Math.min(timeoutMs, 60000),
+          maxProviderRounds: 1,
         });
         qualityGate = qualityGateService.avaliarResposta({
           textoResposta: resultado.texto,
@@ -576,6 +597,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
           pesquisa: pesquisaTecnica,
           pergunta: texto,
           houveRetry: true,
+          historicoMensagens: historico,
         });
       }
       qualityGate.retryCorretivo = { executado: true, acoes: acoesRetry };
@@ -586,7 +608,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     const mensagemErro = erro._semChave
       ? 'Não há provider de IA configurado para esta empresa. Configure ao menos uma chave em Configurações do IA Service.'
       : `Não foi possível concluir a análise no momento: ${erro.message}`;
-    const msgErro = mensagemRepo.salvarMensagem(empresaId, atendimentoId, { papel: 'assistant', conteudo: mensagemErro, usuarioId: null });
+    const msgErro = mensagemRepo.salvarMensagem(empresaId, atendimentoId, { papel: 'assistant', conteudo: mensagemErro, usuarioId: null, diagnostico: { erroInfraestrutura: true } });
     try {
       execucaoRepo.salvarExecucao(empresaId, {
         atendimentoId,

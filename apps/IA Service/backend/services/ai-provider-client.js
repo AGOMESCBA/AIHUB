@@ -186,11 +186,41 @@ function _erroCotaOuCredito(msg) {
   return /quota|free_tier|exceeded|credit balance|insufficient.{0,20}(credit|balance|funds)|purchase credits|billing/i.test(msg || '');
 }
 
+// Prompt maior que a janela de contexto do modelo: retry no MESMO provider
+// nunca resolve (o prompt nao muda de tamanho entre tentativas) — precisa
+// pular direto para o proximo candidato, nunca reentrar na mesma rodada.
+// Achado real, homologacao 2026-10: classificado antes como "transitorio"
+// (bate em nenhuma palavra-chave especifica, caia no catch-all), desperdicando
+// uma rodada inteira tentando de novo um prompt que nunca vai caber.
+function _erroContextoExcedido(msg) {
+  return /maximum context length|context[_ ]length[_ ]exceeded|context window|too many tokens|reduce the length|prompt is too long|input is too long/i.test(msg || '');
+}
+
+// Erro de validacao de certificado/handshake TLS — tipicamente ambiental
+// (proxy/antivirus interceptando HTTPS, ver IA_SERVICE_AUDITORIA_
+// ESTABILIZACAO_PRODUCAO.md secao 1), nao especifico de um provider. Se o
+// erro for esse, os demais hosts HTTPS tendem a falhar pelo mesmo motivo —
+// sinalizado para o chamador decidir interromper a sequencia de fallback em
+// vez de gastar uma tentativa por provider sabendo que todas vao repetir o
+// mesmo erro de ambiente.
+function _erroTlsGlobal(msg) {
+  return /unable to verify the first certificate|self[- ]signed certificate|certificate has expired|unable to get local issuer certificate|cert_|ssl routines|wrong version number/i.test(msg || '');
+}
+
 function _erroPermanenteProvider(msg) {
-  return /api key not valid|invalid api key|incorrect api key|unauthorized|forbidden|401|403|credit balance|insufficient.{0,20}(credit|balance|funds)|purchase credits|billing|model .*not found|does not exist/i.test(msg || '');
+  const m = msg || '';
+  // Rate limit (TPM/RPM/429) e SEMPRE transitorio, mesmo quando a mensagem do
+  // provider inclui um link de upsell contendo a palavra "billing" (caso real
+  // do GROQ: "...Upgrade to Dev Tier today at .../settings/billing" dentro de
+  // uma mensagem de "Rate limit reached" — achado real na homologacao 2026-10,
+  // o padrao solto de /billing/i classificava rate limit como permanente e
+  // impedia o proprio provider de ser retentado em rodada futura).
+  if (/rate.?limit|429|tokens per (minute|day)|TPM|TPD/i.test(m)) return false;
+  return /api key not valid|invalid api key|incorrect api key|unauthorized|forbidden|\b401\b|\b403\b|credit balance|insufficient.{0,20}(credit|balance|funds)|insufficient_quota|exceeded your current quota|purchase credits|update your billing|model .*not found|does not exist/i.test(m);
 }
 
 function _erroTransitorioProvider(msg) {
+  if (_erroContextoExcedido(msg) || _erroTlsGlobal(msg)) return false;
   return /econnreset|etimedout|eai_again|socket hang up|network|timeout|timed out|rate.?limit|429|temporar|try again|503|502|504|500|overloaded|capacity/i.test(msg || '');
 }
 
@@ -222,7 +252,9 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
   const providersPermanentes = new Set();
   const candidatos = ordem.filter(provedor => keys?.[provedor] && (!imagens.length || PROVIDER_CONFIGS[provedor].suportaImagem));
 
-  for (let rodada = 1; rodada <= maxRodadas; rodada++) {
+  let tlsGlobalDetectado = false;
+
+  for (let rodada = 1; rodada <= maxRodadas && !tlsGlobalDetectado; rodada++) {
     let houveTransitorioNaRodada = false;
 
     for (const provedor of candidatos) {
@@ -237,16 +269,30 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
         return { ...resultado, provider: provedor, model: modeloDoProvedor, tentativas, latenciaMs: Date.now() - inicioGeral };
       } catch (erro) {
         const msg = erro.message;
-        const permanente = _erroPermanenteProvider(msg);
+        const contextoExcedido = _erroContextoExcedido(msg);
+        const tlsGlobal = _erroTlsGlobal(msg);
+        const permanente = _erroPermanenteProvider(msg) || contextoExcedido;
         const transitorio = !permanente && _erroTransitorioProvider(msg);
-        erros.push({ provedor, msg, rodada, transitorio, permanente });
-        tentativas.push({ provider: provedor, model: modeloDoProvedor, status: 'erro', erro: msg, rodada, transitorio, permanente, latenciaMs: Date.now() - inicioTentativa });
+        erros.push({ provedor, msg, rodada, transitorio, permanente, contextoExcedido, tlsGlobal });
+        tentativas.push({ provider: provedor, model: modeloDoProvedor, status: 'erro', erro: msg, rodada, transitorio, permanente, contextoExcedido, tlsGlobal, latenciaMs: Date.now() - inicioTentativa });
+        // Contexto excedido: nunca retentar o MESMO provider/modelo (o prompt
+        // nao muda de tamanho entre tentativas) — pula direto para o proximo
+        // candidato na mesma rodada, sem aguardar nem contar como transitorio.
         if (permanente) providersPermanentes.add(provedor);
         if (transitorio) houveTransitorioNaRodada = true;
+        // TLS/certificado global: erro de ambiente, nao do provider — os
+        // demais hosts HTTPS tendem a falhar pelo mesmo motivo. Interrompe a
+        // sequencia de fallback inteira em vez de gastar uma tentativa por
+        // provider sabendo que todas vao repetir o mesmo erro (achado real,
+        // IA_SERVICE_AUDITORIA_ESTABILIZACAO_PRODUCAO.md secao 1).
+        if (tlsGlobal) {
+          tlsGlobalDetectado = true;
+          break;
+        }
       }
     }
 
-    if (!houveTransitorioNaRodada || rodada >= maxRodadas) break;
+    if (tlsGlobalDetectado || !houveTransitorioNaRodada || rodada >= maxRodadas) break;
     if (retryDelayMs > 0) {
       await _sleep(retryDelayMs * rodada);
     }
@@ -277,4 +323,4 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
   throw erroFinal;
 }
 
-module.exports = { chamarIA, chamarProvedor, PROVIDER_CONFIGS, _erroTransitorioProvider, _erroPermanenteProvider };
+module.exports = { chamarIA, chamarProvedor, PROVIDER_CONFIGS, _erroTransitorioProvider, _erroPermanenteProvider, _erroContextoExcedido, _erroTlsGlobal };

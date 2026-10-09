@@ -85,6 +85,27 @@ function _citaIdsInternosComoEvidencia(texto) {
   return /\b(log|logs|mensagens?)\b[\s\S]{0,120}\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i.test(s);
 }
 
+// Verifica se a resposta reconheceu uma pendencia de retorno externo
+// BLOQUEANTE (ex. fornecedor/TOTVS) como a dependencia efetiva do proximo
+// passo. Generico — nao hardcoda nenhum ticket/numero especifico, so o
+// conceito de "pendencia de terceiro externo" vindo do manifesto
+// (context-engine.js:_interpretarPendenciaConsolidada). Achado real,
+// homologacao 2026-10: o Caso C tinha a pendencia no prompt mas a resposta
+// final nunca a tratava como bloqueio — so pedia mais evidencia tecnica
+// interna (codigo/log), como se a pendencia nao existisse.
+function _ignoraPendenciaExternaBloqueante(textoResposta, manifesto) {
+  const pendencia = manifesto?.pendenciaConsolidada;
+  if (!pendencia?.bloqueante) return false;
+  const s = _normalizar(textoResposta);
+  // reconhece a pendencia se a resposta menciona o responsavel (fornecedor/
+  // terceiro) associado a vocabulario de espera/acompanhamento/dependencia —
+  // nao basta citar a palavra "fornecedor" de passagem (ex. so repetindo o
+  // historico), precisa estar perto de um verbo de pendencia/acompanhamento.
+  const mencionaResponsavelComPendencia = /\b(fornecedor|totvs|terceiro|distribuidor)\b[\s\S]{0,80}\b(aguard|pendente|pendencia|retorno|depende|bloquei|acompanh)\w*/i.test(s)
+    || /\b(aguard|pendente|pendencia|depende|bloquei|acompanh)\w*[\s\S]{0,80}\b(fornecedor|totvs|terceiro|distribuidor)\b/i.test(s);
+  return !mencionaResponsavelComPendencia;
+}
+
 function _descartaCustomizacaoSemBase(textoResposta, manifesto) {
   const s = _normalizar(textoResposta);
   const descarta = /nao por customizacao|nao e customizacao|erro e gerado pelo proprio protheus|comportamento padrao do protheus/.test(s);
@@ -103,7 +124,15 @@ function _normalizar(texto) {
 
 function _temJustificativa(texto) {
   const s = _normalizar(texto);
-  return /\b(porque|devido|pois|apos|nova evidencia|mudou|alterou|repetir.*rev|novo log|periodo diferente|execucao diferente|ambiente mudou|versao nova|revalidar)\b/i.test(s);
+  // "porque/devido/pois/apos" soltos capturavam qualquer explicacao causal
+  // comum (ex. "deve subtrair PORQUE o produto volta ao fornecedor") como se
+  // fosse justificativa de evidencia NOVA — achado real na homologacao
+  // 2026-10, mascarava a propria resposta que estava repetindo a mesma
+  // conclusao sem novidade. Agora exigem proximidade de um termo que de fato
+  // indique mudanca/evidencia (nao so qualquer explicacao).
+  if (/\b(porque|devido|pois|apos)\b[\s\S]{0,60}\b(evidencia|teste|log|resultado|retorno|confirma[cç][aã]o|valida[cç][aã]o|anexo|print)\b/i.test(s)) return true;
+  if (/\b(evidencia|teste|log|resultado|retorno|confirma[cç][aã]o|valida[cç][aã]o|anexo|print)\b[\s\S]{0,60}\b(porque|devido|pois|apos)\b/i.test(s)) return true;
+  return /nova evidencia|mudou|alterou|repetir.*rev|novo log|periodo diferente|execucao diferente|ambiente mudou|versao nova|revalidar/i.test(s);
 }
 
 function _paginasLidasOuReutilizadas(pesquisa) {
@@ -173,7 +202,117 @@ function _avaliarRegressaoInvestigativa(textoResposta, manifesto) {
   return falhas;
 }
 
-function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRetry = false } = {}) {
+// Shingles de 8 palavras — repeticao de hipotese/recomendacao em linguagem
+// natural, sem depender de ela ter virado item do dossie com codigo
+// rastreavel (gap real: _avaliarRegressaoInvestigativa so compara contra
+// guard.testesExecutados/hipotesesDescartadas, que vem de itens persistidos;
+// quando a execucao anterior falhou ou o LLM nunca estruturou a hipotese como
+// item, nao ha nenhuma memoria contra a qual comparar). Esta checagem compara
+// direto contra o TEXTO de respostas anteriores reais da IA no historico.
+function _shingles(texto, tamanho = 3) {
+  const palavras = _normalizar(texto).replace(/[^a-z0-9\s]+/g, ' ').split(/\s+/).filter(Boolean);
+  const out = new Set();
+  for (let i = 0; i + tamanho <= palavras.length; i++) out.add(palavras.slice(i, i + tamanho).join(' '));
+  return out;
+}
+
+function _similaridadeShingles(a, b) {
+  const sa = _shingles(a);
+  const sb = _shingles(b);
+  if (!sa.size || !sb.size) return 0;
+  let comuns = 0;
+  for (const s of sa) if (sb.has(s)) comuns += 1;
+  return comuns / Math.min(sa.size, sb.size);
+}
+
+// Ancoras tecnicas restritas para repeticao SEMANTICA (nao lexical): shingles
+// de palavras falham quando o LLM reformula livremente (achado real,
+// homologacao 2026-10 — duas respostas reais do Caso A afirmando a MESMA
+// operacao matematica como causa tiveram so 25% de similaridade por
+// shingles-3, porque a segunda reescreveu a frase do zero). Em vez de medir
+// sobreposicao de sequencias de palavras, extrai um vocabulario fechado e
+// pequeno de sinais estruturais que carregam o significado central da
+// afirmacao tecnica — operador matematico mencionado e identificadores em
+// formato de codigo (maiusculas/underscore, ex. STATUSWF, ZZ_SALDO) — que
+// sobrevivem a reformulacao porque nao dependem de ordem de palavras nem de
+// conectores. Deliberadamente NAO usa a lista fixa de termos de
+// investigative-discipline-service.js (x5_filial, thumbprint, ora-00060...)
+// porque aquela e especifica a cenarios de teste conhecidos; esta precisa
+// generalizar para qualquer par de respostas (ex. soma/subtrai, incrementa/
+// decrementa, qualquer campo/rotina citado como codigo).
+function _extrairAncorasTecnicas(texto) {
+  const n = _normalizar(texto);
+  const ancoras = new Set();
+  if (/usando\s*\+|\+\s*(em vez|ao inves)|operac[aã]o de adi[cç][aã]o|\bsoma(r|ndo)?\b|\baumenta/.test(n)) ancoras.add('OP:SOMA');
+  if (/subtrac[aã]o|\bsubtrair\b|usando\s*-|-\s*(em vez|ao inves)|\bdiminui/.test(n)) ancoras.add('OP:SUBTRAI');
+  if (/incrementa/.test(n)) ancoras.add('OP:INCREMENTA');
+  if (/decrementa/.test(n)) ancoras.add('OP:DECREMENTA');
+  const codigos = String(texto || '').match(/\b[A-Z][A-Z0-9_]{2,}\b/g) || [];
+  for (const c of codigos) ancoras.add('CODE:' + c.toUpperCase());
+  return ancoras;
+}
+
+function _similaridadeAncoras(a, b) {
+  const sa = _extrairAncorasTecnicas(a);
+  const sb = _extrairAncorasTecnicas(b);
+  if (!sa.size || !sb.size) return null; // sem ancora identificavel, nao opina
+  let comuns = 0;
+  for (const x of sa) if (sb.has(x)) comuns += 1;
+  return comuns / Math.min(sa.size, sb.size);
+}
+
+// Rotulos oficiais do vocabulario de confianca pedido pelo system prompt
+// (prompt-builder.js: "causa confirmada", "forte evidencia", "hipotese
+// provavel", "evidencia insuficiente") — a mesma lista que
+// investigacao-service.js:_extrairNivelConfianca ja usa para persistir
+// mensagens.nivel_confianca, sem custo de chamada adicional.
+const ROTULOS_CONFIANCA = ['causa confirmada', 'forte evidência', 'hipótese provável', 'evidência insuficiente'];
+const PESO_CONFIANCA = { 'evidência insuficiente': 0, 'hipótese provável': 1, 'forte evidência': 2, 'causa confirmada': 3 };
+
+function _extrairNivelConfiancaTexto(texto) {
+  const t = String(texto || '').toLowerCase();
+  return ROTULOS_CONFIANCA.find(r => t.includes(r)) || null;
+}
+
+function _avaliarRepeticaoDeRespostaAnterior(textoResposta, historicoMensagens) {
+  const respostasAnteriores = (historicoMensagens || [])
+    .filter(m => m.papel === 'assistant' && !m.diagnostico?.erroInfraestrutura && String(m.conteudo || '').trim().length > 150);
+  if (!respostasAnteriores.length) return [];
+  if (String(textoResposta || '').trim().length < 150) return [];
+  const justificavel = _temJustificativa(textoResposta);
+  if (justificavel) return [];
+
+  const nivelAtual = _extrairNivelConfiancaTexto(textoResposta);
+  const pesoAtual = nivelAtual ? PESO_CONFIANCA[nivelAtual] : null;
+
+  for (const anterior of respostasAnteriores) {
+    const simAncoras = _similaridadeAncoras(textoResposta, anterior.conteudo);
+    const simTexto = _similaridadeShingles(textoResposta, anterior.conteudo);
+    const similaridade = simAncoras !== null ? Math.max(simAncoras, simTexto) : simTexto;
+    if (similaridade < 0.5) continue;
+
+    // Mesma afirmacao tecnica central repetida — severidade sobe se, alem de
+    // repetir, a resposta ESCALOU a confianca sem justificativa (hipotese ->
+    // certeza) ou abandonou o vocabulario de hedging que a anterior usava
+    // (achado real: resposta 1 dizia "hipotese provavel", resposta 2 afirmou
+    // a mesma coisa sem nenhum rotulo de confianca).
+    const nivelAnterior = _extrairNivelConfiancaTexto(anterior.conteudo);
+    const pesoAnterior = nivelAnterior ? PESO_CONFIANCA[nivelAnterior] : null;
+    const escalouSemHedging = nivelAnterior && pesoAnterior < 3 && (nivelAtual === null || pesoAtual > pesoAnterior);
+
+    return [{
+      codigo: 'REGRESSAO_INVESTIGATIVA_RESPOSTA_REPETIDA',
+      severidade: escalouSemHedging ? 'alta' : 'media',
+      detalhe: simAncoras !== null
+        ? `resposta repete a mesma afirmacao tecnica central (operador/identificador) de uma resposta anterior (similaridade de ancoras ${Math.round(simAncoras * 100)}%), sem evidencia nova${escalouSemHedging ? ' — e escalou de hipotese para afirmacao mais categorica sem justificativa' : ''}`
+        : `resposta atual tem ${Math.round(simTexto * 100)}% de sobreposicao textual com uma resposta anterior da IA neste atendimento, sem justificativa de evidencia nova`,
+      acaoCorretiva: 'reconhecer_resposta_anterior_e_avancar_ou_declarar_falta_de_novidade',
+    }];
+  }
+  return [];
+}
+
+function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRetry = false, historicoMensagens = [] } = {}) {
   const falhas = [];
   const resposta = String(textoResposta || '');
   const perguntaTexto = String(pergunta || '');
@@ -235,6 +374,14 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
       acaoCorretiva: 'rebaixar_para_hipotese_e_pedir_fonte_ou_log_especifico',
     });
   }
+  if (_ignoraPendenciaExternaBloqueante(resposta, manifesto)) {
+    falhas.push({
+      codigo: 'EXTERNAL_PENDING_DEPENDENCY_IGNORED',
+      severidade: 'alta',
+      detalhe: `chamado tem pendencia de retorno externo (${manifesto.pendenciaConsolidada.responsavel}) nao reconhecida como dependencia efetiva do proximo passo`,
+      acaoCorretiva: 'reconhecer_pendencia_externa_e_priorizar_acompanhamento',
+    });
+  }
   if (/\b(causa confirmada|diagn[oó]stico confirmado|com certeza|definitivamente)\b/i.test(resposta) && !/\b(evid[eê]ncia|log|fonte|print|anexo|trecho|linha|stack)\b/i.test(resposta)) {
     falhas.push({
       codigo: 'CERTAINTY_WITHOUT_EVIDENCE',
@@ -281,6 +428,7 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
     manifesto: { ...manifesto, pesquisa },
   }));
   falhas.push(..._avaliarRegressaoInvestigativa(resposta, manifesto));
+  falhas.push(..._avaliarRepeticaoDeRespostaAnterior(resposta, historicoMensagens));
   if (/pesquis|tdn|totvs|softexpert|documenta[cç][aã]o|fonte oficial/i.test(perguntaTexto)) {
     if (!pesquisa?.configurado) falhas.push({ codigo: 'RESEARCH_REQUIRED_NOT_EXECUTED', legado: 'PESQUISA_NAO_CONFIGURADA', severidade: 'media', acaoCorretiva: 'informar_pesquisa_indisponivel' });
     else if (pesquisa?.modo !== 'web') falhas.push({ codigo: 'RESEARCH_CONFIGURED_WITHOUT_RESULTS', legado: 'PESQUISA_CONFIGURADA_SEM_RESULTADO', severidade: 'media', acaoCorretiva: 'executar_pesquisa_solicitada_ou_declarar_limite' });
@@ -337,4 +485,4 @@ function montarInstrucaoRetry(gate) {
   ].filter(Boolean).join('\n');
 }
 
-module.exports = { avaliarResposta, montarInstrucaoRetry, _avaliarRegressaoInvestigativa };
+module.exports = { avaliarResposta, montarInstrucaoRetry, _avaliarRegressaoInvestigativa, _similaridadeShingles, _extrairAncorasTecnicas };
