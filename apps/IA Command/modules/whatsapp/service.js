@@ -2697,6 +2697,31 @@ class IACWhatsAppService extends EventEmitter {
     return out;
   }
 
+  _marcarEscopoMultiEmpresa(sender, empresas = [], { todas = false, textos = [] } = {}) {
+    const empresasUnicas = this._dedupeEmpresasPorId(empresas);
+    this._setSenderContext(sender, {
+      empresaId: '__all__',
+      pendingText: null,
+      _empresasEscopoAtualIds: todas ? null : empresasUnicas.map(e => e.empresa_id),
+      _empresasEscopoAtualTextos: todas
+        ? null
+        : (Array.isArray(textos) && textos.length ? textos : empresasUnicas.map(e => e.nome || String(e.empresa_id))),
+      _empresasEscopoAtualTodas: !!todas,
+      _empresasEscopoAtualTs: Date.now(),
+    });
+  }
+
+  _empresasDoEscopoAtual(ctx, empresasDisponiveis = []) {
+    if (!ctx || ctx.empresaId !== '__all__' || ctx._empresasEscopoAtualTodas) return [];
+    const ids = Array.isArray(ctx._empresasEscopoAtualIds)
+      ? ctx._empresasEscopoAtualIds.map(Number).filter(Number.isFinite)
+      : [];
+    if (ids.length < 2) return [];
+    const porId = new Map((empresasDisponiveis || []).map(e => [Number(e.empresa_id), e]));
+    const empresas = ids.map(id => porId.get(id)).filter(Boolean);
+    return empresas.length >= 2 ? empresas : [];
+  }
+
   _formatarPerguntaMultiEmpresaAmbigua(ambiguidade = {}) {
     const termo = String(ambiguidade.termo || 'empresa').trim();
     const empresas = Array.isArray(ambiguidade.empresas) ? ambiguidade.empresas : [];
@@ -2806,6 +2831,9 @@ class IACWhatsAppService extends EventEmitter {
         _skipChannelTenantResolution: true,
       });
     }
+    this._marcarEscopoMultiEmpresa(sender, empresas, {
+      textos: pendente.termos || resolvidas.map(e => e.termo),
+    });
     return await this._pipelineAll(pendente.textoOriginal, empresas, sender, {
       empresasMencionadasTextos: pendente.termos || resolvidas.map(e => e.termo),
       empresasMencionadasIds: resolvidas.map(e => e.empresaId),
@@ -4774,11 +4802,12 @@ class IACWhatsAppService extends EventEmitter {
         .filter(e => !e.ocultar_selecao)
         .filter(e => channelStore.senderAutorizadoEmpresa(e.empresa_id, sender))
         .filter(e => intentService.temConfiguracaoMinima(e.empresa_id));
+      const empresasEscopoAtual = this._empresasDoEscopoAtual(ctx, empresasDoSender);
       if (this._isPedidoTodasEmpresas(textoExecucao) && empresasDoSender.length > 1) {
         if (ctx?.lastIntent && String(ctx.lastIntentChannelId || '') === String(this._channelId || '')) {
           this._saveLastIntent(sender, ctx.lastIntent, '__all__');
         }
-        this._setSenderContext(sender, { empresaId: '__all__', pendingText: null });
+        this._marcarEscopoMultiEmpresa(sender, empresasDoSender, { todas: true });
         return await this._pipelineAll(textoExecucao, empresasDoSender, sender, { _recebidoEm: opts._recebidoEm, _timingCtx });
       }
       const empresasQualificadas = this._resolverEmpresasQualificadasNoTexto(textoExecucao, empresasDoSender);
@@ -4792,7 +4821,9 @@ class IACWhatsAppService extends EventEmitter {
           if (ctx?.lastIntent && String(ctx.lastIntentChannelId || '') === String(this._channelId || '')) {
             this._saveLastIntent(sender, ctx.lastIntent, '__all__');
           }
-          this._setSenderContext(sender, { empresaId: '__all__', pendingText: null });
+          this._marcarEscopoMultiEmpresa(sender, empresasQualificadas.empresas, {
+            textos: empresasQualificadas.termos,
+          });
           this.log(`[resolverEmpresa] lista textual resolvida: ${empresasQualificadas.resolvidas.map(e => `${e.termo}->#${e.empresaId}`).join(', ')}`, 'info');
           return await this._pipelineAll(textoExecucao, empresasQualificadas.empresas, sender, {
             empresasMencionadasTextos: empresasQualificadas.termos,
@@ -4819,7 +4850,8 @@ class IACWhatsAppService extends EventEmitter {
         this.log(`[resolverEmpresa] empresa explicita nao encontrada no canal (${empresaQualificada.termo}), preservando sessao atual e seguindo fluxo de entidade`, 'info');
         // Contexto já era __all__: segue diretamente para _pipelineAll sem perguntar de novo
         if (ctx?.empresaId === '__all__') {
-          return await this._pipelineAll(textoExecucao, empresasDoSender, sender, { _recebidoEm: opts._recebidoEm, _timingCtx });
+          const empresasEscopo = empresasEscopoAtual.length >= 2 ? empresasEscopoAtual : empresasDoSender;
+          return await this._pipelineAll(textoExecucao, empresasEscopo, sender, { _recebidoEm: opts._recebidoEm, _timingCtx });
         }
         const sessaoAtual = ctx?.empresaId ? ctx.empresaId : null;
         const empresaPadrao = sessaoAtual
@@ -4839,6 +4871,15 @@ class IACWhatsAppService extends EventEmitter {
         this.log(`[resolverEmpresa] empresa explicita ambigua no canal: ${empresaQualificada.termo}`, 'warning');
         return `Nao consegui identificar com seguranca a empresa *${empresaQualificada.termo}*.\n\nEmpresas disponiveis: ${empresasDoSender.map(e => `*${e.nome || `#${e.empresa_id}`}*`).join(', ')}.`;
       } else {
+      if (!empresaQualificada && !ctx?.pendingText && empresasEscopoAtual.length >= 2) {
+        this.log(`[resolverEmpresa] mantendo escopo multiempresa atual: ${empresasEscopoAtual.map(e => e.nome || e.empresa_id).join(', ')}`, 'info');
+        return await this._pipelineAll(textoExecucao, empresasEscopoAtual, sender, {
+          empresasMencionadasTextos: Array.isArray(ctx?._empresasEscopoAtualTextos) ? ctx._empresasEscopoAtualTextos : empresasEscopoAtual.map(e => e.nome || String(e.empresa_id)),
+          empresasMencionadasIds: empresasEscopoAtual.map(e => e.empresa_id),
+          _recebidoEm: opts._recebidoEm,
+          _timingCtx,
+        });
+      }
       const resolucao = empresaQualificada?.status === 'resolved'
         ? { status: 'resolved', empresaId: empresaQualificada.empresaId, empresa: empresaQualificada.empresa, origem: 'texto_empresa' }
         : channelStore.resolverEmpresaDoCanal({
@@ -4871,7 +4912,9 @@ class IACWhatsAppService extends EventEmitter {
         if (ctx?.lastIntent && String(ctx.lastIntentChannelId || '') === String(this._channelId || '')) {
           this._saveLastIntent(sender, ctx.lastIntent, '__all__');
         }
-        this._setSenderContext(sender, { empresaId: '__all__', pendingText: null });
+        this._marcarEscopoMultiEmpresa(sender, resolucao.empresas, {
+          textos: resolucao.empresas.map(e => e.nome || String(e.empresa_id)),
+        });
         this.log(`[resolverEmpresa] selecao multiempresa por clarificacao: ${resolucao.empresas.map(e => e.nome || e.empresa_id).join(', ')}`, 'info');
         if (wasReset) return `✅ Agora consultando *${resolucao.empresas.map(e => e.nome || `#${e.empresa_id}`).join(' e ')}*.\nPode fazer sua pergunta.`;
         if (ctx?.pendingText) textoExecucao = ctx.pendingText;
@@ -4887,7 +4930,7 @@ class IACWhatsAppService extends EventEmitter {
         if (ctx?.empresaId !== '__all__' && !this._devePreservarContextoAnalitico(ctx, textoExecucao)) {
           this._clearLastIntent(sender);
         }
-        this._setSenderContext(sender, { empresaId: '__all__', pendingText: null });
+        this._marcarEscopoMultiEmpresa(sender, resolucao.empresas, { todas: true });
         if (wasReset) return `✅ Agora consultando *todas as empresas*.\nPode fazer sua pergunta.`;
         if (ctx?.pendingText) textoExecucao = ctx.pendingText;
         return await this._pipelineAll(textoExecucao, resolucao.empresas, sender, { _recebidoEm: opts._recebidoEm, _timingCtx });
@@ -4897,7 +4940,7 @@ class IACWhatsAppService extends EventEmitter {
         if (ctx?.lastIntent && String(ctx.lastIntentChannelId || '') === String(this._channelId || '')) {
           this._saveLastIntent(sender, ctx.lastIntent, '__all__');
         }
-        this._setSenderContext(sender, { empresaId: '__all__', pendingText: null });
+        this._marcarEscopoMultiEmpresa(sender, empresasDoSender, { todas: true });
         return await this._pipelineAll(textoExecucao, empresasDoSender, sender, { _recebidoEm: opts._recebidoEm, _timingCtx });
       }
 

@@ -114,7 +114,8 @@
     .fila-item-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
     .fila-item-numero { font-size:11.5px; font-weight:800; color:var(--wa-accent); }
     .fila-item-titulo { font-size:13px; font-weight:700; color:var(--wa-text); line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
-    .fila-item-meta { font-size:11px; color:var(--wa-text-tertiary); display:flex; align-items:center; gap:6px; }
+    .fila-item-meta { font-size:11px; color:var(--wa-text-tertiary); display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+    .fila-item-aguardando { font-size:10.5px; font-weight:800; padding:2px 7px; border-radius:99px; background:rgba(234,179,8,.14); color:#fde68a; border:1px solid rgba(234,179,8,.28); white-space:nowrap; }
     .badge { font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; padding:2px 7px; border-radius:99px; flex-shrink:0; }
     .badge-em-atraso { background:rgba(248,113,113,.18); color:#fca5a5; }
     .badge-em-dia { background:rgba(74,222,128,.15); color:#86efac; }
@@ -972,16 +973,31 @@
           return;
         }
 
-        lista.innerHTML = resultado.chamados.map(c => `
+        lista.innerHTML = resultado.chamados.map(c => {
+          const tituloBruto = c.titulo || c.assunto || c.breveDescricao || '(sem título)';
+          // Título vem como "Cliente | Produto | Assunto real" (mesmo padrão
+          // usado em chamado-repository._tituloSemPrefixo no backend) — exibir
+          // o bruto inteiro faz o clamp de 2 linhas repetir "Cliente | Produto"
+          // na 2a linha, parecendo informação duplicada. Mostra só o assunto
+          // real no título; cliente/produto já aparecem no cabeçalho do chat
+          // ao selecionar o chamado.
+          const partesTitulo = tituloBruto.split('|');
+          const tituloExibido = partesTitulo.length >= 3 ? partesTitulo.slice(2).join('|').trim() : tituloBruto;
+          const aguardandoLabel = labelSituacaoRetorno(c.aguardandoConsolidado || c.situacaoRetorno);
+          return `
           <div class="fila-item ${c.id === chamadoSelecionadoId ? 'selecionado' : ''}" onclick="selecionarChamado('${c.id}')">
             <div class="fila-item-top">
               <span class="fila-item-numero">#${escapeHtml(c.numero)}</span>
               ${badgeSla(c.slaPrazo)}
             </div>
-            <div class="fila-item-titulo">${escapeHtml(c.titulo || c.assunto || c.breveDescricao || '(sem título)')}</div>
-            <div class="fila-item-meta">Aberto em ${formatarData(c.dataAbertura)}</div>
+            <div class="fila-item-titulo">${escapeHtml(tituloExibido)}</div>
+            <div class="fila-item-meta">
+              <span>Aberto em ${formatarData(c.dataAbertura)}</span>
+              ${aguardandoLabel ? `<span class="fila-item-aguardando">${escapeHtml(aguardandoLabel)}</span>` : ''}
+            </div>
           </div>
-        `).join('');
+        `;
+        }).join('');
       } catch (err) {
         showError('Não foi possível carregar a fila: ' + err.message);
       }
