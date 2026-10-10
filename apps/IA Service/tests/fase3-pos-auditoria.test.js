@@ -23,11 +23,14 @@ const consultorRepo = require('../backend/repositories/consultor-repository');
 const agenteRepo = require('../backend/repositories/agente-local-repository');
 const chamadoRepo = require('../backend/repositories/chamado-repository');
 const historicalImportService = require('../backend/services/import/historical-import-service');
+const investigacaoService = require('../backend/services/investigacao-service');
+const anexosSoftExpertService = require('../backend/services/anexos-softexpert-service');
 const registrarRotas = require('../backend/routes');
 const registrarRotasExterno = require('../backend/routes/externo-routes');
 
 const EMPRESA_A = 99301;
 const EMPRESA_B = 99302;
+let sessaoExternaSeq = 0;
 
 function criarAtendimentoComAssistente(empresaId, conteudo = 'Orientacao tecnica da IA.') {
   const atendimento = atendimentoRepo.criarAtendimento(empresaId, {
@@ -75,9 +78,10 @@ async function iniciarAppExterno() {
 }
 
 function criarSessaoExterna(empresaId) {
+  const seq = ++sessaoExternaSeq;
   const consultor = consultorRepo.criarConsultor(empresaId, {
-    idSoftexpert: `TEC-${empresaId}`,
-    telefone: `5565999${empresaId}`,
+    idSoftexpert: `TEC-${empresaId}-${seq}`,
+    telefone: `5565999${empresaId}${seq}`,
   });
   const token = crypto.randomBytes(32).toString('hex');
   const agora = new Date();
@@ -136,6 +140,52 @@ async function testarAutorizacaoHttp() {
     });
     assert.strictEqual(cruzadoExt.status, 404, 'namespace externo tambem deve bloquear mensagem de outro atendimento');
   } finally {
+    await new Promise(resolve => externo.server.close(resolve));
+  }
+}
+
+async function testarPreAnaliseExternaInformaPollingAoFrontend() {
+  const fonte = agenteRepo.criarFonte(EMPRESA_A, {
+    connectionKey: 'softexpert-pre-analise-externa',
+    nome: 'SoftExpert Pre Analise Externa',
+    sistemaOrigem: 'softexpert',
+    adapter: 'SoftExpertSqlServerAdapter',
+  });
+  const { chamado } = chamadoRepo.upsertChamado(EMPRESA_A, {
+    fonteId: fonte.id,
+    sistemaOrigem: 'softexpert',
+    oidOrigem: 'OID-PRE-EXT-1',
+    numero: 'PRE-EXT-1',
+    titulo: 'Chamado com pre-analise externa',
+    statusEncerramento: 'Andamento',
+  });
+
+  const originalPreAnalise = investigacaoService.processarPreAnalise;
+  const originalSincronizar = anexosSoftExpertService.sincronizarAnexosParaAtendimento;
+  let preAnaliseDisparada = false;
+  investigacaoService.processarPreAnalise = async () => {
+    preAnaliseDisparada = true;
+    return { resposta: 'ok' };
+  };
+  anexosSoftExpertService.sincronizarAnexosParaAtendimento = async () => [];
+
+  const externo = await iniciarAppExterno();
+  try {
+    const token = criarSessaoExterna(EMPRESA_A);
+    const resp = await fetch(`${externo.baseUrl}/api/ia-service-externo/radar/chamados/${chamado.id}/abrir-atendimento`, {
+      method: 'POST',
+      headers: { 'x-sessao-externa': token },
+    });
+    assert.strictEqual(resp.status, 201, 'abertura externa deve criar atendimento');
+    const body = await resp.json();
+    assert.ok(body.atendimentoId, 'resposta externa deve informar atendimentoId');
+    assert.strictEqual(body.reaberto, false);
+    assert.strictEqual(body.preAnaliseDisparada, true, 'frontend externo precisa saber que deve fazer polling das mensagens');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.strictEqual(preAnaliseDisparada, true, 'pre-analise continua sendo disparada em background');
+  } finally {
+    investigacaoService.processarPreAnalise = originalPreAnalise;
+    anexosSoftExpertService.sincronizarAnexosParaAtendimento = originalSincronizar;
     await new Promise(resolve => externo.server.close(resolve));
   }
 }
@@ -285,6 +335,7 @@ function limpar() {
 
 async function main() {
   await testarAutorizacaoHttp();
+  await testarPreAnaliseExternaInformaPollingAoFrontend();
   await testarDossieGlobalNaoEncerraPorOrientacaoIndividual();
   await testarResumoEOrdenacao();
   await testarSoftExpertMensagemCorretaEIdempotencia();

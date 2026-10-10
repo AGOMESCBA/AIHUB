@@ -29,6 +29,7 @@
     dossie: null,
     investigations: [],
     processing: new Set(),
+    chatStatusText: null,
     autoTimer: null,
     countdownTimer: null,
     nextRefreshAt: 0,
@@ -626,8 +627,9 @@
   // Indicador de progresso dentro do corpo do chat (nao no botao, que tem
   // largura fixa e so comporta um icone) — pedido do usuario: deixar claro
   // que a IA esta processando com base em todo o historico, nao travada.
-  function showChatStatus(texto) {
-    hideChatStatus();
+  function appendChatStatusRow(texto) {
+    const existing = $('chat-status-row');
+    if (existing) existing.remove();
     const container = $('messages');
     if (!container) return;
     const row = document.createElement('article');
@@ -646,14 +648,21 @@
     container.scrollTop = container.scrollHeight;
   }
 
+  function showChatStatus(texto) {
+    state.chatStatusText = texto || 'Processando...';
+    appendChatStatusRow(state.chatStatusText);
+  }
+
   function hideChatStatus() {
+    state.chatStatusText = null;
     const row = $('chat-status-row');
     if (row) row.remove();
   }
 
   function renderMessages() {
     if (!state.messages.length) {
-      $('messages').innerHTML = '<div class="empty-block">Sem mensagens neste atendimento.</div>';
+      $('messages').innerHTML = state.chatStatusText ? '' : '<div class="empty-block">Sem mensagens neste atendimento.</div>';
+      if (state.chatStatusText) appendChatStatusRow(state.chatStatusText);
       return;
     }
     const sorted = [...state.messages].sort((a, b) => new Date(messageTimestamp(a)) - new Date(messageTimestamp(b)));
@@ -677,6 +686,7 @@
         </article>
       `;
     }).join('');
+    if (state.chatStatusText) appendChatStatusRow(state.chatStatusText);
     $('messages').scrollTop = $('messages').scrollHeight;
   }
 
@@ -689,6 +699,7 @@
     const atendimentoId = state.atendimentoId;
     state.processing.add(atendimentoId);
     setBusy($('send-btn'), true, 'Enviando');
+    showChatStatus('Pesquisando e analisando o chamado com a IA...');
     try {
       const anexoIds = await uploadPendingFiles(atendimentoId);
       const body = await request(ext(`/atendimentos/${encodeURIComponent(atendimentoId)}/investigar`), {
@@ -706,6 +717,7 @@
     } finally {
       state.processing.delete(atendimentoId);
       setBusy($('send-btn'), false);
+      hideChatStatus();
     }
   }
 
