@@ -24,6 +24,7 @@ const investigacaoDossieService = require('./investigacao-dossie-service');
 const investigacaoDossieAtualizador = require('./investigacao-dossie-atualizador-service');
 const dossieContextService = require('./dossie-context-service');
 const { redigirValor } = require('./redaction-service');
+const planoRespostaRastreavel = require('./plano-resposta-rastreavel-service');
 
 const MAX_TENTATIVAS_TIMEOUT = 2;
 
@@ -71,6 +72,187 @@ function _extrairFonteCorrigido(secoes) {
   if (!secoes?.['Fonte corrigido']) return null;
   const blocoCodigo = secoes['Fonte corrigido'].match(/```[a-zA-Z]*\n([\s\S]*?)```/);
   return blocoCodigo ? blocoCodigo[1] : null;
+}
+
+function _adicionarInstrucaoObservacaoVisual(userPrompt, contexto) {
+  if (String(userPrompt || '').includes('<<<OBSERVACOES_VISUAIS_AUDITORIA>>>')) return userPrompt;
+  const imagens = contexto?.manifesto?.selecionados?.filter(e => e.tipo === 'imagem' && e.imagemEnviada) || [];
+  if (!imagens.length) return userPrompt;
+  const mapa = imagens.map((img, idx) => `- imagem_${idx + 1}: anexoId=${img.id}; nome=${img.nome || img.id}`).join('\n');
+  return [
+    userPrompt,
+    '',
+    '## Observacoes visuais para auditoria interna',
+    'Como ha imagens/prints nesta chamada, antes da resposta ao analista inclua um bloco JSON delimitado exatamente por <<<OBSERVACOES_VISUAIS_AUDITORIA>>> e <<<FIM_OBSERVACOES_VISUAIS_AUDITORIA>>>.',
+    'Esse bloco e apenas para auditoria e sera removido da resposta final. Nao use nele conclusoes causais; registre somente textos, campos, botoes, rotinas, mensagens ou valores que voce conseguiu observar visualmente.',
+    'Formato obrigatorio:',
+    '{"observacoesVisuais":[{"anexoId":"...","nome":"...","textosVisiveis":["..."],"campos":["..."],"valores":["..."],"observacao":"observacao curta sem conclusao causal","confiancaVisual":"alta|media|baixa"}]}',
+    'Se nao conseguir ler um print, informe textosVisiveis vazio e confiancaVisual baixa.',
+    'Imagens disponiveis:',
+    mapa,
+  ].join('\n');
+}
+
+function _extrairObservacoesVisuaisDaResposta(texto, contexto) {
+  const original = String(texto || '');
+  const regex = /<<<OBSERVACOES_VISUAIS_AUDITORIA>>>\s*([\s\S]*?)\s*<<<FIM_OBSERVACOES_VISUAIS_AUDITORIA>>>/i;
+  const match = original.match(regex);
+  if (!match) return { textoLimpo: original, observacoesVisuais: [] };
+  const textoLimpo = original.replace(regex, '').trim();
+  let parsed = null;
+  try {
+    const bruto = match[1].trim();
+    const json = bruto.match(/\{[\s\S]*\}/)?.[0] || bruto;
+    parsed = JSON.parse(json);
+  } catch (_) {
+    return { textoLimpo, observacoesVisuais: [] };
+  }
+  const observacoes = Array.isArray(parsed) ? parsed : parsed?.observacoesVisuais;
+  const imagens = contexto?.manifesto?.selecionados?.filter(e => e.tipo === 'imagem' && e.imagemEnviada) || [];
+  const porId = new Map(imagens.map(i => [String(i.id), i]));
+  const porNome = new Map(imagens.map(i => [String(i.nome || '').toLowerCase(), i]));
+  const normalizadas = (Array.isArray(observacoes) ? observacoes : []).slice(0, 12).map((o, idx) => {
+    const id = String(o?.anexoId || o?.id || '').trim();
+    const nome = String(o?.nome || '').trim();
+    const ref = porId.get(id) || porNome.get(nome.toLowerCase()) || imagens[idx] || null;
+    return {
+      anexoId: ref?.id || id || null,
+      nome: ref?.nome || nome || null,
+      textosVisiveis: Array.isArray(o?.textosVisiveis) ? o.textosVisiveis.map(x => String(x).slice(0, 180)).filter(Boolean).slice(0, 20) : [],
+      campos: Array.isArray(o?.campos) ? o.campos.map(x => String(x).slice(0, 120)).filter(Boolean).slice(0, 20) : [],
+      valores: Array.isArray(o?.valores) ? o.valores.map(x => String(x).slice(0, 80)).filter(Boolean).slice(0, 20) : [],
+      observacao: String(o?.observacao || '').slice(0, 500),
+      confiancaVisual: ['alta', 'media', 'baixa'].includes(String(o?.confiancaVisual || '').toLowerCase())
+        ? String(o.confiancaVisual).toLowerCase()
+        : 'baixa',
+      origem: 'provider_multimodal_mesma_chamada',
+    };
+  }).filter(o => o.anexoId || o.nome || o.textosVisiveis.length || o.campos.length || o.valores.length);
+  return { textoLimpo, observacoesVisuais: normalizadas };
+}
+
+function _aplicarObservacoesVisuais(resultado, contexto) {
+  const extraido = _extrairObservacoesVisuaisDaResposta(resultado?.texto, contexto);
+  if (extraido.observacoesVisuais.length) {
+    contexto.manifesto.observacoesVisuais = extraido.observacoesVisuais;
+    contexto.manifesto.observacoesVisuaisOrigem = 'provider_multimodal_mesma_chamada';
+    contexto.manifesto.planoRespostaRastreavel = planoRespostaRastreavel.reconciliarObservacoesVisuais(
+      contexto.manifesto.planoRespostaRastreavel,
+      extraido.observacoesVisuais,
+    );
+  }
+  return {
+    ...resultado,
+    texto: extraido.textoLimpo,
+  };
+}
+
+function _limparBastidoresRetryTexto(texto) {
+  let s = String(texto || '');
+  s = s.replace(/^\s*#{1,4}\s*reescrita[^\r\n]*(?:\r?\n)+/i, '');
+  s = s.replace(/^\s*reescrita\s*[-:][^\r\n]*(?:\r?\n)+/i, '');
+  s = s.replace(/^\s*(?:entendi|claro|ok)[^\r\n]{0,500}\b(?:reescrev\w*|quality\s+gate|retry|tentativa\s+corretiva|resposta\s+anterior)[^\r\n]*(?:\r?\n)+\s*(?:[-â€”]{3,}\s*(?:\r?\n)+)?/i, '');
+  s = s.replace(/^\s*(?:vou\s+)?reescrev\w+\s+(?:a\s+)?(?:resposta|analise|anÃ¡lise)[^\r\n]*(?:\r?\n)+\s*(?:[-â€”]{3,}\s*(?:\r?\n)+)?/i, '');
+  s = s.replace(/^\s*(?:entendi|claro|ok)[\s\S]{0,180}\b(?:vou\s+)?reescrev\w*[\s\S]{0,120}(?:\r?\n){2,}/i, '');
+  s = s.replace(/^\s*[-—]{3,}\s*(?:\r?\n)+/, '');
+  s = s.replace(/^\s*(?:entendi|claro|ok)\s*[—,-]\s*(?:vou\s+)?(?:direto|focar|focando)[^\r\n]*(?:sem\s+template|sem\s+laudo|sem\s+repetir)[^\r\n]*(?:\r?\n){2,}/i, '');
+  s = s.replace(/\b(?:vou\s+)?reescrev\w+\s+(?:a\s+)?(?:resposta|analise|análise)[^.\n]*\.?\s*/gi, '');
+  s = s.replace(/^\s*#{1,4}\s+/gm, '');
+  return s.trim();
+}
+
+function _adicionarLimitePesquisaSemPaginaLida(texto, pesquisa) {
+  const s = String(texto || '').trim();
+  const paginas = Array.isArray(pesquisa?.paginasLidas) ? pesquisa.paginasLidas : [];
+  const temConteudo = paginas.some(p => p.status === 'lida' || p.status === 'reutilizada');
+  if (pesquisa?.modo !== 'web' || temConteudo || !paginas.length) return s;
+  const declaraLimite = /\b(pesquisa|documenta[cÃ§][aÃ£]o|fonte oficial|pagina|p[aÃ¡]gina)\b[\s\S]{0,140}\b(nao foi possivel|nao consegui|nao acessivel|nao acessada|nao lida|nenhuma pagina foi lida|sem conteudo|sem pagina lida|nao retornou conteudo|links sem leitura|limitacao)\b/i.test(s)
+    || /\b(nao foi possivel|nao consegui|nao acessivel|nao acessada|nao lida|nenhuma pagina foi lida|sem conteudo|sem pagina lida|nao retornou conteudo|links sem leitura|limitacao)\b[\s\S]{0,140}\b(pesquisa|documenta[cÃ§][aÃ£]o|fonte oficial|pagina|p[aÃ¡]gina)\b/i.test(s);
+  if (declaraLimite) return s;
+  return `${s}\n\nA pesquisa externa retornou links, mas nenhuma pagina foi lida com conteudo tecnico utilizavel nesta execucao; por isso, a orientacao acima usa as evidencias internas do chamado e nao documentacao externa como confirmacao.`;
+}
+
+function _prepararTextoResposta(texto, pesquisa) {
+  return _adicionarLimitePesquisaSemPaginaLida(_limparBastidoresRetryTexto(texto), pesquisa);
+}
+
+function _temBloqueioObjetivoQualityGate(qualityGate) {
+  return (qualityGate?.falhas || []).some(f => (f.decisionKind || f.categoriaDecisao) === 'bloqueio_objetivo');
+}
+
+function _calcularRevisaoNecessariaQualityGate({ qualityGate, retryDeQualityGate }) {
+  if (!retryDeQualityGate || !qualityGate || qualityGate.aprovado) return false;
+  if ((qualityGate.falhas || []).length > 0) return true;
+  if (_temBloqueioObjetivoQualityGate(qualityGate)) return true;
+  return (qualityGate.falhas || []).some(f => (f.decisionKind || f.categoriaDecisao) === 'evidencia_insuficiente'
+    && [
+      'REDUNDANT_OPERATIONAL_ESCALATION',
+      'REDUNDANT_OPERATIONAL_MEETING',
+      'INCIDENTAL_EVIDENCE_PROMOTED_WITHOUT_CAUSAL_BRIDGE',
+      'INVESTIGATIVE_FRAME_OPERATIONAL_STAGE_IGNORED',
+      'UNTRACEABLE_TECHNICAL_REFERENCE',
+      'EXTERNAL_REFERENCE_PRESENTED_AS_CASE_EVIDENCE',
+      'UNSUPPORTED_OPERATIONAL_COUNT',
+      'INTERNAL_IDS_USED_AS_EVIDENCE',
+    ].includes(f.codigo));
+}
+
+function _statusFinalQualityGate(qualityGate, retryDeQualityGate) {
+  if (qualityGate?.aprovado) return 'concluido';
+  return _calcularRevisaoNecessariaQualityGate({ qualityGate, retryDeQualityGate })
+    ? 'revisao_necessaria_quality_gate'
+    : 'concluido_com_alerta_quality_gate';
+}
+
+function _statusFinalExecucao({ qualityGate, retryDeQualityGate, respostaTruncada = false } = {}) {
+  if (respostaTruncada) return 'revisao_necessaria_quality_gate';
+  return _statusFinalQualityGate(qualityGate, retryDeQualityGate);
+}
+
+function _marcarRespostaTruncadaNoGate(qualityGate) {
+  const gate = qualityGate || { aprovado: true, falhas: [], decisoes: {} };
+  const falhas = gate.falhas || [];
+  if (!falhas.some(f => f.codigo === 'TRUNCATED_RESPONSE_INCOMPLETE')) {
+    falhas.push({
+      codigo: 'TRUNCATED_RESPONSE_INCOMPLETE',
+      severidade: 'alta',
+      detalhe: 'provider informou que a resposta foi cortada por limite de tokens/tamanho',
+      acaoCorretiva: 'gerar_resposta_completa_ou_reduzir_escopo_sem_apresentar_parcial_como_concluida',
+      decisionKind: 'bloqueio_objetivo',
+      categoriaDecisao: 'bloqueio_objetivo',
+    });
+  }
+  gate.falhas = falhas;
+  gate.aprovado = false;
+  gate.decisoes = {
+    ...(gate.decisoes || {}),
+    bloqueiosObjetivos: Math.max(1, gate.decisoes?.bloqueiosObjetivos || 0),
+  };
+  return gate;
+}
+
+function _removerIdsInternosTexto(texto) {
+  return String(texto || '')
+    .replace(/\baud[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D-](?:msg|an|at|ch)[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D-][a-z0-9_\u2010-\u2015\u2212\uFE58\uFE63\uFF0D-]+\b/gi, '[ID_INTERNO_REMOVIDO]')
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '[UUID_INTERNO_REMOVIDO]');
+}
+
+function _resumirEvidenciaSemId(e) {
+  const nome = e.nome ? `arquivo "${e.nome}"` : e.tipo === 'mensagem' ? 'mensagem do historico' : `${e.tipo || 'evidencia'} selecionada`;
+  return `${nome} (${e.status || 'ANALISADA'}; ${e.motivo || 'sem motivo registrado'})`;
+}
+
+function _resumoQualityGate(gate) {
+  return {
+    aprovado: !!gate?.aprovado,
+    falhas: (gate?.falhas || []).map(f => ({
+      codigo: f.codigo,
+      decisionKind: f.decisionKind || f.categoriaDecisao || null,
+      termos: f.termos || [],
+      classificacaoContextual: f.classificacaoContextual || null,
+    })),
+    decisoes: gate?.decisoes || null,
+  };
 }
 
 async function _carregarPayloadVisual(contexto) {
@@ -395,7 +577,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
       if (!buffer.length || (anexo.tamanho && buffer.length !== anexo.tamanho)) {
         throw new Error(`Arquivo lido com tamanho inconsistente (esperado ${anexo.tamanho ?? '?'} bytes, lido ${buffer.length} bytes).`);
       }
-      imagens.push({ mimeType: anexo.mimeType, base64: buffer.toString('base64') });
+      imagens.push({ mimeType: anexo.mimeType, base64: buffer.toString('base64'), origem: 'imagem', anexoId: anexo.id });
     } catch (err) {
       console.error('[IA Service] Falha ao ler anexo de imagem para análise:', anexo.id, anexo.nomeOriginal, err.message);
       falhasImagem.push(anexo.nomeOriginal || anexo.id);
@@ -471,10 +653,14 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
   let promptUsado = userPrompt;
   const inicioIa = Date.now();
   try {
+    userPrompt = _adicionarInstrucaoObservacaoVisual(userPrompt, contexto);
+    promptUsado = userPrompt;
     resultado = await aiProviderClient.chamarIA(keys, cfg, promptBuilder.SYSTEM_PROMPT, promptUsado, imagens, {
       maxTokens: 6000,
       timeoutMs,
     });
+    resultado = _aplicarObservacoesVisuais(resultado, contexto);
+    resultado.texto = _prepararTextoResposta(resultado.texto, pesquisaTecnica);
     qualityGate = qualityGateService.avaliarResposta({
       textoResposta: resultado.texto,
       manifesto: contexto.manifesto,
@@ -485,6 +671,8 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     });
     if (qualityGate.deveRetry) {
       retryDeQualityGate = true;
+      const qualityGateAntesRetry = qualityGate;
+      const respostaAntesRetry = String(resultado.texto || '');
       const idsForcados = (qualityGate.falhas || []).map(f => f.evidenciaId).filter(Boolean);
       if (idsForcados.length) {
         contexto = contextEngine.montarContextoInvestigacao({
@@ -523,7 +711,8 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
       if ((qualityGate.falhas || []).some(f => f.codigo === 'GENERIC_RESPONSE_WITH_SPECIFIC_EVIDENCE')) {
         acoesRetry.push({ tipo: 'reforco_evidencias_especificas' });
       }
-      promptUsado = `${userPrompt}\n\n## Reprocessamento por Quality Gate\n${qualityGateService.montarInstrucaoRetry(qualityGate)}`;
+      userPrompt = _adicionarInstrucaoObservacaoVisual(userPrompt, contexto);
+      promptUsado = `${userPrompt}\n\n## Reprocessamento por Quality Gate\n${qualityGateService.montarInstrucaoRetry(qualityGate, { manifesto: contexto.manifesto })}`;
       // maxProviderRounds:1 — teto global de tentativas por investigacao: a
       // primeira chamada ja varreu todos os providers elegiveis em ate 3
       // rodadas; repetir rodadas completas tambem no retry do Quality Gate
@@ -536,6 +725,8 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
         timeoutMs,
         maxProviderRounds: 1,
       });
+      resultado = _aplicarObservacoesVisuais(resultado, contexto);
+      resultado.texto = _prepararTextoResposta(resultado.texto, pesquisaTecnica);
       qualityGate = qualityGateService.avaliarResposta({
         textoResposta: resultado.texto,
         manifesto: contexto.manifesto,
@@ -550,13 +741,16 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
         'SPECIFIC_ERROR_NOT_PRIORITIZED',
         'INTERNAL_IDS_USED_AS_EVIDENCE',
         'CUSTOMIZATION_DISCARDED_WITHOUT_CODE_OR_LOG',
+        'OVERCONFIDENT_CAUSE_WITH_PARTIAL_SOURCE',
+        'HYPOTHESIS_PROMOTED_TO_CONFIRMED_CAUSE',
+        'RESEARCH_FOUND_BUT_NOT_READ',
       ]);
       const falhasReescritaFinal = (qualityGate.falhas || []).filter(f => codigosReescritaFinal.has(f.codigo));
       if (falhasReescritaFinal.length > 0 && (qualityGate.falhas || []).every(f => codigosReescritaFinal.has(f.codigo))) {
         acoesRetry.push({ tipo: 'reescrita_final_quality_gate', falhas: falhasReescritaFinal.map(f => f.codigo) });
         const evidenciasResumo = (contexto.manifesto?.selecionados || [])
           .slice(0, 12)
-          .map(e => `${e.tipo}:${e.nome || e.id} (${e.status}; ${e.motivo || 'sem motivo'})`)
+          .map(_resumirEvidenciaSemId)
           .join('\n');
         const fontesResumo = (pesquisaTecnica?.paginasLidas || [])
           .slice(0, 6)
@@ -564,18 +758,22 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
           .join('\n');
         promptUsado = [
           '## Reescrita final obrigatoria por Quality Gate',
-          qualityGateService.montarInstrucaoRetry(qualityGate),
+          qualityGateService.montarInstrucaoRetry(qualityGate, { manifesto: contexto.manifesto }),
           '',
           'A resposta abaixo ja analisou o caso, mas ainda falhou no Quality Gate. Reescreva SEM reinvestigar do zero.',
           '',
           'Regras obrigatorias:',
           '- nao use cabecalhos Markdown;',
           '- nao use checklist de laudo;',
+          '- nao mencione Quality Gate, reescrita, retry, resposta anterior ou qualquer bastidor interno;',
           '- nao recomende videochamada;',
           '- comece pelo erro especifico mais forte;',
           '- diga o primeiro teste/ajuste tecnico concreto;',
           '- mantenha evidencias visuais e fontes oficiais que sustentam a analise;',
           '- se mencionar parametros/documentacao, trate como apoio e nao como primeira trilha quando existir erro especifico de tela/log.',
+          '- se houver apenas trecho de fonte/codigo, nao apresente declaracao, escopo ou inicializacao de variavel como causa confirmada; trate como hipotese e peca fonte completo + compilacao/execucao controlada;',
+          '- em SoftExpert Workflow, se HTTP 200 coexistir com atividade parada, trate HTTP 200 como fato de recebimento/processamento do callback; trate permissao, papel ou responsavel como hipotese ate haver log interno/auditoria/configuracao confirmando;',
+          '- se a pesquisa tecnica encontrou links mas nenhuma pagina foi lida/reutilizada, declare essa limitacao em uma frase curta e nao cite a documentacao como fonte consultada;',
           '',
           '## Evidencias selecionadas resumidas',
           evidenciasResumo || 'Sem resumo de evidencias.',
@@ -584,13 +782,14 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
           fontesResumo || 'Sem fontes tecnicas.',
           '',
           '## Resposta anterior a reescrever',
-          resultado.texto,
+          _removerIdsInternosTexto(resultado.texto),
         ].join('\n');
         resultado = await aiProviderClient.chamarIA(keys, cfg, promptBuilder.SYSTEM_PROMPT, promptUsado, [], {
           maxTokens: 2200,
           timeoutMs: Math.min(timeoutMs, 60000),
           maxProviderRounds: 1,
         });
+        resultado.texto = _prepararTextoResposta(resultado.texto, pesquisaTecnica);
         qualityGate = qualityGateService.avaliarResposta({
           textoResposta: resultado.texto,
           manifesto: contexto.manifesto,
@@ -600,7 +799,50 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
           historicoMensagens: historico,
         });
       }
-      qualityGate.retryCorretivo = { executado: true, acoes: acoesRetry };
+      if (!qualityGate.aprovado) {
+        const respostaSegura = planoRespostaRastreavel.gerarRespostaSeguraDeterministica({
+          plano: contexto.manifesto?.planoRespostaRastreavel,
+          gate: qualityGate,
+        });
+        if (respostaSegura?.texto) {
+          const qualityGateSeguro = qualityGateService.avaliarResposta({
+            textoResposta: respostaSegura.texto,
+            manifesto: contexto.manifesto,
+            pesquisa: pesquisaTecnica,
+            pergunta: texto,
+            houveRetry: true,
+            historicoMensagens: historico,
+          });
+          const bloqueioSeguro = _temBloqueioObjetivoQualityGate(qualityGateSeguro);
+          acoesRetry.push({
+            tipo: 'resposta_segura_deterministica',
+            modo: respostaSegura.modo,
+            aplicado: !bloqueioSeguro,
+            falhasAntes: (qualityGate.falhas || []).map(f => f.codigo),
+            falhasDepois: (qualityGateSeguro.falhas || []).map(f => f.codigo),
+          });
+          if (!bloqueioSeguro) {
+            resultado = { ...resultado, texto: _prepararTextoResposta(respostaSegura.texto, pesquisaTecnica), recuperacaoDeterministica: respostaSegura };
+            qualityGate = qualityGateSeguro;
+            qualityGate.recuperacaoDeterministica = {
+              aplicada: true,
+              modo: respostaSegura.modo,
+              origem: respostaSegura.origem,
+            };
+          }
+        }
+      }
+      qualityGate.retryCorretivo = {
+        executado: true,
+        acoes: acoesRetry,
+        antes: {
+          qualityGate: _resumoQualityGate(qualityGateAntesRetry),
+          respostaResumo: _removerIdsInternosTexto(respostaAntesRetry).slice(0, 2200),
+        },
+        depois: {
+          qualityGate: _resumoQualityGate(qualityGate),
+        },
+      };
     }
   } catch (erro) {
     // Mensagem de erro registrada como turno do assistente, para o analista
@@ -630,6 +872,20 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     return msgErro;
   }
 
+  if (resultado.truncado) {
+    qualityGate = _marcarRespostaTruncadaNoGate(qualityGate);
+  }
+  const revisaoNecessariaQualityGate = !!resultado.truncado || _calcularRevisaoNecessariaQualityGate({ qualityGate, retryDeQualityGate });
+  const textoRejeitadoQualityGate = revisaoNecessariaQualityGate ? String(resultado.texto || '') : null;
+  if (revisaoNecessariaQualityGate) {
+    qualityGate.revisaoNecessaria = {
+      motivo: resultado.truncado ? 'resposta_truncada_pelo_provider' : 'resposta_continuou_reprovada_apos_retry_permitido',
+      falhas: (qualityGate.falhas || []).map(f => f.codigo),
+      respostaRejeitada: textoRejeitadoQualityGate,
+      politica: 'nao_apresentar_como_orientacao_tecnica_aprovada',
+    };
+  }
+
   // Nenhum dos 3 provedores informa de forma óbvia quando a resposta foi
   // cortada por limite de tamanho (finish_reason='length'/stop_reason=
   // 'max_tokens'/finishReason='MAX_TOKENS', capturado em ai-provider-client.js
@@ -637,7 +893,15 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
   // frase cortada no meio sem explicação (bug real reportado pelo usuário,
   // 2026-10). Aviso anexado ao próprio texto salvo, não só logado, para
   // aparecer na bolha do chat.
-  const textoFinal = resultado.truncado
+  const textoFinal = revisaoNecessariaQualityGate
+    ? [
+      'A analise da IA foi bloqueada para revisao porque continuou reprovada pelo Quality Gate apos a tentativa corretiva permitida.',
+      '',
+      `Falhas detectadas: ${(qualityGate.falhas || []).map(f => f.codigo).join(', ') || 'nao especificadas'}.`,
+      '',
+      'Para evitar orientar o atendimento com uma recomendacao rejeitada pelo proprio controle de qualidade, esta resposta nao deve ser usada como parecer tecnico. Consulte a auditoria da execucao para revisar a resposta rejeitada e as evidencias consideradas.',
+    ].join('\n')
+    : resultado.truncado
     ? `${resultado.texto}\n\n⚠️ *Resposta cortada pelo limite de tamanho da IA — peça para "continuar" ou reformule de forma mais objetiva.*`
     : resultado.texto;
 
@@ -662,7 +926,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
       mensagemUsuarioId: mensagemUsuario?.id ?? null,
       provider: resultado.provider,
       model: resultado.model,
-      status: qualityGate?.aprovado ? 'concluido' : 'concluido_com_alerta_quality_gate',
+      status: _statusFinalExecucao({ qualityGate, retryDeQualityGate, respostaTruncada: !!resultado.truncado }),
       manifesto: contexto.manifesto,
       contexto: contexto.contextoResumo,
       pesquisa: pesquisaTecnica,
@@ -785,4 +1049,13 @@ async function processarPreAnalise(empresaId, atendimentoId, { anexoIds = [] } =
   });
 }
 
-module.exports = { processarTurno, processarPreAnalise, _extrairSecoes, _extrairNivelConfianca, _extrairFonteCorrigido };
+module.exports = {
+  processarTurno,
+  processarPreAnalise,
+  _extrairSecoes,
+  _extrairNivelConfianca,
+  _extrairFonteCorrigido,
+  _calcularRevisaoNecessariaQualityGate,
+  _statusFinalQualityGate,
+  _statusFinalExecucao,
+};

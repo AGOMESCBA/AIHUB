@@ -30,6 +30,7 @@ const technicalResearchService = require('../services/technical-research-service
 const radarRefreshService = require('../services/radar-refresh-service');
 const investigacaoExecucaoRepo = require('../repositories/investigacao-execucao-repository');
 const investigacaoDossieService = require('../services/investigacao-dossie-service');
+const trilhaInvestigacaoService = require('../services/trilha-investigacao-service');
 const turnoLockService = require('../services/turno-lock-service');
 const validacaoSolucaoService = require('../services/validacao-solucao-service');
 const validacaoSolucaoRepo = require('../repositories/validacao-solucao-repository');
@@ -215,6 +216,19 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       const atendimento = atendimentoService.getAtendimento(empresaId, req.params.id);
       if (!atendimento) return res.status(404).json({ error: 'Atendimento não encontrado.' });
       res.json(investigacaoDossieService.obterEstadoCompleto(empresaId, req.params.id));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service/atendimentos/:id/trilha', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const atendimento = atendimentoService.getAtendimento(empresaId, req.params.id);
+      if (!atendimento) return res.status(404).json({ error: 'Atendimento não encontrado.' });
+      const limite = Math.min(Number(req.query?.limite) || 20, 100);
+      const execucoes = investigacaoExecucaoRepo.listarPorAtendimento(empresaId, req.params.id, { limite });
+      res.json({ trilha: trilhaInvestigacaoService.montarTrilha(execucoes) });
     } catch (err) {
       _handleErro(res, err);
     }

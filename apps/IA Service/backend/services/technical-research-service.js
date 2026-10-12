@@ -850,8 +850,10 @@ function montarConsultas(ctx = {}) {
     consultas.push(`TOTVS Protheus ${base}`);
     consultas.push(`ADVPL TLPP ${base}`);
   } else if (det.dominio === 'softexpert') {
+    consultas.push(`site:documentation.softexpert.com SoftExpert Workflow API ${base}`);
+    consultas.push(`site:developer.softexpert.com SoftExpert API workflow ${base}`);
+    consultas.push(`site:help.softexpert.com SoftExpert Workflow ${base}`);
     consultas.push(`SoftExpert Workflow ${base}`);
-    consultas.push(`SoftExpert ${base}`);
   } else if (det.dominio === 'integracao') {
     consultas.push(`integração API ${base}`);
     consultas.push(`REST SOAP ${base}`);
@@ -964,7 +966,7 @@ function _rankearResultados(resultados, plano) {
   }).sort((a, b) => b.rankingScore - a.rankingScore || Number(b.oficial) - Number(a.oficial));
 }
 
-function _selecionarTrechoRelevante(raw, plano, { maxChars = 4500, janela = 900 } = {}) {
+function _selecionarTrechoRelevante(raw, plano, { maxChars = 2200, janela = 500 } = {}) {
   const texto = _limparHtml(raw);
   if (texto.length <= maxChars) return { trecho: redigirTexto(texto), omitido: 0, motivo: 'pagina curta' };
   const sinais = plano?.sinaisTecnicos || {};
@@ -1013,8 +1015,15 @@ async function _abrirResultados(resultados, limite = 4, plano = {}, opts = {}) {
   const urlsJaLidas = new Map((plano?.historico?.urlsLidas || []).map(u => [_normalizar(u.url), u]));
   const urlsReutilizadas = [];
   const trechosOmitidos = [];
-  for (const r of ordenados.slice(0, limite)) {
+  const urlsTentadas = new Set();
+  const maxTentativas = Math.max(limite, opts.maxTentativas || limite);
+  for (const r of ordenados) {
+    if (paginas.filter(p => p.status === 'lida' || p.status === 'reutilizada').length >= limite) break;
+    if (paginas.length >= maxTentativas && paginas.some(p => p.status === 'lida' || p.status === 'reutilizada')) break;
+    if (paginas.length >= maxTentativas + 2) break;
     const urlNormalizada = _normalizar(r.url);
+    if (urlsTentadas.has(urlNormalizada)) continue;
+    urlsTentadas.add(urlNormalizada);
     const lidaAntes = urlsJaLidas.get(urlNormalizada);
     const politicaRefresh = _politicaRefreshUrl(lidaAntes, plano, opts);
     if (lidaAntes && !politicaRefresh.deveRefresh) {
@@ -1036,7 +1045,17 @@ async function _abrirResultados(resultados, limite = 4, plano = {}, opts = {}) {
       continue;
     }
     try {
-      const pagina = await safeFetch.fetchTextoSeguro(r[RAW_URL] || r.url);
+      let pagina;
+      try {
+        pagina = await safeFetch.fetchTextoSeguro(r[RAW_URL] || r.url);
+      } catch (err) {
+        const oficial = _fonteOficial(r[RAW_URL] || r.url);
+        if (!oficial || !/limite de download/i.test(String(err.message || ''))) throw err;
+        pagina = await safeFetch.fetchTextoSeguro(r[RAW_URL] || r.url, {
+          maxBytes: Number(process.env.IA_SERVICE_SAFE_FETCH_OFICIAL_MAX_BYTES || 900000),
+          timeoutMs: Number(process.env.IA_SERVICE_SAFE_FETCH_OFICIAL_TIMEOUT_MS || 12000),
+        });
+      }
       const trecho = _selecionarTrechoRelevante(pagina.raw, plano);
       if (trecho.omitido > 0) trechosOmitidos.push({ url: pagina.url, bytesOmitidosEstimados: trecho.omitido, motivo: trecho.motivo });
       paginas.push({
@@ -1375,7 +1394,7 @@ async function pesquisar(ctx = {}, { limitePorConsulta = 3, buscarSerper, buscar
           oficial: r.oficial,
         }));
         const abrir = abrirResultados || _abrirResultados;
-        paginasLidas = await abrir(resultados, 4, plano, { forcarRefresh });
+        paginasLidas = await abrir(resultados, 2, plano, { forcarRefresh, maxTentativas: 6 });
         urlsReutilizadas = paginasLidas.urlsReutilizadas || [];
         trechosOmitidos = paginasLidas.trechosOmitidos || [];
       }
@@ -1491,6 +1510,7 @@ module.exports = {
   _consultasEquivalentes,
   _classificarStatusUrl,
   _politicaRefreshUrl,
+  _abrirResultados,
   _rankearResultados,
   _selecionarTrechoRelevante,
 };

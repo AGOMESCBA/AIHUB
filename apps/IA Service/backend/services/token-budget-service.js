@@ -5,7 +5,13 @@ const MODELOS_CONTEXTO = [
   { padrao: /gemini/i, janela: 100000 },
   { padrao: /claude/i, janela: 200000 },
   { padrao: /deepseek/i, janela: 64000 },
-  { padrao: /gpt-oss|llama|mixtral|groq/i, janela: 32000 },
+  // Groq on-demand para openai/gpt-oss-20b tem limite pratico de TPM menor
+  // que a janela nominal do modelo. Usar a janela nominal fazia o Context
+  // Engine montar prompts que cabiam no modelo, mas eram recusados pela API
+  // por "tokens per minute". O orcamento aqui reflete o envelope operacional
+  // observado e deixa o fallback intacto.
+  { padrao: /gpt-oss|groq/i, janela: 12000 },
+  { padrao: /llama|mixtral/i, janela: 32000 },
 ];
 
 function estimarTokens(texto) {

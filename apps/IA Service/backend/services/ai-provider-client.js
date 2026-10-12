@@ -30,26 +30,50 @@ const PROVIDER_CONFIGS = {
 // falhava com "Resposta vazia do OpenAI-compat", bug real reportado pelo
 // usuário, 2026-10).
 const MIN_TOKENS_RACIOCINIO = 300;
+const GROQ_TPM_SEGURO_ESTIMADO = 4300;
 const DEFAULT_MAX_PROVIDER_ROUNDS = 3;
 
 const DEFAULT_ORDER = ['groq', 'deepseek', 'openai', 'claude', 'gemini'];
 
+// Buffer explícito (não string) no corpo e no Content-Length — achado real,
+// auditoria 2026-10: req.write(bodyStr) com string deixa o Node escolher o
+// encoding da escrita; em payloads grandes (>400KB, ex. turnos com várias
+// imagens em base64) com acentuação em português, um chunk interno de escrita
+// pode cortar um caractere UTF-8 multi-byte exatamente na fronteira, gerando
+// bytes escritos ligeiramente diferentes do Content-Length declarado via
+// Buffer.byteLength(bodyStr). O servidor remoto então espera bytes que nunca
+// completam — conexão trava indefinidamente, sem erro, sem nunca disparar o
+// fallback para o próximo provider (reproduzido e confirmado na auditoria).
+// Buffer.from(bodyStr) elimina essa classe de bug: byteLength e write operam
+// sobre os mesmos bytes já materializados, não sobre a string.
+//
+// AbortController com temporizador próprio (não req.setTimeout) — achado
+// real, mesma auditoria: req.setTimeout é um timeout de INATIVIDADE DO
+// SOCKET, não de duração total da requisição. Uma conexão TCP que o provider
+// mantém "viva" (TCP keepalive) sem nunca enviar os headers de resposta nunca
+// dispara esse timeout, mesmo além do timeoutMs configurado. abort() fecha a
+// conexão de fato, qualquer que seja o estado do socket.
 function _httpPost(hostname, path, headers, body, timeoutMs = 45000) {
   return new Promise((resolve, reject) => {
     const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+    const bodyBuf = Buffer.from(bodyStr, 'utf8');
+    const controller = new AbortController();
+    const prazo = setTimeout(() => controller.abort(new Error(`Timeout de ${Math.round(timeoutMs / 1000)}s excedido.`)), timeoutMs);
     const req = https.request({
       hostname,
       path,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(bodyStr),
+        'Content-Length': bodyBuf.length,
         ...headers,
       },
+      signal: controller.signal,
     }, (res) => {
       let raw = '';
       res.on('data', c => { raw += c; });
       res.on('end', () => {
+        clearTimeout(prazo);
         let parsed;
         try {
           parsed = JSON.parse(raw);
@@ -63,9 +87,11 @@ function _httpPost(hostname, path, headers, body, timeoutMs = 45000) {
         resolve(parsed);
       });
     });
-    req.setTimeout(timeoutMs, () => req.destroy(new Error(`Timeout de ${Math.round(timeoutMs / 1000)}s excedido.`)));
-    req.on('error', reject);
-    req.write(bodyStr);
+    req.on('error', (err) => {
+      clearTimeout(prazo);
+      reject(controller.signal.aborted ? (controller.signal.reason || err) : err);
+    });
+    req.write(bodyBuf);
     req.end();
   });
 }
@@ -74,6 +100,21 @@ function _normalizarTexto(data, providerName) {
   const texto = String(data || '').trim();
   if (!texto) throw new Error(`Resposta vazia do ${providerName}.`);
   return texto;
+}
+
+function _estimarTokensPrompt(systemPrompt, userPrompt) {
+  const texto = [
+    systemPrompt,
+    typeof userPrompt === 'string' ? userPrompt : JSON.stringify(userPrompt || ''),
+  ].join('\n');
+  return Math.ceil(String(texto || '').length / 4);
+}
+
+function _maxTokensAjustadoPorProvider(cfg, systemPrompt, userPrompt, maxTokensPedido) {
+  if (cfg?.hostname !== 'api.groq.com') return maxTokensPedido;
+  const promptEstimado = _estimarTokensPrompt(systemPrompt, userPrompt);
+  const disponivel = GROQ_TPM_SEGURO_ESTIMADO - promptEstimado;
+  return Math.max(MIN_TOKENS_RACIOCINIO, Math.min(maxTokensPedido, disponivel));
 }
 
 // `imagens` é uma lista de { mimeType, base64 } — vazia na maioria das
@@ -106,7 +147,7 @@ async function _chamarOpenAICompatUmaVez(cfg, apiKey, systemPrompt, userPrompt, 
 }
 
 async function _chamarOpenAICompat(cfg, apiKey, systemPrompt, userPrompt, imagens, opts = {}) {
-  const maxTokensPedido = opts.maxTokens || 3000;
+  const maxTokensPedido = _maxTokensAjustadoPorProvider(cfg, systemPrompt, userPrompt, opts.maxTokens || 3000);
   const maxTokensInicial = cfg.usaRaciocinio ? Math.max(maxTokensPedido, MIN_TOKENS_RACIOCINIO) : maxTokensPedido;
 
   let resultado = await _chamarOpenAICompatUmaVez(cfg, apiKey, systemPrompt, userPrompt, imagens, opts, maxTokensInicial);

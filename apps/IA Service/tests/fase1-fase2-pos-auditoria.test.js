@@ -1,4 +1,4 @@
-// Correcoes pos-auditoria Claude Code - A1, M1 e M2.
+﻿// Correcoes pos-auditoria Claude Code - A1, M1 e M2.
 // Executar: node "apps/IA Service/tests/fase1-fase2-pos-auditoria.test.js"
 
 const assert = require('assert');
@@ -106,19 +106,12 @@ function criarAnexoCodigo(empresaId, atendimentoId, nome, conteudo) {
 }
 
 function respostaComFonteCorrigido() {
-  return `**Diagnóstico**
-Hipótese provável sustentada pelo log e pelo fonte.
-
-**Evidências**
-O log mostra array out of bounds e os fontes anexados usam aItens[nPos].
-
-**Correção proposta**
-Corrigir a validação de índice antes do acesso ao array.
+  return `O log mostra array out of bounds na ROTINA_A.PRW e os fontes anexados usam aItens[nPos]. A correcao tecnica e validar o indice antes do acesso ao array e compilar em homologacao reproduzindo a operacao original.
 
 **Fonte corrigido**
 \`\`\`advpl
 #Include "protheus.ch"
-User Function ROTINA()
+User Function ROTINA_A()
 Local aItens := {}
 Local nPos := 1
 If nPos >= 1 .And. nPos <= Len(aItens)
@@ -127,8 +120,8 @@ EndIf
 Return
 \`\`\`
 
-**Validação**
-Compilar em homologação e reproduzir a operação que gerava o erro.`;
+**Validacao**
+Compilar em homologacao e reproduzir a operacao que gerava o erro.`;
 }
 
 function manifestoComEvidencia() {
@@ -138,7 +131,7 @@ function manifestoComEvidencia() {
       tipo: 'anexo',
       nome: 'erro.log',
       status: 'ANALISADA',
-      trecho: 'ERROR array out of bounds na ROTINA.PRW linha 42',
+      trecho: 'ERROR array out of bounds na ROTINA_A.PRW linha 42',
     }],
     omitidos: [],
   };
@@ -155,11 +148,11 @@ async function main() {
       canalEntrada: 'web',
       conteudoBruto: 'Erro array out of bounds em rotina ADVPL.',
     });
-    const prwA = criarAnexoCodigo(EMPRESA, atendimento.id, 'ROTINA_A.PRW', 'User Function A()\nReturn');
-    const prwB = criarAnexoCodigo(EMPRESA, atendimento.id, 'ROTINA_B.PRW', 'User Function B()\nReturn');
+    const prwA = criarAnexoCodigo(EMPRESA, atendimento.id, 'ROTINA_A.PRW', 'User Function ROTINA_A()\nLocal aItens := {}\nLocal nPos := 1\nConOut(aItens[nPos])\nReturn');
+    const prwB = criarAnexoCodigo(EMPRESA, atendimento.id, 'ROTINA_B.PRW', 'User Function ROTINA_B()\nReturn');
 
     const resposta = await comIAFake(respostaComFonteCorrigido(), () => investigacaoService.processarTurno(EMPRESA, atendimento.id, {
-      texto: 'Analise os dois fontes e proponha a correção.',
+      texto: 'Analise os dois fontes e proponha a correÃ§Ã£o.',
       usuarioId: null,
       anexoIds: [prwA.id, prwB.id],
     }));
@@ -176,12 +169,12 @@ async function main() {
     assert.ok(viaRota.respostaOperacional.avisos.some(a => /mais de um anexo/i.test(a)), 'M1: ficha operacional deve receber avisos persistidos');
 
     const respostasComAcao = [
-      'A evidência do log mostra array out of bounds na ROTINA.PRW. Corrija a validação de índice e compile em homologação.',
-      'A evidência do log mostra array out of bounds na ROTINA.PRW. Corrigir a validação de índice e compilar em homologação.',
-      'A evidência do log mostra array out of bounds na ROTINA.PRW. Corrige a validação de índice e teste em homologação.',
-      'A evidência do log mostra array out of bounds na ROTINA.PRW. Fonte corrigido gerado; valide compilando em homologação.',
-      'A evidência do log mostra array out of bounds na ROTINA.PRW. Executar o teste de reprodução após aplicar a correção.',
-      'A evidência do log mostra array out of bounds na ROTINA.PRW. Verificar o índice antes de acessar o array e validar o fluxo.',
+      'A evidÃªncia do log mostra array out of bounds na ROTINA.PRW. Corrija a validaÃ§Ã£o de Ã­ndice e compile em homologaÃ§Ã£o.',
+      'A evidÃªncia do log mostra array out of bounds na ROTINA.PRW. Corrigir a validaÃ§Ã£o de Ã­ndice e compilar em homologaÃ§Ã£o.',
+      'A evidÃªncia do log mostra array out of bounds na ROTINA.PRW. Corrige a validaÃ§Ã£o de Ã­ndice e teste em homologaÃ§Ã£o.',
+      'A evidÃªncia do log mostra array out of bounds na ROTINA.PRW. Fonte corrigido gerado; valide compilando em homologaÃ§Ã£o.',
+      'A evidÃªncia do log mostra array out of bounds na ROTINA.PRW. Executar o teste de reproduÃ§Ã£o apÃ³s aplicar a correÃ§Ã£o.',
+      'A evidÃªncia do log mostra array out of bounds na ROTINA.PRW. Verificar o Ã­ndice antes de acessar o array e validar o fluxo.',
     ];
     for (const texto of respostasComAcao) {
       const gate = qualityGate.avaliarResposta({ textoResposta: texto, manifesto: manifestoComEvidencia() });
@@ -189,25 +182,25 @@ async function main() {
     }
 
     const semAcao = qualityGate.avaliarResposta({
-      textoResposta: 'A evidência do log mostra array out of bounds na ROTINA.PRW.',
+      textoResposta: 'A evidÃªncia do log mostra array out of bounds na ROTINA.PRW.',
       manifesto: manifestoComEvidencia(),
     });
     assert.ok(semAcao.falhas.some(f => f.codigo === 'EVIDENCE_WITHOUT_NEXT_ACTION'), 'A1: resposta sem acao continua bloqueada');
 
     const curtaCompleta = qualityGate.avaliarResposta({
-      textoResposta: 'Log indica array out of bounds na ROTINA.PRW linha 42. Corrigir validação do índice e compilar em homologação reproduzindo o mesmo fluxo.',
+      textoResposta: 'Log indica array out of bounds na ROTINA.PRW linha 42. Corrigir validaÃ§Ã£o do Ã­ndice e compilar em homologaÃ§Ã£o reproduzindo o mesmo fluxo.',
       manifesto: manifestoComEvidencia(),
     });
     assertSemFalha(curtaCompleta, 'GENERIC_RESPONSE_WITH_SPECIFIC_EVIDENCE', 'M2: resposta curta e tecnica completa nao deve ser tratada como generica');
 
     const curtaInconclusiva = qualityGate.avaliarResposta({
-      textoResposta: 'Evidência insuficiente: envie o log completo e o fonte ROTINA.PRW para validar a hipótese.',
+      textoResposta: 'EvidÃªncia insuficiente: envie o log completo e o fonte ROTINA.PRW para validar a hipÃ³tese.',
       manifesto: manifestoComEvidencia(),
     });
     assertSemFalha(curtaInconclusiva, 'GENERIC_RESPONSE_WITH_SPECIFIC_EVIDENCE', 'M2: inconclusiva curta, mas acionavel, deve ser aceita');
 
     const curtaGenerica = qualityGate.avaliarResposta({
-      textoResposta: 'Verifique os logs e envie mais informações.',
+      textoResposta: 'Verifique os logs e envie mais informaÃ§Ãµes.',
       manifesto: manifestoComEvidencia(),
     });
     assert.ok(curtaGenerica.falhas.some(f => f.codigo === 'GENERIC_RESPONSE_WITH_SPECIFIC_EVIDENCE'), 'M2: resposta curta generica continua rejeitada');

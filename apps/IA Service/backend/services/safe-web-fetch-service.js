@@ -97,6 +97,14 @@ async function fetchTextoSeguro(url, opts = {}, _redirects = []) {
 
   return new Promise((resolve, reject) => {
     let finalizado = false;
+    // AbortController em vez de confiar só em req.setTimeout — achado real,
+    // auditoria 2026-10 (mesma causa documentada em ai-provider-client.js:
+    // _httpPost): req.setTimeout mede INATIVIDADE do socket, não duração
+    // total da requisição. Um host que mantém a conexão TCP aberta sem
+    // nunca enviar headers nunca dispara esse timeout. abort() força o
+    // fechamento independente do estado do socket.
+    const controller = new AbortController();
+    const prazo = setTimeout(() => controller.abort(new Error(`Timeout de ${Math.round(cfg.timeoutMs / 1000)}s ao abrir pagina.`)), cfg.timeoutMs);
     const req = lib.request({
       protocol: parsed.protocol,
       hostname: parsed.hostname,
@@ -104,6 +112,7 @@ async function fetchTextoSeguro(url, opts = {}, _redirects = []) {
       path: `${parsed.pathname}${parsed.search}`,
       method: 'GET',
       timeout: cfg.timeoutMs,
+      signal: controller.signal,
       // BUG REAL CONFIRMADO POR TESTE CONTRA REDE REAL (2026-10): o `lookup`
       // custom do Node, quando `options.all` vem true (Node 18+ passa isso
       // por padrão em `https.request`), exige que o callback receba um ARRAY
@@ -150,6 +159,7 @@ async function fetchTextoSeguro(url, opts = {}, _redirects = []) {
           if (bytes > cfg.maxBytes) {
             if (!finalizado) {
               finalizado = true;
+              clearTimeout(prazo);
               reject(new Error('Pagina excede limite de download.'));
             }
             req.destroy(new Error('Pagina excede limite de download.'));
@@ -160,6 +170,7 @@ async function fetchTextoSeguro(url, opts = {}, _redirects = []) {
         res.on('end', () => {
           if (finalizado) return;
           finalizado = true;
+          clearTimeout(prazo);
           resolve({
             url: redactedUrl,
             finalUrl: redactedUrl,
@@ -173,15 +184,16 @@ async function fetchTextoSeguro(url, opts = {}, _redirects = []) {
       } catch (err) {
         if (!finalizado) {
           finalizado = true;
+          clearTimeout(prazo);
           reject(err);
         }
       }
     });
-    req.setTimeout(cfg.timeoutMs, () => req.destroy(new Error(`Timeout de ${Math.round(cfg.timeoutMs / 1000)}s ao abrir pagina.`)));
     req.on('error', err => {
       if (!finalizado) {
         finalizado = true;
-        reject(err);
+        clearTimeout(prazo);
+        reject(controller.signal.aborted ? (controller.signal.reason || err) : err);
       }
     });
     req.end();
@@ -204,6 +216,11 @@ async function resolverRedirectFinal(url, opts = {}, _redirects = []) {
 
   return new Promise((resolve, reject) => {
     let finalizado = false;
+    // AbortController em vez de req.setTimeout — ver comentário em
+    // fetchTextoSeguro acima (mesmo bug: timeout de inatividade de socket,
+    // não de duração total).
+    const controller = new AbortController();
+    const prazo = setTimeout(() => controller.abort(new Error(`Timeout de ${Math.round(cfg.timeoutMs / 1000)}s ao resolver redirect.`)), cfg.timeoutMs);
     const req = lib.request({
       protocol: parsed.protocol,
       hostname: parsed.hostname,
@@ -211,6 +228,7 @@ async function resolverRedirectFinal(url, opts = {}, _redirects = []) {
       path: `${parsed.pathname}${parsed.search}`,
       method: 'HEAD',
       timeout: cfg.timeoutMs,
+      signal: controller.signal,
       // Mesma correção de fetchTextoSeguro acima — ver comentário lá.
       lookup: (hostname, options, cb) => {
         if (options?.all) return cb(null, enderecos);
@@ -225,16 +243,21 @@ async function resolverRedirectFinal(url, opts = {}, _redirects = []) {
           if (_redirects.length >= cfg.maxRedirects) throw new Error('Limite de redirects excedido.');
           const next = new URL(res.headers.location, parsed).toString();
           const final = await resolverRedirectFinal(next, cfg, [..._redirects, parsed.toString()]);
-          if (!finalizado) { finalizado = true; resolve(final); }
+          if (!finalizado) { finalizado = true; clearTimeout(prazo); resolve(final); }
           return;
         }
-        if (!finalizado) { finalizado = true; resolve(parsed.toString()); }
+        if (!finalizado) { finalizado = true; clearTimeout(prazo); resolve(parsed.toString()); }
       } catch (err) {
-        if (!finalizado) { finalizado = true; reject(err); }
+        if (!finalizado) { finalizado = true; clearTimeout(prazo); reject(err); }
       }
     });
-    req.setTimeout(cfg.timeoutMs, () => req.destroy(new Error(`Timeout de ${Math.round(cfg.timeoutMs / 1000)}s ao resolver redirect.`)));
-    req.on('error', err => { if (!finalizado) { finalizado = true; reject(err); } });
+    req.on('error', err => {
+      if (!finalizado) {
+        finalizado = true;
+        clearTimeout(prazo);
+        reject(controller.signal.aborted ? (controller.signal.reason || err) : err);
+      }
+    });
     req.end();
   });
 }

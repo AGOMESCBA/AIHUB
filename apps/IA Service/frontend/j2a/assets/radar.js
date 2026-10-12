@@ -28,6 +28,8 @@
     research: null,
     dossie: null,
     investigations: [],
+    trilha: [],
+    trilhaExpandida: new Set(),
     processing: new Set(),
     chatStatusText: null,
     autoTimer: null,
@@ -462,6 +464,8 @@
     state.research = null;
     state.dossie = null;
     state.investigations = [];
+    state.trilha = [];
+    state.trilhaExpandida = new Set();
     state.localAttachments = [];
     state.softAttachments = [];
     state.messages = [];
@@ -480,6 +484,7 @@
         loadResearch(ticket.id),
         loadDossier(),
         loadInvestigations(),
+        loadTrilha(),
       ]);
       renderAllCaseData();
       if (open.preAnaliseDisparada) pollMessages(60, 3000, 'Aguardando pre-analise automatica da IA...');
@@ -540,6 +545,7 @@
     renderMessages();
     renderEvidence();
     renderKnowledge();
+    renderTrail();
     renderDetails();
     renderSummary();
   }
@@ -590,6 +596,20 @@
     } catch (_) {
       state.investigations = [];
     }
+  }
+
+  async function loadTrilha() {
+    if (!state.atendimentoId) return;
+    try {
+      const body = await request(ext(`/atendimentos/${encodeURIComponent(state.atendimentoId)}/trilha?limite=20`));
+      state.trilha = body.trilha || [];
+      if (state.trilha.length && state.trilhaExpandida.size === 0) {
+        state.trilhaExpandida.add(state.trilha[state.trilha.length - 1].execucaoId);
+      }
+    } catch (_) {
+      state.trilha = [];
+    }
+    renderTrail();
   }
 
   function messageRole(m) {
@@ -710,7 +730,8 @@
       state.pendingFiles = [];
       renderPendingFiles();
       state.messages.push(body);
-      await Promise.allSettled([loadMessages(), loadLocalAttachments(), loadDossier(), loadInvestigations()]);
+      state.trilhaExpandida = new Set();
+      await Promise.allSettled([loadMessages(), loadLocalAttachments(), loadDossier(), loadInvestigations(), loadTrilha()]);
       renderAllCaseData();
     } catch (err) {
       toast(`Nao foi possivel enviar: ${err.message}`);
@@ -760,7 +781,8 @@
           forcarPesquisa: true,
         }),
       });
-      await Promise.allSettled([loadMessages(), loadResearch(state.selected.id), loadDossier(), loadInvestigations()]);
+      state.trilhaExpandida = new Set();
+      await Promise.allSettled([loadMessages(), loadResearch(state.selected.id), loadDossier(), loadInvestigations(), loadTrilha()]);
       renderAllCaseData();
     } catch (err) {
       toast(`Nao foi possivel pesquisar solucoes: ${err.message}`);
@@ -812,6 +834,136 @@
       const q = exec.qualityGate || exec.quality_gate || exec.quality || null;
       const label = q ? 'Validação disponível' : 'Execução registrada';
       return `<div class="summary-item"><span>${escapeHtml(formatDateTime(exec.criadoEm || exec.createdAt))}</span><strong>${escapeHtml(label)}</strong></div>`;
+    }).join('');
+  }
+
+  const TRILHA_STATUS_BADGE = {
+    concluido: 'ok',
+    aprovado: 'ok',
+    alerta: 'warn',
+    bloqueado: 'danger',
+    erro: 'danger',
+    sem_resultado: 'warn',
+    dispensada: '',
+    sem_dado: '',
+    indisponivel: '',
+  };
+
+  function trilhaStatusLabel(status) {
+    const labels = {
+      concluido: 'Concluído',
+      aprovado: 'Aprovado',
+      alerta: 'Alerta',
+      bloqueado: 'Bloqueado',
+      erro: 'Erro',
+      sem_resultado: 'Sem resultado',
+      dispensada: 'Dispensada',
+      sem_dado: 'Sem dado registrado',
+      indisponivel: 'Indisponível',
+    };
+    return labels[status] || status || '-';
+  }
+
+  function trilhaEventoDetalhes(evento) {
+    const d = evento.detalhes;
+    if (!d) return '';
+    if (evento.tipo === 'processamento_anexos') {
+      const linhas = [...(d.processados || []).map((p) => `<div class="summary-item"><span>${escapeHtml(p.nome)}</span><strong>${escapeHtml(p.status)}${p.enviadoComoImagem ? ' · imagem' : ''}</strong></div>`),
+        ...(d.omitidos || []).map((o) => `<div class="summary-item"><span>${escapeHtml(o.nome)}</span><strong>Omitido — ${escapeHtml(o.motivo || o.status)}</strong></div>`)];
+      const observacoesVisuais = (d.observacoesVisuais || []).map((o) => {
+        const textos = [...(o.textosVisiveis || []), ...(o.campos || []), ...(o.valores || [])].slice(0, 6).join(' · ');
+        return `<div class="knowledge-card"><h3>${escapeHtml(o.nome || 'Imagem')}${o.confiancaVisual ? ` · confiança ${escapeHtml(o.confiancaVisual)}` : ''}</h3><p>${escapeHtml(o.observacao || textos || 'Sem observação registrada.')}</p></div>`;
+      }).join('');
+      return linhas.join('') + observacoesVisuais || '<div class="empty-block">Sem anexos nesta execução.</div>';
+    }
+    if (evento.tipo === 'pesquisa_tecnica') {
+      const fontes = (d.fontes || []).map((f) => {
+        const url = safeUrl(f.url);
+        return `<div class="knowledge-card"><h3>${escapeHtml(f.titulo || f.url || 'Fonte')}${f.oficial ? ' · oficial' : ''}</h3><p>Status: ${escapeHtml(f.status || '-')}</p>${url ? `<a class="link-safe" href="${escapeHtml(url)}" target="_blank" rel="noopener">Abrir fonte</a>` : ''}</div>`;
+      }).join('');
+      const tentativas = (d.tentativasBusca || []).map((t) => `<div class="summary-item"><span>${escapeHtml(t.provider)}</span><strong>${escapeHtml(t.status)}${t.latenciaMs ? ` · ${t.latenciaMs}ms` : ''}</strong></div>`).join('');
+      const consultas = (d.consultasExecutadas || []).map((c) => `<div class="summary-item"><span>Consulta</span><strong>${escapeHtml(c)}</strong></div>`).join('');
+      return consultas + tentativas + fontes || '<div class="empty-block">Sem pesquisa registrada.</div>';
+    }
+    if (evento.tipo === 'chamada_provider') {
+      const linhas = [
+        `<div class="summary-item"><span>Provider final</span><strong>${escapeHtml(d.providerFinal || '-')}${d.modelFinal ? ` (${escapeHtml(d.modelFinal)})` : ''}</strong></div>`,
+        `<div class="summary-item"><span>Latência</span><strong>${d.latenciaMs != null ? `${d.latenciaMs}ms` : '-'}</strong></div>`,
+        `<div class="summary-item"><span>Tokens (prompt/resposta)</span><strong>${d.tokensPrompt ?? '-'} / ${d.tokensResposta ?? '-'}</strong></div>`,
+        d.respostaTruncada ? '<div class="summary-item"><span>Aviso</span><strong>Resposta truncada pelo limite de tamanho</strong></div>' : '',
+        ...(d.tentativas || []).map((t) => `<div class="summary-item"><span>Tentativa — ${escapeHtml(t.provider)}${t.model ? ` (${escapeHtml(t.model)})` : ''}</span><strong>${escapeHtml(t.status)}${t.latenciaMs ? ` · ${t.latenciaMs}ms` : ''}${t.erro ? ` · ${escapeHtml(t.erro)}` : ''}</strong></div>`),
+      ];
+      return linhas.filter(Boolean).join('');
+    }
+    if (evento.tipo === 'quality_gate') {
+      const falhas = (d.falhas || []).map((f) => `<div class="summary-item"><span>${escapeHtml(f.codigo)}${f.categoria ? ` · ${escapeHtml(f.categoria)}` : ''}</span><strong>${escapeHtml(f.severidade || '-')}${f.detalhe ? ` · ${escapeHtml(f.detalhe)}` : ''}</strong></div>`).join('');
+      const retry = d.retryCorretivo?.executado
+        ? `<div class="summary-item"><span>Retry corretivo</span><strong>${escapeHtml((d.retryCorretivo.acoes || []).join(', ') || 'executado')}${d.retryCorretivo.falhasAntes?.length ? ` · antes: ${escapeHtml(d.retryCorretivo.falhasAntes.join(', '))}` : ''}${d.retryCorretivo.falhasDepois?.length ? ` · depois: ${escapeHtml(d.retryCorretivo.falhasDepois.join(', '))}` : ' · depois: aprovado'}</strong></div>`
+        : '';
+      const recuperacao = d.recuperacaoDeterministica?.aplicada
+        ? `<div class="summary-item"><span>Recuperação determinística</span><strong>Aplicada${d.recuperacaoDeterministica.modo ? ` · modo ${escapeHtml(d.recuperacaoDeterministica.modo)}` : ''}${d.recuperacaoDeterministica.origem ? ` · origem ${escapeHtml(d.recuperacaoDeterministica.origem)}` : ''}</strong></div>`
+        : '';
+      const revisao = d.revisaoNecessaria ? `<div class="summary-item"><span>Revisão necessária</span><strong>${escapeHtml(d.revisaoNecessaria.motivo || '-')}</strong></div>` : '';
+      return falhas + retry + recuperacao + revisao || '<div class="empty-block">Nenhum ponto de atenção identificado.</div>';
+    }
+    if (evento.tipo === 'leitura_historico') {
+      return [
+        `<div class="summary-item"><span>Mensagens</span><strong>${d.mensagensSelecionadas ?? '-'} de ${d.mensagensDisponiveis ?? '-'} selecionadas</strong></div>`,
+        d.dossieStatus ? `<div class="summary-item"><span>Dossiê técnico</span><strong>${escapeHtml(d.dossieStatus)}${d.dossieStale ? ' · desatualizado' : ''}</strong></div>` : '',
+      ].filter(Boolean).join('');
+    }
+    if (evento.tipo === 'diagnostico_estruturado') {
+      const papeis = Object.entries(d.evidenciasPorPapel || {}).map(([papel, n]) => `${papel}: ${n}`).join(' · ');
+      const linhas = [
+        d.problemaPrincipal ? `<div class="summary-item"><span>Problema principal</span><strong>${escapeHtml(d.problemaPrincipal)}</strong></div>` : '',
+        d.estadoOperacional ? `<div class="summary-item"><span>Estado operacional</span><strong>${escapeHtml(d.estadoOperacional)}</strong></div>` : '',
+        papeis ? `<div class="summary-item"><span>Evidências por papel causal</span><strong>${escapeHtml(papeis)}</strong></div>` : '',
+        ...(d.lacunasInformacao || []).map((l) => `<div class="summary-item"><span>Lacuna</span><strong>${escapeHtml(l)}</strong></div>`),
+        ...(d.acoesParaReduzirIncerteza || []).map((a) => `<div class="summary-item"><span>Ação para reduzir incerteza</span><strong>${escapeHtml(a)}</strong></div>`),
+      ];
+      if (d.planoRespostaRastreavel) {
+        const prr = d.planoRespostaRastreavel;
+        linhas.push(`<div class="summary-item"><span>Plano de Resposta Rastreável</span><strong>${prr.fatosComprovados} fato(s) · ${prr.hipotesesFundamentadas} hipótese(s) · ${prr.termosTecnicosPermitidos} termo(s) técnico(s) permitido(s)</strong></div>`);
+        for (const l of prr.lacunasObrigatorias || []) {
+          linhas.push(`<div class="summary-item"><span>Lacuna obrigatória${l.bloqueiaConclusao ? ' (bloqueante)' : ''}</span><strong>${escapeHtml(l.texto)}</strong></div>`);
+        }
+        if (prr.proximoPassoRecomendado) linhas.push(`<div class="summary-item"><span>Próximo passo recomendado</span><strong>${escapeHtml(prr.proximoPassoRecomendado)}</strong></div>`);
+      }
+      return linhas.filter(Boolean).join('') || '<div class="empty-block">Sem quadro investigativo estruturado.</div>';
+    }
+    return '';
+  }
+
+  function renderTrail() {
+    const content = $('trail-content');
+    if (!content) return;
+    if (!state.trilha.length) {
+      content.innerHTML = '<div class="empty-block">Nenhuma execução de investigação registrada ainda para este atendimento.</div>';
+      return;
+    }
+    content.innerHTML = state.trilha.map((execucao, idx) => {
+      const aberta = state.trilhaExpandida.has(execucao.execucaoId);
+      const badge = TRILHA_STATUS_BADGE[execucao.status] ?? (execucao.status?.includes('alerta') ? 'warn' : execucao.status?.includes('revisao') ? 'danger' : '');
+      const eventosHtml = execucao.eventos.map((evento, eIdx) => {
+        const evBadge = TRILHA_STATUS_BADGE[evento.status] || '';
+        return `
+          <div class="trail-step" data-trail-step="${execucao.execucaoId}:${eIdx}">
+            <button type="button" class="trail-step-head" data-trail-step-toggle="${execucao.execucaoId}:${eIdx}">
+              <span class="trail-step-title">${eIdx + 1}. ${escapeHtml(evento.titulo)}</span>
+              <span class="badge ${escapeHtml(evBadge)}">${escapeHtml(trilhaStatusLabel(evento.status))}</span>
+            </button>
+            <div class="trail-step-summary">${escapeHtml(evento.resumo)}</div>
+            <div class="trail-step-details" hidden>${trilhaEventoDetalhes(evento)}</div>
+          </div>`;
+      }).join('');
+      return `
+        <div class="trail-execution">
+          <button type="button" class="trail-execution-head" data-trail-toggle="${execucao.execucaoId}">
+            <span class="trail-execution-title">Execução investigativa #${state.trilha.length - idx} — ${escapeHtml(formatDateTime(execucao.criadoEm))}</span>
+            <span class="badge ${escapeHtml(badge)}">${escapeHtml(execucao.statusLabel)}</span>
+          </button>
+          <div class="trail-execution-body" ${aberta ? '' : 'hidden'}>${eventosHtml}</div>
+        </div>`;
     }).join('');
   }
 
@@ -1015,13 +1167,14 @@
     state.activePanel = panel;
     document.querySelectorAll('[data-panel-tab]').forEach((btn) => btn.classList.toggle('active', btn.dataset.panelTab === panel));
     $('nav-radar-btn').classList.remove('active');
-    ['conversation', 'evidence', 'knowledge', 'details', 'risk'].forEach((name) => {
+    ['conversation', 'evidence', 'knowledge', 'trail', 'details', 'risk'].forEach((name) => {
       const el = $(`panel-${name}`);
       if (el) el.classList.toggle('active', name === panel);
     });
     $('radar-layout').classList.toggle('summary-auto-collapsed', panel !== 'conversation');
     if (panel === 'risk') loadRisk();
     if (panel === 'knowledge') renderKnowledge();
+    if (panel === 'trail') renderTrail();
   }
 
   function setMobileTarget(target) {
@@ -1152,6 +1305,24 @@
       if (btn) selectTicket(btn.dataset.ticketId);
     });
     $('evidence-content').addEventListener('click', (event) => {
+      const open = event.target.closest('[data-open-url]');
+      if (open) openAttachment(open.dataset.openUrl);
+    });
+    $('trail-content').addEventListener('click', (event) => {
+      const execToggle = event.target.closest('[data-trail-toggle]');
+      if (execToggle) {
+        const id = execToggle.dataset.trailToggle;
+        if (state.trilhaExpandida.has(id)) state.trilhaExpandida.delete(id);
+        else state.trilhaExpandida.add(id);
+        renderTrail();
+        return;
+      }
+      const stepToggle = event.target.closest('[data-trail-step-toggle]');
+      if (stepToggle) {
+        const body = stepToggle.closest('.trail-step').querySelector('.trail-step-details');
+        if (body) body.hidden = !body.hidden;
+        return;
+      }
       const open = event.target.closest('[data-open-url]');
       if (open) openAttachment(open.dataset.openUrl);
     });

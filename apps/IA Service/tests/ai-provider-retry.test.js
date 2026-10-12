@@ -24,13 +24,14 @@ function instalarMockHttps(respostasPorHost) {
 
   https.request = (options, cb) => {
     const req = new EventEmitter();
-    req.write = () => {};
+    let bodyStr = '';
+    req.write = chunk => { bodyStr += String(chunk || ''); };
     req.setTimeout = () => {};
     req.destroy = err => req.emit('error', err);
     req.end = () => {
       const fila = filaUnica || respostasPorHost[options.hostname];
       const resposta = fila && fila.shift();
-      chamadas.push({ hostname: options.hostname, path: options.path, resposta });
+      chamadas.push({ hostname: options.hostname, path: options.path, resposta, body: bodyStr });
       process.nextTick(() => {
         if (!resposta) {
           req.emit('error', new Error(`Mock sem resposta configurada para ${options.hostname}`));
@@ -128,6 +129,29 @@ async function testarPrimarioComSucesso() {
     );
     assert.strictEqual(r.provider, 'groq');
     assert.strictEqual(mock.chamadas.length, 1, 'sucesso no primario nao deve acionar fallback');
+  } finally {
+    mock.restaurar();
+  }
+}
+
+async function testarGroqAjustaMaxTokensPeloPrompt() {
+  const promptGrande = 'x'.repeat(19000);
+  const mock = instalarMockHttps([
+    { body: { choices: [{ message: { content: 'ok groq com budget ajustado' }, finish_reason: 'stop' }], usage: {} } },
+  ]);
+  try {
+    const r = await aiProviderClient.chamarIA(
+      { groq: 'g-key' },
+      { provedorPrimario: 'groq', fallbackOrdem: 'groq', modelos: { groq: 'openai/gpt-oss-20b' } },
+      'system',
+      promptGrande,
+      [],
+      { maxTokens: 6000, maxProviderRounds: 1, providerRetryDelayMs: 0 }
+    );
+    const body = JSON.parse(mock.chamadas[0].body);
+    assert.strictEqual(r.provider, 'groq');
+    assert.ok(body.max_tokens < 6000, 'Groq deve reduzir max_tokens quando o prompt e grande');
+    assert.ok(body.max_tokens >= 300, 'Groq deve manter piso minimo para modelo de raciocinio responder');
   } finally {
     mock.restaurar();
   }
@@ -367,6 +391,7 @@ async function main() {
   await testarRetryTransitorioAteSucesso();
   await testarErroPermanenteNaoRetenta();
   await testarPrimarioComSucesso();
+  await testarGroqAjustaMaxTokensPeloPrompt();
   await testarPrimario429CaiParaProximoProvider();
   await testarTimeoutNoPrimarioCaiParaFallback();
   await testarRateLimitComLinkDeBillingNaoEhPermanente();
@@ -375,7 +400,7 @@ async function main() {
   await testarErroTlsGlobalInterrompeSequencia();
   testarRespostaRejeitadaPeloQualityGateNaoEhValidada();
   await testarIsolamentoMultiempresaDuranteFallbackConcorrente();
-  console.log('ai-provider-retry.test.js: ok (11 cenarios)');
+  console.log('ai-provider-retry.test.js: ok (12 cenarios)');
 }
 
 main().catch(err => {

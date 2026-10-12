@@ -8,6 +8,7 @@ const { Readable } = require('stream');
 
 const database = require('../backend/database');
 const atendimentoRepo = require('../backend/repositories/atendimento-repository');
+const mensagemRepo = require('../backend/repositories/mensagem-repository');
 const anexoRepo = require('../backend/repositories/anexo-repository');
 const execucaoRepo = require('../backend/repositories/investigacao-execucao-repository');
 const { redigirTexto, redigirValor } = require('../backend/services/redaction-service');
@@ -77,7 +78,7 @@ function manifestoBaseSelecionado() {
   };
 }
 
-async function executarTurnoComContextos({ empresaId, atendimento, contextos, respostaFinal = 'Resposta final com evidencias especificas, stack trace e linha 10.' }) {
+async function executarTurnoComContextos({ empresaId, atendimento, contextos, respostaFinal = 'Resposta final com evidencias especificas, stack trace e linha 10.', respostas = null, automatico = false }) {
   const oldResolver = aiConfigService.resolverKeysEOrdem;
   const oldPesquisar = technicalResearchService.pesquisar;
   const oldFormatar = technicalResearchService.formatarContextoParaPrompt;
@@ -106,9 +107,11 @@ async function executarTurnoComContextos({ empresaId, atendimento, contextos, re
     req.end = () => {
       const body = JSON.parse(raw);
       chamadas.push({ hostname: options.hostname, body });
-      const texto = chamadas.length === 1
-        ? 'Recomendo verificar os logs e envie mais informações.'
-        : respostaFinal;
+      const texto = respostas
+        ? respostas[Math.min(chamadas.length - 1, respostas.length - 1)]
+        : chamadas.length === 1
+          ? 'Recomendo verificar os logs e envie mais informações.'
+          : respostaFinal;
       process.nextTick(() => cb(fakeProviderResponse(texto)));
     };
     return req;
@@ -119,6 +122,7 @@ async function executarTurnoComContextos({ empresaId, atendimento, contextos, re
       texto: 'Analise o chamado',
       usuarioId: null,
       anexoIds: [],
+      automatico,
     });
     return chamadas;
   } finally {
@@ -253,6 +257,36 @@ async function main() {
     const execPdf = execucaoRepo.listarPorAtendimento(9803, atendimentoPdf.id)[0];
     assert.ok(execPdf.manifesto.selecionados.some(e => e.id === anexoPdf.id && e.enviadoComoImagem === true && e.pdfPaginasEnviadas.includes(1)));
     assert.strictEqual(execPdf.qualityGate.retryCorretivo.executado, true);
+
+    const atendimentoGate = atendimentoRepo.criarAtendimento(9804, { origem: 'manual', canalEntrada: 'web', conteudoBruto: 'rateio com erro' });
+    mensagemRepo.salvarMensagem(9804, atendimentoGate.id, { papel: 'customer', conteudo: 'Rateio de notas fica em 100% mesmo informando valores corretos.' });
+    mensagemRepo.salvarMensagem(9804, atendimentoGate.id, { papel: 'user', conteudo: 'Foi realizada chamada via google meet para demonstrar o problema.' });
+    mensagemRepo.salvarMensagem(9804, atendimentoGate.id, { papel: 'user', conteudo: 'Retornando chamado para Fabrica.' });
+
+    await executarTurnoComContextos({
+      empresaId: 9804,
+      atendimento: atendimentoGate,
+      automatico: true,
+      respostas: [
+        'Sugiro abrir uma Fabrica para investigar melhor o rateio.',
+        'Sugiro abrir uma Fabrica para investigar melhor o rateio.',
+      ],
+      contextos: [
+        () => ({
+          userPrompt: 'tentativa 1 operacional redundante',
+          imagensSelecionadas: [],
+          pdfsVisuaisSelecionados: [],
+          manifesto: { ...manifestoBaseSelecionado(), selecionados: [], omitidos: [] },
+          contextoResumo: { tokensEstimadosPrompt: 10 },
+        }),
+      ],
+    });
+    const execGate = execucaoRepo.listarPorAtendimento(9804, atendimentoGate.id)[0];
+    const msgGate = mensagemRepo.getMensagem(9804, execGate.mensagemId);
+    assert.strictEqual(execGate.status, 'revisao_necessaria_quality_gate', 'resposta ainda reprovada apos retry deve exigir revisao');
+    assert.strictEqual(execGate.qualityGate.aprovado, false);
+    assert.ok(execGate.qualityGate.revisaoNecessaria.respostaRejeitada.includes('Sugiro abrir uma Fabrica'), 'resposta rejeitada deve ficar preservada para auditoria');
+    assert.ok(msgGate.conteudo.includes('bloqueada para revisao'), 'mensagem apresentada nao deve parecer orientacao tecnica aprovada');
   } finally {
     database.fecharDB();
     for (const empresaDir of ['9802', '9803']) {

@@ -33,27 +33,14 @@ const EMPRESA_A = 99101;
 const EMPRESA_B = 99102;
 
 function respostaIA(fonteCorrigido) {
-  return `**Diagnóstico**
-O erro vem do uso de cRet sem inicializacao antes do retorno.
-
-**Causa provável**
-Causa confirmada pelo log e pelo fonte anexado.
-
-**Evidências**
-O PRW anexado retorna cRet sem inicializar a variavel.
-
-**Correção proposta**
-Inicializar cRet antes do retorno.
+  return `O PRW anexado retorna cRet sem inicializar a variavel. A correcao tecnica e inicializar cRet antes do retorno e validar em homologacao no mesmo fluxo que gerava o erro.
 
 **Fonte corrigido**
 \`\`\`advpl
 ${fonteCorrigido}
 \`\`\`
 
-**Alterações realizadas**
-Incluida inicializacao de cRet.
-
-**Validação**
+**Validacao**
 Aplicar em homologacao e executar novamente o fluxo que gerava o erro.`;
 }
 

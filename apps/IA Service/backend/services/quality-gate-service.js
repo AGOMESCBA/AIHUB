@@ -1,6 +1,65 @@
 'use strict';
 
 const investigativeDiscipline = require('./investigative-discipline-service');
+const planoRespostaRastreavel = require('./plano-resposta-rastreavel-service');
+
+const DECISAO_QG = {
+  BLOQUEIO_OBJETIVO: 'bloqueio_objetivo',
+  SUSPEITA_SEMANTICA: 'suspeita_semantica',
+  EVIDENCIA_INSUFICIENTE: 'evidencia_insuficiente',
+  CORRECAO_ESTILO: 'correcao_estilo',
+};
+
+function _comDecisao(falha, decisao) {
+  if (!falha) return falha;
+  return {
+    ...falha,
+    decisionKind: falha.decisionKind || decisao,
+    categoriaDecisao: falha.categoriaDecisao || decisao,
+  };
+}
+
+function _classificarFalha(falha) {
+  if (!falha || falha.decisionKind) return falha;
+  const codigo = falha.codigo;
+  const estilo = new Set([
+    'ROBOTIC_TEMPLATE_RESPONSE',
+    'WEAK_ACTIONABLE_CORRECTION',
+    'SPECIFIC_ERROR_NOT_PRIORITIZED',
+    'GENERIC_RESPONSE_WITH_SPECIFIC_EVIDENCE',
+    'VISUAL_EVIDENCE_TOO_GENERIC',
+    'CORRECTION_WITHOUT_VALIDATION',
+    'EVIDENCE_WITHOUT_NEXT_ACTION',
+    'RETRY_CONTEXT_LEAKED',
+  ]);
+  const objetivo = new Set([
+    'INTERNAL_IDS_USED_AS_EVIDENCE',
+    'UNSUPPORTED_OPERATIONAL_COUNT',
+    'REDUNDANT_OPERATIONAL_ESCALATION',
+    'REDUNDANT_OPERATIONAL_MEETING',
+    'OPERATIONAL_ESCALATION_TREATED_AS_RESOLUTION',
+    'INCIDENTAL_EVIDENCE_PROMOTED_WITHOUT_CAUSAL_BRIDGE',
+    'INVESTIGATIVE_FRAME_OPERATIONAL_STAGE_IGNORED',
+    'CUSTOMIZATION_DISCARDED_WITHOUT_CODE_OR_LOG',
+    'EXTERNAL_PENDING_DEPENDENCY_IGNORED',
+    'ATTACHMENT_NOT_ANALYZED',
+    'CRITICAL_EVIDENCE_OMITTED',
+    'FACTUAL_CONTRADICTION_WITH_MISSING_EVIDENCE',
+    'TRUNCATED_RESPONSE_INCOMPLETE',
+    'OVERCONFIDENT_CAUSE_WITH_PARTIAL_SOURCE',
+    'HYPOTHESIS_PROMOTED_TO_CONFIRMED_CAUSE',
+  ]);
+  if (estilo.has(codigo)) return _comDecisao(falha, DECISAO_QG.CORRECAO_ESTILO);
+  if (objetivo.has(codigo)) return _comDecisao(falha, DECISAO_QG.BLOQUEIO_OBJETIVO);
+  if (codigo === 'UNTRACEABLE_TECHNICAL_REFERENCE' && falha.motivoRastreabilidade === 'visual_sem_observacao_estruturada') {
+    return _comDecisao(falha, DECISAO_QG.EVIDENCIA_INSUFICIENTE);
+  }
+  if (codigo === 'EXTERNAL_REFERENCE_PRESENTED_AS_CASE_EVIDENCE') {
+    return _comDecisao(falha, DECISAO_QG.SUSPEITA_SEMANTICA);
+  }
+  if (codigo === 'UNTRACEABLE_TECHNICAL_REFERENCE') return _comDecisao(falha, DECISAO_QG.BLOQUEIO_OBJETIVO);
+  return _comDecisao(falha, DECISAO_QG.SUSPEITA_SEMANTICA);
+}
 
 function _temRespostaGenerica(texto) {
   const s = String(texto || '').toLowerCase();
@@ -81,8 +140,9 @@ function _acaoIgnoraErroMaisEspecifico(texto) {
 }
 
 function _citaIdsInternosComoEvidencia(texto) {
-  const s = String(texto || '');
-  return /\b(log|logs|mensagens?)\b[\s\S]{0,120}\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i.test(s);
+  const s = String(texto || '').replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g, '-');
+  return /\b(log|logs|mensagens?|anexos?|evidencias?)\b[\s\S]{0,160}\b(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|aud-(?:msg|an|at|ch)-[a-z0-9-]+)\b/i.test(s)
+    || /\baud-(?:msg|an|at|ch)-[a-z0-9-]+\b/i.test(s);
 }
 
 // Verifica se a resposta reconheceu uma pendencia de retorno externo
@@ -108,7 +168,12 @@ function _ignoraPendenciaExternaBloqueante(textoResposta, manifesto) {
 
 function _descartaCustomizacaoSemBase(textoResposta, manifesto) {
   const s = _normalizar(textoResposta);
-  const descarta = /nao por customizacao|nao e customizacao|erro e gerado pelo proprio protheus|comportamento padrao do protheus/.test(s);
+  const reconheceLimite = /\b(sem|nao ha|nao temos|nao veio|nao mostra|nao mostram|falt[ao]?)\b[\s\S]{0,120}\b(fonte|codigo|log|gatilho|ponto de entrada|pe|configuracao)\b/i.test(s)
+    || /\b(nao da para afirmar|nao e possivel afirmar|nao consigo afirmar|precisa conferir|preciso conferir|hipotese|possivel|a validar|falta confirmar)\b/i.test(s);
+  const discuteCondicional = /\b(pode ser|poderia ser|pode existir|hipotese|possivel|a validar|gatilho|ponto de entrada|pe|fonte)\b[\s\S]{0,140}\b(customizacao|comportamento padrao|produto padrao|protheus)\b/i.test(s)
+    || /\b(customizacao|comportamento padrao|produto padrao|protheus)\b[\s\S]{0,140}\b(pode ser|poderia ser|hipotese|possivel|a validar|gatilho|ponto de entrada|pe|fonte)\b/i.test(s);
+  if (reconheceLimite || discuteCondicional) return false;
+  const descarta = /nao por customizacao|nao e customizacao|nao se trata de customizacao|descarto customizacao|customizacao descartada|erro e gerado pelo proprio protheus|comportamento padrao do protheus|produto padrao do protheus/.test(s);
   if (!descarta) return false;
   const selecionados = manifesto?.selecionados || [];
   const temFonteOuLog = selecionados.some(e => {
@@ -137,6 +202,447 @@ function _temJustificativa(texto) {
 
 function _paginasLidasOuReutilizadas(pesquisa) {
   return (pesquisa?.paginasLidas || []).filter(p => p.status === 'lida' || p.status === 'reutilizada');
+}
+
+function _corpusInterno(manifesto, pergunta, historicoMensagens) {
+  return [
+    pergunta,
+    ...(historicoMensagens || []).map(m => m.conteudo || ''),
+    ...(manifesto?.observacoesVisuais || []).map(o => [
+      o.nome,
+      o.anexoId,
+      ...(o.textosVisiveis || []),
+      ...(o.campos || []),
+      ...(o.valores || []),
+      o.observacao,
+    ].filter(Boolean).join(' ')),
+    ...(manifesto?.selecionados || []).map(e => [
+      e.nome,
+      e.trecho,
+      e.resumo,
+      e.conteudo,
+      e.conteudoExtraido,
+      e.textoObservado,
+      e.observacaoVisual,
+      e.evidenciaVisual,
+      e.visual?.texto,
+      e.visual?.observacao,
+    ].filter(Boolean).join(' ')),
+    JSON.stringify(manifesto?.dossie || {}),
+    JSON.stringify(manifesto?.quadroInvestigativo || {}),
+  ].filter(Boolean).join('\n');
+}
+
+function _avaliarContradicaoComEvidenciaAusente(textoResposta, manifesto, pergunta, historicoMensagens) {
+  const corpus = _normalizar(_corpusInterno(manifesto, pergunta, historicoMensagens));
+  const resposta = _normalizar(textoResposta);
+  const falhas = [];
+
+  const ausencias = [
+    {
+      item: 'XML original/completo',
+      ausente: /\b(xml|arquivo xml)\b[\s\S]{0,80}\b(nao|sem|ausente|falt|pendente|indisponivel)\b[\s\S]{0,80}\b(anexad|enviad|disponibiliz|consta|recebid|incluid|fornecid)|\b(nao|sem|ausente|falt|pendente|indisponivel)\b[\s\S]{0,80}\b(xml|arquivo xml)\b[\s\S]{0,80}\b(anexad|enviad|disponibiliz|consta|recebid|incluid|fornecid)/i,
+      contradiz: /\b(pdf|anexo|retorno|evidencia|arquivo)\b[\s\S]{0,80}\b(contem|traz|inclui|mostra|apresenta|possui)\b[\s\S]{0,80}\b(xml completo|xml original|arquivo xml completo)\b|\b(xml completo|xml original|arquivo xml completo)\b[\s\S]{0,80}\b(foi anexad|foi enviad|esta anexad|consta no|veio no|aparece no|esta no pdf|esta no anexo)\b/i,
+    },
+    {
+      item: 'log TSS/completo',
+      ausente: /\b(log tss|log completo|log)\b[\s\S]{0,80}\b(nao|sem|ausente|falt|pendente|indisponivel)\b[\s\S]{0,80}\b(anexad|enviad|disponibiliz|consta|recebid|incluid|fornecid)|\b(nao|sem|ausente|falt|pendente|indisponivel)\b[\s\S]{0,80}\b(log tss|log completo|log)\b[\s\S]{0,80}\b(anexad|enviad|disponibiliz|consta|recebid|incluid|fornecid)/i,
+      contradiz: /\b(pdf|anexo|retorno|evidencia|arquivo)\b[\s\S]{0,80}\b(contem|traz|inclui|mostra|apresenta|possui)\b[\s\S]{0,80}\b(log tss|log completo)\b|\b(log tss|log completo)\b[\s\S]{0,80}\b(foi anexad|foi enviad|esta anexad|consta no|veio no|aparece no|esta no pdf|esta no anexo)\b/i,
+    },
+    {
+      item: 'fonte/codigo',
+      ausente: /\b(fonte|codigo|prw|tlpp)\b[\s\S]{0,80}\b(nao|sem|ausente|falt|pendente|indisponivel)\b[\s\S]{0,80}\b(anexad|enviad|disponibiliz|consta|recebid|incluid|fornecid)|\b(nao|sem|ausente|falt|pendente|indisponivel)\b[\s\S]{0,80}\b(fonte|codigo|prw|tlpp)\b[\s\S]{0,80}\b(anexad|enviad|disponibiliz|consta|recebid|incluid|fornecid)/i,
+      contradiz: /\b(fonte completo|codigo completo|prw completo|tlpp completo)\b[\s\S]{0,80}\b(foi anexad|foi enviad|esta anexad|consta no|veio no|aparece no|esta no anexo)\b|\b(anexo|arquivo)\b[\s\S]{0,80}\b(contem|traz|inclui|mostra|apresenta|possui)\b[\s\S]{0,80}\b(fonte completo|codigo completo|prw completo|tlpp completo)\b/i,
+    },
+  ];
+
+  for (const regra of ausencias) {
+    if (!regra.ausente.test(corpus)) continue;
+    if (!regra.contradiz.test(resposta)) continue;
+    falhas.push({
+      codigo: 'FACTUAL_CONTRADICTION_WITH_MISSING_EVIDENCE',
+      severidade: 'alta',
+      evidencia: regra.item,
+      detalhe: `resposta afirmou disponibilidade/conteudo de evidencia explicitamente ausente: ${regra.item}`,
+      acaoCorretiva: 'corrigir_fato_e_tratar_item_como_lacuna_investigativa',
+    });
+  }
+  return falhas;
+}
+
+function _avaliarCertezaIndevidaComEvidenciaParcial(textoResposta, manifesto, pergunta, historicoMensagens) {
+  const corpus = _normalizar(_corpusInterno(manifesto, pergunta, historicoMensagens));
+  const resposta = _normalizar(textoResposta);
+  const falhas = [];
+
+  const fonteParcial = /\b(trecho do fonte|trecho de fonte|fonte parcial|linhas?\s+\d+\s+a\s+\d+|arquivo completo nao|fonte completo nao|faltam? linhas?|preciso ver o fonte completo|precisa ver o fonte completo)\b/i.test(corpus);
+  if (fonteParcial) {
+    const padroesConclusivos = [
+      /\b(a causa tecnica e|a causa e|causa direta|ponte causal e direta|isso e o erro|esse e o erro|resolve o erro especifico|corrige o erro especifico)\b[\s\S]{0,180}\b(local|declaracao|declarar|escopo|variavel|cseriedanfe)\b/gi,
+      /\b(a causa esta clara|causa esta clara|causa clara)\b[\s\S]{0,220}\b(local|declaracao|declarar|escopo|variavel|cseriedanfe|fonte|log)\b/gi,
+      /\b(local|declaracao|declarar|escopo|variavel|cseriedanfe)\b[\s\S]{0,180}\b(e a causa|causa tecnica|resolve o erro|corrige o erro|nao existe no escopo)\b/gi,
+    ];
+    let conclusaoIndevida = false;
+    for (const padrao of padroesConclusivos) {
+      let match;
+      while ((match = padrao.exec(resposta)) !== null) {
+        const janela = resposta.slice(Math.max(0, match.index - 80), Math.min(resposta.length, match.index + match[0].length + 120));
+        const conclusaoForte = /\b(a causa tecnica e|a causa e|a causa esta clara|causa esta clara|causa clara|ponte causal e direta|isso e o erro|esse e o erro|resolve o erro especifico|corrige o erro especifico)\b/i.test(janela);
+        const limitadorLocal = /\b(hipotese|a validar|se confirmado|se nao houver|precisa confirmar|preciso confirmar|confirmar no fonte completo|verificar no fonte completo|teste controlado)\b/i.test(janela);
+        if (conclusaoForte || !limitadorLocal) {
+          conclusaoIndevida = true;
+          break;
+        }
+      }
+      if (conclusaoIndevida) break;
+    }
+    if (conclusaoIndevida) {
+      falhas.push({
+        codigo: 'OVERCONFIDENT_CAUSE_WITH_PARTIAL_SOURCE',
+        severidade: 'media',
+        detalhe: 'resposta promoveu conclusao de escopo/variavel a causa confirmada apesar de haver apenas trecho de fonte ou fonte incompleto',
+        acaoCorretiva: 'rebaixar_para_hipotese_e_exigir_fonte_completo_compilacao_e_teste_controlado',
+      });
+    }
+  }
+
+  const softExpertWorkflow = /\bsoftexpert|workflow|callback|activity|act-validacao|pending responsible role resolution|responsible role\b/i.test(corpus);
+  if (softExpertWorkflow) {
+    const padraoAutorizacao = /\b(autorizacao|autoriza[cç][aã]o|permissao|permiss[aã]o|papel|role|responsavel|responsabilidade)\b[\s\S]{0,140}\b(bloqueia|bloqueando|impede|impedindo|falha|falhando|explica por que|causa)\b|\b(bloqueia|bloqueando|impede|impedindo|explica por que|causa)\b[\s\S]{0,140}\b(autorizacao|autoriza[cç][aã]o|permissao|permiss[aã]o|papel|role|responsavel|responsabilidade)\b/gi;
+    let match;
+    while ((match = padraoAutorizacao.exec(resposta)) !== null) {
+      const janela = resposta.slice(Math.max(0, match.index - 90), Math.min(resposta.length, match.index + match[0].length + 90));
+      const contemLimitador = /\b(pode|poderia|hipotese|hipótese|provavel|provável|sinal|sugere|a confirmar|validar|verificar|se|preciso|falta|sem evid[eê]ncia conclusiva|nao da para afirmar|não dá para afirmar)\b/i.test(janela);
+      if (contemLimitador) continue;
+      falhas.push({
+        codigo: 'HYPOTHESIS_PROMOTED_TO_CONFIRMED_CAUSE',
+        severidade: 'media',
+        detalhe: 'resposta tratou permissao/papel/responsavel como causa confirmada sem log interno ou configuracao do workflow',
+        acaoCorretiva: 'apresentar_como_hipotese_e_pedir_log_interno_configuracao_da_atividade_e_permissoes',
+      });
+      break;
+    }
+  }
+  return falhas;
+}
+
+// Detecta afirmacao numerica que nao fecha aritmeticamente — achado real,
+// auditoria 2026-10 (caso 035635): resposta afirmou que a diferenca de saldo
+// de R$ 61.487,96 "corresponde a" duas aplicacoes CDB citadas (R$
+// 11.117.500,00 + R$ 145.500,00 = R$ 11.263.000,00), uma discrepancia de
+// ~184x. O Quality Gate so reprovou por estilo (ROBOTIC_TEMPLATE_RESPONSE),
+// nunca verificou se a conta de fato fecha. Diferente dos detectores de
+// "certeza indevida" existentes (_avaliarCertezaIndevidaComEvidenciaParcial),
+// que dependem de vocabulario fixo de dois cenarios especificos, esta
+// checagem e puramente aritmetica: extrai valores monetarios de ambos os
+// lados de uma frase de correspondencia/soma e confere o calculo com
+// tolerancia de 1% (ou R$1, o que for maior) para arredondamento legitimo —
+// nao bloqueia por palavra isolada, soh quando o numero realmente nao bate.
+function _extrairValoresMonetarios(trecho) {
+  // Aceita "R$ 1.234,56" ou numero solto no padrao BR "1.234,56" (ex. dentro
+  // de parenteses listando valores somados) — achado real, auditoria
+  // 2026-10: a resposta real citava os valores somados SEM o prefixo "R$"
+  // repetido ("11.117.500,00 + 145.500,00"), so a diferenca tinha "R$".
+  const matches = String(trecho || '').match(/(?:R\$\s*)?-?\d{1,3}(?:\.\d{3})*,\d{2}/g) || [];
+  return matches.map(m => {
+    const limpo = m.replace(/R\$\s*/, '').replace(/\./g, '').replace(',', '.');
+    return Number(limpo);
+  }).filter(n => Number.isFinite(n));
+}
+
+function _avaliarConsistenciaAritmetica(textoResposta) {
+  const falhas = [];
+  const s = String(textoResposta || '');
+  const padraoCorrespondencia = /\bdiferen[cç]a[\s\S]{0,60}(?:R\$\s*)?-?\d{1,3}(?:\.\d{3})*,\d{2}[\s\S]{0,40}\b(?:que\s+)?corresponde(?:m)?\s+a\b[\s\S]{0,220}/gi;
+  let match;
+  while ((match = padraoCorrespondencia.exec(s)) !== null) {
+    const trecho = match[0];
+    const valores = _extrairValoresMonetarios(trecho);
+    if (valores.length < 2) continue;
+    const diferencaAfirmada = Math.abs(valores[0]);
+    const somaDemaisValores = valores.slice(1).reduce((acc, v) => acc + Math.abs(v), 0);
+    const tolerancia = Math.max(1, diferencaAfirmada * 0.01);
+    if (Math.abs(somaDemaisValores - diferencaAfirmada) > tolerancia) {
+      falhas.push({
+        codigo: 'ARITHMETIC_CLAIM_DOES_NOT_RECONCILE',
+        severidade: 'alta',
+        detalhe: `resposta afirmou que valores somam/correspondem a uma diferenca de R$ ${diferencaAfirmada.toFixed(2)}, mas a soma dos valores citados e R$ ${somaDemaisValores.toFixed(2)} — a conta nao fecha`,
+        trecho: compactarTrechoAritmetico(trecho),
+        decisionKind: DECISAO_QG.BLOQUEIO_OBJETIVO,
+        categoriaDecisao: DECISAO_QG.BLOQUEIO_OBJETIVO,
+        acaoCorretiva: 'corrigir_o_calculo_ou_remover_a_afirmacao_de_correspondencia_numerica',
+      });
+    }
+  }
+  return falhas;
+}
+
+function compactarTrechoAritmetico(trecho, max = 240) {
+  const s = String(trecho || '').replace(/\s+/g, ' ').trim();
+  return s.length <= max ? s : `${s.slice(0, max - 3)}...`;
+}
+
+function _corpusPesquisa(pesquisa) {
+  return [
+    ...(pesquisa?.paginasLidas || []).map(p => [p.titulo, p.url, p.trecho].filter(Boolean).join(' ')),
+    ...(pesquisa?.resultados || []).map(p => [p.titulo, p.url, p.trecho].filter(Boolean).join(' ')),
+    JSON.stringify(pesquisa?.plano || {}),
+  ].filter(Boolean).join('\n');
+}
+
+const UI_ACOES = new Set(['INCLUIR', 'ALTERAR', 'VISUALIZAR', 'CONSULTAR', 'EXCLUIR', 'CONFIRMAR', 'CANCELAR', 'SALVAR', 'FECHAR']);
+
+function _tipoIdentificadorTecnico(termo) {
+  const t = String(termo || '').toUpperCase();
+  if (UI_ACOES.has(t)) return 'UI_ACAO';
+  if (/^MV_[A-Z0-9_]+$/.test(t)) return 'PARAMETRO';
+  if (/^U_[A-Z0-9_]+$/.test(t)) return 'FUNCAO_CUSTOM';
+  if (/^SIGA[A-Z0-9]+$/.test(t)) return 'MODULO';
+  if (/^[A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_.]*$/.test(t)) return 'ARQUIVO_FONTE';
+  if (/^(?:MATA|FINA|PGCA|OMSA|GPEA|CTBA|CNTA|ATFA|COMA|FATA|OM)[A-Z0-9_]*\d[A-Z0-9_]*$/.test(t)) return 'ROTINA_PROTHEUS';
+  if (/^(?:SX[235]|S[A-Z0-9]{2}|B1_[A-Z0-9_]+|F1_[A-Z0-9_]+|D1_[A-Z0-9_]+)$/.test(t)) return 'TABELA_CAMPO';
+  if (/^[A-Z][A-Z0-9_]{2,}_[A-Z0-9_]+$/.test(t)) return 'FUNCAO_CUSTOM';
+  if (/^[A-Z]{3,}\d{2,}[A-Z0-9_]*$/.test(t)) return 'ROTINA_OU_CODIGO';
+  if (/APP$|EXECUTE|CALL|STACK|TRACE/.test(t)) return 'FUNCAO_STACK';
+  return 'TERMO_COMUM_MAIUSCULO';
+}
+
+function _extrairIdentificadoresTecnicosDetalhados(texto) {
+  const s = String(texto || '');
+  const encontrados = s.match(/\b(?:MV_[A-Z0-9_]+|U_[A-Z0-9_]+|SIGA[A-Z0-9]+|[A-Z]{3,}\d{2,}[A-Z0-9_]*|[A-Z][A-Z0-9_]{2,}_[A-Z0-9_]+|[A-Z]{2,}[A-Z0-9_]{3,}|[A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_.]*)\b/g) || [];
+  const ignorar = new Set(['TOTVS', 'PROTHEUS', 'SOFTEXPERT', 'PDF', 'PNG', 'JPG', 'XML', 'JSON', 'HTTP', 'HTTPS', 'SLA', 'IA', 'API']);
+  const termos = [...new Set(encontrados.map(t => t.toUpperCase()).filter(t => !ignorar.has(t) && t.length >= 5))];
+  return termos.map(termo => ({ termo, tipo: _tipoIdentificadorTecnico(termo) }));
+}
+
+function _extrairIdentificadoresTecnicos(texto) {
+  return _extrairIdentificadoresTecnicosDetalhados(texto)
+    .filter(x => x.tipo !== 'UI_ACAO' && x.tipo !== 'TERMO_COMUM_MAIUSCULO')
+    .map(x => x.termo);
+}
+
+function _temRotuloHipoteseOuOrigem(texto, termo) {
+  const n = _normalizar(texto);
+  const t = _normalizar(termo);
+  const idx = n.indexOf(t);
+  if (idx < 0) return false;
+  const janela = n.slice(Math.max(0, idx - 140), Math.min(n.length, idx + t.length + 160));
+  return /\b(pesquisa|fonte externa|documentacao|tdn|totvs cita|artigo|hipotese|hipotetico|a validar|validar|pode ser|possivel|exemplo|como apoio|contexto geral|nao confirma|sem comprovar|similar|semelhante|familia|trilha|verificar se existe|procure por|procurar por)\b/i.test(janela);
+}
+
+function _temReferenciaVisualRastreavel(manifesto, termo) {
+  const t = _normalizar(termo);
+  const observacao = (manifesto?.observacoesVisuais || []).some(o => {
+    const texto = _normalizar([
+      o.nome,
+      o.anexoId,
+      ...(o.textosVisiveis || []),
+      ...(o.campos || []),
+      ...(o.valores || []),
+      o.observacao,
+    ].filter(Boolean).join(' '));
+    return texto && texto.includes(t);
+  });
+  if (observacao) return true;
+  return (manifesto?.selecionados || []).some(e => {
+    if (e.tipo !== 'imagem' && !e.enviadoComoImagem && !e.imagemEnviada) return false;
+    const texto = _normalizar([
+      e.trecho,
+      e.resumo,
+      e.conteudo,
+      e.conteudoExtraido,
+      e.textoObservado,
+      e.observacaoVisual,
+      e.evidenciaVisual,
+      e.visual?.texto,
+      e.visual?.observacao,
+    ].filter(Boolean).join(' '));
+    return texto && texto.includes(t);
+  });
+}
+
+function _temImagemSemTextoEstruturado(manifesto) {
+  if ((manifesto?.observacoesVisuais || []).length > 0) return false;
+  return (manifesto?.selecionados || []).some(e => {
+    if (e.tipo !== 'imagem' && !e.enviadoComoImagem && !e.imagemEnviada) return false;
+    const texto = [
+      e.trecho,
+      e.resumo,
+      e.conteudo,
+      e.conteudoExtraido,
+      e.textoObservado,
+      e.observacaoVisual,
+      e.evidenciaVisual,
+      e.visual?.texto,
+      e.visual?.observacao,
+    ].filter(Boolean).join(' ').trim();
+    return !texto;
+  });
+}
+
+function _respostaAlegaVisual(texto, termo) {
+  const n = _normalizar(texto);
+  const t = _normalizar(termo);
+  const idx = n.indexOf(t);
+  if (idx < 0) return false;
+  const janela = n.slice(Math.max(0, idx - 180), Math.min(n.length, idx + t.length + 180));
+  return /\b(print|prints|imagem|imagens|tela|screenshot|anexo visual)\b/.test(janela)
+    && /\b(mostra|mostram|aparece|aparecem|traz|trazem|vejo|visivel|visiveis)\b/.test(janela);
+}
+
+function _janelaNegaAtribuicaoInterna(janela) {
+  return /\b(nao|sem|nenhum|nenhuma)\b[\s\S]{0,80}\b(historico|mensagens?|cliente|prints?|anexos?|log|evidencias? internas?)\b[\s\S]{0,120}\b(mencao|mostra|mostram|traz|trazem|aparece|aparecem|informa|registra|cita|referencia)\b/i.test(janela)
+    || /\b(nao aparece|nao ha|nao consta|nao foi encontrado|nao esta no|nao veio do|apenas pesquisa externa|so pesquisa externa|fonte externa|contexto do modulo|nao e evidencia|nao comprova|nao confirma)\b/i.test(janela);
+}
+
+function _pareceRotinaPadraoProtheus(termo) {
+  return /^(?:FINA|MATA|PGCA|OMSA|GPEA|CTBA|SIGA)[A-Z0-9_]*\d[A-Z0-9_]*$/i.test(String(termo || ''));
+}
+
+function _usoVisualComoObservacaoSemCausa(texto, termo) {
+  const n = _normalizar(texto);
+  const t = _normalizar(termo);
+  const idx = n.indexOf(t);
+  if (idx < 0) return false;
+  const janela = n.slice(Math.max(0, idx - 220), Math.min(n.length, idx + t.length + 260));
+  const visual = /\b(print|prints|imagem|imagens|tela|screenshot|anexo visual)\b/.test(janela);
+  if (!visual) return false;
+  const limitaCausa = /\b(sem ponte causal|sem vinculo causal|nao tem relacao causal demonstrada|nao usaria isso como causa|outro dominio|problema diferente|incidental|separad[ao]|nao relacionado)\b/.test(janela);
+  const afirmaCausa = /\b(causa|causado|impactando|impede|por isso|deve estar|regularizar.*antes|corrigir.*antes)\b/.test(janela) && !limitaCausa;
+  return !afirmaCausa && (limitaCausa || /\b(mostra|mostram|aparece|aparecem|traz|trazem|erro|mensagem)\b/.test(janela));
+}
+
+function _usoTecnicoComoHipoteseCondicional(texto, termo) {
+  const n = _normalizar(texto);
+  const t = _normalizar(termo);
+  const idx = n.indexOf(t);
+  if (idx < 0) return false;
+  const janela = n.slice(Math.max(0, idx - 240), Math.min(n.length, idx + t.length + 260));
+  const hipotese = /\b(hipotese|a validar|validar|verificar|conferir|procure por|procurar por|pode existir|pode ser|possivel|similar|semelhante|ou similar|familia|exemplo|ex\.|por exemplo|ou outro|ou outra|trilha)\b/.test(janela);
+  if (!hipotese) return false;
+  const conclusaoForte = /\b(causa confirmada|causa provavel e|diagnostico confirmado|com certeza|definitivamente|e o ponto de entrada concreto|corrija a rotina|ajuste a rotina|a causa e|o problema e causado)\b/.test(janela);
+  return !conclusaoForte;
+}
+
+function _avaliarRastreabilidadeTecnica(textoResposta, { manifesto, pesquisa, pergunta, historicoMensagens }) {
+  const falhas = [];
+  const resposta = String(textoResposta || '');
+  const respostaNorm = _normalizar(resposta);
+  const internoNorm = _normalizar(_corpusInterno(manifesto, pergunta, historicoMensagens));
+  const pesquisaNorm = _normalizar(_corpusPesquisa(pesquisa));
+  const ids = _extrairIdentificadoresTecnicosDetalhados(resposta)
+    .filter(x => x.tipo !== 'UI_ACAO' && x.tipo !== 'TERMO_COMUM_MAIUSCULO');
+
+  for (const item of ids) {
+    const id = item.termo;
+    const idNorm = _normalizar(id);
+    const estaInterno = internoNorm.includes(idNorm);
+    const estaPesquisa = pesquisaNorm.includes(idNorm);
+    const visualRastreavel = _temReferenciaVisualRastreavel(manifesto, id);
+    const visualSemTextoMasObservado = !visualRastreavel
+      && _temImagemSemTextoEstruturado(manifesto)
+      && _pareceRotinaPadraoProtheus(id)
+      && _usoVisualComoObservacaoSemCausa(resposta, id);
+    const hipoteseCondicional = _usoTecnicoComoHipoteseCondicional(resposta, id);
+    if (!estaInterno && !estaPesquisa && !visualRastreavel && !visualSemTextoMasObservado && !hipoteseCondicional && !_temRotuloHipoteseOuOrigem(resposta, id)) {
+      const visualNaoVerificavel = _temImagemSemTextoEstruturado(manifesto) && _respostaAlegaVisual(resposta, id);
+      falhas.push({
+        codigo: 'UNTRACEABLE_TECHNICAL_REFERENCE',
+        severidade: 'media',
+        detalhe: visualNaoVerificavel
+          ? 'resposta citou identificador tecnico como observado em imagem, mas nao ha observacao visual estruturada independente no manifesto'
+          : 'resposta citou identificador tecnico especifico sem origem rastreavel ou rotulo claro de hipotese',
+        termos: [id],
+        tipoIdentificador: item.tipo,
+        motivoRastreabilidade: visualNaoVerificavel ? 'visual_sem_observacao_estruturada' : 'sem_origem_verificavel',
+        decisionKind: visualNaoVerificavel ? DECISAO_QG.EVIDENCIA_INSUFICIENTE : DECISAO_QG.BLOQUEIO_OBJETIVO,
+        categoriaDecisao: visualNaoVerificavel ? DECISAO_QG.EVIDENCIA_INSUFICIENTE : DECISAO_QG.BLOQUEIO_OBJETIVO,
+        acaoCorretiva: 'citar_origem_da_referencia_ou_rebaixar_para_hipotese_a_validar',
+      });
+      break;
+    }
+    if (!estaInterno && estaPesquisa) {
+      const idx = respostaNorm.indexOf(idNorm);
+      const janela = respostaNorm.slice(Math.max(0, idx - 170), Math.min(respostaNorm.length, idx + idNorm.length + 170));
+      const atribuiAoHistorico = /\b(cliente|historico|mensagens?|prints?|anexos?|log|evidencias? internas?)\b[\s\S]{0,120}\b(mostra|mostram|traz|trazem|aparece|aparecem|informa|informou|registra|registram|cita|citam|referencia|referenciam)\b/i.test(janela)
+        || /\b(mostra|mostram|traz|trazem|aparece|aparecem|informa|informou|registra|registram|cita|citam|referencia|referenciam)\b[\s\S]{0,120}\b(cliente|historico|mensagens?|prints?|anexos?|log|evidencias? internas?)\b/i.test(janela);
+      const reconheceExterno = /\b(pesquisa|fonte externa|documentacao|tdn|totvs|artigo|como apoio|contexto geral)\b/i.test(janela);
+      const negacaoOuLimite = _janelaNegaAtribuicaoInterna(janela);
+      if (atribuiAoHistorico && !reconheceExterno && !negacaoOuLimite) {
+        falhas.push({
+          codigo: 'EXTERNAL_REFERENCE_PRESENTED_AS_CASE_EVIDENCE',
+          severidade: 'media',
+          detalhe: 'referencia tecnica encontrada em pesquisa externa foi apresentada como se estivesse no historico/anexo/log do chamado',
+          termos: [id],
+          tipoIdentificador: item.tipo,
+          decisionKind: DECISAO_QG.BLOQUEIO_OBJETIVO,
+          categoriaDecisao: DECISAO_QG.BLOQUEIO_OBJETIVO,
+          acaoCorretiva: 'diferenciar_fonte_externa_de_evidencia_interna_do_chamado',
+        });
+        break;
+      }
+    }
+  }
+
+  return falhas;
+}
+
+function _avaliarContagemOperacionalFalsa(textoResposta, historicoMensagens, manifesto) {
+  const resposta = _normalizar(textoResposta);
+  const numeroExtenso = '(?:duas|dois|tres|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez)';
+  const m = resposta.match(new RegExp(`\\b(\\d+|${numeroExtenso})\\s+vezes\\b`, 'i'));
+  if (!m) return [];
+  const janelaAntes = resposta.slice(Math.max(0, m.index - 140), m.index);
+  if (!/\b(foi|foram|feito|feita|realizad[ao]s?|abert[ao]s?|encaminhad[ao]s?|acionad[ao]s?|retornad[ao]s?|analisad[ao]s?|visto|vista|fabrica|desenvolvimento|meet|reuniao|video)\b/i.test(janelaAntes)) return [];
+  const normalizarNumero = valor => {
+    const v = _normalizar(valor);
+    const mapa = { duas: 2, dois: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10 };
+    return /^\d+$/.test(v) ? Number(v) : mapa[v];
+  };
+  const n = normalizarNumero(m[1]);
+  if (!Number.isFinite(n) || n <= 1) return [];
+  const historico = _normalizar((historicoMensagens || []).map(x => x.conteudo || '').join('\n'));
+  const numeroLiteral = String(m[1] || '').toLowerCase();
+  const numeroTexto = Object.entries({ duas: 2, dois: 2, tres: 3, 'três': 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10 })
+    .filter(([, valor]) => valor === n)
+    .map(([texto]) => texto.replace('ê', '[eê]'));
+  const mencaoExplicita = new RegExp(`\\b(?:${[String(n), numeroLiteral, ...numeroTexto].filter(Boolean).join('|')})\\s+vezes\\b`, 'i').test(historico);
+  if (!mencaoExplicita) {
+    return [{
+      codigo: 'UNSUPPORTED_OPERATIONAL_COUNT',
+      severidade: 'media',
+      detalhe: 'resposta afirmou contagem operacional sem essa quantidade aparecer explicitamente no historico',
+      quantidadeAfirmada: n,
+      decisionKind: DECISAO_QG.BLOQUEIO_OBJETIVO,
+      categoriaDecisao: DECISAO_QG.BLOQUEIO_OBJETIVO,
+      acaoCorretiva: 'remover_contagem_ou_ancorar_na_evidencia_real',
+    }];
+  }
+  const mencionaFabrica = /\b(fabrica|desenvolvimento|escalar|escalado|encaminh|acionad|retornad)\b/.test(resposta);
+  const mencionaReuniao = /\b(meet|video|reuniao|chamada|demonstr)\b/.test(resposta);
+  let count = 0;
+  if (mencionaFabrica) {
+    count = (historicoMensagens || []).filter(m => {
+      const texto = _normalizar(m.conteudo || '');
+      return /\b(fabrica|desenvolvimento)\b/.test(texto) && /\b(retorn|encaminh|abert|abrir|acion|acompanhar|aguard)\w*/.test(texto);
+    }).length;
+    const eventos = (manifesto?.eventosOperacionais || manifesto?.quadroInvestigativo?.eventosOperacionais || []).filter(a => a.tipo === 'encaminhamento_fabrica');
+    if (eventos.length) count = Math.max(count, eventos.length);
+  }
+  if (mencionaReuniao) count = Math.max(count, (historico.match(/\b(meet|videochamada|videoconferencia|chamada via google meet|demonstr)\b/g) || []).length);
+  if (count > 0 && count < n) {
+    return [{
+      codigo: 'UNSUPPORTED_OPERATIONAL_COUNT',
+      severidade: 'media',
+      detalhe: 'resposta afirmou quantidade operacional maior do que a evidenciada no historico',
+      quantidadeAfirmada: n,
+      quantidadeEvidenciada: count,
+      decisionKind: DECISAO_QG.BLOQUEIO_OBJETIVO,
+      categoriaDecisao: DECISAO_QG.BLOQUEIO_OBJETIVO,
+      acaoCorretiva: 'remover_contagem_ou_ancorar_na_evidencia_real',
+    }];
+  }
+  return [];
 }
 
 function _avaliarRegressaoInvestigativa(textoResposta, manifesto) {
@@ -344,7 +850,7 @@ function _avaliarAcaoOperacionalRedundante(textoResposta, historicoMensagens) {
     {
       codigo: 'REDUNDANT_OPERATIONAL_ESCALATION',
       historico: /\b(fabrica|desenvolvimento|fornecedor)\b[\s\S]{0,120}\b(abert|abrir|retorn|encaminh|acompanhar|aguard)\w*|\b(abert|abrir|retorn|encaminh|acompanhar|aguard)\w*[\s\S]{0,120}\b(fabrica|desenvolvimento|fornecedor)\b/i,
-      resposta: /\b(abrir|encaminh|retorn|acion|solicit)\w*[\s\S]{0,100}\b(fabrica|desenvolvimento|equipe de desenvolvimento|fornecedor)\b|\b(fabrica|desenvolvimento|equipe de desenvolvimento|fornecedor)\b[\s\S]{0,100}\b(abrir|encaminh|retorn|acion|solicit)\w*/i,
+      resposta: /\b(abrir|encaminh|reencaminh|acion|solicit)\w*[\s\S]{0,100}\b(fabrica|desenvolvimento|equipe de desenvolvimento|fornecedor)\b|\bretorn\w*[\s\S]{0,40}\b(?:para|a)\s+(?:a\s+)?\b(fabrica|desenvolvimento|equipe de desenvolvimento|fornecedor)\b|\b(fabrica|desenvolvimento|equipe de desenvolvimento|fornecedor)\b[\s\S]{0,100}\b(abrir|encaminh|reencaminh|acion|solicit)\w*/i,
       detalhe: 'resposta recomenda encaminhamento operacional ja registrado no historico',
       acaoCorretiva: 'distinguir_encaminhamento_em_andamento_de_correcao_concluida_e_orientar_acompanhamento_ou_evidencia_tecnica_faltante',
     },
@@ -353,8 +859,11 @@ function _avaliarAcaoOperacionalRedundante(textoResposta, historicoMensagens) {
   const falhas = [];
   for (const acao of acoes) {
     if (!acao.historico.test(historico)) continue;
-    if (!acao.resposta.test(resposta)) continue;
+    const match = resposta.match(acao.resposta);
+    if (!match) continue;
     if (acao.codigo === 'REDUNDANT_OPERATIONAL_MEETING' && _temJustificativaTecnicaNova(resposta)) continue;
+    const janela = resposta.slice(Math.max(0, match.index - 80), Math.min(resposta.length, match.index + match[0].length + 80));
+    if (/\b(nao|não|evite|sem)\b[\s\S]{0,50}\b(recomende|peca|peça|solicite|agende|abrir|acionar|encaminh|reencaminh|video|reuniao|meet|fabrica|desenvolvimento)\b/i.test(janela)) continue;
     if (_temReconhecimentoOperacional(resposta, acao.resposta)) continue;
     falhas.push({
       codigo: acao.codigo,
@@ -384,6 +893,78 @@ function _avaliarEncaminhamentoComoResolucao(textoResposta, historicoMensagens) 
   }];
 }
 
+function _termosRelevantesEvidencia(ev) {
+  const texto = _normalizar([ev?.referencia, ev?.resumo, ev?.dominio].filter(Boolean).join(' '));
+  const termos = [];
+  const candidatos = [
+    'contabilidade', 'contabil', 'financeiro', 'contas a pagar', 'titulo', 'fina050',
+    'compras', 'pedido de compra', 'workflow', 'aprovacao', 'status',
+    'rateio', 'pre nota', 'documento de entrada',
+    'contrato agricola', 'saldo', 'devolucao',
+  ];
+  for (const c of candidatos) {
+    if (texto.includes(c)) termos.push(c);
+  }
+  const codigos = String([ev?.referencia, ev?.resumo].filter(Boolean).join(' ')).match(/\b[A-Z]{2,}[A-Z0-9_]{2,}\b|\b[A-Z]{3,}\d{2,}\b/gi) || [];
+  for (const c of codigos.slice(0, 4)) termos.push(_normalizar(c));
+  return [...new Set(termos)].filter(t => t.length >= 4);
+}
+
+function _respostaPromoveEvidenciaIncidental(textoResposta, manifesto) {
+  const quadro = manifesto?.quadroInvestigativo;
+  const incidentais = (quadro?.evidencias || []).filter(e => {
+    const papeis = e.papeis || [];
+    // Mensagens operacionais como "foi anexado log/fonte" podem receber
+    // INCIDENTAl por nao serem a causa em si, mas elas apenas descrevem a
+    // disponibilidade da evidencia central. Nao devem bloquear uma resposta
+    // que usa o log/fonte real selecionado como CENTRAL.
+    return papeis.includes('INCIDENTAL') && !papeis.includes('OPERACIONAL') && !papeis.includes('CENTRAL');
+  });
+  if (!incidentais.length) return [];
+  const resposta = _normalizar(textoResposta);
+  const reconheceLimite = /\b(incidental|vinculo causal nao demonstrado|sem vinculo causal|nao ha vinculo|nao comprova|hipotese|precisa demonstrar|precisa validar|confirmar a relacao)\b/i.test(resposta);
+  const falhas = [];
+
+  for (const ev of incidentais) {
+    const termos = _termosRelevantesEvidencia(ev);
+    if (!termos.some(t => resposta.includes(t))) continue;
+    const mencionaComoCausa = /\b(causa|causado|causando|provavel|deve estar relacionado|esta relacionado|impactando|impedindo|por isso|devido|regulariz|corrig|verificar os titulos|contabiliz)\b/i.test(resposta);
+    const temPonteCausal = /\b(ponte causal|relacao direta|vinculo|integra[cç][aã]o|gera o titulo|processa o pedido|no mesmo fluxo|apos a aprovacao|ao atualizar o status|log mostra|stack mostra|fonte mostra|evidencia demonstra)\b/i.test(resposta);
+    if (mencionaComoCausa && !temPonteCausal && !reconheceLimite) {
+      falhas.push({
+        codigo: 'INCIDENTAL_EVIDENCE_PROMOTED_WITHOUT_CAUSAL_BRIDGE',
+        severidade: 'media',
+        evidencia: ev.referencia || ev.resumo,
+        detalhe: 'resposta promoveu evidencia classificada como incidental a causa/proximo passo principal sem demonstrar ponte causal com o problema principal',
+        acaoCorretiva: 'tratar_evidencia_incidental_como_lacuna_ou_demonstrar_ponte_causal',
+      });
+      break;
+    }
+  }
+  return falhas;
+}
+
+function _avaliarEstadoOperacionalDoQuadro(textoResposta, manifesto) {
+  const quadro = manifesto?.quadroInvestigativo;
+  if (!quadro?.estadoOperacional) return [];
+  const resposta = _normalizar(textoResposta);
+  const falhas = [];
+  if (/correcao_aplicada/.test(quadro.estadoOperacional)) {
+    const reconheceValidacao = /\b(valid|homolog|teste|reteste|confirm|cliente|producao|aplicad|implantad)\w*/i.test(resposta);
+    const reabreSemValidar = /\b(abrir|encaminh|acionar|solicitar)\w*[\s\S]{0,90}\b(fabrica|desenvolvimento|totvs|fornecedor)\b/i.test(resposta)
+      && !/\b(acompanhar|validar|confirmar|ja|foi|aplicad|implantad)\b/i.test(resposta);
+    if (!reconheceValidacao || reabreSemValidar) {
+      falhas.push({
+        codigo: 'INVESTIGATIVE_FRAME_OPERATIONAL_STAGE_IGNORED',
+        severidade: 'media',
+        detalhe: 'quadro indica correcao aplicada/pendente de validacao, mas a resposta nao priorizou validacao ou reabriu encaminhamento como se fosse etapa inicial',
+        acaoCorretiva: 'reconhecer_correcao_aplicada_e_priorizar_validacao_do_sintoma_original',
+      });
+    }
+  }
+  return falhas;
+}
+
 function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRetry = false, historicoMensagens = [] } = {}) {
   const falhas = [];
   const resposta = String(textoResposta || '');
@@ -393,9 +974,31 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
   const analisados = selecionados.filter(e => e.status === 'ANALISADA' || e.status === 'PARCIALMENTE_ANALISADA');
   const anexosAnalisados = analisados.filter(e => e.tipo === 'anexo' || e.tipo === 'imagem');
   const imagensAnalisadas = analisados.filter(e => e.tipo === 'imagem');
-  const pedeAnexo = /\b(anexo|arquivo|fonte|log|print|imagem|screenshot|pdf|compare|ver novamente)\b/i.test(perguntaTexto);
-  const evidenciaCriticaOmitida = omitidos.find(e => (e.score || 0) >= 80 && e.status !== 'NAO_SUPORTADA');
+  // anexosDisponiveis (nao so anexosAnalisados) — achado real, auditoria
+  // 2026-10: a pergunta de investigacao padrao sempre menciona "anexos" (ex.
+  // "...com base no historico e nos anexos disponiveis..."), disparando
+  // pedeAnexo=true mesmo quando o atendimento NAO TEM nenhum anexo (caso
+  // real: chamado so consultivo, so historico textual). Sem anexo nenhum
+  // existir, nao ha "anexo nao analisado" para reclamar — a falha so pode
+  // ser legitima se havia pelo menos um anexo disponivel no caso.
+  const anexosDisponiveis = Number(manifesto?.anexosDisponiveis || 0);
+  const pedeAnexo = anexosDisponiveis > 0 && /\b(anexo|arquivo|fonte|log|print|imagem|screenshot|pdf|compare|ver novamente)\b/i.test(perguntaTexto);
+  // tipo !== 'mensagem' — achado real, auditoria 2026-10: mensagens de
+  // historico cortadas por orcamento de contexto (comportamento ESPERADO do
+  // sistema, nao uma falha) tambem carregam score alto quando relevantes
+  // (ex. score=100 para mensagem do turno atual) e disparavam esta falha
+  // mesmo sem nenhum ANEXO critico de fato omitido.
+  const evidenciaCriticaOmitida = omitidos.find(e => e.tipo !== 'mensagem' && (e.score || 0) >= 80 && e.status !== 'NAO_SUPORTADA');
   const paginasComConteudo = _paginasLidasOuReutilizadas(pesquisa);
+
+  if (/\b(resposta anterior|quality gate|controle de rastreabilidade|falhou no quality gate|reescrev[ae]r)\b/i.test(resposta)) {
+    falhas.push({
+      codigo: 'RETRY_CONTEXT_LEAKED',
+      severidade: 'media',
+      detalhe: 'resposta expôs bastidor de retry/quality gate ao analista',
+      acaoCorretiva: 'remover_mencao_a_reescrita_retry_ou_quality_gate',
+    });
+  }
 
   if (pedeAnexo && anexosAnalisados.length === 0) {
     falhas.push({ codigo: 'ATTACHMENT_NOT_ANALYZED', legado: 'PERGUNTA_PEDE_ANEXO_SEM_ANEXO_ANALISADO', severidade: 'alta', acaoCorretiva: 'reconstruir_contexto_com_anexo_ou_visual' });
@@ -438,6 +1041,15 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
       acaoCorretiva: 'remover_ids_internos_e_citar_conteudo_visivel',
     });
   }
+  falhas.push(..._avaliarContradicaoComEvidenciaAusente(resposta, manifesto, perguntaTexto, historicoMensagens));
+  falhas.push(..._avaliarCertezaIndevidaComEvidenciaParcial(resposta, manifesto, perguntaTexto, historicoMensagens));
+  falhas.push(..._avaliarRastreabilidadeTecnica(resposta, { manifesto, pesquisa, pergunta: perguntaTexto, historicoMensagens }));
+  falhas.push(...planoRespostaRastreavel.avaliarRespostaContraPlano({
+    textoResposta: resposta,
+    plano: manifesto?.planoRespostaRastreavel,
+  }));
+  falhas.push(..._avaliarContagemOperacionalFalsa(resposta, historicoMensagens, manifesto));
+  falhas.push(..._avaliarConsistenciaAritmetica(resposta));
   if (_descartaCustomizacaoSemBase(resposta, manifesto)) {
     falhas.push({
       codigo: 'CUSTOMIZATION_DISCARDED_WITHOUT_CODE_OR_LOG',
@@ -480,8 +1092,26 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
   }
   if (imagensAnalisadas.length > 0 && /imagem|imagens|print|screenshot|tela/i.test(resposta)) {
     const respostaNormalizada = _normalizar(resposta);
-    const temSinalVisualConcreto = /fwwhen|%\s*rateio|perc\s+rateio|valor do rat|nf rateio|modo edicao|valor nao pode ser atribuido|incluir|alterar|100[, ]?00|105[, ]?6/.test(respostaNormalizada);
-    if (!temSinalVisualConcreto) {
+    // Padrao original (fwwhen/rateio/100,00 etc.) era calibrado so para
+    // cenarios de customizacao de tela/rateio — achado real, auditoria
+    // 2026-10 (caso 036166): resposta citava codigo de tela curto ("V260416")
+    // e status operacional especifico lido do print ("BLOQUEADO/REJEITADO",
+    // "vazia (/ /)") que so poderiam vir de leitura real da imagem, mas
+    // nenhum batia o padrao antigo (que exige 3+ letras antes dos digitos).
+    // Generaliza para: (a) codigo alfanumerico curto de tela/rotina (1+
+    // letra + 3+ digitos, ex. V260416, SX2010); (b) status operacional em
+    // caixa alta citado como valor lido (BLOQUEADO, REJEITADO, PENDENTE
+    // etc.) perto de "status"/"situacao"; (c) campo explicitamente vazio
+    // (parenteses com so barra/espaco, ex. "(/ /)", "( )").
+    const temCodigoTelaCurto = /\b[a-z]\d{3,}[a-z0-9_]*\b/.test(respostaNormalizada);
+    const temStatusLidoConcreto = /\b(status|situac[aã]o|estado)\b[\s\S]{0,40}\b(bloqueado|rejeitado|pendente|aprovado|processado|concluido|cancelado|aberto|fechado)\b/i.test(resposta)
+      || /\b(bloqueado|rejeitado|pendente|aprovado|processado|concluido|cancelado)\b[\s\S]{0,40}\b(status|situac[aã]o|estado)\b/i.test(resposta);
+    const temCampoVazioLido = /\(\s*\/\s*\/?\s*\)|\(\s*\)\s*(?:\(\s*\))?\s*,?\s*(?:ou\s+)?vazi[ao]/i.test(resposta) && /\bvazi[ao]\b/i.test(resposta) && /\bdata|dt\b|baixa|vencimento|campo/i.test(resposta);
+    const temSinalVisualConcreto = /fwwhen|%\s*rateio|perc\s+rateio|valor do rat|nf rateio|modo edicao|valor nao pode ser atribuido|incluir|alterar|100[, ]?00|105[, ]?6|\b[a-z]{3,}\d{2,}[a-z0-9_]*\b/.test(respostaNormalizada)
+      || temCodigoTelaCurto || temStatusLidoConcreto || temCampoVazioLido;
+    const pedePrintFuturo = /\b(tire|peca|peça|capture|capturar|solicite|traga|anexe|envie)\b[\s\S]{0,80}\b(print|screenshot|tela|imagem)\b/i.test(respostaNormalizada)
+      || /\b(print|screenshot|tela|imagem)\b[\s\S]{0,80}\b(apos|após|quando|logo depois|para validar|mostrando)\b/i.test(respostaNormalizada);
+    if (!temSinalVisualConcreto && !pedePrintFuturo) {
       falhas.push({
         codigo: 'VISUAL_EVIDENCE_TOO_GENERIC',
         severidade: 'media',
@@ -494,7 +1124,8 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
     textoResposta: resposta,
     evidenciasTexto: [
       perguntaTexto,
-      ...(analisados || []).map(e => `${e.nome || e.id || ''} ${e.trecho || e.resumo || e.conteudo || ''}`),
+    ...(analisados || []).map(e => `${e.nome || e.id || ''} ${e.trecho || e.resumo || e.conteudo || ''}`),
+      ...paginasComConteudo.map(p => `${p.titulo || ''} ${p.url || ''} ${p.trecho || ''}`),
       pesquisa?.plano ? JSON.stringify(pesquisa.plano) : '',
     ].filter(Boolean).join('\n'),
     manifesto: { ...manifesto, pesquisa },
@@ -503,17 +1134,31 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
   falhas.push(..._avaliarRepeticaoDeRespostaAnterior(resposta, historicoMensagens));
   falhas.push(..._avaliarAcaoOperacionalRedundante(resposta, historicoMensagens));
   falhas.push(..._avaliarEncaminhamentoComoResolucao(resposta, historicoMensagens));
+  falhas.push(..._respostaPromoveEvidenciaIncidental(resposta, manifesto));
+  falhas.push(..._avaliarEstadoOperacionalDoQuadro(resposta, manifesto));
   if (/pesquis|tdn|totvs|softexpert|documenta[cç][aã]o|fonte oficial/i.test(perguntaTexto)) {
     if (!pesquisa?.configurado) falhas.push({ codigo: 'RESEARCH_REQUIRED_NOT_EXECUTED', legado: 'PESQUISA_NAO_CONFIGURADA', severidade: 'media', acaoCorretiva: 'informar_pesquisa_indisponivel' });
     else if (pesquisa?.modo !== 'web') falhas.push({ codigo: 'RESEARCH_CONFIGURED_WITHOUT_RESULTS', legado: 'PESQUISA_CONFIGURADA_SEM_RESULTADO', severidade: 'media', acaoCorretiva: 'executar_pesquisa_solicitada_ou_declarar_limite' });
-    else if (!paginasComConteudo.length) falhas.push({ codigo: 'RESEARCH_FOUND_BUT_NOT_READ', legado: 'PESQUISA_SEM_PAGINA_LIDA', severidade: 'media', acaoCorretiva: 'tentar_fetch_seguro' });
+    else if (!paginasComConteudo.length) {
+      const declaraLimitePesquisa = /\b(pesquisa|documenta[cÃ§][aÃ£]o|fonte oficial|pagina|p[aÃ¡]gina)\b[\s\S]{0,120}\b(nao foi possivel|nao consegui|nao acessivel|nao acessada|nao lida|nenhuma pagina foi lida|sem conteudo|sem pagina lida|nao retornou conteudo|links sem leitura|limitacao)\b/i.test(resposta)
+        || /\b(nao foi possivel|nao consegui|nao acessivel|nao acessada|nao lida|nenhuma pagina foi lida|sem conteudo|sem pagina lida|nao retornou conteudo|links sem leitura|limitacao)\b[\s\S]{0,120}\b(pesquisa|documenta[cÃ§][aÃ£]o|fonte oficial|pagina|p[aÃ¡]gina)\b/i.test(resposta);
+      if (!declaraLimitePesquisa) falhas.push({ codigo: 'RESEARCH_FOUND_BUT_NOT_READ', legado: 'PESQUISA_SEM_PAGINA_LIDA', severidade: 'media', acaoCorretiva: 'tentar_fetch_seguro' });
+    }
   }
 
-  const deveRetry = !houveRetry && falhas.some(f => ['alta', 'media'].includes(f.severidade));
+  const falhasClassificadas = falhas.map(_classificarFalha);
+  const deveRetry = !houveRetry && falhasClassificadas.some(f => ['alta', 'media'].includes(f.severidade) && f.decisionKind !== DECISAO_QG.SUSPEITA_SEMANTICA);
+  const decisoes = {
+    bloqueiosObjetivos: falhasClassificadas.filter(f => f.decisionKind === DECISAO_QG.BLOQUEIO_OBJETIVO).length,
+    suspeitasSemanticas: falhasClassificadas.filter(f => f.decisionKind === DECISAO_QG.SUSPEITA_SEMANTICA).length,
+    evidenciasInsuficientes: falhasClassificadas.filter(f => f.decisionKind === DECISAO_QG.EVIDENCIA_INSUFICIENTE).length,
+    correcoesEstilo: falhasClassificadas.filter(f => f.decisionKind === DECISAO_QG.CORRECAO_ESTILO).length,
+  };
   return {
-    aprovado: falhas.length === 0,
+    aprovado: falhasClassificadas.length === 0,
     deveRetry,
-    falhas,
+    falhas: falhasClassificadas,
+    decisoes,
     criterios: {
       anexosAnalisados: anexosAnalisados.length,
       evidenciasSelecionadas: selecionados.length,
@@ -527,7 +1172,78 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
   };
 }
 
-function montarInstrucaoRetry(gate) {
+function _termosDasFalhas(gate, codigo) {
+  return [...new Set((gate?.falhas || [])
+    .filter(f => f.codigo === codigo)
+    .flatMap(f => f.termos || f.referencia || [])
+    .map(t => String(t || '').trim())
+    .filter(Boolean))];
+}
+
+function _formatarContratoPRRRetry(manifesto) {
+  const prr = manifesto?.planoRespostaRastreavel;
+  if (!prr) return '';
+  const linhas = ['Contrato PRR obrigatorio nesta reescrita:'];
+  const estado = manifesto?.quadroInvestigativo?.estadoOperacional;
+  if (estado) linhas.push(`- Estado operacional atual: ${estado}.`);
+  if (prr.proximoPassoRecomendado?.descricao) linhas.push(`- Proximo passo permitido pelo PRR: ${prr.proximoPassoRecomendado.descricao}`);
+  const termos = (prr.termosTecnicosPermitidos || []).slice(0, 18).map(t => {
+    const origens = (t.origens || []).map(o => o.origem).filter(Boolean).join('+') || 'sem_origem';
+    return `${t.termo} (${t.usoPermitido}; causal=${t.causalPermitido ? 'sim' : 'nao'}; origem=${origens})`;
+  });
+  if (termos.length) linhas.push(`- Referencias tecnicas autorizadas: ${termos.join('; ')}.`);
+  const lacunas = (prr.lacunasObrigatorias || []).filter(l => l.bloqueiaConclusao).slice(0, 5).map(l => l.texto);
+  if (lacunas.length) linhas.push(`- Lacunas que impedem conclusao: ${lacunas.join(' | ')}.`);
+  linhas.push('- Se precisar formular hipotese sem referencia autorizada, descreva funcionalmente a evidencia faltante; nao invente nome de rotina, parametro, fonte, tabela ou ponto de entrada.');
+  return linhas.join('\n');
+}
+
+function _instrucoesDirecionadasPorFalha(gate, manifesto) {
+  const codigos = new Set((gate?.falhas || []).map(f => f.codigo));
+  const linhas = [];
+  if (codigos.has('INTERNAL_IDS_USED_AS_EVIDENCE')) {
+    linhas.push('Falha INTERNAL_IDS_USED_AS_EVIDENCE: remova qualquer ID interno do texto final (aud-msg, aud-an, aud-at, aud-ch, UUID, id de execucao). Substitua por conteudo visivel: texto do erro, nome do arquivo, campo, rotina observada ou trecho de log real.');
+  }
+  if (codigos.has('UNTRACEABLE_TECHNICAL_REFERENCE')) {
+    const termos = _termosDasFalhas(gate, 'UNTRACEABLE_TECHNICAL_REFERENCE');
+    linhas.push(`Falha UNTRACEABLE_TECHNICAL_REFERENCE: remova identificadores tecnicos sem origem verificavel${termos.length ? ` (${termos.join(', ')})` : ''}. Nao substitua por outro nome tecnico. Use descricao funcional generica, como "tela de parametrizacao", "fonte responsavel pelo calculo" ou "log do fluxo", e diga qual evidencia deve revelar o nome real.`);
+  }
+  if (codigos.has('PRR_TECHNICAL_REFERENCE_NOT_ALLOWED')) {
+    const termos = _termosDasFalhas(gate, 'PRR_TECHNICAL_REFERENCE_NOT_ALLOWED');
+    linhas.push(`Falha PRR_TECHNICAL_REFERENCE_NOT_ALLOWED: retire referencias tecnicas fora do PRR${termos.length ? ` (${termos.join(', ')})` : ''}. Nao use exemplos de rotina, tela, parametro, fonte, tabela ou ponto de entrada que nao estejam no PRR. Se a ideia for util, reescreva sem nome inventado: "fonte/gatilho/ponto de entrada que altera o campo" ou "rotina envolvida no fluxo", e diga qual evidencia identifica o nome real.`);
+  }
+  if (codigos.has('PRR_EXTERNAL_REFERENCE_USED_AS_CAUSE')) {
+    const termos = _termosDasFalhas(gate, 'PRR_EXTERNAL_REFERENCE_USED_AS_CAUSE');
+    linhas.push(`Falha PRR_EXTERNAL_REFERENCE_USED_AS_CAUSE: referencias externas${termos.length ? ` (${termos.join(', ')})` : ''} so podem aparecer como apoio/hipotese; nao as apresente como causa nem como acao principal sem ponte causal interna.`);
+  }
+  if (codigos.has('PRR_VISUAL_REFERENCE_USED_AS_CAUSE')) {
+    const termos = _termosDasFalhas(gate, 'PRR_VISUAL_REFERENCE_USED_AS_CAUSE');
+    linhas.push(`Falha PRR_VISUAL_REFERENCE_USED_AS_CAUSE: termos visuais${termos.length ? ` (${termos.join(', ')})` : ''} podem delimitar o escopo ou mostrar ausencia de vinculo, mas nao podem virar causa/acao principal sem ponte causal.`);
+  }
+  if (codigos.has('REDUNDANT_OPERATIONAL_ESCALATION')) {
+    const estado = manifesto?.quadroInvestigativo?.estadoOperacional;
+    linhas.push(`Falha REDUNDANT_OPERATIONAL_ESCALATION: nao recomende abrir, acionar ou reencaminhar Fabrica/desenvolvimento como se fosse novo. Estado atual${estado ? `: ${estado}` : ''}. Oriente acompanhar retorno, pedir evidencia tecnica objetiva, validar ajuste ou registrar pendencia ainda nao comprovada.`);
+  }
+  if (codigos.has('REDUNDANT_OPERATIONAL_MEETING')) {
+    linhas.push('Falha REDUNDANT_OPERATIONAL_MEETING: nao peca nova reuniao/demonstracao quando o historico ja registra reuniao realizada; so solicite nova sessao se houver evidencia tecnica nova e explicita que exija reproducao diferente.');
+  }
+  if (codigos.has('PRR_CONFIRMED_CAUSE_WITH_BLOCKING_GAP')) {
+    linhas.push('Falha PRR_CONFIRMED_CAUSE_WITH_BLOCKING_GAP: rebaixe causa confirmada para hipotese/lacuna; diga exatamente qual evidencia falta para confirmar.');
+  }
+  if (codigos.has('OVERCONFIDENT_CAUSE_WITH_PARTIAL_SOURCE')) {
+    linhas.push('Falha OVERCONFIDENT_CAUSE_WITH_PARTIAL_SOURCE: ha apenas trecho de fonte ou fonte incompleto. Nao escreva "a causa e", "ponte causal direta" ou "isso resolve" para escopo/declaracao de variavel. Apresente como hipotese provavel, peca o fonte completo, confirme inicializacao/escopo da variavel e indique teste controlado de compilacao/execucao.');
+  }
+  if (codigos.has('HYPOTHESIS_PROMOTED_TO_CONFIRMED_CAUSE')) {
+    linhas.push('Falha HYPOTHESIS_PROMOTED_TO_CONFIRMED_CAUSE: separe fato observado, hipotese e confirmacao. Em SoftExpert Workflow, HTTP 200 confirma apenas recebimento/processamento do callback; atividade parada e aviso de responsavel/papel sustentam hipotese de resolucao de responsavel/regra de transicao, nao causa confirmada. Peca log interno do workflow/auditoria da atividade e configuracao de responsaveis/permissoes para confirmar.');
+  }
+  if (codigos.has('RESEARCH_FOUND_BUT_NOT_READ')) {
+    linhas.push('Falha RESEARCH_FOUND_BUT_NOT_READ: nao afirme que a documentacao oficial foi consultada se nenhuma pagina foi efetivamente lida/reutilizada. Use a pesquisa apenas como limitada/nao conclusiva ou ignore-a e conduza a investigacao pelas evidencias internas.');
+  }
+  return linhas.join('\n');
+}
+
+function montarInstrucaoRetry(gate, contexto = {}) {
+  const manifesto = contexto.manifesto || contexto;
   const falhas = (gate?.falhas || []).map(f => f.codigo).join(', ');
   const regressao = (gate?.falhas || []).filter(f => String(f.codigo || '').startsWith('REGRESSAO_INVESTIGATIVA'));
   // Achado real, Caso #001 (2026-10): quando pesquisa era necessária mas não
@@ -543,16 +1259,23 @@ function montarInstrucaoRetry(gate) {
   return [
     'A resposta anterior falhou no Quality Gate interno.',
     `Falhas detectadas: ${falhas || 'nao especificadas'}.`,
+    _formatarContratoPRRRetry(manifesto),
+    _instrucoesDirecionadasPorFalha(gate, manifesto),
     regressao.length ? `Regressao investigativa detectada: ${regressao.map(f => `${f.codigo}${f.itemCodigo ? ` em ${f.itemCodigo}` : ''}${f.evidencia ? ` em ${f.evidencia}` : ''}`).join('; ')}.` : '',
     regressao.length ? 'Use o estado atual do dossie: nao repita teste/evidencia/hipotese/solucao ja encerrados sem justificar explicitamente qual evidencia ou mudanca nova torna a repeticao necessaria.' : '',
     'Refaca a analise usando explicitamente as evidencias selecionadas no manifesto. Cite as evidencias tecnicas que sustentam o diagnostico.',
     'Reescreva como conversa tecnica humana, nao como laudo com template fixo. Evite cabecalhos formais em Markdown como "### Fatos", "### Causa provavel" e "### Proximos passos". Comece pelo ponto que mais muda a analise e va direto ao proximo ajuste/teste de maior valor.',
     'Se houver evidencias suficientes, proponha uma acao tecnica concreta. Nao use "agendar videochamada", "analisar melhor" ou "consultar documentacao" como recomendacao principal quando ja existem prints, logs, parametros, rotinas ou fontes oficiais apontando uma trilha.',
     'A primeira acao tecnica deve atacar a evidencia mais especifica do caso. Se houver uma mensagem de erro concreta (por exemplo modo de edicao, campo nao atribuivel, stack trace ou excecao), priorize essa trilha antes de parametros/documentacao genericos.',
+    'Use o Quadro investigativo quando ele existir: respeite problema principal, estado operacional e papeis das evidencias. Nao transforme evidencia INCIDENTAL em causa/proximo passo principal sem demonstrar a ponte causal; se a ponte nao existir, declare a lacuna.',
+    'Se o quadro indicar correcao aplicada pendente de validacao, priorize validar o sintoma original e nao recomende abrir/acionar Fabrica, TOTVS ou fornecedor como se isso ainda nao tivesse ocorrido.',
     'Nao cite IDs internos do manifesto como se fossem logs, mensagens ou evidencias do chamado. Cite apenas conteudo visivel, nome de arquivo, campo, mensagem de erro, trecho de log real ou fonte tecnica.',
     'Nao descarte customizacao nem atribua o erro ao produto padrao sem fonte, log ou codigo sustentando essa conclusao. Se nao houver esse material, diga que precisa conferir fonte/gatilho/ponto de entrada.',
     'Quando houver imagens/prints enviados, cite textos, campos, percentuais, mensagens ou estados visiveis nas telas. Nao escreva apenas "as imagens mostram" sem dizer o que foi visto.',
     'Quando houver fontes oficiais lidas ou reutilizadas, use-as como evidencia externa rastreavel e diferencie parametro/documentacao de causa confirmada no ambiente.',
+    'Para cada rotina, parametro, modulo, erro ou tabela especifica que voce citar, deixe claro se veio do historico/anexo/log/print, de pesquisa externa, do dossie, ou se e apenas hipotese a validar. Nao atribua ao cliente ou ao historico um termo que veio apenas da pesquisa externa.',
+    'Nao use IDs internos do manifesto/runner. Se voce citou aud-msg, UUID, id de anexo ou execucao, substitua pelo conteudo visivel da mensagem/anexo.',
+    'Nao afirme quantidades operacionais ("feito 3 vezes", "Fabrica viu X vezes") sem essa contagem explicita no historico.',
     'Se a evidencia necessaria nao estiver disponivel ou nao for suportada, diga isso objetivamente e peca a evidencia especifica que falta.',
     'Se uma causa ou fato tecnico nao estiver sustentado, rebaixe para hipotese explicita e informe a lacuna/proximo passo de maior valor.',
     pesquisaIndisponivel ? 'Pesquisa tecnica externa era necessaria para esta pergunta mas nao pode ser executada (mecanismo de busca indisponivel nesta instalacao). Declare isso explicitamente na resposta ao usuario — nao apresente a causa como se tivesse sido corroborada por fonte externa, e nao finja ter pesquisado.' : '',
