@@ -57,6 +57,19 @@
     .validacao-badge-pendente { background:var(--bg-hover); color:var(--text-md); border:1px solid var(--border); }
     .validacao-link { font-size:11px; background:none; border:none; color:var(--accent); cursor:pointer; text-decoration:underline; padding:0; }
     .validacao-evidencia-hint { font-size:11.5px; color:var(--text-lo); width:100%; }
+    .ficha-operacional-avaliacao { margin-top:8px; border-top:1px solid rgba(0,0,0,.08); padding-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .avaliacao-link { font-size:11px; background:none; border:none; color:var(--accent); cursor:pointer; text-decoration:underline; padding:0; }
+    .avaliacao-resumo { font-size:11.5px; color:var(--text-md); font-weight:700; }
+    .avaliacao-outras { font-size:11px; color:var(--text-lo); }
+    .avaliacao-modal-body { display:flex; flex-direction:column; gap:12px; padding:4px; }
+    .avaliacao-criterio { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .avaliacao-criterio label { font-size:12.5px; color:var(--text-hi); font-weight:700; flex:1; }
+    .avaliacao-criterio select { font-size:12.5px; padding:4px 8px; border:1px solid var(--border); background:var(--bg-app); color:var(--text-hi); border-radius:7px; }
+    .avaliacao-observacoes textarea { width:100%; min-height:70px; font-size:12.5px; padding:8px; border:1px solid var(--border); background:var(--bg-app); color:var(--text-hi); border-radius:7px; resize:vertical; box-sizing:border-box; }
+    .avaliacao-erro-critico { display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--text-hi); }
+    .avaliacao-modal-actions { display:flex; justify-content:flex-end; gap:8px; }
+    .avaliacao-modal-actions button { font-size:12.5px; padding:6px 14px; border-radius:7px; border:1px solid var(--border); cursor:pointer; font-weight:700; }
+    .avaliacao-modal-actions .avaliacao-salvar { background:var(--accent); color:#fff; border-color:var(--accent); }
 
     .fonte-corrigido-actions { display:flex; gap:8px; margin-top:6px; }
     .fonte-corrigido-actions button { font-size:12px; padding:5px 10px; }
@@ -139,12 +152,31 @@
     </div>
   </div>
 
+  <div class="diff-modal-backdrop" id="avaliacao-modal-backdrop" onclick="fecharModalAvaliacao(event)">
+    <div class="diff-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
+      <div class="diff-modal-head">
+        <div>
+          <div class="diff-modal-title">Avaliar investigação</div>
+          <div class="diff-modal-subtitle">Avalie a utilidade técnica real desta resposta — 0 (nenhuma) a 5 (excelente) em cada critério.</div>
+        </div>
+        <button class="diff-modal-close" type="button" title="Fechar" onclick="fecharModalAvaliacao()">x</button>
+      </div>
+      <div class="diff-modal-body">
+        <div class="avaliacao-modal-body" id="avaliacao-modal-body"></div>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/auth.js"></script>
   <script>
     const params = new URLSearchParams(location.search);
     const atendimentoId = params.get('id');
     let anexosPendentes = []; // [{id, nomeOriginal, mimeType, eCodigo}]
     let enviando = false;
+    // Espelho local das mensagens já carregadas (por id) -- usado só para
+    // pré-popular/atualizar o modal de avaliação humana sem round-trip extra
+    // ao servidor; fonte de verdade continua sendo a API.
+    let _mensagensCarregadas = new Map();
 
     function showError(msg) {
       const el = document.getElementById('error-banner');
@@ -284,8 +316,112 @@
           </div>
           ${detalhes ? `<details class="ficha-operacional-details"><summary>Analise completa, evidencias e historico</summary>${detalhes}</details>` : ''}
           ${renderizarValidacaoSolucao(mensagemId, ficha.validacaoSolucao)}
+          ${renderizarAvaliacaoHumana(mensagemId, ficha.avaliacaoHumana)}
         </div>
       `;
+    }
+
+    const CRITERIOS_AVALIACAO = [
+      ['compreensaoProblema', 'Compreensão do problema'],
+      ['aproveitamentoEvidencias', 'Aproveitamento das evidências'],
+      ['profundidadeTecnica', 'Profundidade técnica'],
+      ['orientacaoPratica', 'Orientação prática'],
+      ['confiabilidadeTecnica', 'Confiabilidade técnica'],
+    ];
+    const FAIXAS_AVALIACAO = [
+      { chave: 'EXCELENTE', rotulo: 'Excelente', min: 22, max: 25 },
+      { chave: 'BOA', rotulo: 'Boa', min: 18, max: 21 },
+      { chave: 'PARCIAL', rotulo: 'Parcial', min: 13, max: 17 },
+      { chave: 'INSATISFATORIA', rotulo: 'Insatisfatória', min: 0, max: 12 },
+    ];
+    function faixaDeNotaTotal(notaTotal) {
+      return FAIXAS_AVALIACAO.find(f => notaTotal >= f.min && notaTotal <= f.max)?.rotulo || 'Insatisfatória';
+    }
+    let _mensagemIdAvaliacaoAtual = null;
+
+    // Avaliacao humana de utilidade tecnica real (consultor), independente
+    // do Quality Gate -- nunca altera o motor. Mostra resumo compacto se eu
+    // ja avaliei; senao, link discreto para abrir o modal.
+    function renderizarAvaliacaoHumana(mensagemId, avaliacaoHumana) {
+      if (!mensagemId) return '';
+      const minha = avaliacaoHumana?.minhaAvaliacaoAtual || null;
+      const outras = (avaliacaoHumana?.todasAsAvaliacoesAtuais || []).filter(a => !minha || String(a.usuarioId) !== String(minha.usuarioId));
+      const resumoMinha = minha
+        ? `<span class="avaliacao-resumo">Sua avaliação: ${minha.notaTotal}/25 · ${escapeHtml(faixaDeNotaTotal(minha.notaTotal))}</span>
+           <button type="button" class="avaliacao-link" onclick="abrirModalAvaliacao('${escapeHtml(mensagemId)}')">editar</button>`
+        : `<button type="button" class="avaliacao-link" onclick="abrirModalAvaliacao('${escapeHtml(mensagemId)}')">Avaliar investigação</button>`;
+      const outrasHtml = outras.length
+        ? `<span class="avaliacao-outras">· ${outras.length} outra(s) avaliação(ões) de ${escapeHtml(outras.map(a => a.nomeAvaliador || 'consultor').join(', '))}</span>`
+        : '';
+      return `<div class="ficha-operacional-avaliacao" id="avaliacao-card-${escapeHtml(mensagemId)}">${resumoMinha}${outrasHtml}</div>`;
+    }
+
+    function abrirModalAvaliacao(mensagemId) {
+      _mensagemIdAvaliacaoAtual = mensagemId;
+      const dados = _mensagensCarregadas.get(mensagemId);
+      const minha = dados?.respostaOperacional?.avaliacaoHumana?.minhaAvaliacaoAtual || null;
+      const body = document.getElementById('avaliacao-modal-body');
+      body.innerHTML = `
+        ${CRITERIOS_AVALIACAO.map(([campo, rotulo]) => `
+          <div class="avaliacao-criterio">
+            <label for="avaliacao-${campo}">${escapeHtml(rotulo)}</label>
+            <select id="avaliacao-${campo}">
+              ${[0,1,2,3,4,5].map(n => `<option value="${n}" ${minha?.notas?.[campo] === n ? 'selected' : ''}>${n}</option>`).join('')}
+            </select>
+          </div>
+        `).join('')}
+        <div class="avaliacao-observacoes">
+          <textarea id="avaliacao-observacoes" placeholder="Observações (opcional)" maxlength="2000">${escapeHtml(minha?.observacoes || '')}</textarea>
+        </div>
+        <label class="avaliacao-erro-critico">
+          <input type="checkbox" id="avaliacao-erro-critico" ${minha?.erroTecnicoCritico ? 'checked' : ''}>
+          Erro técnico crítico identificado nesta resposta
+        </label>
+        <div class="avaliacao-modal-actions">
+          <button type="button" onclick="fecharModalAvaliacao()">Cancelar</button>
+          <button type="button" class="avaliacao-salvar" onclick="salvarAvaliacaoInvestigacao()">Salvar avaliação</button>
+        </div>
+      `;
+      document.getElementById('avaliacao-modal-backdrop').classList.add('ativo');
+    }
+
+    function fecharModalAvaliacao(event) {
+      if (event && event.target !== document.getElementById('avaliacao-modal-backdrop')) return;
+      document.getElementById('avaliacao-modal-backdrop').classList.remove('ativo');
+    }
+
+    async function salvarAvaliacaoInvestigacao() {
+      const mensagemId = _mensagemIdAvaliacaoAtual;
+      if (!mensagemId) return;
+      const notas = {};
+      for (const [campo] of CRITERIOS_AVALIACAO) {
+        notas[campo] = Number(document.getElementById(`avaliacao-${campo}`).value);
+      }
+      const observacoes = document.getElementById('avaliacao-observacoes').value.trim() || null;
+      const erroTecnicoCritico = document.getElementById('avaliacao-erro-critico').checked;
+      try {
+        const empresaId = empresaIdAtual();
+        const resp = await api(`/api/ia-service/atendimentos/${atendimentoId}/mensagens/${mensagemId}/avaliacao?empresa_id=${empresaId}`, {
+          method: 'POST',
+          body: JSON.stringify({ notas, observacoes, erroTecnicoCritico }),
+        });
+        const dados = _mensagensCarregadas.get(mensagemId);
+        if (dados?.respostaOperacional?.avaliacaoHumana) {
+          const avaliacaoHumana = dados.respostaOperacional.avaliacaoHumana;
+          avaliacaoHumana.minhaAvaliacaoAtual = resp.avaliacaoAtual;
+          // Mantem todasAsAvaliacoesAtuais em sincronia: substitui a entrada
+          // deste usuario (se ja existia) pela nova, em vez de deixar o
+          // cache local desatualizado ate o proximo reload da pagina.
+          const outras = (avaliacaoHumana.todasAsAvaliacoesAtuais || [])
+            .filter(a => String(a.usuarioId) !== String(resp.avaliacaoAtual.usuarioId));
+          avaliacaoHumana.todasAsAvaliacoesAtuais = [...outras, resp.avaliacaoAtual];
+        }
+        const card = document.getElementById(`avaliacao-card-${mensagemId}`);
+        if (card) card.outerHTML = renderizarAvaliacaoHumana(mensagemId, dados?.respostaOperacional?.avaliacaoHumana);
+        fecharModalAvaliacao();
+      } catch (err) {
+        showError('Não foi possível registrar a avaliação: ' + err.message);
+      }
     }
 
     async function confirmarValidacaoSolucao(mensagemId, resultado) {
@@ -500,6 +636,7 @@
           (anexosPorMensagem[a.mensagemId] ||= []).push(a);
         }
 
+        _mensagensCarregadas = new Map(mensagens.map(m => [m.id, m]));
         for (const m of mensagens) {
           if (m.papel === 'system') continue;
           addBubble({
@@ -572,6 +709,7 @@
           body: JSON.stringify({ texto, anexoIds: anexosDoTurno.map(a => a.id) }),
         });
         hideTyping();
+        _mensagensCarregadas.set(resposta.id, resposta);
         addBubble({ id: resposta.id, direcao: 'in', texto: resposta.conteudo, diagnostico: resposta.diagnostico, nivelConfianca: resposta.nivelConfianca, criadoEm: resposta.criadoEm, papel: 'assistant', fontesCorrigidos: resposta.fontesCorrigidos, avisosFonteCorrigido: resposta.avisosFonteCorrigido, respostaOperacional: resposta.respostaOperacional });
       } catch (err) {
         hideTyping();

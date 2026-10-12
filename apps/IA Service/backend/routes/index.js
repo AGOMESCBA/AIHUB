@@ -34,6 +34,8 @@ const trilhaInvestigacaoService = require('../services/trilha-investigacao-servi
 const turnoLockService = require('../services/turno-lock-service');
 const validacaoSolucaoService = require('../services/validacao-solucao-service');
 const validacaoSolucaoRepo = require('../repositories/validacao-solucao-repository');
+const avaliacaoInvestigacaoService = require('../services/avaliacao-investigacao-service');
+const homologacaoService = require('../services/homologacao-service');
 
 // multer com storage em memória — o binário só vai para disco depois da
 // validação (armazenamento.validarAnexo), nunca antes. Limite de tamanho
@@ -150,12 +152,21 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   app.get('/api/ia-service/atendimentos/:id/mensagens', (req, res) => {
     try {
       const empresaId = req.svcEmpresaId;
+      const usuarioId = req.session?.user_id || null;
       const mensagens = atendimentoService.listarMensagens(empresaId, req.params.id);
       const idsAssistente = mensagens.filter(m => m.papel === 'assistant').map(m => m.id);
       const estadosValidacao = validacaoSolucaoRepo.obterEstadoAtualPorMensagens(empresaId, idsAssistente);
-      res.json(mensagens.map(m => respostaOperacionalService.anexarFichaOperacional(m, {
-        validacaoSolucao: estadosValidacao[m.id] || null,
-      })));
+      const avaliacoesPorMensagem = avaliacaoInvestigacaoService.obterAvaliacoesEmLote(empresaId, idsAssistente);
+      res.json(mensagens.map(m => {
+        const todasAsAvaliacoesAtuais = avaliacoesPorMensagem[m.id] || [];
+        const minhaAvaliacaoAtual = usuarioId
+          ? todasAsAvaliacoesAtuais.find(a => String(a.usuarioId) === String(usuarioId)) || null
+          : null;
+        return respostaOperacionalService.anexarFichaOperacional(m, {
+          validacaoSolucao: estadosValidacao[m.id] || null,
+          avaliacaoHumana: { minhaAvaliacaoAtual, todasAsAvaliacoesAtuais },
+        });
+      }));
     } catch (err) {
       _handleErro(res, err);
     }
@@ -193,6 +204,85 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       const empresaId = req.svcEmpresaId;
       const estadoAtual = validacaoSolucaoService.obterEstadoValidacao(empresaId, req.params.mensagemId, req.params.id);
       res.json(estadoAtual);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // Avaliacao humana da investigacao (consultor avalia utilidade tecnica real
+  // da resposta da IA, independente do Quality Gate) -- sempre cria um evento
+  // novo em avaliacoes_investigacao, nunca sobrescreve o anterior. Exige
+  // usuario autenticado (nunca confia em ID enviado pelo corpo da requisicao
+  // para identificar quem avaliou -- mesma regra da Fase 3/confirmacao de
+  // solucao).
+  app.post('/api/ia-service/atendimentos/:id/mensagens/:mensagemId/avaliacao', async (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const usuarioId = req.session?.user_id;
+      if (!usuarioId) return res.status(401).json({ error: 'Usuário não identificado para avaliar a investigação.' });
+      const { notas, observacoes, erroTecnicoCritico } = req.body || {};
+      const { evento, avaliacaoAtual } = await avaliacaoInvestigacaoService.avaliarInvestigacao(empresaId, {
+        atendimentoId: req.params.id,
+        mensagemAssistenteId: req.params.mensagemId,
+        notas,
+        observacoes: observacoes || null,
+        erroTecnicoCritico: !!erroTecnicoCritico,
+        usuarioId,
+      });
+      res.status(201).json({ evento, avaliacaoAtual });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // Avaliacao atual do usuario logado para aquela mensagem (pre-popular
+  // "consultar e atualizar a propria avaliacao").
+  app.get('/api/ia-service/atendimentos/:id/mensagens/:mensagemId/avaliacao', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const usuarioId = req.session?.user_id || null;
+      const avaliacaoAtual = avaliacaoInvestigacaoService.obterAvaliacaoAtual(empresaId, req.params.mensagemId, usuarioId, req.params.id);
+      res.json(avaliacaoAtual);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // Todas as avaliacoes atuais da mensagem (todos os consultores, com nome
+  // do avaliador) -- visivel a qualquer consultor da empresa, mesmo nivel de
+  // acesso da validacao de solucao.
+  app.get('/api/ia-service/atendimentos/:id/mensagens/:mensagemId/avaliacao/todas', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const todas = avaliacaoInvestigacaoService.obterAvaliacoesAtuaisDaMensagem(empresaId, req.params.mensagemId);
+      res.json(todas);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // Historico completo de avaliacoes do usuario logado para uma mensagem
+  // (nunca apagado -- cada reavaliacao e um evento novo preservado).
+  app.get('/api/ia-service/atendimentos/:id/mensagens/:mensagemId/avaliacao/historico', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const usuarioId = req.session?.user_id;
+      if (!usuarioId) return res.status(401).json({ error: 'Usuário não identificado.' });
+      const historico = avaliacaoInvestigacaoService.obterHistoricoDoUsuario(empresaId, req.params.mensagemId, usuarioId);
+      res.json(historico);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // Relatorio agregado de homologacao da IA -- visivel a qualquer consultor
+  // da empresa (mesmo nivel de acesso das telas de radar/atendimentos hoje).
+  app.get('/api/ia-service/homologacao/resumo', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const { provider, model, produto } = req.query || {};
+      const relatorio = homologacaoService.obterRelatorioAgregado(empresaId, { provider, model, produto });
+      res.json(relatorio);
     } catch (err) {
       _handleErro(res, err);
     }

@@ -30,6 +30,7 @@
         // não terminou o fetch assíncrono da empresa neste ponto.
         { id: 'svc-radar',        label: 'Radar de Chamados', hrefDinamico: radarHref,                    icon: '📡', novaGuia: true },
         { id: 'svc-atendimentos', label: 'Atendimentos',      href: '/app/ia-service/atendimentos.html', icon: '💬' },
+        { id: 'svc-homologacao',  label: 'Homologação da IA', href: '/app/ia-service/homologacao.html',  icon: '📊' },
       ],
     },
     {

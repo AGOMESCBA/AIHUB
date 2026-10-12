@@ -88,7 +88,7 @@ function _detalhes(secoes = {}, textoCompleto = '') {
 
 function construirFichaOperacional({
   diagnostico, nivelConfianca, conteudo, fontesCorrigidos = [], avisosFonteCorrigido = [],
-  validacaoSolucao = null,
+  validacaoSolucao = null, avaliacaoHumana = null,
 } = {}) {
   const secoes = diagnostico || {};
   const tipo = _tipoDiagnostico(secoes, nivelConfianca, conteudo);
@@ -110,6 +110,13 @@ function construirFichaOperacional({
     // validacao-solucao-repository.obterEstadoAtual (regra de precedência
     // confirmação > evidência externa é resolvida lá, não nesta camada).
     validacaoSolucao: validacaoSolucao || { status: 'AGUARDANDO_VALIDACAO', ultimaConfirmacao: null, ultimaEvidencia: null, historico: [] },
+    // Avaliacao humana de utilidade tecnica real (consultor), independente
+    // do Quality Gate -- apenas apresentacao, nunca derivado aqui (ver
+    // avaliacao-investigacao-service.js). minhaAvaliacaoAtual e a avaliacao
+    // do usuario logado (null se ainda nao avaliou); todasAsAvaliacoesAtuais
+    // inclui avaliacoes de outros consultores (nome do avaliador ja
+    // resolvido na camada de service).
+    avaliacaoHumana: avaliacaoHumana || { minhaAvaliacaoAtual: null, todasAsAvaliacoesAtuais: [] },
   };
 
   ficha.camposPreenchidos = ['diagnostico', 'acaoRecomendada', 'evidencia', 'validacao', 'proximoPasso']
@@ -129,6 +136,7 @@ function anexarFichaOperacional(mensagem, extras = {}) {
       fontesCorrigidos: extras.fontesCorrigidos || mensagem.fontesCorrigidos || [],
       avisosFonteCorrigido: extras.avisosFonteCorrigido || mensagem.avisosFonteCorrigido || [],
       validacaoSolucao: extras.validacaoSolucao || null,
+      avaliacaoHumana: extras.avaliacaoHumana || null,
     }),
   };
 }

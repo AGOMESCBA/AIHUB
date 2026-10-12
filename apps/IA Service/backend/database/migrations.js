@@ -1054,6 +1054,70 @@ const MIGRATIONS = [
       ALTER TABLE chamados ADD COLUMN status_encerramento_anterior TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 42,
+    descricao: 'Avaliacao humana das respostas investigativas da IA (utilidade tecnica real, medida fora do motor). Append-only, mesmo padrao de validacoes_solucao (migration 41): nenhuma UPDATE/DELETE de evento anterior -- "atualizar a propria avaliacao" = INSERT de um evento novo. Diferente de validacoes_solucao (estado por mensagem inteira), aqui o "estado atual" e por (mensagem, usuario): cada consultor avalia de forma independente e podem coexistir N avaliacoes atuais distintas para a mesma mensagem. Motivacao: auditoria de causa-raiz do chamado #035988 (2026-10) mostrou que o Quality Gate aprova respostas sem avaliar profundidade investigativa, e que a amostra real de execucoes auditadas (6 no banco inteiro) e pequena demais para decidir qualquer correcao no motor -- esta tabela coleta dado real de uso para decidir com evidencia de volume, no futuro.',
+    sql: `
+      CREATE TABLE IF NOT EXISTS avaliacoes_investigacao (
+        id                             TEXT PRIMARY KEY,
+        empresa_id                     INTEGER NOT NULL,
+        atendimento_id                 TEXT NOT NULL REFERENCES atendimentos(id) ON DELETE CASCADE,
+        mensagem_assistente_id         TEXT NOT NULL REFERENCES mensagens(id) ON DELETE CASCADE,
+
+        -- Resolvido automaticamente pelo repository (SELECT ... WHERE
+        -- mensagem_id = ? ORDER BY criado_em DESC LIMIT 1) -- nunca exigido
+        -- do chamador. NULL quando a mensagem nao tem execucao auditada
+        -- (ex. falha de provider antes do Quality Gate, caso do #035988).
+        execucao_id                    TEXT DEFAULT NULL REFERENCES investigacao_execucoes(id) ON DELETE SET NULL,
+
+        -- 5 criterios fixos, 0-5 cada. Colunas explicitas (nao JSON): dominio
+        -- nunca varia por tipo de resposta, permite AVG/GROUP BY direto em
+        -- SQL no relatorio agregado. Faixa validada no service (sem CHECK --
+        -- nenhuma tabela do schema usa, mesmo padrao do enum "resultado" em
+        -- validacoes_solucao).
+        nota_compreensao_problema      INTEGER NOT NULL,
+        nota_aproveitamento_evidencias INTEGER NOT NULL,
+        nota_profundidade_tecnica      INTEGER NOT NULL,
+        nota_orientacao_pratica        INTEGER NOT NULL,
+        nota_confiabilidade_tecnica    INTEGER NOT NULL,
+
+        observacoes                    TEXT DEFAULT NULL,
+
+        -- Sinalizacao independente das 5 notas -- um erro critico pode
+        -- coexistir com notas nao tao baixas (ex. a IA investigou bem mas
+        -- citou um dado factualmente errado). Nunca escreve no dossie de
+        -- investigacao (decisao explicita do usuario): fica so aqui e no
+        -- relatorio agregado.
+        erro_tecnico_critico           INTEGER NOT NULL DEFAULT 0,
+
+        -- NUNCA NULL -- avaliacao e sempre evento humano explicito (decisao
+        -- inegociavel do usuario), nunca inferido nem atribuido ao proprio
+        -- modelo como substituto do consultor. Sempre req.session.user_id,
+        -- nunca aceito do corpo da requisicao.
+        usuario_id                     INTEGER NOT NULL,
+        criado_em                      TEXT NOT NULL
+      );
+
+      -- Consulta mais frequente: estado atual de UM consultor para UMA
+      -- mensagem ("minha avaliacao atual" no chat).
+      CREATE INDEX IF NOT EXISTS idx_svc_avaliacoes_mensagem_usuario
+        ON avaliacoes_investigacao (empresa_id, mensagem_assistente_id, usuario_id, criado_em);
+
+      CREATE INDEX IF NOT EXISTS idx_svc_avaliacoes_atendimento
+        ON avaliacoes_investigacao (empresa_id, atendimento_id, criado_em);
+
+      -- Relatorio agregado cruza com investigacao_execucoes (provider/model/
+      -- quality_gate_json) sem table scan.
+      CREATE INDEX IF NOT EXISTS idx_svc_avaliacoes_execucao
+        ON avaliacoes_investigacao (empresa_id, execucao_id);
+
+      -- Mesmo padrao da migration 37: indice dedicado com atendimento_id
+      -- como 1a coluna para o ON DELETE CASCADE de atendimentos nao forcar
+      -- SCAN completo desta tabela.
+      CREATE INDEX IF NOT EXISTS idx_svc_avaliacoes_cascade_atendimento
+        ON avaliacoes_investigacao (atendimento_id);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;
