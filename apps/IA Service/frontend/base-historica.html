@@ -190,8 +190,9 @@
               Apagar ▾
             </button>
             <div class="apagar-dropdown" id="apagar-dropdown">
-              <button type="button" onclick="limparLog()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg> Limpar Log</button>
-              <button type="button" onclick="zerarBase()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Zerar Base</button>
+              <button type="button" onclick="limparLog()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg> Log</button>
+              <button type="button" onclick="limparPesquisaIA()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Pesquisas e Dossiês da IA</button>
+              <button type="button" onclick="zerarBase()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Chamados e Pesquisas da IA</button>
             </div>
           </div>
         </div>
@@ -653,6 +654,40 @@
     }
   }
 
+  // "Pesquisa da IA" — apaga só dossiês e execuções de investigação da
+  // fonte selecionada (memória de trabalho da IA). Preserva atendimentos,
+  // chamados, posicionamentos, mensagens de chat (incluindo respostas
+  // antigas da IA) e anexos — permite reinvestigar os MESMOS chamados do
+  // zero sem reimportar nada do SoftExpert.
+  async function limparPesquisaIA() {
+    hideError();
+    hideInfo();
+    document.getElementById('apagar-dropdown').classList.remove('open');
+    const empresaId = empresaIdAtual();
+    const fonteSelect = document.getElementById('importar-fonte');
+    const fonteId = fonteSelect.value;
+    const fonteNome = fonteSelect.options[fonteSelect.selectedIndex]?.textContent || fonteId;
+    if (!fonteId) return showError('Selecione uma fonte para limpar a pesquisa da IA.');
+    if (!confirm(`Limpar a pesquisa da IA da fonte "${fonteNome}"?\n\nIsso apaga os dossiês técnicos e as execuções de investigação (pesquisas, Quality Gate, tentativas) já feitas pela IA. Chamados, posicionamentos, atendimentos, mensagens do chat e anexos continuam intactos — a IA poderá investigar os mesmos chamados novamente do zero.`)) return;
+    setButtonLoading('btn-apagar', true, 'Limpando pesquisa da IA...');
+    mostrarOperacaoEmAndamento('Limpando dossiês e execuções da IA…');
+    try {
+      const resultado = await api(`/api/ia-service/base-historica/fontes/${fonteId}/pesquisa-ia?empresa_id=${empresaId}`, { method: 'DELETE' });
+      mostrarResultadoOperacao({
+        titulo: '✅ Pesquisa da IA limpa com sucesso.',
+        linhas: [
+          `Dossiês removidos: ${resultado.dossiesRemovidos || 0}`,
+          `Execuções removidas: ${resultado.execucoesRemovidas || 0}`,
+        ],
+      });
+      await carregarImportacoes();
+    } catch (err) {
+      mostrarResultadoOperacao({ titulo: '❌ Não foi possível limpar a pesquisa da IA.', linhas: [err.message], erro: true });
+    } finally {
+      setButtonLoading('btn-apagar', false);
+    }
+  }
+
   // "Zerar Base" — reset radical: apaga chamados/posicionamentos/
   // atendimentos/anexos/importações da fonte selecionada, SEM disparar
   // reimportação em seguida (diferente de "Reimportar do zero", que faz os
@@ -667,7 +702,7 @@
     const fonteId = fonteSelect.value;
     const fonteNome = fonteSelect.options[fonteSelect.selectedIndex]?.textContent || fonteId;
     if (!fonteId) return showError('Selecione uma fonte para zerar a base.');
-    if (!confirm(`Zerar a base da fonte "${fonteNome}"?\n\nIsso apaga chamados, posicionamentos, atendimentos do Radar/respostas da IA e anexos (banco e disco) já importados por ela, além do log de importações. A fonte continua cadastrada. NÃO reimporta automaticamente depois — use "Importação de Período" se quiser repopular.`)) return;
+    if (!confirm(`Zerar a base da fonte "${fonteNome}"?\n\nIsso apaga chamados, posicionamentos, atendimentos do Radar/respostas da IA, anexos (banco e disco) e TODAS as pesquisas e dossiês da IA já importados por ela, além do log de importações. A fonte continua cadastrada. NÃO reimporta automaticamente depois — use "Importação de Período" se quiser repopular.`)) return;
     setButtonLoading('btn-apagar', true, 'Zerando base...');
     mostrarOperacaoEmAndamento('Zerando base — isso pode levar alguns minutos dependendo do volume…');
     try {
@@ -772,7 +807,7 @@
     if (!fonteId) return showError('Selecione uma fonte para reimportar.');
     const inicio = dataParaYyyymmdd(document.getElementById('importar-inicio').value);
     const fim = dataParaYyyymmdd(document.getElementById('importar-fim').value);
-    if (!confirm(`Reimportar do zero a fonte "${fonteNome}"?\n\nIsso apaga as importações anteriores, os chamados/posicionamentos históricos e os atendimentos do Radar criados a partir dessa fonte, incluindo respostas antigas da IA. Depois inicia uma nova importação do período ${inicio} a ${fim}.`)) return;
+    if (!confirm(`Reimportar do zero a fonte "${fonteNome}"?\n\nIsso apaga as importações anteriores, os chamados/posicionamentos históricos e os atendimentos do Radar criados a partir dessa fonte, incluindo respostas, pesquisas e dossiês antigos da IA. Depois inicia uma nova importação do período ${inicio} a ${fim}.`)) return;
 
     setButtonLoading('btn-reimportar-zero', true, 'Reimportando...');
     mostrarOperacaoEmAndamento('Zerando a base antes de reimportar…');

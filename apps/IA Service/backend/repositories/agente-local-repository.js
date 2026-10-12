@@ -207,6 +207,12 @@ function _atendimentoIdsDaFonte(db, empresaId, fonteId) {
  * explícita do usuário (2026-10): "Zerar Base" existe separado de
  * "Reimportar do zero" para permitir limpar tudo sem disparar uma nova
  * importação automática em seguida.
+ *
+ * O DELETE de `atendimentos` já cascateia (FK ON DELETE CASCADE, com
+ * `foreign_keys = ON` global em database/index.js) para `mensagens`,
+ * `anexos`, `investigacao_execucoes` e `investigacao_dossies` (+ tabelas
+ * filhas destas) — "Zerar Base" sempre inclui pesquisas e dossiês da IA,
+ * não precisa de DELETE explícito adicional para essas tabelas.
  */
 const TAMANHO_LOTE_ZERAR_BASE = 500;
 
@@ -236,6 +242,44 @@ async function _deletarEmLotes(db, sql, params) {
     await _cederEventLoop();
   }
   return total;
+}
+
+/**
+ * "Pesquisa da IA" — apaga SÓ o que o motor de investigação gerou
+ * (investigacao_dossies, investigacao_execucoes e tabelas filhas por
+ * ON DELETE CASCADE: investigacao_itens, investigacao_item_relacoes,
+ * investigacao_dossie_atualizacoes), para os atendimentos desta fonte.
+ * Decisão explícita do usuário (2026-10): diferente de "Zerar Base",
+ * preserva atendimentos/chamados/posicionamentos/mensagens/anexos —
+ * permite resetar a "memória investigativa" da IA sobre os MESMOS
+ * chamados reais, sem reimportar nada do SoftExpert. Mensagens de chat
+ * já geradas pela IA (tabela `mensagens`, papel 'assistant') não são
+ * tocadas aqui — ficam como histórico de conversa.
+ */
+async function limparPesquisaIAFonte(empresaId, fonteId) {
+  const db = getDB();
+  const fonte = getFonte(empresaId, fonteId);
+  if (!fonte) return { limpa: false };
+  const empresa = Number(empresaId);
+
+  const atendimentoIds = _atendimentoIdsDaFonte(db, empresa, fonteId);
+  if (!atendimentoIds.length) {
+    return { limpa: true, dossiesRemovidos: 0, execucoesRemovidas: 0 };
+  }
+
+  let dossiesRemovidos = 0;
+  let execucoesRemovidas = 0;
+  for (let i = 0; i < atendimentoIds.length; i += TAMANHO_LOTE_ZERAR_BASE) {
+    const lote = atendimentoIds.slice(i, i + TAMANHO_LOTE_ZERAR_BASE);
+    const placeholders = lote.map(() => '?').join(',');
+    db.transaction(() => {
+      dossiesRemovidos += db.prepare(`DELETE FROM investigacao_dossies WHERE empresa_id = ? AND atendimento_id IN (${placeholders})`).run(empresa, ...lote).changes;
+      execucoesRemovidas += db.prepare(`DELETE FROM investigacao_execucoes WHERE empresa_id = ? AND atendimento_id IN (${placeholders})`).run(empresa, ...lote).changes;
+    })();
+    if (atendimentoIds.length > TAMANHO_LOTE_ZERAR_BASE) await _cederEventLoop();
+  }
+
+  return { limpa: true, dossiesRemovidos, execucoesRemovidas };
 }
 
 async function zerarBaseFonte(empresaId, fonteId) {
@@ -316,5 +360,6 @@ module.exports = {
   listarFontes,
   excluirFonte,
   limparHistoricoFonte,
+  limparPesquisaIAFonte,
   zerarBaseFonte,
 };

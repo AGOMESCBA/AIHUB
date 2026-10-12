@@ -600,6 +600,19 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
+  // "Pesquisa da IA" — apaga só dossiês e execuções de investigação da
+  // fonte (preserva atendimentos/chamados/posicionamentos/mensagens/
+  // anexos). Ver agenteLocalService.limparPesquisaIAFonte.
+  app.delete('/api/ia-service/base-historica/fontes/:id/pesquisa-ia', async (req, res) => {
+    try {
+      const resultado = await agenteLocalService.limparPesquisaIAFonte(req.svcEmpresaId, req.params.id);
+      if (!resultado?.limpa) return res.status(404).json({ error: 'Fonte não encontrada.' });
+      res.json(resultado);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   // "Zerar Base" — reset radical da fonte (chamados/posicionamentos/
   // atendimentos/anexos/importações), sem reimportar em seguida. Mantém o
   // cadastro da fonte (nome/connection_key) intacto. Ver

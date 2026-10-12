@@ -213,6 +213,15 @@ async function limparHistoricoFonte(empresaId, fonteId) {
   return agenteRepo.limparHistoricoFonte(empresaId, fonteId);
 }
 
+// "Pesquisa da IA" — apaga só dossiês e execuções de investigação da fonte
+// (ver agenteRepo.limparPesquisaIAFonte). Não toca em atendimentos/chamados/
+// posicionamentos/mensagens/anexos — sem diretório de disco para varrer.
+async function limparPesquisaIAFonte(empresaId, fonteId) {
+  const fonte = agenteRepo.getFonte(empresaId, fonteId);
+  if (!fonte) throw new Error('Fonte histórica não encontrada.');
+  return agenteRepo.limparPesquisaIAFonte(empresaId, fonteId);
+}
+
 // "Zerar Base" — reset radical da fonte (chamados/posicionamentos/
 // atendimentos/importações), sem disparar reimportação em seguida (isso é
 // decisão explícita do usuário no frontend, separado de "Reimportar do zero").
@@ -279,6 +288,7 @@ module.exports = {
   listarFontes,
   excluirFonte,
   limparHistoricoFonte,
+  limparPesquisaIAFonte,
   zerarBaseFonte,
   testarFonte,
   executarSelectNaFonte,
