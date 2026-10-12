@@ -654,11 +654,12 @@
     }
   }
 
-  // "Pesquisa da IA" — apaga só dossiês e execuções de investigação da
-  // fonte selecionada (memória de trabalho da IA). Preserva atendimentos,
-  // chamados, posicionamentos, mensagens de chat (incluindo respostas
-  // antigas da IA) e anexos — permite reinvestigar os MESMOS chamados do
-  // zero sem reimportar nada do SoftExpert.
+  // "Pesquisa da IA" — apaga dossiês, execuções de investigação e as
+  // mensagens de resposta da IA no chat, da fonte selecionada (memória de
+  // trabalho + histórico visível da IA). Preserva atendimentos, chamados,
+  // posicionamentos, mensagens escritas por humanos (cliente/analista) e
+  // anexos — permite reinvestigar os MESMOS chamados do zero, com o chat
+  // limpo, sem reimportar nada do SoftExpert.
   async function limparPesquisaIA() {
     hideError();
     hideInfo();
@@ -668,9 +669,9 @@
     const fonteId = fonteSelect.value;
     const fonteNome = fonteSelect.options[fonteSelect.selectedIndex]?.textContent || fonteId;
     if (!fonteId) return showError('Selecione uma fonte para limpar a pesquisa da IA.');
-    if (!confirm(`Limpar a pesquisa da IA da fonte "${fonteNome}"?\n\nIsso apaga os dossiês técnicos e as execuções de investigação (pesquisas, Quality Gate, tentativas) já feitas pela IA. Chamados, posicionamentos, atendimentos, mensagens do chat e anexos continuam intactos — a IA poderá investigar os mesmos chamados novamente do zero.`)) return;
+    if (!confirm(`Limpar a pesquisa da IA da fonte "${fonteNome}"?\n\nIsso apaga os dossiês técnicos, as execuções de investigação (pesquisas, Quality Gate, tentativas) e as mensagens de resposta da IA no chat. Chamados, posicionamentos, atendimentos, mensagens do cliente/analista e anexos continuam intactos — a IA poderá investigar os mesmos chamados novamente do zero.`)) return;
     setButtonLoading('btn-apagar', true, 'Limpando pesquisa da IA...');
-    mostrarOperacaoEmAndamento('Limpando dossiês e execuções da IA…');
+    mostrarOperacaoEmAndamento('Limpando dossiês, execuções e mensagens da IA…');
     try {
       const resultado = await api(`/api/ia-service/base-historica/fontes/${fonteId}/pesquisa-ia?empresa_id=${empresaId}`, { method: 'DELETE' });
       mostrarResultadoOperacao({
@@ -678,6 +679,7 @@
         linhas: [
           `Dossiês removidos: ${resultado.dossiesRemovidos || 0}`,
           `Execuções removidas: ${resultado.execucoesRemovidas || 0}`,
+          `Mensagens da IA removidas: ${resultado.mensagensIaRemovidas || 0}`,
         ],
       });
       await carregarImportacoes();

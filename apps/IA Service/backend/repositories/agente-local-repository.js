@@ -245,16 +245,20 @@ async function _deletarEmLotes(db, sql, params) {
 }
 
 /**
- * "Pesquisa da IA" — apaga SÓ o que o motor de investigação gerou
+ * "Pesquisa da IA" — apaga o que o motor de investigação gerou
  * (investigacao_dossies, investigacao_execucoes e tabelas filhas por
  * ON DELETE CASCADE: investigacao_itens, investigacao_item_relacoes,
- * investigacao_dossie_atualizacoes), para os atendimentos desta fonte.
+ * investigacao_dossie_atualizacoes) E as mensagens de resposta da IA
+ * (`mensagens` com papel 'assistant'), para os atendimentos desta fonte.
  * Decisão explícita do usuário (2026-10): diferente de "Zerar Base",
- * preserva atendimentos/chamados/posicionamentos/mensagens/anexos —
- * permite resetar a "memória investigativa" da IA sobre os MESMOS
- * chamados reais, sem reimportar nada do SoftExpert. Mensagens de chat
- * já geradas pela IA (tabela `mensagens`, papel 'assistant') não são
- * tocadas aqui — ficam como histórico de conversa.
+ * preserva atendimentos/chamados/posicionamentos/anexos e as mensagens
+ * ESCRITAS POR HUMANOS (cliente/analista, papel 'customer'/'user') —
+ * permite resetar a "memória investigativa" da IA (incluindo o que já
+ * apareceu no chat) sobre os MESMOS chamados reais, sem reimportar nada
+ * do SoftExpert e sem apagar o que o cliente/analista de fato escreveu.
+ * `anexos.mensagem_id` é ON DELETE SET NULL (não cascade) — o anexo
+ * físico e seu registro nunca são removidos por esta limpeza, só perdem
+ * o vínculo com a mensagem de IA apagada.
  */
 async function limparPesquisaIAFonte(empresaId, fonteId) {
   const db = getDB();
@@ -264,22 +268,24 @@ async function limparPesquisaIAFonte(empresaId, fonteId) {
 
   const atendimentoIds = _atendimentoIdsDaFonte(db, empresa, fonteId);
   if (!atendimentoIds.length) {
-    return { limpa: true, dossiesRemovidos: 0, execucoesRemovidas: 0 };
+    return { limpa: true, dossiesRemovidos: 0, execucoesRemovidas: 0, mensagensIaRemovidas: 0 };
   }
 
   let dossiesRemovidos = 0;
   let execucoesRemovidas = 0;
+  let mensagensIaRemovidas = 0;
   for (let i = 0; i < atendimentoIds.length; i += TAMANHO_LOTE_ZERAR_BASE) {
     const lote = atendimentoIds.slice(i, i + TAMANHO_LOTE_ZERAR_BASE);
     const placeholders = lote.map(() => '?').join(',');
     db.transaction(() => {
       dossiesRemovidos += db.prepare(`DELETE FROM investigacao_dossies WHERE empresa_id = ? AND atendimento_id IN (${placeholders})`).run(empresa, ...lote).changes;
       execucoesRemovidas += db.prepare(`DELETE FROM investigacao_execucoes WHERE empresa_id = ? AND atendimento_id IN (${placeholders})`).run(empresa, ...lote).changes;
+      mensagensIaRemovidas += db.prepare(`DELETE FROM mensagens WHERE empresa_id = ? AND papel = 'assistant' AND atendimento_id IN (${placeholders})`).run(empresa, ...lote).changes;
     })();
     if (atendimentoIds.length > TAMANHO_LOTE_ZERAR_BASE) await _cederEventLoop();
   }
 
-  return { limpa: true, dossiesRemovidos, execucoesRemovidas };
+  return { limpa: true, dossiesRemovidos, execucoesRemovidas, mensagensIaRemovidas };
 }
 
 async function zerarBaseFonte(empresaId, fonteId) {
