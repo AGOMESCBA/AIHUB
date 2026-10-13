@@ -111,34 +111,53 @@
         <nav class="topbar-nav" aria-label="Áreas do Radar">
           <button class="nav-item active" id="nav-radar-btn">Radar</button>
           <button class="nav-item" data-panel-tab="conversation">Conversa</button>
-          <button class="nav-item" data-panel-tab="evidence">Evidências</button>
-          <button class="nav-item" data-panel-tab="trail">Trilha de Investigação</button>
-          <button class="nav-item" data-panel-tab="details">Detalhes</button>
           <button class="nav-item" data-panel-tab="risk">Risco SLA</button>
-          <button class="nav-item" data-panel-tab="knowledge">Base de Conhecimento</button>
+          <details class="topbar-menu more-menu">
+            <summary class="nav-item">Mais</summary>
+            <div class="topbar-menu-panel compact" role="menu">
+              <button class="nav-item" type="button" role="menuitem" data-panel-tab="evidence">Evidências</button>
+              <button class="nav-item" type="button" role="menuitem" data-panel-tab="trail">Trilha de Investigação</button>
+              <button class="nav-item" type="button" role="menuitem" data-panel-tab="details">Detalhes</button>
+              <button class="nav-item" type="button" role="menuitem" data-panel-tab="knowledge">Base de Conhecimento</button>
+            </div>
+          </details>
         </nav>
         <div class="topbar-actions">
           <a href="/iaservice/guia" target="_blank" rel="noopener" class="help-button" title="Abrir manual do chat">
             <span aria-hidden="true">?</span>
             <strong>Ajuda</strong>
           </a>
-          <div class="company-chip">
-            <span>Empresa</span>
-            <strong id="company-name">-</strong>
-          </div>
-          <div class="theme-switch" id="theme-switch">
-            <button type="button" id="theme-toggle" aria-haspopup="true" aria-expanded="false" title="Tema">🖥️</button>
-            <div class="theme-menu" id="theme-menu" role="menu" aria-label="Tema" hidden>
-              <button type="button" role="menuitem" data-theme-option="system"><span>🖥️</span> Sistema</button>
-              <button type="button" role="menuitem" data-theme-option="light"><span>☀️</span> Claro</button>
-              <button type="button" role="menuitem" data-theme-option="dark"><span>🌙</span> Escuro</button>
+          <details class="topbar-menu account-menu">
+            <summary class="account-summary" title="Conta e preferências">
+              <span id="user-initials" class="account-avatar">IA</span>
+              <span class="account-copy">
+                <strong id="consultant-name">Consultor</strong>
+                <small id="company-name">-</small>
+              </span>
+            </summary>
+            <div class="topbar-menu-panel account-panel" role="menu">
+              <div class="account-meta">
+                <span>Empresa</span>
+                <strong id="account-company-readonly">Veja acima</strong>
+              </div>
+              <div class="account-meta">
+                <span>Consultor</span>
+                <strong id="account-consultant-readonly">Sessão externa</strong>
+              </div>
+              <div class="account-divider"></div>
+              <div class="account-section-label">Tema</div>
+              <div class="theme-switch" id="theme-switch">
+                <button type="button" id="theme-toggle" aria-haspopup="true" aria-expanded="false" title="Tema">🖥️</button>
+                <div class="theme-menu" id="theme-menu" role="menu" aria-label="Tema" hidden>
+                  <button type="button" role="menuitem" data-theme-option="system"><span>🖥️</span> Sistema</button>
+                  <button type="button" role="menuitem" data-theme-option="light"><span>☀️</span> Claro</button>
+                  <button type="button" role="menuitem" data-theme-option="dark"><span>🌙</span> Escuro</button>
+                </div>
+              </div>
+              <div class="account-divider"></div>
+              <button id="logout-btn" class="account-logout" type="button" role="menuitem">Sair</button>
             </div>
-          </div>
-          <button id="logout-btn" class="icon-button" title="Sair">Sair</button>
-          <div class="user-chip">
-            <span id="user-initials">IA</span>
-            <strong id="consultant-name">Consultor</strong>
-          </div>
+          </details>
         </div>
       </header>
 

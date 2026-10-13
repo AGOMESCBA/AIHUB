@@ -90,7 +90,24 @@ async function main() {
     assert.strictEqual(consultorRepo.getConsultor(EMPRESA, consultor.id).preAnaliseAutomatica, false);
     console.log('[4/4] Sem data ou com falha na Platform: nada muda e nunca lanca: ok');
 
-    console.log('sincronizacao-preferencia-platform.test.js: ok (4/4 cenarios validados)');
+    // 5) Dois vinculos chat-web do MESMO telefone/empresa (ex.: manual + auto da
+    // importacao): vence o editado mais recente, em qualquer ordem da lista.
+    // Usa a empresa real 1 porque listarEmpresasDoTelefone resolve o nome via
+    // crud.buscarPorId('empresas', ...).
+    const antigo = { platformIdentityId: 'ident-auto', empresaId: 1, telefone: '5565911112222', ativo: true,
+      usuarioIdIahub: null, idSoftexpert: '501', preAnaliseAutomatica: true, atualizadoEm: '2026-10-13T10:00:00.000Z' };
+    const recente = { ...antigo, platformIdentityId: 'ident-manual', preAnaliseAutomatica: false, atualizadoEm: '2026-10-13T12:00:00.000Z' };
+    for (const ordem of [[antigo, recente], [recente, antigo]]) {
+      platformStore.listarIaServicePorTelefone = () => ordem;
+      const empresas = loginExternoService.listarEmpresasDoTelefone('5565911112222');
+      assert.strictEqual(empresas.length, 1, 'uma entrada por empresa');
+      const c = consultorRepo.getConsultor(1, empresas[0].consultorId);
+      assert.strictEqual(c.preAnaliseAutomatica, false,
+        'vinculo editado mais recentemente (Manual) deve vencer independente da ordem');
+    }
+    console.log('[5/5] Vinculos duplicados do mesmo telefone: vence o mais recente em qualquer ordem: ok');
+
+    console.log('sincronizacao-preferencia-platform.test.js: ok (5/5 cenarios validados)');
   } finally {
     platformStore.listarIaServicePorTelefone = originalLista;
     Date.now = originalNow;

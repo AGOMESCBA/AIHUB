@@ -52,10 +52,34 @@ function _limparChallengesExpirados(db) {
  * mas no domínio de `consultores`. Retorna [] se o telefone não é
  * consultor de nenhuma empresa (chamador decide a mensagem de erro).
  */
+/**
+ * Um mesmo telefone pode ter mais de um vinculo ia-service/chat-web na mesma
+ * empresa na Platform (ex.: o vinculo criado a mao na tela e o vinculo
+ * automatico recriado pela importacao do IA Command). Antes, o login gravava
+ * um por vez e o ULTIMO da lista vencia -- ordem arbitraria, e a preferencia
+ * "Manual" cadastrada podia voltar "Automatica" (reportado em producao,
+ * 2026-10). Agora cada empresa fica com UM vinculo: o editado mais
+ * recentemente (empate: o que desliga a pre-analise, mais conservador).
+ */
+function _consolidarVinculosPorEmpresa(itens) {
+  const porEmpresa = new Map();
+  for (const item of itens) {
+    if (!item.idSoftexpert) continue;
+    const atual = porEmpresa.get(item.empresaId);
+    if (!atual) { porEmpresa.set(item.empresaId, item); continue; }
+    const tNovo = new Date(item.atualizadoEm || 0).getTime() || 0;
+    const tAtual = new Date(atual.atualizadoEm || 0).getTime() || 0;
+    if (tNovo > tAtual || (tNovo === tAtual && item.preAnaliseAutomatica === false && atual.preAnaliseAutomatica !== false)) {
+      porEmpresa.set(item.empresaId, item);
+    }
+  }
+  return [...porEmpresa.values()];
+}
+
 function listarEmpresasDoTelefone(telefoneBruto) {
   const telefone = normalizarTelefone(telefoneBruto);
   if (!telefone) return [];
-  const autorizadosPlatform = platformStore.listarIaServicePorTelefone(telefone);
+  const autorizadosPlatform = _consolidarVinculosPorEmpresa(platformStore.listarIaServicePorTelefone(telefone));
   if (autorizadosPlatform.length) {
     return autorizadosPlatform
       .map(item => {
@@ -111,8 +135,8 @@ function sincronizarPreferenciaDaPlatform(empresaId, consultorId) {
 
     const consultor = consultorRepo.getConsultor(empresaId, consultorId);
     if (!consultor?.telefone) return false;
-    const item = platformStore.listarIaServicePorTelefone(normalizarTelefone(consultor.telefone))
-      .find(i => Number(i.empresaId) === Number(empresaId) && i.idSoftexpert);
+    const item = _consolidarVinculosPorEmpresa(platformStore.listarIaServicePorTelefone(normalizarTelefone(consultor.telefone)))
+      .find(i => Number(i.empresaId) === Number(empresaId));
     if (!item?.atualizadoEm) return false;
 
     const platformEm = new Date(item.atualizadoEm).getTime();

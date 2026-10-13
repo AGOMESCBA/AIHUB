@@ -249,7 +249,19 @@
     toggle.setAttribute('aria-expanded', String(open));
   }
 
+  function closeTopbarMenus(except) {
+    document.querySelectorAll('.topbar-menu[open]').forEach((menu) => {
+      if (menu !== except) menu.open = false;
+    });
+    if (!except || !except.querySelector('#theme-switch')) setThemeMenu(false);
+  }
+
   function showAccess(message) {
+    // Sempre volta ao passo do telefone com os digitos limpos -- antes, depois
+    // de Sair a tela reaparecia no passo "Codigo" com o codigo antigo.
+    codeInputs().forEach((input) => { input.value = ''; });
+    $('code-input').value = '';
+    setAccessStep('phone');
     $('access-screen').hidden = false;
     $('radar-screen').hidden = true;
     $('app').dataset.view = 'access';
@@ -481,6 +493,10 @@
       showRadar();
       $('company-name').textContent = state.whoami.empresaNome || '-';
       $('consultant-name').textContent = state.whoami.consultorNome || 'Consultor';
+      const accountCompany = $('account-company-readonly');
+      const accountConsultant = $('account-consultant-readonly');
+      if (accountCompany) accountCompany.textContent = state.whoami.empresaNome || '-';
+      if (accountConsultant) accountConsultant.textContent = state.whoami.consultorNome || 'Consultor';
       $('user-initials').textContent = initials(state.whoami.consultorNome);
       await Promise.allSettled([loadPreferences(), loadQueue(), loadRisk()]);
       setupAutoRefresh();
@@ -491,8 +507,20 @@
   }
 
   async function loadPreferences() {
-    const pref = await request(ext('/radar/minhas-preferencias'));
-    $('pre-analysis-toggle').checked = pref.preAnaliseAutomatica !== false;
+    const toggle = $('pre-analysis-toggle');
+    let pref;
+    try {
+      pref = await request(ext('/radar/minhas-preferencias'));
+    } catch (err) {
+      // Nunca deixa o toggle "ligado por padrao" fingindo ser a preferencia real.
+      toggle.disabled = true;
+      toggle.title = 'Nao foi possivel carregar a preferencia de pre-analise.';
+      toast(`Nao foi possivel carregar a preferencia de pre-analise: ${err.message}`);
+      throw err;
+    }
+    toggle.disabled = false;
+    toggle.title = '';
+    toggle.checked = pref.preAnaliseAutomatica !== false;
     try {
       const config = await request(ext('/radar/config'));
       if (config?.autoRefreshSegundos != null) $('auto-refresh-select').value = String(config.autoRefreshSegundos);
@@ -1655,11 +1683,17 @@
         setThemeMenu(false);
       }
     });
+    document.querySelectorAll('.topbar-menu').forEach((menu) => {
+      menu.addEventListener('toggle', () => {
+        if (menu.open) closeTopbarMenus(menu);
+      });
+    });
     document.addEventListener('click', (event) => {
+      if (!event.target.closest('.topbar-menu')) closeTopbarMenus();
       if (!event.target.closest('#theme-switch')) setThemeMenu(false);
     });
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') setThemeMenu(false);
+      if (event.key === 'Escape') closeTopbarMenus();
     });
     $('refresh-queue-btn').addEventListener('click', () => {
       loadQueue({ forceSync: true });
@@ -1712,6 +1746,7 @@
     });
     document.querySelectorAll('[data-panel-tab]').forEach((btn) => btn.addEventListener('click', () => {
       setPanel(btn.dataset.panelTab);
+      closeTopbarMenus();
       if (state.selected && (state.mobileTarget === 'queue' || state.mobileTarget === 'summary')) setMobileTarget('conversation');
     }));
     document.querySelectorAll('[data-knowledge-tab]').forEach((btn) => btn.addEventListener('click', () => {
