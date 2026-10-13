@@ -43,6 +43,16 @@
     // chave consultar em state.processing. Populado em selectTicket() assim
     // que abrir-atendimento resolve o atendimentoId real.
     atendimentoIdPorChamado: new Map(),
+    // Guard contra multiplos pollMessages concorrentes para o MESMO
+    // atendimentoId (bug real, 2026-10: reabrir o mesmo chamado varias
+    // vezes antes da pre-analise anterior terminar criava um novo polling
+    // fire-and-forget a cada vez; cada um escrevia em
+    // state.chatStatusText/chatStatusAtendimentoId, e o indicador podia
+    // ficar "preso" na tela mesmo apos a resposta real ja ter chegado --
+    // um F5 limpava porque reiniciava o JS do zero, matando os pollings
+    // antigos). Analogo ao preAnalisesEmAndamento do backend
+    // (radar-service.js), mas do lado do cliente.
+    pollingsAtivos: new Set(),
   };
 
   // Avaliacao Humana (2026-10) -- mesmos criterios/faixas de
@@ -187,7 +197,15 @@
 
   async function request(path, options = {}) {
     const json = options.json !== false;
+    // cache:'no-store' -- pedido do usuario (ja levantado em sessoes
+    // anteriores): o chat da IA nunca pode servir uma resposta antiga do
+    // cache HTTP do navegador em vez de buscar o estado real do servidor.
+    // Sem isso, mensagens/dossie apagados manualmente (ex. botao "Pesquisas
+    // e Dossies da IA" na Base Historica) podiam continuar aparecendo no
+    // J2A mesmo numa aba aberta DEPOIS da limpeza, ate um F5 forcar o
+    // navegador a ignorar o cache.
     const res = await fetch(path, {
+      cache: 'no-store',
       ...options,
       headers: { ...apiHeaders(json), ...(options.headers || {}) },
     });
@@ -393,11 +411,40 @@
     bootRadar();
   }
 
+  // Zera todo estado de chat/fila em memoria antes de (re)entrar no Radar --
+  // pedido explicito do usuario (ja levantado em sessoes anteriores): login
+  // nunca pode herdar nenhum resquicio de uma sessao/chamado anterior nesta
+  // mesma aba (ex. trocar de empresa, ou sessao expirar e logar de novo sem
+  // dar F5). Mantem so token/preferencias de tema, que sao do dispositivo,
+  // nao da sessao.
+  function _resetEstadoDoChat() {
+    state.queue = [];
+    state.risk = { consultores: [], chamados: [] };
+    state.selected = null;
+    state.atendimentoId = null;
+    state.messages = [];
+    state.localAttachments = [];
+    state.softAttachments = [];
+    state.pendingFiles = [];
+    state.research = null;
+    state.dossie = null;
+    state.investigations = [];
+    state.trilha = [];
+    state.trilhaExpandida = new Set();
+    state.processing = new Set();
+    state.chatStatusText = null;
+    state.chatStatusAtendimentoId = null;
+    state.avaliacaoMensagemId = null;
+    state.atendimentoIdPorChamado = new Map();
+    state.pollingsAtivos = new Set();
+  }
+
   async function bootRadar() {
     if (!state.token) {
       showAccess();
       return;
     }
+    _resetEstadoDoChat();
     try {
       state.whoami = await request(ext('/whoami'));
       showRadar();
@@ -796,6 +843,12 @@
   // Porta a mesma logica/UX de atendimento.html (renderizarAvaliacaoHumana),
   // adaptada ao estilo "full re-render a partir do estado" do J2A.
   function renderizarAvaliacaoHumana(m) {
+    // Nunca oferece "Avaliar investigação" numa resposta que o proprio
+    // Quality Gate ja marcou como bloqueada para revisao (pedido explicito
+    // do usuario, 2026-10) -- o backend tambem rejeita a gravacao
+    // (avaliacao-investigacao-service.js), isto aqui e so para nao mostrar
+    // um botao que levaria a um erro.
+    if (m.respostaOperacional?.qualityGateBloqueado) return '';
     const avaliacaoHumana = m.respostaOperacional?.avaliacaoHumana;
     const minha = avaliacaoHumana?.minhaAvaliacaoAtual || null;
     const outras = (avaliacaoHumana?.todasAsAvaliacoesAtuais || []).filter(
@@ -1002,6 +1055,11 @@
   // hideChatStatus/loadMessages) e que respeita "ainda e o atendimento
   // visivel?".
   async function pollMessages(atendimentoId, times, interval, statusTexto) {
+    // Nunca inicia um 2o polling para o mesmo atendimentoId (ver comentario
+    // de state.pollingsAtivos) -- reabrir o mesmo chamado repetidas vezes
+    // antes da pre-analise anterior terminar nao deve empilhar pollings.
+    if (state.pollingsAtivos.has(atendimentoId)) return;
+    state.pollingsAtivos.add(atendimentoId);
     const aindaVisivel = () => atendimentoId === state.atendimentoId;
     if (statusTexto) showChatStatus(statusTexto, atendimentoId); // showChatStatus ja so exibe na tela se aindaVisivel() -- nao precisa checar aqui tambem
     state.processing.add(atendimentoId);
@@ -1013,6 +1071,7 @@
         if (temMensagemNova) break;
       }
     } finally {
+      state.pollingsAtivos.delete(atendimentoId);
       state.processing.delete(atendimentoId);
       renderQueue();
       if (statusTexto) hideChatStatus(atendimentoId);

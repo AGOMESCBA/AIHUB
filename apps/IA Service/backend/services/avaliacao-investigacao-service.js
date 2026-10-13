@@ -5,6 +5,7 @@
 const avaliacaoRepo = require('../repositories/avaliacao-investigacao-repository');
 const atendimentoRepo = require('../repositories/atendimento-repository');
 const mensagemRepo = require('../repositories/mensagem-repository');
+const investigacaoExecucaoRepo = require('../repositories/investigacao-execucao-repository');
 const consultorService = require('./consultor-service');
 const { NOTA_MIN, NOTA_MAX, CAMPOS_NOTA } = require('./avaliacao-criterios');
 
@@ -85,6 +86,14 @@ async function avaliarInvestigacao(empresaId, {
   const observacoesValidadas = _validarObservacoes(observacoes);
 
   _validarMensagemAssistenteDoAtendimento(empresaId, atendimentoId, mensagemAssistenteId);
+
+  // Defesa em profundidade (nao so esconder o botao no frontend): nunca
+  // grava avaliacao numa resposta que o proprio Quality Gate ja marcou como
+  // bloqueada para revisao -- pedido explicito do usuario, 2026-10.
+  const statusExecucao = investigacaoExecucaoRepo.listarStatusPorMensagens(empresaId, [mensagemAssistenteId]);
+  if (statusExecucao[mensagemAssistenteId] === 'revisao_necessaria_quality_gate') {
+    throw _erroValidacao('Esta resposta foi bloqueada pelo Quality Gate e não pode ser avaliada como investigação.');
+  }
 
   const evento = avaliacaoRepo.registrarAvaliacao(empresaId, {
     atendimentoId, mensagemAssistenteId, notas, observacoes: observacoesValidadas,

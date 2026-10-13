@@ -318,7 +318,7 @@
           </div>
           ${detalhes ? `<details class="ficha-operacional-details"><summary>Analise completa, evidencias e historico</summary>${detalhes}</details>` : ''}
           ${renderizarValidacaoSolucao(mensagemId, ficha.validacaoSolucao)}
-          ${renderizarAvaliacaoHumana(mensagemId, ficha.avaliacaoHumana)}
+          ${renderizarAvaliacaoHumana(mensagemId, ficha.avaliacaoHumana, ficha.qualityGateBloqueado)}
         </div>
       `;
     }
@@ -344,8 +344,14 @@
     // Avaliacao humana de utilidade tecnica real (consultor), independente
     // do Quality Gate -- nunca altera o motor. Mostra resumo compacto se eu
     // ja avaliei; senao, link discreto para abrir o modal.
-    function renderizarAvaliacaoHumana(mensagemId, avaliacaoHumana) {
+    function renderizarAvaliacaoHumana(mensagemId, avaliacaoHumana, qualityGateBloqueado) {
       if (!mensagemId) return '';
+      // Nunca oferece "Avaliar investigação" numa resposta que o proprio
+      // Quality Gate ja marcou como bloqueada para revisao (pedido
+      // explicito do usuario, 2026-10) -- o backend tambem rejeita a
+      // gravacao, isto aqui e so para nao mostrar um botao que levaria a
+      // um erro.
+      if (qualityGateBloqueado) return '';
       const minha = avaliacaoHumana?.minhaAvaliacaoAtual || null;
       const outras = (avaliacaoHumana?.todasAsAvaliacoesAtuais || []).filter(a => !minha || String(a.usuarioId) !== String(minha.usuarioId));
       const resumoMinha = minha
@@ -455,7 +461,7 @@
           avaliacaoHumana.todasAsAvaliacoesAtuais = [...outras, resp.avaliacaoAtual];
         }
         const card = document.getElementById(`avaliacao-card-${mensagemId}`);
-        if (card) card.outerHTML = renderizarAvaliacaoHumana(mensagemId, dados?.respostaOperacional?.avaliacaoHumana);
+        if (card) card.outerHTML = renderizarAvaliacaoHumana(mensagemId, dados?.respostaOperacional?.avaliacaoHumana, dados?.respostaOperacional?.qualityGateBloqueado);
         fecharModalAvaliacao();
       } catch (err) {
         showError('Não foi possível registrar a avaliação: ' + err.message);

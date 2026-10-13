@@ -88,7 +88,7 @@ function _detalhes(secoes = {}, textoCompleto = '') {
 
 function construirFichaOperacional({
   diagnostico, nivelConfianca, conteudo, fontesCorrigidos = [], avisosFonteCorrigido = [],
-  validacaoSolucao = null, avaliacaoHumana = null,
+  validacaoSolucao = null, avaliacaoHumana = null, qualityGateBloqueado = false,
 } = {}) {
   const secoes = diagnostico || {};
   const tipo = _tipoDiagnostico(secoes, nivelConfianca, conteudo);
@@ -117,6 +117,13 @@ function construirFichaOperacional({
     // inclui avaliacoes de outros consultores (nome do avaliador ja
     // resolvido na camada de service).
     avaliacaoHumana: avaliacaoHumana || { minhaAvaliacaoAtual: null, todasAsAvaliacoesAtuais: [] },
+    // true quando a execucao desta resposta ficou com status
+    // 'revisao_necessaria_quality_gate' (bloqueada pelo proprio Quality
+    // Gate apos reprovacao). Apenas apresentacao -- nunca altera o motor.
+    // Frontend usa para NUNCA oferecer "Avaliar investigacao" numa resposta
+    // que o sistema ja marcou como nao-confiavel (pedido explicito do
+    // usuario, 2026-10).
+    qualityGateBloqueado: !!qualityGateBloqueado,
   };
 
   ficha.camposPreenchidos = ['diagnostico', 'acaoRecomendada', 'evidencia', 'validacao', 'proximoPasso']
@@ -137,6 +144,7 @@ function anexarFichaOperacional(mensagem, extras = {}) {
       avisosFonteCorrigido: extras.avisosFonteCorrigido || mensagem.avisosFonteCorrigido || [],
       validacaoSolucao: extras.validacaoSolucao || null,
       avaliacaoHumana: extras.avaliacaoHumana || null,
+      qualityGateBloqueado: !!extras.qualityGateBloqueado,
     }),
   };
 }

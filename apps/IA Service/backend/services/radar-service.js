@@ -331,6 +331,31 @@ function _tentarDispararPreAnaliseEmBackground(empresaId, chamado, atendimento, 
       const anexoIds = todosAnexos.map(a => a.id).filter(Boolean);
       investigacaoService.processarPreAnalise(empresaId, atendimento.id, { anexoIds }).catch(err => {
         console.error(`[IA Service] Pré-análise automática (abertura no radar) falhou (chamado ${chamado.numero}):`, err.message);
+        // Rede de segurança (bug real, 2026-10: chamado #036475): quando a
+        // falha acontece ANTES do próprio processarTurno conseguir gravar sua
+        // mensagem de erro (ex. exceção síncrona bem no início, como
+        // getAtendimento ou qualquer passo antes do try de pesquisa técnica),
+        // nenhuma mensagem nem execução fica registrada — o guard
+        // verificarRespostaExistente (acima) nunca encontra nada, e CADA
+        // reabertura do chamado dispara uma nova tentativa, reiniciando o
+        // indicador "Aguardando pré-análise..." no frontend indefinidamente,
+        // mesmo sem nenhuma resposta nova de fato. Grava aqui um fallback
+        // mínimo só se processarPreAnalise não deixou NENHUM rastro, para que
+        // a próxima reabertura veja "já tem resposta" e pare de tentar.
+        try {
+          const jaRegistrouAlgo = mensagemRepo.listarMensagens(empresaId, atendimento.id, { limite: 500 })
+            .some(m => m.papel === 'assistant');
+          if (!jaRegistrouAlgo) {
+            mensagemRepo.salvarMensagem(empresaId, atendimento.id, {
+              papel: 'assistant',
+              conteudo: `Não foi possível concluir a pré-análise automática no momento: ${err.message}`,
+              usuarioId: null,
+              diagnostico: { erroInfraestrutura: true },
+            });
+          }
+        } catch (gravarErr) {
+          console.error('[IA Service] Falha ao gravar fallback da pré-análise automática:', gravarErr.message);
+        }
       });
     })
     .finally(() => {

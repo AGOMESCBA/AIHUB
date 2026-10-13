@@ -110,4 +110,30 @@ function listarPorAtendimento(empresaId, atendimentoId, { limite = 20 } = {}) {
   return rows.map(_rowParaDominio);
 }
 
-module.exports = { salvarExecucao, getExecucao, listarPorAtendimento };
+/**
+ * Status da execucao mais recente por mensagem_id, em lote -- usado para
+ * decidir se a Avaliacao Humana deve ser oferecida numa resposta (nunca
+ * oferecer "Avaliar investigacao" numa resposta bloqueada pelo Quality
+ * Gate, status 'revisao_necessaria_quality_gate': o proprio sistema ja
+ * marcou essa resposta como nao-confiavel, pedido explicito do usuario,
+ * 2026-10). So devolve o campo status, nao a execucao inteira.
+ */
+function listarStatusPorMensagens(empresaId, mensagemIds) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const ids = Array.from(new Set((mensagemIds || []).filter(Boolean)));
+  if (!ids.length) return {};
+  const db = getDB();
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = db.prepare(`
+    SELECT mensagem_id, status FROM investigacao_execucoes
+     WHERE empresa_id = ? AND mensagem_id IN (${placeholders})
+     ORDER BY criado_em DESC
+  `).all(Number(empresaId), ...ids);
+  const resultado = {};
+  for (const row of rows) {
+    if (!(row.mensagem_id in resultado)) resultado[row.mensagem_id] = redigirValor(row.status);
+  }
+  return resultado;
+}
+
+module.exports = { salvarExecucao, getExecucao, listarPorAtendimento, listarStatusPorMensagens };

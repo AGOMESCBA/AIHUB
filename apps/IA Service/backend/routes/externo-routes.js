@@ -257,6 +257,7 @@ module.exports = function registrarRotasExterno(app) {
       const idsAssistente = mensagens.filter(m => m.papel === 'assistant').map(m => m.id);
       const estadosValidacao = validacaoSolucaoRepo.obterEstadoAtualPorMensagens(empresaId, idsAssistente);
       const avaliacoesPorMensagem = avaliacaoInvestigacaoService.obterAvaliacoesEmLote(empresaId, idsAssistente);
+      const statusExecucaoPorMensagem = investigacaoExecucaoRepo.listarStatusPorMensagens(empresaId, idsAssistente);
       res.json(mensagens.map(m => {
         const todasAsAvaliacoesAtuais = avaliacoesPorMensagem[m.id] || [];
         const minhaAvaliacaoAtual = consultorExternoId
@@ -265,6 +266,7 @@ module.exports = function registrarRotasExterno(app) {
         return respostaOperacionalService.anexarFichaOperacional(m, {
           validacaoSolucao: estadosValidacao[m.id] || null,
           avaliacaoHumana: { minhaAvaliacaoAtual, todasAsAvaliacoesAtuais },
+          qualityGateBloqueado: statusExecucaoPorMensagem[m.id] === 'revisao_necessaria_quality_gate',
         });
       }));
     } catch (err) {

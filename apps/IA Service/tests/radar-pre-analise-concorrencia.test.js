@@ -126,7 +126,45 @@ async function main() {
     }
     console.log('[3/3] Atendimento que ja tem resposta assistant nunca redispara (comportamento preservado): ok');
 
-    console.log('radar-pre-analise-concorrencia.test.js: ok (3/3 cenarios validados)');
+    // 4) Bug real de producao (2026-10, chamado #036475): processarPreAnalise
+    // rejeita ANTES de conseguir persistir qualquer mensagem/execucao (ex.
+    // excecao sincrona bem no inicio do turno, fora de qualquer try interno)
+    // -- sem rede de seguranca, o guard "ja tem resposta?" nunca encontra
+    // nada e CADA reabertura do chamado dispara uma nova tentativa
+    // indefinidamente (reportado pelo usuario: "voltou a disparar a pesquisa
+    // novamente sem necessidade", indicador "Aguardando pre-analise..."
+    // preso no frontend a cada reabertura). O fallback em
+    // _tentarDispararPreAnaliseEmBackground deve gravar uma mensagem de erro
+    // minima quando processarPreAnalise falha sem deixar rastro, para que a
+    // proxima reabertura pare de tentar.
+    {
+      chamadasPreAnalise = 0;
+      investigacaoService.processarPreAnalise = async () => {
+        chamadasPreAnalise += 1;
+        throw new Error('falha sintetica antes de qualquer persistencia (simula #036475)');
+      };
+      const chamado = criarChamadoReal('CONC-FALHA-SEM-RASTRO-1');
+      const r1 = await radarService.iniciarAnalise(EMPRESA_A, chamado.id, { usuarioIdIahub: 1, preAnaliseAutomatica: true });
+      assert.strictEqual(r1.preAnaliseDisparada, true);
+      await new Promise(r => setTimeout(r, 100)); // aguarda o .catch() do disparo em background terminar
+
+      const mensagemRepo = require('../backend/repositories/mensagem-repository');
+      const mensagens = mensagemRepo.listarMensagens(EMPRESA_A, r1.atendimento.id, { limite: 500 });
+      assert.ok(
+        mensagens.some(m => m.papel === 'assistant'),
+        'falha sem rastro deve gravar uma mensagem assistant de fallback, senao o guard nunca para de redisparar',
+      );
+
+      // Reabertura seguinte: o guard deve agora encontrar a mensagem de
+      // fallback e NAO disparar de novo -- mesmo a pre-analise continuando a
+      // falhar sempre, o ciclo nao deve se repetir a cada reabertura.
+      const r2 = await radarService.iniciarAnalise(EMPRESA_A, chamado.id, { usuarioIdIahub: 1, preAnaliseAutomatica: true });
+      assert.strictEqual(r2.preAnaliseDisparada, false, 'apos o fallback persistir uma mensagem, reabertura seguinte nao deve redisparar');
+      assert.strictEqual(chamadasPreAnalise, 1, 'processarPreAnalise nao deve ser chamado de novo apos o fallback persistir rastro');
+    }
+    console.log('[4/4] Falha sem rastro grava fallback e impede redisparo infinito a cada reabertura (#036475): ok');
+
+    console.log('radar-pre-analise-concorrencia.test.js: ok (4/4 cenarios validados)');
   } finally {
     investigacaoService.processarPreAnalise = originalPreAnalise;
     anexosSoftExpertService.sincronizarAnexosParaAtendimento = originalSincronizar;
