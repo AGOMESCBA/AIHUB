@@ -442,6 +442,17 @@
     state.atendimentoIdPorChamado = new Map();
     state.pollingsAtivos = new Set();
     state.concluidosNaoVistos = new Set();
+    // O estado em memoria nao basta: o DOM do caso anterior continuava
+    // visivel apos um novo login na mesma aba (sessao expirada -> login), mesmo
+    // com as mensagens ja apagadas no servidor -- so um F5 limpava
+    // (reportado em producao, 2026-10).
+    $('case-view').hidden = true;
+    $('empty-state').hidden = false;
+    for (const id of ['messages', 'evidence-content', 'details-content', 'summary-content', 'trail-content', 'knowledge-content']) {
+      const el = $(id);
+      if (el) el.innerHTML = '';
+    }
+    fecharModalAvaliacao();
   }
 
   async function bootRadar() {
@@ -1541,7 +1552,31 @@
     countdownEl.textContent = mm > 0 ? `${mm}m ${String(ss).padStart(2, '0')}s` : `${ss}s`;
   }
 
+  // Aba deixada aberta enquanto os dados mudaram em outro lugar (ex. "Pesquisas
+  // e Dossies da IA" na Base Historica): ao voltar para a aba, rebusca a
+  // conversa do chamado aberto no servidor em vez de manter o que estava na
+  // tela. Nao roda enquanto aquele atendimento esta pesquisando (nao
+  // interfere na deteccao de resposta nova de pollMessages).
+  async function sincronizarChatAtivo() {
+    const atendimentoId = state.atendimentoId;
+    if (!atendimentoId || !state.selected || !state.token) return;
+    if (state.processing.has(atendimentoId)) return;
+    try {
+      const mensagens = await request(ext(`/atendimentos/${encodeURIComponent(atendimentoId)}/mensagens`));
+      if (atendimentoId !== state.atendimentoId || state.processing.has(atendimentoId)) return;
+      state.messages = mensagens;
+      await Promise.allSettled([loadLocalAttachments(), loadDossier(), loadInvestigations(), loadTrilha()]);
+      if (atendimentoId !== state.atendimentoId) return;
+      renderAllCaseData();
+    } catch (_) {
+      // Falha ao atualizar nunca derruba a tela: mantem o que ja estava exibido.
+    }
+  }
+
   function bindEvents() {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') sincronizarChatAtivo();
+    });
     $('phone-form').addEventListener('submit', startLogin);
     $('code-form').addEventListener('submit', verifyLogin);
     $('back-to-phone-btn').addEventListener('click', () => {
@@ -1589,6 +1624,9 @@
     $('logout-btn').addEventListener('click', () => {
       localStorage.removeItem(TOKEN_KEY);
       state.token = '';
+      clearInterval(state.autoTimer);
+      clearInterval(state.countdownTimer);
+      _resetEstadoDoChat();
       showAccess('Sessao encerrada.');
     });
     $('theme-switch').addEventListener('click', (event) => {
