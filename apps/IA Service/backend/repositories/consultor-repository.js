@@ -25,7 +25,15 @@ function _rowParaDominio(row) {
     idSoftexpert: row.id_softexpert,
     telefone: row.telefone,
     ativo: !!row.ativo,
-    preAnaliseAutomatica: !!row.pre_analise_automatica,
+    // Valor EFETIVO (escolha pessoal do analista, se houver; senao o padrao
+    // do cadastro da Platform) -- e o que o resto do sistema consome.
+    preAnaliseAutomatica: row.pre_analise_pessoal === null || row.pre_analise_pessoal === undefined
+      ? !!row.pre_analise_automatica
+      : !!row.pre_analise_pessoal,
+    preAnalisePadrao: !!row.pre_analise_automatica,
+    preAnalisePessoal: row.pre_analise_pessoal === null || row.pre_analise_pessoal === undefined
+      ? null
+      : !!row.pre_analise_pessoal,
     criadoEm: row.criado_em,
     atualizadoEm: row.atualizado_em,
   };
@@ -141,6 +149,10 @@ function upsertConsultorPlatform(empresaId, dados) {
   const existente = existentePorTelefone || existentePorId || existentePorSoftExpert;
 
   if (existente) {
+    // pre_analise_automatica e so o PADRAO vindo da Platform (sempre copiado);
+    // a escolha pessoal do analista fica em pre_analise_pessoal e nunca e
+    // tocada aqui.
+    const preAnalise = dados.preAnaliseAutomatica === false ? 0 : 1;
     db.prepare(`
       UPDATE consultores
          SET usuario_id_iahub = ?, id_softexpert = ?, telefone = ?, ativo = ?, pre_analise_automatica = ?, atualizado_em = ?
@@ -150,7 +162,7 @@ function upsertConsultorPlatform(empresaId, dados) {
       dados.idSoftexpert ?? existente.id_softexpert,
       dados.telefone ?? existente.telefone,
       dados.ativo === false ? 0 : 1,
-      dados.preAnaliseAutomatica === false ? 0 : 1,
+      preAnalise,
       agora,
       existente.id,
       Number(empresaId)
@@ -176,6 +188,22 @@ function upsertConsultorPlatform(empresaId, dados) {
   return _rowParaDominio(db.prepare('SELECT * FROM consultores WHERE id = ? AND empresa_id = ?').get(idPreferencial, Number(empresaId)));
 }
 
+/**
+ * Grava a escolha PESSOAL de pre-analise do analista (true/false) ou a remove
+ * (null = volta a seguir o padrao do cadastro). Nunca altera o padrao nem o
+ * cadastro da Platform.
+ */
+function definirPreferenciaPessoal(empresaId, consultorId, valor) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const db = getDB();
+  const atual = getConsultor(empresaId, consultorId);
+  if (!atual) return null;
+  const v = valor === null || valor === undefined ? null : (valor ? 1 : 0);
+  db.prepare('UPDATE consultores SET pre_analise_pessoal = ?, atualizado_em = ? WHERE id = ? AND empresa_id = ?')
+    .run(v, new Date().toISOString(), consultorId, Number(empresaId));
+  return getConsultor(empresaId, consultorId);
+}
+
 function atualizarConsultor(empresaId, consultorId, patch) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
@@ -190,7 +218,7 @@ function atualizarConsultor(empresaId, consultorId, patch) {
     patch.idSoftexpert !== undefined ? patch.idSoftexpert : atual.idSoftexpert,
     patch.telefone !== undefined ? patch.telefone : atual.telefone,
     patch.ativo !== undefined ? (patch.ativo ? 1 : 0) : (atual.ativo ? 1 : 0),
-    patch.preAnaliseAutomatica !== undefined ? (patch.preAnaliseAutomatica ? 1 : 0) : (atual.preAnaliseAutomatica ? 1 : 0),
+    patch.preAnaliseAutomatica !== undefined ? (patch.preAnaliseAutomatica ? 1 : 0) : (atual.preAnalisePadrao ? 1 : 0),
     agora,
     consultorId,
     Number(empresaId)
@@ -235,6 +263,7 @@ module.exports = {
   listarConsultores,
   listarConsultoresPorTelefoneNormalizado,
   upsertConsultorPlatform,
+  definirPreferenciaPessoal,
   atualizarConsultor,
   excluirConsultor,
   getNomeTecnicoPorIdOrigem,

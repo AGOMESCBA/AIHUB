@@ -245,6 +245,8 @@
     const menu = $('theme-menu');
     const toggle = $('theme-toggle');
     if (!menu || !toggle) return;
+    // Dentro do menu da conta as opcoes ficam sempre visiveis.
+    if (menu.closest('.account-panel')) return;
     menu.hidden = !open;
     toggle.setAttribute('aria-expanded', String(open));
   }
@@ -521,6 +523,7 @@
     toggle.disabled = false;
     toggle.title = '';
     toggle.checked = pref.preAnaliseAutomatica !== false;
+    renderPreferenciaPadrao(pref);
     try {
       const config = await request(ext('/radar/config'));
       if (config?.autoRefreshSegundos != null) $('auto-refresh-select').value = String(config.autoRefreshSegundos);
@@ -529,13 +532,31 @@
     }
   }
 
-  async function savePreferences() {
+  // O padrao vem do cadastro da Plataforma; a escolha feita aqui e pessoal e
+  // fica guardada a parte (nunca altera o cadastro). Mostra o aviso e o botao
+  // "Voltar ao padrao" so quando a escolha pessoal difere do padrao.
+  function renderPreferenciaPadrao(pref) {
+    const box = $('pre-analysis-padrao');
+    if (!box) return;
+    const difere = pref && pref.preAnalisePessoal !== null && pref.preAnalisePessoal !== undefined
+      && pref.preAnalisePessoal !== (pref.preAnalisePadrao !== false);
+    box.hidden = !difere;
+    if (difere) {
+      $('pre-analysis-padrao-texto').textContent = `Sua escolha. Padrão do cadastro: ${pref.preAnalisePadrao !== false ? 'Automática' : 'Manual'}.`;
+    }
+  }
+
+  async function savePreferences(valor) {
+    // valor: undefined = usa o toggle; null = voltar ao padrao do cadastro.
+    const enviar = valor === undefined ? $('pre-analysis-toggle').checked : valor;
     try {
-      await request(ext('/radar/minhas-preferencias'), {
+      const pref = await request(ext('/radar/minhas-preferencias'), {
         method: 'PUT',
-        body: JSON.stringify({ preAnaliseAutomatica: $('pre-analysis-toggle').checked }),
+        body: JSON.stringify({ preAnaliseAutomatica: enviar }),
       });
-      toast('Preferencia salva.');
+      $('pre-analysis-toggle').checked = pref.preAnaliseAutomatica !== false;
+      renderPreferenciaPadrao(pref);
+      toast(enviar === null ? 'Voltou ao padrão do cadastro.' : 'Preferencia salva.');
     } catch (err) {
       toast(`Nao foi possivel salvar: ${err.message}`);
     }
@@ -1710,7 +1731,8 @@
       setupAutoRefresh();
       saveAutoRefreshConfig();
     });
-    $('pre-analysis-toggle').addEventListener('change', savePreferences);
+    $('pre-analysis-toggle').addEventListener('change', () => savePreferences());
+    $('pre-analysis-padrao-btn').addEventListener('click', () => savePreferences(null));
     $('nav-radar-btn').addEventListener('click', backToRadar);
     $('queue-list').addEventListener('click', (event) => {
       const btn = event.target.closest('[data-ticket-id]');

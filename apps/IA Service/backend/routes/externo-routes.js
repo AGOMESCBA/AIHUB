@@ -506,6 +506,8 @@ module.exports = function registrarRotasExterno(app) {
         consultorEncontrado: true,
         consultorId: consultor.id,
         preAnaliseAutomatica: consultor.preAnaliseAutomatica !== false,
+        preAnalisePadrao: consultor.preAnalisePadrao !== false,
+        preAnalisePessoal: consultor.preAnalisePessoal,
       });
     } catch (err) {
       _handleErro(res, err);
@@ -517,14 +519,17 @@ module.exports = function registrarRotasExterno(app) {
       const consultor = consultorService.getConsultor(req.svcEmpresaId, req.svcConsultorExterno);
       if (!consultor) return res.status(404).json({ error: 'Consultor não encontrado nesta empresa.' });
 
+      // null = "voltar ao padrao" (remove a escolha pessoal); true/false = escolha do analista.
       const { preAnaliseAutomatica } = req.body || {};
-      const atualizado = consultorService.atualizarConsultor(req.svcEmpresaId, consultor.id, {
-        preAnaliseAutomatica: !!preAnaliseAutomatica,
-      });
+      const atualizado = consultorService.definirPreferenciaPessoal(
+        req.svcEmpresaId, consultor.id, preAnaliseAutomatica === null ? null : !!preAnaliseAutomatica,
+      );
       res.json({
         consultorEncontrado: true,
         consultorId: atualizado.id,
         preAnaliseAutomatica: atualizado.preAnaliseAutomatica !== false,
+        preAnalisePadrao: atualizado.preAnalisePadrao !== false,
+        preAnalisePessoal: atualizado.preAnalisePessoal,
       });
     } catch (err) {
       _handleErro(res, err);

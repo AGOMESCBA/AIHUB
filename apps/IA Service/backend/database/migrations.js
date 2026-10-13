@@ -1125,6 +1125,13 @@ const MIGRATIONS = [
       ALTER TABLE avaliacoes_investigacao ADD COLUMN origem_identidade TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 44,
+    descricao: 'Escolha PESSOAL de pre-analise automatica do consultor, separada do padrao vindo da Platform (2026-10): pre_analise_automatica passa a ser so o PADRAO copiado do cadastro da Platform a cada login; pre_analise_pessoal (NULL = segue o padrao, 0/1 = escolha do proprio analista no chat) nunca e sobrescrita pelo login nem pela sincronizacao. Valor efetivo = pessoal ?? padrao. Coluna aditiva, sem tocar no cadastro da Platform.',
+    sql: `
+      ALTER TABLE consultores ADD COLUMN pre_analise_pessoal INTEGER DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

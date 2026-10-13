@@ -76,6 +76,10 @@ function atualizarConsultor(empresaId, consultorId, patch) {
   return consultorRepo.atualizarConsultor(empresaId, consultorId, patch);
 }
 
+function definirPreferenciaPessoal(empresaId, consultorId, valor) {
+  return consultorRepo.definirPreferenciaPessoal(empresaId, consultorId, valor);
+}
+
 function excluirConsultor(empresaId, consultorId) {
   return consultorRepo.excluirConsultor(empresaId, consultorId);
 }
@@ -88,5 +92,6 @@ module.exports = {
   getNomeExibicaoPorUsuarioIahub,
   listarConsultores,
   atualizarConsultor,
+  definirPreferenciaPessoal,
   excluirConsultor,
 };

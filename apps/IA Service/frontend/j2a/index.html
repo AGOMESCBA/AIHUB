@@ -148,7 +148,7 @@
               <div class="account-section-label">Tema</div>
               <div class="theme-switch" id="theme-switch">
                 <button type="button" id="theme-toggle" aria-haspopup="true" aria-expanded="false" title="Tema">🖥️</button>
-                <div class="theme-menu" id="theme-menu" role="menu" aria-label="Tema" hidden>
+                <div class="theme-menu" id="theme-menu" role="menu" aria-label="Tema">
                   <button type="button" role="menuitem" data-theme-option="system"><span>🖥️</span> Sistema</button>
                   <button type="button" role="menuitem" data-theme-option="light"><span>☀️</span> Claro</button>
                   <button type="button" role="menuitem" data-theme-option="dark"><span>🌙</span> Escuro</button>
@@ -196,6 +196,10 @@
               <span class="switch-label"><strong>Pré-análise IA</strong><small>Ao iniciar análise</small></span>
               <input id="pre-analysis-toggle" type="checkbox" checked>
             </label>
+            <div class="pre-analysis-padrao" id="pre-analysis-padrao" hidden>
+              <span id="pre-analysis-padrao-texto"></span>
+              <button type="button" id="pre-analysis-padrao-btn" class="link-button">Voltar ao padrão</button>
+            </div>
           </div>
           <div id="queue-list" class="queue-list"></div>
         </aside>

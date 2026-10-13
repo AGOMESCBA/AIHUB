@@ -488,6 +488,25 @@ button.loading .loader { display: block; }
 .theme-switch button:hover { opacity: .8; }
 .theme-switch { position: relative; }
 .theme-switch #theme-toggle { opacity: 1; filter: none; width: 28px; height: 26px; font-size: 14px; }
+.pre-analysis-padrao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 0 4px;
+  font-size: 11px;
+  color: var(--muted, #8aa0b6);
+}
+.pre-analysis-padrao .link-button {
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
 .theme-menu {
   position: absolute;
   top: calc(100% + 6px);
@@ -518,6 +537,33 @@ button.loading .loader { display: block; }
 }
 .theme-switch .theme-menu button:hover { background: rgba(127,127,127,.16); }
 .theme-switch .theme-menu button.active { background: rgba(0,107,214,.18); font-weight: 700; }
+
+/* Dentro do menu da conta as 3 opcoes ficam sempre visiveis, lado a lado
+   (um popover dentro de outro popover escondia 2 das 3 opcoes). */
+.account-panel .theme-switch { display: block; padding: 0; border: 0; background: transparent; }
+.account-panel #theme-toggle { display: none; }
+.account-panel .theme-menu,
+.account-panel .theme-menu[hidden] {
+  display: flex;
+  position: static;
+  flex-direction: row;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.account-panel .theme-switch .theme-menu button {
+  flex: 1 1 0;
+  justify-content: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  font-size: 12px;
+}
+.account-panel .theme-switch .theme-menu button.active { border-color: var(--brand); }
 
 .radar-layout {
   min-height: 0;

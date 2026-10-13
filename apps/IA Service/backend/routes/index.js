@@ -1082,6 +1082,8 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
         consultorEncontrado: true,
         consultorId: consultor.id,
         preAnaliseAutomatica: consultor.preAnaliseAutomatica !== false,
+        preAnalisePadrao: consultor.preAnalisePadrao !== false,
+        preAnalisePessoal: consultor.preAnalisePessoal,
       });
     } catch (err) {
       _handleErro(res, err);
@@ -1096,13 +1098,15 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       if (!consultor) return res.status(404).json({ error: 'Consultor não encontrado para este usuário nesta empresa.' });
 
       const { preAnaliseAutomatica } = req.body || {};
-      const atualizado = consultorService.atualizarConsultor(empresaId, consultor.id, {
-        preAnaliseAutomatica: !!preAnaliseAutomatica,
-      });
+      const atualizado = consultorService.definirPreferenciaPessoal(
+        empresaId, consultor.id, preAnaliseAutomatica === null ? null : !!preAnaliseAutomatica,
+      );
       res.json({
         consultorEncontrado: true,
         consultorId: atualizado.id,
         preAnaliseAutomatica: atualizado.preAnaliseAutomatica !== false,
+        preAnalisePadrao: atualizado.preAnalisePadrao !== false,
+        preAnalisePessoal: atualizado.preAnalisePessoal,
       });
     } catch (err) {
       _handleErro(res, err);

@@ -137,12 +137,9 @@ function sincronizarPreferenciaDaPlatform(empresaId, consultorId) {
     if (!consultor?.telefone) return false;
     const item = _consolidarVinculosPorEmpresa(platformStore.listarIaServicePorTelefone(normalizarTelefone(consultor.telefone)))
       .find(i => Number(i.empresaId) === Number(empresaId));
-    if (!item?.atualizadoEm) return false;
-
-    const platformEm = new Date(item.atualizadoEm).getTime();
-    const consultorEm = new Date(consultor.atualizadoEm).getTime();
-    if (!Number.isFinite(platformEm) || (Number.isFinite(consultorEm) && platformEm <= consultorEm)) return false;
-    if (item.preAnaliseAutomatica === consultor.preAnaliseAutomatica && item.ativo === consultor.ativo) return false;
+    if (!item) return false;
+    // So o PADRAO e sincronizado; a escolha pessoal do analista nunca e tocada.
+    if (item.preAnaliseAutomatica === consultor.preAnalisePadrao && item.ativo === consultor.ativo) return false;
 
     consultorRepo.upsertConsultorPlatform(empresaId, {
       platformIdentityId: item.platformIdentityId,
