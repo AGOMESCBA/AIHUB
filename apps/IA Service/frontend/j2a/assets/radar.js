@@ -32,6 +32,7 @@
     trilhaExpandida: new Set(),
     processing: new Set(),
     chatStatusText: null,
+    chatStatusAtendimentoId: null,
     autoTimer: null,
     countdownTimer: null,
     nextRefreshAt: 0,
@@ -726,13 +727,25 @@
     if (pertoDoFim) container.scrollTop = container.scrollHeight;
   }
 
-  function showChatStatus(texto) {
+  // BUG REAL corrigido (2026-10): state.chatStatusText era uma variavel
+  // GLOBAL unica, sem nenhuma associacao a qual atendimento o "Aguardando
+  // pre-analise..." pertencia -- abrir o chamado A (que dispara o status),
+  // depois trocar para o chamado B, fazia renderMessages() de B reexibir o
+  // mesmo texto "escapando" do chamado A, mesmo B nao estando em
+  // processamento nenhum (reportado pelo usuario: aparecia em TODOS os
+  // chamados, nao so no que estava sendo pesquisado). Corrigido associando
+  // o texto ao atendimentoId que o gerou -- so e exibido quando esse
+  // atendimento ainda e o visivel na tela.
+  function showChatStatus(texto, atendimentoId = state.atendimentoId) {
     state.chatStatusText = texto || 'Processando...';
-    appendChatStatusRow(state.chatStatusText);
+    state.chatStatusAtendimentoId = atendimentoId;
+    if (atendimentoId === state.atendimentoId) appendChatStatusRow(state.chatStatusText);
   }
 
-  function hideChatStatus() {
+  function hideChatStatus(atendimentoId = state.atendimentoId) {
+    if (atendimentoId !== state.chatStatusAtendimentoId) return; // nao esconde status de OUTRO atendimento
     state.chatStatusText = null;
+    state.chatStatusAtendimentoId = null;
     const row = $('chat-status-row');
     if (row) row.remove();
   }
@@ -740,9 +753,14 @@
   function renderMessages() {
     const container = $('messages');
     const pertoDoFim = _estaPertoDoFim(container);
+    // So exibe o indicador "Aguardando pre-analise.../Pesquisando..." se ele
+    // pertencer ao atendimento ATUALMENTE visivel -- ver comentario de
+    // showChatStatus/hideChatStatus (bug real: status "vazando" para
+    // qualquer chamado aberto depois, nao so o que estava em processamento).
+    const statusPertenceAoAtual = state.chatStatusText && state.chatStatusAtendimentoId === state.atendimentoId;
     if (!state.messages.length) {
-      container.innerHTML = state.chatStatusText ? '' : '<div class="empty-block">Sem mensagens neste atendimento.</div>';
-      if (state.chatStatusText) appendChatStatusRow(state.chatStatusText, pertoDoFim);
+      container.innerHTML = statusPertenceAoAtual ? '' : '<div class="empty-block">Sem mensagens neste atendimento.</div>';
+      if (statusPertenceAoAtual) appendChatStatusRow(state.chatStatusText, pertoDoFim);
       return;
     }
     const sorted = [...state.messages].sort((a, b) => new Date(messageTimestamp(a)) - new Date(messageTimestamp(b)));
@@ -768,7 +786,7 @@
         </article>
       `;
     }).join('');
-    if (state.chatStatusText) appendChatStatusRow(state.chatStatusText, pertoDoFim);
+    if (statusPertenceAoAtual) appendChatStatusRow(state.chatStatusText, pertoDoFim);
     if (pertoDoFim) container.scrollTop = container.scrollHeight;
   }
 
@@ -890,7 +908,7 @@
     state.processing.add(atendimentoId);
     renderQueue();
     setBusy($('send-btn'), true, 'Enviando');
-    showChatStatus('Pesquisando e analisando o chamado com a IA...');
+    showChatStatus('Pesquisando e analisando o chamado com a IA...', atendimentoId);
     try {
       const anexoIds = await uploadPendingFiles(atendimentoId);
       const body = await request(ext(`/atendimentos/${encodeURIComponent(atendimentoId)}/investigar`), {
@@ -910,7 +928,7 @@
       state.processing.delete(atendimentoId);
       renderQueue();
       setBusy($('send-btn'), false);
-      hideChatStatus();
+      hideChatStatus(atendimentoId);
     }
   }
 
@@ -937,7 +955,7 @@
     state.processing.add(atendimentoId);
     renderQueue();
     setBusy($('research-btn'), true);
-    showChatStatus('Pesquisando no histórico completo do chamado...');
+    showChatStatus('Pesquisando no histórico completo do chamado...', atendimentoId);
     try {
       await request(ext(`/radar/chamados/${encodeURIComponent(state.selected.id)}/anexos-softexpert/sincronizar`), {
         method: 'POST',
@@ -963,7 +981,7 @@
       state.processing.delete(atendimentoId);
       renderQueue();
       setBusy($('research-btn'), false);
-      hideChatStatus();
+      hideChatStatus(atendimentoId);
     }
   }
 
@@ -985,7 +1003,7 @@
   // visivel?".
   async function pollMessages(atendimentoId, times, interval, statusTexto) {
     const aindaVisivel = () => atendimentoId === state.atendimentoId;
-    if (statusTexto && aindaVisivel()) showChatStatus(statusTexto);
+    if (statusTexto) showChatStatus(statusTexto, atendimentoId); // showChatStatus ja so exibe na tela se aindaVisivel() -- nao precisa checar aqui tambem
     state.processing.add(atendimentoId);
     renderQueue();
     try {
@@ -997,7 +1015,7 @@
     } finally {
       state.processing.delete(atendimentoId);
       renderQueue();
-      if (statusTexto && aindaVisivel()) hideChatStatus();
+      if (statusTexto) hideChatStatus(atendimentoId);
     }
   }
 
