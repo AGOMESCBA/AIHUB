@@ -34,12 +34,9 @@ async function _enviarCodigoViaWhatsApp({ empresaId, numero, codigo }) {
 
   const texto = [
     '🔐 IA Service - acesso ao chat',
-    '',
-    'Recebemos uma tentativa de entrada usando este WhatsApp.',
-    `O código expira em 5 minuto(s).`,
-    '',
-    '⚠️ Se você não solicitou este acesso, ignore a próxima mensagem.',
-    'Nunca compartilhe seu código com terceiros.',
+    `Use o código da próxima mensagem para entrar. Expira em 5 min.`,
+    'Se não solicitou este acesso, ignore.',
+    'Nunca compartilhe seu código.',
   ].join('\n');
 
   const base = process.env.IA_COMMAND_INTERNAL_URL || 'http://127.0.0.1:' + (process.env.PORT || 3000);

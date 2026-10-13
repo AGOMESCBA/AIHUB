@@ -167,6 +167,37 @@
     .sistema-block-head{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--accent-glow);font-size:12px;font-weight:700;color:var(--accent);}
     .sistema-block-body{padding:12px;display:flex;flex-direction:column;gap:10px;}
     .wa-detail-grid{display:grid;grid-template-columns:1fr 280px;gap:18px;align-items:start;}
+    .wa-analyst-shell{display:grid;grid-template-columns:minmax(320px,430px) minmax(0,1fr);gap:16px;align-items:start;}
+    .wa-analyst-list-panel,.wa-analyst-detail-panel{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;min-width:0;}
+    .wa-analyst-list-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;}
+    .wa-analyst-count{font-size:12px;color:var(--text-lo);white-space:nowrap;}
+    .wa-analyst-list{max-height:calc(100vh - 330px);min-height:420px;overflow:auto;background:var(--bg-base);}
+    .wa-analyst-group{padding:10px 12px 6px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);background:var(--bg-card);border-top:1px solid var(--border);position:sticky;top:0;z-index:1;}
+    .wa-analyst-card{width:100%;border:0;border-bottom:1px solid var(--border);background:var(--bg-card);padding:13px 14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:8px;transition:background .15s,box-shadow .15s;}
+    .wa-analyst-card:hover{background:var(--bg-hover);}
+    .wa-analyst-card.active{background:rgba(124,58,237,.07);box-shadow:inset 3px 0 0 var(--accent);}
+    .wa-analyst-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+    .wa-analyst-name{font-size:14px;font-weight:800;color:var(--text-hi);line-height:1.25;}
+    .wa-analyst-phone{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--text-md);margin-top:2px;}
+    .wa-status-dot{width:9px;height:9px;border-radius:99px;background:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.12);flex:0 0 auto;margin-top:4px;}
+    .wa-status-dot.inactive{background:#94a3b8;box-shadow:0 0 0 3px rgba(148,163,184,.18);}
+    .wa-analyst-detail-head{padding:18px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:14px;}
+    .wa-detail-title{font-size:20px;font-weight:800;color:var(--text-hi);line-height:1.2;}
+    .wa-detail-sub{font-family:ui-monospace,Consolas,monospace;font-size:13px;color:var(--text-md);margin-top:5px;}
+    .wa-detail-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+    .wa-detail-body{padding:18px;display:grid;gap:16px;}
+    .wa-detail-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+    .wa-metric{border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--bg-base);}
+    .wa-metric-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);}
+    .wa-metric-value{font-size:15px;font-weight:800;color:var(--text-hi);margin-top:4px;word-break:break-word;}
+    .wa-detail-section{border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--bg-base);}
+    .wa-detail-section-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);margin-bottom:10px;}
+    .wa-role-list{display:grid;gap:8px;}
+    .wa-role-line{display:grid;grid-template-columns:minmax(120px,1fr) minmax(110px,1fr) minmax(80px,.7fr) minmax(80px,.7fr);gap:8px;align-items:center;font-size:12px;color:var(--text-md);padding:8px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg-card);}
+    .wa-role-line strong{color:var(--text-hi);}
+    .wa-empty-detail{min-height:520px;display:flex;align-items:center;justify-content:center;color:var(--text-lo);font-size:13px;text-align:center;padding:24px;}
+    @media(max-width:1080px){.wa-analyst-shell{grid-template-columns:1fr}.wa-analyst-list{max-height:420px}.wa-detail-metrics{grid-template-columns:repeat(2,minmax(0,1fr));}}
+    @media(max-width:640px){.wa-detail-metrics,.wa-role-line{grid-template-columns:1fr}.wa-analyst-detail-head{display:block}.wa-detail-actions{justify-content:flex-start;margin-top:12px}}
     @media(max-width:960px){.page-head,.wa-detail-grid{display:block}.page-head .editor-actions{margin-top:12px}.quick-row select.form-control{width:100%;}.quick-row input.form-control{min-width:100%;}}
     .toast{position:fixed;bottom:24px;right:24px;background:#10b981;color:#fff;padding:11px 18px;border-radius:var(--radius);font-size:13px;font-weight:500;transform:translateY(80px);opacity:0;transition:var(--transition);z-index:999;}
     .toast.show{transform:translateY(0);opacity:1;}
@@ -228,6 +259,7 @@
           <button class="iac-tab" onclick="mudarAba(this,'aba-agente')">🔌 Agente Local</button>
           <button class="iac-tab" onclick="mudarAba(this,'aba-link')">🔗 Link de acesso</button>
           <button class="iac-tab" onclick="mudarAba(this,'aba-identidades')">Números Autorizados</button>
+          <button class="iac-tab" onclick="mudarAba(this,'aba-analistas')">Analistas</button>
           <button class="iac-tab" onclick="mudarAba(this,'aba-importacao')">Importacao</button>
         </div>
 
@@ -605,6 +637,65 @@
               </div>
             </div>
 
+            <div class="iac-tab-panel" id="aba-analistas">
+              <div class="page-head">
+                <div>
+                  <div class="page-kicker">Nova visualizacao</div>
+                  <div class="page-title">Analistas autorizados</div>
+                  <div class="page-subtitle">Lista com filtros, ordenacao, agrupamento e detalhe do cadastro selecionado.</div>
+                </div>
+                <div class="editor-actions">
+                  <button class="btn btn-ghost" onclick="limparAnalistasFiltros()">Limpar</button>
+                  <button class="btn btn-primary" onclick="novaIdentidadeDaVisao()">+ Novo Numero</button>
+                </div>
+              </div>
+
+              <div class="quick-panel open" id="wa-analyst-filter-panel">
+                <div class="quick-row">
+                  <input id="wa-analyst-busca" type="text" class="form-control" placeholder="Buscar por nome, telefone, modulo ou perfil..." oninput="renderAnalistas()">
+                  <select id="wa-analyst-status" class="form-control" onchange="renderAnalistas()">
+                    <option value="">Todos</option>
+                    <option value="ativo">Ativos</option>
+                    <option value="inativo">Inativos</option>
+                  </select>
+                  <select id="wa-analyst-sort" class="form-control" onchange="renderAnalistas()">
+                    <option value="nome">Ordenar por nome</option>
+                    <option value="numero">Ordenar por numero</option>
+                    <option value="criadoEm">Ordenar por criacao</option>
+                    <option value="perfil">Ordenar por perfil</option>
+                  </select>
+                  <select id="wa-analyst-dir" class="form-control" onchange="renderAnalistas()">
+                    <option value="asc">Ascendente</option>
+                    <option value="desc">Descendente</option>
+                  </select>
+                  <select id="wa-analyst-group" class="form-control" onchange="renderAnalistas()">
+                    <option value="">Sem grupo</option>
+                    <option value="perfil">Agrupar por perfil</option>
+                    <option value="modulo">Agrupar por modulo</option>
+                    <option value="status">Agrupar por status</option>
+                    <option value="origem">Agrupar por origem</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="wa-analyst-shell">
+                <section class="wa-analyst-list-panel">
+                  <div class="wa-analyst-list-head">
+                    <div>
+                      <div class="grid-title">Analistas</div>
+                      <div id="wa-analyst-filter-status" class="grid-meta">Carregando...</div>
+                    </div>
+                    <div id="wa-analyst-count" class="wa-analyst-count">-</div>
+                  </div>
+                  <div class="wa-analyst-list" id="wa-analyst-list"></div>
+                </section>
+
+                <section class="wa-analyst-detail-panel" id="wa-analyst-detail">
+                  <div class="wa-empty-detail">Selecione um analista para ver o cadastro completo.</div>
+                </section>
+              </div>
+            </div>
+
             <div class="iac-tab-panel" id="aba-importacao"><div class="form-section"><div class="form-section-body">
               <div class="prov-header"><div class="prov-icon prov-icon-agente">↧</div><div class="prov-meta"><div class="prov-name">Importacao IA Command</div><div class="prov-desc">Historico das cargas ja gravadas no IAHub Platform.</div></div></div>
               <div class="key-action" style="margin-bottom:14px">
@@ -633,14 +724,14 @@
 <div class="toast" id="toast"></div>
 <script>
 const providers = ['groq','openai','gemini','deepseek','claude'];
-const state = { activeTab:'aba-groq', identities:[] };
+const state = { activeTab:'aba-groq', identities:[], selectedAnalystId:null };
 function toggleSidebar(){ const sb=document.getElementById('sidebar'); if(!sb) return; const pinned=!sb.classList.contains('pinned'); sb.classList.toggle('pinned',pinned); document.querySelector('.layout')?.classList.toggle('sidebar-pinned',pinned); }
 function montarMenuPlatform(){ const nav=document.querySelector('.sidebar-nav'); if(!nav) return; const itens=[['/app/ia-administracao/administracao.html','IA Administracao','⚙'],['/app/ia-administracao/platform-config.html','IAHub Platform','IA'],['/app/ia-administracao/platform-config.html#numeros','Numeros Autorizados','▦']]; nav.innerHTML='<div class="nav-section-hdr open"><span class="nav-icon">▦</span><span class="nav-label">IAHub</span></div><div class="nav-section-body open">'+itens.map(([href,label,icon])=>'<a class="nav-item sub" href="'+href+'" style="text-decoration:none"><span class="nav-icon">'+icon+'</span><span class="nav-label">'+label+'</span></a>').join('')+'</div>'; const footer=document.querySelector('.sidebar-footer'); if(footer) footer.innerHTML=`<button class="nav-item sub" onclick="location.href='/app/ia-administracao/administracao.html'" title="Voltar"><span class="nav-icon">←</span><span class="nav-label">Voltar</span></button>`; }
 function qs(){ const p=new URLSearchParams(location.search); const eid=p.get('empresaId'); return eid?'?empresaId='+encodeURIComponent(eid):''; }
 function empresaIdBody(){ const eid=new URLSearchParams(location.search).get('empresaId'); return eid?{empresaId:Number(eid)}:{}; }
 async function api(url,options){ const r=await fetch(url,{credentials:'include',headers:{'Content-Type':'application/json'},...(options||{})}); const data=await r.json().catch(()=>({})); if(!r.ok||data.ok===false) throw new Error(data.error||data.erro||'Falha na requisicao'); return data; }
 function toast(msg,error){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.toggle('error',!!error); el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
-function mudarAba(btn,id){ state.activeTab=id; document.querySelectorAll('.iac-tab').forEach(b=>b.classList.remove('active')); document.querySelectorAll('.iac-tab-panel').forEach(p=>p.classList.remove('active')); btn.classList.add('active'); document.getElementById(id).classList.add('active'); document.getElementById('platform-editor-grid')?.classList.toggle('whatsapp-full',id==='aba-identidades'); }
+function mudarAba(btn,id){ state.activeTab=id; document.querySelectorAll('.iac-tab').forEach(b=>b.classList.remove('active')); document.querySelectorAll('.iac-tab-panel').forEach(p=>p.classList.remove('active')); btn.classList.add('active'); document.getElementById(id).classList.add('active'); document.getElementById('platform-editor-grid')?.classList.toggle('whatsapp-full',id==='aba-identidades'||id==='aba-analistas'); if(id==='aba-analistas') renderAnalistas(); }
 function eyeIcon(hidden){ return hidden ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C5 20 1 12 1 12a20.29 20.29 0 0 1 5.06-5.94"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.44 20.44 0 0 1-3.17 4.19"/><path d="M14.12 14.12a3 3 0 0 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>' : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'; }
 function setEyeIcon(input){ const btn=input.closest('.pass-wrap')?.querySelector('.btn-pass-toggle'); if(btn) btn.innerHTML=eyeIcon(input.type==='password'); }
 function toggleKey(id){ const i=document.getElementById(id); i.type=i.type==='password'?'text':'password'; setEyeIcon(i); }
@@ -678,7 +769,7 @@ function copiarLinkApelido(){ const el=document.getElementById('f-login-link'); 
 async function testarProvedor(provedor){ const div=document.getElementById('test-'+provedor); div.className='test-result'; div.style.display='block'; div.textContent='Testando conexao...'; try{ await api('/api/iahub/platform/ai-config/test',{method:'POST',body:JSON.stringify({...empresaIdBody(),provedor,api_key:document.getElementById('key-'+provedor).value.trim()})}); div.className='test-result ok'; div.textContent='Conexao OK — chave valida.'; }catch(e){ div.className='test-result fail'; div.textContent=e.message; } }
 async function carregarAgente(){ try{ const a=await api('/api/iahub/platform/agent-config'+qs()); fill('agent-enabled',String(a.agenteLocalAtivo!==false)); fill('agent-base-url',a.agenteLocalUrl||''); fill('agent-token',''); fill('agent-crypto-key',''); const cryptoChk=document.getElementById('agent-crypto-enabled'); if(cryptoChk) cryptoChk.checked=!!a.agenteLocalCryptoAtivo; const badge=document.getElementById('agente-status-badge'); const ativo=a.agenteLocalAtivo!==false; badge.className='provider-badge '+(ativo?'badge-agente-ativo':'badge-agente-inativo'); badge.textContent=ativo?'● Ativo':'○ Inativo'; const tokenStatus=document.getElementById('agent-token-status'); if(tokenStatus) tokenStatus.innerHTML=a.agenteLocalTokenConfigurado?'<span class="badge badge-ok">Token configurado</span>':'<span class="badge badge-muted">Sem token</span>'; const cryptoStatus=document.getElementById('agent-crypto-key-status'); if(cryptoStatus) cryptoStatus.innerHTML=a.agenteLocalCryptoKeyConfigurada?'<span class="badge badge-ok">Chave configurada</span>':'<span class="badge badge-muted">Sem chave</span>'; }catch(e){} }
 async function salvarAgente(){ const body={...empresaIdBody(),agenteLocalUrl:document.getElementById('agent-base-url').value.trim(),agenteLocalAtivo:boolValue('agent-enabled'),agenteLocalCryptoAtivo:document.getElementById('agent-crypto-enabled').checked}; const token=document.getElementById('agent-token').value.trim(); if(token) body.agenteLocalToken=token; const cryptoKey=document.getElementById('agent-crypto-key').value.trim(); if(cryptoKey) body.agenteLocalCryptoKey=cryptoKey; await api('/api/iahub/platform/agent-config',{method:'POST',body:JSON.stringify(body)}); toast('Agente Local salvo'); await carregarAgente(); }
-async function carregarIdentidades(){ try{ state.identities=await api('/api/iahub/platform/whatsapp-identities'+(qs()?qs()+'&includeRoles=1':'?includeRoles=1')); renderIdentidades(); }catch(e){ document.getElementById('identities-body').innerHTML='<tr><td colspan="7">Erro ao carregar: '+esc(e.message)+'</td></tr>'; throw e; } }
+async function carregarIdentidades(){ try{ state.identities=await api('/api/iahub/platform/whatsapp-identities'+(qs()?qs()+'&includeRoles=1':'?includeRoles=1')); renderIdentidades(); renderAnalistas(); }catch(e){ document.getElementById('identities-body').innerHTML='<tr><td colspan="7">Erro ao carregar: '+esc(e.message)+'</td></tr>'; const list=document.getElementById('wa-analyst-list'); if(list) list.innerHTML='<div class="wa-empty-detail">Erro ao carregar: '+esc(e.message)+'</div>'; throw e; } }
 function rolesTexto(item){ return (item.roles||[]).map(r=>[r.sistema,r.modulo,r.papel,r.codigoIdentidade].filter(Boolean).join(' / ')).filter(Boolean); }
 function toggleFiltrosWhatsApp(){ const p=document.getElementById('wa-filter-panel'); const b=document.getElementById('wa-filter-toggle'); const open=!p?.classList.contains('open'); p?.classList.toggle('open',open); if(b) b.textContent=open?'− Ocultar filtros':'+ Mostrar filtros'; }
 function numeroFmt(v){ const n=String(v||'').replace(/\D/g,''); if(n.length===13&&n.startsWith('55')) return '+55 ('+n.slice(2,4)+') '+n.slice(4,9)+'-'+n.slice(9); if(n.length===12&&n.startsWith('55')) return '+55 ('+n.slice(2,4)+') '+n.slice(4,8)+'-'+n.slice(8); return v||n||''; }
@@ -688,6 +779,18 @@ function perfilChips(item){ const chips=[]; const seen=new Set(); (item.roles||[
 function filtrarIdentidades(){ const q=(document.getElementById('wa-busca')?.value||'').trim().toLowerCase(); const st=document.getElementById('wa-status')?.value||''; return state.identities.filter(i=>{ const hay=[i.nome,i.numero,i.numeroNormalizado,i.origemSistema,...rolesTexto(i)].join(' ').toLowerCase(); const okBusca=!q||hay.includes(q); const okStatus=!st||(st==='ativo'?i.ativo!==false:i.ativo===false); return okBusca&&okStatus; }); }
 function renderIdentidades(){ const body=document.getElementById('identities-body'); if(!body) return; const rows=filtrarIdentidades(); const total=state.identities.length; const count=document.getElementById('wa-count'); if(count) count.textContent=rows.length===total?(total===1?'1 numero':total+' numeros'):rows.length+' de '+total+' numeros'; const fs=document.getElementById('wa-filter-status'); if(fs){ const q=(document.getElementById('wa-busca')?.value||'').trim(); const st=document.getElementById('wa-status')?.value||''; fs.textContent=(q||st)?'Filtros ativos: '+[q&&('busca "'+q+'"'),st&&st].filter(Boolean).join(' | '):'Sem filtros ou agrupamentos ativos'; } if(!total){ body.innerHTML='<tr><td colspan="7">Nenhum numero cadastrado</td></tr>'; atualizarResumo(); return; } if(!rows.length){ body.innerHTML='<tr><td colspan="7">Nenhum numero encontrado com os filtros atuais</td></tr>'; atualizarResumo(); return; } body.innerHTML=rows.map(i=>'<tr onclick="editarIdentidade('+esc(JSON.stringify(i.id))+')"><td><span class="identity-id">'+esc(String(i.id||'').slice(0,8))+'...</span></td><td><strong style="color:var(--text-hi)">'+esc(i.nome||'')+'</strong></td><td><span class="identity-phone">'+esc(numeroFmt(i.numero||i.numeroNormalizado||''))+'</span></td><td><div class="module-chips">'+moduloChips(i)+'</div></td><td><div class="module-chips">'+perfilChips(i)+'</div></td><td>'+esc(dataCurta(i.criadoEm))+'</td><td><span class="actions-cell"><button class="btn-icon" onclick="event.stopPropagation();editarIdentidade('+esc(JSON.stringify(i.id))+')" title="Editar">✏️</button><button class="btn-icon" onclick="event.stopPropagation();excluirIdentidade('+esc(JSON.stringify(i.id))+')" title="Excluir" style="color:#dc2626">🗑</button></span></td></tr>').join(''); atualizarResumo(); }
 function limparFiltroWhatsApp(){ fill('wa-busca',''); fill('wa-status',''); renderIdentidades(); }
+function abrirAbaPlatform(id){ const btn=[...document.querySelectorAll('.iac-tab')].find(b=>b.getAttribute('onclick')?.includes(id)); if(btn) mudarAba(btn,id); }
+function textoRolePrincipal(item){ const roles=item.roles||[]; const svc=roles.find(r=>String(r.sistema||'').toLowerCase()==='ia-service')||roles[0]||{}; return [svc.sistema,svc.modulo,svc.papel].filter(Boolean).join(' / ')||'-'; }
+function valoresGrupoAnalista(item,campo){ const roles=item.roles||[]; if(!campo) return ['']; if(campo==='status') return [item.ativo===false?'Inativos':'Ativos']; if(campo==='origem') return [item.origemSistema||'Sem origem']; const vals=[]; roles.forEach(r=>{ if(campo==='perfil'&&r.papel) vals.push(r.papel); if(campo==='modulo') vals.push([r.sistema,r.modulo].filter(Boolean).join(' / ')||'Sem modulo'); }); return [...new Set(vals.length?vals:['Sem '+campo])]; }
+function filtrarAnalistas(){ const q=(document.getElementById('wa-analyst-busca')?.value||'').trim().toLowerCase(); const st=document.getElementById('wa-analyst-status')?.value||''; return state.identities.filter(i=>{ const hay=[i.nome,i.numero,i.numeroNormalizado,i.origemSistema,...rolesTexto(i)].join(' ').toLowerCase(); const okBusca=!q||hay.includes(q); const okStatus=!st||(st==='ativo'?i.ativo!==false:i.ativo===false); return okBusca&&okStatus; }); }
+function ordenarAnalistas(rows){ const sort=document.getElementById('wa-analyst-sort')?.value||'nome'; const dir=document.getElementById('wa-analyst-dir')?.value==='desc'?-1:1; const val=i=>{ if(sort==='numero') return String(i.numero||i.numeroNormalizado||''); if(sort==='criadoEm') return i.criadoEm?new Date(i.criadoEm).getTime():0; if(sort==='perfil') return textoRolePrincipal(i).toLowerCase(); return String(i.nome||'').toLowerCase(); }; return [...rows].sort((a,b)=>{ const av=val(a),bv=val(b); if(av<bv) return -1*dir; if(av>bv) return 1*dir; return String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR')*dir; }); }
+function renderAnalistas(){ const list=document.getElementById('wa-analyst-list'); if(!list) return; const rows=ordenarAnalistas(filtrarAnalistas()); const total=state.identities.length; const count=document.getElementById('wa-analyst-count'); if(count) count.textContent=rows.length===total?(total===1?'1 numero':total+' numeros'):rows.length+' de '+total; const status=document.getElementById('wa-analyst-filter-status'); if(status){ const group=document.getElementById('wa-analyst-group')?.value||''; status.textContent=[document.getElementById('wa-analyst-busca')?.value&&'busca ativa',document.getElementById('wa-analyst-status')?.value&&document.getElementById('wa-analyst-status').value,group&&('grupo: '+group)].filter(Boolean).join(' | ')||'Sem filtros ou agrupamentos ativos'; } if(!total){ list.innerHTML='<div class="wa-empty-detail">Nenhum numero cadastrado.</div>'; renderAnalistaDetalhe(null); return; } if(!rows.length){ list.innerHTML='<div class="wa-empty-detail">Nenhum analista encontrado com os filtros atuais.</div>'; renderAnalistaDetalhe(null); return; } if(!state.selectedAnalystId||!rows.some(i=>i.id===state.selectedAnalystId)) state.selectedAnalystId=rows[0].id; const group=document.getElementById('wa-analyst-group')?.value||''; const listRows=group?[...rows].sort((a,b)=>valoresGrupoAnalista(a,group)[0].localeCompare(valoresGrupoAnalista(b,group)[0],'pt-BR')||String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR')):rows; const parts=[]; let current=null; listRows.forEach(i=>{ const label=valoresGrupoAnalista(i,group)[0]||'Outros'; if(group&&label!==current){ current=label; parts.push('<div class="wa-analyst-group">'+esc(label)+'</div>'); } parts.push(cardAnalista(i)); }); list.innerHTML=parts.join(''); renderAnalistaDetalhe(state.identities.find(i=>i.id===state.selectedAnalystId)||rows[0]); }
+function cardAnalista(i){ const active=i.id===state.selectedAnalystId?' active':''; const inactive=i.ativo===false?' inactive':''; return '<button type="button" class="wa-analyst-card'+active+'" onclick="selecionarAnalista('+esc(JSON.stringify(i.id))+')"><div class="wa-analyst-card-top"><div><div class="wa-analyst-name">'+esc(i.nome||'Sem nome')+'</div><div class="wa-analyst-phone">'+esc(numeroFmt(i.numero||i.numeroNormalizado||''))+'</div></div><span class="wa-status-dot'+inactive+'"></span></div><div class="module-chips">'+moduloChips(i)+'</div><div class="module-chips">'+perfilChips(i)+'</div></button>'; }
+function selecionarAnalista(id){ state.selectedAnalystId=id; renderAnalistas(); }
+function renderAnalistaDetalhe(i){ const el=document.getElementById('wa-analyst-detail'); if(!el) return; if(!i){ el.innerHTML='<div class="wa-empty-detail">Selecione um analista para ver o cadastro completo.</div>'; return; } const roles=i.roles||[]; const modulos=[...new Set(roles.map(r=>[r.sistema,r.modulo].filter(Boolean).join(' / ')).filter(Boolean))]; const perfis=[...new Set(roles.map(r=>r.papel).filter(Boolean))]; const svc=iaServiceData(i); el.innerHTML='<div class="wa-analyst-detail-head"><div><div class="wa-detail-title">'+esc(i.nome||'Sem nome')+'</div><div class="wa-detail-sub">'+esc(numeroFmt(i.numero||i.numeroNormalizado||''))+'</div></div><div class="wa-detail-actions"><button class="btn btn-ghost" onclick="editarAnalistaSelecionado()">Editar cadastro</button><button class="btn btn-ghost" style="color:#dc2626" onclick="excluirIdentidade('+esc(JSON.stringify(i.id))+')">Excluir</button></div></div><div class="wa-detail-body"><div class="wa-detail-metrics"><div class="wa-metric"><div class="wa-metric-label">Status</div><div class="wa-metric-value">'+esc(i.ativo===false?'Inativo':'Ativo')+'</div></div><div class="wa-metric"><div class="wa-metric-label">Tipo</div><div class="wa-metric-value">'+esc(i.metadata&&i.metadata.tipo||'analista')+'</div></div><div class="wa-metric"><div class="wa-metric-label">Criado em</div><div class="wa-metric-value">'+esc(dataCurta(i.criadoEm)||'-')+'</div></div><div class="wa-metric"><div class="wa-metric-label">Origem</div><div class="wa-metric-value">'+esc(i.origemSistema||'-')+'</div></div></div><div class="wa-detail-section"><div class="wa-detail-section-title">Modulos na empresa</div><div class="module-chips">'+(modulos.length?modulos.map(m=>'<span class="module-chip chip-soft">'+esc(m)+'</span>').join(''):'<span class="module-chip">Sem modulo</span>')+'</div></div><div class="wa-detail-section"><div class="wa-detail-section-title">IA Service</div><div class="wa-role-list"><div class="wa-role-line"><strong>Chat Web</strong><span>'+esc(svc.papel||'-')+'</span><span>SoftExpert: '+esc(svc.idSoftexpert||'-')+'</span><span>'+esc(svc.preAnaliseAutomatica?'Pre-analise auto':'Pre-analise manual')+'</span></div></div></div><div class="wa-detail-section"><div class="wa-detail-section-title">Perfis e acessos</div><div class="wa-role-list">'+(roles.length?roles.map(r=>'<div class="wa-role-line"><strong>'+esc(r.sistema||'-')+'</strong><span>'+esc(r.modulo||'-')+'</span><span>'+esc(r.papel||'-')+'</span><span>'+esc(r.codigoIdentidade||'-')+'</span></div>').join(''):'<div class="wa-role-line"><strong>Sem acessos</strong><span>-</span><span>-</span><span>-</span></div>')+'</div></div>'+(i.observacoes?'<div class="wa-detail-section"><div class="wa-detail-section-title">Observacoes</div><div style="font-size:13px;color:var(--text-md);line-height:1.5">'+esc(i.observacoes)+'</div></div>':'')+'</div>'; }
+function editarAnalistaSelecionado(){ if(!state.selectedAnalystId) return; abrirAbaPlatform('aba-identidades'); editarIdentidade(state.selectedAnalystId); }
+function novaIdentidadeDaVisao(){ abrirAbaPlatform('aba-identidades'); novaIdentidade(); }
+function limparAnalistasFiltros(){ fill('wa-analyst-busca',''); fill('wa-analyst-status',''); fill('wa-analyst-sort','nome'); fill('wa-analyst-dir','asc'); fill('wa-analyst-group',''); renderAnalistas(); }
 function abrirListaWhatsApp(){ const lista=document.getElementById('wa-lista'); const form=document.getElementById('wa-form'); if(lista) lista.style.display='block'; if(form) form.style.display='none'; }
 function abrirFormularioWhatsApp(){ const lista=document.getElementById('wa-lista'); const form=document.getElementById('wa-form'); if(lista) lista.style.display='none'; if(form) form.style.display='block'; }
 function mudarAbaWhatsAppForm(nome,btn){ document.querySelectorAll('#wa-form .form-tab').forEach(b=>b.classList.remove('active')); document.querySelectorAll('#wa-form .tab-pane').forEach(p=>p.classList.remove('active')); if(btn) btn.classList.add('active'); const pane=document.getElementById('wa-pane-'+nome); if(pane) pane.classList.add('active'); }
