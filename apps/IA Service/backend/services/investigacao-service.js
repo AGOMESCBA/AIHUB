@@ -333,9 +333,11 @@ async function _registrarErroVisual({ empresaId, atendimentoId, mensagemUsuario,
   return msgErro;
 }
 
-const SYSTEM_PROMPT_CLASSIFICACAO_TURNO = `Você classifica uma única mensagem de um analista de suporte técnico dentro de um chat de investigação. Responda APENAS com um JSON: {"tipo": "pergunta_processo" | "investigacao"}.
+const SYSTEM_PROMPT_CLASSIFICACAO_TURNO = `Você classifica uma única mensagem de um analista de suporte técnico dentro de um chat de investigação. Responda APENAS com um JSON: {"tipo": "pergunta_processo" | "fora_de_escopo" | "investigacao"}.
 
 "pergunta_processo": a mensagem é sobre VOCÊ (a IA) ou sobre O PROCESSO administrativo de atendimento — sua capacidade, limites, próximos passos administrativos, prazos, ou se um passo administrativo é necessário. NÃO envolve nenhum conceito técnico do domínio do chamado (regra de negócio, campo, rotina, cálculo, comportamento esperado do sistema). Exemplos: "se eu te enviar o fonte, você consegue corrigir?", "você consegue ver vídeo?", "precisa abrir chamado na TOTVS também?", "em quanto tempo você responde?", "o que você precisa de mim agora?".
+
+"fora_de_escopo": a mensagem é CLARAMENTE alheia ao chamado, ao sistema/ERP e ao atendimento — assunto geral sem nenhuma relação com o trabalho de suporte. Exemplos: "qual a temperatura em Cuiabá agora?", "que dia é hoje?", "me conta uma piada", "quem ganhou o jogo ontem?". Só use quando NÃO houver qualquer ligação plausível com o chamado, com um sistema ou com o atendimento.
 
 "investigacao": a mensagem pergunta sobre o PROBLEMA TÉCNICO em si — isso inclui perguntar sobre uma REGRA DE NEGÓCIO ou COMPORTAMENTO ESPERADO do sistema (ex.: "esse campo deveria somar ou subtrair?", "qual a regra para X?"), trazer evidência técnica nova (erro, log, trecho de código, resultado de teste), ou pedir para investigar/corrigir/pesquisar algo concreto do domínio do chamado. Perguntas sobre REGRA DE NEGÓCIO SEMPRE são "investigacao", mesmo que pareçam pedidos de confirmação ou esclarecimento pontual — elas exigem evidência técnica do caso para responder com segurança, não são sobre o processo de atendimento.
 
@@ -365,7 +367,8 @@ async function _classificarTurno(texto, { keys, cfg }) {
       { maxTokens: 30, timeoutMs: 12000, json: true, maxProviderRounds: 1 },
     );
     const parsed = JSON.parse(resultado.texto.match(/\{[\s\S]*\}/)?.[0] || '{}');
-    return parsed.tipo === 'pergunta_processo' ? 'pergunta_processo' : 'investigacao';
+    if (parsed.tipo === 'pergunta_processo' || parsed.tipo === 'fora_de_escopo') return parsed.tipo;
+    return 'investigacao';
   } catch (err) {
     console.error('[IA Service] Classificação de turno falhou, seguindo como investigação:', err.message);
     return 'investigacao';
@@ -442,7 +445,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
   if (!automatico && !forcarPesquisa && anexoIds.length === 0 && mensagemUsuario) {
     const { keys: keysClassificacao, cfg: cfgClassificacao } = aiConfigService.resolverKeysEOrdem(empresaId);
     const tipoTurno = await _classificarTurno(texto, { keys: keysClassificacao, cfg: cfgClassificacao });
-    if (tipoTurno === 'pergunta_processo') {
+    if (tipoTurno === 'pergunta_processo' || tipoTurno === 'fora_de_escopo') {
       // redigirValor: este atalho curto NUNCA passa pelo Context Engine (que
       // aplica a redacao no fluxo principal) — sem isso, CPF/senha/token do
       // historico iam em texto claro para o provider sempre que o turno fosse
@@ -450,15 +453,24 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
       const historicoRecente = historico.slice(-8)
         .map(m => `[${m.papel === 'user' ? 'Analista' : 'Você'}]: ${redigirValor(String(m.conteudo || '').slice(0, 600))}`)
         .join('\n');
-      const promptCurto = `## Contexto recente da conversa\n${historicoRecente}\n\n## Pergunta atual do analista\n${redigirValor(texto)}\n\nResponda SOMENTE essa pergunta, de forma direta e breve (poucas frases). Não reabra nem repita o diagnóstico técnico já dado nas mensagens anteriores.`;
+      // fora_de_escopo: resposta curta que não reabre o chamado (2026-10,
+      // pedido do usuário: pergunta de clima/data gerava resposta longa
+      // reabrindo o chamado inteiro). Este atalho não grava execução de
+      // investigação, então a avaliação humana não é oferecida (ver
+      // resposta-operacional-service.execucaoAvaliavel).
+      const instrucaoFinal = tipoTurno === 'fora_de_escopo'
+        ? 'Esta pergunta não tem relação com o chamado. Responda em no máximo 2 frases: se souber responder com segurança (sem inventar dados em tempo real, que você não tem), responda; caso contrário, diga que não tem como consultar isso aqui. Não reabra, não resuma e não repita nada do chamado; apenas convide o analista a seguir com o chamado quando quiser.'
+        : 'Responda SOMENTE essa pergunta, de forma direta e breve (poucas frases). Não reabra nem repita o diagnóstico técnico já dado nas mensagens anteriores.';
+      const promptCurto = `## Contexto recente da conversa\n${historicoRecente}\n\n## Pergunta atual do analista\n${redigirValor(texto)}\n\n${instrucaoFinal}`;
       try {
         const resultadoCurto = await aiProviderClient.chamarIA(
           keysClassificacao, cfgClassificacao, promptBuilder.SYSTEM_PROMPT, promptCurto, [],
-          { maxTokens: 500, timeoutMs: 20000 },
+          { maxTokens: tipoTurno === 'fora_de_escopo' ? 200 : 500, timeoutMs: 20000 },
         );
         return mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
           papel: 'assistant', conteudo: resultadoCurto.texto, usuarioId: null,
           provider: resultadoCurto.provider, model: resultadoCurto.model,
+          respostaCurta: tipoTurno,
         });
       } catch (err) {
         console.error('[IA Service] Falha ao responder pergunta de processo curta, seguindo fluxo completo:', err.message);

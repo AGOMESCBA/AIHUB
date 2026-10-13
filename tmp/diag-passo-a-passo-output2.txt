@@ -1,0 +1,27 @@
+[+0ms] iniciando...
+[IA Service] Banco SQLite inicializado: C:/tmp/ia-service-auditoria-independente-10casos.db
+[+14ms] DB inicializado
+[+39ms] 8 anexos encontrados
+[+39ms] chamando processarTurno...
+[+181ms] >>> resolverKeysEOrdem (PATCHED) chamada #1 para empresaId=1
+[+184ms] <<< resolverKeysEOrdem (PATCHED) retornou #1: {"provedorPrimario":"groq","fallbackOrdem":"groq","keysPresentes":["groq","openai","deepseek","claude","gemini"]}
+[+186ms] >>> technicalResearchService.pesquisar iniciando
+[+199ms] >>> resolverKeysEOrdem (PATCHED) chamada #2 para empresaId=1
+[+199ms] <<< resolverKeysEOrdem (PATCHED) retornou #2: {"provedorPrimario":"groq","fallbackOrdem":"groq","keysPresentes":["groq","openai","deepseek","claude","gemini"]}
+[+201ms] >>> chamarIA #1 iniciando — provedorPrimario=groq fallbackOrdem=groq imagens=0 timeoutMs=8000 maxTokens=700 userPromptLen=1534
+[+3890ms] <<< chamarIA #1 OK em 3689ms — provider=deepseek model=deepseek-chat
+[+11550ms] <<< technicalResearchService.pesquisar OK em 11364ms
+[+11550ms] >>> resolverKeysEOrdem (PATCHED) chamada #3 para empresaId=1
+[+11551ms] <<< resolverKeysEOrdem (PATCHED) retornou #3: {"provedorPrimario":"groq","fallbackOrdem":"groq","keysPresentes":["groq","openai","deepseek","claude","gemini"]}
+[+11551ms] >>> contextEngine.montarContextoInvestigacao iniciando
+[+11561ms] <<< contextEngine.montarContextoInvestigacao OK em 10ms
+[+18078ms] >>> chamarIA #2 iniciando — provedorPrimario=groq fallbackOrdem=groq imagens=7 timeoutMs=150000 maxTokens=6000 userPromptLen=29381
+[+78522ms] <<< chamarIA #2 OK em 60443ms — provider=claude model=claude-haiku-4-5-20251001
+[+78534ms] >>> chamarIA #3 iniciando — provedorPrimario=groq fallbackOrdem=groq imagens=7 timeoutMs=150000 maxTokens=6000 userPromptLen=33422
+[+134249ms] <<< chamarIA #3 OK em 55715ms — provider=claude model=claude-haiku-4-5-20251001
+[+134260ms] >>> resolverKeysEOrdem (PATCHED) chamada #4 para empresaId=1
+[+134261ms] <<< resolverKeysEOrdem (PATCHED) retornou #4: {"provedorPrimario":"groq","fallbackOrdem":"groq","keysPresentes":["groq","openai","deepseek","claude","gemini"]}
+[+134262ms] >>> chamarIA #4 iniciando — provedorPrimario=groq fallbackOrdem=groq imagens=0 timeoutMs=30000 maxTokens=1600 userPromptLen=77895
+[+142556ms] <<< chamarIA #4 OK em 8294ms — provider=deepseek model=deepseek-chat
+[+142566ms] processarTurno OK em 142527ms — provider=claude model=claude-haiku-4-5-20251001
+[+142570ms] FIM — saindo normalmente.

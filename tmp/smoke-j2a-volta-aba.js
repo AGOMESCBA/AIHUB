@@ -1,0 +1,23 @@
+const { chromium } = require('playwright');
+const TOKEN = process.argv[2];
+(async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  await page.addInitScript((t) => localStorage.setItem('svc_token_externo', t), TOKEN);
+  let ativas = true;
+  await page.route('**/radar/chamados/*/abrir-atendimento', (r) => r.fulfill({ json: { atendimentoId: 'AT-A', reaberto: true, preAnaliseDisparada: false } }));
+  await page.route('**/atendimentos/AT-A/mensagens', (r) => r.fulfill({ json: ativas ? [{ id: 'm1', papel: 'assistant', conteudo: 'RESPOSTA ANTIGA DA IA', criadoEm: new Date().toISOString() }] : [] }));
+  for (const s of ['anexos', 'dossie', 'investigacoes**', 'trilha**']) await page.route(`**/atendimentos/AT-A/${s}`, (r) => r.fulfill({ json: s === 'anexos' ? [] : {} }));
+  await page.goto('http://127.0.0.1:4993/iaservice/j2a', { waitUntil: 'networkidle' });
+  await page.waitForSelector('.ticket');
+  await page.locator('.ticket').first().click();
+  await page.waitForSelector('text=RESPOSTA ANTIGA DA IA');
+  ativas = false;
+  await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  await page.waitForTimeout(1200);
+  const txt = await page.locator('#messages').innerText();
+  const ok = !txt.includes('RESPOSTA ANTIGA DA IA');
+  console.log(ok ? 'OK: conversa recarregada ao voltar para a aba' : 'FALHA: resposta antiga continua');
+  await browser.close();
+  process.exitCode = ok ? 0 : 1;
+})().catch((e) => { console.error(e); process.exitCode = 1; });

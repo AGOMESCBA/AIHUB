@@ -7,22 +7,32 @@ const { getDB } = require('../database');
 
 const PAPEIS_VALIDOS = new Set(['user', 'assistant', 'system', 'customer']);
 const META_AVISOS_FONTE_CORRIGIDO = '__avisosFonteCorrigido';
+// Marca a mensagem como resposta curta do atalho de turno (pergunta_processo/
+// fora_de_escopo): nao veio de uma investigacao, entao nao e avaliavel como
+// pesquisa da IA. Guardado no proprio diagnostico_json (sem coluna nova).
+const META_RESPOSTA_CURTA = '__respostaCurta';
 
 function _parseDiagnostico(json) {
-  if (!json) return { diagnostico: null, avisosFonteCorrigido: [] };
+  if (!json) return { diagnostico: null, avisosFonteCorrigido: [], respostaCurta: null };
   const parsed = JSON.parse(json);
   const avisosFonteCorrigido = Array.isArray(parsed?.[META_AVISOS_FONTE_CORRIGIDO])
     ? parsed[META_AVISOS_FONTE_CORRIGIDO]
     : [];
-  if (parsed && typeof parsed === 'object') delete parsed[META_AVISOS_FONTE_CORRIGIDO];
+  const respostaCurta = typeof parsed?.[META_RESPOSTA_CURTA] === 'string' ? parsed[META_RESPOSTA_CURTA] : null;
+  if (parsed && typeof parsed === 'object') {
+    delete parsed[META_AVISOS_FONTE_CORRIGIDO];
+    delete parsed[META_RESPOSTA_CURTA];
+  }
   return {
     diagnostico: parsed && Object.keys(parsed).length ? parsed : null,
     avisosFonteCorrigido,
+    respostaCurta,
   };
 }
 
-function _serializarDiagnostico(diagnostico, avisosFonteCorrigido = []) {
+function _serializarDiagnostico(diagnostico, avisosFonteCorrigido = [], respostaCurta = null) {
   const payload = { ...(diagnostico || {}) };
+  if (respostaCurta) payload[META_RESPOSTA_CURTA] = String(respostaCurta);
   if (Array.isArray(avisosFonteCorrigido) && avisosFonteCorrigido.length) {
     payload[META_AVISOS_FONTE_CORRIGIDO] = avisosFonteCorrigido;
   }
@@ -31,7 +41,7 @@ function _serializarDiagnostico(diagnostico, avisosFonteCorrigido = []) {
 
 function _rowParaDominio(row) {
   if (!row) return null;
-  const { diagnostico, avisosFonteCorrigido } = _parseDiagnostico(row.diagnostico_json);
+  const { diagnostico, avisosFonteCorrigido, respostaCurta } = _parseDiagnostico(row.diagnostico_json);
   return {
     id: row.id,
     empresaId: row.empresa_id,
@@ -42,6 +52,7 @@ function _rowParaDominio(row) {
     criadoEm: row.criado_em,
     diagnostico,
     avisosFonteCorrigido,
+    respostaCurta,
     nivelConfianca: row.nivel_confianca,
     provider: row.provider,
     model: row.model,
@@ -85,7 +96,7 @@ function salvarMensagem(empresaId, atendimentoId, dados) {
     dados.conteudo,
     dados.usuarioId ?? null,
     agora,
-    _serializarDiagnostico(dados.diagnostico, dados.avisosFonteCorrigido),
+    _serializarDiagnostico(dados.diagnostico, dados.avisosFonteCorrigido, dados.respostaCurta),
     dados.nivelConfianca ?? null,
     dados.provider ?? null,
     dados.model ?? null,
@@ -104,12 +115,12 @@ function atualizarAvisosFonteCorrigido(empresaId, mensagemId, avisosFonteCorrigi
   const db = getDB();
   const row = db.prepare(`SELECT diagnostico_json FROM mensagens WHERE id = ? AND empresa_id = ?`).get(mensagemId, Number(empresaId));
   if (!row) throw new Error('Mensagem não encontrada nesta empresa.');
-  const { diagnostico } = _parseDiagnostico(row.diagnostico_json);
+  const { diagnostico, respostaCurta } = _parseDiagnostico(row.diagnostico_json);
   db.prepare(`
     UPDATE mensagens
        SET diagnostico_json = ?
      WHERE id = ? AND empresa_id = ?
-  `).run(_serializarDiagnostico(diagnostico, avisosFonteCorrigido), mensagemId, Number(empresaId));
+  `).run(_serializarDiagnostico(diagnostico, avisosFonteCorrigido, respostaCurta), mensagemId, Number(empresaId));
   return getMensagem(empresaId, mensagemId);
 }
 

@@ -7,6 +7,7 @@ const atendimentoRepo = require('../repositories/atendimento-repository');
 const mensagemRepo = require('../repositories/mensagem-repository');
 const investigacaoExecucaoRepo = require('../repositories/investigacao-execucao-repository');
 const consultorService = require('./consultor-service');
+const respostaOperacionalService = require('./resposta-operacional-service');
 const { NOTA_MIN, NOTA_MAX, CAMPOS_NOTA } = require('./avaliacao-criterios');
 
 // Mesmo limite usado para comentario de validacao de solucao
@@ -85,7 +86,7 @@ async function avaliarInvestigacao(empresaId, {
   _validarNotas(notas);
   const observacoesValidadas = _validarObservacoes(observacoes);
 
-  _validarMensagemAssistenteDoAtendimento(empresaId, atendimentoId, mensagemAssistenteId);
+  const { mensagem: mensagemAvaliada } = _validarMensagemAssistenteDoAtendimento(empresaId, atendimentoId, mensagemAssistenteId);
 
   // Defesa em profundidade (nao so esconder o botao no frontend): nunca
   // grava avaliacao numa resposta que o proprio Quality Gate ja marcou como
@@ -93,6 +94,11 @@ async function avaliarInvestigacao(empresaId, {
   const statusExecucao = investigacaoExecucaoRepo.listarStatusPorMensagens(empresaId, [mensagemAssistenteId]);
   if (statusExecucao[mensagemAssistenteId] === 'revisao_necessaria_quality_gate') {
     throw _erroValidacao('Esta resposta foi bloqueada pelo Quality Gate e não pode ser avaliada como investigação.');
+  }
+  // Resposta curta do atalho (pergunta de processo/fora de escopo) e resposta
+  // de erro de provider/imagem não são pesquisa da IA.
+  if (!respostaOperacionalService.execucaoAvaliavel(statusExecucao[mensagemAssistenteId], mensagemAvaliada.respostaCurta)) {
+    throw _erroValidacao('Esta resposta não veio de uma pesquisa da IA e não pode ser avaliada.');
   }
 
   const evento = avaliacaoRepo.registrarAvaliacao(empresaId, {

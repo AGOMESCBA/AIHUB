@@ -943,6 +943,9 @@
     if (m.respostaOperacional?.qualityGateBloqueado) return '';
     const avaliacaoHumana = m.respostaOperacional?.avaliacaoHumana;
     const minha = avaliacaoHumana?.minhaAvaliacaoAtual || null;
+    // Resposta que nao veio de uma pesquisa da IA (atalho curto, erro de
+    // provider): nao oferece avaliar; mantem o resumo se ja avaliada antes.
+    if (m.respostaOperacional?.avaliavel === false && !minha) return '';
     const outras = (avaliacaoHumana?.todasAsAvaliacoesAtuais || []).filter(
       (a) => !minha || String(a.usuarioId) !== String(minha.usuarioId),
     );

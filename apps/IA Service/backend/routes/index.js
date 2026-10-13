@@ -168,6 +168,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
           validacaoSolucao: estadosValidacao[m.id] || null,
           avaliacaoHumana: { minhaAvaliacaoAtual, todasAsAvaliacoesAtuais },
           qualityGateBloqueado: statusExecucaoPorMensagem[m.id] === 'revisao_necessaria_quality_gate',
+          avaliavel: respostaOperacionalService.execucaoAvaliavel(statusExecucaoPorMensagem[m.id], m.respostaCurta),
         });
       }));
     } catch (err) {

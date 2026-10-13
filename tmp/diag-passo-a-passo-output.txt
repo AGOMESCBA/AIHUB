@@ -1,0 +1,25 @@
+[+0ms] iniciando...
+[IA Service] Banco SQLite inicializado: C:/tmp/ia-service-auditoria-independente-10casos.db
+[+11ms] DB inicializado
+[+37ms] 8 anexos encontrados
+[+37ms] chamando processarTurno...
+[+174ms] >>> resolverKeysEOrdem (PATCHED) chamada #1 para empresaId=1
+[+178ms] <<< resolverKeysEOrdem (PATCHED) retornou #1: {"provedorPrimario":"groq","fallbackOrdem":"groq","keysPresentes":["groq","openai","deepseek","claude","gemini"]}
+[+180ms] >>> technicalResearchService.pesquisar iniciando
+[+192ms] >>> resolverKeysEOrdem (PATCHED) chamada #2 para empresaId=1
+[+193ms] <<< resolverKeysEOrdem (PATCHED) retornou #2: {"provedorPrimario":"groq","fallbackOrdem":"groq","keysPresentes":["groq","openai","deepseek","claude","gemini"]}
+[+194ms] >>> chamarIA #1 iniciando — provedorPrimario=groq fallbackOrdem=groq imagens=0 timeoutMs=8000 maxTokens=700 userPromptLen=1534
+[+3073ms] <<< chamarIA #1 OK em 2879ms — provider=deepseek model=deepseek-chat
+[+10134ms] <<< technicalResearchService.pesquisar OK em 9954ms
+[+10134ms] >>> resolverKeysEOrdem (PATCHED) chamada #3 para empresaId=1
+[+10135ms] <<< resolverKeysEOrdem (PATCHED) retornou #3: {"provedorPrimario":"groq","fallbackOrdem":"groq","keysPresentes":["groq","openai","deepseek","claude","gemini"]}
+[+10135ms] >>> contextEngine.montarContextoInvestigacao iniciando
+[+10144ms] <<< contextEngine.montarContextoInvestigacao OK em 9ms
+[+14599ms] >>> chamarIA #2 iniciando — provedorPrimario=groq fallbackOrdem=groq imagens=7 timeoutMs=150000 maxTokens=6000 userPromptLen=29381
+[+78764ms] <<< chamarIA #2 OK em 64165ms — provider=claude model=claude-haiku-4-5-20251001
+[+78776ms] >>> chamarIA #3 iniciando — provedorPrimario=groq fallbackOrdem=groq imagens=7 timeoutMs=150000 maxTokens=6000 userPromptLen=33238
+
+### WATCHDOG disparado apos 90000ms — forcando saida. ###
+Stack dump do event loop (best effort):
+1 handles ativos
+0 requests ativos

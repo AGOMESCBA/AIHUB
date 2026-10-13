@@ -1,0 +1,23 @@
+const { chromium } = require('playwright');
+const TOKEN = process.argv[2];
+(async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 1500, height: 700 } });
+  await page.addInitScript((t) => localStorage.setItem('svc_token_externo', t), TOKEN);
+  await page.goto('http://127.0.0.1:4993/iaservice/j2a', { waitUntil: 'networkidle' });
+  await page.waitForSelector('#logout-btn');
+  const x = async (sel) => (await page.locator(sel).first().boundingBox()).x;
+  const ordem = [['empresa', '.company-chip'], ['analista', '.user-chip'], ['ajuda', '.help-button'], ['tema', '#theme-toggle'], ['sair', '#logout-btn']];
+  const pos = [];
+  for (const [nome, sel] of ordem) pos.push([nome, await x(sel)]);
+  console.log(pos.map(([n, v]) => `${n}@${Math.round(v)}`).join('  '));
+  const crescente = pos.every((p, i) => i === 0 || p[1] > pos[i - 1][1]);
+  console.log(crescente ? 'OK ordem: Empresa > Analista > Ajuda > Tema > Sair (esq. p/ dir.)' : 'FALHA ordem');
+  await page.click('#theme-toggle');
+  const menu = await page.locator('#theme-menu').isVisible();
+  console.log(menu ? 'OK menu de tema abre' : 'FALHA menu de tema');
+  await page.keyboard.press('Escape');
+  await page.screenshot({ path: 'tmp/header-ordem.png', clip: { x: 0, y: 0, width: 1500, height: 80 } });
+  await browser.close();
+  process.exitCode = crescente && menu ? 0 : 1;
+})().catch((e) => { console.error(e); process.exitCode = 1; });

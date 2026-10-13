@@ -595,7 +595,6 @@ apps/
     frontend/
       j2a/
         assets/
-          entrar-teste-local.html
           radar.css
           radar.js
         index.html
@@ -672,6 +671,7 @@ apps/
       pre-avaliacao-ia.test.js
       quality-gate-homologacao-investigativa.test.js
       radar-pre-analise-concorrencia.test.js
+      sincronizacao-preferencia-platform.test.js
   IAHUB/
     backend/
       auth/
@@ -1177,43 +1177,6 @@ typography:
     xl:   "15px"    # topbar-title
     2xl:  "17px"    # logo-text
     3xl:  "28px"    # stat-value
-</file>
-
-<file path=".github/instructions/tds-vscode-1-0-2.instructions.md">
----
-applyTo: "**/*.{.prw,.prx,.prg,.ppx,.ppp,.tlpp,.apw,.aph,.apl,.ahu,.th}"
-name: "AdvPL/TLPP LS-First"
-description: "LS priority"
----
-
-<!--
-NOTICE for Protheus developers:
-     This instruction file was generated automatically.
-     Changes are preserved, as it is generated only if it does not exist.
-     If you do not want to use it, keep it in the folder but leave it empty.
--->
-
-<!--
-NOTICE for extension developers:
-     Keep the `.md.txt` extension to prevent it from being loaded during
-     extension development, which could interfere with the environment.
--->
-
-# Instructions
-
-- Answer in English, objectively.
-- Mandatory LS-first rule: in any navigation, analysis, fix, or refactoring task, the first action must be an LS tool.
-- Mandatory semantic navigation sequence:
-
- 1) Locate the symbol with `lsp_workspace_symbols`.
- 2) Confirm the definition with `lsp_definition`.
- 3) Map usage and impact with `lsp_references`.
-
-- It is forbidden to start with `grep_search`, `file_search`, `read_file`, or manual reading when LS is available.
-- Controlled exception: use text search or manual reading only if LS fails, does not return the symbol, or lacks coverage.
-- When falling into the exception, explicitly state in the response: "LS unavailable/no coverage; proceeding with text search".
-- Compliance criterion: before the result, inform which LS tool was used and what it returned.
-- Non-compliance rule: if LS is not used first without valid justification, consider the execution out of standard and correct the approach in the same response.
 </file>
 
 <file path="apps/IA Administracao/backend/README.md">
@@ -19597,6 +19560,32 @@ function get(channelOrEmpresa)
 function getAll()
 </file>
 
+<file path="apps/IA Command/modules/whatsapp/servico-externo-routes.js">
+function getManager()
+⋮----
+function workerJson(workerPort, rota, payload = null, timeoutMs = 30000)
+⋮----
+async function canalWorkerConectado(canal, workerJsonFn = workerJson)
+⋮----
+function canalServiceConectado(canal, managerRef = getManager())
+⋮----
+async function primeiroCanalConectado(canais, deps =
+⋮----
+function canalCandidatoServicoExterno(canal)
+⋮----
+function canaisGlobaisCandidatos(channelStore = channels)
+⋮----
+async function canaisGlobaisConectados(deps =
+⋮----
+async function resolverCanalServicoExterno(empresaId, deps =
+⋮----
+async function enviarTextoServicoExterno(
+⋮----
+function segredoAutorizado(req)
+⋮----
+function registrarRotaServicoExterno(app)
+</file>
+
 <file path="apps/IA Command/modules/whatsapp/whatsapp-attachment-builder.js">
 const _DETECTOR_EMPRESA = k
 ⋮----
@@ -20435,6 +20424,24 @@ channelStore.senderAutorizadoEmpresa = ()
 async function rodar()
 ⋮----
 self.sendMediaMessage = async () =>
+</file>
+
+<file path="apps/IA Command/tests/whatsapp-servico-externo-routes.test.js">
+function managerVazio()
+⋮----
+get: ()
+getAll: ()
+⋮----
+function channelStoreFake(
+⋮----
+listarPorEmpresa: (empresaId)
+listarAtivosComSessao: ()
+listarTodosCanais: ()
+listarEmpresasDoCanal: (channelId)
+⋮----
+function canal(id, porta)
+⋮----
+const workerJsonFn = async (porta, rota, payload) =>
 </file>
 
 <file path="apps/IA Command/.gitignore">
@@ -22438,6 +22445,23 @@ function _executarMigracoes()
 function fecharDB()
 </file>
 
+<file path="apps/IA Service/backend/repositories/ai-config-repository.js">
+function _rowParaDominio(row)
+⋮----
+function getConfig(empresaId)
+⋮----
+function getConfigPorApelido(apelido)
+⋮----
+function _normalizarApelido(valor)
+⋮----
+function salvarConfig(empresaId, dados)
+⋮----
+// Criptografa ANTES de gravar — o COALESCE abaixo compara com a coluna
+// crua do banco (já cifrada), então o valor novo também precisa estar
+// cifrado para a comparação/substituição fazer sentido byte a byte (senão
+// o COALESCE sempre "substituiria", pois um texto plano nunca é NULL).
+</file>
+
 <file path="apps/IA Service/backend/repositories/radar-config-repository.js">
 function _rowParaDominio(row)
 ⋮----
@@ -22490,27 +22514,68 @@ function _executar(empresaId,
 async function sincronizarAntesDaFila(empresaId,
 </file>
 
-<file path="apps/IA Service/backend/services/sessao-externa-middleware.js">
-function requireSessaoExterna(req, res, next)
-</file>
-
-<file path="apps/IA Service/frontend/j2a/assets/entrar-teste-local.html">
-<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<title>Entrada de teste local - IA Service</title>
-</head>
-<body style="font-family: Arial, sans-serif; background:#0b1b25; color:#edf7ff; display:flex; align-items:center; justify-content:center; height:100vh; margin:0;">
-  <div style="text-align:center;">
-    <p>Entrando com sessão de teste local...</p>
-  </div>
-  <script>
-    localStorage.setItem('svc_token_externo', 'aeb9e61238397c98feface3bc6fe0f94b440f55f560a57463d14b19559a946b1');
-    window.location.href = '/iaservice/j2a';
-  </script>
-</body>
-</html>
+<file path="apps/IA Service/frontend/js/tab-manager.js">
+function _saveState()
+⋮----
+function _restoreState()
+⋮----
+async function _getEmpresas()
+⋮----
+function _stripEmpresaParam(url)
+⋮----
+function openTab(url, label, icon, empresaIdOverride = null, empresaNomeOverride = null)
+⋮----
+// Fallback: aba com mesma URL base já aberta (ex.: empresa mudou mas página é a mesma)
+⋮----
+function closeTab(url)
+⋮----
+function _tabSrc(baseUrl, empresaId)
+⋮----
+function _urlComEmpresa(baseUrl, empresaId)
+⋮----
+function _reloadTab(tabKey)
+⋮----
+function _activateTab(url)
+⋮----
+function _handleTabDragStart(e, tabKey)
+⋮----
+function _handleTabDragEnd(chip)
+⋮----
+function _enableTabReorder(bar)
+⋮----
+function _getDragAfterTab(bar, x)
+⋮----
+function _syncTabOrderFromDom()
+⋮----
+async function _trocarEmpresaTab(url, empresaId)
+⋮----
+function _tabKey(tab, empresaId)
+⋮----
+function _aplicarEmpresaNaTab(oldKey, tab, emp)
+⋮----
+function _atualizarEmpresaTab(oldKey, emp)
+⋮----
+async function trocarEmpresaTodasAbas(empresaId, empresaNome = null)
+⋮----
+async function _abrirSeletorEmpresa(url, anchorEl, frame = null)
+⋮----
+function _posicionarDropdownEmpresa(drop, anchorEl, frame = null)
+⋮----
+function _getAnchorRect(anchorEl, frame = null)
+⋮----
+function _fecharDropdown()
+⋮----
+function _prepareFrame(frame, tab)
+⋮----
+function _chipHtml(icon, label)
+⋮----
+function _syncSidebarActive(url)
+⋮----
+function _setTopbarTitle(tab)
+⋮----
+function _updateScrollBtns()
+⋮----
+function scrollMdiTabs(dir)
 </file>
 
 <file path="apps/IA Service/frontend/atendimentos.html">
@@ -23108,25 +23173,210 @@ function requireSessaoExterna(req, res, next)
 </html>
 </file>
 
-<file path="apps/IA Service/tests/ajustes-migracao-incremental.test.js">
-function limpar()
+<file path="apps/IA Service/frontend/shell.html">
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IA Service</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#1d4ed8; --accent-light:#3b82f6; --accent-glow:rgba(29,78,216,.1); }
+    .sidebar-logo .logo-icon { background:var(--accent) !important; }
+    /* ── Barra de abas MDI (adaptado de apps/IA Command/frontend/shell.html,
+       trocando o roxo do IA Command por --accent do IA Service) ─────────── */
+    .mdi-tabbar {
+      display: flex;
+      align-items: flex-end;
+      background: var(--bg-hover);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-hi) transparent;
+      scroll-behavior: smooth;
+      flex-shrink: 0;
+      padding: 6px 8px 0;
+      gap: 3px;
+    }
+    .mdi-tabbar::-webkit-scrollbar { height: 6px; }
+    .mdi-tabbar::-webkit-scrollbar-track { background: transparent; }
+    .mdi-tabbar::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 999px; }
+    .mdi-tab {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 10px 8px 13px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-md);
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      border-bottom: none;
+      border-radius: 7px 7px 0 0;
+      cursor: pointer;
+      white-space: nowrap;
+      flex: 0 0 clamp(220px, 15vw, 280px);
+      max-width: 280px;
+      min-width: 0;
+      user-select: none;
+      transition: color var(--transition), background var(--transition), box-shadow var(--transition);
+      margin-bottom: -1px;
+      position: relative;
+    }
+    .mdi-tab:hover  { background: var(--bg-card); color: var(--text-hi); }
+    .mdi-tab.active {
+      background: var(--bg-card);
+      color: var(--accent);
+      font-weight: 600;
+      border-color: var(--border);
+      border-top: 2px solid var(--accent);
+      box-shadow: 0 -2px 10px var(--accent-glow), var(--shadow-sm);
+      z-index: 1;
+    }
+    .mdi-tab.dragging { opacity: .55; cursor: grabbing; box-shadow: var(--shadow-md); }
+    .mdi-tab-icon  { font-size: 14px; flex-shrink: 0; }
+    .mdi-tab-label { flex: 1; overflow: hidden; text-overflow: ellipsis; text-align: left; min-width: 0; }
+    .mdi-tab-close {
+      flex-shrink: 0; width: 20px; height: 20px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 4px; font-size: 16px; line-height: 1;
+      color: var(--text-lo); transition: background var(--transition), color var(--transition);
+      margin-left: 1px;
+    }
+    .mdi-tab-close:hover                 { background: rgba(0,0,0,.08); color: var(--text-hi); }
+    .mdi-tab.active .mdi-tab-close:hover { background: var(--accent-glow); color: var(--accent); }
+    /* ── Scroll buttons ─────────────────────────────────────────────── */
+    .mdi-tabbar-wrap {
+      display: flex;
+      align-items: stretch;
+      background: var(--bg-hover);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .mdi-tabbar { flex: 1; min-width: 0; border-bottom: none !important; }
+    .mdi-scroll-btn {
+      display: none;
+      align-items: center; justify-content: center;
+      width: 30px; flex-shrink: 0;
+      background: var(--bg-card); border: none;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer; font-size: 12px; color: var(--text-md);
+      transition: color var(--transition), background var(--transition); z-index: 1;
+    }
+    .mdi-scroll-btn:hover { color: var(--accent); background: var(--bg-hover); }
+    /* ── Área de conteúdo ────────────────────────────────────────────── */
+    .mdi-content { flex: 1; position: relative; overflow: hidden; background: var(--bg-card); }
+    .mdi-iframe  { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: none; background: var(--bg-card); }
+    .mdi-iframe.active { display: block; }
+    /* ── Estado vazio ────────────────────────────────────────────────── */
+    .mdi-empty {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; pointer-events: none; user-select: none;
+    }
+    .mdi-empty-icon  { font-size: 56px; opacity: .15; }
+    .mdi-empty-title { font-size: 15px; font-weight: 600; color: var(--text-md); }
+    .mdi-empty-sub   { font-size: 13px; color: var(--text-lo); }
+    /* ── Topbar ──────────────────────────────────────────────────────── */
+    .isvc-topbar { padding: 0 16px; gap: 8px; }
+    .isvc-topbar .topbar-title { font-weight: 800; flex: 1; min-width: 0; }
+  </style>
+</head>
+<body>
+<div class="layout" id="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Service</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebarDrawer()" aria-hidden="true"></div>
+  <div class="main">
+    <div class="topbar isvc-topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6"  x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title" id="shell-title">IA Service</span>
+    </div>
+    <div class="mdi-tabbar-wrap">
+      <button class="mdi-scroll-btn" id="mdi-scroll-left"  title="Rolar para esquerda" onclick="scrollMdiTabs(-1)">◀</button>
+      <div class="mdi-tabbar" id="mdi-tabbar"></div>
+      <button class="mdi-scroll-btn" id="mdi-scroll-right" title="Rolar para direita"  onclick="scrollMdiTabs(1)">▶</button>
+    </div>
+    <div class="mdi-content" id="mdi-content">
+      <div class="mdi-empty" id="mdi-empty">
+        <div class="mdi-empty-icon">⚡</div>
+        <div class="mdi-empty-title">Nenhuma rotina aberta</div>
+        <div class="mdi-empty-sub">Selecione uma opção no menu lateral para começar</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/js/auth.js"></script>
+<script src="./js/sidebar.js"></script>
+<script src="./js/tab-manager.js"></script>
+<script>
+  // Interceptação de clique no menu — mesmo padrão do shell.html do IA
+  // Command: abre a rotina numa aba interna em vez de navegar a página
+  // inteira. Exceção: itens com target="_blank" (ex. Radar de Chamados,
+  // que abre em nova guia do navegador por decisão arquitetural anterior —
+  // nunca depende de cookie de sessão cruzando abas) continuam navegando
+  // normalmente, sem passar pelo MDI.
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('#sidebar a.nav-item');
+    if (!link) return;
+    if (link.target === '_blank') return; // deixa o navegador abrir a nova guia normalmente
+    e.preventDefault();
+    const url   = new URL(link.href, location.origin).pathname;
+    const label = link.querySelector('.nav-label')?.textContent?.trim() || url;
+    const icon  = link.querySelector('.nav-icon')?.textContent?.trim()  || '📄';
+    window.openTab(url, label, icon);
+    window.closeSidebarDrawer?.();
+  });
+  // No shell MDI, trocar empresa atualiza todas as abas abertas sem
+  // recarregar a janela — auth.js define _trocarEmpresa com
+  // location.reload() por padrão; sobrescrevemos aqui (mesmo padrão do
+  // shell.html do IA Command).
+  window._iahubAuthReady?.then(() => {
+    let empresaSwitchQueue = Promise.resolve();
+    window._trocarEmpresa = async function (empresa_id) {
+      empresaSwitchQueue = empresaSwitchQueue
+        .catch(() => null)
+        .then(async () => {
+          const res = await fetch('/api/empresas/selecionar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ empresa_id, system_code: 'ia-service' }),
+          });
+          if (!res.ok) return;
+          const lista = await fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []);
+          const emp = lista.find(e => Number(e.id) === Number(empresa_id));
+          if (emp) {
+            const empresaNome = emp.razao_social || emp.nome || '';
+            window._iahubEmpresa = { id: emp.id, nome: empresaNome };
+            window._iahubAtualizarEmpresaBadge?.({ id: emp.id, nome: empresaNome });
+            await window.trocarEmpresaTodasAbas?.(emp.id, empresaNome);
+          }
+          const drop = document.getElementById('_empresa-dropdown');
+          if (drop) drop.style.display = 'none';
+        });
+      return empresaSwitchQueue;
+    };
+  });
+</script>
+</body>
+</html>
 </file>
 
-<file path="apps/IA Service/tests/avaliacao-investigacao-quality-gate-bloqueado.test.js">
-function criarAtendimentoComOrientacao(empresaId, texto = 'Hipótese provável de falha na rotina customizada.')
-⋮----
-function registrarExecucao(empresaId, atendimentoId, mensagemId, status)
-⋮----
-function notasBase()
-⋮----
-async function iniciarAppInterno()
-⋮----
-requireAuth: (_req, _res, next)
-requireIaService: (req, _res, next) =>
-⋮----
+<file path="apps/IA Service/tests/ajustes-migracao-incremental.test.js">
 function limpar()
-⋮----
-async function main()
 </file>
 
 <file path="apps/IA Service/tests/base-historica-incremental.test.js">
@@ -24734,6 +24984,10 @@ Os caminhos antigos em `modules/` permanecem apenas como stubs temporarios de
 compatibilidade para imports existentes.
 </file>
 
+<file path="apps/Master Crypto/backend/routes.js">
+function resolveCompanyId(req)
+</file>
+
 <file path="apps/Master Crypto/backend/service-manager.js">
 function updateStatus(patch)
 ⋮----
@@ -24787,6 +25041,110 @@ suggested = [
 reply = (
 </file>
 
+<file path="apps/Master Crypto/backend-python/app/api/v1/backtest.py">
+router = APIRouter(prefix="/backtest", tags=["Backtest Engine"])
+⋮----
+symbol = normalize_symbol(symbol)
+adapter = BinanceAdapter()
+candles = await adapter.get_candles(symbol=symbol, interval=timeframe, limit=limit)
+⋮----
+result = BacktestEngine.run_backtest(
+</file>
+
+<file path="apps/Master Crypto/backend-python/app/api/v1/btc_cycle.py">
+router = APIRouter(prefix="/btc-cycle", tags=["BTC Cycle Analysis"])
+</file>
+
+<file path="apps/Master Crypto/backend-python/app/api/v1/company_state.py">
+router = APIRouter(prefix="/company", tags=["IAHUB Company State"])
+⋮----
+class CompanySettingsUpdate(BaseModel)
+⋮----
+initial_bank_usd: float | None = Field(default=None, gt=0)
+risk_per_trade_pct: float | None = Field(default=None, gt=0, le=100)
+scanner_top_limit: int | None = Field(default=None, ge=1, le=100)
+scanner_timeframe: str | None = None
+radar_auto_refresh_seconds: int | None = Field(default=None, ge=0, le=86400)
+min_risk_reward_ratio: float | None = Field(default=None, gt=0)
+mode: str | None = None
+selected_exchange: str | None = None
+exchange_api_key: str | None = None
+exchange_api_secret: str | None = None
+⋮----
+def clean_patch(self) -> Dict[str, Any]
+⋮----
+data = self.model_dump(exclude_none=True)
+⋮----
+class ExchangeConnectionTest(BaseModel)
+⋮----
+exchange: str = "BINANCE"
+api_key: str | None = None
+api_secret: str | None = None
+⋮----
+@router.get("/settings")
+def get_company_settings(request: Request)
+⋮----
+ctx = get_iahub_context(request)
+⋮----
+@router.put("/settings")
+def update_company_settings(req: CompanySettingsUpdate, request: Request)
+⋮----
+@router.get("/summary")
+def get_company_summary(request: Request)
+⋮----
+@router.get("/mobile-token")
+def get_mobile_token(request: Request)
+⋮----
+@router.post("/mobile-token/regenerate")
+def regenerate_mobile_token(request: Request)
+⋮----
+@router.post("/test-exchange")
+async def test_exchange_connection(req: ExchangeConnectionTest, request: Request)
+⋮----
+exchange = str(req.exchange or DEFAULT_SETTINGS["selected_exchange"]).upper()
+⋮----
+api_key = str(req.api_key or "").strip()
+api_secret = str(req.api_secret or "").strip()
+⋮----
+current = store.get_settings(ctx.company_id, include_secrets=True)
+api_key = api_key or str(current.get("exchange_api_key", "")).strip()
+api_secret = api_secret or str(current.get("exchange_api_secret", "")).strip()
+⋮----
+public_result = await _test_public_connection(exchange, api_key, api_secret)
+assets_result = await _test_assets_read(exchange, api_key, api_secret)
+success = bool(public_result.get("success") and assets_result.get("success"))
+⋮----
+@router.post("/test-exchange/connection")
+async def test_exchange_public_connection(req: ExchangeConnectionTest, request: Request)
+⋮----
+@router.post("/test-exchange/assets")
+async def test_exchange_assets_read(req: ExchangeConnectionTest, request: Request)
+⋮----
+async def _test_public_connection(exchange: str, api_key: str, api_secret: str) -> Dict[str, Any]
+⋮----
+adapter = ExchangeFactory.get_adapter(
+price = await adapter.get_ticker_price("BTCUSDT")
+⋮----
+async def _test_assets_read(exchange: str, api_key: str, api_secret: str) -> Dict[str, Any]
+⋮----
+account = await _get_binance_account(api_key, api_secret)
+balances = account.get("balances", [])
+assets_with_balance = [
+⋮----
+async def _get_binance_account(api_key: str, api_secret: str) -> Dict[str, Any]
+⋮----
+timestamp = int(time.time() * 1000)
+query = urlencode({"timestamp": timestamp, "recvWindow": 5000})
+signature = hmac.new(api_secret.encode("utf-8"), query.encode("utf-8"), hashlib.sha256).hexdigest()
+url = f"https://api.binance.com/api/v3/account?{query}&signature={signature}"
+⋮----
+response = await client.get(url, headers={"X-MBX-APIKEY": api_key})
+⋮----
+detail = (response.text or "").strip()[:300]
+⋮----
+detail = (
+</file>
+
 <file path="apps/Master Crypto/backend-python/app/api/v1/news.py">
 router = APIRouter(prefix="/news", tags=["Crypto & Macro News"])
 ⋮----
@@ -24801,6 +25159,155 @@ summary = NewsEngine.get_market_sentiment_summary(news)
 async def get_news_sentiment()
 ⋮----
 news = await NewsEngine.fetch_crypto_news(limit=10)
+</file>
+
+<file path="apps/Master Crypto/backend-python/app/api/v1/opportunities.py">
+def format_price_py(val: float) -> str
+⋮----
+v = float(val)
+⋮----
+router = APIRouter(prefix="/opportunities", tags=["Trade Opportunities"])
+⋮----
+adapter = BinanceAdapter()
+scanner = MarketScanner(adapter=adapter)
+btc_context = await scanner.get_btc_context()
+⋮----
+symbols = TOP_20_BASELINE[:top_limit]
+universe_source = "BASELINE"
+⋮----
+opportunities = []
+⋮----
+candles = await adapter.get_candles(symbol=symbol, interval=timeframe, limit=100)
+⋮----
+df_annotated = IndicatorEngine.annotate_all_indicators(candles)
+regime = RegimeEngine.classify_regime(df_annotated)
+last = df_annotated.iloc[-1]
+close = float(last["close"])
+period_open = float(last.get("open", close))
+period_change_pct = ((close - period_open) / period_open * 100.0) if period_open else 0.0
+rsi = float(last.get("rsi_14", 50.0))
+rvol = float(last.get("rvol", 1.0))
+ema21 = float(last.get("ema_21", close))
+ema9 = float(last.get("ema_9", close))
+atr = float(last.get("atr_14", close * 0.02))
+⋮----
+trade_plan = StrategyEngine.evaluate_opportunity(
+⋮----
+strat = StrategyEnum.PULLBACK if regime == MarketRegimeEnum.TRENDING_UP else (
+stop_loss = round(max(support, close - (1.5 * atr)), 4)
+⋮----
+stop_loss = round(close * 0.97, 4)
+⋮----
+target_t2 = round(close * 1.055, 4)
+reward = target_t2 - close
+risk = max(0.0001, close - stop_loss)
+rr = round(reward / risk, 2)
+potential_pct = round(((target_t2 - close) / close) * 100.0, 2)
+⋮----
+trade_plan = TradePlan(
+⋮----
+trend_score = 90.0 if regime.value in ["TRENDING_UP", "RECOVERY"] else 55.0
+price_struct_score = 85.0
+momentum_score = min(100.0, rsi * 1.4)
+volume_score = min(100.0, rvol * 50.0)
+regime_score = 90.0 if regime.value == "TRENDING_UP" else 75.0
+btc_score = btc_context.score
+mtf_score = 80.0
+⋮----
+score_result = OpportunityScoreEngine.calculate_score(
+⋮----
+position_calc = RiskManager.calculate_position_size(
+⋮----
+min_str = format_price_py(trade_plan.entry_zone_min)
+max_str = format_price_py(trade_plan.entry_zone_max)
+stop_str = format_price_py(trade_plan.stop_loss)
+target_str = format_price_py(trade_plan.target_t2)
+</file>
+
+<file path="apps/Master Crypto/backend-python/app/api/v1/orders.py">
+router = APIRouter(prefix="/orders", tags=["Real Exchange Orders"])
+⋮----
+class RealOrderRequest(BaseModel)
+⋮----
+symbol: str
+exchange: str = "BINANCE"
+side: str = "BUY"
+order_type: str = "LIMIT"
+quantity: float = 1.0
+entry_price: float
+stop_loss: Optional[float] = None
+target_t2: Optional[float] = None
+api_key: Optional[str] = None
+api_secret: Optional[str] = None
+⋮----
+@router.post("/real")
+async def execute_real_order(req: RealOrderRequest, request: Request)
+⋮----
+@router.get("/balance")
+async def get_exchange_balance(request: Request, exchange: str = "BINANCE")
+⋮----
+exchange_name = exchange.upper().strip()
+company_settings = _company_exchange_settings(request)
+api_key = _clean_credential(company_settings.get("exchange_api_key") or settings.BINANCE_API_KEY)
+api_secret = _clean_credential(company_settings.get("exchange_api_secret") or settings.BINANCE_API_SECRET)
+⋮----
+timestamp = int(time.time() * 1000)
+params = {"timestamp": timestamp, "recvWindow": 5000}
+query = urlencode(params)
+signature = hmac.new(api_secret.encode("utf-8"), query.encode("utf-8"), hashlib.sha256).hexdigest()
+url = f"https://api.binance.com/api/v3/account?{query}&signature={signature}"
+⋮----
+response = await client.get(url, headers={"X-MBX-APIKEY": api_key})
+⋮----
+detail = response.text[:300]
+⋮----
+account = response.json()
+balances = account.get("balances", [])
+usdt = next((item for item in balances if item.get("asset") == "USDT"), {})
+free = float(usdt.get("free") or 0)
+locked = float(usdt.get("locked") or 0)
+⋮----
+@router.get("/assets")
+async def get_exchange_assets(request: Request, exchange: str = "BINANCE")
+⋮----
+account_url = f"https://api.binance.com/api/v3/account?{query}&signature={signature}"
+⋮----
+account_response = await client.get(account_url, headers={"X-MBX-APIKEY": api_key})
+prices_response = await client.get("https://api.binance.com/api/v3/ticker/price")
+⋮----
+detail = _binance_error_message(account_response.text)
+⋮----
+detail = prices_response.text[:300]
+⋮----
+account = account_response.json()
+raw_balances = account.get("balances", [])
+prices = prices_response.json()
+price_map = {item.get("symbol"): float(item.get("price") or 0) for item in prices if item.get("symbol")}
+⋮----
+stable_assets = {"USDT", "USDC", "FDUSD", "BUSD", "TUSD", "DAI"}
+assets = []
+total_estimated_usdt = 0.0
+⋮----
+asset = str(item.get("asset") or "").upper()
+free = float(item.get("free") or 0)
+locked = float(item.get("locked") or 0)
+total = free + locked
+⋮----
+price_usdt = 1.0
+⋮----
+price_usdt = price_map.get(f"{asset}USDT", 0.0)
+⋮----
+estimated_usdt = total * price_usdt if price_usdt else 0.0
+⋮----
+def _company_exchange_settings(request: Request) -> dict
+⋮----
+ctx = get_iahub_context(request)
+⋮----
+def _clean_credential(value: str | None) -> str
+⋮----
+def _binance_error_message(raw_text: str) -> str
+⋮----
+text = (raw_text or "").strip()
 </file>
 
 <file path="apps/Master Crypto/backend-python/app/api/v1/paper_trading.py">
@@ -24845,6 +25352,20 @@ trade = paper_engine.close_paper_trade_manually(req.trade_id, req.current_market
 ⋮----
 @router.get("/metrics")
 def get_paper_trading_metrics(request: Request)
+</file>
+
+<file path="apps/Master Crypto/backend-python/app/api/v1/scanner.py">
+router = APIRouter(prefix="/scanner", tags=["Market Scanner"])
+⋮----
+@router.get("/symbols")
+async def get_top_symbols(top_limit: int = Query(20, ge=1, le=100), dynamic: bool = True)
+⋮----
+symbols = TOP_20_BASELINE[:top_limit]
+source = "BASELINE"
+⋮----
+scanner = MarketScanner()
+btc_context = await scanner.get_btc_context()
+scanned_assets = await scanner.scan_all_top(timeframe=timeframe, top_limit=top_limit, use_dynamic=dynamic)
 </file>
 
 <file path="apps/Master Crypto/backend-python/app/backtest/backtest_engine.py">
@@ -24935,6 +25456,118 @@ MIN_TECHNICAL_POTENTIAL_PCT: float = 5.0
 model_config = ConfigDict(env_file=".env", extra="ignore")
 ⋮----
 settings = Settings()
+</file>
+
+<file path="apps/Master Crypto/backend-python/app/core/crypto_envelope.py">
+ENVELOPE_VERSION = 1
+ENVELOPE_ALG = "AES-256-GCM"
+IV_BYTES = 12
+TAG_BYTES = 16
+⋮----
+def is_encrypted_envelope(value: Any) -> bool
+⋮----
+def normalize_key(key: str | None) -> bytes
+⋮----
+raw = str(key or "").strip()
+⋮----
+key_bytes = bytes.fromhex(raw)
+⋮----
+key_bytes = base64.b64decode(raw)
+⋮----
+def _secret_key() -> str
+⋮----
+key = os.getenv("MASTER_CRYPTO_DATA_CRYPTO_KEY") or os.getenv("SVC_DATA_CRYPTO_KEY")
+⋮----
+def encrypt_payload(payload: Dict[str, Any], key: str, kid: str = "default") -> Dict[str, str | int]
+⋮----
+key_bytes = normalize_key(key)
+iv = os.urandom(IV_BYTES)
+plaintext = json.dumps(payload or {}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+encrypted_with_tag = AESGCM(key_bytes).encrypt(iv, plaintext, None)
+data = encrypted_with_tag[:-TAG_BYTES]
+tag = encrypted_with_tag[-TAG_BYTES:]
+⋮----
+def decrypt_payload(envelope: Dict[str, Any], key: str) -> Dict[str, Any]
+⋮----
+iv = base64.b64decode(envelope["iv"])
+tag = base64.b64decode(envelope["tag"])
+data = base64.b64decode(envelope["data"])
+⋮----
+plaintext = AESGCM(key_bytes).decrypt(iv, data + tag, None)
+⋮----
+def encrypt_secret(plain_text: str | None) -> str
+⋮----
+envelope = encrypt_payload({"s": str(plain_text)}, _secret_key())
+⋮----
+def decrypt_secret(stored_text: str | None, *, allow_plaintext_legacy: bool = True) -> str
+⋮----
+envelope = json.loads(stored_text)
+⋮----
+payload = decrypt_payload(envelope, _secret_key())
+⋮----
+def mask_secret(value: str | None, *, keep_start: int = 4, keep_end: int = 4) -> str
+⋮----
+raw = str(value or "")
+</file>
+
+<file path="apps/Master Crypto/backend-python/app/core/iahub_context.py">
+@dataclass(frozen=True)
+class IAHUBContext
+⋮----
+company_id: int
+user_id: int | None = None
+⋮----
+def get_iahub_context(request: Request) -> IAHUBContext
+⋮----
+company_raw = request.headers.get("x-iahub-company-id")
+user_raw = request.headers.get("x-iahub-user-id")
+⋮----
+company_id = int(company_raw or 0)
+⋮----
+company_id = 0
+⋮----
+token = request.headers.get("x-company-token")
+internal_secret = request.headers.get("x-master-crypto-internal-secret")
+configured_internal_secret = os.getenv("MASTER_CRYPTO_INTERNAL_SECRET", "").strip()
+client_host = (request.client.host if request.client else "") or ""
+is_local_proxy = client_host in {"127.0.0.1", "::1", "localhost"}
+is_internal = bool(
+⋮----
+user_id = int(user_raw) if user_raw else None
+⋮----
+user_id = None
+</file>
+
+<file path="apps/Master Crypto/backend-python/app/core/request_validation.py">
+Timeframe = Literal["1m", "5m", "15m", "1h", "4h", "1d"]
+⋮----
+def normalize_symbol(symbol: str) -> str
+⋮----
+clean = str(symbol or "").replace("/", "").upper().strip()
+</file>
+
+<file path="apps/Master Crypto/backend-python/app/domain/assets.py">
+TOP_20_BASELINE = [
+⋮----
+TOP_20_SYMBOLS = TOP_20_BASELINE
+⋮----
+async def fetch_dynamic_top_by_volume_with_source(top_limit: int = 20) -> Tuple[List[str], str]
+⋮----
+url = "https://api.binance.com/api/v3/ticker/24hr"
+excluded_keywords = ["USDC", "DAI", "FDUSD", "TUSD", "USDS", "WBTC", "WETH", "EUR", "BUSD", "PYUSD", "USD1", "RLUSD"]
+⋮----
+response = await client.get(url)
+⋮----
+data = response.json()
+⋮----
+usdt_pairs = []
+⋮----
+symbol = item["symbol"]
+⋮----
+sorted_pairs = sorted(usdt_pairs, key=lambda x: x["quote_volume"], reverse=True)
+dynamic_list = [p["symbol"] for p in sorted_pairs[:top_limit]]
+⋮----
+async def fetch_dynamic_top_by_volume(top_limit: int = 20) -> List[str]
 </file>
 
 <file path="apps/Master Crypto/backend-python/app/domain/schemas.py">
@@ -25484,6 +26117,86 @@ expectancy = net_pnl / total_trades if total_trades > 0 else 0.0
 
 </file>
 
+<file path="apps/Master Crypto/backend-python/app/persistence/company_store.py">
+DEFAULT_SETTINGS = {
+⋮----
+def _new_mobile_token(company_id: int) -> str
+⋮----
+class CompanyStore
+⋮----
+def __init__(self, path: Path | None = None)
+⋮----
+base_dir = Path(__file__).resolve().parents[2] / "data"
+⋮----
+def _empty(self) -> Dict[str, Any]
+⋮----
+def _load(self) -> Dict[str, Any]
+⋮----
+data = json.load(fh)
+⋮----
+def _save(self, data: Dict[str, Any]) -> None
+⋮----
+tmp_path = self.path.with_suffix(".tmp")
+⋮----
+def _company(self, data: Dict[str, Any], company_id: int) -> Dict[str, Any]
+⋮----
+companies = data.setdefault("companies", {})
+key = str(company_id)
+⋮----
+company = companies[key]
+⋮----
+def _prepare_settings_for_save(self, current: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, Any]
+⋮----
+prepared = deepcopy(patch)
+⋮----
+value = str(prepared.get(key) or "").strip()
+⋮----
+def _public_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]
+⋮----
+public = {**deepcopy(DEFAULT_SETTINGS), **deepcopy(settings)}
+⋮----
+secret = decrypt_secret(public.get(key))
+⋮----
+def _private_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]
+⋮----
+private = {**deepcopy(DEFAULT_SETTINGS), **deepcopy(settings)}
+⋮----
+def get_settings(self, company_id: int, *, include_secrets: bool = False) -> Dict[str, Any]
+⋮----
+data = self._load()
+settings = self._company(data, company_id)["settings"]
+⋮----
+def update_settings(self, company_id: int, patch: Dict[str, Any]) -> Dict[str, Any]
+⋮----
+allowed = set(DEFAULT_SETTINGS.keys())
+clean = {key: value for key, value in patch.items() if key in allowed}
+⋮----
+company = self._company(data, company_id)
+⋮----
+def get_mobile_token(self, company_id: int) -> Dict[str, str]
+⋮----
+token = company["mobile_token"]
+⋮----
+def regenerate_mobile_token(self, company_id: int) -> Dict[str, str]
+⋮----
+def validate_mobile_token(self, company_id: int, token: str | None) -> bool
+⋮----
+expected = str(company.get("mobile_token") or "")
+⋮----
+def get_paper_state(self, company_id: int) -> Dict[str, Any]
+⋮----
+paper = self._company(data, company_id)["paper"]
+⋮----
+def get_summary(self, company_id: int) -> Dict[str, Any]
+⋮----
+settings = self.get_settings(company_id)
+paper = self.get_paper_state(company_id)
+engine = PaperTradingEngine(
+metrics = engine.get_performance_metrics()
+⋮----
+store = CompanyStore()
+</file>
+
 <file path="apps/Master Crypto/backend-python/app/workers/background_loop.py">
 logger = logging.getLogger("market_worker")
 ⋮----
@@ -25535,6 +26248,48 @@ tasks = [self.scan_single_symbol(sym, timeframe) for sym in symbols]
 results = await asyncio.gather(*tasks, return_exceptions=True)
 ⋮----
 scanned = []
+</file>
+
+<file path="apps/Master Crypto/backend-python/app/main.py">
+worker = BackgroundMarketWorker(interval_seconds=300)
+⋮----
+@asynccontextmanager
+async def lifespan(app: FastAPI)
+⋮----
+task = asyncio.create_task(worker.start_loop())
+⋮----
+app = FastAPI(
+⋮----
+class ConnectionManager
+⋮----
+def __init__(self)
+⋮----
+async def connect(self, websocket: WebSocket)
+⋮----
+def disconnect(self, websocket: WebSocket)
+⋮----
+async def broadcast(self, message: dict)
+⋮----
+ws_manager = ConnectionManager()
+⋮----
+@app.get("/health")
+def health_check()
+⋮----
+@app.websocket("/api/v1/ws/market")
+async def websocket_market_endpoint(websocket: WebSocket)
+⋮----
+data = await websocket.receive_text()
+⋮----
+symbol = normalize_symbol(symbol)
+adapter = BinanceAdapter()
+candles = await adapter.get_candles(symbol=symbol, interval=interval, limit=limit)
+⋮----
+@app.get(f"{settings.API_V1_STR}/market/price")
+async def get_market_price(symbol: str = "BTCUSDT")
+⋮----
+clean_symbol = normalize_symbol(symbol)
+⋮----
+price = await adapter.get_ticker_price(clean_symbol)
 </file>
 
 <file path="apps/Master Crypto/backend-python/tests/test_analyst.py">
@@ -25590,6 +26345,35 @@ df = IndicatorEngine.annotate_all_indicators(candles)
 regime = RegimeEngine.classify_regime(df)
 </file>
 
+<file path="apps/Master Crypto/backend-python/tests/test_iahub_multitenant_store.py">
+def _plan(symbol="SOLUSDT")
+⋮----
+def test_company_store_isolates_paper_trades_by_company(tmp_path)
+⋮----
+store = CompanyStore(path=tmp_path / "mc.json")
+⋮----
+engine_a = PaperTradingEngine()
+trade_a = engine_a.open_paper_trade(
+⋮----
+state_a = store.get_paper_state(empresa_a)
+state_b = store.get_paper_state(empresa_b := 202)
+⋮----
+def test_company_store_keeps_settings_by_company(tmp_path)
+⋮----
+def test_company_store_encrypts_exchange_credentials_and_masks_public_settings(tmp_path, monkeypatch)
+⋮----
+public = store.update_settings(101, {
+⋮----
+raw_text = (tmp_path / "mc.json").read_text(encoding="utf-8")
+⋮----
+private = store.get_settings(101, include_secrets=True)
+⋮----
+def test_company_store_validates_mobile_token_by_company(tmp_path)
+⋮----
+token_a = store.get_mobile_token(101)["mobile_token"]
+token_b = store.get_mobile_token(202)["mobile_token"]
+</file>
+
 <file path="apps/Master Crypto/backend-python/tests/test_news.py">
 @pytest.mark.asyncio
 async def test_news_engine_max_10_articles()
@@ -25628,6 +26412,32 @@ base_price = 100.0
 price = base_price + (i * 0.5) if i < 60 else base_price + 30.0 - ((i - 60) * 0.3)
 ⋮----
 result = BacktestEngine.run_backtest(candles=candles, symbol="TESTUSDT", timeframe="4H")
+</file>
+
+<file path="apps/Master Crypto/backend-python/tests/test_scanner.py">
+class FakeAdapter
+⋮----
+async def get_candles(self, symbol: str, interval: str = "4h", limit: int = 200)
+⋮----
+@pytest.mark.asyncio
+async def test_dynamic_top_limit_fetch()
+⋮----
+top5 = await fetch_dynamic_top_by_volume(top_limit=5)
+⋮----
+top10 = await fetch_dynamic_top_by_volume(top_limit=10)
+⋮----
+@pytest.mark.asyncio
+async def test_market_scanner_with_custom_top_limit(monkeypatch)
+⋮----
+async def fake_top(top_limit: int = 20)
+⋮----
+scanner = MarketScanner(adapter=FakeAdapter())
+results = await scanner.scan_all_top(timeframe="4h", top_limit=3, use_dynamic=True)
+⋮----
+@pytest.mark.asyncio
+async def test_btc_context_scanner()
+⋮----
+btc_ctx = await scanner.get_btc_context()
 </file>
 
 <file path="apps/Master Crypto/backend-python/tests/test_strategies.py">
@@ -25676,6 +26486,21 @@ DEFAULT_TOP_LIMIT=20
 DEFAULT_RISK_PER_TRADE_PCT=2.0
 MIN_RISK_REWARD_RATIO=2.0
 MIN_TECHNICAL_POTENTIAL_PCT=5.0
+</file>
+
+<file path="apps/Master Crypto/backend-python/requirements.txt">
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+sqlalchemy>=2.0.28
+asyncpg>=0.29.0
+httpx>=0.27.0
+cryptography>=43.0.3
+numpy>=1.26.0
+pandas>=2.2.0
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
 </file>
 
 <file path="apps/Master Crypto/frontend/css/master-crypto.css">
@@ -26988,6 +27813,489 @@ function scrollMdiTabs(dir)
 </html>
 </file>
 
+<file path="apps/Master Crypto/frontend/configuracoes.html">
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Configurações - Crypto Radar AI</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="./css/master-crypto.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { background: #f8fafc; padding: 16px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; }
+    .card-box { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    /* TABS STYLE LIKE IA COMMAND */
+    .tabs-header {
+      display: flex;
+      gap: 6px;
+      border-bottom: 2px solid #e2e8f0;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+    .tab-item {
+      background: transparent;
+      border: none;
+      color: #64748b;
+      padding: 12px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .tab-item:hover { color: #0f172a; }
+    .tab-item.active { color: #2563eb; border-bottom-color: #2563eb; background: rgba(37, 99, 235, 0.04); border-radius: 8px 8px 0 0; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+    .form-control {
+      width: 100%;
+      height: 44px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 0 44px 0 14px;
+      font-size: 14px;
+      color: #0f172a;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+    .form-control.code-font { font-family: monospace; font-size: 15px; }
+    .form-control:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+    .toggle-password-btn {
+      position: absolute;
+      right: 8px;
+      background: transparent;
+      border: none;
+      color: #64748b;
+      cursor: pointer;
+      font-size: 18px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+    }
+    .toggle-password-btn:hover { color: #2563eb; background: #f1f5f9; }
+    .btn-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+    .btn {
+      height: 42px;
+      padding: 0 22px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: #2563eb; color: #ffffff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-outline { background: #ffffff; border: 1px solid #2563eb; color: #2563eb; }
+    .btn-outline:hover { background: rgba(37, 99, 235, 0.05); }
+    .btn-secondary { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+    .btn-secondary:hover { background: #e2e8f0; }
+    .status-line { font-size: 13px; color: #64748b; font-weight: 500; }
+    .test-feedback {
+      margin-top: 14px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      display: none;
+    }
+    .test-feedback.success { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .test-feedback.error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    .test-checks { display: grid; gap: 8px; margin-top: 8px; }
+    .test-check {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      border-radius: 8px;
+      padding: 9px 11px;
+      background: rgba(255, 255, 255, .45);
+      line-height: 1.4;
+    }
+    .test-check strong { display: block; margin-bottom: 2px; }
+    .copy-toast {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      z-index: 9999;
+      display: none;
+      min-width: 220px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid #86efac;
+      background: #dcfce7;
+      color: #166534;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+      font-size: 14px;
+      font-weight: 800;
+      text-align: center;
+    }
+    .copy-toast.show { display: block; }
+  </style>
+</head>
+<body>
+<div id="copyToast" class="copy-toast">Token copiado</div>
+<div class="page-kicker">CONFIGURAÇÃO / PARÂMETROS & RISCO</div>
+<div class="head-row" style="margin-bottom: 16px;">
+  <div>
+    <div class="head-title" style="font-size: 22px; font-weight: 700;">Ajustes do Motor Algorítmico & Scanner 24x7</div>
+    <div class="status-line" id="statusLine">Carregando parâmetros da empresa...</div>
+  </div>
+</div>
+<div class="tabs-header">
+  <button class="tab-item active" onclick="switchTab('tab-corretora', this)">⚡ 1. Corretora & Chaves Binance</button>
+  <button class="tab-item" onclick="switchTab('tab-banca', this)">🎯 2. Banca & Risco</button>
+  <button class="tab-item" onclick="switchTab('tab-scanner', this)">🔍 3. Scanner & Algoritmo</button>
+  <button class="tab-item" onclick="switchTab('tab-empresa', this)">🏢 4. Dados da Empresa</button>
+</div>
+<div id="tab-corretora" class="tab-pane active">
+  <div class="card-box">
+    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 16px; color: #0f172a;">🔑 Credenciais de Exchange (Binance / Bybit / OKX / KuCoin)</h3>
+    <div class="form-grid">
+      <div class="form-group" style="grid-column: 1 / -1;">
+        <label for="selected_exchange">Corretora Ativa</label>
+        <select id="selected_exchange" class="form-control" style="max-width: 320px;">
+          <option value="BINANCE">Binance (Spot & Futures)</option>
+          <option value="BYBIT">Bybit</option>
+          <option value="OKX">OKX</option>
+          <option value="KUCOIN">KuCoin</option>
+        </select>
+      </div>
+      <div class="form-group" style="grid-column: 1 / -1;">
+        <label for="exchange_api_key">API Key da Corretora (Pública)</label>
+        <div class="input-wrapper">
+          <input id="exchange_api_key" type="password" class="form-control code-font" placeholder="Cole a API Key pública fornecida pela Binance">
+          <button type="button" class="toggle-password-btn" title="Mostrar/Ocultar API Key" onclick="toggleVisibility('exchange_api_key', this)">👁️</button>
+        </div>
+      </div>
+      <div class="form-group" style="grid-column: 1 / -1;">
+        <label for="exchange_api_secret">API Secret da Corretora (Privado - Criptografado)</label>
+        <div class="input-wrapper">
+          <input id="exchange_api_secret" type="password" class="form-control code-font" placeholder="Cole o API Secret privado fornecido pela Binance">
+          <button type="button" class="toggle-password-btn" title="Mostrar/Ocultar API Secret" onclick="toggleVisibility('exchange_api_secret', this)">👁️</button>
+        </div>
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" type="button" onclick="saveSettings()">💾 Salvar Chaves de API</button>
+      <button class="btn btn-outline" type="button" onclick="testExchangeConnection()">⚡ Testar Conexão com a Binance</button>
+      <button class="btn btn-secondary" type="button" onclick="loadSettings()">🔄 Recarregar</button>
+    </div>
+    <div id="testFeedback" class="test-feedback"></div>
+  </div>
+</div>
+<div id="tab-banca" class="tab-pane">
+  <div class="card-box">
+    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 16px; color: #0f172a;">🎯 Parâmetros de Banca & Gestão de Risco</h3>
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="initial_bank_usd">Banca inicial por empresa (USD)</label>
+        <input id="initial_bank_usd" type="number" class="form-control" min="1" step="100" value="10000">
+      </div>
+      <div class="form-group">
+        <label for="risk_per_trade_pct">Risco por Trade (% da Banca)</label>
+        <input id="risk_per_trade_pct" type="number" class="form-control" min="0.1" max="100" step="0.1" value="2.0">
+      </div>
+      <div class="form-group">
+        <label for="min_risk_reward_ratio">Relação Risco/Retorno Mínima (R:R)</label>
+        <input id="min_risk_reward_ratio" type="number" class="form-control" min="0.1" step="0.1" value="2.0">
+      </div>
+      <div class="form-group">
+        <label for="mode">Modo operacional</label>
+        <select id="mode" class="form-control">
+          <option value="demo">Simulação por empresa (Paper Trading)</option>
+          <option value="real">Modo Real (Ordens diretas na Binance)</option>
+        </select>
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" type="button" onclick="saveSettings()">💾 Salvar Risco & Banca</button>
+    </div>
+  </div>
+</div>
+<div id="tab-scanner" class="tab-pane">
+  <div class="card-box">
+    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 16px; color: #0f172a;">🔍 Parâmetros do Scanner Automático</h3>
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="scanner_top_limit">Profundidade Padrão do Scanner</label>
+        <select id="scanner_top_limit" class="form-control">
+          <option value="10">Top 10 Criptomoedas</option>
+          <option value="20" selected>Top 20 Criptomoedas</option>
+          <option value="30">Top 30 Criptomoedas</option>
+          <option value="50">Top 50 Criptomoedas</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="scanner_timeframe">Timeframe padrão</label>
+        <select id="scanner_timeframe" class="form-control">
+          <option value="1h">1H</option>
+          <option value="4h" selected>4H (Baseline de Swing Trade)</option>
+          <option value="1d">1D (Diário)</option>
+        </select>
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" type="button" onclick="saveSettings()">💾 Salvar Parâmetros do Scanner</button>
+    </div>
+  </div>
+</div>
+<div id="tab-empresa" class="tab-pane">
+  <div class="card-box">
+    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 16px; color: #0f172a;">🏢 Empresa & Token de Integração do App Mobile</h3>
+    <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin-bottom: 16px;">
+      Este ambiente responde dinamicamente à empresa selecionada no cabeçalho do IAHub. Utilize o <strong>Token da Empresa</strong> abaixo para autenticar e vincular o aplicativo móvel Master Crypto às configurações desta empresa.
+    </p>
+    <div style="padding: 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; color: #1e40af; font-size: 13px; margin-bottom: 20px;">
+      🏢 <strong>Empresa Ativa:</strong> <span id="companyActiveLabel">Carregando...</span>
+    </div>
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px;">
+      <h4 style="margin-top: 0; margin-bottom: 10px; font-size: 14px; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+        🔑 Token de Acesso da Empresa (App Mobile)
+      </h4>
+      <p style="font-size: 12px; color: #64748b; margin-top: 0; margin-bottom: 14px;">
+        Copie este Token e insira no aplicativo celular do Master Crypto para liberar o acesso:
+      </p>
+      <div class="form-group" style="margin-bottom: 14px;">
+        <div class="input-wrapper">
+          <input id="companyTokenInput" type="text" readonly class="form-control code-font" style="font-weight: 700; color: #2563eb; background: #ffffff; letter-spacing: 1px;" value="Carregando token...">
+          <button type="button" class="btn btn-primary btn-sm" style="position: absolute; right: 6px; height: 32px; font-size: 12px; padding: 0 14px;" onclick="copyCompanyToken()">📋 Copiar Token</button>
+        </div>
+      </div>
+      <div class="btn-group" style="margin-top: 10px;">
+        <button class="btn btn-outline" type="button" onclick="copyCompanyToken()">📋 Copiar Token para o App</button>
+        <button class="btn btn-secondary" type="button" onclick="generateNewCompanyToken()">🔄 Gerar Novo Token</button>
+      </div>
+      <div id="tokenCopiedMsg" style="display: none; margin-top: 10px; font-size: 13px; font-weight: 700; color: #166534; background: #dcfce7; padding: 8px 12px; border-radius: 6px; border: 1px solid #86efac;">
+        ✅ Token copiado para a área de transferência! Insira no App Mobile.
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/js/auth.js"></script>
+<script>
+  const fields = ['initial_bank_usd', 'risk_per_trade_pct', 'min_risk_reward_ratio', 'scanner_top_limit', 'scanner_timeframe', 'mode', 'selected_exchange', 'exchange_api_key', 'exchange_api_secret'];
+  function getEmpresaId() {
+    return window._iahubEmpresa?.id || window._iahubEmpresa?.empresa_id || '';
+  }
+  function apiUrl(path) {
+    const companyId = getEmpresaId();
+    if (!companyId) return path;
+    const sep = path.includes('?') ? '&' : '?';
+    return `${path}${sep}empresa_id=${encodeURIComponent(companyId)}`;
+  }
+  async function loadCompanyToken() {
+    const tokenInput = document.getElementById('companyTokenInput');
+    if (!tokenInput) return;
+    tokenInput.value = 'Carregando token...';
+    try {
+      const data = await fetch(apiUrl('/api/master-crypto/company/mobile-token')).then(r => r.json());
+      tokenInput.value = data.mobile_token || '';
+    } catch (_) {
+      tokenInput.value = 'Nao foi possivel carregar o token';
+    }
+  }
+  async function copyCompanyToken() {
+    const tokenInput = document.getElementById('companyTokenInput');
+    if (!tokenInput?.value || tokenInput.value.includes('Carregando') || tokenInput.value.includes('Nao foi')) return;
+    const copied = await copyTextToClipboard(tokenInput.value, tokenInput);
+    if (!copied) {
+      alert('Nao foi possivel copiar automaticamente. Selecione o token e copie manualmente com Ctrl+C.');
+      return;
+    }
+    showCopyToast();
+    const msg = document.getElementById('tokenCopiedMsg');
+    msg.style.display = 'block';
+    setTimeout(() => { msg.style.display = 'none'; }, 3000);
+  }
+  async function copyTextToClipboard(text, inputEl) {
+    inputEl.focus();
+    inputEl.select();
+    inputEl.setSelectionRange(0, text.length);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (_) {}
+    try {
+      return document.execCommand('copy');
+    } catch (_) {
+      return false;
+    }
+  }
+  function showCopyToast() {
+    const toast = document.getElementById('copyToast');
+    if (!toast) return;
+    toast.classList.add('show');
+    clearTimeout(window._copyToastTimer);
+    window._copyToastTimer = setTimeout(() => {
+      toast.classList.remove('show');
+    }, 2600);
+  }
+  async function generateNewCompanyToken() {
+    if (!confirm('Gerar novo token? O token anterior deixara de autenticar o app mobile desta empresa.')) return;
+    const tokenInput = document.getElementById('companyTokenInput');
+    tokenInput.value = 'Gerando novo token...';
+    try {
+      const data = await fetch(apiUrl('/api/master-crypto/company/mobile-token/regenerate'), { method: 'POST' }).then(r => r.json());
+      tokenInput.value = data.mobile_token || '';
+      alert('Novo token gerado e salvo para esta empresa. Atualize o token no aplicativo celular.');
+    } catch (_) {
+      await loadCompanyToken();
+      alert('Nao foi possivel gerar um novo token agora.');
+    }
+  }
+  function switchTab(tabId, btn) {
+    document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-item').forEach(el => el.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    btn.classList.add('active');
+  }
+  function toggleVisibility(fieldId, btn) {
+    const el = document.getElementById(fieldId);
+    if (el.type === 'password') {
+      el.type = 'text';
+      btn.textContent = '🙈';
+    } else {
+      el.type = 'password';
+      btn.textContent = '👁️';
+    }
+  }
+  async function loadSettings() {
+    await (window._iahubAuthReady || Promise.resolve());
+    setStatus('Carregando parâmetros da empresa...');
+    const companyName = window._iahubEmpresa?.nome || 'Empresa Selecionada';
+    const companyId = window._iahubEmpresa?.id || '-';
+    document.getElementById('companyActiveLabel').textContent = `${companyName} (ID: ${companyId})`;
+    await loadCompanyToken();
+    try {
+      const data = await fetch(apiUrl('/api/master-crypto/company/settings')).then(r => r.json());
+      fields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && data[id] !== undefined) el.value = data[id];
+      });
+      const keyInput = document.getElementById('exchange_api_key');
+      const secretInput = document.getElementById('exchange_api_secret');
+      if (keyInput && data.exchange_api_key_configured) {
+        keyInput.value = '';
+        keyInput.placeholder = `Configurada (${data.exchange_api_key_masked || 'protegida'}) - preencha apenas para trocar`;
+      }
+      if (secretInput && data.exchange_api_secret_configured) {
+        secretInput.value = '';
+        secretInput.placeholder = `Configurada (${data.exchange_api_secret_masked || 'protegida'}) - preencha apenas para trocar`;
+      }
+      setStatus(`Parâmetros carregados para ${companyName}.`);
+    } catch (err) {
+      setStatus('Não foi possível carregar os parâmetros desta empresa.');
+    }
+  }
+  async function saveSettings() {
+    const body = {
+      initial_bank_usd: Number(document.getElementById('initial_bank_usd').value),
+      risk_per_trade_pct: Number(document.getElementById('risk_per_trade_pct').value),
+      min_risk_reward_ratio: Number(document.getElementById('min_risk_reward_ratio').value),
+      scanner_top_limit: Number(document.getElementById('scanner_top_limit').value),
+      scanner_timeframe: document.getElementById('scanner_timeframe').value,
+      mode: document.getElementById('mode').value,
+      selected_exchange: document.getElementById('selected_exchange').value,
+    };
+    const apiKey = document.getElementById('exchange_api_key').value.trim();
+    const apiSecret = document.getElementById('exchange_api_secret').value.trim();
+    if (apiKey) body.exchange_api_key = apiKey;
+    if (apiSecret) body.exchange_api_secret = apiSecret;
+    setStatus('Salvando parâmetros...');
+    const res = await fetch(apiUrl('/api/master-crypto/company/settings'), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      setStatus('Não foi possível salvar os parâmetros.');
+      return;
+    }
+    setStatus('Parâmetros salvos com sucesso para esta empresa.');
+    await loadSettings();
+  }
+  async function testExchangeConnection() {
+    const feedback = document.getElementById('testFeedback');
+    feedback.style.display = 'block';
+    feedback.className = 'test-feedback';
+    feedback.innerHTML = '⚡ Testando conexão pública e leitura autenticada dos ativos... Aguarde...';
+    const apiKey = document.getElementById('exchange_api_key').value.trim();
+    const apiSecret = document.getElementById('exchange_api_secret').value.trim();
+    const exchange = document.getElementById('selected_exchange').value;
+    try {
+      const res = await fetch(apiUrl('/api/master-crypto/company/test-exchange'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          exchange: exchange,
+          api_key: apiKey,
+          api_secret: apiSecret,
+          empresa_id: window._iahubEmpresa?.id || window._iahubEmpresa?.empresa_id || undefined
+        })
+      });
+      const data = await res.json();
+      const checks = data.checks || {};
+      const connection = checks.connection || {};
+      const assets = checks.assets || {};
+      feedback.className = data.success ? 'test-feedback success' : 'test-feedback error';
+      feedback.innerHTML = `
+        ${data.success ? '✅' : '⚠️'} <strong>Teste Binance concluído</strong>
+        <div class="test-checks">
+          ${renderTestCheck('Conexão pública / cotação', connection)}
+          ${renderTestCheck('Leitura autenticada dos ativos', assets)}
+        </div>
+      `;
+    } catch(err) {
+      feedback.className = 'test-feedback error';
+      feedback.innerHTML = `❌ <strong>Erro de Comunicação:</strong> Não foi possível testar (${err.message})`;
+    }
+  }
+  function renderTestCheck(title, check) {
+    const ok = Boolean(check?.success);
+    const message = check?.message || 'Sem retorno.';
+    return `
+      <div class="test-check">
+        <span>${ok ? '✅' : '❌'}</span>
+        <span><strong>${title}</strong>${escapeHtml(message)}</span>
+      </div>
+    `;
+  }
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+  }
+  function setStatus(text) {
+    document.getElementById('statusLine').textContent = text;
+  }
+  window.addEventListener('DOMContentLoaded', loadSettings);
+</script>
+</body>
+</html>
+</file>
+
 <file path="apps/Master Crypto/frontend/guia.html">
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -27988,6 +29296,58 @@ plugins {
 include(":app")
 </file>
 
+<file path="apps/Master Crypto/mobile/lib/src/core/api_client.dart">
+import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+⋮----
+class ApiClient {
+⋮----
+static String get activeBaseUrl => activeResolvedBaseUrl;
+⋮----
+static void setCompanyToken(String token) {
+⋮----
+static String get numericCompanyId {
+⋮----
+static Map<String, String> get defaultHeaders {
+⋮----
+static void setServerIp(String ip) {
+⋮----
+static Future<Map<String, dynamic>> validateCompanyToken(String token) async {
+⋮----
+static Future<Map<String, dynamic>> testExchangeConnection({
+⋮----
+static Future<Map<String, dynamic>> getWalletBalances() async {
+⋮----
+static Future<bool> testConnection(String ip) async {
+⋮----
+static Future<Map<String, dynamic>> getSymbolTicker(String symbol) async {
+⋮----
+} catch (_) {
+⋮----
+static Future<Map<String, dynamic>> getActiveOpportunities({int topLimit = 20}) async {
+⋮----
+static Future<Map<String, dynamic>> runBacktest({
+⋮----
+static Future<Map<String, dynamic>> getBTCCycleComparison() async {
+⋮----
+static Future<Map<String, dynamic>> getPaperTradingMetrics() async {
+⋮----
+static Future<Map<String, dynamic>> getActivePaperTrades() async {
+⋮----
+static Future<Map<String, dynamic>> getPaperTradeHistory() async {
+⋮----
+static Future<Map<String, dynamic>> startPaperTrade(Map<String, dynamic> tradeReq) async {
+⋮----
+static Future<Map<String, dynamic>> closePaperTrade(String tradeId, double currentPrice) async {
+⋮----
+static Future<Map<String, dynamic>> askAnalyst({required String question, Map<String, dynamic>? opportunityContext}) async {
+⋮----
+static Future<Map<String, dynamic>> getNewsFeed({int limit = 10}) async {
+⋮----
+static Future<Map<String, dynamic>> executeRealOrder({
+</file>
+
 <file path="apps/Master Crypto/mobile/lib/src/core/notification_service.dart">
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -28189,6 +29549,106 @@ Widget _buildDefaultActiveTradeCard(BuildContext context, WidgetRef ref) {
 Widget _metricTile(String label, String value, Color color) {
 ⋮----
 Widget _tradeItem(String symbol, String strategy, String status, String pnlUsd, String pnlPct, String reason) {
+</file>
+
+<file path="apps/Master Crypto/mobile/lib/src/features/radar/radar_provider.dart">
+import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:crypto_swing_app/src/core/api_client.dart';
+import 'package:crypto_swing_app/src/core/websocket_client.dart';
+import 'package:crypto_swing_app/src/local_db/app_database.dart';
+⋮----
+enum RadarExecutionMode { real, simulation }
+⋮----
+class RadarStateNotifier extends StateNotifier<AsyncValue<Map<String, dynamic>>> {
+⋮----
+RadarStateNotifier(this.ref) : super(const AsyncValue.loading()) {
+⋮----
+Future<void> fetchOpportunities() async {
+⋮----
+void _initWebSocket() {
+⋮----
+void dispose() {
+</file>
+
+<file path="apps/Master Crypto/mobile/lib/src/features/real_trading/real_trading_screen.dart">
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:crypto_swing_app/src/core/theme.dart';
+import 'package:crypto_swing_app/src/core/api_client.dart';
+import 'package:crypto_swing_app/src/ui/app_icons.dart';
+import 'package:crypto_swing_app/src/ui/crypto_logo_avatar.dart';
+import 'package:crypto_swing_app/src/features/settings/settings_provider.dart';
+⋮----
+class RealTradingScreen extends ConsumerWidget {
+const RealTradingScreen({super.key});
+⋮----
+Widget build(BuildContext context, WidgetRef ref) {
+⋮----
+// BOTÕES DE AÇÃO RÁPIDA (BINANCE STYLE)
+⋮----
+Widget _quickActionButton(AppIconType iconType, String label) {
+⋮----
+Widget _buildBinanceAssetRow({
+⋮----
+Widget _buildCleanPositionCard(
+⋮----
+Widget _gridLevelTile(String label, String value, Color color) {
+⋮----
+Widget _buildPendingOrderCard(String symbol, String type, String price, String status) {
+⋮----
+Widget _buildHistoryItem(String symbol, String result, String pnlUsd, String pnlPct, String reason) {
+</file>
+
+<file path="apps/Master Crypto/mobile/lib/src/features/settings/settings_provider.dart">
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:crypto_swing_app/src/core/api_client.dart';
+⋮----
+class SettingsStorageService {
+⋮----
+static Future<void> loadSavedSettings(WidgetRef ref) async {
+⋮----
+static Future<void> saveCompanyToken(String token) async {
+⋮----
+static Future<void> saveCompanyName(WidgetRef ref, String name) async {
+⋮----
+static Future<void> saveServerIp(String ip) async {
+⋮----
+static Future<void> saveExchangeCredentials({
+⋮----
+static Future<void> saveRiskSettings(double riskPct, double balance) async {
+</file>
+
+<file path="apps/Master Crypto/mobile/lib/src/features/settings/settings_screen.dart">
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:crypto_swing_app/src/core/theme.dart';
+import 'package:crypto_swing_app/src/core/api_client.dart';
+import 'package:crypto_swing_app/src/core/notification_service.dart';
+import 'package:crypto_swing_app/src/features/settings/settings_provider.dart';
+import 'package:crypto_swing_app/src/features/radar/radar_provider.dart';
+import 'package:crypto_swing_app/src/ui/app_icons.dart';
+⋮----
+class SettingsScreen extends ConsumerStatefulWidget {
+const SettingsScreen({super.key});
+⋮----
+ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+⋮----
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+⋮----
+void _validateCompanyToken() async {
+⋮----
+void initState() {
+⋮----
+void dispose() {
+⋮----
+void _testExchangeConnection() async {
+⋮----
+void _testConnection() async {
+⋮----
+Widget build(BuildContext context) {
 </file>
 
 <file path="apps/Master Crypto/mobile/lib/src/local_db/app_database.dart">
@@ -41194,6 +42654,43 @@ Quando a IA gerar SQL errado, verificar nesta ordem:
 4. Só após confirmar os três acima → considerar mudança no spec
 </file>
 
+<file path=".github/instructions/tds-vscode-1-0-2.instructions.md">
+---
+applyTo: "**/*.{.prw,.prx,.prg,.ppx,.ppp,.tlpp,.apw,.aph,.apl,.ahu,.th}"
+name: "AdvPL/TLPP LS-First"
+description: "LS priority"
+---
+
+<!--
+NOTICE for Protheus developers:
+     This instruction file was generated automatically.
+     Changes are preserved, as it is generated only if it does not exist.
+     If you do not want to use it, keep it in the folder but leave it empty.
+-->
+
+<!--
+NOTICE for extension developers:
+     Keep the `.md.txt` extension to prevent it from being loaded during
+     extension development, which could interfere with the environment.
+-->
+
+# Instructions
+
+- Answer in English, objectively.
+- Mandatory LS-first rule: in any navigation, analysis, fix, or refactoring task, the first action must be an LS tool.
+- Mandatory semantic navigation sequence:
+
+ 1) Locate the symbol with `lsp_workspace_symbols`.
+ 2) Confirm the definition with `lsp_definition`.
+ 3) Map usage and impact with `lsp_references`.
+
+- It is forbidden to start with `grep_search`, `file_search`, `read_file`, or manual reading when LS is available.
+- Controlled exception: use text search or manual reading only if LS fails, does not return the symbol, or lacks coverage.
+- When falling into the exception, explicitly state in the response: "LS unavailable/no coverage; proceeding with text search".
+- Compliance criterion: before the result, inform which LS tool was used and what it returned.
+- Non-compliance rule: if LS is not used first without valid justification, consider the execution out of standard and correct the approach in the same response.
+</file>
+
 <file path="apps/IA Command/modules/scheduler/scheduled-question-executor.js">
 function getRunner()
 ⋮----
@@ -41334,32 +42831,6 @@ function listarTodosCanais()
 function atualizarCanalWindowsService(channelId,
 </file>
 
-<file path="apps/IA Command/modules/whatsapp/servico-externo-routes.js">
-function getManager()
-⋮----
-function workerJson(workerPort, rota, payload = null, timeoutMs = 30000)
-⋮----
-async function canalWorkerConectado(canal, workerJsonFn = workerJson)
-⋮----
-function canalServiceConectado(canal, managerRef = getManager())
-⋮----
-async function primeiroCanalConectado(canais, deps =
-⋮----
-function canalCandidatoServicoExterno(canal)
-⋮----
-function canaisGlobaisCandidatos(channelStore = channels)
-⋮----
-async function canaisGlobaisConectados(deps =
-⋮----
-async function resolverCanalServicoExterno(empresaId, deps =
-⋮----
-async function enviarTextoServicoExterno(
-⋮----
-function segredoAutorizado(req)
-⋮----
-function registrarRotaServicoExterno(app)
-</file>
-
 <file path="apps/IA Command/tests/empresa-qualificada-entidade.test.js">
 
 </file>
@@ -41380,24 +42851,6 @@ function sanitizarContratoHistorico(contrato_orquestrador)
 async executar(intentRetry, empresaId)
 ⋮----
 crud.listar = (tabela, filtros =
-</file>
-
-<file path="apps/IA Command/tests/whatsapp-servico-externo-routes.test.js">
-function managerVazio()
-⋮----
-get: ()
-getAll: ()
-⋮----
-function channelStoreFake(
-⋮----
-listarPorEmpresa: (empresaId)
-listarAtivosComSessao: ()
-listarTodosCanais: ()
-listarEmpresasDoCanal: (channelId)
-⋮----
-function canal(id, porta)
-⋮----
-const workerJsonFn = async (porta, rota, payload) =>
 </file>
 
 <file path="apps/IA Service/backend/repositories/cliente-repository.js">
@@ -41488,22 +42941,6 @@ function getRelacao(empresaId, relacaoId, db = getDB())
 function listarRelacoes(empresaId, atendimentoId, filtros =
 ⋮----
 function getEstadoCompleto(empresaId, atendimentoId, db = getDB())
-</file>
-
-<file path="apps/IA Service/backend/repositories/investigacao-execucao-repository.js">
-function _json(valor)
-⋮----
-function _parse(valor)
-⋮----
-function _rowParaDominio(row)
-⋮----
-function salvarExecucao(empresaId, dados)
-⋮----
-function getExecucao(empresaId, id)
-⋮----
-function listarPorAtendimento(empresaId, atendimentoId,
-⋮----
-function listarStatusPorMensagens(empresaId, mensagemIds)
 </file>
 
 <file path="apps/IA Service/backend/repositories/validacao-solucao-repository.js">
@@ -41753,32 +43190,6 @@ function listarItens(empresaId, atendimentoId, filtros =
 function listarRelacoes(empresaId, atendimentoId, filtros =
 </file>
 
-<file path="apps/IA Service/backend/services/login-externo-service.js">
-function normalizarTelefone(valor)
-⋮----
-function _hashCodigo(challengeId, telefone, codigo)
-⋮----
-function _hashToken(token)
-⋮----
-function _limparChallengesExpirados(db)
-⋮----
-function listarEmpresasDoTelefone(telefoneBruto)
-⋮----
-function iniciarLogin(telefoneBruto)
-⋮----
-function _validarChallenge(challengeId, telefoneBruto, codigoBruto)
-⋮----
-function _emitirSessao(empresaId, consultorId)
-⋮----
-function verificarLogin(challengeId, telefoneBruto, codigoBruto)
-⋮----
-function escolherEmpresa(telefoneBruto, empresaId)
-⋮----
-function trocarEmpresa(tokenAtual, novoEmpresaId)
-⋮----
-function validarSessaoExterna(token)
-</file>
-
 <file path="apps/IA Service/backend/services/pdf-visual-service.js">
 function detectarNecessidadeVisualPdf(
 ⋮----
@@ -41863,6 +43274,10 @@ function _normalizarNota(valor)
 async function gerarPreAvaliacao(empresaId,
 </file>
 
+<file path="apps/IA Service/backend/services/sessao-externa-middleware.js">
+function requireSessaoExterna(req, res, next)
+</file>
+
 <file path="apps/IA Service/backend/services/trilha-investigacao-service.js">
 function _statusLabel(status)
 ⋮----
@@ -41939,70 +43354,6 @@ function criarVersaoCorrigida(empresaId,
 function listarVersoes(empresaId, anexoOriginalId)
 ⋮----
 function calcularDiff(textoOriginal, textoCorrigido)
-</file>
-
-<file path="apps/IA Service/frontend/js/tab-manager.js">
-function _saveState()
-⋮----
-function _restoreState()
-⋮----
-async function _getEmpresas()
-⋮----
-function _stripEmpresaParam(url)
-⋮----
-function openTab(url, label, icon, empresaIdOverride = null, empresaNomeOverride = null)
-⋮----
-// Fallback: aba com mesma URL base já aberta (ex.: empresa mudou mas página é a mesma)
-⋮----
-function closeTab(url)
-⋮----
-function _tabSrc(baseUrl, empresaId)
-⋮----
-function _urlComEmpresa(baseUrl, empresaId)
-⋮----
-function _reloadTab(tabKey)
-⋮----
-function _activateTab(url)
-⋮----
-function _handleTabDragStart(e, tabKey)
-⋮----
-function _handleTabDragEnd(chip)
-⋮----
-function _enableTabReorder(bar)
-⋮----
-function _getDragAfterTab(bar, x)
-⋮----
-function _syncTabOrderFromDom()
-⋮----
-async function _trocarEmpresaTab(url, empresaId)
-⋮----
-function _tabKey(tab, empresaId)
-⋮----
-function _aplicarEmpresaNaTab(oldKey, tab, emp)
-⋮----
-function _atualizarEmpresaTab(oldKey, emp)
-⋮----
-async function trocarEmpresaTodasAbas(empresaId, empresaNome = null)
-⋮----
-async function _abrirSeletorEmpresa(url, anchorEl, frame = null)
-⋮----
-function _posicionarDropdownEmpresa(drop, anchorEl, frame = null)
-⋮----
-function _getAnchorRect(anchorEl, frame = null)
-⋮----
-function _fecharDropdown()
-⋮----
-function _prepareFrame(frame, tab)
-⋮----
-function _chipHtml(icon, label)
-⋮----
-function _syncSidebarActive(url)
-⋮----
-function _setTopbarTitle(tab)
-⋮----
-function _updateScrollBtns()
-⋮----
-function scrollMdiTabs(dir)
 </file>
 
 <file path="apps/IA Service/frontend/home.html">
@@ -42259,208 +43610,6 @@ function scrollMdiTabs(dir)
     }
     window._iahubAuthReady?.then(carregarRelatorio) ?? carregarRelatorio();
   </script>
-</body>
-</html>
-</file>
-
-<file path="apps/IA Service/frontend/shell.html">
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>IA Service</title>
-  <link rel="stylesheet" href="/css/iahub.css">
-  <style>
-    :root { --accent:#1d4ed8; --accent-light:#3b82f6; --accent-glow:rgba(29,78,216,.1); }
-    .sidebar-logo .logo-icon { background:var(--accent) !important; }
-    /* ── Barra de abas MDI (adaptado de apps/IA Command/frontend/shell.html,
-       trocando o roxo do IA Command por --accent do IA Service) ─────────── */
-    .mdi-tabbar {
-      display: flex;
-      align-items: flex-end;
-      background: var(--bg-hover);
-      border-bottom: 1px solid var(--border);
-      overflow-x: auto;
-      scrollbar-width: thin;
-      scrollbar-color: var(--border-hi) transparent;
-      scroll-behavior: smooth;
-      flex-shrink: 0;
-      padding: 6px 8px 0;
-      gap: 3px;
-    }
-    .mdi-tabbar::-webkit-scrollbar { height: 6px; }
-    .mdi-tabbar::-webkit-scrollbar-track { background: transparent; }
-    .mdi-tabbar::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 999px; }
-    .mdi-tab {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      padding: 7px 10px 8px 13px;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text-md);
-      background: var(--bg-hover);
-      border: 1px solid var(--border);
-      border-bottom: none;
-      border-radius: 7px 7px 0 0;
-      cursor: pointer;
-      white-space: nowrap;
-      flex: 0 0 clamp(220px, 15vw, 280px);
-      max-width: 280px;
-      min-width: 0;
-      user-select: none;
-      transition: color var(--transition), background var(--transition), box-shadow var(--transition);
-      margin-bottom: -1px;
-      position: relative;
-    }
-    .mdi-tab:hover  { background: var(--bg-card); color: var(--text-hi); }
-    .mdi-tab.active {
-      background: var(--bg-card);
-      color: var(--accent);
-      font-weight: 600;
-      border-color: var(--border);
-      border-top: 2px solid var(--accent);
-      box-shadow: 0 -2px 10px var(--accent-glow), var(--shadow-sm);
-      z-index: 1;
-    }
-    .mdi-tab.dragging { opacity: .55; cursor: grabbing; box-shadow: var(--shadow-md); }
-    .mdi-tab-icon  { font-size: 14px; flex-shrink: 0; }
-    .mdi-tab-label { flex: 1; overflow: hidden; text-overflow: ellipsis; text-align: left; min-width: 0; }
-    .mdi-tab-close {
-      flex-shrink: 0; width: 20px; height: 20px;
-      display: flex; align-items: center; justify-content: center;
-      border-radius: 4px; font-size: 16px; line-height: 1;
-      color: var(--text-lo); transition: background var(--transition), color var(--transition);
-      margin-left: 1px;
-    }
-    .mdi-tab-close:hover                 { background: rgba(0,0,0,.08); color: var(--text-hi); }
-    .mdi-tab.active .mdi-tab-close:hover { background: var(--accent-glow); color: var(--accent); }
-    /* ── Scroll buttons ─────────────────────────────────────────────── */
-    .mdi-tabbar-wrap {
-      display: flex;
-      align-items: stretch;
-      background: var(--bg-hover);
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-    .mdi-tabbar { flex: 1; min-width: 0; border-bottom: none !important; }
-    .mdi-scroll-btn {
-      display: none;
-      align-items: center; justify-content: center;
-      width: 30px; flex-shrink: 0;
-      background: var(--bg-card); border: none;
-      border-bottom: 1px solid var(--border);
-      cursor: pointer; font-size: 12px; color: var(--text-md);
-      transition: color var(--transition), background var(--transition); z-index: 1;
-    }
-    .mdi-scroll-btn:hover { color: var(--accent); background: var(--bg-hover); }
-    /* ── Área de conteúdo ────────────────────────────────────────────── */
-    .mdi-content { flex: 1; position: relative; overflow: hidden; background: var(--bg-card); }
-    .mdi-iframe  { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: none; background: var(--bg-card); }
-    .mdi-iframe.active { display: block; }
-    /* ── Estado vazio ────────────────────────────────────────────────── */
-    .mdi-empty {
-      position: absolute; inset: 0;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 14px; pointer-events: none; user-select: none;
-    }
-    .mdi-empty-icon  { font-size: 56px; opacity: .15; }
-    .mdi-empty-title { font-size: 15px; font-weight: 600; color: var(--text-md); }
-    .mdi-empty-sub   { font-size: 13px; color: var(--text-lo); }
-    /* ── Topbar ──────────────────────────────────────────────────────── */
-    .isvc-topbar { padding: 0 16px; gap: 8px; }
-    .isvc-topbar .topbar-title { font-weight: 800; flex: 1; min-width: 0; }
-  </style>
-</head>
-<body>
-<div class="layout" id="layout">
-  <nav class="sidebar" id="sidebar">
-    <div class="sidebar-logo" onclick="toggleSidebar()">
-      <div class="logo-icon">⚡</div>
-      <span class="logo-text">IA Service</span>
-    </div>
-    <div class="sidebar-nav"></div>
-    <div class="sidebar-footer"></div>
-  </nav>
-  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebarDrawer()" aria-hidden="true"></div>
-  <div class="main">
-    <div class="topbar isvc-topbar">
-      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <line x1="3" y1="6"  x2="21" y2="6"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-          <line x1="3" y1="18" x2="21" y2="18"/>
-        </svg>
-      </button>
-      <span class="topbar-title" id="shell-title">IA Service</span>
-    </div>
-    <div class="mdi-tabbar-wrap">
-      <button class="mdi-scroll-btn" id="mdi-scroll-left"  title="Rolar para esquerda" onclick="scrollMdiTabs(-1)">◀</button>
-      <div class="mdi-tabbar" id="mdi-tabbar"></div>
-      <button class="mdi-scroll-btn" id="mdi-scroll-right" title="Rolar para direita"  onclick="scrollMdiTabs(1)">▶</button>
-    </div>
-    <div class="mdi-content" id="mdi-content">
-      <div class="mdi-empty" id="mdi-empty">
-        <div class="mdi-empty-icon">⚡</div>
-        <div class="mdi-empty-title">Nenhuma rotina aberta</div>
-        <div class="mdi-empty-sub">Selecione uma opção no menu lateral para começar</div>
-      </div>
-    </div>
-  </div>
-</div>
-<script src="/js/auth.js"></script>
-<script src="./js/sidebar.js"></script>
-<script src="./js/tab-manager.js"></script>
-<script>
-  // Interceptação de clique no menu — mesmo padrão do shell.html do IA
-  // Command: abre a rotina numa aba interna em vez de navegar a página
-  // inteira. Exceção: itens com target="_blank" (ex. Radar de Chamados,
-  // que abre em nova guia do navegador por decisão arquitetural anterior —
-  // nunca depende de cookie de sessão cruzando abas) continuam navegando
-  // normalmente, sem passar pelo MDI.
-  document.addEventListener('click', (e) => {
-    const link = e.target.closest('#sidebar a.nav-item');
-    if (!link) return;
-    if (link.target === '_blank') return; // deixa o navegador abrir a nova guia normalmente
-    e.preventDefault();
-    const url   = new URL(link.href, location.origin).pathname;
-    const label = link.querySelector('.nav-label')?.textContent?.trim() || url;
-    const icon  = link.querySelector('.nav-icon')?.textContent?.trim()  || '📄';
-    window.openTab(url, label, icon);
-    window.closeSidebarDrawer?.();
-  });
-  // No shell MDI, trocar empresa atualiza todas as abas abertas sem
-  // recarregar a janela — auth.js define _trocarEmpresa com
-  // location.reload() por padrão; sobrescrevemos aqui (mesmo padrão do
-  // shell.html do IA Command).
-  window._iahubAuthReady?.then(() => {
-    let empresaSwitchQueue = Promise.resolve();
-    window._trocarEmpresa = async function (empresa_id) {
-      empresaSwitchQueue = empresaSwitchQueue
-        .catch(() => null)
-        .then(async () => {
-          const res = await fetch('/api/empresas/selecionar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ empresa_id, system_code: 'ia-service' }),
-          });
-          if (!res.ok) return;
-          const lista = await fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []);
-          const emp = lista.find(e => Number(e.id) === Number(empresa_id));
-          if (emp) {
-            const empresaNome = emp.razao_social || emp.nome || '';
-            window._iahubEmpresa = { id: emp.id, nome: empresaNome };
-            window._iahubAtualizarEmpresaBadge?.({ id: emp.id, nome: empresaNome });
-            await window.trocarEmpresaTodasAbas?.(emp.id, empresaNome);
-          }
-          const drop = document.getElementById('_empresa-dropdown');
-          if (drop) drop.style.display = 'none';
-        });
-      return empresaSwitchQueue;
-    };
-  });
-</script>
 </body>
 </html>
 </file>
@@ -43182,6 +44331,23 @@ function notasBase(overrides =
 async function main()
 </file>
 
+<file path="apps/IA Service/tests/avaliacao-investigacao-quality-gate-bloqueado.test.js">
+function criarAtendimentoComOrientacao(empresaId, texto = 'Hipótese provável de falha na rotina customizada.')
+⋮----
+function registrarExecucao(empresaId, atendimentoId, mensagemId, status)
+⋮----
+function notasBase()
+⋮----
+async function iniciarAppInterno()
+⋮----
+requireAuth: (_req, _res, next)
+requireIaService: (req, _res, next) =>
+⋮----
+function limpar()
+⋮----
+async function main()
+</file>
+
 <file path="apps/IA Service/tests/avaliacao-investigacao-relatorio.test.js">
 function criarCasoAvaliado(empresaId,
 ⋮----
@@ -43738,1223 +44904,103 @@ function testarMensagemOperacionalIncidentalNaoBloqueiaFonteCentral()
 function testarPesquisaSemPaginaLidaComLimitacaoDeclarada()
 </file>
 
-<file path="apps/IA Service/tests/radar-pre-analise-concorrencia.test.js">
-function criarChamadoReal(numero)
-⋮----
-async function main()
-⋮----
-investigacaoService.processarPreAnalise = async () =>
-anexosSoftExpertService.sincronizarAnexosParaAtendimento = async ()
-</file>
+<file path=".env.example">
+# ============================================================
+# IAHub — Configuracao de Ambiente
+# Copie este arquivo para .env e preencha os valores abaixo
+# ============================================================
 
-<file path="apps/Master Crypto/backend/routes.js">
-function resolveCompanyId(req)
-</file>
+# --- Inteligencia Artificial ---
 
-<file path="apps/Master Crypto/backend-python/app/api/v1/backtest.py">
-router = APIRouter(prefix="/backtest", tags=["Backtest Engine"])
-⋮----
-symbol = normalize_symbol(symbol)
-adapter = BinanceAdapter()
-candles = await adapter.get_candles(symbol=symbol, interval=timeframe, limit=limit)
-⋮----
-result = BacktestEngine.run_backtest(
-</file>
+# Chave da API do Groq (obtenha gratis em https://console.groq.com)
+GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-<file path="apps/Master Crypto/backend-python/app/api/v1/btc_cycle.py">
-router = APIRouter(prefix="/btc-cycle", tags=["BTC Cycle Analysis"])
-</file>
+# Chave da API do Google Gemini (fallback quando Groq atinge limite)
+# Obtenha em https://aistudio.google.com
+GEMINI_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-<file path="apps/Master Crypto/backend-python/app/api/v1/company_state.py">
-router = APIRouter(prefix="/company", tags=["IAHUB Company State"])
-⋮----
-class CompanySettingsUpdate(BaseModel)
-⋮----
-initial_bank_usd: float | None = Field(default=None, gt=0)
-risk_per_trade_pct: float | None = Field(default=None, gt=0, le=100)
-scanner_top_limit: int | None = Field(default=None, ge=1, le=100)
-scanner_timeframe: str | None = None
-radar_auto_refresh_seconds: int | None = Field(default=None, ge=0, le=86400)
-min_risk_reward_ratio: float | None = Field(default=None, gt=0)
-mode: str | None = None
-selected_exchange: str | None = None
-exchange_api_key: str | None = None
-exchange_api_secret: str | None = None
-⋮----
-def clean_patch(self) -> Dict[str, Any]
-⋮----
-data = self.model_dump(exclude_none=True)
-⋮----
-class ExchangeConnectionTest(BaseModel)
-⋮----
-exchange: str = "BINANCE"
-api_key: str | None = None
-api_secret: str | None = None
-⋮----
-@router.get("/settings")
-def get_company_settings(request: Request)
-⋮----
-ctx = get_iahub_context(request)
-⋮----
-@router.put("/settings")
-def update_company_settings(req: CompanySettingsUpdate, request: Request)
-⋮----
-@router.get("/summary")
-def get_company_summary(request: Request)
-⋮----
-@router.get("/mobile-token")
-def get_mobile_token(request: Request)
-⋮----
-@router.post("/mobile-token/regenerate")
-def regenerate_mobile_token(request: Request)
-⋮----
-@router.post("/test-exchange")
-async def test_exchange_connection(req: ExchangeConnectionTest, request: Request)
-⋮----
-exchange = str(req.exchange or DEFAULT_SETTINGS["selected_exchange"]).upper()
-⋮----
-api_key = str(req.api_key or "").strip()
-api_secret = str(req.api_secret or "").strip()
-⋮----
-current = store.get_settings(ctx.company_id, include_secrets=True)
-api_key = api_key or str(current.get("exchange_api_key", "")).strip()
-api_secret = api_secret or str(current.get("exchange_api_secret", "")).strip()
-⋮----
-public_result = await _test_public_connection(exchange, api_key, api_secret)
-assets_result = await _test_assets_read(exchange, api_key, api_secret)
-success = bool(public_result.get("success") and assets_result.get("success"))
-⋮----
-@router.post("/test-exchange/connection")
-async def test_exchange_public_connection(req: ExchangeConnectionTest, request: Request)
-⋮----
-@router.post("/test-exchange/assets")
-async def test_exchange_assets_read(req: ExchangeConnectionTest, request: Request)
-⋮----
-async def _test_public_connection(exchange: str, api_key: str, api_secret: str) -> Dict[str, Any]
-⋮----
-adapter = ExchangeFactory.get_adapter(
-price = await adapter.get_ticker_price("BTCUSDT")
-⋮----
-async def _test_assets_read(exchange: str, api_key: str, api_secret: str) -> Dict[str, Any]
-⋮----
-account = await _get_binance_account(api_key, api_secret)
-balances = account.get("balances", [])
-assets_with_balance = [
-⋮----
-async def _get_binance_account(api_key: str, api_secret: str) -> Dict[str, Any]
-⋮----
-timestamp = int(time.time() * 1000)
-query = urlencode({"timestamp": timestamp, "recvWindow": 5000})
-signature = hmac.new(api_secret.encode("utf-8"), query.encode("utf-8"), hashlib.sha256).hexdigest()
-url = f"https://api.binance.com/api/v3/account?{query}&signature={signature}"
-⋮----
-response = await client.get(url, headers={"X-MBX-APIKEY": api_key})
-⋮----
-detail = (response.text or "").strip()[:300]
-⋮----
-detail = (
-</file>
+# --- Acesso ao Sistema ---
 
-<file path="apps/Master Crypto/backend-python/app/api/v1/opportunities.py">
-def format_price_py(val: float) -> str
-⋮----
-v = float(val)
-⋮----
-router = APIRouter(prefix="/opportunities", tags=["Trade Opportunities"])
-⋮----
-adapter = BinanceAdapter()
-scanner = MarketScanner(adapter=adapter)
-btc_context = await scanner.get_btc_context()
-⋮----
-symbols = TOP_20_BASELINE[:top_limit]
-universe_source = "BASELINE"
-⋮----
-opportunities = []
-⋮----
-candles = await adapter.get_candles(symbol=symbol, interval=timeframe, limit=100)
-⋮----
-df_annotated = IndicatorEngine.annotate_all_indicators(candles)
-regime = RegimeEngine.classify_regime(df_annotated)
-last = df_annotated.iloc[-1]
-close = float(last["close"])
-period_open = float(last.get("open", close))
-period_change_pct = ((close - period_open) / period_open * 100.0) if period_open else 0.0
-rsi = float(last.get("rsi_14", 50.0))
-rvol = float(last.get("rvol", 1.0))
-ema21 = float(last.get("ema_21", close))
-ema9 = float(last.get("ema_9", close))
-atr = float(last.get("atr_14", close * 0.02))
-⋮----
-trade_plan = StrategyEngine.evaluate_opportunity(
-⋮----
-strat = StrategyEnum.PULLBACK if regime == MarketRegimeEnum.TRENDING_UP else (
-stop_loss = round(max(support, close - (1.5 * atr)), 4)
-⋮----
-stop_loss = round(close * 0.97, 4)
-⋮----
-target_t2 = round(close * 1.055, 4)
-reward = target_t2 - close
-risk = max(0.0001, close - stop_loss)
-rr = round(reward / risk, 2)
-potential_pct = round(((target_t2 - close) / close) * 100.0, 2)
-⋮----
-trade_plan = TradePlan(
-⋮----
-trend_score = 90.0 if regime.value in ["TRENDING_UP", "RECOVERY"] else 55.0
-price_struct_score = 85.0
-momentum_score = min(100.0, rsi * 1.4)
-volume_score = min(100.0, rvol * 50.0)
-regime_score = 90.0 if regime.value == "TRENDING_UP" else 75.0
-btc_score = btc_context.score
-mtf_score = 80.0
-⋮----
-score_result = OpportunityScoreEngine.calculate_score(
-⋮----
-position_calc = RiskManager.calculate_position_size(
-⋮----
-min_str = format_price_py(trade_plan.entry_zone_min)
-max_str = format_price_py(trade_plan.entry_zone_max)
-stop_str = format_price_py(trade_plan.stop_loss)
-target_str = format_price_py(trade_plan.target_t2)
-</file>
+# Usuario e senha do administrador
+ADMIN_USER=admin
+ADMIN_PASS=iahub@2024
 
-<file path="apps/Master Crypto/backend-python/app/api/v1/orders.py">
-router = APIRouter(prefix="/orders", tags=["Real Exchange Orders"])
-⋮----
-class RealOrderRequest(BaseModel)
-⋮----
-symbol: str
-exchange: str = "BINANCE"
-side: str = "BUY"
-order_type: str = "LIMIT"
-quantity: float = 1.0
-entry_price: float
-stop_loss: Optional[float] = None
-target_t2: Optional[float] = None
-api_key: Optional[str] = None
-api_secret: Optional[str] = None
-⋮----
-@router.post("/real")
-async def execute_real_order(req: RealOrderRequest, request: Request)
-⋮----
-@router.get("/balance")
-async def get_exchange_balance(request: Request, exchange: str = "BINANCE")
-⋮----
-exchange_name = exchange.upper().strip()
-company_settings = _company_exchange_settings(request)
-api_key = _clean_credential(company_settings.get("exchange_api_key") or settings.BINANCE_API_KEY)
-api_secret = _clean_credential(company_settings.get("exchange_api_secret") or settings.BINANCE_API_SECRET)
-⋮----
-timestamp = int(time.time() * 1000)
-params = {"timestamp": timestamp, "recvWindow": 5000}
-query = urlencode(params)
-signature = hmac.new(api_secret.encode("utf-8"), query.encode("utf-8"), hashlib.sha256).hexdigest()
-url = f"https://api.binance.com/api/v3/account?{query}&signature={signature}"
-⋮----
-response = await client.get(url, headers={"X-MBX-APIKEY": api_key})
-⋮----
-detail = response.text[:300]
-⋮----
-account = response.json()
-balances = account.get("balances", [])
-usdt = next((item for item in balances if item.get("asset") == "USDT"), {})
-free = float(usdt.get("free") or 0)
-locked = float(usdt.get("locked") or 0)
-⋮----
-@router.get("/assets")
-async def get_exchange_assets(request: Request, exchange: str = "BINANCE")
-⋮----
-account_url = f"https://api.binance.com/api/v3/account?{query}&signature={signature}"
-⋮----
-account_response = await client.get(account_url, headers={"X-MBX-APIKEY": api_key})
-prices_response = await client.get("https://api.binance.com/api/v3/ticker/price")
-⋮----
-detail = _binance_error_message(account_response.text)
-⋮----
-detail = prices_response.text[:300]
-⋮----
-account = account_response.json()
-raw_balances = account.get("balances", [])
-prices = prices_response.json()
-price_map = {item.get("symbol"): float(item.get("price") or 0) for item in prices if item.get("symbol")}
-⋮----
-stable_assets = {"USDT", "USDC", "FDUSD", "BUSD", "TUSD", "DAI"}
-assets = []
-total_estimated_usdt = 0.0
-⋮----
-asset = str(item.get("asset") or "").upper()
-free = float(item.get("free") or 0)
-locked = float(item.get("locked") or 0)
-total = free + locked
-⋮----
-price_usdt = 1.0
-⋮----
-price_usdt = price_map.get(f"{asset}USDT", 0.0)
-⋮----
-estimated_usdt = total * price_usdt if price_usdt else 0.0
-⋮----
-def _company_exchange_settings(request: Request) -> dict
-⋮----
-ctx = get_iahub_context(request)
-⋮----
-def _clean_credential(value: str | None) -> str
-⋮----
-def _binance_error_message(raw_text: str) -> str
-⋮----
-text = (raw_text or "").strip()
-</file>
+# Segredo para criptografia de sessao (mude para uma string aleatoria longa)
+SESSION_SECRET=mude-para-uma-chave-secreta-aleatoria-longa
 
-<file path="apps/Master Crypto/backend-python/app/api/v1/scanner.py">
-router = APIRouter(prefix="/scanner", tags=["Market Scanner"])
-⋮----
-@router.get("/symbols")
-async def get_top_symbols(top_limit: int = Query(20, ge=1, le=100), dynamic: bool = True)
-⋮----
-symbols = TOP_20_BASELINE[:top_limit]
-source = "BASELINE"
-⋮----
-scanner = MarketScanner()
-btc_context = await scanner.get_btc_context()
-scanned_assets = await scanner.scan_all_top(timeframe=timeframe, top_limit=top_limit, use_dynamic=dynamic)
-</file>
+# --- IA Hub Shell / Sistemas ---
 
-<file path="apps/Master Crypto/backend-python/app/core/crypto_envelope.py">
-ENVELOPE_VERSION = 1
-ENVELOPE_ALG = "AES-256-GCM"
-IV_BYTES = 12
-TAG_BYTES = 16
-⋮----
-def is_encrypted_envelope(value: Any) -> bool
-⋮----
-def normalize_key(key: str | None) -> bytes
-⋮----
-raw = str(key or "").strip()
-⋮----
-key_bytes = bytes.fromhex(raw)
-⋮----
-key_bytes = base64.b64decode(raw)
-⋮----
-def _secret_key() -> str
-⋮----
-key = os.getenv("MASTER_CRYPTO_DATA_CRYPTO_KEY") or os.getenv("SVC_DATA_CRYPTO_KEY")
-⋮----
-def encrypt_payload(payload: Dict[str, Any], key: str, kid: str = "default") -> Dict[str, str | int]
-⋮----
-key_bytes = normalize_key(key)
-iv = os.urandom(IV_BYTES)
-plaintext = json.dumps(payload or {}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-encrypted_with_tag = AESGCM(key_bytes).encrypt(iv, plaintext, None)
-data = encrypted_with_tag[:-TAG_BYTES]
-tag = encrypted_with_tag[-TAG_BYTES:]
-⋮----
-def decrypt_payload(envelope: Dict[str, Any], key: str) -> Dict[str, Any]
-⋮----
-iv = base64.b64decode(envelope["iv"])
-tag = base64.b64decode(envelope["tag"])
-data = base64.b64decode(envelope["data"])
-⋮----
-plaintext = AESGCM(key_bytes).decrypt(iv, data + tag, None)
-⋮----
-def encrypt_secret(plain_text: str | None) -> str
-⋮----
-envelope = encrypt_payload({"s": str(plain_text)}, _secret_key())
-⋮----
-def decrypt_secret(stored_text: str | None, *, allow_plaintext_legacy: bool = True) -> str
-⋮----
-envelope = json.loads(stored_text)
-⋮----
-payload = decrypt_payload(envelope, _secret_key())
-⋮----
-def mask_secret(value: str | None, *, keep_start: int = 4, keep_end: int = 4) -> str
-⋮----
-raw = str(value or "")
-</file>
+# Recrutamento exige sessao valida emitida pelo IA Hub Shell
+IA_HUB_AUTH_REQUIRED=true
 
-<file path="apps/Master Crypto/backend-python/app/core/iahub_context.py">
-@dataclass(frozen=True)
-class IAHUBContext
-⋮----
-company_id: int
-user_id: int | None = None
-⋮----
-def get_iahub_context(request: Request) -> IAHUBContext
-⋮----
-company_raw = request.headers.get("x-iahub-company-id")
-user_raw = request.headers.get("x-iahub-user-id")
-⋮----
-company_id = int(company_raw or 0)
-⋮----
-company_id = 0
-⋮----
-token = request.headers.get("x-company-token")
-internal_secret = request.headers.get("x-master-crypto-internal-secret")
-configured_internal_secret = os.getenv("MASTER_CRYPTO_INTERNAL_SECRET", "").strip()
-client_host = (request.client.host if request.client else "") or ""
-is_local_proxy = client_host in {"127.0.0.1", "::1", "localhost"}
-is_internal = bool(
-⋮----
-user_id = int(user_raw) if user_raw else None
-⋮----
-user_id = None
-</file>
+# Quando false, bloqueia acesso direto ao Recrutamento sem sessao/sistema selecionado
+ALLOW_STANDALONE_ACCESS=false
 
-<file path="apps/Master Crypto/backend-python/app/core/request_validation.py">
-Timeframe = Literal["1m", "5m", "15m", "1h", "4h", "1d"]
-⋮----
-def normalize_symbol(symbol: str) -> str
-⋮----
-clean = str(symbol or "").replace("/", "").upper().strip()
-</file>
+# URL publica do Shell usada em redirecionamentos de seguranca
+IA_HUB_SHELL_URL=https://iahub.com.br
 
-<file path="apps/Master Crypto/backend-python/app/domain/assets.py">
-TOP_20_BASELINE = [
-⋮----
-TOP_20_SYMBOLS = TOP_20_BASELINE
-⋮----
-async def fetch_dynamic_top_by_volume_with_source(top_limit: int = 20) -> Tuple[List[str], str]
-⋮----
-url = "https://api.binance.com/api/v3/ticker/24hr"
-excluded_keywords = ["USDC", "DAI", "FDUSD", "TUSD", "USDS", "WBTC", "WETH", "EUR", "BUSD", "PYUSD", "USD1", "RLUSD"]
-⋮----
-response = await client.get(url)
-⋮----
-data = response.json()
-⋮----
-usdt_pairs = []
-⋮----
-symbol = item["symbol"]
-⋮----
-sorted_pairs = sorted(usdt_pairs, key=lambda x: x["quote_volume"], reverse=True)
-dynamic_list = [p["symbol"] for p in sorted_pairs[:top_limit]]
-⋮----
-async def fetch_dynamic_top_by_volume(top_limit: int = 20) -> List[str]
-</file>
+# --- IA Command / Tokens internos servidor-a-servidor ---
+# Segredos compartilhados usados para autenticar chamadas que nao tem sessao de
+# usuario do IAHub (Windows Service do WhatsApp, agente local, canal Protheus).
+# Gere com: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
-<file path="apps/Master Crypto/backend-python/app/persistence/company_store.py">
-DEFAULT_SETTINGS = {
-⋮----
-def _new_mobile_token(company_id: int) -> str
-⋮----
-class CompanyStore
-⋮----
-def __init__(self, path: Path | None = None)
-⋮----
-base_dir = Path(__file__).resolve().parents[2] / "data"
-⋮----
-def _empty(self) -> Dict[str, Any]
-⋮----
-def _load(self) -> Dict[str, Any]
-⋮----
-data = json.load(fh)
-⋮----
-def _save(self, data: Dict[str, Any]) -> None
-⋮----
-tmp_path = self.path.with_suffix(".tmp")
-⋮----
-def _company(self, data: Dict[str, Any], company_id: int) -> Dict[str, Any]
-⋮----
-companies = data.setdefault("companies", {})
-key = str(company_id)
-⋮----
-company = companies[key]
-⋮----
-def _prepare_settings_for_save(self, current: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, Any]
-⋮----
-prepared = deepcopy(patch)
-⋮----
-value = str(prepared.get(key) or "").strip()
-⋮----
-def _public_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]
-⋮----
-public = {**deepcopy(DEFAULT_SETTINGS), **deepcopy(settings)}
-⋮----
-secret = decrypt_secret(public.get(key))
-⋮----
-def _private_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]
-⋮----
-private = {**deepcopy(DEFAULT_SETTINGS), **deepcopy(settings)}
-⋮----
-def get_settings(self, company_id: int, *, include_secrets: bool = False) -> Dict[str, Any]
-⋮----
-data = self._load()
-settings = self._company(data, company_id)["settings"]
-⋮----
-def update_settings(self, company_id: int, patch: Dict[str, Any]) -> Dict[str, Any]
-⋮----
-allowed = set(DEFAULT_SETTINGS.keys())
-clean = {key: value for key, value in patch.items() if key in allowed}
-⋮----
-company = self._company(data, company_id)
-⋮----
-def get_mobile_token(self, company_id: int) -> Dict[str, str]
-⋮----
-token = company["mobile_token"]
-⋮----
-def regenerate_mobile_token(self, company_id: int) -> Dict[str, str]
-⋮----
-def validate_mobile_token(self, company_id: int, token: str | None) -> bool
-⋮----
-expected = str(company.get("mobile_token") or "")
-⋮----
-def get_paper_state(self, company_id: int) -> Dict[str, Any]
-⋮----
-paper = self._company(data, company_id)["paper"]
-⋮----
-def get_summary(self, company_id: int) -> Dict[str, Any]
-⋮----
-settings = self.get_settings(company_id)
-paper = self.get_paper_state(company_id)
-engine = PaperTradingEngine(
-metrics = engine.get_performance_metrics()
-⋮----
-store = CompanyStore()
-</file>
+# Autentica o Windows Service do WhatsApp ao publicar eventos (header X-Worker-Token)
+IAC_HUB_INTERNAL_TOKEN=
 
-<file path="apps/Master Crypto/backend-python/app/main.py">
-worker = BackgroundMarketWorker(interval_seconds=300)
-⋮----
-@asynccontextmanager
-async def lifespan(app: FastAPI)
-⋮----
-task = asyncio.create_task(worker.start_loop())
-⋮----
-app = FastAPI(
-⋮----
-class ConnectionManager
-⋮----
-def __init__(self)
-⋮----
-async def connect(self, websocket: WebSocket)
-⋮----
-def disconnect(self, websocket: WebSocket)
-⋮----
-async def broadcast(self, message: dict)
-⋮----
-ws_manager = ConnectionManager()
-⋮----
-@app.get("/health")
-def health_check()
-⋮----
-@app.websocket("/api/v1/ws/market")
-async def websocket_market_endpoint(websocket: WebSocket)
-⋮----
-data = await websocket.receive_text()
-⋮----
-symbol = normalize_symbol(symbol)
-adapter = BinanceAdapter()
-candles = await adapter.get_candles(symbol=symbol, interval=interval, limit=limit)
-⋮----
-@app.get(f"{settings.API_V1_STR}/market/price")
-async def get_market_price(symbol: str = "BTCUSDT")
-⋮----
-clean_symbol = normalize_symbol(symbol)
-⋮----
-price = await adapter.get_ticker_price(clean_symbol)
-</file>
+# Autentica a rotina ADVPL do Protheus ao solicitar token de sessao do chat
+# (header X-Protheus-Secret em POST /api/ia-command/protheus/token).
+# Sem esta variavel definida, o endpoint fica aberto — nao deixar vazio em producao.
+IAC_PROTHEUS_CHAT_SECRET=
+IAC_PROTHEUS_CHAT_TTL_MS=28800000
+IAC_PROTHEUS_CHAT_MAX_TTL_MS=0
 
-<file path="apps/Master Crypto/backend-python/tests/test_iahub_multitenant_store.py">
-def _plan(symbol="SOLUSDT")
-⋮----
-def test_company_store_isolates_paper_trades_by_company(tmp_path)
-⋮----
-store = CompanyStore(path=tmp_path / "mc.json")
-⋮----
-engine_a = PaperTradingEngine()
-trade_a = engine_a.open_paper_trade(
-⋮----
-state_a = store.get_paper_state(empresa_a)
-state_b = store.get_paper_state(empresa_b := 202)
-⋮----
-def test_company_store_keeps_settings_by_company(tmp_path)
-⋮----
-def test_company_store_encrypts_exchange_credentials_and_masks_public_settings(tmp_path, monkeypatch)
-⋮----
-public = store.update_settings(101, {
-⋮----
-raw_text = (tmp_path / "mc.json").read_text(encoding="utf-8")
-⋮----
-private = store.get_settings(101, include_secrets=True)
-⋮----
-def test_company_store_validates_mobile_token_by_company(tmp_path)
-⋮----
-token_a = store.get_mobile_token(101)["mobile_token"]
-token_b = store.get_mobile_token(202)["mobile_token"]
-</file>
+# Opcional: chave dedicada para criptografar campos sensiveis do Chat Web em repouso.
+# Se vazia, o sistema deriva a chave de IAC_PROTHEUS_CHAT_SECRET/SESSION_SECRET.
+IAC_CHAT_DATA_CRYPTO_KEY=
 
-<file path="apps/Master Crypto/backend-python/tests/test_scanner.py">
-class FakeAdapter
-⋮----
-async def get_candles(self, symbol: str, interval: str = "4h", limit: int = 200)
-⋮----
-@pytest.mark.asyncio
-async def test_dynamic_top_limit_fetch()
-⋮----
-top5 = await fetch_dynamic_top_by_volume(top_limit=5)
-⋮----
-top10 = await fetch_dynamic_top_by_volume(top_limit=10)
-⋮----
-@pytest.mark.asyncio
-async def test_market_scanner_with_custom_top_limit(monkeypatch)
-⋮----
-async def fake_top(top_limit: int = 20)
-⋮----
-scanner = MarketScanner(adapter=FakeAdapter())
-results = await scanner.scan_all_top(timeframe="4h", top_limit=3, use_dynamic=True)
-⋮----
-@pytest.mark.asyncio
-async def test_btc_context_scanner()
-⋮----
-btc_ctx = await scanner.get_btc_context()
-</file>
+# --- IA Service ---
+# Chave para criptografar em repouso (AES-256-GCM) credenciais do IA Service:
+# chaves de API de IA (ai_config) e config do Agente Local (URL/token/crypto_key).
+# Gere com: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+SVC_DATA_CRYPTO_KEY=
 
-<file path="apps/Master Crypto/backend-python/requirements.txt">
-fastapi>=0.110.0
-uvicorn[standard]>=0.28.0
-pydantic>=2.6.0
-pydantic-settings>=2.2.0
-sqlalchemy>=2.0.28
-asyncpg>=0.29.0
-httpx>=0.27.0
-cryptography>=43.0.3
-numpy>=1.26.0
-pandas>=2.2.0
-pytest>=8.0.0
-pytest-asyncio>=0.23.0
-</file>
+# Segredo do envio de codigo OTP por WhatsApp no login externo por telefone
+# (/entrar-servico). Sem esta variavel, o IA Service nao consegue enviar o
+# codigo e o login falha com "WhatsApp de atendimento esta indisponivel".
+# Mesmo valor tambem autentica a chamada no IA Command (fallback de
+# IAC_WHATSAPP_SERVICO_EXTERNO_SECRET quando essa nao estiver definida) —
+# nao precisa duplicar, um unico valor basta.
+# Gere com: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+SVC_WHATSAPP_OTP_SECRET=
 
-<file path="apps/Master Crypto/frontend/configuracoes.html">
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>Configurações - Crypto Radar AI</title>
-  <link rel="stylesheet" href="/css/iahub.css">
-  <link rel="stylesheet" href="./css/master-crypto.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    body { background: #f8fafc; padding: 16px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; }
-    .card-box { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 20px; }
-    /* TABS STYLE LIKE IA COMMAND */
-    .tabs-header {
-      display: flex;
-      gap: 6px;
-      border-bottom: 2px solid #e2e8f0;
-      margin-bottom: 20px;
-      overflow-x: auto;
-    }
-    .tab-item {
-      background: transparent;
-      border: none;
-      color: #64748b;
-      padding: 12px 20px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      border-bottom: 3px solid transparent;
-      margin-bottom: -2px;
-      transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      white-space: nowrap;
-    }
-    .tab-item:hover { color: #0f172a; }
-    .tab-item.active { color: #2563eb; border-bottom-color: #2563eb; background: rgba(37, 99, 235, 0.04); border-radius: 8px 8px 0 0; }
-    .tab-pane { display: none; }
-    .tab-pane.active { display: block; }
-    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
-    .form-group { margin-bottom: 16px; }
-    .form-group label { display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
-    .input-wrapper {
-      position: relative;
-      display: flex;
-      align-items: center;
-      width: 100%;
-    }
-    .form-control {
-      width: 100%;
-      height: 44px;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      padding: 0 44px 0 14px;
-      font-size: 14px;
-      color: #0f172a;
-      box-sizing: border-box;
-      outline: none;
-      transition: border-color 0.2s;
-      font-family: inherit;
-    }
-    .form-control.code-font { font-family: monospace; font-size: 15px; }
-    .form-control:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
-    .toggle-password-btn {
-      position: absolute;
-      right: 8px;
-      background: transparent;
-      border: none;
-      color: #64748b;
-      cursor: pointer;
-      font-size: 18px;
-      padding: 6px 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 6px;
-    }
-    .toggle-password-btn:hover { color: #2563eb; background: #f1f5f9; }
-    .btn-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
-    .btn {
-      height: 42px;
-      padding: 0 22px;
-      border-radius: 8px;
-      font-weight: 700;
-      font-size: 14px;
-      cursor: pointer;
-      border: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      transition: all 0.2s;
-    }
-    .btn-primary { background: #2563eb; color: #ffffff; }
-    .btn-primary:hover { background: #1d4ed8; }
-    .btn-outline { background: #ffffff; border: 1px solid #2563eb; color: #2563eb; }
-    .btn-outline:hover { background: rgba(37, 99, 235, 0.05); }
-    .btn-secondary { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
-    .btn-secondary:hover { background: #e2e8f0; }
-    .status-line { font-size: 13px; color: #64748b; font-weight: 500; }
-    .test-feedback {
-      margin-top: 14px;
-      padding: 12px 16px;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      display: none;
-    }
-    .test-feedback.success { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
-    .test-feedback.error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
-    .test-checks { display: grid; gap: 8px; margin-top: 8px; }
-    .test-check {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      border-radius: 8px;
-      padding: 9px 11px;
-      background: rgba(255, 255, 255, .45);
-      line-height: 1.4;
-    }
-    .test-check strong { display: block; margin-bottom: 2px; }
-    .copy-toast {
-      position: fixed;
-      top: 18px;
-      right: 18px;
-      z-index: 9999;
-      display: none;
-      min-width: 220px;
-      padding: 12px 16px;
-      border-radius: 10px;
-      border: 1px solid #86efac;
-      background: #dcfce7;
-      color: #166534;
-      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
-      font-size: 14px;
-      font-weight: 800;
-      text-align: center;
-    }
-    .copy-toast.show { display: block; }
-  </style>
-</head>
-<body>
-<div id="copyToast" class="copy-toast">Token copiado</div>
-<div class="page-kicker">CONFIGURAÇÃO / PARÂMETROS & RISCO</div>
-<div class="head-row" style="margin-bottom: 16px;">
-  <div>
-    <div class="head-title" style="font-size: 22px; font-weight: 700;">Ajustes do Motor Algorítmico & Scanner 24x7</div>
-    <div class="status-line" id="statusLine">Carregando parâmetros da empresa...</div>
-  </div>
-</div>
-<div class="tabs-header">
-  <button class="tab-item active" onclick="switchTab('tab-corretora', this)">⚡ 1. Corretora & Chaves Binance</button>
-  <button class="tab-item" onclick="switchTab('tab-banca', this)">🎯 2. Banca & Risco</button>
-  <button class="tab-item" onclick="switchTab('tab-scanner', this)">🔍 3. Scanner & Algoritmo</button>
-  <button class="tab-item" onclick="switchTab('tab-empresa', this)">🏢 4. Dados da Empresa</button>
-</div>
-<div id="tab-corretora" class="tab-pane active">
-  <div class="card-box">
-    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 16px; color: #0f172a;">🔑 Credenciais de Exchange (Binance / Bybit / OKX / KuCoin)</h3>
-    <div class="form-grid">
-      <div class="form-group" style="grid-column: 1 / -1;">
-        <label for="selected_exchange">Corretora Ativa</label>
-        <select id="selected_exchange" class="form-control" style="max-width: 320px;">
-          <option value="BINANCE">Binance (Spot & Futures)</option>
-          <option value="BYBIT">Bybit</option>
-          <option value="OKX">OKX</option>
-          <option value="KUCOIN">KuCoin</option>
-        </select>
-      </div>
-      <div class="form-group" style="grid-column: 1 / -1;">
-        <label for="exchange_api_key">API Key da Corretora (Pública)</label>
-        <div class="input-wrapper">
-          <input id="exchange_api_key" type="password" class="form-control code-font" placeholder="Cole a API Key pública fornecida pela Binance">
-          <button type="button" class="toggle-password-btn" title="Mostrar/Ocultar API Key" onclick="toggleVisibility('exchange_api_key', this)">👁️</button>
-        </div>
-      </div>
-      <div class="form-group" style="grid-column: 1 / -1;">
-        <label for="exchange_api_secret">API Secret da Corretora (Privado - Criptografado)</label>
-        <div class="input-wrapper">
-          <input id="exchange_api_secret" type="password" class="form-control code-font" placeholder="Cole o API Secret privado fornecido pela Binance">
-          <button type="button" class="toggle-password-btn" title="Mostrar/Ocultar API Secret" onclick="toggleVisibility('exchange_api_secret', this)">👁️</button>
-        </div>
-      </div>
-    </div>
-    <div class="btn-group">
-      <button class="btn btn-primary" type="button" onclick="saveSettings()">💾 Salvar Chaves de API</button>
-      <button class="btn btn-outline" type="button" onclick="testExchangeConnection()">⚡ Testar Conexão com a Binance</button>
-      <button class="btn btn-secondary" type="button" onclick="loadSettings()">🔄 Recarregar</button>
-    </div>
-    <div id="testFeedback" class="test-feedback"></div>
-  </div>
-</div>
-<div id="tab-banca" class="tab-pane">
-  <div class="card-box">
-    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 16px; color: #0f172a;">🎯 Parâmetros de Banca & Gestão de Risco</h3>
-    <div class="form-grid">
-      <div class="form-group">
-        <label for="initial_bank_usd">Banca inicial por empresa (USD)</label>
-        <input id="initial_bank_usd" type="number" class="form-control" min="1" step="100" value="10000">
-      </div>
-      <div class="form-group">
-        <label for="risk_per_trade_pct">Risco por Trade (% da Banca)</label>
-        <input id="risk_per_trade_pct" type="number" class="form-control" min="0.1" max="100" step="0.1" value="2.0">
-      </div>
-      <div class="form-group">
-        <label for="min_risk_reward_ratio">Relação Risco/Retorno Mínima (R:R)</label>
-        <input id="min_risk_reward_ratio" type="number" class="form-control" min="0.1" step="0.1" value="2.0">
-      </div>
-      <div class="form-group">
-        <label for="mode">Modo operacional</label>
-        <select id="mode" class="form-control">
-          <option value="demo">Simulação por empresa (Paper Trading)</option>
-          <option value="real">Modo Real (Ordens diretas na Binance)</option>
-        </select>
-      </div>
-    </div>
-    <div class="btn-group">
-      <button class="btn btn-primary" type="button" onclick="saveSettings()">💾 Salvar Risco & Banca</button>
-    </div>
-  </div>
-</div>
-<div id="tab-scanner" class="tab-pane">
-  <div class="card-box">
-    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 16px; color: #0f172a;">🔍 Parâmetros do Scanner Automático</h3>
-    <div class="form-grid">
-      <div class="form-group">
-        <label for="scanner_top_limit">Profundidade Padrão do Scanner</label>
-        <select id="scanner_top_limit" class="form-control">
-          <option value="10">Top 10 Criptomoedas</option>
-          <option value="20" selected>Top 20 Criptomoedas</option>
-          <option value="30">Top 30 Criptomoedas</option>
-          <option value="50">Top 50 Criptomoedas</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="scanner_timeframe">Timeframe padrão</label>
-        <select id="scanner_timeframe" class="form-control">
-          <option value="1h">1H</option>
-          <option value="4h" selected>4H (Baseline de Swing Trade)</option>
-          <option value="1d">1D (Diário)</option>
-        </select>
-      </div>
-    </div>
-    <div class="btn-group">
-      <button class="btn btn-primary" type="button" onclick="saveSettings()">💾 Salvar Parâmetros do Scanner</button>
-    </div>
-  </div>
-</div>
-<div id="tab-empresa" class="tab-pane">
-  <div class="card-box">
-    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 16px; color: #0f172a;">🏢 Empresa & Token de Integração do App Mobile</h3>
-    <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin-bottom: 16px;">
-      Este ambiente responde dinamicamente à empresa selecionada no cabeçalho do IAHub. Utilize o <strong>Token da Empresa</strong> abaixo para autenticar e vincular o aplicativo móvel Master Crypto às configurações desta empresa.
-    </p>
-    <div style="padding: 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; color: #1e40af; font-size: 13px; margin-bottom: 20px;">
-      🏢 <strong>Empresa Ativa:</strong> <span id="companyActiveLabel">Carregando...</span>
-    </div>
-    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px;">
-      <h4 style="margin-top: 0; margin-bottom: 10px; font-size: 14px; color: #0f172a; display: flex; align-items: center; gap: 8px;">
-        🔑 Token de Acesso da Empresa (App Mobile)
-      </h4>
-      <p style="font-size: 12px; color: #64748b; margin-top: 0; margin-bottom: 14px;">
-        Copie este Token e insira no aplicativo celular do Master Crypto para liberar o acesso:
-      </p>
-      <div class="form-group" style="margin-bottom: 14px;">
-        <div class="input-wrapper">
-          <input id="companyTokenInput" type="text" readonly class="form-control code-font" style="font-weight: 700; color: #2563eb; background: #ffffff; letter-spacing: 1px;" value="Carregando token...">
-          <button type="button" class="btn btn-primary btn-sm" style="position: absolute; right: 6px; height: 32px; font-size: 12px; padding: 0 14px;" onclick="copyCompanyToken()">📋 Copiar Token</button>
-        </div>
-      </div>
-      <div class="btn-group" style="margin-top: 10px;">
-        <button class="btn btn-outline" type="button" onclick="copyCompanyToken()">📋 Copiar Token para o App</button>
-        <button class="btn btn-secondary" type="button" onclick="generateNewCompanyToken()">🔄 Gerar Novo Token</button>
-      </div>
-      <div id="tokenCopiedMsg" style="display: none; margin-top: 10px; font-size: 13px; font-weight: 700; color: #166534; background: #dcfce7; padding: 8px 12px; border-radius: 6px; border: 1px solid #86efac;">
-        ✅ Token copiado para a área de transferência! Insira no App Mobile.
-      </div>
-    </div>
-  </div>
-</div>
-<script src="/js/auth.js"></script>
-<script>
-  const fields = ['initial_bank_usd', 'risk_per_trade_pct', 'min_risk_reward_ratio', 'scanner_top_limit', 'scanner_timeframe', 'mode', 'selected_exchange', 'exchange_api_key', 'exchange_api_secret'];
-  function getEmpresaId() {
-    return window._iahubEmpresa?.id || window._iahubEmpresa?.empresa_id || '';
-  }
-  function apiUrl(path) {
-    const companyId = getEmpresaId();
-    if (!companyId) return path;
-    const sep = path.includes('?') ? '&' : '?';
-    return `${path}${sep}empresa_id=${encodeURIComponent(companyId)}`;
-  }
-  async function loadCompanyToken() {
-    const tokenInput = document.getElementById('companyTokenInput');
-    if (!tokenInput) return;
-    tokenInput.value = 'Carregando token...';
-    try {
-      const data = await fetch(apiUrl('/api/master-crypto/company/mobile-token')).then(r => r.json());
-      tokenInput.value = data.mobile_token || '';
-    } catch (_) {
-      tokenInput.value = 'Nao foi possivel carregar o token';
-    }
-  }
-  async function copyCompanyToken() {
-    const tokenInput = document.getElementById('companyTokenInput');
-    if (!tokenInput?.value || tokenInput.value.includes('Carregando') || tokenInput.value.includes('Nao foi')) return;
-    const copied = await copyTextToClipboard(tokenInput.value, tokenInput);
-    if (!copied) {
-      alert('Nao foi possivel copiar automaticamente. Selecione o token e copie manualmente com Ctrl+C.');
-      return;
-    }
-    showCopyToast();
-    const msg = document.getElementById('tokenCopiedMsg');
-    msg.style.display = 'block';
-    setTimeout(() => { msg.style.display = 'none'; }, 3000);
-  }
-  async function copyTextToClipboard(text, inputEl) {
-    inputEl.focus();
-    inputEl.select();
-    inputEl.setSelectionRange(0, text.length);
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        return true;
-      }
-    } catch (_) {}
-    try {
-      return document.execCommand('copy');
-    } catch (_) {
-      return false;
-    }
-  }
-  function showCopyToast() {
-    const toast = document.getElementById('copyToast');
-    if (!toast) return;
-    toast.classList.add('show');
-    clearTimeout(window._copyToastTimer);
-    window._copyToastTimer = setTimeout(() => {
-      toast.classList.remove('show');
-    }, 2600);
-  }
-  async function generateNewCompanyToken() {
-    if (!confirm('Gerar novo token? O token anterior deixara de autenticar o app mobile desta empresa.')) return;
-    const tokenInput = document.getElementById('companyTokenInput');
-    tokenInput.value = 'Gerando novo token...';
-    try {
-      const data = await fetch(apiUrl('/api/master-crypto/company/mobile-token/regenerate'), { method: 'POST' }).then(r => r.json());
-      tokenInput.value = data.mobile_token || '';
-      alert('Novo token gerado e salvo para esta empresa. Atualize o token no aplicativo celular.');
-    } catch (_) {
-      await loadCompanyToken();
-      alert('Nao foi possivel gerar um novo token agora.');
-    }
-  }
-  function switchTab(tabId, btn) {
-    document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.tab-item').forEach(el => el.classList.remove('active'));
-    document.getElementById(tabId).classList.add('active');
-    btn.classList.add('active');
-  }
-  function toggleVisibility(fieldId, btn) {
-    const el = document.getElementById(fieldId);
-    if (el.type === 'password') {
-      el.type = 'text';
-      btn.textContent = '🙈';
-    } else {
-      el.type = 'password';
-      btn.textContent = '👁️';
-    }
-  }
-  async function loadSettings() {
-    await (window._iahubAuthReady || Promise.resolve());
-    setStatus('Carregando parâmetros da empresa...');
-    const companyName = window._iahubEmpresa?.nome || 'Empresa Selecionada';
-    const companyId = window._iahubEmpresa?.id || '-';
-    document.getElementById('companyActiveLabel').textContent = `${companyName} (ID: ${companyId})`;
-    await loadCompanyToken();
-    try {
-      const data = await fetch(apiUrl('/api/master-crypto/company/settings')).then(r => r.json());
-      fields.forEach(id => {
-        const el = document.getElementById(id);
-        if (el && data[id] !== undefined) el.value = data[id];
-      });
-      const keyInput = document.getElementById('exchange_api_key');
-      const secretInput = document.getElementById('exchange_api_secret');
-      if (keyInput && data.exchange_api_key_configured) {
-        keyInput.value = '';
-        keyInput.placeholder = `Configurada (${data.exchange_api_key_masked || 'protegida'}) - preencha apenas para trocar`;
-      }
-      if (secretInput && data.exchange_api_secret_configured) {
-        secretInput.value = '';
-        secretInput.placeholder = `Configurada (${data.exchange_api_secret_masked || 'protegida'}) - preencha apenas para trocar`;
-      }
-      setStatus(`Parâmetros carregados para ${companyName}.`);
-    } catch (err) {
-      setStatus('Não foi possível carregar os parâmetros desta empresa.');
-    }
-  }
-  async function saveSettings() {
-    const body = {
-      initial_bank_usd: Number(document.getElementById('initial_bank_usd').value),
-      risk_per_trade_pct: Number(document.getElementById('risk_per_trade_pct').value),
-      min_risk_reward_ratio: Number(document.getElementById('min_risk_reward_ratio').value),
-      scanner_top_limit: Number(document.getElementById('scanner_top_limit').value),
-      scanner_timeframe: document.getElementById('scanner_timeframe').value,
-      mode: document.getElementById('mode').value,
-      selected_exchange: document.getElementById('selected_exchange').value,
-    };
-    const apiKey = document.getElementById('exchange_api_key').value.trim();
-    const apiSecret = document.getElementById('exchange_api_secret').value.trim();
-    if (apiKey) body.exchange_api_key = apiKey;
-    if (apiSecret) body.exchange_api_secret = apiSecret;
-    setStatus('Salvando parâmetros...');
-    const res = await fetch(apiUrl('/api/master-crypto/company/settings'), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      setStatus('Não foi possível salvar os parâmetros.');
-      return;
-    }
-    setStatus('Parâmetros salvos com sucesso para esta empresa.');
-    await loadSettings();
-  }
-  async function testExchangeConnection() {
-    const feedback = document.getElementById('testFeedback');
-    feedback.style.display = 'block';
-    feedback.className = 'test-feedback';
-    feedback.innerHTML = '⚡ Testando conexão pública e leitura autenticada dos ativos... Aguarde...';
-    const apiKey = document.getElementById('exchange_api_key').value.trim();
-    const apiSecret = document.getElementById('exchange_api_secret').value.trim();
-    const exchange = document.getElementById('selected_exchange').value;
-    try {
-      const res = await fetch(apiUrl('/api/master-crypto/company/test-exchange'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          exchange: exchange,
-          api_key: apiKey,
-          api_secret: apiSecret,
-          empresa_id: window._iahubEmpresa?.id || window._iahubEmpresa?.empresa_id || undefined
-        })
-      });
-      const data = await res.json();
-      const checks = data.checks || {};
-      const connection = checks.connection || {};
-      const assets = checks.assets || {};
-      feedback.className = data.success ? 'test-feedback success' : 'test-feedback error';
-      feedback.innerHTML = `
-        ${data.success ? '✅' : '⚠️'} <strong>Teste Binance concluído</strong>
-        <div class="test-checks">
-          ${renderTestCheck('Conexão pública / cotação', connection)}
-          ${renderTestCheck('Leitura autenticada dos ativos', assets)}
-        </div>
-      `;
-    } catch(err) {
-      feedback.className = 'test-feedback error';
-      feedback.innerHTML = `❌ <strong>Erro de Comunicação:</strong> Não foi possível testar (${err.message})`;
-    }
-  }
-  function renderTestCheck(title, check) {
-    const ok = Boolean(check?.success);
-    const message = check?.message || 'Sem retorno.';
-    return `
-      <div class="test-check">
-        <span>${ok ? '✅' : '❌'}</span>
-        <span><strong>${title}</strong>${escapeHtml(message)}</span>
-      </div>
-    `;
-  }
-  function escapeHtml(value) {
-    return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
-  }
-  function setStatus(text) {
-    document.getElementById('statusLine').textContent = text;
-  }
-  window.addEventListener('DOMContentLoaded', loadSettings);
-</script>
-</body>
-</html>
-</file>
+# Fallback TEMPORARIO de login externo por telefone: autoriza o caminho legado
+# (tabela consultores do proprio IA Service) quando o telefone ainda nao tem a
+# role "ia-service/chat-web" liberada em platform_identity_roles (fonte de
+# verdade oficial, alimentada pela importacao do IA Command na tela Platform).
+# Deixar OFF por padrao e intencional: evita duas fontes de autorizacao
+# divergentes sem que ninguem perceba. Ativar so como contorno pontual
+# enquanto a importacao/role correta nao e corrigida, nao como configuracao
+# permanente.
+# SVC_ALLOW_LEGACY_CONSULTORES=1
 
-<file path="apps/Master Crypto/mobile/lib/src/core/api_client.dart">
-import 'dart:async';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-⋮----
-class ApiClient {
-⋮----
-static String get activeBaseUrl => activeResolvedBaseUrl;
-⋮----
-static void setCompanyToken(String token) {
-⋮----
-static String get numericCompanyId {
-⋮----
-static Map<String, String> get defaultHeaders {
-⋮----
-static void setServerIp(String ip) {
-⋮----
-static Future<Map<String, dynamic>> validateCompanyToken(String token) async {
-⋮----
-static Future<Map<String, dynamic>> testExchangeConnection({
-⋮----
-static Future<Map<String, dynamic>> getWalletBalances() async {
-⋮----
-static Future<bool> testConnection(String ip) async {
-⋮----
-static Future<Map<String, dynamic>> getSymbolTicker(String symbol) async {
-⋮----
-} catch (_) {
-⋮----
-static Future<Map<String, dynamic>> getActiveOpportunities({int topLimit = 20}) async {
-⋮----
-static Future<Map<String, dynamic>> runBacktest({
-⋮----
-static Future<Map<String, dynamic>> getBTCCycleComparison() async {
-⋮----
-static Future<Map<String, dynamic>> getPaperTradingMetrics() async {
-⋮----
-static Future<Map<String, dynamic>> getActivePaperTrades() async {
-⋮----
-static Future<Map<String, dynamic>> getPaperTradeHistory() async {
-⋮----
-static Future<Map<String, dynamic>> startPaperTrade(Map<String, dynamic> tradeReq) async {
-⋮----
-static Future<Map<String, dynamic>> closePaperTrade(String tradeId, double currentPrice) async {
-⋮----
-static Future<Map<String, dynamic>> askAnalyst({required String question, Map<String, dynamic>? opportunityContext}) async {
-⋮----
-static Future<Map<String, dynamic>> getNewsFeed({int limit = 10}) async {
-⋮----
-static Future<Map<String, dynamic>> executeRealOrder({
-</file>
+# --- Alertas operacionais (Telegram) ---
+# Notifica quando o WhatsApp cai e reconexao automatica nao resolve (LOGOUT ou limite de
+# tentativas esgotado). Nao depende de QR/sessao do WhatsApp, por isso funciona mesmo com
+# o canal principal fora do ar. Deixar em branco desativa o alerta (falha silenciosa).
+# Criacao do bot: fale com @BotFather no Telegram, /newbot, copie o token gerado.
+IAC_TELEGRAM_BOT_TOKEN=
+# chat_id de quem deve receber o alerta — inicie uma conversa com o bot e consulte
+# https://api.telegram.org/bot<TOKEN>/getUpdates para descobrir o chat_id.
+IAC_TELEGRAM_ALERT_CHAT_ID=
 
-<file path="apps/Master Crypto/mobile/lib/src/features/radar/radar_provider.dart">
-import 'dart:async';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:crypto_swing_app/src/core/api_client.dart';
-import 'package:crypto_swing_app/src/core/websocket_client.dart';
-import 'package:crypto_swing_app/src/local_db/app_database.dart';
-⋮----
-enum RadarExecutionMode { real, simulation }
-⋮----
-class RadarStateNotifier extends StateNotifier<AsyncValue<Map<String, dynamic>>> {
-⋮----
-RadarStateNotifier(this.ref) : super(const AsyncValue.loading()) {
-⋮----
-Future<void> fetchOpportunities() async {
-⋮----
-void _initWebSocket() {
-⋮----
-void dispose() {
-</file>
+# --- Servidor ---
 
-<file path="apps/Master Crypto/mobile/lib/src/features/real_trading/real_trading_screen.dart">
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:crypto_swing_app/src/core/theme.dart';
-import 'package:crypto_swing_app/src/core/api_client.dart';
-import 'package:crypto_swing_app/src/ui/app_icons.dart';
-import 'package:crypto_swing_app/src/ui/crypto_logo_avatar.dart';
-import 'package:crypto_swing_app/src/features/settings/settings_provider.dart';
-⋮----
-class RealTradingScreen extends ConsumerWidget {
-const RealTradingScreen({super.key});
-⋮----
-Widget build(BuildContext context, WidgetRef ref) {
-⋮----
-// BOTÕES DE AÇÃO RÁPIDA (BINANCE STYLE)
-⋮----
-Widget _quickActionButton(AppIconType iconType, String label) {
-⋮----
-Widget _buildBinanceAssetRow({
-⋮----
-Widget _buildCleanPositionCard(
-⋮----
-Widget _gridLevelTile(String label, String value, Color color) {
-⋮----
-Widget _buildPendingOrderCard(String symbol, String type, String price, String status) {
-⋮----
-Widget _buildHistoryItem(String symbol, String result, String pnlUsd, String pnlPct, String reason) {
-</file>
+# Porta em que o Node.js vai rodar (padrao: 3000)
+# PORT=3000
 
-<file path="apps/Master Crypto/mobile/lib/src/features/settings/settings_provider.dart">
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:crypto_swing_app/src/core/api_client.dart';
-⋮----
-class SettingsStorageService {
-⋮----
-static Future<void> loadSavedSettings(WidgetRef ref) async {
-⋮----
-static Future<void> saveCompanyToken(String token) async {
-⋮----
-static Future<void> saveCompanyName(WidgetRef ref, String name) async {
-⋮----
-static Future<void> saveServerIp(String ip) async {
-⋮----
-static Future<void> saveExchangeCredentials({
-⋮----
-static Future<void> saveRiskSettings(double riskPct, double balance) async {
-</file>
-
-<file path="apps/Master Crypto/mobile/lib/src/features/settings/settings_screen.dart">
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:crypto_swing_app/src/core/theme.dart';
-import 'package:crypto_swing_app/src/core/api_client.dart';
-import 'package:crypto_swing_app/src/core/notification_service.dart';
-import 'package:crypto_swing_app/src/features/settings/settings_provider.dart';
-import 'package:crypto_swing_app/src/features/radar/radar_provider.dart';
-import 'package:crypto_swing_app/src/ui/app_icons.dart';
-⋮----
-class SettingsScreen extends ConsumerStatefulWidget {
-const SettingsScreen({super.key});
-⋮----
-ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
-⋮----
-class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-⋮----
-void _validateCompanyToken() async {
-⋮----
-void initState() {
-⋮----
-void dispose() {
-⋮----
-void _testExchangeConnection() async {
-⋮----
-void _testConnection() async {
-⋮----
-Widget build(BuildContext context) {
+# Caminho do Chrome instalado (obrigatorio em Windows Server)
+# O script 2-configurar-servico.ps1 adiciona esta linha automaticamente
+CHROME_PATH=C:\Program Files\Google\Chrome\Application\chrome.exe
 </file>
 
 <file path="IA_SERVICE_AUDITORIA_CLAUDE_FASES_1_2.md">
@@ -50891,23 +50937,6 @@ async function executarJob(empresaId, job,
 // SQL fixo: executa localmente e envia para cada destinatário via worker
 </file>
 
-<file path="apps/IA Service/backend/repositories/ai-config-repository.js">
-function _rowParaDominio(row)
-⋮----
-function getConfig(empresaId)
-⋮----
-function getConfigPorApelido(apelido)
-⋮----
-function _normalizarApelido(valor)
-⋮----
-function salvarConfig(empresaId, dados)
-⋮----
-// Criptografa ANTES de gravar — o COALESCE abaixo compara com a coluna
-// crua do banco (já cifrada), então o valor novo também precisa estar
-// cifrado para a comparação/substituição fazer sentido byte a byte (senão
-// o COALESCE sempre "substituiria", pois um texto plano nunca é NULL).
-</file>
-
 <file path="apps/IA Service/backend/repositories/anexo-repository.js">
 function _rowParaDominio(row)
 ⋮----
@@ -51023,6 +51052,22 @@ function registrarInconsistencia(empresaId,
 function listarInconsistencias(empresaId, importacaoId)
 </file>
 
+<file path="apps/IA Service/backend/repositories/investigacao-execucao-repository.js">
+function _json(valor)
+⋮----
+function _parse(valor)
+⋮----
+function _rowParaDominio(row)
+⋮----
+function salvarExecucao(empresaId, dados)
+⋮----
+function getExecucao(empresaId, id)
+⋮----
+function listarPorAtendimento(empresaId, atendimentoId,
+⋮----
+function listarStatusPorMensagens(empresaId, mensagemIds)
+</file>
+
 <file path="apps/IA Service/backend/services/investigative-discipline-service.js">
 function normalizar(texto)
 ⋮----
@@ -51064,37 +51109,6 @@ function redigirTexto(texto)
 function redigirUrl(url)
 ⋮----
 function redigirValor(valor)
-</file>
-
-<file path="apps/IA Service/backend/services/resposta-operacional-service.js">
-function _limpar(texto)
-⋮----
-function _primeiraLinhaUtil(texto)
-⋮----
-function _semCodigo(texto)
-⋮----
-function _tipoDiagnostico(secoes =
-⋮----
-function _rotuloDiagnostico(tipo)
-⋮----
-function _diagnosticoPrincipal(secoes =
-⋮----
-function _acaoPrincipal(secoes =
-⋮----
-function _evidenciaPrincipal(secoes =
-⋮----
-function _validacaoPrincipal(secoes =
-⋮----
-function _proximoPasso(secoes =
-⋮----
-function _detalhes(secoes =
-⋮----
-function construirFichaOperacional({
-  diagnostico, nivelConfianca, conteudo, fontesCorrigidos = [], avisosFonteCorrigido = [],
-  validacaoSolucao = null, avaliacaoHumana = null, qualityGateBloqueado = false,
-} =
-⋮----
-function anexarFichaOperacional(mensagem, extras =
 </file>
 
 <file path="apps/IA Service/backend/services/token-budget-service.js">
@@ -51309,6 +51323,32 @@ function limpar()
 async function main()
 </file>
 
+<file path="apps/IA Service/tests/radar-pre-analise-concorrencia.test.js">
+function criarChamadoReal(numero)
+⋮----
+async function main()
+⋮----
+investigacaoService.processarPreAnalise = async () =>
+anexosSoftExpertService.sincronizarAnexosParaAtendimento = async ()
+</file>
+
+<file path="apps/IA Service/tests/sincronizacao-preferencia-platform.test.js">
+function limpar()
+⋮----
+const sleep = (ms)
+⋮----
+async function main()
+⋮----
+Date.now = ()
+const avancarThrottle = () =>
+⋮----
+platformStore.listarIaServicePorTelefone = () => [
+⋮----
+platformStore.listarIaServicePorTelefone = () =>
+⋮----
+platformStore.listarIaServicePorTelefone = ()
+</file>
+
 <file path="apps/IAHUB/backend/platform-import-ia-command.js">
 function now()
 function uuid()
@@ -51320,105 +51360,6 @@ function roleDefaults(row, modulo)
 function upsertRole(platformDb, identityId, empresaId, role)
 ⋮----
 function importarNumerosJ2A()
-</file>
-
-<file path=".env.example">
-# ============================================================
-# IAHub — Configuracao de Ambiente
-# Copie este arquivo para .env e preencha os valores abaixo
-# ============================================================
-
-# --- Inteligencia Artificial ---
-
-# Chave da API do Groq (obtenha gratis em https://console.groq.com)
-GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-
-# Chave da API do Google Gemini (fallback quando Groq atinge limite)
-# Obtenha em https://aistudio.google.com
-GEMINI_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-
-# --- Acesso ao Sistema ---
-
-# Usuario e senha do administrador
-ADMIN_USER=admin
-ADMIN_PASS=iahub@2024
-
-# Segredo para criptografia de sessao (mude para uma string aleatoria longa)
-SESSION_SECRET=mude-para-uma-chave-secreta-aleatoria-longa
-
-# --- IA Hub Shell / Sistemas ---
-
-# Recrutamento exige sessao valida emitida pelo IA Hub Shell
-IA_HUB_AUTH_REQUIRED=true
-
-# Quando false, bloqueia acesso direto ao Recrutamento sem sessao/sistema selecionado
-ALLOW_STANDALONE_ACCESS=false
-
-# URL publica do Shell usada em redirecionamentos de seguranca
-IA_HUB_SHELL_URL=https://iahub.com.br
-
-# --- IA Command / Tokens internos servidor-a-servidor ---
-# Segredos compartilhados usados para autenticar chamadas que nao tem sessao de
-# usuario do IAHub (Windows Service do WhatsApp, agente local, canal Protheus).
-# Gere com: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-
-# Autentica o Windows Service do WhatsApp ao publicar eventos (header X-Worker-Token)
-IAC_HUB_INTERNAL_TOKEN=
-
-# Autentica a rotina ADVPL do Protheus ao solicitar token de sessao do chat
-# (header X-Protheus-Secret em POST /api/ia-command/protheus/token).
-# Sem esta variavel definida, o endpoint fica aberto — nao deixar vazio em producao.
-IAC_PROTHEUS_CHAT_SECRET=
-IAC_PROTHEUS_CHAT_TTL_MS=28800000
-IAC_PROTHEUS_CHAT_MAX_TTL_MS=0
-
-# Opcional: chave dedicada para criptografar campos sensiveis do Chat Web em repouso.
-# Se vazia, o sistema deriva a chave de IAC_PROTHEUS_CHAT_SECRET/SESSION_SECRET.
-IAC_CHAT_DATA_CRYPTO_KEY=
-
-# --- IA Service ---
-# Chave para criptografar em repouso (AES-256-GCM) credenciais do IA Service:
-# chaves de API de IA (ai_config) e config do Agente Local (URL/token/crypto_key).
-# Gere com: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-SVC_DATA_CRYPTO_KEY=
-
-# Segredo do envio de codigo OTP por WhatsApp no login externo por telefone
-# (/entrar-servico). Sem esta variavel, o IA Service nao consegue enviar o
-# codigo e o login falha com "WhatsApp de atendimento esta indisponivel".
-# Mesmo valor tambem autentica a chamada no IA Command (fallback de
-# IAC_WHATSAPP_SERVICO_EXTERNO_SECRET quando essa nao estiver definida) —
-# nao precisa duplicar, um unico valor basta.
-# Gere com: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-SVC_WHATSAPP_OTP_SECRET=
-
-# Fallback TEMPORARIO de login externo por telefone: autoriza o caminho legado
-# (tabela consultores do proprio IA Service) quando o telefone ainda nao tem a
-# role "ia-service/chat-web" liberada em platform_identity_roles (fonte de
-# verdade oficial, alimentada pela importacao do IA Command na tela Platform).
-# Deixar OFF por padrao e intencional: evita duas fontes de autorizacao
-# divergentes sem que ninguem perceba. Ativar so como contorno pontual
-# enquanto a importacao/role correta nao e corrigida, nao como configuracao
-# permanente.
-# SVC_ALLOW_LEGACY_CONSULTORES=1
-
-# --- Alertas operacionais (Telegram) ---
-# Notifica quando o WhatsApp cai e reconexao automatica nao resolve (LOGOUT ou limite de
-# tentativas esgotado). Nao depende de QR/sessao do WhatsApp, por isso funciona mesmo com
-# o canal principal fora do ar. Deixar em branco desativa o alerta (falha silenciosa).
-# Criacao do bot: fale com @BotFather no Telegram, /newbot, copie o token gerado.
-IAC_TELEGRAM_BOT_TOKEN=
-# chat_id de quem deve receber o alerta — inicie uma conversa com o bot e consulte
-# https://api.telegram.org/bot<TOKEN>/getUpdates para descobrir o chat_id.
-IAC_TELEGRAM_ALERT_CHAT_ID=
-
-# --- Servidor ---
-
-# Porta em que o Node.js vai rodar (padrao: 3000)
-# PORT=3000
-
-# Caminho do Chrome instalado (obrigatorio em Windows Server)
-# O script 2-configurar-servico.ps1 adiciona esta linha automaticamente
-CHROME_PATH=C:\Program Files\Google\Chrome\Application\chrome.exe
 </file>
 
 <file path="index.js">
@@ -51472,36 +51413,27 @@ function upsertConsultorPlatform(empresaId, dados)
 ⋮----
 function atualizarConsultor(empresaId, consultorId, patch)
 ⋮----
+/**
+ * Exclusão física — seguro porque atendimentos.consultor_id é
+ * ON DELETE SET NULL (migration v2): apagar um consultor nunca deixa
+ * atendimento órfão quebrado, só perde a referência de "quem atendeu"
+ * nos atendimentos já vinculados a ele.
+ */
 function excluirConsultor(empresaId, consultorId)
 ⋮----
 function getNomeTecnicoPorIdOrigem(empresaId, idSoftexpert)
 </file>
 
-<file path="apps/IA Service/backend/services/avaliacao-investigacao-service.js">
-function _naoEncontrado(mensagem)
+<file path="apps/IA Service/backend/services/ai-config-service.js">
+function permitirConfigLegada()
 ⋮----
-function _erroValidacao(mensagem)
+function resolverKeysEOrdem(empresaId)
 ⋮----
-function _validarNotas(notas)
+function resolverConfigPesquisa(empresaId)
 ⋮----
-function _validarObservacoes(observacoes)
+function salvarConfig(empresaId, dados)
 ⋮----
-function _validarMensagemAssistenteDoAtendimento(empresaId, atendimentoId, mensagemAssistenteId)
-⋮----
-function _resolverNomeAvaliador(empresaId, usuarioId, origemIdentidade)
-⋮----
-async function avaliarInvestigacao(empresaId, {
-  atendimentoId, mensagemAssistenteId, notas, observacoes = null, erroTecnicoCritico = false, usuarioId,
-  origemIdentidade = null,
-})
-⋮----
-function obterAvaliacaoAtual(empresaId, mensagemAssistenteId, usuarioId, atendimentoId = null)
-⋮----
-function obterAvaliacoesAtuaisDaMensagem(empresaId, mensagemAssistenteId)
-⋮----
-function obterHistoricoDoUsuario(empresaId, mensagemAssistenteId, usuarioId)
-⋮----
-function obterAvaliacoesEmLote(empresaId, mensagemAssistenteIds)
+function getConfig(empresaId)
 </file>
 
 <file path="apps/IA Service/backend/services/consultor-service.js">
@@ -51520,6 +51452,67 @@ function listarConsultores(empresaId, filtros)
 function atualizarConsultor(empresaId, consultorId, patch)
 ⋮----
 function excluirConsultor(empresaId, consultorId)
+</file>
+
+<file path="apps/IA Service/backend/services/login-externo-service.js">
+function normalizarTelefone(valor)
+⋮----
+function _hashCodigo(challengeId, telefone, codigo)
+⋮----
+function _hashToken(token)
+⋮----
+function _limparChallengesExpirados(db)
+⋮----
+function _consolidarVinculosPorEmpresa(itens)
+⋮----
+function listarEmpresasDoTelefone(telefoneBruto)
+⋮----
+function sincronizarPreferenciaDaPlatform(empresaId, consultorId)
+⋮----
+function iniciarLogin(telefoneBruto)
+⋮----
+function _validarChallenge(challengeId, telefoneBruto, codigoBruto)
+⋮----
+function _emitirSessao(empresaId, consultorId)
+⋮----
+function verificarLogin(challengeId, telefoneBruto, codigoBruto)
+⋮----
+function escolherEmpresa(telefoneBruto, empresaId)
+⋮----
+function trocarEmpresa(tokenAtual, novoEmpresaId)
+⋮----
+function validarSessaoExterna(token)
+</file>
+
+<file path="apps/IA Service/backend/services/resposta-operacional-service.js">
+function _limpar(texto)
+⋮----
+function _primeiraLinhaUtil(texto)
+⋮----
+function _semCodigo(texto)
+⋮----
+function _tipoDiagnostico(secoes =
+⋮----
+function _rotuloDiagnostico(tipo)
+⋮----
+function _diagnosticoPrincipal(secoes =
+⋮----
+function _acaoPrincipal(secoes =
+⋮----
+function _evidenciaPrincipal(secoes =
+⋮----
+function _validacaoPrincipal(secoes =
+⋮----
+function _proximoPasso(secoes =
+⋮----
+function _detalhes(secoes =
+⋮----
+function construirFichaOperacional({
+  diagnostico, nivelConfianca, conteudo, fontesCorrigidos = [], avisosFonteCorrigido = [],
+  validacaoSolucao = null, avaliacaoHumana = null, qualityGateBloqueado = false,
+} =
+⋮----
+function anexarFichaOperacional(mensagem, extras =
 </file>
 
 <file path="apps/IA Service/backend/services/safe-web-fetch-service.js">
@@ -51632,6 +51625,33 @@ const enviar = async (corpo) =>
 setHeaders(res)
 </file>
 
+<file path="apps/IA Service/backend/services/avaliacao-investigacao-service.js">
+function _naoEncontrado(mensagem)
+⋮----
+function _erroValidacao(mensagem)
+⋮----
+function _validarNotas(notas)
+⋮----
+function _validarObservacoes(observacoes)
+⋮----
+function _validarMensagemAssistenteDoAtendimento(empresaId, atendimentoId, mensagemAssistenteId)
+⋮----
+function _resolverNomeAvaliador(empresaId, usuarioId, origemIdentidade)
+⋮----
+async function avaliarInvestigacao(empresaId, {
+  atendimentoId, mensagemAssistenteId, notas, observacoes = null, erroTecnicoCritico = false, usuarioId,
+  origemIdentidade = null,
+})
+⋮----
+function obterAvaliacaoAtual(empresaId, mensagemAssistenteId, usuarioId, atendimentoId = null)
+⋮----
+function obterAvaliacoesAtuaisDaMensagem(empresaId, mensagemAssistenteId)
+⋮----
+function obterHistoricoDoUsuario(empresaId, mensagemAssistenteId, usuarioId)
+⋮----
+function obterAvaliacoesEmLote(empresaId, mensagemAssistenteIds)
+</file>
+
 <file path="apps/IA Service/tests/etapa2-contexto-pesquisa-quality.test.js">
 function limparEDesligar()
 ⋮----
@@ -51658,18 +51678,6 @@ function _filtroRiscoParaCondicao(filtroRisco)
 function listarFila(empresaId,
 ⋮----
 function listarRiscoSla(empresaId,
-</file>
-
-<file path="apps/IA Service/backend/services/ai-config-service.js">
-function permitirConfigLegada()
-⋮----
-function resolverKeysEOrdem(empresaId)
-⋮----
-function resolverConfigPesquisa(empresaId)
-⋮----
-function salvarConfig(empresaId, dados)
-⋮----
-function getConfig(empresaId)
 </file>
 
 <file path="apps/IA Service/backend/services/armazenamento-anexos.js">
@@ -51828,106 +51836,6 @@ function _limitarTexto(texto, max = 2200)
  * separadamente ao motor de IA (ai-provider-client) como blocos multimodais.
  */
 function buildUserPrompt(
-</file>
-
-<file path="apps/IAHUB/backend/platform-store.js">
-function getDB()
-⋮----
-function key()
-⋮----
-function decrypt(value)
-⋮----
-function parseJson(value, fallback =
-⋮----
-function safeGet(sql, params = [])
-⋮----
-function safeAll(sql, params = [])
-⋮----
-function getAiConfig(empresaId)
-⋮----
-function getSearchConfig(empresaId)
-⋮----
-function getAgentConfig(empresaId)
-⋮----
-function listarIaServicePorTelefone(telefoneNormalizado)
-⋮----
-// Exige o vínculo PRÓPRIO 'ia-service/chat-web' — autorização do IA
-⋮----
-function getConfigPorApelido(apelido)
-</file>
-
-<file path="apps/IA Service/backend/repositories/agente-local-repository.js">
-function _configParaDominio(row)
-⋮----
-function getConfig(empresaId)
-⋮----
-function salvarConfig(empresaId,
-⋮----
-function registrarTeste(empresaId, ok)
-⋮----
-function _fonteParaDominio(row)
-⋮----
-function criarFonte(empresaId, dados)
-⋮----
-function atualizarFonte(empresaId, fonteId, patch)
-⋮----
-function getFonte(empresaId, fonteId)
-⋮----
-function listarFontes(empresaId, filtros =
-⋮----
-async function excluirFonte(empresaId, fonteId)
-⋮----
-function _atendimentoIdsDaFonte(db, empresaId, fonteId)
-⋮----
-function _cederEventLoop()
-⋮----
-async function _deletarEmLotes(db, sql, params)
-⋮----
-async function limparPesquisaIAFonte(empresaId, fonteId)
-⋮----
-async function zerarBaseFonte(empresaId, fonteId)
-⋮----
-function limparHistoricoFonte(empresaId, fonteId)
-</file>
-
-<file path="apps/IA Service/backend/services/agente-local-service.js">
-async function _limparAnexosOrfaosDaEmpresa(empresaId)
-⋮----
-function permitirConfigLegada()
-⋮----
-function _resolverConfig(empresaId)
-⋮----
-function getConfig(empresaId)
-⋮----
-function salvarConfig(empresaId, dados)
-⋮----
-function getTokenRevelado(empresaId)
-⋮----
-function getCryptoKeyRevelada(empresaId)
-⋮----
-async function testarConexao(empresaId)
-⋮----
-async function listarConexoesDoAgente(empresaId)
-⋮----
-function criarFonte(empresaId,
-⋮----
-function atualizarFonte(empresaId, fonteId, patch)
-⋮----
-function getFonte(empresaId, fonteId)
-⋮----
-async function excluirFonte(empresaId, fonteId)
-⋮----
-async function limparHistoricoFonte(empresaId, fonteId)
-⋮----
-async function limparPesquisaIAFonte(empresaId, fonteId)
-⋮----
-async function zerarBaseFonte(empresaId, fonteId)
-⋮----
-function listarFontes(empresaId, filtros)
-⋮----
-async function testarFonte(empresaId, fonteId)
-⋮----
-async function executarSelectNaFonte(empresaId, fonteId,
 </file>
 
 <file path="apps/IA Service/frontend/entrar.html">
@@ -52674,13 +52582,12 @@ async function executarSelectNaFonte(empresaId, fonteId,
     function codeValue() { return codeInputs.map(i => i.value).join(''); }
     function entrarComToken(token) {
       localStorage.setItem('svc_token_externo', token);
-      // Reflete o apelido na URL pós-login só por clareza visual (pedido do
-      // usuário, 2026-10) — a segurança/isolamento entre empresas continua
-      // 100% pelo token de sessão (x-sessao-externa), nunca pela URL; um
-      // apelido desconhecido em /radar-externo/:apelido ainda serve o mesmo
-      // radar.html normalmente, a empresa real vem do token.
-      const apelido = localStorage.getItem(LOGIN_APELIDO_KEY);
-      location.href = apelido ? `/radar-externo/${encodeURIComponent(apelido)}` : '/radar-externo';
+      // O link da empresa (/entrar-servico/:apelido) passa a abrir o NOVO chat
+      // (J2A) -- o Radar antigo (/radar-externo) ficou obsoleto (pedido do
+      // usuario, 2026-10). O J2A le o mesmo token de localStorage; a
+      // seguranca/isolamento entre empresas continua 100% pelo token de
+      // sessao (x-sessao-externa), nunca pela URL.
+      location.href = '/iaservice/j2a';
     }
     async function enviarCodigo() {
       const telefone = digits($('phone').value);
@@ -52833,6 +52740,106 @@ async function executarSelectNaFonte(empresaId, fonteId,
 </html>
 </file>
 
+<file path="apps/IA Service/backend/repositories/agente-local-repository.js">
+function _configParaDominio(row)
+⋮----
+function getConfig(empresaId)
+⋮----
+function salvarConfig(empresaId,
+⋮----
+function registrarTeste(empresaId, ok)
+⋮----
+function _fonteParaDominio(row)
+⋮----
+function criarFonte(empresaId, dados)
+⋮----
+function atualizarFonte(empresaId, fonteId, patch)
+⋮----
+function getFonte(empresaId, fonteId)
+⋮----
+function listarFontes(empresaId, filtros =
+⋮----
+async function excluirFonte(empresaId, fonteId)
+⋮----
+function _atendimentoIdsDaFonte(db, empresaId, fonteId)
+⋮----
+function _cederEventLoop()
+⋮----
+async function _deletarEmLotes(db, sql, params)
+⋮----
+async function limparPesquisaIAFonte(empresaId, fonteId)
+⋮----
+async function zerarBaseFonte(empresaId, fonteId)
+⋮----
+function limparHistoricoFonte(empresaId, fonteId)
+</file>
+
+<file path="apps/IA Service/backend/services/agente-local-service.js">
+async function _limparAnexosOrfaosDaEmpresa(empresaId)
+⋮----
+function permitirConfigLegada()
+⋮----
+function _resolverConfig(empresaId)
+⋮----
+function getConfig(empresaId)
+⋮----
+function salvarConfig(empresaId, dados)
+⋮----
+function getTokenRevelado(empresaId)
+⋮----
+function getCryptoKeyRevelada(empresaId)
+⋮----
+async function testarConexao(empresaId)
+⋮----
+async function listarConexoesDoAgente(empresaId)
+⋮----
+function criarFonte(empresaId,
+⋮----
+function atualizarFonte(empresaId, fonteId, patch)
+⋮----
+function getFonte(empresaId, fonteId)
+⋮----
+async function excluirFonte(empresaId, fonteId)
+⋮----
+async function limparHistoricoFonte(empresaId, fonteId)
+⋮----
+async function limparPesquisaIAFonte(empresaId, fonteId)
+⋮----
+async function zerarBaseFonte(empresaId, fonteId)
+⋮----
+function listarFontes(empresaId, filtros)
+⋮----
+async function testarFonte(empresaId, fonteId)
+⋮----
+async function executarSelectNaFonte(empresaId, fonteId,
+</file>
+
+<file path="apps/IAHUB/backend/platform-store.js">
+function getDB()
+⋮----
+function key()
+⋮----
+function decrypt(value)
+⋮----
+function parseJson(value, fallback =
+⋮----
+function safeGet(sql, params = [])
+⋮----
+function safeAll(sql, params = [])
+⋮----
+function getAiConfig(empresaId)
+⋮----
+function getSearchConfig(empresaId)
+⋮----
+function getAgentConfig(empresaId)
+⋮----
+function listarIaServicePorTelefone(telefoneNormalizado)
+⋮----
+// Exige o vínculo PRÓPRIO 'ia-service/chat-web' — autorização do IA
+⋮----
+function getConfigPorApelido(apelido)
+</file>
+
 <file path="apps/IA Service/backend/services/import/softexpert-sqlserver-adapter.js">
 function inteiroNaoNegativo(valor, padrao = 0)
 ⋮----
@@ -52876,43 +52883,6 @@ async function listarPosicionamentosDoLote(empresaId, fonte, idProcessList)
  * inclui `origem` para o chamador saber de qual das três fontes veio.
  */
 async function listarAnexosDoChamado(empresaId, fonte, idProcess)
-</file>
-
-<file path="apps/IAHUB/backend/platform-routes.js">
-function getDB()
-⋮----
-function key()
-⋮----
-function encrypt(value)
-⋮----
-function decrypt(value)
-⋮----
-function now()
-function uuid()
-function empresaId(req)
-function requireEmpresa(req, res, next)
-function hasSecret(row, col)
-function secretValue(row, col, reveal)
-function parseJson(value, fallback)
-function normalizePhone(value)
-// Mesma regra de slug já usada em apps/IA Service/backend/repositories/
-// ai-config-repository.js:_normalizarApelido — minúsculas, só [a-z0-9-],
-// sem hífen duplicado/nas pontas. Duplicada aqui de propósito: a Platform
-// nunca importa módulos do IA Service em runtime (bancos fisicamente
-// separados, regra do projeto).
-function normalizarApelido(valor)
-function mapAi(row, reveal = false)
-function getAiRow(eid)
-function getAgentRow(eid)
-function getSearchRow(eid)
-⋮----
-function mapSearch(row, reveal = false)
-⋮----
-// Revela o Token/Crypto Key JÁ SALVOS em texto puro — mesmo padrão e
-// justificativa já usados em agente-local-service.getTokenRevelado do IA
-// Service (botão "olhinho" da tela, ação explícita sob clique do admin,
-// nunca incluído no GET normal acima). Exige requireAdmin (diferente do
-// GET de status, que qualquer usuário da empresa pode ver).
 </file>
 
 <file path="apps/IA Service/backend/services/ai-provider-client.js">
@@ -52984,6 +52954,43 @@ function _sleep(ms)
 async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts =
 </file>
 
+<file path="apps/IAHUB/backend/platform-routes.js">
+function getDB()
+⋮----
+function key()
+⋮----
+function encrypt(value)
+⋮----
+function decrypt(value)
+⋮----
+function now()
+function uuid()
+function empresaId(req)
+function requireEmpresa(req, res, next)
+function hasSecret(row, col)
+function secretValue(row, col, reveal)
+function parseJson(value, fallback)
+function normalizePhone(value)
+// Mesma regra de slug já usada em apps/IA Service/backend/repositories/
+// ai-config-repository.js:_normalizarApelido — minúsculas, só [a-z0-9-],
+// sem hífen duplicado/nas pontas. Duplicada aqui de propósito: a Platform
+// nunca importa módulos do IA Service em runtime (bancos fisicamente
+// separados, regra do projeto).
+function normalizarApelido(valor)
+function mapAi(row, reveal = false)
+function getAiRow(eid)
+function getAgentRow(eid)
+function getSearchRow(eid)
+⋮----
+function mapSearch(row, reveal = false)
+⋮----
+// Revela o Token/Crypto Key JÁ SALVOS em texto puro — mesmo padrão e
+// justificativa já usados em agente-local-service.getTokenRevelado do IA
+// Service (botão "olhinho" da tela, ação explícita sob clique do admin,
+// nunca incluído no GET normal acima). Exige requireAdmin (diferente do
+// GET de status, que qualquer usuário da empresa pode ver).
+</file>
+
 <file path="apps/IA Service/backend/services/import/historical-import-service.js">
 function _mapearChamado(row)
 ⋮----
@@ -53050,381 +53057,11 @@ function _tentarDispararPreAnaliseEmBackground(empresaId, chamado, atendimento,
 function iniciarAnalise(empresaId, chamadoId,
 </file>
 
-<file path="apps/IA Service/frontend/j2a/assets/radar.css">
-:root {
+<file path="apps/IA Service/backend/routes/externo-routes.js">
+function _erroParaStatus(err)
+function _handleErro(res, err)
 ⋮----
-:root[data-theme="dark"] {
-⋮----
-:root[data-theme="system"] {
-⋮----
-* { box-sizing: border-box; }
-html, body { height: 100%; }
-body {
-button, input, select, textarea { font: inherit; }
-button { cursor: pointer; }
-button:disabled { cursor: not-allowed; opacity: .62; }
-⋮----
-.app-shell { min-height: 100%; }
-[hidden] { display: none !important; }
-⋮----
-.access-screen {
-.access-card {
-.access-hero {
-.access-brand { display: flex; align-items: center; gap: 14px; }
-.brand-mark {
-.access-brand h1 { margin: 0; font-size: 23px; line-height: 1.15; }
-.access-brand p { margin: 4px 0 0; color: #9fb4bb; font-size: 13px; }
-.hero-copy h2 { max-width: 420px; margin: 0; font-size: clamp(25px, 3vw, 36px); line-height: 1.08; }
-.hero-copy p { max-width: 440px; margin: 10px 0 0; color: #c9d9dd; font-size: 14px; line-height: 1.45; }
-.access-flow { display: grid; gap: 8px; max-width: 430px; }
-.flow-item {
-.flow-num {
-.flow-title { font-size: 13px; font-weight: 800; }
-.flow-text { margin-top: 3px; color: #9fb4bb; font-size: 12px; line-height: 1.35; }
-.otp-visual {
-.visual-top { display: flex; justify-content: space-between; margin-bottom: 14px; color: #9fb4bb; font-size: 11px; }
-.phone-mock { display: grid; gap: 8px; }
-.bubble { width: fit-content; max-width: 86%; padding: 8px 10px; border-radius: 8px; background: #0b2e27; color: #dff7ec; font-size: 12px; line-height: 1.35; }
-.bubble.out { justify-self: end; background: #005c4b; }
-.otp-preview { display: flex; gap: 6px; margin-top: 4px; }
-.otp-preview span { width: 30px; height: 34px; display: grid; place-items: center; border-radius: 7px; background: rgba(255, 255, 255, .1); font-weight: 900; color: #fff; }
-.visual-foot { color: #9fb4bb; font-size: 11px; }
-.access-form-wrap {
-.stepper {
-.step-pill {
-.step-pill.active { color: #edf7f5; border-color: rgba(0, 168, 132, .62); background: rgba(0, 168, 132, .14); }
-.step-dot {
-.step-pill.active .step-dot { background: #00a884; color: #03251d; }
-.auth-panel {
-.panel-head-auth { padding: 22px 22px 18px; background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .02)); border-bottom: 1px solid rgba(179, 215, 221, .18); }
-.eyebrow { color: #25d366; font-size: 12px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-.panel-head-auth h2 { margin: 8px 0 0; font-size: 24px; line-height: 1.2; }
-.panel-head-auth p { margin: 10px 0 0; color: #9fb4bb; font-size: 14px; line-height: 1.55; }
-.panel-body-auth { padding: 22px; }
-.auth-step { display: grid; gap: 0; }
-.auth-panel label { display: block; margin-bottom: 8px; color: #c9d9dd; font-size: 12px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
-.input-wrap { position: relative; }
-.prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: rgba(37, 211, 102, .15); color: #25d366; pointer-events: none; transition: background .16s ease, color .16s ease; }
-.input-wrap:focus-within .prefix { background: rgba(37, 211, 102, .22); color: #fff; }
-.auth-panel input {
-.input-wrap input { padding-left: 54px; }
-.auth-panel input:focus { border-color: rgba(37, 211, 102, .58); box-shadow: 0 0 0 3px rgba(37, 211, 102, .18); background: rgba(255, 255, 255, .08); }
-.auth-panel input::placeholder { color: rgba(201, 217, 221, .48); }
-.hint { margin: 9px 0 0; color: #9fb4bb; font-size: 13px; line-height: 1.45; }
-.actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 20px; }
-.actions.right { justify-content: flex-end; }
-.auth-panel button, .company-option {
-.auth-panel button:hover, .company-option:hover { background: #25d366; transform: translateY(-1px); }
-.auth-panel button.ghost { background: transparent; border-color: rgba(179, 215, 221, .18); color: #edf7f5; }
-.auth-panel button.ghost:hover { background: rgba(255, 255, 255, .06); border-color: rgba(179, 215, 221, .32); }
-.loader { width: 15px; height: 15px; border-radius: 50%; border: 2px solid rgba(3, 37, 29, .28); border-top-color: #03251d; animation: spin .8s linear infinite; display: none; }
-button.loading .loader { display: block; }
-⋮----
-.summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; padding: 12px; border: 1px solid rgba(179, 215, 221, .14); border-radius: var(--radius); background: rgba(255, 255, 255, .04); }
-.summary-label { color: #9fb4bb; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
-.summary-value { margin-top: 3px; color: #edf7f5; font-size: 15px; font-weight: 900; word-break: break-word; }
-.code-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
-.code-row input { height: 58px; padding: 0; text-align: center; font-size: 24px; font-weight: 900; }
-.company-list { display: grid; gap: 8px; }
-.status-line { min-height: 22px; margin-top: 16px; padding: 0 2px; color: #9fb4bb; font-size: 13px; line-height: 1.45; word-break: break-word; }
-.status-line.error { color: #ff8a8a; }
-.status-line.ok { color: #25d366; }
-.footnote { margin-top: 16px; padding: 12px 14px; border-radius: var(--radius); color: #9fb4bb; background: rgba(255, 255, 255, .04); font-size: 12px; line-height: 1.5; }
-.copyright { margin: 14px 0 0; color: rgba(201, 217, 221, .64); font-size: 11px; line-height: 1.45; text-align: center; }
-⋮----
-.radar-screen { height: 100vh; display: grid; grid-template-rows: 58px 1fr; }
-.topbar {
-.topbar-brand { display: flex; align-items: center; gap: 8px; min-width: 150px; }
-.topbar-brand .brand-mark { width: 30px; height: 30px; border-radius: 8px; font-size: 13px; }
-.topbar-brand strong { display: block; line-height: 1.15; font-size: 13px; }
-.topbar-brand span { color: #c8d7e9; font-size: 10.5px; }
-.topbar-nav { display: flex; gap: 6px; min-width: 0; overflow: auto; }
-.nav-item {
-.nav-item.active { color: #fff; background: rgba(47, 140, 255, .24); }
-.topbar-actions { display: flex; align-items: center; gap: 8px; }
-.company-chip {
-.company-chip span { color: #c8d7e9; display: block; font-size: 10px; }
-.user-chip { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 12.5px; }
-.user-chip span {
-.theme-switch {
-.theme-switch button {
-.theme-switch button:hover { opacity: .8; }
-.theme-switch button.active { background: rgba(255,255,255,.16); opacity: 1; filter: none; }
-.topbar-actions #logout-btn {
-⋮----
-.radar-layout {
-.radar-layout.summary-collapsed,
-.radar-layout.summary-collapsed .summary-panel,
-.summary-reopen-rail { display: none; }
-.radar-layout.summary-collapsed .summary-reopen-rail,
-.summary-reopen-rail:hover { color: var(--brand); background: var(--panel-2); }
-.panel {
-.panel-head {
-.panel-head h2 { margin: 0; font-size: 16px; }
-.panel-head p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
-.icon-button, .secondary-button {
-.primary-button {
-⋮----
-.primary-button.icon-only {
-.primary-button.icon-only .loader {
-.primary-button.icon-only.loading .loader { display: block; }
-.primary-button.icon-only.loading .icon-label { visibility: hidden; }
-⋮----
-.queue-panel { display: grid; grid-template-rows: auto auto 1fr; }
-.queue-tools {
-.queue-tools input, .risk-toolbar input, .risk-toolbar select {
-.segmented { display: flex; gap: 5px; }
-.segmented button, .subtabs button {
-.segmented button.active, .subtabs button.active {
-.queue-options { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
-.queue-refresh-group { display: flex; align-items: center; gap: 6px; }
-.queue-refresh-group .icon-button {
-.refresh-countdown {
-.queue-options select {
-.switch-row {
-.switch-row .switch-label { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; overflow: hidden; }
-.switch-row strong { font-size: 12px; }
-.switch-row small { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
-.switch-row input[type="checkbox"] {
-.switch-row input[type="checkbox"]::before {
-.switch-row input[type="checkbox"]:checked {
-.switch-row input[type="checkbox"]:checked::before {
-.queue-list { overflow: auto; }
-.ticket {
-.ticket.active { background: rgba(0, 107, 214, .09); border-left-color: var(--brand); }
-.ticket-top, .case-line, .case-actions, .case-badges { display: flex; align-items: center; gap: 8px; }
-.ticket-top { justify-content: space-between; }
-.ticket-number { font-weight: 800; color: var(--brand-2); font-size: 12px; }
-.ticket-title { margin: 5px 0 4px; font-weight: 700; font-size: 13px; line-height: 1.26; }
-.ticket-meta { color: var(--muted); font-size: 11px; line-height: 1.35; }
-.ticket-top .badge { padding: 2px 7px; font-size: 10px; }
-.badge {
-.badge.danger { color: #ffffff; background: #e10600; border-color: #e10600; }
-.badge.warn { color: #241c02; background: #ecc222; border-color: #ecc222; }
-.badge.ok { color: #ffffff; background: #1a9c4a; border-color: #1a9c4a; }
-.badge.pulsing { animation: badge-pulse 1.4s infinite ease-in-out; }
-⋮----
-.workspace { position: relative; display: grid; min-height: 0; }
-.empty-state {
-.empty-state h2 { margin: 0; color: var(--text); }
-.empty-icon { font-size: 42px; }
-.case-view { min-height: 0; display: grid; grid-template-rows: auto auto 1fr; }
-.case-header { padding: 10px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
-.case-top-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
-.case-title-block { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
-.case-title-block h1 { margin: 0; font-size: 15px; font-weight: 800; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.case-number { color: var(--brand); font-weight: 800; font-size: 15px; flex: none; }
-.case-actions { display: flex; align-items: center; gap: 6px; flex: none; }
-.case-actions .icon-button {
-.case-actions .primary-button {
-.chevron-toggle svg { transition: transform .18s ease; }
-.chevron-toggle.collapsed svg { transform: rotate(180deg); }
-.case-header-extra { display: contents; }
-.case-header.collapsed .case-header-extra { display: none; }
-.case-view.header-collapsed .case-description { display: none; }
-.case-second-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.case-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.case-badges .badge { font-size: 10.5px; padding: 3px 8px; }
-.case-meta {
-.case-meta div { display: flex; gap: 4px; align-items: baseline; }
-.case-meta span { color: var(--muted); }
-.case-meta strong { color: var(--text); font-weight: 700; }
-⋮----
-.waiting-highlight {
-.waiting-highlight-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #d6a419; }
-.waiting-highlight-days { font-size: 18px; font-weight: 900; color: var(--text); line-height: 1.2; }
-.waiting-highlight-sub { font-size: 10.5px; color: var(--muted); }
-.waiting-highlight-compact { width: 100%; padding: 7px 10px; margin-top: 2px; }
-.waiting-highlight-compact .waiting-highlight-days { font-size: 15px; }
-⋮----
-.case-description { border-bottom: 1px solid var(--line); background: var(--panel-2); }
-.description-toggle {
-.description-chevron { transition: transform .15s ease; font-size: 10px; }
-.case-description.collapsed .description-chevron { transform: rotate(-90deg); }
-.case-description.collapsed .description-body { display: none; }
-.description-body {
-⋮----
-.tab-panel { display: none; min-height: 0; overflow: auto; }
-.tab-panel.active { display: block; }
-#panel-conversation.active {
-#panel-risk.active {
-.messages {
-.message {
-.message-left { align-self: flex-start; }
-.message-right { align-self: flex-end; }
-.message-avatar {
-.message-card {
-.message-left .message-card { background: var(--panel-2); border-top-left-radius: 3px; }
-.message-right .message-card { background: rgba(0, 107, 214, .1); border-top-right-radius: 3px; }
-.message-head { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 11px; margin-bottom: 4px; }
-.message-text { white-space: pre-wrap; line-height: 1.45; overflow-wrap: anywhere; font-size: 13px; }
-⋮----
-.message-avaliacao { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.avaliacao-link { font-size: 11px; background: none; border: none; color: var(--brand); cursor: pointer; text-decoration: underline; padding: 0; }
-.avaliacao-resumo { font-size: 11.5px; color: var(--text); font-weight: 700; }
-.avaliacao-outras { font-size: 11px; color: var(--muted); }
-⋮----
-.avaliacao-modal-backdrop { display: none; position: fixed; inset: 0; z-index: 400; background: rgba(0, 0, 0, .45); align-items: center; justify-content: center; padding: 20px; }
-.avaliacao-modal-backdrop.ativo { display: flex; }
-.avaliacao-modal { width: min(900px, 96vw); max-height: 86vh; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
-.avaliacao-modal-head { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
-.avaliacao-modal-title { font-weight: 900; color: var(--text); font-size: 14px; }
-.avaliacao-modal-subtitle { color: var(--muted); font-size: 12px; margin-top: 2px; }
-.avaliacao-modal-close-btn { border: 1px solid var(--line); background: var(--panel-2); border-radius: 7px; cursor: pointer; width: 30px; height: 30px; color: var(--text); }
-.avaliacao-modal-body { overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
-.avaliacao-criterio { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.avaliacao-criterio label { font-size: 12.5px; color: var(--text); font-weight: 700; flex: 1; }
-.avaliacao-criterio select { font-size: 12.5px; padding: 4px 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); border-radius: 7px; }
-.avaliacao-observacoes textarea { width: 100%; min-height: 70px; font-size: 12.5px; padding: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); border-radius: 7px; resize: vertical; box-sizing: border-box; }
-.avaliacao-erro-critico { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text); }
-.avaliacao-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.avaliacao-sugestao-status { font-size: 11.5px; color: var(--muted); font-style: italic; }
-.avaliacao-sugestao-rotulo { font-size: 11px; color: var(--brand); font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
-⋮----
-.chat-status-card { display: flex; align-items: center; gap: 8px; }
-.chat-status-text { color: var(--muted); font-size: 12px; font-style: italic; }
-.chat-status-dot {
-.chat-status-dot:nth-child(2) { animation-delay: .15s; }
-.chat-status-dot:nth-child(3) { animation-delay: .3s; }
-⋮----
-.message-attachments { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
-.message-attachment {
-.message-attachment:hover { text-decoration: underline; }
-.composer {
-.attach-button {
-.composer-main {
-.pending-files { display: none; padding: 8px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; }
-.pending-files.active { display: block; }
-.composer textarea {
-.composer button {
-⋮----
-.section-stack { padding: 12px 16px; display: grid; gap: 10px; }
-.info-card, .summary-card, .knowledge-card, .risk-table-card {
-.info-card h3, .summary-card h3, .knowledge-card h3 {
-.info-card-icon { font-size: 13px; }
-.info-grid { display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); gap: 9px; }
-.info-item span { display: block; color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
-.info-item strong { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
-.subtabs { display: flex; gap: 8px; padding: 12px 16px 0; }
-.link-safe { color: var(--brand); text-decoration: none; overflow-wrap: anywhere; }
-.link-safe:hover { text-decoration: underline; }
-⋮----
-.trail-execution {
-.trail-execution + .trail-execution { margin-top: 10px; }
-.trail-execution-head {
-.trail-execution-title { font-size: 12.5px; font-weight: 800; }
-.trail-execution-body {
-.trail-step {
-.trail-step:last-child { padding-bottom: 2px; }
-.trail-step::before {
-.trail-step-head {
-.trail-step-title { font-size: 12px; font-weight: 700; }
-.trail-step-summary { padding: 6px 10px 0; color: var(--muted); font-size: 11.5px; line-height: 1.4; }
-.trail-step-details { padding: 8px 10px 2px; display: grid; gap: 6px; }
-.trail-step-details .knowledge-card { padding: 9px 10px; }
-.trail-step-details .knowledge-card h3 { text-transform: none; font-size: 12px; }
-⋮----
-.summary-panel { display: grid; grid-template-rows: auto 1fr; }
-.summary-panel .panel-head p { font-size: 11px; }
-.summary-content { overflow: auto; padding: 10px; display: grid; gap: 8px; align-content: start; }
-.empty-block { padding: 12px; border: 1px dashed var(--line); border-radius: 7px; color: var(--muted); font-size: 12px; line-height: 1.4; }
-.summary-card { padding: 10px; }
-.summary-card h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); font-weight: 800; }
-.summary-list { display: grid; gap: 6px; }
-.summary-item { border-bottom: 1px solid var(--line); padding-bottom: 6px; }
-.summary-item:last-child { border-bottom: 0; padding-bottom: 0; }
-.summary-item span { display: block; color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; }
-.summary-item strong, .summary-item div { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.35; }
-.progress { height: 8px; background: var(--panel-3); border-radius: 999px; overflow: hidden; border: 1px solid var(--line); }
-.progress > span { display: block; height: 100%; width: var(--value, 0%); background: var(--danger); }
-⋮----
-.risk-toolbar {
-.risk-toolbar .segmented {
-.risk-toolbar .segmented button {
-.risk-toolbar .segmented button.active { background: var(--panel); color: var(--brand); box-shadow: 0 1px 3px rgba(18, 36, 58, .12); border-color: transparent; }
-.risk-toolbar .segmented button:not(.active):hover { color: var(--text); }
-.risk-toolbar select, .risk-toolbar input {
-.risk-toolbar select { flex: none; width: 180px; padding: 0 28px 0 14px; }
-.risk-toolbar input { flex: 1; min-width: 180px; padding: 0 14px; }
-.risk-toolbar select {
-.risk-toolbar input:focus, .risk-toolbar select:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(0, 107, 214, .12); }
-.risk-layout {
-.risk-layout.consultants-collapsed { grid-template-columns: 0 1fr; }
-.risk-layout.consultants-collapsed .risk-consultants-wrap { display: none; }
-.risk-consultants-wrap { min-height: 0; display: grid; grid-template-rows: auto 1fr; border-right: 1px solid var(--line); background: var(--panel-2); }
-.risk-consultants-head {
-.risk-consultants-head .icon-button {
-.risk-consultants { overflow: auto; }
-.risk-consultant {
-.risk-consultant:hover { background: var(--panel-3); }
-.risk-consultant strong { font-weight: 700; }
-.risk-consultant small { color: var(--muted); font-size: 11px; }
-.risk-consultant.active { background: rgba(0, 168, 132, .1); border-left-color: var(--brand-2); color: var(--brand-2); }
-.risk-grid-wrap { min-width: 0; min-height: 0; height: 100%; display: flex; padding: 8px; }
-.risk-grid { flex: 1; min-height: 0; min-width: 0; overflow: auto; border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 1px 3px rgba(18, 36, 58, .06); }
-.risk-table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: 12px; }
-.risk-table th, .risk-table td { border-bottom: 1px solid var(--line); padding: 7px 9px; text-align: left; white-space: nowrap; }
-.risk-table th { position: sticky; top: 0; background: var(--panel-3); z-index: 1; font-size: 10.5px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); box-shadow: 0 1px 0 var(--line); }
-.risk-table tbody tr:hover td { background: var(--panel-2); }
-.group-row td { background: rgba(0, 168, 132, .14) !important; color: var(--brand-2); font-weight: 900; font-size: 12px; }
-.risk-table button { border: 0; background: transparent; color: var(--brand); font-weight: 800; font-size: 12px; padding: 3px 6px; border-radius: 5px; transition: background .12s ease; }
-.risk-table button:hover { background: rgba(0, 107, 214, .1); }
-.risk-table td .badge { font-size: 10.5px; padding: 3px 8px; }
-⋮----
-.toast {
-.toast.active { display: block; }
-⋮----
-.mobile-nav { display: none; }
-⋮----
-.radar-layout { grid-template-columns: 300px minmax(420px, 1fr) 330px; }
-.case-meta { grid-template-columns: repeat(3, minmax(100px, 1fr)); }
-⋮----
-body { overflow: auto; }
-.access-screen { min-height: 100vh; height: auto; padding: 18px; }
-.access-card { grid-template-columns: 1fr; height: auto; min-height: 0; }
-.access-hero { border-right: 0; border-bottom: 1px solid rgba(179, 215, 221, .18); padding: 24px; }
-.hero-copy h2 { font-size: 28px; }
-.otp-visual { display: none; }
-.access-form-wrap { padding: 24px; }
-.radar-screen { min-height: 100vh; height: auto; grid-template-rows: 54px 1fr 48px; }
-.topbar { grid-template-columns: auto 1fr auto; padding: 0 12px; gap: 8px; }
-.company-chip, .theme-switch, #logout-btn, .user-chip strong { display: none; }
-.topbar-brand { min-width: 0; }
-.topbar-nav { min-width: 0; }
-⋮----
-.panel { border-radius: 0; border-left: 0; border-right: 0; box-shadow: none; }
-.queue-panel, .workspace, .summary-panel { display: none; min-height: calc(100vh - 102px); }
-.radar-layout.mobile-queue .queue-panel,
-.radar-layout.mobile-more #panel-conversation { display: none; }
-.radar-layout.mobile-more .case-view { grid-template-rows: auto auto 1fr; }
-.case-header { padding: 10px 12px; }
-.case-top-row { flex-wrap: wrap; }
-.case-title-block { min-width: 100%; }
-.case-actions { justify-content: flex-end; }
-.messages { padding: 12px; }
-.message { max-width: 90%; }
-.composer { padding: 10px 12px; }
-.summary-panel { grid-template-rows: auto 1fr; }
-.risk-toolbar { grid-template-columns: 1fr; }
-.risk-layout { grid-template-columns: 1fr; min-height: 360px; }
-.risk-consultants { max-height: 180px; border-right: 0; border-bottom: 1px solid var(--line); }
-.mobile-nav {
-.mobile-nav button {
-.mobile-nav button.active { color: var(--brand); }
-.info-grid { grid-template-columns: 1fr; }
-⋮----
-.access-screen { padding: 0; place-items: stretch; }
-.access-card { width: 100%; min-height: 100vh; border: 0; border-radius: 0; }
-.access-hero { padding: 22px; }
-.access-flow { display: none; }
-.access-form-wrap { padding: 20px; }
-.stepper { grid-template-columns: 1fr; }
-.panel-head-auth, .panel-body-auth { padding: 18px; }
-.actions { flex-direction: column-reverse; align-items: stretch; }
-.actions.right { align-items: stretch; }
-.auth-panel button { width: 100%; }
-.code-row { gap: 6px; }
-.code-row input { height: 52px; font-size: 21px; }
+function iniciarAnaliseRadarExterno(req, res)
 </file>
 
 <file path="apps/IA Service/frontend/j2a/index.html">
@@ -53537,27 +53174,53 @@ body { overflow: auto; }
         <nav class="topbar-nav" aria-label="Áreas do Radar">
           <button class="nav-item active" id="nav-radar-btn">Radar</button>
           <button class="nav-item" data-panel-tab="conversation">Conversa</button>
-          <button class="nav-item" data-panel-tab="evidence">Evidências</button>
-          <button class="nav-item" data-panel-tab="trail">Trilha de Investigação</button>
-          <button class="nav-item" data-panel-tab="details">Detalhes</button>
           <button class="nav-item" data-panel-tab="risk">Risco SLA</button>
-          <button class="nav-item" data-panel-tab="knowledge">Base de Conhecimento</button>
+          <details class="topbar-menu more-menu">
+            <summary class="nav-item">Mais</summary>
+            <div class="topbar-menu-panel compact" role="menu">
+              <button class="nav-item" type="button" role="menuitem" data-panel-tab="evidence">Evidências</button>
+              <button class="nav-item" type="button" role="menuitem" data-panel-tab="trail">Trilha de Investigação</button>
+              <button class="nav-item" type="button" role="menuitem" data-panel-tab="details">Detalhes</button>
+              <button class="nav-item" type="button" role="menuitem" data-panel-tab="knowledge">Base de Conhecimento</button>
+            </div>
+          </details>
         </nav>
         <div class="topbar-actions">
-          <div class="company-chip">
-            <span>Empresa</span>
-            <strong id="company-name">-</strong>
-          </div>
-          <div class="theme-switch" id="theme-switch" role="group" aria-label="Tema">
-            <button type="button" data-theme-option="system" title="Tema do sistema">🖥️</button>
-            <button type="button" data-theme-option="light" title="Tema claro">☀️</button>
-            <button type="button" data-theme-option="dark" title="Tema escuro">🌙</button>
-          </div>
-          <button id="logout-btn" class="icon-button" title="Sair">Sair</button>
-          <div class="user-chip">
-            <span id="user-initials">IA</span>
-            <strong id="consultant-name">Consultor</strong>
-          </div>
+          <a href="/iaservice/guia" target="_blank" rel="noopener" class="help-button" title="Abrir manual do chat">
+            <span aria-hidden="true">?</span>
+            <strong>Ajuda</strong>
+          </a>
+          <details class="topbar-menu account-menu">
+            <summary class="account-summary" title="Conta e preferências">
+              <span id="user-initials" class="account-avatar">IA</span>
+              <span class="account-copy">
+                <strong id="consultant-name">Consultor</strong>
+                <small id="company-name">-</small>
+              </span>
+            </summary>
+            <div class="topbar-menu-panel account-panel" role="menu">
+              <div class="account-meta">
+                <span>Empresa</span>
+                <strong id="account-company-readonly">Veja acima</strong>
+              </div>
+              <div class="account-meta">
+                <span>Consultor</span>
+                <strong id="account-consultant-readonly">Sessão externa</strong>
+              </div>
+              <div class="account-divider"></div>
+              <div class="account-section-label">Tema</div>
+              <div class="theme-switch" id="theme-switch">
+                <button type="button" id="theme-toggle" aria-haspopup="true" aria-expanded="false" title="Tema">🖥️</button>
+                <div class="theme-menu" id="theme-menu" role="menu" aria-label="Tema">
+                  <button type="button" role="menuitem" data-theme-option="system"><span>🖥️</span> Sistema</button>
+                  <button type="button" role="menuitem" data-theme-option="light"><span>☀️</span> Claro</button>
+                  <button type="button" role="menuitem" data-theme-option="dark"><span>🌙</span> Escuro</button>
+                </div>
+              </div>
+              <div class="account-divider"></div>
+              <button id="logout-btn" class="account-logout" type="button" role="menuitem">Sair</button>
+            </div>
+          </details>
         </div>
       </header>
       <main class="radar-layout" id="radar-layout">
@@ -53584,8 +53247,10 @@ body { overflow: auto; }
                   <option value="30">30s</option>
                   <option value="60">1 min</option>
                   <option value="300">5 min</option>
-                  <option value="900" selected>15 min</option>
+                  <option value="900">15 min</option>
                   <option value="1800">30 min</option>
+                  <option value="3600">1 hora</option>
+                  <option value="14400" selected>4 horas</option>
                 </select>
               </div>
             </div>
@@ -53740,13 +53405,6 @@ body { overflow: auto; }
   <script src="/iaservice/j2a/assets/radar.js"></script>
 </body>
 </html>
-</file>
-
-<file path="apps/IA Service/backend/routes/externo-routes.js">
-function _erroParaStatus(err)
-function _handleErro(res, err)
-⋮----
-function iniciarAnaliseRadarExterno(req, res)
 </file>
 
 </files>

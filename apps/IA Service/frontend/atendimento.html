@@ -318,7 +318,7 @@
           </div>
           ${detalhes ? `<details class="ficha-operacional-details"><summary>Analise completa, evidencias e historico</summary>${detalhes}</details>` : ''}
           ${renderizarValidacaoSolucao(mensagemId, ficha.validacaoSolucao)}
-          ${renderizarAvaliacaoHumana(mensagemId, ficha.avaliacaoHumana, ficha.qualityGateBloqueado)}
+          ${renderizarAvaliacaoHumana(mensagemId, ficha.avaliacaoHumana, ficha.qualityGateBloqueado, ficha.avaliavel === false)}
         </div>
       `;
     }
@@ -344,7 +344,7 @@
     // Avaliacao humana de utilidade tecnica real (consultor), independente
     // do Quality Gate -- nunca altera o motor. Mostra resumo compacto se eu
     // ja avaliei; senao, link discreto para abrir o modal.
-    function renderizarAvaliacaoHumana(mensagemId, avaliacaoHumana, qualityGateBloqueado) {
+    function renderizarAvaliacaoHumana(mensagemId, avaliacaoHumana, qualityGateBloqueado, naoAvaliavel = false) {
       if (!mensagemId) return '';
       // Nunca oferece "Avaliar investigação" numa resposta que o proprio
       // Quality Gate ja marcou como bloqueada para revisao (pedido
@@ -353,6 +353,9 @@
       // um erro.
       if (qualityGateBloqueado) return '';
       const minha = avaliacaoHumana?.minhaAvaliacaoAtual || null;
+      // Resposta que nao veio de uma pesquisa da IA (atalho curto, erro de
+      // provider): nao oferece avaliar; mantem o resumo se ja avaliada antes.
+      if (naoAvaliavel && !minha) return '';
       const outras = (avaliacaoHumana?.todasAsAvaliacoesAtuais || []).filter(a => !minha || String(a.usuarioId) !== String(minha.usuarioId));
       const resumoMinha = minha
         ? `<span class="avaliacao-resumo">Sua avaliação: ${minha.notaTotal}/25 · ${escapeHtml(faixaDeNotaTotal(minha.notaTotal))}</span>
@@ -461,7 +464,7 @@
           avaliacaoHumana.todasAsAvaliacoesAtuais = [...outras, resp.avaliacaoAtual];
         }
         const card = document.getElementById(`avaliacao-card-${mensagemId}`);
-        if (card) card.outerHTML = renderizarAvaliacaoHumana(mensagemId, dados?.respostaOperacional?.avaliacaoHumana, dados?.respostaOperacional?.qualityGateBloqueado);
+        if (card) card.outerHTML = renderizarAvaliacaoHumana(mensagemId, dados?.respostaOperacional?.avaliacaoHumana, dados?.respostaOperacional?.qualityGateBloqueado, dados?.respostaOperacional?.avaliavel === false);
         fecharModalAvaliacao();
       } catch (err) {
         showError('Não foi possível registrar a avaliação: ' + err.message);

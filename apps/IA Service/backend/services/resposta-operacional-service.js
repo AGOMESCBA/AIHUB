@@ -88,7 +88,7 @@ function _detalhes(secoes = {}, textoCompleto = '') {
 
 function construirFichaOperacional({
   diagnostico, nivelConfianca, conteudo, fontesCorrigidos = [], avisosFonteCorrigido = [],
-  validacaoSolucao = null, avaliacaoHumana = null, qualityGateBloqueado = false,
+  validacaoSolucao = null, avaliacaoHumana = null, qualityGateBloqueado = false, avaliavel = true,
 } = {}) {
   const secoes = diagnostico || {};
   const tipo = _tipoDiagnostico(secoes, nivelConfianca, conteudo);
@@ -124,6 +124,10 @@ function construirFichaOperacional({
     // que o sistema ja marcou como nao-confiavel (pedido explicito do
     // usuario, 2026-10).
     qualityGateBloqueado: !!qualityGateBloqueado,
+    // false quando a mensagem NAO veio de uma investigacao real (atalho curto
+    // pergunta_processo/fora_de_escopo, que nao grava execucao) ou a execucao
+    // terminou em erro -- a avaliacao humana nao deve ser oferecida.
+    avaliavel: avaliavel !== false,
   };
 
   ficha.camposPreenchidos = ['diagnostico', 'acaoRecomendada', 'evidencia', 'validacao', 'proximoPasso']
@@ -145,11 +149,28 @@ function anexarFichaOperacional(mensagem, extras = {}) {
       validacaoSolucao: extras.validacaoSolucao || null,
       avaliacaoHumana: extras.avaliacaoHumana || null,
       qualityGateBloqueado: !!extras.qualityGateBloqueado,
+      avaliavel: extras.avaliavel !== false,
     }),
   };
 }
 
+/**
+ * Uma resposta NAO e avaliavel como "pesquisa da IA" quando: e resposta curta
+ * do atalho de turno (pergunta_processo/fora_de_escopo, marcada na mensagem),
+ * foi bloqueada pelo Quality Gate, ou a execucao terminou em erro de
+ * provider/imagem.
+ */
+function execucaoAvaliavel(statusExecucao, respostaCurta = null) {
+  if (respostaCurta) return false;
+  // Sem execucao registrada (ex.: mensagem importada/legada) NAO bloqueia por
+  // omissao -- decisao anterior mantida (ver teste quality-gate-bloqueado [3/4]).
+  if (!statusExecucao) return true;
+  if (statusExecucao === 'revisao_necessaria_quality_gate') return false;
+  return !String(statusExecucao).startsWith('erro');
+}
+
 module.exports = {
+  execucaoAvaliavel,
   construirFichaOperacional,
   anexarFichaOperacional,
   _tipoDiagnostico,
