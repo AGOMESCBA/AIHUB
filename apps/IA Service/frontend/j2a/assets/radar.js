@@ -53,6 +53,10 @@
     // antigos). Analogo ao preAnalisesEmAndamento do backend
     // (radar-service.js), mas do lado do cliente.
     pollingsAtivos: new Set(),
+    // atendimentoIds cuja pesquisa terminou enquanto OUTRO chamado estava na
+    // tela -- alimenta o badge "Concluida" da fila ate o analista abrir o
+    // chamado (pedido do usuario, 2026-10). So em memoria: F5 limpa.
+    concluidosNaoVistos: new Set(),
   };
 
   // Avaliacao Humana (2026-10) -- mesmos criterios/faixas de
@@ -437,6 +441,7 @@
     state.avaliacaoMensagemId = null;
     state.atendimentoIdPorChamado = new Map();
     state.pollingsAtivos = new Set();
+    state.concluidosNaoVistos = new Set();
   }
 
   async function bootRadar() {
@@ -537,18 +542,29 @@
   // 2026-10: "nunca sei quando a pesquisa do primeiro ou do segundo que
   // naveguei acabou"). Mostra "Pesquisando..." enquanto o atendimento
   // daquele chamado esta em state.processing (setado em pollMessages/
-  // sendMessage/researchSolutions); nao mostra nada quando concluido --
-  // decisao deliberada para nao poluir a fila com um badge permanente "lido/
-  // nao lido" sem pedido explicito disso.
+  // sendMessage/researchSolutions). Quando a pesquisa termina com outro
+  // chamado na tela, mostra "Concluida" ate o analista abrir o chamado
+  // (state.concluidosNaoVistos).
   function pesquisaBadge(chamadoId) {
     const atendimentoId = state.atendimentoIdPorChamado.get(String(chamadoId));
-    if (!atendimentoId || !state.processing.has(atendimentoId)) return '';
-    return '<span class="badge warn pulsing">Pesquisando…</span>';
+    if (!atendimentoId) return '';
+    if (state.processing.has(atendimentoId)) return '<span class="badge warn pulsing">Pesquisando…</span>';
+    if (state.concluidosNaoVistos.has(atendimentoId)) return '<span class="badge ok">Concluída</span>';
+    return '';
+  }
+
+  // Chamado cuja pesquisa terminou fora da tela vira "Concluida" na fila ate
+  // ser aberto; se ja esta na tela, o analista ve a resposta e nao precisa de sinal.
+  function marcarConcluidoSeNaoVisivel(atendimentoId) {
+    if (!atendimentoId || atendimentoId === state.atendimentoId) return;
+    state.concluidosNaoVistos.add(atendimentoId);
   }
 
   async function selectTicket(id) {
     const ticket = state.queue.find((c) => String(c.id) === String(id)) || state.risk.chamados.find((c) => String(c.id) === String(id));
     if (!ticket) return;
+    const atendimentoConhecido = state.atendimentoIdPorChamado.get(String(ticket.id));
+    if (atendimentoConhecido) state.concluidosNaoVistos.delete(atendimentoConhecido);
     state.selected = ticket;
     state.research = null;
     state.dossie = null;
@@ -568,6 +584,7 @@
       const open = await request(ext(`/radar/chamados/${encodeURIComponent(ticket.id)}/abrir-atendimento`), { method: 'POST' });
       state.atendimentoId = open.atendimentoId;
       state.atendimentoIdPorChamado.set(String(ticket.id), open.atendimentoId);
+      state.concluidosNaoVistos.delete(open.atendimentoId);
       await Promise.allSettled([
         loadMessages(),
         loadLocalAttachments(),
@@ -962,6 +979,7 @@
     renderQueue();
     setBusy($('send-btn'), true, 'Enviando');
     showChatStatus('Pesquisando e analisando o chamado com a IA...', atendimentoId);
+    let concluiu = false;
     try {
       const anexoIds = await uploadPendingFiles(atendimentoId);
       const body = await request(ext(`/atendimentos/${encodeURIComponent(atendimentoId)}/investigar`), {
@@ -975,10 +993,12 @@
       state.trilhaExpandida = new Set();
       await Promise.allSettled([loadMessages(), loadLocalAttachments(), loadDossier(), loadInvestigations(), loadTrilha()]);
       renderAllCaseData();
+      concluiu = true;
     } catch (err) {
       toast(`Nao foi possivel enviar: ${err.message}`);
     } finally {
       state.processing.delete(atendimentoId);
+      if (concluiu) marcarConcluidoSeNaoVisivel(atendimentoId);
       renderQueue();
       setBusy($('send-btn'), false);
       hideChatStatus(atendimentoId);
@@ -1009,6 +1029,7 @@
     renderQueue();
     setBusy($('research-btn'), true);
     showChatStatus('Pesquisando no histórico completo do chamado...', atendimentoId);
+    let concluiu = false;
     try {
       await request(ext(`/radar/chamados/${encodeURIComponent(state.selected.id)}/anexos-softexpert/sincronizar`), {
         method: 'POST',
@@ -1028,10 +1049,12 @@
       state.trilhaExpandida = new Set();
       await Promise.allSettled([loadMessages(), loadResearch(state.selected.id), loadDossier(), loadInvestigations(), loadTrilha()]);
       renderAllCaseData();
+      concluiu = true;
     } catch (err) {
       toast(`Nao foi possivel pesquisar solucoes: ${err.message}`);
     } finally {
       state.processing.delete(atendimentoId);
+      if (concluiu) marcarConcluidoSeNaoVisivel(atendimentoId);
       renderQueue();
       setBusy($('research-btn'), false);
       hideChatStatus(atendimentoId);
@@ -1064,15 +1087,17 @@
     if (statusTexto) showChatStatus(statusTexto, atendimentoId); // showChatStatus ja so exibe na tela se aindaVisivel() -- nao precisa checar aqui tambem
     state.processing.add(atendimentoId);
     renderQueue();
+    let chegouResposta = false;
     try {
       for (let i = 0; i < times; i += 1) {
         await new Promise((resolve) => setTimeout(resolve, interval));
         const temMensagemNova = await _verificarMensagemNova(atendimentoId, aindaVisivel());
-        if (temMensagemNova) break;
+        if (temMensagemNova) { chegouResposta = true; break; }
       }
     } finally {
       state.pollingsAtivos.delete(atendimentoId);
       state.processing.delete(atendimentoId);
+      if (chegouResposta) marcarConcluidoSeNaoVisivel(atendimentoId);
       renderQueue();
       if (statusTexto) hideChatStatus(atendimentoId);
     }
