@@ -86,6 +86,55 @@ function listarEmpresasDoTelefone(telefoneBruto) {
     .filter(Boolean);
 }
 
+// Throttle por consultor: o middleware chama a cada request e a Platform so
+// muda quando um administrador edita o cadastro.
+const _ultimaSincronizacaoPlatform = new Map();
+const INTERVALO_SINCRONIZACAO_PLATFORM_MS = 30 * 1000;
+
+/**
+ * Propaga para o consultor a preferencia de pre-analise cadastrada na
+ * Platform (Numeros Autorizados > IA Service) sem exigir novo pedido de codigo
+ * de login -- antes so o login copiava, e quem ja tinha sessao ativa seguia
+ * com o valor antigo (reportado em producao, 2026-10: cadastro em "Manual" e
+ * o chat continuava "automatica"). Regra: vence a alteracao mais recente.
+ * Cadastro da Platform editado DEPOIS da ultima alteracao do consultor
+ * (inclusive o toggle feito pelo proprio analista no chat) sobrescreve; caso
+ * contrario o toggle do analista e preservado.
+ * Nunca lanca: falha aqui nao pode derrubar a requisicao.
+ */
+function sincronizarPreferenciaDaPlatform(empresaId, consultorId) {
+  try {
+    const chave = `${empresaId}:${consultorId}`;
+    const ultima = _ultimaSincronizacaoPlatform.get(chave) || 0;
+    if (Date.now() - ultima < INTERVALO_SINCRONIZACAO_PLATFORM_MS) return false;
+    _ultimaSincronizacaoPlatform.set(chave, Date.now());
+
+    const consultor = consultorRepo.getConsultor(empresaId, consultorId);
+    if (!consultor?.telefone) return false;
+    const item = platformStore.listarIaServicePorTelefone(normalizarTelefone(consultor.telefone))
+      .find(i => Number(i.empresaId) === Number(empresaId) && i.idSoftexpert);
+    if (!item?.atualizadoEm) return false;
+
+    const platformEm = new Date(item.atualizadoEm).getTime();
+    const consultorEm = new Date(consultor.atualizadoEm).getTime();
+    if (!Number.isFinite(platformEm) || (Number.isFinite(consultorEm) && platformEm <= consultorEm)) return false;
+    if (item.preAnaliseAutomatica === consultor.preAnaliseAutomatica && item.ativo === consultor.ativo) return false;
+
+    consultorRepo.upsertConsultorPlatform(empresaId, {
+      platformIdentityId: item.platformIdentityId,
+      usuarioIdIahub: item.usuarioIdIahub,
+      idSoftexpert: item.idSoftexpert,
+      telefone: item.telefone,
+      ativo: item.ativo,
+      preAnaliseAutomatica: item.preAnaliseAutomatica,
+    });
+    return true;
+  } catch (err) {
+    console.error('[IA Service] Falha ao sincronizar preferencia da Platform:', err.message);
+    return false;
+  }
+}
+
 /**
  * Inicia o login: localiza o(s) consultor(es) pelo telefone em QUALQUER
  * empresa (não recebe mais empresaId — a empresa só é conhecida depois de
@@ -249,6 +298,7 @@ function validarSessaoExterna(token) {
 }
 
 module.exports = {
+  sincronizarPreferenciaDaPlatform,
   normalizarTelefone,
   listarEmpresasDoTelefone,
   iniciarLogin,

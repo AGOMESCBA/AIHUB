@@ -139,6 +139,8 @@ function listarIaServicePorTelefone(telefoneNormalizado) {
       i.numero_normalizado,
       i.ativo,
       i.metadata_json,
+      i.atualizado_em AS identidade_atualizada_em,
+      r.atualizado_em AS role_atualizado_em,
       r.codigo_identidade,
       r.papel,
       r.metadata_json AS role_metadata_json
@@ -168,6 +170,7 @@ function listarIaServicePorTelefone(telefoneNormalizado) {
       usuarioIdIahub: iaService.usuarioIdIahub || roleMetadata.usuarioIdIahub || null,
       idSoftexpert: iaService.idSoftexpert || roleMetadata.idSoftexpert || row.codigo_identidade || null,
       preAnaliseAutomatica: iaService.preAnaliseAutomatica !== false && roleMetadata.preAnaliseAutomatica !== false,
+      atualizadoEm: [row.identidade_atualizada_em, row.role_atualizado_em].filter(Boolean).sort().pop() || null,
     };
   });
 }

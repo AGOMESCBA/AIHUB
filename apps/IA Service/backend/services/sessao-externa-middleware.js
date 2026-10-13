@@ -16,6 +16,7 @@ function requireSessaoExterna(req, res, next) {
 
   req.svcEmpresaId = sessao.empresaId;
   req.svcConsultorExterno = sessao.consultorId;
+  loginExternoService.sincronizarPreferenciaDaPlatform(sessao.empresaId, sessao.consultorId);
   next();
 }
 
