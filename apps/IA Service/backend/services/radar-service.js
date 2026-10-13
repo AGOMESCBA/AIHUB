@@ -289,8 +289,28 @@ function _preAnaliseHabilitada(consultor, preAnaliseAutomatica) {
     : !!consultor && consultor.preAnaliseAutomatica !== false;
 }
 
-function _dispararPreAnaliseEmBackground(empresaId, chamado, atendimento, { chamadoId, preAnaliseHabilitada }) {
-  if (preAnalisesEmAndamento.has(atendimento.id)) return;
+/**
+ * Decide (de forma SINCRONA e atomica, sem await no meio) se a pre-analise
+ * deve disparar, e ja marca o lock antes de retornar -- fecha a janela de
+ * corrida real encontrada em producao (2026-10, chamado #035988): duas
+ * requisicoes POST /iniciar-analise quase simultaneas (ex. duplo-clique)
+ * cada uma lia "ja tem resposta da IA?" do banco ANTES de qualquer uma ter
+ * disparado, as duas viam "nao" e as duas disparavam -- o guard antigo so
+ * era marcado DEPOIS dessa leitura, tarde demais para proteger a decisao em
+ * si. Agora a leitura de jaTemRespostaIa e a marcacao do lock acontecem na
+ * MESMA chamada sincrona desta funcao: como JS de um processo Node roda a
+ * parte sincrona de uma funcao sem interrupcao por outra requisicao
+ * concorrente, a segunda chamada so ve o lock ja marcado pela primeira,
+ * nunca as duas decidindo "nao tem resposta ainda" ao mesmo tempo.
+ */
+function _tentarDispararPreAnaliseEmBackground(empresaId, chamado, atendimento, { chamadoId, preAnaliseHabilitada, verificarRespostaExistente }) {
+  if (preAnalisesEmAndamento.has(atendimento.id)) return false;
+  if (verificarRespostaExistente) {
+    const mensagens = mensagemRepo.listarMensagens(empresaId, atendimento.id, { limite: 500 });
+    if (mensagens.some(m => m.papel === 'assistant')) return false;
+  }
+  if (!preAnaliseHabilitada) return false;
+
   preAnalisesEmAndamento.add(atendimento.id);
   anexosSoftExpertService.sincronizarAnexosParaAtendimento(empresaId, chamadoId, atendimento.id)
     .catch(err => {
@@ -298,7 +318,6 @@ function _dispararPreAnaliseEmBackground(empresaId, chamado, atendimento, { cham
       return [];
     })
     .then(() => {
-      if (!preAnaliseHabilitada) return;
       // sincronizarAnexosParaAtendimento devolve só os anexos BAIXADOS NESTA
       // execução (filtra os já sincronizados antes, para não duplicar
       // download/extração) — usar esse retorno como anexoIds da IA fazia a
@@ -317,6 +336,7 @@ function _dispararPreAnaliseEmBackground(empresaId, chamado, atendimento, { cham
     .finally(() => {
       preAnalisesEmAndamento.delete(atendimento.id);
     });
+  return true;
 }
 
 /**
@@ -360,12 +380,13 @@ function iniciarAnalise(empresaId, chamadoId, { usuarioIdIahub, consultorId, pre
 
   if (!criado) {
     _sincronizarHistoricoImportado(empresaId, atendimento.id, chamado, posicionamentos, usuarioIdIahub);
-    const mensagens = mensagemRepo.listarMensagens(empresaId, atendimento.id, { limite: 500 });
-    const jaTemRespostaIa = mensagens.some(m => m.papel === 'assistant');
-    const preAnaliseDisparada = preAnaliseLigada && !jaTemRespostaIa;
-    if (preAnaliseDisparada) {
-      _dispararPreAnaliseEmBackground(empresaId, chamado, atendimento, { chamadoId, preAnaliseHabilitada: true });
-    }
+    // verificarRespostaExistente:true -- a checagem de "ja tem resposta da
+    // IA?" acontece DENTRO da secao sincrona protegida pelo lock (nao mais
+    // antes de chama-la), fechando a janela de corrida de duas requisicoes
+    // concorrentes (ver comentario de _tentarDispararPreAnaliseEmBackground).
+    const preAnaliseDisparada = _tentarDispararPreAnaliseEmBackground(empresaId, chamado, atendimento, {
+      chamadoId, preAnaliseHabilitada: preAnaliseLigada, verificarRespostaExistente: true,
+    });
     return { atendimento, reaberto: true, preAnaliseDisparada };
   }
 
@@ -378,9 +399,13 @@ function iniciarAnalise(empresaId, chamadoId, { usuarioIdIahub, consultorId, pre
   // atrasa a resposta HTTP de "iniciar análise"); a pré-análise só começa
   // depois de tentar sincronizar, para já poder correlacionar os anexos
   // desde a primeira resposta da IA.
-  _dispararPreAnaliseEmBackground(empresaId, chamado, atendimento, { chamadoId, preAnaliseHabilitada: preAnaliseLigada });
+  // verificarRespostaExistente:false -- atendimento RECÉM-CRIADO nesta
+  // mesma chamada (criado=true), nunca pode ter resposta de IA ainda.
+  const preAnaliseDisparada = _tentarDispararPreAnaliseEmBackground(empresaId, chamado, atendimento, {
+    chamadoId, preAnaliseHabilitada: preAnaliseLigada, verificarRespostaExistente: false,
+  });
 
-  return { atendimento, reaberto: false, preAnaliseDisparada: preAnaliseLigada };
+  return { atendimento, reaberto: false, preAnaliseDisparada };
 }
 
 module.exports = {
