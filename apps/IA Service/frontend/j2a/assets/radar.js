@@ -231,7 +231,22 @@
     document.querySelectorAll('#theme-switch [data-theme-option]').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.themeOption === theme);
     });
+    // O botao fechado mostra o icone do tema escolhido; as opcoes ficam no menu.
+    const escolhido = document.querySelector(`#theme-switch [data-theme-option="${theme}"]`);
+    const toggle = $('theme-toggle');
+    if (toggle && escolhido) {
+      toggle.textContent = escolhido.querySelector('span')?.textContent || toggle.textContent;
+      toggle.title = `Tema: ${escolhido.textContent.trim()}`;
+    }
     localStorage.setItem(THEME_KEY, theme);
+  }
+
+  function setThemeMenu(open) {
+    const menu = $('theme-menu');
+    const toggle = $('theme-toggle');
+    if (!menu || !toggle) return;
+    menu.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
   }
 
   function showAccess(message) {
@@ -1630,8 +1645,21 @@
       showAccess('Sessao encerrada.');
     });
     $('theme-switch').addEventListener('click', (event) => {
+      if (event.target.closest('#theme-toggle')) {
+        setThemeMenu($('theme-menu').hidden);
+        return;
+      }
       const btn = event.target.closest('[data-theme-option]');
-      if (btn) applyTheme(btn.dataset.themeOption);
+      if (btn) {
+        applyTheme(btn.dataset.themeOption);
+        setThemeMenu(false);
+      }
+    });
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('#theme-switch')) setThemeMenu(false);
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') setThemeMenu(false);
     });
     $('refresh-queue-btn').addEventListener('click', () => {
       loadQueue({ forceSync: true });

@@ -752,6 +752,46 @@ app.get('/app/ia-command/guia/exportar-pdf', requireIaCommand, async (req, res) 
   }
 });
 
+// Exportacao do Manual exclusivo do Chat IA Service (J2A)
+app.get('/iaservice/guia/exportar-pdf', async (req, res) => {
+  if (!puppeteer) return res.status(503).send('puppeteer-core nao esta instalado.');
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      executablePath: CHROME_PATH,
+      headless: 'new',
+      args: ['--no-first-run', '--disable-extensions'],
+    });
+    const page = await browser.newPage();
+
+    await page.goto(`http://127.0.0.1:${process.env.PORT || 3000}/iaservice/guia`, {
+      waitUntil: 'networkidle0',
+      timeout: 30000,
+    });
+
+    const pdfRaw = await page.pdf({
+      format: 'A4',
+      margin: { top: '14mm', right: '12mm', bottom: '14mm', left: '12mm' },
+      printBackground: true,
+    });
+    const pdf = Buffer.from(pdfRaw);
+
+    if (!pdf.slice(0, 4).toString().startsWith('%PDF')) {
+      throw new Error('PDF gerado invalido - header incorreto');
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="manual-chat-ia-service.pdf"');
+    res.setHeader('Content-Length', pdf.length);
+    res.end(pdf);
+  } catch (err) {
+    console.error('[IA Service Chat Manual PDF] ERRO:', err.message);
+    res.status(500).send(`Erro ao gerar o PDF: ${err.message}`);
+  } finally {
+    if (browser) await browser.close();
+  }
+});
+
 // ── Inicia servidor ───────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {

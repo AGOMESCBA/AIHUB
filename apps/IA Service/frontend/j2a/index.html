@@ -118,14 +118,21 @@
           <button class="nav-item" data-panel-tab="knowledge">Base de Conhecimento</button>
         </nav>
         <div class="topbar-actions">
+          <a href="/iaservice/guia" target="_blank" rel="noopener" class="help-button" title="Abrir manual do chat">
+            <span aria-hidden="true">?</span>
+            <strong>Ajuda</strong>
+          </a>
           <div class="company-chip">
             <span>Empresa</span>
             <strong id="company-name">-</strong>
           </div>
-          <div class="theme-switch" id="theme-switch" role="group" aria-label="Tema">
-            <button type="button" data-theme-option="system" title="Tema do sistema">🖥️</button>
-            <button type="button" data-theme-option="light" title="Tema claro">☀️</button>
-            <button type="button" data-theme-option="dark" title="Tema escuro">🌙</button>
+          <div class="theme-switch" id="theme-switch">
+            <button type="button" id="theme-toggle" aria-haspopup="true" aria-expanded="false" title="Tema">🖥️</button>
+            <div class="theme-menu" id="theme-menu" role="menu" aria-label="Tema" hidden>
+              <button type="button" role="menuitem" data-theme-option="system"><span>🖥️</span> Sistema</button>
+              <button type="button" role="menuitem" data-theme-option="light"><span>☀️</span> Claro</button>
+              <button type="button" role="menuitem" data-theme-option="dark"><span>🌙</span> Escuro</button>
+            </div>
           </div>
           <button id="logout-btn" class="icon-button" title="Sair">Sair</button>
           <div class="user-chip">

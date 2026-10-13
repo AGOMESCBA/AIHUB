@@ -147,6 +147,13 @@ module.exports = function registrarRotasLoginExterno(app) {
     res.sendFile(require('path').join(j2aDir, 'index.html'));
   });
 
+  const guiaDir = require('path').join(__dirname, '..', '..', 'frontend', 'guia');
+  app.get(['/iaservice/guia', '/iaservice/guia/'], (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.sendFile(require('path').join(guiaDir, 'index.html'));
+  });
+
   app.post('/api/ia-service-publico/login/iniciar', rateLimitLoginExterno, async (req, res) => {
     let resultado;
     try {
