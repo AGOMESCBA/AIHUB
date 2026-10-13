@@ -36,6 +36,7 @@ const validacaoSolucaoService = require('../services/validacao-solucao-service')
 const validacaoSolucaoRepo = require('../repositories/validacao-solucao-repository');
 const avaliacaoInvestigacaoService = require('../services/avaliacao-investigacao-service');
 const homologacaoService = require('../services/homologacao-service');
+const preAvaliacaoIaService = require('../services/pre-avaliacao-ia-service');
 
 // multer com storage em memória — o binário só vai para disco depois da
 // validação (armazenamento.validarAnexo), nunca antes. Limite de tamanho
@@ -272,6 +273,24 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       res.json(historico);
     } catch (err) {
       _handleErro(res, err);
+    }
+  });
+
+  // Sugestao de avaliacao gerada por IA (pre-preenche o modal, NUNCA
+  // persiste nada) -- reducao deliberada do esforco manual do consultor
+  // (decisao explicita do usuario, 2026-10), sempre 200 mesmo em falha: o
+  // corpo indica sucesso:false e o frontend trata como "sem sugestao",
+  // nunca como erro de rede que bloqueia a avaliacao manual.
+  app.get('/api/ia-service/atendimentos/:id/mensagens/:mensagemId/avaliacao/sugestao', async (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const resultado = await preAvaliacaoIaService.gerarPreAvaliacao(empresaId, {
+        atendimentoId: req.params.id,
+        mensagemAssistenteId: req.params.mensagemId,
+      });
+      res.json(resultado);
+    } catch (err) {
+      res.json({ sucesso: false });
     }
   });
 

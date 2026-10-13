@@ -6,16 +6,12 @@ const avaliacaoRepo = require('../repositories/avaliacao-investigacao-repository
 const atendimentoRepo = require('../repositories/atendimento-repository');
 const mensagemRepo = require('../repositories/mensagem-repository');
 const consultorService = require('./consultor-service');
-
-const NOTA_MIN = avaliacaoRepo.NOTA_MIN;
-const NOTA_MAX = avaliacaoRepo.NOTA_MAX;
+const { NOTA_MIN, NOTA_MAX, CAMPOS_NOTA } = require('./avaliacao-criterios');
 
 // Mesmo limite usado para comentario de validacao de solucao
 // (COMENTARIO_MAX_CHARS em validacao-solucao-service.js) -- consistencia de
 // contrato entre os dois campos de texto livre do operador.
 const OBSERVACOES_MAX_CHARS = 2000;
-
-const CAMPOS_NOTA = ['compreensaoProblema', 'aproveitamentoEvidencias', 'profundidadeTecnica', 'orientacaoPratica', 'confiabilidadeTecnica'];
 
 function _naoEncontrado(mensagem) {
   const err = new Error(mensagem);
