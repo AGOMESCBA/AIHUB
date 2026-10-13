@@ -297,6 +297,30 @@
     </section>
 
     <div id="toast" class="toast" role="status"></div>
+
+    <div id="avaliacao-modal-backdrop" class="avaliacao-modal-backdrop">
+      <div class="avaliacao-modal" role="dialog" aria-modal="true">
+        <div class="avaliacao-modal-head">
+          <div>
+            <div class="avaliacao-modal-title">Avaliar investigação</div>
+            <div class="avaliacao-modal-subtitle">Avalie a utilidade técnica real desta resposta — 0 (nenhuma) a 5 (excelente) em cada critério.</div>
+          </div>
+          <button id="avaliacao-modal-close" type="button" class="avaliacao-modal-close-btn" title="Fechar">×</button>
+        </div>
+        <div class="avaliacao-modal-body">
+          <div id="avaliacao-modal-sugestao-aviso"></div>
+          <div id="avaliacao-modal-campos"></div>
+          <label class="avaliacao-erro-critico">
+            <input type="checkbox" id="avaliacao-erro-critico">
+            Erro técnico crítico identificado nesta resposta
+          </label>
+          <div class="avaliacao-modal-actions">
+            <button id="avaliacao-modal-cancelar" type="button" class="secondary-button">Cancelar</button>
+            <button id="avaliacao-modal-salvar" type="button" class="primary-button">Salvar avaliação</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
   <script src="/iaservice/j2a/assets/radar.js"></script>
 </body>

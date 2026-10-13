@@ -1118,6 +1118,13 @@ const MIGRATIONS = [
         ON avaliacoes_investigacao (atendimento_id);
     `,
   },
+  {
+    version: 43,
+    descricao: 'Desambigua a origem de usuario_id em avaliacoes_investigacao -- motivada pela exposicao da Avaliacao Humana no canal externo (J2A/WhatsApp, 2026-10): req.svcConsultorExterno e um ID da tabela consultores, diferente de req.session.user_id (tabela usuarios do IAHub), e os dois numeros podem colidir (ex. usuario_id=5 do IAHub e consultor_id=5 externo seriam indistinguiveis sem este campo). Mesmo padrao ja usado em origem_sistema de mensagens/anexos.',
+    sql: `
+      ALTER TABLE avaliacoes_investigacao ADD COLUMN origem_identidade TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

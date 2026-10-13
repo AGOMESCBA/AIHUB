@@ -6,9 +6,13 @@
 // requireSessaoExterna (token validado em login-externo-service.js), que
 // popula req.svcEmpresaId/req.svcConsultorExterno.
 //
-// Superfície minima: só os 5 endpoints que radar.html usa em modo externo
-// (fila, abrir-atendimento, mensagens, anexos, investigar, config). Nada
-// além disso é exposto neste namespace.
+// Superfície já ampliada além dos endpoints originais (fila, abrir-atendimento,
+// mensagens, anexos, investigar, config): inclui também confirmação de
+// solução (Fase 3) e, agora, Avaliação Humana + Pré-avaliação por IA — cada
+// ampliação replica o MESMO service usado no namespace interno, só trocando
+// a origem da identidade (req.svcConsultorExterno em vez de req.session.user_id).
+// Nunca expor endpoint cuja lógica de negócio não exista já no namespace
+// interno.
 
 const fs = require('fs');
 const path = require('path');
@@ -32,6 +36,8 @@ const trilhaInvestigacaoService = require('../services/trilha-investigacao-servi
 const respostaOperacionalService = require('../services/resposta-operacional-service');
 const validacaoSolucaoService = require('../services/validacao-solucao-service');
 const validacaoSolucaoRepo = require('../repositories/validacao-solucao-repository');
+const avaliacaoInvestigacaoService = require('../services/avaliacao-investigacao-service');
+const preAvaliacaoIaService = require('../services/pre-avaliacao-ia-service');
 const crud = require('../../../IAHUB/backend/crud');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: armazenamento.TAMANHO_MAXIMO_BYTES } });
@@ -245,12 +251,22 @@ module.exports = function registrarRotasExterno(app) {
 
   app.get('/api/ia-service-externo/atendimentos/:id/mensagens', (req, res) => {
     try {
-      const mensagens = atendimentoService.listarMensagens(req.svcEmpresaId, req.params.id);
+      const empresaId = req.svcEmpresaId;
+      const consultorExternoId = req.svcConsultorExterno || null;
+      const mensagens = atendimentoService.listarMensagens(empresaId, req.params.id);
       const idsAssistente = mensagens.filter(m => m.papel === 'assistant').map(m => m.id);
-      const estadosValidacao = validacaoSolucaoRepo.obterEstadoAtualPorMensagens(req.svcEmpresaId, idsAssistente);
-      res.json(mensagens.map(m => respostaOperacionalService.anexarFichaOperacional(m, {
-        validacaoSolucao: estadosValidacao[m.id] || null,
-      })));
+      const estadosValidacao = validacaoSolucaoRepo.obterEstadoAtualPorMensagens(empresaId, idsAssistente);
+      const avaliacoesPorMensagem = avaliacaoInvestigacaoService.obterAvaliacoesEmLote(empresaId, idsAssistente);
+      res.json(mensagens.map(m => {
+        const todasAsAvaliacoesAtuais = avaliacoesPorMensagem[m.id] || [];
+        const minhaAvaliacaoAtual = consultorExternoId
+          ? todasAsAvaliacoesAtuais.find(a => String(a.usuarioId) === String(consultorExternoId)) || null
+          : null;
+        return respostaOperacionalService.anexarFichaOperacional(m, {
+          validacaoSolucao: estadosValidacao[m.id] || null,
+          avaliacaoHumana: { minhaAvaliacaoAtual, todasAsAvaliacoesAtuais },
+        });
+      }));
     } catch (err) {
       _handleErro(res, err);
     }
@@ -286,6 +302,76 @@ module.exports = function registrarRotasExterno(app) {
       res.json(validacaoSolucaoService.obterEstadoValidacao(req.svcEmpresaId, req.params.mensagemId, req.params.id));
     } catch (err) {
       _handleErro(res, err);
+    }
+  });
+
+  // Avaliacao Humana + Pre-avaliacao por IA (2026-10) -- mesmo service do
+  // namespace interno (index.js), so troca a origem da identidade:
+  // req.svcConsultorExterno (tabela consultores) em vez de
+  // req.session.user_id (tabela usuarios do IAHub). origemIdentidade:
+  // 'consultor_externo' e sempre explicito, nunca inferido -- evita colisao
+  // numerica entre as duas tabelas de identidade na mesma coluna usuario_id
+  // (migration 43). Nunca confia em ID enviado pelo corpo da requisicao.
+  app.post('/api/ia-service-externo/atendimentos/:id/mensagens/:mensagemId/avaliacao', async (req, res) => {
+    try {
+      if (!req.svcConsultorExterno) return res.status(401).json({ error: 'Consultor não identificado para avaliar a investigação.' });
+      const { notas, observacoes, erroTecnicoCritico } = req.body || {};
+      const { evento, avaliacaoAtual } = await avaliacaoInvestigacaoService.avaliarInvestigacao(req.svcEmpresaId, {
+        atendimentoId: req.params.id,
+        mensagemAssistenteId: req.params.mensagemId,
+        notas,
+        observacoes: observacoes || null,
+        erroTecnicoCritico: !!erroTecnicoCritico,
+        usuarioId: req.svcConsultorExterno,
+        origemIdentidade: 'consultor_externo',
+      });
+      res.status(201).json({ evento, avaliacaoAtual });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service-externo/atendimentos/:id/mensagens/:mensagemId/avaliacao', (req, res) => {
+    try {
+      const avaliacaoAtual = avaliacaoInvestigacaoService.obterAvaliacaoAtual(
+        req.svcEmpresaId, req.params.mensagemId, req.svcConsultorExterno || null, req.params.id,
+      );
+      res.json(avaliacaoAtual);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service-externo/atendimentos/:id/mensagens/:mensagemId/avaliacao/todas', (req, res) => {
+    try {
+      res.json(avaliacaoInvestigacaoService.obterAvaliacoesAtuaisDaMensagem(req.svcEmpresaId, req.params.mensagemId));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.get('/api/ia-service-externo/atendimentos/:id/mensagens/:mensagemId/avaliacao/historico', (req, res) => {
+    try {
+      if (!req.svcConsultorExterno) return res.status(401).json({ error: 'Consultor não identificado.' });
+      const historico = avaliacaoInvestigacaoService.obterHistoricoDoUsuario(req.svcEmpresaId, req.params.mensagemId, req.svcConsultorExterno);
+      res.json(historico);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // Sugestao de avaliacao gerada por IA -- sempre 200 mesmo em falha (corpo
+  // indica sucesso:false), nunca bloqueia a avaliacao manual (mesmo contrato
+  // da rota interna em routes/index.js).
+  app.get('/api/ia-service-externo/atendimentos/:id/mensagens/:mensagemId/avaliacao/sugestao', async (req, res) => {
+    try {
+      const resultado = await preAvaliacaoIaService.gerarPreAvaliacao(req.svcEmpresaId, {
+        atendimentoId: req.params.id,
+        mensagemAssistenteId: req.params.mensagemId,
+      });
+      res.json(resultado);
+    } catch (err) {
+      res.json({ sucesso: false });
     }
   });
 

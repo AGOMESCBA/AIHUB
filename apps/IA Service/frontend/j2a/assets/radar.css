@@ -584,6 +584,11 @@ button.loading .loader { display: block; }
 .badge.danger { color: #ffffff; background: #e10600; border-color: #e10600; }
 .badge.warn { color: #241c02; background: #ecc222; border-color: #ecc222; }
 .badge.ok { color: #ffffff; background: #1a9c4a; border-color: #1a9c4a; }
+.badge.pulsing { animation: badge-pulse 1.4s infinite ease-in-out; }
+@keyframes badge-pulse {
+  0%, 100% { opacity: .6; }
+  50% { opacity: 1; }
+}
 
 .workspace { position: relative; display: grid; min-height: 0; }
 .empty-state {
@@ -740,6 +745,30 @@ button.loading .loader { display: block; }
 .message-right .message-card { background: rgba(0, 107, 214, .1); border-top-right-radius: 3px; }
 .message-head { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 11px; margin-bottom: 4px; }
 .message-text { white-space: pre-wrap; line-height: 1.45; overflow-wrap: anywhere; font-size: 13px; }
+
+/* Avaliacao Humana (2026-10) -- utilidade tecnica real da resposta da IA,
+   independente do Quality Gate. Portado de atendimento.html. */
+.message-avaliacao { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.avaliacao-link { font-size: 11px; background: none; border: none; color: var(--brand); cursor: pointer; text-decoration: underline; padding: 0; }
+.avaliacao-resumo { font-size: 11.5px; color: var(--text); font-weight: 700; }
+.avaliacao-outras { font-size: 11px; color: var(--muted); }
+
+.avaliacao-modal-backdrop { display: none; position: fixed; inset: 0; z-index: 400; background: rgba(0, 0, 0, .45); align-items: center; justify-content: center; padding: 20px; }
+.avaliacao-modal-backdrop.ativo { display: flex; }
+.avaliacao-modal { width: min(900px, 96vw); max-height: 86vh; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.avaliacao-modal-head { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.avaliacao-modal-title { font-weight: 900; color: var(--text); font-size: 14px; }
+.avaliacao-modal-subtitle { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.avaliacao-modal-close-btn { border: 1px solid var(--line); background: var(--panel-2); border-radius: 7px; cursor: pointer; width: 30px; height: 30px; color: var(--text); }
+.avaliacao-modal-body { overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.avaliacao-criterio { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.avaliacao-criterio label { font-size: 12.5px; color: var(--text); font-weight: 700; flex: 1; }
+.avaliacao-criterio select { font-size: 12.5px; padding: 4px 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); border-radius: 7px; }
+.avaliacao-observacoes textarea { width: 100%; min-height: 70px; font-size: 12.5px; padding: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); border-radius: 7px; resize: vertical; box-sizing: border-box; }
+.avaliacao-erro-critico { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text); }
+.avaliacao-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.avaliacao-sugestao-status { font-size: 11.5px; color: var(--muted); font-style: italic; }
+.avaliacao-sugestao-rotulo { font-size: 11px; color: var(--brand); font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
 
 /* Indicador de progresso dentro do chat (nao no botao) — a IA esta
    processando com base em todo o historico, nao travada. */

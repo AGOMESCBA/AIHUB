@@ -63,12 +63,22 @@ function _validarMensagemAssistenteDoAtendimento(empresaId, atendimentoId, mensa
   return { atendimento, mensagem };
 }
 
-function _resolverNomeAvaliador(usuarioId) {
+// origemIdentidade distingue de qual tabela usuarioId vem -- 'consultor_externo'
+// (req.svcConsultorExterno, canal WhatsApp/J2A) usa a tabela consultores;
+// qualquer outro valor (incluindo null/ausente, avaliacoes anteriores a esta
+// migration) assume o caminho interno (req.session.user_id, tabela usuarios
+// do IAHub) -- os dois IDs vem de tabelas diferentes e podem colidir
+// numericamente, por isso nunca resolver nome sem saber a origem.
+function _resolverNomeAvaliador(empresaId, usuarioId, origemIdentidade) {
+  if (origemIdentidade === 'consultor_externo') {
+    return consultorService.getNomeExibicao(empresaId, usuarioId);
+  }
   return consultorService.getNomeExibicaoPorUsuarioIahub(usuarioId);
 }
 
 async function avaliarInvestigacao(empresaId, {
   atendimentoId, mensagemAssistenteId, notas, observacoes = null, erroTecnicoCritico = false, usuarioId,
+  origemIdentidade = null,
 }) {
   if (!usuarioId) throw _erroValidacao('Usuário não identificado para avaliar a investigação.');
   _validarNotas(notas);
@@ -78,31 +88,36 @@ async function avaliarInvestigacao(empresaId, {
 
   const evento = avaliacaoRepo.registrarAvaliacao(empresaId, {
     atendimentoId, mensagemAssistenteId, notas, observacoes: observacoesValidadas,
-    erroTecnicoCritico: !!erroTecnicoCritico, usuarioId,
+    erroTecnicoCritico: !!erroTecnicoCritico, usuarioId, origemIdentidade,
   });
 
-  return { evento, avaliacaoAtual: { ...evento, nomeAvaliador: _resolverNomeAvaliador(usuarioId) } };
+  return { evento, avaliacaoAtual: { ...evento, nomeAvaliador: _resolverNomeAvaliador(empresaId, usuarioId, origemIdentidade) } };
 }
 
 function obterAvaliacaoAtual(empresaId, mensagemAssistenteId, usuarioId, atendimentoId = null) {
   if (atendimentoId) _validarMensagemAssistenteDoAtendimento(empresaId, atendimentoId, mensagemAssistenteId);
   const avaliacao = avaliacaoRepo.obterAvaliacaoAtualDoUsuario(empresaId, mensagemAssistenteId, usuarioId);
   if (!avaliacao) return null;
-  return { ...avaliacao, nomeAvaliador: _resolverNomeAvaliador(usuarioId) };
+  return { ...avaliacao, nomeAvaliador: _resolverNomeAvaliador(empresaId, usuarioId, avaliacao.origemIdentidade) };
 }
 
 function obterAvaliacoesAtuaisDaMensagem(empresaId, mensagemAssistenteId) {
-  return avaliacaoRepo.listarAvaliacoesAtuaisDaMensagem(empresaId, mensagemAssistenteId, _resolverNomeAvaliador);
+  return avaliacaoRepo.listarAvaliacoesAtuaisDaMensagem(
+    empresaId, mensagemAssistenteId,
+    (usuarioId, origemIdentidade) => _resolverNomeAvaliador(empresaId, usuarioId, origemIdentidade),
+  );
 }
 
 function obterHistoricoDoUsuario(empresaId, mensagemAssistenteId, usuarioId) {
   const historico = avaliacaoRepo.listarHistoricoDoUsuario(empresaId, mensagemAssistenteId, usuarioId);
-  const nomeAvaliador = _resolverNomeAvaliador(usuarioId);
-  return historico.map(evento => ({ ...evento, nomeAvaliador }));
+  return historico.map(evento => ({ ...evento, nomeAvaliador: _resolverNomeAvaliador(empresaId, usuarioId, evento.origemIdentidade) }));
 }
 
 function obterAvaliacoesEmLote(empresaId, mensagemAssistenteIds) {
-  return avaliacaoRepo.listarAvaliacoesAtuaisPorMensagens(empresaId, mensagemAssistenteIds, _resolverNomeAvaliador);
+  return avaliacaoRepo.listarAvaliacoesAtuaisPorMensagens(
+    empresaId, mensagemAssistenteIds,
+    (usuarioId, origemIdentidade) => _resolverNomeAvaliador(empresaId, usuarioId, origemIdentidade),
+  );
 }
 
 module.exports = {

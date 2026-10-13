@@ -35,7 +35,34 @@
     autoTimer: null,
     countdownTimer: null,
     nextRefreshAt: 0,
+    avaliacaoMensagemId: null,
+    // state.processing guarda atendimentoId (retornado por abrir-atendimento),
+    // mas renderQueue itera sobre chamados (chamadoId) -- este mapa resolve
+    // chamadoId -> atendimentoId para o badge "pesquisando" saber qual
+    // chave consultar em state.processing. Populado em selectTicket() assim
+    // que abrir-atendimento resolve o atendimentoId real.
+    atendimentoIdPorChamado: new Map(),
   };
+
+  // Avaliacao Humana (2026-10) -- mesmos criterios/faixas de
+  // frontend/atendimento.html (apps/IA Service/frontend/atendimento.html),
+  // portados ao J2A.
+  const CRITERIOS_AVALIACAO = [
+    ['compreensaoProblema', 'Compreensão do problema'],
+    ['aproveitamentoEvidencias', 'Aproveitamento das evidências'],
+    ['profundidadeTecnica', 'Profundidade técnica'],
+    ['orientacaoPratica', 'Orientação prática'],
+    ['confiabilidadeTecnica', 'Confiabilidade técnica'],
+  ];
+  const FAIXAS_AVALIACAO = [
+    { chave: 'EXCELENTE', rotulo: 'Excelente', min: 22, max: 25 },
+    { chave: 'BOA', rotulo: 'Boa', min: 18, max: 21 },
+    { chave: 'PARCIAL', rotulo: 'Parcial', min: 13, max: 17 },
+    { chave: 'INSATISFATORIA', rotulo: 'Insatisfatória', min: 0, max: 12 },
+  ];
+  function faixaDeNotaTotal(notaTotal) {
+    return FAIXAS_AVALIACAO.find((f) => notaTotal >= f.min && notaTotal <= f.max)?.rotulo || 'Insatisfatória';
+  }
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, (c) => ({
@@ -450,11 +477,25 @@
         <span class="ticket-top">
           <span class="ticket-number">#${escapeHtml(c.numero)}</span>
           ${slaBadge(c.slaPrazo)}
+          ${pesquisaBadge(c.id)}
         </span>
         <span class="ticket-title">${escapeHtml(currentTicketTitle(c))}</span>
         <span class="ticket-meta">${escapeHtml([c.clienteNome, c.produto].filter(Boolean).join(' | '))}<br>Aberto em ${escapeHtml(formatDate(c.dataAbertura))}</span>
       </button>
     `).join('');
+  }
+
+  // Indicador de pesquisa em andamento por chamado (pedido do usuario,
+  // 2026-10: "nunca sei quando a pesquisa do primeiro ou do segundo que
+  // naveguei acabou"). Mostra "Pesquisando..." enquanto o atendimento
+  // daquele chamado esta em state.processing (setado em pollMessages/
+  // sendMessage/researchSolutions); nao mostra nada quando concluido --
+  // decisao deliberada para nao poluir a fila com um badge permanente "lido/
+  // nao lido" sem pedido explicito disso.
+  function pesquisaBadge(chamadoId) {
+    const atendimentoId = state.atendimentoIdPorChamado.get(String(chamadoId));
+    if (!atendimentoId || !state.processing.has(atendimentoId)) return '';
+    return '<span class="badge warn pulsing">Pesquisando…</span>';
   }
 
   async function selectTicket(id) {
@@ -478,6 +519,7 @@
       await loadSoftAttachments(ticket.id);
       const open = await request(ext(`/radar/chamados/${encodeURIComponent(ticket.id)}/abrir-atendimento`), { method: 'POST' });
       state.atendimentoId = open.atendimentoId;
+      state.atendimentoIdPorChamado.set(String(ticket.id), open.atendimentoId);
       await Promise.allSettled([
         loadMessages(),
         loadLocalAttachments(),
@@ -487,7 +529,14 @@
         loadTrilha(),
       ]);
       renderAllCaseData();
-      if (open.preAnaliseDisparada) pollMessages(60, 3000, 'Aguardando pre-analise automatica da IA...');
+      // Bug real corrigido (2026-10): a chamada nao passava atendimentoId
+      // como 1o argumento (assinatura exige -- ver comentario de
+      // pollMessages), entao a guarda "atendimentoId !== state.atendimentoId"
+      // comparava 60 (o antigo 1o argumento "times") contra o atendimentoId
+      // real e sempre retornava cedo -- o polling nunca rodava de fato, e o
+      // indicador "Aguardando pre-analise..." podia ficar preso na tela sem
+      // nunca checar se a resposta ja chegou.
+      if (open.preAnaliseDisparada) pollMessages(state.atendimentoId, 60, 3000, 'Aguardando pre-analise automatica da IA...');
     } catch (err) {
       toast(`Nao foi possivel abrir o chamado: ${err.message}`);
     }
@@ -644,10 +693,19 @@
     return state.localAttachments.filter((a) => a.mensagemId != null && String(a.mensagemId) === String(m.id));
   }
 
+  // Analista rolando para cima para ler mensagens antigas nao deve ser
+  // "puxado" de volta para o fim a cada re-render (achado real, 2026-10) --
+  // so forca o scroll para o fim quando o usuario ja estava perto dele
+  // (ou o container ainda esta vazio, 1a renderizacao do atendimento).
+  function _estaPertoDoFim(container, limiar = 80) {
+    if (!container) return true;
+    return container.scrollHeight - container.scrollTop - container.clientHeight < limiar;
+  }
+
   // Indicador de progresso dentro do corpo do chat (nao no botao, que tem
   // largura fixa e so comporta um icone) — pedido do usuario: deixar claro
   // que a IA esta processando com base em todo o historico, nao travada.
-  function appendChatStatusRow(texto) {
+  function appendChatStatusRow(texto, pertoDoFim = true) {
     const existing = $('chat-status-row');
     if (existing) existing.remove();
     const container = $('messages');
@@ -665,7 +723,7 @@
       </div>
     `;
     container.appendChild(row);
-    container.scrollTop = container.scrollHeight;
+    if (pertoDoFim) container.scrollTop = container.scrollHeight;
   }
 
   function showChatStatus(texto) {
@@ -680,13 +738,15 @@
   }
 
   function renderMessages() {
+    const container = $('messages');
+    const pertoDoFim = _estaPertoDoFim(container);
     if (!state.messages.length) {
-      $('messages').innerHTML = state.chatStatusText ? '' : '<div class="empty-block">Sem mensagens neste atendimento.</div>';
-      if (state.chatStatusText) appendChatStatusRow(state.chatStatusText);
+      container.innerHTML = state.chatStatusText ? '' : '<div class="empty-block">Sem mensagens neste atendimento.</div>';
+      if (state.chatStatusText) appendChatStatusRow(state.chatStatusText, pertoDoFim);
       return;
     }
     const sorted = [...state.messages].sort((a, b) => new Date(messageTimestamp(a)) - new Date(messageTimestamp(b)));
-    $('messages').innerHTML = sorted.map((m) => {
+    container.innerHTML = sorted.map((m) => {
       const assistant = m.papel === 'assistant';
       const side = messageSide(m);
       const attachments = messageAttachments(m);
@@ -695,6 +755,7 @@
           <a class="message-attachment" href="${escapeHtml(ext(`/anexos/${encodeURIComponent(a.id)}/download`))}" target="_blank" rel="noopener">📎 ${escapeHtml(a.nome || a.nomeOriginal || 'Anexo')}</a>
         `).join('')}</div>
       ` : '';
+      const avaliacaoHtml = assistant ? renderizarAvaliacaoHumana(m) : '';
       return `
         <article class="message message-${side} ${assistant ? 'assistant' : ''}">
           <div class="message-avatar">${escapeHtml(messageAvatar(m))}</div>
@@ -702,12 +763,121 @@
             <div class="message-head"><strong>${escapeHtml(messageRole(m))}</strong><span>${escapeHtml(formatDateTime(messageTimestamp(m)))}</span></div>
             <div class="message-text">${escapeHtml(messageText(m))}</div>
             ${attachmentsHtml}
+            ${avaliacaoHtml}
           </div>
         </article>
       `;
     }).join('');
-    if (state.chatStatusText) appendChatStatusRow(state.chatStatusText);
-    $('messages').scrollTop = $('messages').scrollHeight;
+    if (state.chatStatusText) appendChatStatusRow(state.chatStatusText, pertoDoFim);
+    if (pertoDoFim) container.scrollTop = container.scrollHeight;
+  }
+
+  // Avaliacao humana de utilidade tecnica real (consultor), independente do
+  // Quality Gate -- nunca altera o motor. Mostra resumo compacto se o
+  // consultor logado ja avaliou; senao, link discreto para abrir o modal.
+  // Porta a mesma logica/UX de atendimento.html (renderizarAvaliacaoHumana),
+  // adaptada ao estilo "full re-render a partir do estado" do J2A.
+  function renderizarAvaliacaoHumana(m) {
+    const avaliacaoHumana = m.respostaOperacional?.avaliacaoHumana;
+    const minha = avaliacaoHumana?.minhaAvaliacaoAtual || null;
+    const outras = (avaliacaoHumana?.todasAsAvaliacoesAtuais || []).filter(
+      (a) => !minha || String(a.usuarioId) !== String(minha.usuarioId),
+    );
+    const resumoMinha = minha
+      ? `<span class="avaliacao-resumo">Sua avaliação: ${minha.notaTotal}/25 · ${escapeHtml(faixaDeNotaTotal(minha.notaTotal))}</span>
+         <button type="button" class="avaliacao-link" data-avaliacao-abrir="${escapeHtml(m.id)}">editar</button>`
+      : `<button type="button" class="avaliacao-link" data-avaliacao-abrir="${escapeHtml(m.id)}">Avaliar investigação</button>`;
+    const outrasHtml = outras.length
+      ? `<span class="avaliacao-outras">· ${outras.length} outra(s) avaliação(ões) de ${escapeHtml(outras.map((a) => a.nomeAvaliador || 'consultor').join(', '))}</span>`
+      : '';
+    return `<div class="message-avaliacao" id="avaliacao-card-${escapeHtml(m.id)}">${resumoMinha}${outrasHtml}</div>`;
+  }
+
+  function _renderizarCamposAvaliacao(valores) {
+    return `
+      ${CRITERIOS_AVALIACAO.map(([campo, rotulo]) => `
+        <div class="avaliacao-criterio">
+          <label for="avaliacao-${campo}">${escapeHtml(rotulo)}</label>
+          <select id="avaliacao-${campo}">
+            ${[0, 1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${valores?.notas?.[campo] === n ? 'selected' : ''}>${n}</option>`).join('')}
+          </select>
+        </div>
+      `).join('')}
+      <div class="avaliacao-observacoes">
+        <textarea id="avaliacao-observacoes" placeholder="Observações (opcional)" maxlength="2000">${escapeHtml(valores?.observacoes || '')}</textarea>
+      </div>
+    `;
+  }
+
+  function abrirModalAvaliacao(mensagemId) {
+    state.avaliacaoMensagemId = mensagemId;
+    const m = state.messages.find((msg) => String(msg.id) === String(mensagemId));
+    const minha = m?.respostaOperacional?.avaliacaoHumana?.minhaAvaliacaoAtual || null;
+    $('avaliacao-modal-sugestao-aviso').innerHTML = '';
+    $('avaliacao-modal-campos').innerHTML = _renderizarCamposAvaliacao(minha);
+    $('avaliacao-erro-critico').checked = !!minha?.erroTecnicoCritico;
+    $('avaliacao-modal-backdrop').classList.add('ativo');
+    // Sugestao por IA so e buscada quando ainda nao ha avaliacao salva --
+    // nunca sobrescreve uma nota que o consultor ja registrou antes.
+    if (!minha) _buscarSugestaoAvaliacao(mensagemId);
+  }
+
+  function fecharModalAvaliacao() {
+    $('avaliacao-modal-backdrop').classList.remove('ativo');
+  }
+
+  async function _buscarSugestaoAvaliacao(mensagemId) {
+    const aviso = $('avaliacao-modal-sugestao-aviso');
+    if (aviso) aviso.innerHTML = '<div class="avaliacao-sugestao-status">Gerando sugestão da IA…</div>';
+    try {
+      const resp = await request(ext(`/atendimentos/${encodeURIComponent(state.atendimentoId)}/mensagens/${encodeURIComponent(mensagemId)}/avaliacao/sugestao`));
+      // O modal pode ter sido fechado/trocado de mensagem enquanto a chamada
+      // estava em voo -- nunca aplica a sugestao em um modal que ja nao e o
+      // desta mensagem.
+      if (state.avaliacaoMensagemId !== mensagemId) return;
+      const avisoAtual = $('avaliacao-modal-sugestao-aviso');
+      if (!resp?.sucesso) {
+        if (avisoAtual) avisoAtual.innerHTML = '';
+        return;
+      }
+      const campos = $('avaliacao-modal-campos');
+      if (campos) campos.innerHTML = _renderizarCamposAvaliacao(resp.sugestao);
+      if (avisoAtual) avisoAtual.innerHTML = '<div class="avaliacao-sugestao-rotulo">Sugestão da IA — revise antes de salvar</div>';
+    } catch (_) {
+      if (state.avaliacaoMensagemId !== mensagemId) return;
+      const avisoAtual = $('avaliacao-modal-sugestao-aviso');
+      if (avisoAtual) avisoAtual.innerHTML = '';
+    }
+  }
+
+  async function salvarAvaliacaoInvestigacao() {
+    const mensagemId = state.avaliacaoMensagemId;
+    if (!mensagemId) return;
+    const notas = {};
+    for (const [campo] of CRITERIOS_AVALIACAO) {
+      notas[campo] = Number($(`avaliacao-${campo}`).value);
+    }
+    const observacoes = $('avaliacao-observacoes').value.trim() || null;
+    const erroTecnicoCritico = $('avaliacao-erro-critico').checked;
+    try {
+      const resp = await request(ext(`/atendimentos/${encodeURIComponent(state.atendimentoId)}/mensagens/${encodeURIComponent(mensagemId)}/avaliacao`), {
+        method: 'POST',
+        body: JSON.stringify({ notas, observacoes, erroTecnicoCritico }),
+      });
+      const m = state.messages.find((msg) => String(msg.id) === String(mensagemId));
+      if (m) {
+        m.respostaOperacional = m.respostaOperacional || {};
+        m.respostaOperacional.avaliacaoHumana = m.respostaOperacional.avaliacaoHumana || { minhaAvaliacaoAtual: null, todasAsAvaliacoesAtuais: [] };
+        m.respostaOperacional.avaliacaoHumana.minhaAvaliacaoAtual = resp.avaliacaoAtual;
+        const outras = (m.respostaOperacional.avaliacaoHumana.todasAsAvaliacoesAtuais || [])
+          .filter((a) => String(a.usuarioId) !== String(resp.avaliacaoAtual.usuarioId));
+        m.respostaOperacional.avaliacaoHumana.todasAsAvaliacoesAtuais = [...outras, resp.avaliacaoAtual];
+      }
+      fecharModalAvaliacao();
+      renderMessages();
+    } catch (err) {
+      toast(`Não foi possível registrar a avaliação: ${err.message}`);
+    }
   }
 
   async function sendMessage(event) {
@@ -718,6 +888,7 @@
     if (!texto && !state.pendingFiles.length) return;
     const atendimentoId = state.atendimentoId;
     state.processing.add(atendimentoId);
+    renderQueue();
     setBusy($('send-btn'), true, 'Enviando');
     showChatStatus('Pesquisando e analisando o chamado com a IA...');
     try {
@@ -737,6 +908,7 @@
       toast(`Nao foi possivel enviar: ${err.message}`);
     } finally {
       state.processing.delete(atendimentoId);
+      renderQueue();
       setBusy($('send-btn'), false);
       hideChatStatus();
     }
@@ -763,6 +935,7 @@
     if (!state.atendimentoId || !state.selected || state.processing.has(state.atendimentoId)) return;
     const atendimentoId = state.atendimentoId;
     state.processing.add(atendimentoId);
+    renderQueue();
     setBusy($('research-btn'), true);
     showChatStatus('Pesquisando no histórico completo do chamado...');
     try {
@@ -788,22 +961,65 @@
       toast(`Nao foi possivel pesquisar solucoes: ${err.message}`);
     } finally {
       state.processing.delete(atendimentoId);
+      renderQueue();
       setBusy($('research-btn'), false);
       hideChatStatus();
     }
   }
 
-  async function pollMessages(times, interval, statusTexto) {
-    if (statusTexto) showChatStatus(statusTexto);
+  // atendimentoId é capturado pelo CHAMADOR no momento em que a espera
+  // começa (nunca lido de novo de state.atendimentoId aqui dentro) -- sem
+  // isso, o polling de um chamado A continuava rodando em background depois
+  // do analista trocar para o chamado B (fire-and-forget em selectTicket,
+  // sem await): cada iteração via mostrar/esconder o indicador "Aguardando
+  // pre-analise..." na tela de B, mesmo esse chamado ja tendo resposta
+  // pronta ha tempo -- o mesmo achado real ja corrigido em radar.html
+  // principal, replicado aqui porque este e um frontend separado.
+  //
+  // Deliberadamente NAO para o loop so porque o analista trocou de chamado
+  // (diferente da 1a versao deste fix): o polling continua em background
+  // ate a resposta chegar ou o tempo esgotar, para alimentar o badge "em
+  // andamento" da fila (renderQueue/state.processing) mesmo em chamados que
+  // nao estao na tela agora -- so a parte que MEXE NA TELA (showChatStatus/
+  // hideChatStatus/loadMessages) e que respeita "ainda e o atendimento
+  // visivel?".
+  async function pollMessages(atendimentoId, times, interval, statusTexto) {
+    const aindaVisivel = () => atendimentoId === state.atendimentoId;
+    if (statusTexto && aindaVisivel()) showChatStatus(statusTexto);
+    state.processing.add(atendimentoId);
+    renderQueue();
     try {
       for (let i = 0; i < times; i += 1) {
         await new Promise((resolve) => setTimeout(resolve, interval));
-        const before = state.messages.length;
-        await loadMessages().catch(() => null);
-        if (state.messages.length > before) break;
+        const temMensagemNova = await _verificarMensagemNova(atendimentoId, aindaVisivel());
+        if (temMensagemNova) break;
       }
     } finally {
-      if (statusTexto) hideChatStatus();
+      state.processing.delete(atendimentoId);
+      renderQueue();
+      if (statusTexto && aindaVisivel()) hideChatStatus();
+    }
+  }
+
+  // Verifica se chegou mensagem nova para `atendimentoId`. Se ainda for o
+  // atendimento visivel na tela, reusa loadMessages() (que ja atualiza
+  // state.messages/renderMessages); senao, consulta a mesma rota
+  // diretamente SEM mexer no estado da tela atual, so para saber se deve
+  // encerrar o polling de fundo.
+  const _ultimaContagemConhecida = new Map();
+  async function _verificarMensagemNova(atendimentoId, aindaVisivel) {
+    if (aindaVisivel) {
+      const before = state.messages.length;
+      await loadMessages().catch(() => null);
+      return state.messages.length > before;
+    }
+    try {
+      const mensagens = await request(ext(`/atendimentos/${encodeURIComponent(atendimentoId)}/mensagens`));
+      const antes = _ultimaContagemConhecida.get(atendimentoId) ?? mensagens.length;
+      _ultimaContagemConhecida.set(atendimentoId, mensagens.length);
+      return mensagens.length > antes;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -1375,6 +1591,20 @@
       renderPendingFiles();
     });
     document.querySelectorAll('.mobile-nav button').forEach((btn) => btn.addEventListener('click', () => setMobileTarget(btn.dataset.mobileTarget)));
+
+    // Avaliacao Humana -- delegacao de clique dentro do chat (botao
+    // "Avaliar investigação"/"editar" e reconstruido a cada renderMessages,
+    // mesmo padrao ja usado para data-ticket-id/data-open-url).
+    $('messages').addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-avaliacao-abrir]');
+      if (btn) abrirModalAvaliacao(btn.dataset.avaliacaoAbrir);
+    });
+    $('avaliacao-modal-backdrop').addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) fecharModalAvaliacao();
+    });
+    $('avaliacao-modal-close').addEventListener('click', fecharModalAvaliacao);
+    $('avaliacao-modal-cancelar').addEventListener('click', fecharModalAvaliacao);
+    $('avaliacao-modal-salvar').addEventListener('click', salvarAvaliacaoInvestigacao);
   }
 
   async function openAttachment(url) {

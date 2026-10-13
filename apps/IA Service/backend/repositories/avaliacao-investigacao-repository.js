@@ -54,6 +54,7 @@ function _rowParaDominio(row, nomeAvaliador = null) {
     observacoes: row.observacoes,
     erroTecnicoCritico: !!row.erro_tecnico_critico,
     usuarioId: row.usuario_id,
+    origemIdentidade: row.origem_identidade,
     nomeAvaliador,
     criadoEm: row.criado_em,
   };
@@ -95,6 +96,7 @@ function _validarMensagemAssistente(empresaId, atendimentoId, mensagemAssistente
  */
 function registrarAvaliacao(empresaId, {
   atendimentoId, mensagemAssistenteId, notas, observacoes = null, erroTecnicoCritico = false, usuarioId,
+  origemIdentidade = null,
 }) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   if (!atendimentoId) throw new Error('atendimentoId é obrigatório.');
@@ -116,13 +118,13 @@ function registrarAvaliacao(empresaId, {
       id, empresa_id, atendimento_id, mensagem_assistente_id, execucao_id,
       nota_compreensao_problema, nota_aproveitamento_evidencias, nota_profundidade_tecnica,
       nota_orientacao_pratica, nota_confiabilidade_tecnica,
-      observacoes, erro_tecnico_critico, usuario_id, criado_em
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      observacoes, erro_tecnico_critico, usuario_id, criado_em, origem_identidade
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, Number(empresaId), atendimentoId, mensagemAssistenteId, execucaoId,
     notas.compreensaoProblema, notas.aproveitamentoEvidencias, notas.profundidadeTecnica,
     notas.orientacaoPratica, notas.confiabilidadeTecnica,
-    observacoes, erroTecnicoCritico ? 1 : 0, usuarioId, agora
+    observacoes, erroTecnicoCritico ? 1 : 0, usuarioId, agora, origemIdentidade
   );
 
   return _rowParaDominio(db.prepare(`SELECT * FROM avaliacoes_investigacao WHERE id = ?`).get(id));
@@ -171,7 +173,7 @@ function listarAvaliacoesAtuaisDaMensagem(empresaId, mensagemAssistenteId, resol
   const porUsuario = new Map();
   for (const row of rows) porUsuario.set(row.usuario_id, row);
 
-  return Array.from(porUsuario.values()).map(row => _rowParaDominio(row, resolverNomeAvaliador?.(row.usuario_id) || null));
+  return Array.from(porUsuario.values()).map(row => _rowParaDominio(row, resolverNomeAvaliador?.(row.usuario_id, row.origem_identidade) || null));
 }
 
 /**
@@ -202,7 +204,7 @@ function listarAvaliacoesAtuaisPorMensagens(empresaId, mensagemAssistenteIds, re
   for (const id of ids) {
     const porUsuario = porMensagem.get(id);
     resultado[id] = porUsuario
-      ? Array.from(porUsuario.values()).map(row => _rowParaDominio(row, resolverNomeAvaliador?.(row.usuario_id) || null))
+      ? Array.from(porUsuario.values()).map(row => _rowParaDominio(row, resolverNomeAvaliador?.(row.usuario_id, row.origem_identidade) || null))
       : [];
   }
   return resultado;

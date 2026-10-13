@@ -229,6 +229,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
         observacoes: observacoes || null,
         erroTecnicoCritico: !!erroTecnicoCritico,
         usuarioId,
+        origemIdentidade: 'usuario_iahub',
       });
       res.status(201).json({ evento, avaliacaoAtual });
     } catch (err) {
