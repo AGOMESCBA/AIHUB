@@ -806,7 +806,7 @@
     if (m.papel === 'assistant') return 'IA Service';
     if (m.papel === 'customer') return autor ? `Cliente - ${autor}` : 'Cliente';
     if (m.papel === 'system') return 'Sistema';
-    const base = m.direcao === 'out' ? 'Analista' : 'Mensagem';
+    const base = 'Atendente';
     return autor ? `${base} - ${autor}` : base;
   }
 
@@ -949,7 +949,7 @@
     const resumoMinha = minha
       ? `<span class="avaliacao-resumo">Sua avaliação: ${minha.notaTotal}/25 · ${escapeHtml(faixaDeNotaTotal(minha.notaTotal))}</span>
          <button type="button" class="avaliacao-link" data-avaliacao-abrir="${escapeHtml(m.id)}">editar</button>`
-      : `<button type="button" class="avaliacao-link" data-avaliacao-abrir="${escapeHtml(m.id)}">Avaliar investigação</button>`;
+      : `<button type="button" class="avaliacao-link" data-avaliacao-abrir="${escapeHtml(m.id)}">Avaliar Pesquisa da IA</button>`;
     const outrasHtml = outras.length
       ? `<span class="avaliacao-outras">· ${outras.length} outra(s) avaliação(ões) de ${escapeHtml(outras.map((a) => a.nomeAvaliador || 'consultor').join(', '))}</span>`
       : '';
