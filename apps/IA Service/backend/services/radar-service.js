@@ -14,8 +14,8 @@ const anexosSoftExpertService = require('./anexos-softexpert-service');
 const anexoRepo = require('../repositories/anexo-repository');
 
 const SISTEMA_ORIGEM_PADRAO = 'softexpert';
-const AUTO_REFRESH_PADRAO_SEGUNDOS = 900;
-const AUTO_REFRESH_VALORES_VALIDOS = new Set([0, 30, 60, 300, 900, 1800]);
+const AUTO_REFRESH_PADRAO_SEGUNDOS = 14400;
+const AUTO_REFRESH_VALORES_VALIDOS = new Set([0, 30, 60, 300, 900, 1800, 3600, 14400]);
 const preAnalisesEmAndamento = new Set();
 
 function getConfig(empresaId) {
