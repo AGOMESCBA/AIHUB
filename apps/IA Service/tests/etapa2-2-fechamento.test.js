@@ -283,10 +283,15 @@ async function main() {
     });
     const execGate = execucaoRepo.listarPorAtendimento(9804, atendimentoGate.id)[0];
     const msgGate = mensagemRepo.getMensagem(9804, execGate.mensagemId);
-    assert.strictEqual(execGate.status, 'revisao_necessaria_quality_gate', 'resposta ainda reprovada apos retry deve exigir revisao');
+    // M4 (2026-10): escalonamento operacional redundante e falha de qualidade da
+    // orientacao, nao de integridade do que se afirma sobre o caso. Apos o retry
+    // a resposta e ENTREGUE com alerta registrado — o gate nao substitui a analise.
+    assert.strictEqual(execGate.status, 'concluido_com_alerta_quality_gate', 'falha nao-integridade apos retry gera alerta, nao bloqueio');
     assert.strictEqual(execGate.qualityGate.aprovado, false);
-    assert.ok(execGate.qualityGate.revisaoNecessaria.respostaRejeitada.includes('Sugiro abrir uma Fabrica'), 'resposta rejeitada deve ficar preservada para auditoria');
-    assert.ok(msgGate.conteudo.includes('bloqueada para revisao'), 'mensagem apresentada nao deve parecer orientacao tecnica aprovada');
+    assert.ok(execGate.qualityGate.falhas.some(f => f.codigo === 'REDUNDANT_OPERATIONAL_ESCALATION'), 'alerta deve ficar registrado na auditoria');
+    assert.ok(!execGate.qualityGate.revisaoNecessaria, 'nao ha veto');
+    assert.ok(msgGate.conteudo.includes('Sugiro abrir uma Fabrica'), 'resposta do modelo e entregue ao analista');
+    assert.ok(!/bloqueada para revisao/.test(msgGate.conteudo));
   } finally {
     database.fecharDB();
     for (const empresaDir of ['9802', '9803']) {

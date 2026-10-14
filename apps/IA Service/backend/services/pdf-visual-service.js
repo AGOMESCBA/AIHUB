@@ -15,7 +15,9 @@ function detectarNecessidadeVisualPdf({ conteudoExtraido, pergunta = '', nomeOri
   const texto = String(conteudoExtraido || '');
   const perguntaTexto = String(pergunta || '');
   const poucoTexto = texto.replace(/\[[^\]]+\]/g, '').trim().length < 120;
-  const pedeVisual = /\b(print|screenshot|imagem|tela|visual|grafico|gr[aá]fico|diagrama|scan|escanead|pdf)\b/i.test(`${perguntaTexto} ${nomeOriginal}`);
+  // "pdf" fica de fora da regex: casaria com a extensao de todo arquivo .pdf
+  // e forcaria rasterizacao visual mesmo com texto extraido de sobra.
+  const pedeVisual = /\b(print|screenshot|imagem|tela|visual|grafico|gr[aá]fico|diagrama|scan|escanead)\b/i.test(`${perguntaTexto} ${nomeOriginal}`);
   const extracaoFalhou = /\[PDF detectado\]|nao foi possivel extrair texto|parser principal nao conseguiu/i.test(texto);
   return poucoTexto || pedeVisual || extracaoFalhou;
 }

@@ -41,7 +41,6 @@ function _classificarFalha(falha) {
     'INCIDENTAL_EVIDENCE_PROMOTED_WITHOUT_CAUSAL_BRIDGE',
     'INVESTIGATIVE_FRAME_OPERATIONAL_STAGE_IGNORED',
     'CUSTOMIZATION_DISCARDED_WITHOUT_CODE_OR_LOG',
-    'EXTERNAL_PENDING_DEPENDENCY_IGNORED',
     'ATTACHMENT_NOT_ANALYZED',
     'CRITICAL_EVIDENCE_OMITTED',
     'FACTUAL_CONTRADICTION_WITH_MISSING_EVIDENCE',
@@ -410,7 +409,7 @@ function _tipoIdentificadorTecnico(termo) {
 function _extrairIdentificadoresTecnicosDetalhados(texto) {
   const s = String(texto || '');
   const encontrados = s.match(/\b(?:MV_[A-Z0-9_]+|U_[A-Z0-9_]+|SIGA[A-Z0-9]+|[A-Z]{3,}\d{2,}[A-Z0-9_]*|[A-Z][A-Z0-9_]{2,}_[A-Z0-9_]+|[A-Z]{2,}[A-Z0-9_]{3,}|[A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_.]*)\b/g) || [];
-  const ignorar = new Set(['TOTVS', 'PROTHEUS', 'SOFTEXPERT', 'PDF', 'PNG', 'JPG', 'XML', 'JSON', 'HTTP', 'HTTPS', 'SLA', 'IA', 'API']);
+  const ignorar = new Set(['TOTVS', 'PROTHEUS', 'SOFTEXPERT', 'PDF', 'PNG', 'JPG', 'XML', 'JSON', 'HTTP', 'HTTPS', 'SLA', 'IA', 'API', 'OBSERVACOES_VISUAIS_AUDITORIA', 'FIM_OBSERVACOES_VISUAIS_AUDITORIA']);
   const termos = [...new Set(encontrados.map(t => t.toUpperCase()).filter(t => !ignorar.has(t) && t.length >= 5))];
   return termos.map(termo => ({ termo, tipo: _tipoIdentificadorTecnico(termo) }));
 }
@@ -487,7 +486,7 @@ function _respostaAlegaVisual(texto, termo) {
   if (idx < 0) return false;
   const janela = n.slice(Math.max(0, idx - 180), Math.min(n.length, idx + t.length + 180));
   return /\b(print|prints|imagem|imagens|tela|screenshot|anexo visual)\b/.test(janela)
-    && /\b(mostra|mostram|aparece|aparecem|traz|trazem|vejo|visivel|visiveis)\b/.test(janela);
+    && /\b(mostra|mostram|aparece|aparecem|traz|trazem|vejo|visivel|visiveis|comprova|comprovam|confirma|confirmam|prova|provam)\b/.test(janela);
 }
 
 function _janelaNegaAtribuicaoInterna(janela) {
@@ -524,67 +523,183 @@ function _usoTecnicoComoHipoteseCondicional(texto, termo) {
   return !conclusaoForte;
 }
 
-function _avaliarRastreabilidadeTecnica(textoResposta, { manifesto, pesquisa, pergunta, historicoMensagens }) {
-  const falhas = [];
+const TOKENS_PROTOCOLO_INTERNO = new Set(['OBSERVACOES_VISUAIS_AUDITORIA', 'FIM_OBSERVACOES_VISUAIS_AUDITORIA']);
+const FONTES_DO_CASO = 'cliente|historico|mensagens?|prints?|anexos?|log|evidencias? internas?';
+const VERBOS_ATRIBUICAO = 'mostra|mostram|traz|trazem|aparece|aparecem|informa|informou|registra|registram|cita|citam|referencia|referenciam';
+
+// A resposta apresenta a referencia como algo que o cliente/historico/print/log
+// do CASO mostra? (afirmacao sobre o caso, nao conhecimento tecnico)
+function _atribuiReferenciaAoCaso(janela) {
+  return new RegExp(`\\b(${FONTES_DO_CASO})\\b[\\s\\S]{0,120}\\b(${VERBOS_ATRIBUICAO})\\b`, 'i').test(janela)
+    || new RegExp(`\\b(${VERBOS_ATRIBUICAO})\\b[\\s\\S]{0,120}\\b(${FONTES_DO_CASO})\\b`, 'i').test(janela);
+}
+
+// A propria resposta ja identifica a origem como externa/conhecimento/hipotese?
+function _reconheceOrigemNaoCaso(janela) {
+  return /\b(pesquisa|fonte externa|documentacao|tdn|totvs|artigo|como apoio|contexto geral|conhecimento|em geral|geralmente|normalmente|costuma|tipicamente|padrao do produto|hipotese|a validar|possivel|pode ser)\b/i.test(janela);
+}
+
+// Referencia nao evidenciada AFIRMADA como causa confirmada do caso (sem
+// hedge): afirmacao sobre o caso, nao conhecimento tecnico.
+function _afirmaComoCausaConfirmada(janela) {
+  return /\b(causa confirmada|causa comprovada|causa concreta|causa raiz e|diagnostico confirmado|com certeza|definitivamente|a causa e|e a causa|o problema e causado|esta causando|foi a causa|ponto de entrada concreto)\b/i.test(janela)
+    && !/\b(provavel|provavelmente|possivel|possivelmente|talvez|hipotese|suspeit\w*|indica que pode|pode estar|nao confirm\w*)\b/i.test(janela);
+}
+
+function _contemTermoNormalizado(textoNorm, termoNorm) {
+  if (!termoNorm) return false;
+  if (termoNorm.length >= 5) return textoNorm.includes(termoNorm);
+  const esc = termoNorm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^a-z0-9_])${esc}([^a-z0-9_]|$)`).test(textoNorm);
+}
+
+function _termosTecnicosDaResposta(texto) {
+  const mapa = new Map();
+  for (const x of _extrairIdentificadoresTecnicosDetalhados(texto)) {
+    if (x.tipo === 'UI_ACAO' || x.tipo === 'TERMO_COMUM_MAIUSCULO') continue;
+    mapa.set(x.termo, x.tipo);
+  }
+  for (const x of planoRespostaRastreavel.extrairTermosTecnicos(texto, { codigosCurtos: true })) {
+    if (!mapa.has(x.termo)) mapa.set(x.termo, x.tipo);
+  }
+  for (const t of TOKENS_PROTOCOLO_INTERNO) mapa.delete(t);
+  return [...mapa.entries()].map(([termo, tipo]) => ({ termo, tipo }));
+}
+
+// Proveniencia das referencias tecnicas citadas na resposta (M1). NAO ha lista
+// de termos permitidos: a origem e calculada por correspondencia com o que o
+// modelo recebeu (texto enviado das evidencias, historico, observacoes visuais,
+// dossie, quadro) e com a pesquisa lida.
+//   chamado             -> consta nas evidencias do caso
+//   pesquisa            -> consta so na pesquisa externa
+//   conhecimento_modelo -> nao consta em nenhuma (hipotese/orientacao tecnica)
+// Referencia nova NAO e erro. So vira falha quando apresentada como observada
+// no caso (atribuicao falsa) — ver _avaliarRastreabilidadeTecnica.
+function classificarProvenienciaReferencias(textoResposta, { manifesto, pesquisa, pergunta, historicoMensagens, indiceReferencias } = {}) {
   const resposta = String(textoResposta || '');
   const respostaNorm = _normalizar(resposta);
   const internoNorm = _normalizar(_corpusInterno(manifesto, pergunta, historicoMensagens));
   const pesquisaNorm = _normalizar(_corpusPesquisa(pesquisa));
-  const ids = _extrairIdentificadoresTecnicosDetalhados(resposta)
-    .filter(x => x.tipo !== 'UI_ACAO' && x.tipo !== 'TERMO_COMUM_MAIUSCULO');
-
-  for (const item of ids) {
+  const indice = indiceReferencias instanceof Set ? indiceReferencias : new Set(indiceReferencias || []);
+  const referencias = [];
+  for (const item of _termosTecnicosDaResposta(resposta)) {
     const id = item.termo;
     const idNorm = _normalizar(id);
-    const estaInterno = internoNorm.includes(idNorm);
-    const estaPesquisa = pesquisaNorm.includes(idNorm);
-    const visualRastreavel = _temReferenciaVisualRastreavel(manifesto, id);
-    const visualSemTextoMasObservado = !visualRastreavel
-      && _temImagemSemTextoEstruturado(manifesto)
+    const doCaso = indice.has(id.toUpperCase())
+      || _contemTermoNormalizado(internoNorm, idNorm)
+      || _temReferenciaVisualRastreavel(manifesto, id);
+    const naPesquisa = _contemTermoNormalizado(pesquisaNorm, idNorm);
+    const origem = doCaso ? 'chamado' : naPesquisa ? 'pesquisa' : 'conhecimento_modelo';
+    const idx = respostaNorm.indexOf(idNorm);
+    const janela = idx >= 0
+      ? respostaNorm.slice(Math.max(0, idx - 170), Math.min(respostaNorm.length, idx + idNorm.length + 170))
+      : '';
+    const rotulada = _temRotuloHipoteseOuOrigem(resposta, id) || _usoTecnicoComoHipoteseCondicional(resposta, id);
+    const reconheceOrigem = rotulada || _reconheceOrigemNaoCaso(janela);
+    const atribuidaAoCaso = origem !== 'chamado'
+      && _atribuiReferenciaAoCaso(janela)
+      && !_janelaNegaAtribuicaoInterna(janela)
+      && !reconheceOrigem;
+    const afirmadaComoCausa = origem !== 'chamado' && _afirmaComoCausaConfirmada(janela);
+    referencias.push({ termo: id, tipo: item.tipo, origem, rotulada, atribuidaAoCaso, afirmadaComoCausa });
+  }
+  return referencias;
+}
+
+function _resumoProveniencia(referencias) {
+  const contagem = { chamado: 0, pesquisa: 0, conhecimento_modelo: 0 };
+  for (const r of referencias) contagem[r.origem] = (contagem[r.origem] || 0) + 1;
+  return {
+    contagem,
+    atribuicoesFalsas: referencias.filter(r => r.atribuidaAoCaso || r.afirmadaComoCausa).length,
+    referencias: referencias.slice(0, 60).map(r => ({ termo: r.termo, origem: r.origem, rotulada: !!r.rotulada, atribuidaAoCaso: !!r.atribuidaAoCaso, afirmadaComoCausa: !!r.afirmadaComoCausa })),
+  };
+}
+
+// O Quality Gate protege a INTEGRIDADE do que se afirma sobre o caso. Uma
+// referencia tecnica nova (conhecimento do modelo/hipotese) nao e falha: so e
+// quando apresentada como observada no chamado, print, log ou pesquisa.
+function _avaliarRastreabilidadeTecnica(textoResposta, { manifesto, referencias } = {}) {
+  const falhas = [];
+  const resposta = String(textoResposta || '');
+  for (const ref of referencias || []) {
+    if (ref.origem === 'chamado') continue;
+    const id = ref.termo;
+    const visualSemTextoMasObservado = _temImagemSemTextoEstruturado(manifesto)
       && _pareceRotinaPadraoProtheus(id)
       && _usoVisualComoObservacaoSemCausa(resposta, id);
-    const hipoteseCondicional = _usoTecnicoComoHipoteseCondicional(resposta, id);
-    if (!estaInterno && !estaPesquisa && !visualRastreavel && !visualSemTextoMasObservado && !hipoteseCondicional && !_temRotuloHipoteseOuOrigem(resposta, id)) {
-      const visualNaoVerificavel = _temImagemSemTextoEstruturado(manifesto) && _respostaAlegaVisual(resposta, id);
-      falhas.push({
-        codigo: 'UNTRACEABLE_TECHNICAL_REFERENCE',
-        severidade: 'media',
-        detalhe: visualNaoVerificavel
-          ? 'resposta citou identificador tecnico como observado em imagem, mas nao ha observacao visual estruturada independente no manifesto'
-          : 'resposta citou identificador tecnico especifico sem origem rastreavel ou rotulo claro de hipotese',
-        termos: [id],
-        tipoIdentificador: item.tipo,
-        motivoRastreabilidade: visualNaoVerificavel ? 'visual_sem_observacao_estruturada' : 'sem_origem_verificavel',
-        decisionKind: visualNaoVerificavel ? DECISAO_QG.EVIDENCIA_INSUFICIENTE : DECISAO_QG.BLOQUEIO_OBJETIVO,
-        categoriaDecisao: visualNaoVerificavel ? DECISAO_QG.EVIDENCIA_INSUFICIENTE : DECISAO_QG.BLOQUEIO_OBJETIVO,
-        acaoCorretiva: 'citar_origem_da_referencia_ou_rebaixar_para_hipotese_a_validar',
-      });
-      break;
-    }
-    if (!estaInterno && estaPesquisa) {
-      const idx = respostaNorm.indexOf(idNorm);
-      const janela = respostaNorm.slice(Math.max(0, idx - 170), Math.min(respostaNorm.length, idx + idNorm.length + 170));
-      const atribuiAoHistorico = /\b(cliente|historico|mensagens?|prints?|anexos?|log|evidencias? internas?)\b[\s\S]{0,120}\b(mostra|mostram|traz|trazem|aparece|aparecem|informa|informou|registra|registram|cita|citam|referencia|referenciam)\b/i.test(janela)
-        || /\b(mostra|mostram|traz|trazem|aparece|aparecem|informa|informou|registra|registram|cita|citam|referencia|referenciam)\b[\s\S]{0,120}\b(cliente|historico|mensagens?|prints?|anexos?|log|evidencias? internas?)\b/i.test(janela);
-      const reconheceExterno = /\b(pesquisa|fonte externa|documentacao|tdn|totvs|artigo|como apoio|contexto geral)\b/i.test(janela);
-      const negacaoOuLimite = _janelaNegaAtribuicaoInterna(janela);
-      if (atribuiAoHistorico && !reconheceExterno && !negacaoOuLimite) {
+    if (visualSemTextoMasObservado) continue;
+    const visualNaoVerificavel = _temImagemSemTextoEstruturado(manifesto) && _respostaAlegaVisual(resposta, id);
+    if (visualNaoVerificavel && !ref.rotulada) {
+      if (!falhas.some(f => f.codigo === 'UNTRACEABLE_TECHNICAL_REFERENCE')) {
         falhas.push({
-          codigo: 'EXTERNAL_REFERENCE_PRESENTED_AS_CASE_EVIDENCE',
+          codigo: 'UNTRACEABLE_TECHNICAL_REFERENCE',
           severidade: 'media',
-          detalhe: 'referencia tecnica encontrada em pesquisa externa foi apresentada como se estivesse no historico/anexo/log do chamado',
+          detalhe: 'resposta citou identificador tecnico como observado em imagem, mas nao ha observacao visual estruturada independente no manifesto',
           termos: [id],
-          tipoIdentificador: item.tipo,
+          tipoIdentificador: ref.tipo,
+          motivoRastreabilidade: 'visual_sem_observacao_estruturada',
+          decisionKind: DECISAO_QG.EVIDENCIA_INSUFICIENTE,
+          categoriaDecisao: DECISAO_QG.EVIDENCIA_INSUFICIENTE,
+          acaoCorretiva: 'corrigir_atribuicao_visual_mantendo_conteudo_tecnico',
+        });
+      }
+      continue;
+    }
+    if (ref.atribuidaAoCaso || ref.afirmadaComoCausa) {
+      const codigo = ref.origem === 'pesquisa' ? 'EXTERNAL_REFERENCE_PRESENTED_AS_CASE_EVIDENCE' : 'MODEL_KNOWLEDGE_PRESENTED_AS_CASE_EVIDENCE';
+      if (!falhas.some(f => f.codigo === codigo)) {
+        falhas.push({
+          codigo,
+          severidade: 'media',
+          detalhe: ref.afirmadaComoCausa && !ref.atribuidaAoCaso
+            ? 'referencia tecnica que nao consta nas evidencias foi afirmada como causa confirmada do chamado (sem rotulo de hipotese)'
+            : ref.origem === 'pesquisa'
+              ? 'referencia tecnica encontrada em pesquisa externa foi apresentada como se estivesse no historico/anexo/log do chamado'
+              : 'referencia tecnica do conhecimento do modelo foi apresentada como se estivesse no historico/anexo/log do chamado',
+          termos: [id],
+          tipoIdentificador: ref.tipo,
           decisionKind: DECISAO_QG.BLOQUEIO_OBJETIVO,
           categoriaDecisao: DECISAO_QG.BLOQUEIO_OBJETIVO,
-          acaoCorretiva: 'diferenciar_fonte_externa_de_evidencia_interna_do_chamado',
+          acaoCorretiva: 'corrigir_atribuicao_de_origem_mantendo_conteudo_tecnico',
         });
-        break;
       }
     }
   }
-
   return falhas;
+}
+
+// Falhas que podem VETAR a entrega apos o retry: integridade do que e afirmado
+// sobre o caso, grau de certeza e vazamento de dados internos. Demais falhas
+// (estilo, qualidade, aviso operacional) geram alerta, nunca substituem a
+// resposta (M4).
+const FALHAS_DE_INTEGRIDADE = new Set([
+  'INTERNAL_IDS_USED_AS_EVIDENCE',
+  'RETRY_CONTEXT_LEAKED',
+  'UNSUPPORTED_OPERATIONAL_COUNT',
+  'FACTUAL_CONTRADICTION_WITH_MISSING_EVIDENCE',
+  'ARITHMETIC_CLAIM_DOES_NOT_RECONCILE',
+  'TRUNCATED_RESPONSE_INCOMPLETE',
+  'OVERCONFIDENT_CAUSE_WITH_PARTIAL_SOURCE',
+  'HYPOTHESIS_PROMOTED_TO_CONFIRMED_CAUSE',
+  'PRR_CONFIRMED_CAUSE_WITH_BLOCKING_GAP',
+  'CERTAINTY_WITHOUT_EVIDENCE',
+  'CUSTOMIZATION_DISCARDED_WITHOUT_CODE_OR_LOG',
+  'INCIDENTAL_EVIDENCE_PROMOTED_WITHOUT_CAUSAL_BRIDGE',
+  'OPERATIONAL_ESCALATION_TREATED_AS_RESOLUTION',
+  'EXTERNAL_REFERENCE_PRESENTED_AS_CASE_EVIDENCE',
+  'MODEL_KNOWLEDGE_PRESENTED_AS_CASE_EVIDENCE',
+  'UNTRACEABLE_TECHNICAL_REFERENCE',
+  'PRR_EXTERNAL_REFERENCE_USED_AS_CAUSE',
+  'PRR_VISUAL_REFERENCE_USED_AS_CAUSE',
+]);
+
+function ehFalhaDeIntegridade(falha) {
+  return FALHAS_DE_INTEGRIDADE.has(falha?.codigo);
+}
+
+function temFalhaDeIntegridade(gate) {
+  return (gate?.falhas || []).some(ehFalhaDeIntegridade);
 }
 
 function _avaliarContagemOperacionalFalsa(textoResposta, historicoMensagens, manifesto) {
@@ -965,7 +1080,7 @@ function _avaliarEstadoOperacionalDoQuadro(textoResposta, manifesto) {
   return falhas;
 }
 
-function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRetry = false, historicoMensagens = [] } = {}) {
+function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRetry = false, historicoMensagens = [], indiceReferencias = null } = {}) {
   const falhas = [];
   const resposta = String(textoResposta || '');
   const perguntaTexto = String(pergunta || '');
@@ -1043,7 +1158,8 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
   }
   falhas.push(..._avaliarContradicaoComEvidenciaAusente(resposta, manifesto, perguntaTexto, historicoMensagens));
   falhas.push(..._avaliarCertezaIndevidaComEvidenciaParcial(resposta, manifesto, perguntaTexto, historicoMensagens));
-  falhas.push(..._avaliarRastreabilidadeTecnica(resposta, { manifesto, pesquisa, pergunta: perguntaTexto, historicoMensagens }));
+  const referenciasProvenientes = classificarProvenienciaReferencias(resposta, { manifesto, pesquisa, pergunta: perguntaTexto, historicoMensagens, indiceReferencias });
+  falhas.push(..._avaliarRastreabilidadeTecnica(resposta, { manifesto, referencias: referenciasProvenientes }));
   falhas.push(...planoRespostaRastreavel.avaliarRespostaContraPlano({
     textoResposta: resposta,
     plano: manifesto?.planoRespostaRastreavel,
@@ -1061,9 +1177,11 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
   if (_ignoraPendenciaExternaBloqueante(resposta, manifesto)) {
     falhas.push({
       codigo: 'EXTERNAL_PENDING_DEPENDENCY_IGNORED',
-      severidade: 'alta',
-      detalhe: `chamado tem pendencia de retorno externo (${manifesto.pendenciaConsolidada.responsavel}) nao reconhecida como dependencia efetiva do proximo passo`,
-      acaoCorretiva: 'reconhecer_pendencia_externa_e_priorizar_acompanhamento',
+      severidade: 'baixa',
+      detalhe: `chamado tem pendencia de retorno externo (${manifesto.pendenciaConsolidada.responsavel}) nao mencionada na resposta (alerta informativo; nao impede a investigacao interna)`,
+      acaoCorretiva: 'mencionar_pendencia_externa_como_atividade_paralela',
+      decisionKind: DECISAO_QG.CORRECAO_ESTILO,
+      categoriaDecisao: DECISAO_QG.CORRECAO_ESTILO,
     });
   }
   if (/\b(causa confirmada|diagn[oó]stico confirmado|com certeza|definitivamente)\b/i.test(resposta) && !/\b(evid[eê]ncia|log|fonte|print|anexo|trecho|linha|stack)\b/i.test(resposta)) {
@@ -1159,6 +1277,7 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
     deveRetry,
     falhas: falhasClassificadas,
     decisoes,
+    proveniencia: _resumoProveniencia(referenciasProvenientes),
     criterios: {
       anexosAnalisados: anexosAnalisados.length,
       evidenciasSelecionadas: selecionados.length,
@@ -1183,18 +1302,18 @@ function _termosDasFalhas(gate, codigo) {
 function _formatarContratoPRRRetry(manifesto) {
   const prr = manifesto?.planoRespostaRastreavel;
   if (!prr) return '';
-  const linhas = ['Contrato PRR obrigatorio nesta reescrita:'];
+  const linhas = ['Organizacao do caso (PRR) para esta reescrita — rastreabilidade, nao lista de conhecimento permitido:'];
   const estado = manifesto?.quadroInvestigativo?.estadoOperacional;
   if (estado) linhas.push(`- Estado operacional atual: ${estado}.`);
-  if (prr.proximoPassoRecomendado?.descricao) linhas.push(`- Proximo passo permitido pelo PRR: ${prr.proximoPassoRecomendado.descricao}`);
+  if (prr.proximoPassoRecomendado?.descricao) linhas.push(`- Proximo passo sugerido pelo PRR (ponto de partida, nao limite): ${prr.proximoPassoRecomendado.descricao}`);
   const termos = (prr.termosTecnicosPermitidos || []).slice(0, 18).map(t => {
     const origens = (t.origens || []).map(o => o.origem).filter(Boolean).join('+') || 'sem_origem';
-    return `${t.termo} (${t.usoPermitido}; causal=${t.causalPermitido ? 'sim' : 'nao'}; origem=${origens})`;
+    return `${t.termo} (origem=${origens})`;
   });
-  if (termos.length) linhas.push(`- Referencias tecnicas autorizadas: ${termos.join('; ')}.`);
+  if (termos.length) linhas.push(`- Referencias ja rastreadas no caso: ${termos.join('; ')}.`);
   const lacunas = (prr.lacunasObrigatorias || []).filter(l => l.bloqueiaConclusao).slice(0, 5).map(l => l.texto);
   if (lacunas.length) linhas.push(`- Lacunas que impedem conclusao: ${lacunas.join(' | ')}.`);
-  linhas.push('- Se precisar formular hipotese sem referencia autorizada, descreva funcionalmente a evidencia faltante; nao invente nome de rotina, parametro, fonte, tabela ou ponto de entrada.');
+  linhas.push('- Mantenha o conteudo tecnico da analise, inclusive hipoteses, rotinas, campos, parametros e tabelas do seu conhecimento que nao constam acima: corrija apenas a ATRIBUICAO de origem e o GRAU DE CERTEZA. Nao remova nem troque por descricao generica.');
   return linhas.join('\n');
 }
 
@@ -1204,17 +1323,17 @@ function _instrucoesDirecionadasPorFalha(gate, manifesto) {
   if (codigos.has('INTERNAL_IDS_USED_AS_EVIDENCE')) {
     linhas.push('Falha INTERNAL_IDS_USED_AS_EVIDENCE: remova qualquer ID interno do texto final (aud-msg, aud-an, aud-at, aud-ch, UUID, id de execucao). Substitua por conteudo visivel: texto do erro, nome do arquivo, campo, rotina observada ou trecho de log real.');
   }
+  if (codigos.has('EXTERNAL_REFERENCE_PRESENTED_AS_CASE_EVIDENCE') || codigos.has('MODEL_KNOWLEDGE_PRESENTED_AS_CASE_EVIDENCE')) {
+    const termos = [..._termosDasFalhas(gate, 'EXTERNAL_REFERENCE_PRESENTED_AS_CASE_EVIDENCE'), ..._termosDasFalhas(gate, 'MODEL_KNOWLEDGE_PRESENTED_AS_CASE_EVIDENCE')];
+    linhas.push(`Falha de ATRIBUICAO${termos.length ? ` (${termos.join(', ')})` : ''}: essas referencias nao constam nas evidencias do chamado, mas foram apresentadas como se o cliente, o historico, o print ou o log as mostrassem. MANTENHA o conteudo tecnico e corrija so a origem: diga que e conhecimento tecnico seu, orientacao geral, pesquisa externa ou hipotese a validar no ambiente. Nao remova a referencia nem a troque por descricao generica.`);
+  }
   if (codigos.has('UNTRACEABLE_TECHNICAL_REFERENCE')) {
     const termos = _termosDasFalhas(gate, 'UNTRACEABLE_TECHNICAL_REFERENCE');
-    linhas.push(`Falha UNTRACEABLE_TECHNICAL_REFERENCE: remova identificadores tecnicos sem origem verificavel${termos.length ? ` (${termos.join(', ')})` : ''}. Nao substitua por outro nome tecnico. Use descricao funcional generica, como "tela de parametrizacao", "fonte responsavel pelo calculo" ou "log do fluxo", e diga qual evidencia deve revelar o nome real.`);
-  }
-  if (codigos.has('PRR_TECHNICAL_REFERENCE_NOT_ALLOWED')) {
-    const termos = _termosDasFalhas(gate, 'PRR_TECHNICAL_REFERENCE_NOT_ALLOWED');
-    linhas.push(`Falha PRR_TECHNICAL_REFERENCE_NOT_ALLOWED: retire referencias tecnicas fora do PRR${termos.length ? ` (${termos.join(', ')})` : ''}. Nao use exemplos de rotina, tela, parametro, fonte, tabela ou ponto de entrada que nao estejam no PRR. Se a ideia for util, reescreva sem nome inventado: "fonte/gatilho/ponto de entrada que altera o campo" ou "rotina envolvida no fluxo", e diga qual evidencia identifica o nome real.`);
+    linhas.push(`Falha de ATRIBUICAO VISUAL${termos.length ? ` (${termos.join(', ')})` : ''}: a resposta diz que isso aparece em print/imagem, mas nao ha leitura verificavel do print. Mantenha a referencia como hipotese tecnica sua (ou peca a leitura/texto do print), sem afirmar que foi observada na imagem.`);
   }
   if (codigos.has('PRR_EXTERNAL_REFERENCE_USED_AS_CAUSE')) {
     const termos = _termosDasFalhas(gate, 'PRR_EXTERNAL_REFERENCE_USED_AS_CAUSE');
-    linhas.push(`Falha PRR_EXTERNAL_REFERENCE_USED_AS_CAUSE: referencias externas${termos.length ? ` (${termos.join(', ')})` : ''} so podem aparecer como apoio/hipotese; nao as apresente como causa nem como acao principal sem ponte causal interna.`);
+    linhas.push(`Falha de CERTEZA${termos.length ? ` (${termos.join(', ')})` : ''}: referencia vinda de pesquisa externa foi afirmada como CAUSA do caso sem ponte causal interna. Mantenha a referencia e a orientacao tecnica; apresente a causa como hipotese a validar e diga qual verificacao a confirmaria.`);
   }
   if (codigos.has('PRR_VISUAL_REFERENCE_USED_AS_CAUSE')) {
     const termos = _termosDasFalhas(gate, 'PRR_VISUAL_REFERENCE_USED_AS_CAUSE');
@@ -1282,4 +1401,4 @@ function montarInstrucaoRetry(gate, contexto = {}) {
   ].filter(Boolean).join('\n');
 }
 
-module.exports = { avaliarResposta, montarInstrucaoRetry, _avaliarRegressaoInvestigativa, _similaridadeShingles, _extrairAncorasTecnicas };
+module.exports = { avaliarResposta, montarInstrucaoRetry, classificarProvenienciaReferencias, temFalhaDeIntegridade, ehFalhaDeIntegridade, FALHAS_DE_INTEGRIDADE, _avaliarRegressaoInvestigativa, _similaridadeShingles, _extrairAncorasTecnicas };

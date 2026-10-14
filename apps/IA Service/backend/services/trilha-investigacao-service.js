@@ -258,6 +258,13 @@ function _eventoQualityGate(execucao) {
       recuperacaoDeterministica: recuperacao ? { aplicada: !!recuperacao.aplicada, modo: recuperacao.modo || null, origem: recuperacao.origem || null } : null,
       revisaoNecessaria: revisao ? { motivo: revisao.motivo, falhas: revisao.falhas || [] } : null,
       criterios: qg.criterios || null,
+      // Proveniencia das referencias tecnicas citadas (transparencia: o que
+      // consta no chamado, na pesquisa ou e conhecimento/hipotese do modelo).
+      proveniencia: qg.proveniencia ? {
+        contagem: qg.proveniencia.contagem || null,
+        atribuicoesFalsas: qg.proveniencia.atribuicoesFalsas ?? 0,
+        referencias: qg.proveniencia.referencias || [],
+      } : null,
     },
   };
 }

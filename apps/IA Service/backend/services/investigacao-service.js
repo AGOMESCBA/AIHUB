@@ -93,15 +93,67 @@ function _adicionarInstrucaoObservacaoVisual(userPrompt, contexto) {
   ].join('\n');
 }
 
+// Remove, do texto exibido ao analista, um objeto JSON que contenha a chave
+// informada (com ou sem cerca ```json), usando casamento de chaves — tolera o
+// modelo omitir/errar os marcadores <<<...>>> do protocolo de auditoria.
+function _removerBlocoJsonComChave(texto, chave) {
+  const original = String(texto || '');
+  const i = original.indexOf(`"${chave}"`);
+  if (i < 0) return { texto: original, bloco: null };
+  const ini = original.lastIndexOf('{', i);
+  if (ini < 0) return { texto: original, bloco: null };
+  let profundidade = 0;
+  let emString = false;
+  let escape = false;
+  let fim = -1;
+  for (let k = ini; k < original.length; k++) {
+    const ch = original[k];
+    if (emString) {
+      if (escape) escape = false;
+      else if (ch === '\\') escape = true;
+      else if (ch === '"') emString = false;
+      continue;
+    }
+    if (ch === '"') emString = true;
+    else if (ch === '{') profundidade += 1;
+    else if (ch === '}') {
+      profundidade -= 1;
+      if (profundidade === 0) { fim = k; break; }
+    }
+  }
+  if (fim < 0) return { texto: original, bloco: null };
+  const cercaAbertura = original.slice(0, ini).match(/```(?:json)?\s*$/i);
+  const cercaFechamento = original.slice(fim + 1).match(/^\s*```/);
+  const de = ini - (cercaAbertura ? cercaAbertura[0].length : 0);
+  const ate = fim + 1 + (cercaFechamento ? cercaFechamento[0].length : 0);
+  return { texto: `${original.slice(0, de)}${original.slice(ate)}`, bloco: original.slice(ini, fim + 1) };
+}
+
+// Nenhum token do protocolo interno pode chegar ao analista.
+function _limparMarcadoresProtocolo(texto) {
+  return String(texto || '')
+    .replace(/<{0,3}\s*\/?\s*(?:FIM_)?OBSERVACOES_VISUAIS_AUDITORIA\s*>{0,3}/gi, '')
+    .replace(/\n{3,}/g, '\n\n');
+}
+
 function _extrairObservacoesVisuaisDaResposta(texto, contexto) {
   const original = String(texto || '');
   const regex = /<<<OBSERVACOES_VISUAIS_AUDITORIA>>>\s*([\s\S]*?)\s*<<<FIM_OBSERVACOES_VISUAIS_AUDITORIA>>>/i;
   const match = original.match(regex);
-  if (!match) return { textoLimpo: original, observacoesVisuais: [] };
-  const textoLimpo = original.replace(regex, '').trim();
+  let textoLimpo;
+  let bruto = null;
+  if (match) {
+    textoLimpo = original.replace(regex, '');
+    bruto = match[1].trim();
+  } else {
+    const sem = _removerBlocoJsonComChave(original, 'observacoesVisuais');
+    textoLimpo = sem.texto;
+    bruto = sem.bloco;
+  }
+  textoLimpo = _limparMarcadoresProtocolo(textoLimpo).trim();
+  if (!bruto) return { textoLimpo, observacoesVisuais: [] };
   let parsed = null;
   try {
-    const bruto = match[1].trim();
     const json = bruto.match(/\{[\s\S]*\}/)?.[0] || bruto;
     parsed = JSON.parse(json);
   } catch (_) {
@@ -176,25 +228,31 @@ function _prepararTextoResposta(texto, pesquisa) {
   return _adicionarLimitePesquisaSemPaginaLida(_limparBastidoresRetryTexto(texto), pesquisa);
 }
 
+// O retry existe para corrigir atribuicao/certeza, nunca para piorar a analise.
+// Se a resposta do retry for uma recusa do provider ("Desculpe, nao posso
+// ajudar"), vazia ou muito mais curta que a anterior, ela e descartada e a
+// resposta anterior e mantida (com seus alertas registrados).
+function _retryDegradouResposta(textoRetry, textoAnterior) {
+  const novo = String(textoRetry || '').trim();
+  const anterior = String(textoAnterior || '').trim();
+  if (!novo) return 'vazia';
+  const norm = novo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (novo.length < 240 && /^(desculpe|sinto muito|lamento|nao posso|nao consigo ajudar|i(?:'m| am) sorry|sorry|i can(?:not|'t))/.test(norm)) return 'recusa_do_provider';
+  if (anterior.length >= 300 && novo.length < anterior.length * 0.3) return 'muito_mais_curta';
+  return null;
+}
+
 function _temBloqueioObjetivoQualityGate(qualityGate) {
   return (qualityGate?.falhas || []).some(f => (f.decisionKind || f.categoriaDecisao) === 'bloqueio_objetivo');
 }
 
+// M4 (2026-10): apos o retry, so falhas de INTEGRIDADE (atribuicao falsa de
+// origem, certeza indevida, dados internos expostos, resposta truncada...)
+// podem vetar a entrega. Estilo, qualidade e avisos operacionais geram alerta e
+// a resposta do modelo e entregue — o Quality Gate nao substitui a analise.
 function _calcularRevisaoNecessariaQualityGate({ qualityGate, retryDeQualityGate }) {
   if (!retryDeQualityGate || !qualityGate || qualityGate.aprovado) return false;
-  if ((qualityGate.falhas || []).length > 0) return true;
-  if (_temBloqueioObjetivoQualityGate(qualityGate)) return true;
-  return (qualityGate.falhas || []).some(f => (f.decisionKind || f.categoriaDecisao) === 'evidencia_insuficiente'
-    && [
-      'REDUNDANT_OPERATIONAL_ESCALATION',
-      'REDUNDANT_OPERATIONAL_MEETING',
-      'INCIDENTAL_EVIDENCE_PROMOTED_WITHOUT_CAUSAL_BRIDGE',
-      'INVESTIGATIVE_FRAME_OPERATIONAL_STAGE_IGNORED',
-      'UNTRACEABLE_TECHNICAL_REFERENCE',
-      'EXTERNAL_REFERENCE_PRESENTED_AS_CASE_EVIDENCE',
-      'UNSUPPORTED_OPERATIONAL_COUNT',
-      'INTERNAL_IDS_USED_AS_EVIDENCE',
-    ].includes(f.codigo));
+  return qualityGateService.temFalhaDeIntegridade(qualityGate);
 }
 
 function _statusFinalQualityGate(qualityGate, retryDeQualityGate) {
@@ -303,9 +361,9 @@ async function _carregarPayloadVisual(contexto) {
 async function _registrarErroVisual({ empresaId, atendimentoId, mensagemUsuario, contexto, pesquisaTecnica, userPrompt, falhasImagem, falhasPdfVisual }) {
   const falhas = [
     ...falhasImagem.map(nome => ({ codigo: 'IMAGEM_NAO_CARREGADA', severidade: 'alta', detalhe: nome })),
-    ...falhasPdfVisual.map(f => ({ codigo: 'PDF_VISUAL_NAO_RASTERIZADO', severidade: 'alta', detalhe: f.nome, erro: f.erro })),
+    ...falhasPdfVisual.map(f => ({ codigo: 'PDF_VISUAL_NAO_RASTERIZADO', severidade: 'alta', detalhe: f.erro ? `${f.nome} — ${f.erro}` : f.nome, erro: f.erro })),
   ];
-  const nomes = [...falhasImagem, ...falhasPdfVisual.map(f => f.nome)].join(', ');
+  const nomes = [...falhasImagem, ...falhasPdfVisual.map(f => (f.erro ? `${f.nome}: ${f.erro}` : f.nome))].join(', ');
   const mensagemErro = `NÃ£o foi possÃ­vel carregar ${falhas.length} evidÃªncia(s) visual(is) para anÃ¡lise (${nomes}) â€” a investigaÃ§Ã£o foi interrompida para nÃ£o gerar um diagnÃ³stico sem considerar essas evidÃªncias. Tente novamente; se persistir, reenvie o(s) arquivo(s).`;
   // erroInfraestrutura: true evita que o Context Engine trate esta mensagem como
   // tentativa de diagnostico ao montar o historico do proximo turno.
@@ -331,6 +389,113 @@ async function _registrarErroVisual({ empresaId, atendimentoId, mensagemUsuario,
     console.error('[IA Service] Falha ao registrar auditoria de erro de imagem da investigaÃ§Ã£o:', auditErr.message);
   }
   return msgErro;
+}
+
+// Reaproveita imagens/PDFs ja carregados (e rasterizados) no turno quando o
+// contexto reconstruido seleciona o mesmo subconjunto, evitando reler disco e
+// reabrir o Chrome a cada candidato. Se faltar qualquer item, carrega tudo.
+async function _carregarPayloadVisualReaproveitando(contexto, carregadas = []) {
+  const reaproveitadas = [];
+  let completo = true;
+  for (const anexo of contexto.imagensSelecionadas || []) {
+    const achada = carregadas.find(i => i.origem === 'imagem' && i.anexoId === anexo.id);
+    if (!achada) { completo = false; break; }
+    reaproveitadas.push(achada);
+  }
+  if (completo) {
+    for (const item of contexto.pdfsVisuaisSelecionados || []) {
+      const paginas = item.paginas || [1];
+      const achadas = carregadas.filter(i => i.origem === 'pdf' && i.anexoId === item.anexo.id && paginas.includes(i.pagina));
+      if (achadas.length !== paginas.length) { completo = false; break; }
+      reaproveitadas.push(...achadas);
+    }
+  }
+  if (completo) return { imagens: reaproveitadas, falhasImagem: [], falhasPdfVisual: [] };
+  return _carregarPayloadVisual(contexto);
+}
+
+function _entradaDisponivelDoModelo(modelo) {
+  return tokenBudget.criarOrcamento({ modelo, systemPrompt: promptBuilder.SYSTEM_PROMPT }).entradaDisponivel;
+}
+
+// Registro por tentativa (vai para tentativas_json da execucao): qual
+// provider/modelo, qual orcamento e quais evidencias entraram ou ficaram de fora.
+function _registroPreparo(ctx, candidato, reconstruido, qtdImagens) {
+  const orc = ctx.manifesto?.orcamento || {};
+  return {
+    reconstruido,
+    orcamento: {
+      provider: candidato.provider,
+      modelo: candidato.model,
+      janela: orc.janela ?? null,
+      respostaReservada: orc.respostaReservada ?? null,
+      margem: orc.margem ?? null,
+      entradaDisponivel: orc.entradaDisponivel ?? null,
+      origem: orc.origemReferencia ?? null,
+    },
+    imagensEnviadas: qtdImagens,
+    evidenciasIncluidas: (ctx.manifesto?.selecionados || []).map(s => ({ tipo: s.tipo, id: s.id, statusEnvio: s.statusEnvio || null })),
+    evidenciasOmitidas: (ctx.manifesto?.omitidos || []).map(o => ({ tipo: o.tipo, id: o.id, motivo: o.motivo || o.status || null })),
+  };
+}
+
+/**
+ * Preparo do prompt POR CANDIDATO (opcao B, 2026-10). O contexto inicial e
+ * dimensionado para o primeiro candidato elegivel da ordem cadastrada. Quando
+ * o fallback chega a um modelo com orcamento diferente (janela maior OU
+ * menor), o contexto e reconstruido para o orcamento desse modelo, em vez de
+ * reenviar um prompt dimensionado para outro. Nenhum candidato e pulado por
+ * preferencia nem por janela; a ordem cadastrada e preservada.
+ *
+ * Retorna { preparar, usadoPor }: `preparar` e o callback do chamarIA;
+ * `usadoPor(resultado)` devolve o contexto/prompt/imagens da tentativa
+ * vencedora (ou null) para persistencia e Quality Gate.
+ */
+function _criarPreparadorPorCandidato({ contexto, userPromptAtual, imagensAtuais, candidatoAtual, paramsContexto, evidenciaForcadaIds = [], decorar }) {
+  const base = { contexto, userPrompt: userPromptAtual, imagens: [...imagensAtuais] };
+  const usados = new Map();
+  const reconstruidos = new Map();
+  const entradaBase = candidatoAtual ? _entradaDisponivelDoModelo(candidatoAtual.model) : null;
+
+  async function preparar({ provider, model, suportaImagem }) {
+    const chave = `${provider}|${model}`;
+    const mesmoOrcamento = entradaBase !== null
+      && _entradaDisponivelDoModelo(model) === entradaBase
+      && (suportaImagem || base.imagens.length === 0);
+    if (mesmoOrcamento) {
+      usados.set(chave, base);
+      return { registro: _registroPreparo(base.contexto, { provider, model }, false, base.imagens.length) };
+    }
+    const chaveCache = `${chave}|${suportaImagem ? 'v' : 'n'}`;
+    let pronto = reconstruidos.get(chaveCache);
+    if (!pronto) {
+      const novo = contextEngine.montarContextoInvestigacao({
+        ...paramsContexto,
+        evidenciaForcadaIds,
+        candidatoOrcamento: { provider, model },
+        permitirImagens: !!suportaImagem,
+      });
+      const payload = await _carregarPayloadVisualReaproveitando(novo, base.imagens);
+      if (payload.falhasImagem.length > 0 || payload.falhasPdfVisual.length > 0) {
+        const nomes = [...payload.falhasImagem, ...payload.falhasPdfVisual.map(f => f.nome)].join(', ');
+        throw new Error(`evidencia(s) visual(is) nao carregada(s): ${nomes}`);
+      }
+      pronto = { contexto: novo, userPrompt: decorar(novo, novo.userPrompt), imagens: payload.imagens };
+      reconstruidos.set(chaveCache, pronto);
+    }
+    usados.set(chave, pronto);
+    return {
+      userPrompt: pronto.userPrompt,
+      imagens: pronto.imagens,
+      registro: _registroPreparo(pronto.contexto, { provider, model }, true, pronto.imagens.length),
+    };
+  }
+
+  function usadoPor(resultado) {
+    return usados.get(`${resultado?.provider}|${resultado?.model}`) || null;
+  }
+
+  return { preparar, usadoPor };
 }
 
 const SYSTEM_PROMPT_CLASSIFICACAO_TURNO = `Você classifica uma única mensagem de um analista de suporte técnico dentro de um chat de investigação. Responda APENAS com um JSON: {"tipo": "pergunta_processo" | "fora_de_escopo" | "investigacao"}.
@@ -550,7 +715,9 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
   }
 
   const { keys, cfg } = aiConfigService.resolverKeysEOrdem(empresaId);
-  let contexto = contextEngine.montarContextoInvestigacao({
+  // Parametros de montagem do contexto, reaproveitados nas reconstrucoes por
+  // candidato (cada modelo da ordem cadastrada tem seu proprio orcamento).
+  const paramsContexto = {
     atendimento,
     mensagens: historico,
     mensagemAtual: texto,
@@ -561,9 +728,22 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     relacionados,
     systemPrompt: promptBuilder.SYSTEM_PROMPT,
     cfg,
+    keys,
     dossieOperacionalPrecarregado: dossieOperacionalTurno,
     analistaAtualNome,
     chamado,
+  };
+  // Primeiro candidato da ordem cadastrada (primario + fallback) com chave,
+  // SEM exigir visao: so se sabe se ha imagem efetivamente enviada depois que
+  // o contexto e montado. Se houver, o candidato com visao e resolvido abaixo.
+  let candidatoBase = aiProviderClient.primeiroCandidatoElegivel(keys, cfg, { exigeImagem: false });
+  let contexto = contextEngine.montarContextoInvestigacao({
+    ...paramsContexto,
+    candidatoOrcamento: candidatoBase,
+    // Imagens permitidas no 1o build: a regra "anexo de imagem nunca e
+    // ignorado" exige detectar se ha imagem efetivamente enviada, mesmo que o
+    // candidato-base nao tenha visao (nesse caso troca-se o candidato abaixo).
+    permitirImagens: true,
   });
   let userPrompt = contexto.userPrompt;
 
@@ -620,9 +800,9 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
   if (falhasImagem.length > 0 || falhasPdfVisual.length > 0) {
     const falhas = [
       ...falhasImagem.map(nome => ({ codigo: 'IMAGEM_NAO_CARREGADA', severidade: 'alta', detalhe: nome })),
-      ...falhasPdfVisual.map(f => ({ codigo: 'PDF_VISUAL_NAO_RASTERIZADO', severidade: 'alta', detalhe: f.nome, erro: f.erro })),
+      ...falhasPdfVisual.map(f => ({ codigo: 'PDF_VISUAL_NAO_RASTERIZADO', severidade: 'alta', detalhe: f.erro ? `${f.nome} — ${f.erro}` : f.nome, erro: f.erro })),
     ];
-    const nomes = [...falhasImagem, ...falhasPdfVisual.map(f => f.nome)].join(', ');
+    const nomes = [...falhasImagem, ...falhasPdfVisual.map(f => (f.erro ? `${f.nome}: ${f.erro}` : f.nome))].join(', ');
     const mensagemErro = `Não foi possível carregar ${falhas.length} evidência(s) visual(is) para análise (${nomes}) — a investigação foi interrompida para não gerar um diagnóstico sem considerar essas evidências. Tente novamente; se persistir, reenvie o(s) arquivo(s).`;
     const msgErro = mensagemRepo.salvarMensagem(empresaId, atendimentoId, { papel: 'assistant', conteudo: mensagemErro, usuarioId: null, diagnostico: { erroInfraestrutura: true } });
     try {
@@ -648,6 +828,34 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     return msgErro;
   }
 
+  // Modalidade: com imagem efetivamente enviada e candidato-base sem visao,
+  // o orcamento passa a ser o do primeiro candidato da ORDEM CADASTRADA que
+  // tem visao (mesma regra de elegibilidade do ai-provider-client). Nenhum
+  // provider e promovido por preferencia: so se segue a ordem do cadastro.
+  if (imagens.length > 0 && candidatoBase && !aiProviderClient.PROVIDER_CONFIGS[candidatoBase.provider]?.suportaImagem) {
+    const candidatoVisao = aiProviderClient.primeiroCandidatoElegivel(keys, cfg, { exigeImagem: true });
+    if (candidatoVisao) {
+      const novoContexto = contextEngine.montarContextoInvestigacao({ ...paramsContexto, candidatoOrcamento: candidatoVisao, permitirImagens: true });
+      const payloadNovo = await _carregarPayloadVisualReaproveitando(novoContexto, imagens);
+      if (payloadNovo.falhasImagem.length > 0 || payloadNovo.falhasPdfVisual.length > 0) {
+        return _registrarErroVisual({
+          empresaId,
+          atendimentoId,
+          mensagemUsuario,
+          contexto: novoContexto,
+          pesquisaTecnica,
+          userPrompt: novoContexto.userPrompt,
+          falhasImagem: payloadNovo.falhasImagem,
+          falhasPdfVisual: payloadNovo.falhasPdfVisual,
+        });
+      }
+      contexto = novoContexto;
+      userPrompt = novoContexto.userPrompt;
+      imagens.splice(0, imagens.length, ...payloadNovo.imagens);
+      candidatoBase = candidatoVisao;
+    }
+  }
+
   // Timeout escalado pelo volume de imagens — payload maior (base64 de N
   // fotos) leva mais tempo de upload + processamento do lado do provedor.
   // Com timeout fixo, turnos com várias imagens (ex.: 7 fotos de WhatsApp)
@@ -667,10 +875,29 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
   try {
     userPrompt = _adicionarInstrucaoObservacaoVisual(userPrompt, contexto);
     promptUsado = userPrompt;
+    const preparador = _criarPreparadorPorCandidato({
+      contexto,
+      userPromptAtual: promptUsado,
+      imagensAtuais: imagens,
+      candidatoAtual: candidatoBase,
+      paramsContexto,
+      decorar: (ctx, prompt) => _adicionarInstrucaoObservacaoVisual(prompt, ctx),
+    });
     resultado = await aiProviderClient.chamarIA(keys, cfg, promptBuilder.SYSTEM_PROMPT, promptUsado, imagens, {
       maxTokens: 6000,
       timeoutMs,
+      prepararParaCandidato: preparador.preparar,
     });
+    // O contexto/manifesto/imagens persistidos e avaliados pelo Quality Gate
+    // sao os da tentativa vencedora (podem ter sido reconstruidos para o
+    // orcamento do modelo que de fato respondeu).
+    const usadoPrincipal = preparador.usadoPor(resultado);
+    if (usadoPrincipal) {
+      contexto = usadoPrincipal.contexto;
+      promptUsado = usadoPrincipal.userPrompt;
+      userPrompt = usadoPrincipal.userPrompt;
+      imagens.splice(0, imagens.length, ...usadoPrincipal.imagens);
+    }
     resultado = _aplicarObservacoesVisuais(resultado, contexto);
     resultado.texto = _prepararTextoResposta(resultado.texto, pesquisaTecnica);
     qualityGate = qualityGateService.avaliarResposta({
@@ -680,28 +907,20 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
       pergunta: texto,
       houveRetry: false,
       historicoMensagens: historico,
+      indiceReferencias: contexto.indiceReferencias,
     });
     if (qualityGate.deveRetry) {
       retryDeQualityGate = true;
       const qualityGateAntesRetry = qualityGate;
+      const resultadoAntesRetry = resultado;
       const respostaAntesRetry = String(resultado.texto || '');
       const idsForcados = (qualityGate.falhas || []).map(f => f.evidenciaId).filter(Boolean);
       if (idsForcados.length) {
         contexto = contextEngine.montarContextoInvestigacao({
-          atendimento,
-          mensagens: historico,
-          mensagemAtual: texto,
-          anexosDoTurno,
-          anexosComoContexto,
-          pesquisaTecnicaTexto,
-          pesquisa: pesquisaTecnica,
-          relacionados,
-          systemPrompt: promptBuilder.SYSTEM_PROMPT,
-          cfg,
+          ...paramsContexto,
           evidenciaForcadaIds: idsForcados,
-          dossieOperacionalPrecarregado: dossieOperacionalTurno,
-          analistaAtualNome,
-          chamado,
+          candidatoOrcamento: candidatoBase,
+          permitirImagens: true,
         });
         userPrompt = contexto.userPrompt;
         const payloadVisualRetry = await _carregarPayloadVisual(contexto);
@@ -732,11 +951,36 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
       // investigacao sem nenhum limite agregado (achado real, auditoria do
       // fallback multi-provider 2026-10). Uma rodada aqui ainda tenta TODOS
       // os providers elegiveis uma vez, so nao reinsiste em erro transitorio.
+      const contextoRetry = contexto;
+      const preparadorRetry = _criarPreparadorPorCandidato({
+        contexto: contextoRetry,
+        userPromptAtual: promptUsado,
+        imagensAtuais: imagens,
+        candidatoAtual: candidatoBase,
+        paramsContexto,
+        evidenciaForcadaIds: idsForcados,
+        decorar: (ctx, prompt) => `${_adicionarInstrucaoObservacaoVisual(prompt, ctx)}\n\n## Reprocessamento por Quality Gate\n${qualityGateService.montarInstrucaoRetry(qualityGateAntesRetry, { manifesto: ctx.manifesto })}`,
+      });
       resultado = await aiProviderClient.chamarIA(keys, cfg, promptBuilder.SYSTEM_PROMPT, promptUsado, imagens, {
         maxTokens: 6000,
         timeoutMs,
         maxProviderRounds: 1,
+        prepararParaCandidato: preparadorRetry.preparar,
       });
+      const motivoDescarteRetry = _retryDegradouResposta(resultado.texto, respostaAntesRetry);
+      if (motivoDescarteRetry) {
+        acoesRetry.push({ tipo: 'retry_descartado_resposta_degradada', motivo: motivoDescarteRetry });
+        resultado = {
+          ...resultadoAntesRetry,
+          tentativas: [...(resultadoAntesRetry.tentativas || []), ...(resultado.tentativas || [])],
+        };
+      }
+      const usadoRetry = motivoDescarteRetry ? null : preparadorRetry.usadoPor(resultado);
+      if (usadoRetry) {
+        contexto = usadoRetry.contexto;
+        promptUsado = usadoRetry.userPrompt;
+        imagens.splice(0, imagens.length, ...usadoRetry.imagens);
+      }
       resultado = _aplicarObservacoesVisuais(resultado, contexto);
       resultado.texto = _prepararTextoResposta(resultado.texto, pesquisaTecnica);
       qualityGate = qualityGateService.avaliarResposta({
@@ -746,6 +990,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
         pergunta: texto,
         houveRetry: true,
         historicoMensagens: historico,
+      indiceReferencias: contexto.indiceReferencias,
       });
       const codigosReescritaFinal = new Set([
         'ROBOTIC_TEMPLATE_RESPONSE',
@@ -809,9 +1054,10 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
           pergunta: texto,
           houveRetry: true,
           historicoMensagens: historico,
+      indiceReferencias: contexto.indiceReferencias,
         });
       }
-      if (!qualityGate.aprovado) {
+      if (!qualityGate.aprovado && qualityGateService.temFalhaDeIntegridade(qualityGate)) {
         const respostaSegura = planoRespostaRastreavel.gerarRespostaSeguraDeterministica({
           plano: contexto.manifesto?.planoRespostaRastreavel,
           gate: qualityGate,
@@ -824,6 +1070,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
             pergunta: texto,
             houveRetry: true,
             historicoMensagens: historico,
+      indiceReferencias: contexto.indiceReferencias,
           });
           const bloqueioSeguro = _temBloqueioObjetivoQualityGate(qualityGateSeguro);
           acoesRetry.push({
@@ -1064,6 +1311,9 @@ async function processarPreAnalise(empresaId, atendimentoId, { anexoIds = [] } =
 module.exports = {
   processarTurno,
   processarPreAnalise,
+  _criarPreparadorPorCandidato,
+  _extrairObservacoesVisuaisDaResposta,
+  _retryDegradouResposta,
   _extrairSecoes,
   _extrairNivelConfianca,
   _extrairFonteCorrigido,

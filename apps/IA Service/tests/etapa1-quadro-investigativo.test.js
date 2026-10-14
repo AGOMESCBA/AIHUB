@@ -305,7 +305,9 @@ function testarEtapa12_RastreabilidadeTecnica() {
     pesquisa,
     historicoMensagens: [{ papel: 'customer', conteudo: manifesto.selecionados[0].trecho }],
   });
-  assert.ok(falha(semOrigem, 'UNTRACEABLE_TECHNICAL_REFERENCE'), 'identificador tecnico sem origem nem hipotese deve reprovar');
+  // Proveniencia (2026-10): referencia fora das evidencias nao e erro por ausencia;
+  // so e falha quando afirmada como fato/causa do caso, sem rotulo de hipotese.
+  assert.ok(falha(semOrigem, 'MODEL_KNOWLEDGE_PRESENTED_AS_CASE_EVIDENCE'), 'conhecimento do modelo afirmado como ponto concreto do caso deve reprovar');
 
   const hipoteseLegitima = qualityGateService.avaliarResposta({
     textoResposta: 'Como hipotese a validar, pode existir uma rotina customizada semelhante a CALCULA_SALDO_CONTRATO, mas ela nao aparece nas evidencias; por isso eu pediria o fonte ou log antes de concluir.',
@@ -418,7 +420,8 @@ function testarEtapa13_HipoteseTecnicaCondicional() {
     manifesto,
     pergunta: 'Qual proximo passo?',
   });
-  assert.ok(falha(afirmacao, 'UNTRACEABLE_TECHNICAL_REFERENCE'), 'rotina sem origem apresentada como causa deve continuar reprovando');
+  assert.ok(falha(afirmacao, 'MODEL_KNOWLEDGE_PRESENTED_AS_CASE_EVIDENCE'), 'rotina fora das evidencias apresentada como causa confirmada deve continuar reprovando');
+  assert.ok(!falha(afirmacao, 'UNTRACEABLE_TECHNICAL_REFERENCE'), 'a falha e de atribuicao/certeza, nao de ausencia da referencia');
 }
 
 function testarEtapa14_DecisoesEObservacaoVisual() {
@@ -552,7 +555,7 @@ function testarEtapa15_HipoteseTecnicaComoExemploNaoBloqueia() {
     manifesto,
     pergunta: 'Qual evidencia falta?',
   });
-  assert.ok(falha(gateRuim, 'UNTRACEABLE_TECHNICAL_REFERENCE'), 'referencia tecnica sem origem apresentada como fato deve continuar bloqueada');
+  assert.ok(falha(gateRuim, 'MODEL_KNOWLEDGE_PRESENTED_AS_CASE_EVIDENCE'), 'referencia fora das evidencias apresentada como causa comprovada deve continuar bloqueada');
 }
 
 function testarEtapa15_CustomizacaoCondicionalNaoBloqueia() {
@@ -595,10 +598,13 @@ function testarEtapa15_FailClosedPorBloqueioObjetivo() {
       decisionKind: 'correcao_estilo',
     }],
   };
+  // M4 (2026-10): estilo/qualidade nao veta a entrega — gera alerta. Apenas
+  // falhas de integridade (atribuicao falsa, certeza indevida, dados internos)
+  // vetam apos o retry.
   assert.strictEqual(
     investigacaoService._statusFinalQualityGate(gateEstilo, true),
-    'revisao_necessaria_quality_gate',
-    'qualquer falha remanescente apos retry deve virar revisao necessaria',
+    'concluido_com_alerta_quality_gate',
+    'falha de estilo remanescente apos retry deve gerar alerta, nao bloquear a resposta',
   );
 }
 
@@ -657,7 +663,10 @@ function testarEtapa2_PRRBloqueiaReferenciaTecnicaNaoAutorizada() {
     pesquisa,
     pergunta: 'Analise o caso.',
   });
-  assert.ok(falha(gateInventado, 'PRR_TECHNICAL_REFERENCE_NOT_ALLOWED'), 'PRR deve bloquear referencia tecnica especifica fora do plano');
+  assert.ok(!falha(gateInventado, 'PRR_TECHNICAL_REFERENCE_NOT_ALLOWED'), 'PRR nao e catalogo de conhecimento autorizado: referencia nova nao bloqueia');
+  assert.ok(!falha(gateInventado, 'MODEL_KNOWLEDGE_PRESENTED_AS_CASE_EVIDENCE'), 'orientacao tecnica com referencia nova, sem atribuir ao caso, nao e falha');
+  const refD1 = (gateInventado.proveniencia?.referencias || []).find(r => r.termo === 'D1_RATEIO');
+  assert.ok(refD1 && refD1.origem === 'conhecimento_modelo', 'proveniencia deve registrar a referencia como conhecimento do modelo');
 }
 
 function testarEtapa2_PRRPermiteHipoteseSemNomeInventado() {
@@ -747,7 +756,7 @@ function testarEtapa21_PRRSemObservacaoNaoAutorizaVisual() {
     manifesto: { selecionados: [], omitidos: [], planoRespostaRastreavel: plano },
     pergunta: 'Analise os prints.',
   });
-  assert.ok(falha(gate, 'PRR_TECHNICAL_REFERENCE_NOT_ALLOWED'), 'sem observacao visual estruturada, PRR nao deve autorizar termo tecnico citado como visto no print');
+  assert.ok(falha(gate, 'MODEL_KNOWLEDGE_PRESENTED_AS_CASE_EVIDENCE'), 'sem observacao visual estruturada, termo citado como visto no print e atribuicao falsa ao caso');
 }
 
 function planoComFINA050Visual() {
@@ -864,7 +873,7 @@ function testarEtapa22_ReferenciaExternaIncidentalVersusCausa() {
     manifesto,
     pergunta: 'Analise o fonte.',
   });
-  assert.ok(falha(causa, 'PRR_EXTERNAL_REFERENCE_USED_AS_CAUSE') || falha(causa, 'PRR_TECHNICAL_REFERENCE_NOT_ALLOWED'), 'SIGAEST promovido a causa deve bloquear');
+  assert.ok(falha(causa, 'PRR_EXTERNAL_REFERENCE_USED_AS_CAUSE'), 'SIGAEST externo promovido a causa confirmada deve bloquear');
 }
 
 function testarEtapa22_InventadosEIdsContinuamBloqueados() {
@@ -884,7 +893,9 @@ function testarEtapa22_InventadosEIdsContinuamBloqueados() {
     manifesto,
     pergunta: 'Analise o rateio.',
   });
-  assert.ok(falha(inventados, 'PRR_TECHNICAL_REFERENCE_NOT_ALLOWED'), 'PARM_RATEIO_EXATOS/F3ANTES/F3APOS inventados devem bloquear');
+  assert.ok(!falha(inventados, 'PRR_TECHNICAL_REFERENCE_NOT_ALLOWED'), 'hipoteses tecnicas novas (PARM_RATEIO_EXATOS/F3ANTES/F3APOS) nao bloqueiam por ausencia');
+  const origensInventados = (inventados.proveniencia?.referencias || []).filter(r => r.origem === 'conhecimento_modelo').map(r => r.termo);
+  assert.ok(origensInventados.includes('PARM_RATEIO_EXATOS'), 'devem ser registradas como conhecimento do modelo na proveniencia');
 
   const idInterno = qualityGateService.avaliarResposta({
     textoResposta: 'A evidencia aud-msg-035988-2 comprova a falha.',
@@ -958,7 +969,7 @@ function testarEtapa23_RetryDirecionadoPorPRR() {
   const gate = {
     falhas: [
       { codigo: 'INTERNAL_IDS_USED_AS_EVIDENCE', decisionKind: 'bloqueio_objetivo' },
-      { codigo: 'PRR_TECHNICAL_REFERENCE_NOT_ALLOWED', decisionKind: 'bloqueio_objetivo', termos: ['RATEIO_DOCENTRADA'] },
+      { codigo: 'MODEL_KNOWLEDGE_PRESENTED_AS_CASE_EVIDENCE', decisionKind: 'bloqueio_objetivo', termos: ['RATEIO_DOCENTRADA'] },
       { codigo: 'REDUNDANT_OPERATIONAL_ESCALATION', decisionKind: 'bloqueio_objetivo' },
     ],
   };
@@ -969,10 +980,13 @@ function testarEtapa23_RetryDirecionadoPorPRR() {
     },
   });
   assert.ok(/INTERNAL_IDS_USED_AS_EVIDENCE/.test(instrucao), 'retry deve tratar IDs internos de forma direcionada');
-  assert.ok(/RATEIO_DOCENTRADA/.test(instrucao), 'retry deve citar termo nao autorizado que precisa sair');
+  assert.ok(/RATEIO_DOCENTRADA/.test(instrucao), 'retry deve citar a referencia cuja ATRIBUICAO precisa ser corrigida');
+  assert.ok(/ATRIBUICAO/.test(instrucao), 'retry deve pedir correcao de atribuicao, nao remocao do conteudo tecnico');
   assert.ok(/encaminhado_fabrica_em_andamento/.test(instrucao), 'retry deve receber estado operacional atual');
-  assert.ok(/fonte\/gatilho\/ponto de entrada/i.test(instrucao), 'retry deve orientar descricao funcional sem nome inventado');
-  assert.ok(/Contrato PRR/.test(instrucao), 'retry deve incluir contrato PRR resumido');
+  assert.ok(!/descreva funcionalmente|descricao funcional generica/i.test(instrucao), 'retry nao deve pedir para trocar referencia tecnica por descricao generica');
+  assert.ok(/Organizacao do caso \(PRR\)/.test(instrucao), 'retry deve incluir a organizacao do caso (PRR) resumida');
+  assert.ok(!/autorizad/i.test(instrucao) && !/nao invente nome de rotina/i.test(instrucao), 'retry nao deve tratar o PRR como lista de conhecimento autorizado');
+  assert.ok(/Mantenha o conteudo tecnico/.test(instrucao), 'retry deve preservar o conteudo tecnico e corrigir so atribuicao/certeza');
 }
 
 function testarEtapa23_PrrNaoBloqueiaNegacaoDeCausaConfirmada() {

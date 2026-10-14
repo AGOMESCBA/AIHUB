@@ -1,7 +1,10 @@
 'use strict';
 
 const UI_ACOES = new Set(['INCLUIR', 'ALTERAR', 'VISUALIZAR', 'CONSULTAR', 'EXCLUIR', 'CONFIRMAR', 'CANCELAR', 'SALVAR', 'FECHAR']);
-const IGNORAR = new Set(['TOTVS', 'PROTHEUS', 'SOFTEXPERT', 'PDF', 'PNG', 'JPG', 'XML', 'JSON', 'HTTP', 'HTTPS', 'SLA', 'IA', 'API']);
+// Codigos curtos de registro/tabela (ex.: C197, E115, M220, SC7010): 1-2 letras +
+// 3-4 digitos. Exclui anos (ex.: A2025) para nao tratar datas como referencia.
+const CODIGO_CURTO = /^(?![A-Z]{1,2}(?:19|20)\d{2}$)[A-Z]{1,2}\d{3,4}$/;
+const IGNORAR = new Set(['TOTVS', 'PROTHEUS', 'SOFTEXPERT', 'PDF', 'PNG', 'JPG', 'XML', 'JSON', 'HTTP', 'HTTPS', 'SLA', 'IA', 'API', 'OBSERVACOES_VISUAIS_AUDITORIA', 'FIM_OBSERVACOES_VISUAIS_AUDITORIA']);
 
 function normalizar(texto) {
   return String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -30,17 +33,26 @@ function tipoIdentificador(termo) {
   if (/^(?:SX[235]|S[A-Z0-9]{2}|[A-Z]\d_[A-Z0-9_]+|B1_[A-Z0-9_]+|F1_[A-Z0-9_]+|D1_[A-Z0-9_]+)$/.test(t)) return 'tabela_campo';
   if (/^[A-Z][A-Z0-9_]{2,}_[A-Z0-9_]+$/.test(t)) return 'funcao_custom';
   if (/^[A-Z]\d[A-Z0-9_]{3,}$/.test(t)) return 'rotina_ou_codigo';
+  if (CODIGO_CURTO.test(t)) return 'codigo_registro';
   if (/^[A-Z]{3,}\d{2,}[A-Z0-9_]*$/.test(t)) return 'rotina_ou_codigo';
   if (/APP$|EXECUTE|CALL|STACK|TRACE/.test(t)) return 'stack';
   return 'termo_comum';
 }
 
-function extrairTermosTecnicos(texto) {
+// codigosCurtos (default false): reconhece codigos curtos de registro (C197,
+// E115...). Usado SO na extracao das EVIDENCIAS (o que e rastreavel/permitido);
+// a verificacao da resposta mantem o comportamento anterior, para nao tornar o
+// Quality Gate mais rigido sem decisao explicita.
+function extrairTermosTecnicos(texto, { codigosCurtos = false } = {}) {
   const s = String(texto || '');
-  const encontrados = s.match(/\b(?:MV_[A-Z0-9_]+|U_[A-Z0-9_]+|SIGA[A-Z0-9]+|[A-Z]\d_[A-Z0-9_]+|[A-Z]\d[A-Z0-9_]{3,}|[A-Z]{3,}\d{2,}[A-Z0-9_]*|[A-Z][A-Z0-9_]{2,}_[A-Z0-9_]+|[A-Z]{2,}[A-Z0-9_]{3,}|[A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_.]*)\b/g) || [];
+  const encontrados = s.match(/\b(?:MV_[A-Z0-9_]+|U_[A-Z0-9_]+|SIGA[A-Z0-9]+|[A-Z]\d_[A-Z0-9_]+|[A-Z]\d[A-Z0-9_]{3,}|[A-Z]{3,}\d{2,}[A-Z0-9_]*|[A-Z][A-Z0-9_]{2,}_[A-Z0-9_]+|[A-Z]{2,}[A-Z0-9_]{3,}|[A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_.]*|[A-Z]{1,2}\d{3,4})\b/g) || [];
   return [...new Set(encontrados.map(t => t.toUpperCase()).filter(t => {
-    if (t.length < 5 || IGNORAR.has(t)) return false;
+    if (IGNORAR.has(t)) return false;
+    // Letra(s) + ano (ex.: T2026, A2025) e data/versao, nao referencia tecnica.
+    if (/^[A-Z]{1,2}(?:19|20)\d{2}$/.test(t)) return false;
     const tipo = tipoIdentificador(t);
+    if (tipo === 'codigo_registro') return codigosCurtos;
+    if (t.length < 5) return false;
     return tipo !== 'acao_tela' && tipo !== 'termo_comum';
   }))].map(termo => ({ termo, tipo: tipoIdentificador(termo) }));
 }
@@ -102,6 +114,20 @@ function montarPlano({ manifesto = {}, pesquisaTexto = '', evidenciasSelecionada
   }
 
   for (const ev of quadro.evidencias || []) {
+    // Resposta anterior da IA: historico conversacional, nunca fato confirmado
+    // nem fonte de termos rastreaveis (evita o ciclo IA -> fato -> IA).
+    if ((ev.papeis || []).includes('HISTORICO_IA')) {
+      hipotesesFundamentadas.push({
+        id: `hipotese-resposta-ia-${hipotesesFundamentadas.length + 1}`,
+        texto: compactar(ev.resumo || ev.referencia),
+        origem: 'resposta_anterior_ia',
+        referencia: ev.referencia || null,
+        vinculoProblema: 'possivel',
+        permissaoUso: 'resposta_anterior_ia_nao_confirmada',
+        testeNecessario: 'Resposta anterior da IA: nao e fato confirmado; validar contra o historico original, anexos e fontes.',
+      });
+      continue;
+    }
     const papel = (ev.papeis || [])[0] || 'TECNICA_RELACIONADA';
     const origem = {
       origem: ev.origem || 'manifesto',
@@ -136,7 +162,7 @@ function montarPlano({ manifesto = {}, pesquisaTexto = '', evidenciasSelecionada
         bloqueiaConclusao: true,
       });
     }
-    for (const termo of extrairTermosTecnicos([ev.referencia, ev.resumo].filter(Boolean).join(' '))) {
+    for (const termo of extrairTermosTecnicos([ev.referencia, ev.resumo].filter(Boolean).join(' '), { codigosCurtos: true })) {
       adicionarTermo(termos, termo, origem, (ev.papeis || []).includes('CENTRAL') ? 'fato_do_chamado' : 'contexto_ou_hipotese', {
         causalPermitido: (ev.papeis || []).includes('CENTRAL') && !/nao demonstrado/i.test(ev.vinculoCausal || ''),
       });
@@ -164,7 +190,7 @@ function montarPlano({ manifesto = {}, pesquisaTexto = '', evidenciasSelecionada
       referencia: evidencia.referencia || null,
       papel: 'evidencia_selecionada',
     };
-    for (const termo of extrairTermosTecnicos(evidencia.texto)) {
+    for (const termo of extrairTermosTecnicos(evidencia.texto, { codigosCurtos: true })) {
       adicionarTermo(termos, termo, origem, 'contexto_ou_hipotese', { causalPermitido: false });
     }
   }
@@ -269,18 +295,18 @@ function reconciliarObservacoesVisuais(plano, observacoesVisuais = []) {
 function formatarPlanoParaPrompt(plano) {
   if (!plano) return '';
   const linhas = ['## Plano de Resposta Rastreavel (PRR)'];
-  linhas.push('Use o PRR como contrato obrigatorio de geracao: fatos como fatos, hipoteses como hipoteses, lacunas como limites obrigatorios.');
-  linhas.push('Nao complete lacunas com nomes tecnicos especificos. Se o nome real de uma rotina, parametro, campo, tabela, fonte ou ponto de entrada nao estiver em "Termos tecnicos permitidos", descreva a verificacao de forma funcional, sem inventar identificadores.');
+  linhas.push('Use o PRR como organizacao e rastreabilidade do caso: fatos como fatos, hipoteses como hipoteses, lacunas como limites do que ja esta comprovado.');
+  linhas.push('Voce pode usar seu conhecimento tecnico para investigar: formule hipoteses e proponha verificacoes, inclusive com rotinas, campos, parametros ou tabelas que NAO constam abaixo. Rotule a origem (comprovado no chamado, pesquisa, conhecimento tecnico/hipotese a validar) e nunca atribua ao chamado, cliente, print ou log o que veio do seu conhecimento. Nao invente identificadores: se nao tiver certeza do nome exato, diga isso.');
   if (plano.fatosComprovados?.length) {
-    linhas.push('Fatos permitidos:');
+    linhas.push('Fatos comprovados no caso:');
     for (const f of plano.fatosComprovados.slice(0, 10)) linhas.push(`- ${f.id}: ${f.texto} [origem=${f.origem}; uso=${f.permissaoUso}]`);
   }
   if (plano.hipotesesFundamentadas?.length) {
-    linhas.push('Hipoteses permitidas:');
+    linhas.push('Hipoteses ja formuladas a partir do caso:');
     for (const h of plano.hipotesesFundamentadas.slice(0, 8)) linhas.push(`- ${h.id}: ${h.texto} [teste=${h.testeNecessario}]`);
   }
   if (plano.termosTecnicosPermitidos?.length) {
-    linhas.push('Termos tecnicos permitidos e uso:');
+    linhas.push('Referencias tecnicas ja rastreadas no caso (origem):');
     for (const t of plano.termosTecnicosPermitidos.slice(0, 20)) linhas.push(`- ${t.termo}: ${t.usoPermitido}; causal=${t.causalPermitido ? 'sim' : 'nao'}; origens=${t.origens.map(o => o.origem).join('+')}`);
   }
   if (plano.lacunasObrigatorias?.length) {
@@ -288,8 +314,8 @@ function formatarPlanoParaPrompt(plano) {
     for (const l of plano.lacunasObrigatorias.slice(0, 8)) linhas.push(`- ${l.texto}`);
   }
   if (plano.proximoPassoRecomendado?.descricao) linhas.push(`Proximo passo recomendado pelo PRR: ${plano.proximoPassoRecomendado.descricao}`);
-  linhas.push('Regra: se quiser citar uma rotina, parametro, fonte, tabela ou modulo que nao esteja no PRR, nao cite o nome; diga qual evidencia deve ser coletada para identificar essa referencia.');
-  linhas.push('Regra de seguranca: uma resposta sem causa conclusiva continua valida se explicar fatos, hipoteses, lacunas e o proximo passo tecnico permitido.');
+  linhas.push('Referencias tecnicas novas, do seu conhecimento, sao bem-vindas como hipotese ou orientacao geral; apenas deixe claro que nao foram observadas no chamado.');
+  linhas.push('Uma resposta sem causa conclusiva continua valida se separar fatos, hipoteses, lacunas e o proximo passo tecnico.');
   return linhas.join('\n');
 }
 
@@ -391,8 +417,11 @@ function _classificarUsosReferencia(texto, termo) {
 function _usoBloqueadoPeloPRR(uso, permitido) {
   if (!uso) return false;
   if (permitido?.causalPermitido) return false;
-  return uso.classificacaoContextual === 'afirmacao_causal'
-    || uso.classificacaoContextual === 'recomendacao_operacional_baseada_na_referencia';
+  if (uso.classificacaoContextual === 'afirmacao_causal') return true;
+  // Recomendar verificar/ajustar com base em referencia externa e orientacao
+  // tecnica. Mas prometer que isso RESOLVE o problema e afirmacao de causa.
+  return uso.classificacaoContextual === 'recomendacao_operacional_baseada_na_referencia'
+    && /\b(resolvera|vai resolver|solucionara|e a solucao|corrige o problema|resolve o problema|para resolver|causou|causado por|causa do|origem do erro)\b/.test(normalizar(uso.trecho || ''));
 }
 
 function _detalhesDecisaoPRR(uso, permitido) {
@@ -429,20 +458,10 @@ function avaliarRespostaContraPlano({ textoResposta, plano } = {}) {
     const permitido = permitidos.get(termo.termo);
     const usos = _classificarUsosReferencia(textoResposta, termo.termo);
     const usoBloqueavel = usos.find(uso => _usoBloqueadoPeloPRR(uso, permitido));
-    if (!permitido) {
-      if (usos.length && usos.every(uso => ['hipotese_condicionada', 'ausencia_evidencia_causal', 'negacao_causal'].includes(uso.classificacaoContextual))) continue;
-      falhas.push({
-        codigo: 'PRR_TECHNICAL_REFERENCE_NOT_ALLOWED',
-        severidade: 'media',
-        detalhe: 'resposta citou referencia tecnica especifica fora do Plano de Resposta Rastreavel',
-        termos: [termo.termo],
-        ..._detalhesDecisaoPRR(usoBloqueavel || usos[0], null),
-        decisionKind: 'bloqueio_objetivo',
-        categoriaDecisao: 'bloqueio_objetivo',
-        acaoCorretiva: 'remover_referencia_ou_incluir_origem_rastreavel_no_plano',
-      });
-      break;
-    }
+    // Referencia fora do PRR NAO e erro: o PRR organiza o que ja foi rastreado
+    // no caso; nao e um catalogo de conhecimento autorizado. A integridade da
+    // atribuicao/certeza e avaliada pelo Quality Gate (proveniencia).
+    if (!permitido) continue;
     if (permitido.usoPermitido === 'apoio_externo_apenas' && usoBloqueavel) {
       falhas.push({
         codigo: 'PRR_EXTERNAL_REFERENCE_USED_AS_CAUSE',

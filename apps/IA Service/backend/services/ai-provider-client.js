@@ -11,6 +11,7 @@
 // certificado TLS fica ligada (comportamento padrão do Node).
 
 const https = require('https');
+const tokenBudget = require('./token-budget-service');
 
 const PROVIDER_CONFIGS = {
   groq: { hostname: 'api.groq.com', path: '/openai/v1/chat/completions', model: 'openai/gpt-oss-20b', tipo: 'openai_compat', suportaImagem: false, usaRaciocinio: true },
@@ -291,7 +292,17 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
   const maxRodadas = Math.max(1, Math.min(Number(opts.maxProviderRounds) || DEFAULT_MAX_PROVIDER_ROUNDS, 5));
   const retryDelayMs = Math.max(0, Number(opts.providerRetryDelayMs) || 1200);
   const providersPermanentes = new Set();
-  const candidatos = ordem.filter(provedor => keys?.[provedor] && (!imagens.length || PROVIDER_CONFIGS[provedor].suportaImagem));
+  // Candidatos na ORDEM cadastrada (primario + fallback), com chave e, quando
+  // o turno envia imagem, com visao. Nenhum provider e promovido ou removido
+  // por preferencia: a unica exclusao por capacidade e a de modalidade.
+  const candidatos = candidatosElegiveis(keys, cfg, { exigeImagem: imagens.length > 0 });
+  // Guarda de janela: rede de seguranca APOS o preparo por candidato. Com
+  // opts.prepararParaCandidato o prompt e reconstruido para o orcamento de
+  // cada modelo e a guarda nao deve disparar; sem o callback (ex.: reescrita
+  // final do Quality Gate) ela impede reenviar um prompt maior que a janela
+  // do modelo, o que so gastaria uma tentativa para ser recusado.
+  const ignoradosPorJanela = new Set();
+  let ultimoTokensPrompt = 0;
 
   let tlsGlobalDetectado = false;
 
@@ -299,14 +310,50 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
     let houveTransitorioNaRodada = false;
 
     for (const provedor of candidatos) {
-      if (providersPermanentes.has(provedor)) continue;
+      if (providersPermanentes.has(provedor) || ignoradosPorJanela.has(provedor)) continue;
+
+      const modeloDoProvedor = cfg?.modelos?.[provedor] || opts.model || PROVIDER_CONFIGS[provedor].model;
+      let promptTentativa = userPrompt;
+      let imagensTentativa = imagens;
+      let preparo = null;
+      if (typeof opts.prepararParaCandidato === 'function') {
+        try {
+          const prep = await opts.prepararParaCandidato({
+            provider: provedor,
+            model: modeloDoProvedor,
+            janela: tokenBudget.capacidadeModelo(modeloDoProvedor),
+            suportaImagem: !!PROVIDER_CONFIGS[provedor].suportaImagem,
+          });
+          if (prep) {
+            if (typeof prep.userPrompt === 'string') promptTentativa = prep.userPrompt;
+            if (Array.isArray(prep.imagens)) imagensTentativa = prep.imagens;
+            preparo = prep.registro || null;
+          }
+        } catch (errPrep) {
+          tentados += 1;
+          const msgPrep = `Falha ao preparar o contexto para ${provedor}/${modeloDoProvedor}: ${errPrep.message}`;
+          erros.push({ provedor, msg: msgPrep, rodada, transitorio: false, permanente: false, contextoExcedido: false, tlsGlobal: false });
+          tentativas.push({ provider: provedor, model: modeloDoProvedor, status: 'erro', erro: msgPrep, rodada, transitorio: false, permanente: false, etapa: 'preparo_contexto' });
+          continue;
+        }
+      }
+      ultimoTokensPrompt = tokenBudget.estimarTokens(systemPrompt) + tokenBudget.estimarTokens(promptTentativa)
+        + imagensTentativa.length * tokenBudget.estimarTokensImagem();
+      // Janela nominal inteira (sem margem): a guarda so barra o que
+      // comprovadamente nao cabe; a folga e responsabilidade do orcamento.
+      const limiteJanela = tokenBudget.capacidadeModelo(modeloDoProvedor);
+      if (ultimoTokensPrompt > limiteJanela) {
+        ignoradosPorJanela.add(provedor);
+        tentativas.push({ provider: provedor, model: modeloDoProvedor, status: 'ignorado_janela', erro: `Prompt estimado em ${ultimoTokensPrompt} tokens excede a janela utilizavel (${limiteJanela}) do modelo.`, rodada, tokensPromptEstimados: ultimoTokensPrompt, limiteJanela, ...(preparo ? { preparo } : {}) });
+        continue;
+      }
 
       tentados += 1;
-      const modeloDoProvedor = cfg?.modelos?.[provedor] || opts.model || PROVIDER_CONFIGS[provedor].model;
       const inicioTentativa = Date.now();
+      const extraTentativa = { tokensPromptEstimados: ultimoTokensPrompt, ...(preparo ? { preparo } : {}) };
       try {
-        const resultado = await chamarProvedor(provedor, keys[provedor], systemPrompt, userPrompt, imagens, { ...opts, model: modeloDoProvedor });
-        tentativas.push({ provider: provedor, model: modeloDoProvedor, status: 'ok', rodada, latenciaMs: Date.now() - inicioTentativa });
+        const resultado = await chamarProvedor(provedor, keys[provedor], systemPrompt, promptTentativa, imagensTentativa, { ...opts, model: modeloDoProvedor });
+        tentativas.push({ provider: provedor, model: modeloDoProvedor, status: 'ok', rodada, latenciaMs: Date.now() - inicioTentativa, ...extraTentativa });
         return { ...resultado, provider: provedor, model: modeloDoProvedor, tentativas, latenciaMs: Date.now() - inicioGeral };
       } catch (erro) {
         const msg = erro.message;
@@ -315,7 +362,7 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
         const permanente = _erroPermanenteProvider(msg) || contextoExcedido;
         const transitorio = !permanente && _erroTransitorioProvider(msg);
         erros.push({ provedor, msg, rodada, transitorio, permanente, contextoExcedido, tlsGlobal });
-        tentativas.push({ provider: provedor, model: modeloDoProvedor, status: 'erro', erro: msg, rodada, transitorio, permanente, contextoExcedido, tlsGlobal, latenciaMs: Date.now() - inicioTentativa });
+        tentativas.push({ provider: provedor, model: modeloDoProvedor, status: 'erro', erro: msg, rodada, transitorio, permanente, contextoExcedido, tlsGlobal, latenciaMs: Date.now() - inicioTentativa, ...extraTentativa });
         // Contexto excedido: nunca retentar o MESMO provider/modelo (o prompt
         // nao muda de tamanho entre tentativas) — pula direto para o proximo
         // candidato na mesma rodada, sem aguardar nem contar como transitorio.
@@ -347,21 +394,39 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
   // escondia que, na prática, zero chamadas tinham sido feitas (bug real:
   // turno com imagens e só Groq/DeepSeek configurados nunca tentava
   // nenhum provedor, usuário via erro sem entender a causa, 2026-10).
-  const semProvedorComImagem = imagens.length > 0 && !semChave && tentados === 0;
+  const semJanelaSuficiente = ignoradosPorJanela.size > 0 && tentados === 0;
+  const semProvedorComImagem = imagens.length > 0 && !semChave && tentados === 0 && !semJanelaSuficiente;
   const cotaEsgotada = erros.length > 0 && erros.every(e => _erroCotaOuCredito(e.msg));
   const erroFinal = new Error(
     semChave
       ? 'Nenhum provider de IA configurado para esta empresa.'
+      : semJanelaSuficiente
+        ? `Nenhum provider elegível comporta o prompt deste turno (~${ultimoTokensPrompt} tokens estimados). Reduza o volume de evidências ou configure um provider com janela de contexto maior.`
       : semProvedorComImagem
         ? `Nenhum provider configurado com chave suporta análise de imagem (necessário para ${imagens.length} anexo(s) deste turno). Configure uma chave para OpenAI, Claude ou Gemini em Configurações do IA Service.`
         : `Todos os providers falharam: ${erros.map(e => `${e.provedor}: ${e.msg}`).join(' | ')}`
   );
   erroFinal._semChave = semChave;
   erroFinal._semProvedorComImagem = semProvedorComImagem;
+  erroFinal._semJanelaSuficiente = semJanelaSuficiente;
   erroFinal._cotaEsgotada = cotaEsgotada;
   erroFinal._tentativas = tentativas;
   erroFinal._latenciaMs = Date.now() - inicioGeral;
   throw erroFinal;
 }
 
-module.exports = { chamarIA, chamarProvedor, PROVIDER_CONFIGS, _erroTransitorioProvider, _erroPermanenteProvider, _erroContextoExcedido, _erroTlsGlobal };
+// Candidatos que PODEM executar um turno: tem chave e, quando o turno envia
+// imagem, suportam visao. Fonte unica de elegibilidade — usada tanto pelo
+// chamarIA quanto pelo Context Engine (para dimensionar o orcamento pelo
+// modelo que de fato vai responder, e nao pelo provedorPrimario cego).
+function candidatosElegiveis(keys, cfg, { exigeImagem = false } = {}) {
+  return _normalizarOrdem(cfg).filter(provedor => keys?.[provedor] && (!exigeImagem || PROVIDER_CONFIGS[provedor].suportaImagem));
+}
+
+function primeiroCandidatoElegivel(keys, cfg, { exigeImagem = false } = {}) {
+  const provider = candidatosElegiveis(keys, cfg, { exigeImagem })[0];
+  if (!provider) return null;
+  return { provider, model: cfg?.modelos?.[provider] || PROVIDER_CONFIGS[provider].model };
+}
+
+module.exports = { candidatosElegiveis, primeiroCandidatoElegivel, chamarIA, chamarProvedor, PROVIDER_CONFIGS, _erroTransitorioProvider, _erroPermanenteProvider, _erroContextoExcedido, _erroTlsGlobal };
