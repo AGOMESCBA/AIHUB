@@ -1,4 +1,5 @@
 const { getDB } = require('../database');
+const { nomeDoCelular } = require('../database/interpretation-owner');
 
 function _agenteUrl(empresaId) {
   if (!empresaId) return null;
@@ -185,6 +186,7 @@ function registrar(payload = {}) {
     empresa_id: payload.empresa_id ?? null,
     usuario: payload.usuario || null,
     numero_wa: payload.numero_wa || null,
+    numero_wa_nome: nomeDoCelular(db, payload.empresa_id, payload.numero_wa),
     canal_id: payload.canal_id || null,
     canal_origem: payload.canal_origem || null,
     texto_original: payload.texto_original || '',
@@ -299,6 +301,7 @@ function listarResumo(empresaId, opts = {}) {
       criado_em,
       usuario,
       numero_wa,
+      numero_wa_nome,
       canal_id,
       ${canalOrigemSelect},
       origem,

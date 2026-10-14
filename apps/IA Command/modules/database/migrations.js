@@ -1785,4 +1785,11 @@ const MIGRATIONS = [
   },
 ];
 
+MIGRATIONS.push({
+  version: 95,
+  descricao: 'IA Command - nome do titular do celular no historico de interpretacoes e preenchimento dos legados por empresa',
+  sql: '-- Coluna e backfill transacional e idempotente executados em run.',
+  run(db) { return require('./interpretation-owner').migrar(db); },
+});
+
 module.exports = MIGRATIONS;

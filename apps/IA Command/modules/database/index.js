@@ -54,6 +54,7 @@ function _executarMigracoes() {
 
     try {
       _db.exec(migration.sql);
+      if (migration.run) migration.run(_db);
       inserir.run(migration.version, migration.descricao, new Date().toISOString());
       console.log(`[IA Command] Migração v${migration.version} aplicada: ${migration.descricao}`);
     } catch (err) {
@@ -114,6 +115,7 @@ function _garantirColunasCompatibilidade() {
   `);
 
   const interpretationLog = {
+    numero_wa_nome: 'TEXT DEFAULT NULL',
     sql_gerado: 'TEXT',
     duracao_ms: 'INTEGER',
     trace_json: 'TEXT',

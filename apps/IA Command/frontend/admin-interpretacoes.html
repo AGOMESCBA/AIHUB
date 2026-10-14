@@ -1097,6 +1097,8 @@
           formatter: c => fmtData(c.getValue()) },
         { title: 'Celular', field: '_celular', width: 150, headerFilter: true,
           formatter: c => esc(c.getValue()) },
+        { title: 'Nome', field: 'numero_wa_nome', width: 200, headerFilter: true,
+          formatter: c => esc(c.getValue() || '-') },
         { title: 'Canal', field: '_canal', width: 125,
           headerFilter: 'select', headerFilterParams: { values: { '': 'Todos', WhatsApp: 'WhatsApp', Chat: 'Chat', Agendamento: 'Agendamento' } },
           formatter: c => {

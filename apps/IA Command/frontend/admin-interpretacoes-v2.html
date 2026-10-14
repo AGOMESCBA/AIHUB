@@ -38,7 +38,8 @@
 
     .table-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden; }
     .table-wrap { height:calc(100vh - 235px);min-height:360px;overflow:auto;background:var(--bg-card); }
-    .history-table { width:100%;min-width:1650px;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:13px; }
+    .history-table { width:100%;min-width:1850px;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:13px; }
+    .col-owner { width:200px; }
     .history-table thead th { position:sticky;top:0;z-index:2;background:var(--bg-card);border-bottom:1px solid var(--border);color:var(--text-lo);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 10px;white-space:nowrap; }
     .history-table thead th.sortable { cursor:pointer;user-select:none; }
     .history-table thead th.sortable:hover { color:var(--accent);background:var(--bg-hover); }
@@ -190,6 +191,7 @@
             <button class="group-chip" type="button" draggable="true" data-group-field="resultado_tipo">Resultado</button>
             <button class="group-chip" type="button" draggable="true" data-group-field="motor">Motor</button>
             <button class="group-chip" type="button" draggable="true" data-group-field="numero_wa">Celular</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="numero_wa_nome">Nome</button>
             <button class="group-chip" type="button" draggable="true" data-group-field="dataset_nome">Dataset</button>
             <button class="group-chip" type="button" draggable="true" data-group-field="canal_origem">Canal</button>
             <button class="group-chip" type="button" draggable="true" data-group-field="escopo_execucao">Execucao via</button>
@@ -209,6 +211,7 @@
                   <th class="col-action"></th>
                   <th class="col-date sortable" draggable="true" data-group-field="criado_data" data-sort="criado_em">Data/Hora</th>
                   <th class="col-phone sortable" draggable="true" data-group-field="numero_wa" data-sort="numero_wa">Celular</th>
+                  <th class="col-owner sortable" draggable="true" data-group-field="numero_wa_nome" data-sort="numero_wa_nome">Nome</th>
                   <th class="col-channel sortable" draggable="true" data-group-field="canal_origem" data-sort="canal_origem">Canal</th>
                   <th class="col-question sortable" draggable="true" data-group-field="texto_original" data-sort="texto_original">Pergunta</th>
                   <th class="col-answer sortable" data-sort="resposta_entregue">Resposta</th>
@@ -222,6 +225,7 @@
                   <th></th>
                   <th></th>
                   <th><input data-filter="numero_wa" autocomplete="off" spellcheck="false"></th>
+                  <th><input data-filter="numero_wa_nome" autocomplete="off" spellcheck="false" aria-label="Filtrar pelo nome do titular"></th>
                   <th><select data-filter="canal_origem" autocomplete="off"><option value="">Todos</option><option value="whatsapp">WhatsApp</option><option value="chat">Chat</option><option value="agendamento">Agendamento</option></select></th>
                   <th><input data-filter="texto_original" autocomplete="off" spellcheck="false"></th>
                   <th><input data-filter="resposta_entregue" autocomplete="off" spellcheck="false"></th>
@@ -583,6 +587,7 @@
         </button></td>
         <td>${esc(fmtDate(row.criado_em))}</td>
         <td>${esc(fmtPhone(row.numero_wa))}</td>
+        <td>${esc(row.numero_wa_nome || '-')}</td>
         <td>${channelBadge(row)}</td>
         <td><div class="text-preview question" title="${esc(row.texto_original || '')}">${esc(row.texto_original || '-')}</div></td>
         <td><div class="text-preview" title="${esc(row.resposta_entregue || '')}">${esc(row.resposta_entregue || '(sem resposta)')}</div></td>
@@ -627,11 +632,12 @@
       buckets.get(label).push(row);
     });
     [...buckets.entries()].forEach(([label, items]) => {
-      const title = `${groupName(field)}: ${label}`;
+      const owners = field === 'numero_wa' ? [...new Set(items.map(row => row.numero_wa_nome).filter(Boolean))] : [];
+      const title = `${groupName(field)}: ${label}${owners.length ? ` — ${owners.join(', ')}` : ''}`;
       const nextPath = path.concat([[field, label]]);
       const key = groupKey(nextPath);
       const collapsed = state.collapsedGroups.has(key);
-      parts.push(`<tr class="group-row level-${Math.min(level, 3)}" data-group-key="${esc(key)}"><td colspan="11"><button class="group-toggle-btn" type="button" data-group-toggle="${esc(key)}" aria-label="${collapsed ? 'Expandir agrupamento' : 'Recolher agrupamento'}">${collapsed ? '+' : '-'}</button><span class="group-row-label">${esc(title)} (${items.length})</span></td></tr>`);
+      parts.push(`<tr class="group-row level-${Math.min(level, 3)}" data-group-key="${esc(key)}"><td colspan="12"><button class="group-toggle-btn" type="button" data-group-toggle="${esc(key)}" aria-label="${collapsed ? 'Expandir agrupamento' : 'Recolher agrupamento'}">${collapsed ? '+' : '-'}</button><span class="group-row-label">${esc(title)} (${items.length})</span></td></tr>`);
       if (collapsed) return;
       if (level + 1 < groups.length) renderGroupedRows(parts, items, groups, level + 1, nextPath);
       else items.forEach(row => parts.push(renderDataRow(row)));
@@ -660,6 +666,7 @@
       criado_hora: 'Hora',
       texto_original: 'Pergunta',
       numero_wa: 'Celular',
+      numero_wa_nome: 'Nome',
       intencao: 'Intencao',
       modulo: 'Modulo',
       canal_origem: 'Canal',
@@ -826,6 +833,7 @@
     const meta = [
       ['Data/Hora', fmtDate(row.criado_em)],
       ['Celular', fmtPhone(row.numero_wa)],
+      ['Nome', row.numero_wa_nome || '-'],
       ['Canal', channelLabel(row)],
       ['Motor', motor(row)],
       ['Pipeline', pipelineLabel(row.pipeline_origem)],
