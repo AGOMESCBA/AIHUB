@@ -682,19 +682,6 @@
     }
   }
 
-  function backToRadar() {
-    if (state.selected) {
-      setPanel('conversation');
-      setMobileTarget('conversation');
-      return;
-    }
-    $('empty-state').hidden = false;
-    $('case-view').hidden = true;
-    document.querySelectorAll('[data-panel-tab]').forEach((btn) => btn.classList.remove('active'));
-    $('nav-radar-btn').classList.add('active');
-    setMobileTarget('queue');
-  }
-
   function renderCaseShell() {
     $('empty-state').hidden = true;
     $('case-view').hidden = false;
@@ -1300,7 +1287,11 @@
         ? `<div class="summary-item"><span>Recuperação determinística</span><strong>Aplicada${d.recuperacaoDeterministica.modo ? ` · modo ${escapeHtml(d.recuperacaoDeterministica.modo)}` : ''}${d.recuperacaoDeterministica.origem ? ` · origem ${escapeHtml(d.recuperacaoDeterministica.origem)}` : ''}</strong></div>`
         : '';
       const revisao = d.revisaoNecessaria ? `<div class="summary-item"><span>Revisão necessária</span><strong>${escapeHtml(d.revisaoNecessaria.motivo || '-')}</strong></div>` : '';
-      return falhas + retry + recuperacao + revisao || '<div class="empty-block">Nenhum ponto de atenção identificado.</div>';
+      const c = d.proveniencia?.contagem;
+      const proveniencia = c
+        ? `<div class="summary-item"><span>Proveniência das referências técnicas</span><strong>no chamado: ${c.chamado || 0} · pesquisa: ${c.pesquisa || 0} · conhecimento do modelo (hipótese/orientação): ${c.conhecimento_modelo || 0}${d.proveniencia.atribuicoesFalsas ? ` · atribuições indevidas ao caso: ${d.proveniencia.atribuicoesFalsas}` : ''}</strong></div>`
+        : '';
+      return falhas + retry + recuperacao + revisao + proveniencia || '<div class="empty-block">Nenhum ponto de atenção identificado.</div>';
     }
     if (evento.tipo === 'leitura_historico') {
       return [
@@ -1559,15 +1550,32 @@
     $('risk-grid').innerHTML = `<table class="risk-table"><thead><tr><th>Chamado</th><th>Título</th><th>Cliente</th><th>Usuário</th><th>Aguardando retorno</th><th>Status</th><th>Previsão conclusão</th><th>Duração</th><th>Horas duração</th><th>Dias suporte</th><th>Dias desenv.</th><th>Dias distrib.</th><th>Dias cliente</th><th>Dias tecn. cliente</th><th>Último</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
   }
 
+  const ROTULOS_ROTINA = {
+    conversation: 'Chamados',
+    risk: 'Risco SLA',
+    evidence: 'Evidências',
+    trail: 'Trilha de Investigação',
+    details: 'Detalhes',
+    knowledge: 'Base de Conhecimento',
+  };
+
   function setPanel(panel) {
     state.activePanel = panel;
     document.querySelectorAll('[data-panel-tab]').forEach((btn) => btn.classList.toggle('active', btn.dataset.panelTab === panel));
-    $('nav-radar-btn').classList.remove('active');
     ['conversation', 'evidence', 'knowledge', 'trail', 'details', 'risk'].forEach((name) => {
       const el = $(`panel-${name}`);
       if (el) el.classList.toggle('active', name === panel);
     });
     $('radar-layout').classList.toggle('summary-auto-collapsed', panel !== 'conversation');
+    // Pesquisar Soluções só faz sentido na tela de mensagens.
+    const pesquisarBtn = $('research-btn');
+    if (pesquisarBtn) pesquisarBtn.hidden = panel !== 'conversation';
+    const rotuloEl = $('routine-title');
+    if (rotuloEl) {
+      const rotulo = ROTULOS_ROTINA[panel] || '';
+      rotuloEl.textContent = rotulo;
+      rotuloEl.hidden = !rotulo || panel === 'conversation';
+    }
     if (panel === 'risk') loadRisk();
     if (panel === 'knowledge') renderKnowledge();
     if (panel === 'trail') renderTrail();
@@ -1736,7 +1744,6 @@
     });
     $('pre-analysis-toggle').addEventListener('change', () => savePreferences());
     $('pre-analysis-padrao-btn').addEventListener('click', () => savePreferences(null));
-    $('nav-radar-btn').addEventListener('click', backToRadar);
     $('queue-list').addEventListener('click', (event) => {
       const btn = event.target.closest('[data-ticket-id]');
       if (btn) selectTicket(btn.dataset.ticketId);
@@ -1850,7 +1857,12 @@
 
   function init() {
     applyTheme(localStorage.getItem(THEME_KEY) || 'system');
-    bindEvents();
+  window.IaTabExport.mount(document.querySelector('.case-actions'), () => ({
+    element: $(`panel-${state.activePanel}`),
+    title: ROTULOS_ROTINA[state.activePanel],
+    context: state.activePanel === 'risk' ? '' : [ $('case-number').textContent, $('case-title').textContent ].join(' — '),
+  }));
+  bindEvents();
     bootRadar();
   }
 

@@ -1354,3 +1354,19 @@ button.loading .loader { display: block; }
   .code-row { gap: 6px; }
   .code-row input { height: 52px; font-size: 21px; }
 }
+
+.routine-title { padding: 10px 16px 6px; font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted, #8fa3b8); border-bottom: 1px solid var(--border, rgba(255,255,255,.08)); }
+
+@media (max-width: 600px) {
+  .topbar-brand > div:last-child { display: none; }
+  .topbar-nav { gap: 3px; }
+  .topbar-nav .nav-item { padding-left: 7px; padding-right: 7px; font-size: 12px; }
+}
+
+/* Reservar uma linha própria ao título da aba, mantendo o conteúdo rolável. */
+.case-view, .radar-layout.mobile-more .case-view { grid-template-rows: auto auto auto minmax(0, 1fr); }
+.case-header { grid-row: 1; }
+.case-description { grid-row: 2; }
+.routine-title { grid-row: 3; }
+.tab-panel { grid-row: 4; }
+#research-btn[hidden] { display: none; }

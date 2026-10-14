@@ -578,7 +578,7 @@
         <section class="chat-col" id="chat-col">
           <div class="view-tabs" id="chat-view-tabs" role="tablist">
             <button class="view-tab active" id="tab-conversa" type="button" role="tab" aria-selected="true" onclick="trocarAbaChat('conversa')">
-              <span class="badge-dot"></span> Conversa
+              <span class="badge-dot"></span> Chamados
             </button>
             <button class="view-tab" id="tab-informacoes" type="button" role="tab" aria-selected="false" onclick="trocarAbaChat('informacoes')">
               <span class="badge-dot"></span> Detalhes do Chamado
@@ -2771,6 +2771,41 @@
     }
 
     window._iahubAuthReady?.then(iniciar) ?? iniciar();
+  </script>
+  <script src="/iaservice/j2a/assets/tab-export.js"></script>
+  <script>
+    const exportHost = document.createElement('div');
+    exportHost.style.cssText = 'position:absolute;right:12px;top:6px;z-index:30';
+    document.getElementById('chat-col').style.position = 'relative';
+    document.getElementById('chat-view-tabs').style.paddingRight = '52px';
+    document.getElementById('chat-col').append(exportHost);
+    window.IaTabExport.mount(exportHost, () => {
+      const element = document.querySelector('.view-panel.active');
+      return {
+        element,
+        title: document.querySelector('.view-tab.active')?.textContent.trim(),
+        context: element?.id === 'painel-risco' ? '' : document.getElementById('chat-header-titulo').textContent,
+        prepare(clone) {
+          if (element.id !== 'painel-risco' || !riscoTable) return;
+          // A grade virtualiza linhas: reconstruir uma tabela com todos os registros filtrados.
+          const columns = riscoTable.getColumnDefinitions().filter(column => column.field);
+          const table = document.createElement('table');
+          table.style.cssText = 'border-collapse:collapse;width:max-content;font:12px/1.5 sans-serif';
+          const addRow = (values, header) => {
+            const row = table.insertRow();
+            values.forEach(value => {
+              const cell = document.createElement(header ? 'th' : 'td');
+              cell.textContent = value ?? '';
+              cell.style.cssText = 'padding:8px;border:1px solid #8895a555;text-align:left;white-space:nowrap';
+              row.append(cell);
+            });
+          };
+          addRow(columns.map(column => column.title), true);
+          riscoTable.getData('active').forEach(row => addRow(columns.map(column => row[column.field])));
+          clone.querySelector('.risco-grid-wrap')?.replaceWith(table);
+        },
+      };
+    });
   </script>
 </body>
 </html>

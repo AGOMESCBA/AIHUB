@@ -109,15 +109,14 @@
           </div>
         </div>
         <nav class="topbar-nav" aria-label="Áreas do Radar">
-          <button class="nav-item active" id="nav-radar-btn">Radar</button>
-          <button class="nav-item" data-panel-tab="conversation">Conversa</button>
+          <button class="nav-item" data-panel-tab="conversation">Chamados</button>
+          <button class="nav-item" data-panel-tab="details">Detalhes</button>
           <button class="nav-item" data-panel-tab="risk">Risco SLA</button>
           <details class="topbar-menu more-menu">
             <summary class="nav-item">Mais</summary>
             <div class="topbar-menu-panel compact" role="menu">
               <button class="nav-item" type="button" role="menuitem" data-panel-tab="evidence">Evidências</button>
               <button class="nav-item" type="button" role="menuitem" data-panel-tab="trail">Trilha de Investigação</button>
-              <button class="nav-item" type="button" role="menuitem" data-panel-tab="details">Detalhes</button>
               <button class="nav-item" type="button" role="menuitem" data-panel-tab="knowledge">Base de Conhecimento</button>
             </div>
           </details>
@@ -245,6 +244,8 @@
               <div id="description-body" class="description-body"></div>
             </section>
 
+            <div id="routine-title" class="routine-title" hidden></div>
+
             <section id="panel-conversation" class="tab-panel active">
               <div id="messages" class="messages"></div>
               <form id="composer" class="composer">
@@ -322,7 +323,7 @@
 
       <nav class="mobile-nav" aria-label="Navegação mobile">
         <button class="active" data-mobile-target="queue">Fila</button>
-        <button data-mobile-target="conversation">Conversa</button>
+        <button data-mobile-target="conversation">Chamados</button>
         <button data-mobile-target="summary">Resumo</button>
         <button data-mobile-target="more">Mais</button>
       </nav>
@@ -354,6 +355,7 @@
       </div>
     </div>
   </div>
+  <script src="/iaservice/j2a/assets/tab-export.js"></script>
   <script src="/iaservice/j2a/assets/radar.js"></script>
 </body>
 </html>
