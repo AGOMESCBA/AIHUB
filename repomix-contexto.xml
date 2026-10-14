@@ -1,0 +1,156 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files and files not matching ignore patterns, combined into a single document by Repomix.
+The content has been processed where comments have been removed, empty lines have been removed, content has been compressed (code blocks are separated by ⋮---- delimiter).
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: apps/IA Service/backend/services/context-engine.js, apps/IA Service/backend/services/ai-provider-client.js, apps/IA Service/backend/services/investigacao-service.js, apps/IA Service/backend/services/token-budget-service.js
+- Files matching these patterns are excluded: node_modules/**, .wwebjs_auth/**, .wwebjs_cache/**, tmp/**, logs/**, deploy/**, *.log, *.err, package-lock.json, yarn.lock, pnpm-lock.yaml, **/guia/index.html, IA_SERVICE_ANALISE_IAHUB_COMMAND.md, **/_prod_compare/**, **/protheus-chat.html, **/administracao.html
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Code comments have been removed from supported file types
+- Empty lines have been removed from all files
+- Content has been compressed - code blocks are separated by ⋮---- delimiter
+- Long base64 data strings (e.g., data:image/png;base64,...) have been truncated to reduce token count
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+apps/
+  IA Service/
+    backend/
+      services/
+        ai-provider-client.js
+        context-engine.js
+        investigacao-service.js
+        token-budget-service.js
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="apps/IA Service/backend/services/token-budget-service.js">
+function estimarTokens(texto)
+⋮----
+function estimarTokensImagem()
+⋮----
+function capacidadeModelo(modelo)
+⋮----
+function criarOrcamento(
+</file>
+
+<file path="apps/IA Service/backend/services/ai-provider-client.js">
+function _httpPost(hostname, path, headers, body, timeoutMs = 45000)
+⋮----
+function _normalizarTexto(data, providerName)
+⋮----
+function _estimarTokensPrompt(systemPrompt, userPrompt)
+⋮----
+function _maxTokensAjustadoPorProvider(cfg, systemPrompt, userPrompt, maxTokensPedido)
+⋮----
+async function _chamarOpenAICompatUmaVez(cfg, apiKey, systemPrompt, userPrompt, imagens, opts, maxTokens)
+⋮----
+async function _chamarOpenAICompat(cfg, apiKey, systemPrompt, userPrompt, imagens, opts =
+⋮----
+async function _chamarAnthropic(cfg, apiKey, systemPrompt, userPrompt, imagens, opts =
+⋮----
+async function _chamarGemini(cfg, apiKey, systemPrompt, userPrompt, imagens, opts =
+⋮----
+async function chamarProvedor(provedor, apiKey, systemPrompt, userPrompt, imagens, opts =
+⋮----
+function _normalizarOrdem(
+⋮----
+function _erroCotaOuCredito(msg)
+⋮----
+// Prompt maior que a janela de contexto do modelo: retry no MESMO provider
+// nunca resolve (o prompt nao muda de tamanho entre tentativas) — precisa
+// pular direto para o proximo candidato, nunca reentrar na mesma rodada.
+// Achado real, homologacao 2026-10: classificado antes como "transitorio"
+// (bate em nenhuma palavra-chave especifica, caia no catch-all), desperdicando
+// uma rodada inteira tentando de novo um prompt que nunca vai caber.
+function _erroContextoExcedido(msg)
+⋮----
+// Erro de validacao de certificado/handshake TLS — tipicamente ambiental
+// (proxy/antivirus interceptando HTTPS, ver IA_SERVICE_AUDITORIA_
+// ESTABILIZACAO_PRODUCAO.md secao 1), nao especifico de um provider. Se o
+// erro for esse, os demais hosts HTTPS tendem a falhar pelo mesmo motivo —
+// sinalizado para o chamador decidir interromper a sequencia de fallback em
+// vez de gastar uma tentativa por provider sabendo que todas vao repetir o
+// mesmo erro de ambiente.
+function _erroTlsGlobal(msg)
+⋮----
+function _erroPermanenteProvider(msg)
+⋮----
+// Rate limit (TPM/RPM/429) e SEMPRE transitorio, mesmo quando a mensagem do
+// provider inclui um link de upsell contendo a palavra "billing" (caso real
+// do GROQ: "...Upgrade to Dev Tier today at .../settings/billing" dentro de
+// uma mensagem de "Rate limit reached" — achado real na homologacao 2026-10,
+// o padrao solto de /billing/i classificava rate limit como permanente e
+// impedia o proprio provider de ser retentado em rodada futura).
+⋮----
+function _erroTransitorioProvider(msg)
+⋮----
+function _sleep(ms)
+⋮----
+/**
+ * Chama o motor de IA com fallback entre providers, na ordem configurada pela
+ * empresa (ai_config). `imagens` (pode ser []) restringe a ordem aos
+ * providers com suporte a visão quando não vazia — Groq é pulado nesse caso.
+ *
+ * Modelo por provedor (2026-09): `cfg.modelos` (vindo de
+ * ai-config-service.resolverKeysEOrdem) tem prioridade sobre `opts.model` —
+ * cada provedor tem seu próprio nome de modelo, então um `opts.model` único
+ * aplicado ao vencedor do fallback estaria errado na maioria dos casos
+ * (ex.: "gpt-4o-mini" não existe na API do Groq). `opts.model` continua
+ * funcionando como override GLOBAL para quem não tiver `cfg.modelos` (ex.:
+ * chamadas de teste avulsas, ver rota /config/ia/testar).
+ */
+async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts =
+⋮----
+// Candidatos na ORDEM cadastrada (primario + fallback), com chave e, quando
+// o turno envia imagem, com visao. Nenhum provider e promovido ou removido
+// por preferencia: a unica exclusao por capacidade e a de modalidade.
+⋮----
+// Guarda de janela: rede de seguranca APOS o preparo por candidato. Com
+// opts.prepararParaCandidato o prompt e reconstruido para o orcamento de
+// cada modelo e a guarda nao deve disparar; sem o callback (ex.: reescrita
+// final do Quality Gate) ela impede reenviar um prompt maior que a janela
+// do modelo, o que so gastaria uma tentativa para ser recusado.
+⋮----
+function candidatosElegiveis(keys, cfg,
+⋮----
+function primeiroCandidatoElegivel(keys, cfg,
+</file>
+
+</files>

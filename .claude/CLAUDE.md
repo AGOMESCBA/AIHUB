@@ -6,8 +6,9 @@ Sempre responda em **português do Brasil (pt-BR)**. Toda UI e mensagens de usu�
 # Projeto: Instruções de Contexto e Escopo
 
 ## Economia de Contexto e Tokens
-- ANTES de tentar ler arquivos avulsos do diretório ou adivinhar a arquitetura, leia obrigatoriamente o arquivo de contexto unificado `./repomix-output.xml`.
-- O arquivo `./repomix-output.xml` contém a estrutura completa, dependências e assinaturas atualizadas do código do projeto de forma ultra-compactada.
+- `./repomix-output.xml` é um mapa compactado do código (assinaturas, sem lógica interna; ~2,5 MB, ~700 mil tokens). **Nunca ler inteiro.**
+- Para orientação: `Grep` por `<file path="...` ou por nome de função no XML e ler só a faixa do trecho encontrado.
+- Para entender ou alterar lógica: ir ao arquivo-fonte real, localizar com `Grep` e ler com `offset`/`limit` (~60–120 linhas). Não reler arquivo já presente na conversa.
 - Baseie suas respostas e análises de código estritamente nas tags estruturadas desse XML para evitar leituras redundantes de disco e desperdício de tokens.
 
 ---

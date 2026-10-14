@@ -1,0 +1,1067 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files and files not matching ignore patterns, combined into a single document by Repomix.
+The content has been processed where comments have been removed, empty lines have been removed, content has been compressed (code blocks are separated by ⋮---- delimiter).
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: apps/IA Service/backend/services/**
+- Files matching these patterns are excluded: node_modules/**, .wwebjs_auth/**, .wwebjs_cache/**, tmp/**, logs/**, deploy/**, *.log, *.err, package-lock.json, yarn.lock, pnpm-lock.yaml, **/guia/index.html, IA_SERVICE_ANALISE_IAHUB_COMMAND.md, **/_prod_compare/**, **/protheus-chat.html, **/administracao.html
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Code comments have been removed from supported file types
+- Empty lines have been removed from all files
+- Content has been compressed - code blocks are separated by ⋮---- delimiter
+- Long base64 data strings (e.g., data:image/png;base64,...) have been truncated to reduce token count
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+apps/
+  IA Service/
+    backend/
+      services/
+        import/
+          adapters/
+            index.js
+          historical-import-service.js
+          historical-sync-service.js
+          normalizadores.js
+          softexpert-sqlserver-adapter.js
+        agente-local-provider.js
+        agente-local-service.js
+        ai-config-service.js
+        ai-provider-client.js
+        anexos-softexpert-service.js
+        armazenamento-anexos.js
+        atendimento-service.js
+        avaliacao-criterios.js
+        avaliacao-investigacao-service.js
+        consultor-service.js
+        context-engine.js
+        crypto-envelope.js
+        dossie-context-service.js
+        empresa-context.js
+        extracao-conteudo.js
+        homologacao-service.js
+        investigacao-dossie-atualizador-service.js
+        investigacao-dossie-service.js
+        investigacao-service.js
+        investigative-discipline-service.js
+        login-externo-service.js
+        pdf-visual-service.js
+        plano-resposta-rastreavel-service.js
+        pre-avaliacao-ia-service.js
+        prompt-builder.js
+        quality-gate-service.js
+        radar-refresh-service.js
+        radar-service.js
+        redaction-service.js
+        resposta-operacional-service.js
+        safe-web-fetch-service.js
+        sessao-externa-middleware.js
+        technical-research-service.js
+        token-budget-service.js
+        trilha-investigacao-service.js
+        turno-lock-service.js
+        validacao-solucao-service.js
+        versao-fonte-service.js
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="apps/IA Service/backend/services/import/adapters/index.js">
+function resolverAdapter(nomeAdapter)
+</file>
+
+<file path="apps/IA Service/backend/services/atendimento-service.js">
+function _normalizarEntradaCanonica(entrada)
+⋮----
+function criarAtendimentoDeEntradaCanonica(entrada)
+⋮----
+function getAtendimento(empresaId, atendimentoId)
+⋮----
+function listarAtendimentos(empresaId, filtros)
+⋮----
+function atualizarStatus(empresaId, atendimentoId, status)
+⋮----
+function adicionarMensagem(empresaId, atendimentoId,
+⋮----
+function listarMensagens(empresaId, atendimentoId)
+⋮----
+function listarAnexos(empresaId, atendimentoId)
+</file>
+
+<file path="apps/IA Service/backend/services/empresa-context.js">
+function _explicitEmpresaId(req)
+⋮----
+function _sessionEmpresaId(req)
+⋮----
+function _sessionTemEmpresa(req, empresaId)
+⋮----
+function resolveEmpresaId(req)
+⋮----
+function getEmpresaId(req)
+⋮----
+function requireEmpresaContext(req, res, next)
+</file>
+
+<file path="apps/IA Service/backend/services/radar-refresh-service.js">
+function _fontesElegiveis(empresaId)
+⋮----
+function _executar(empresaId,
+⋮----
+async function sincronizarAntesDaFila(empresaId,
+</file>
+
+<file path="apps/IA Service/backend/services/import/historical-sync-service.js">
+function _formatarYyyymmdd(data)
+⋮----
+function _calcularPeriodoIncremental(empresaId, fonteId,
+⋮----
+function iniciarIncremental(empresaId, fonteId,
+⋮----
+async function executarIncremental(empresaId, fonteId, opts =
+</file>
+
+<file path="apps/IA Service/backend/services/import/normalizadores.js">
+function normalizarCnpj(valorBruto)
+⋮----
+/**
+ * Validação simples de formato — 14 dígitos para CNPJ, 11 para CPF pessoa
+ * física (SoftExpert pode ter solicitante PF). Não valida dígito verificador
+ * (fora de escopo desta etapa) — só descarta lixo óbvio (poucos dígitos,
+ * tudo zero, etc).
+ */
+function cnpjPareceValido(cnpjNormalizado)
+⋮----
+/**
+ * Detecta indício de e-mail dentro de um campo que deveria ser só nome —
+ * seção 46 do prompt: "nome do solicitante contendo e-mail" é uma
+ * inconsistência a registrar, não a corrigir silenciosamente.
+ */
+function pareceConterEmail(texto)
+⋮----
+function textoOuNull(valor)
+⋮----
+function numeroOuNull(valor)
+⋮----
+/**
+ * Datas do SoftExpert observadas na especificação do prompt como string
+ * 'YYYYMMDD' (ou variações com hora) — normaliza para ISO-8601 quando
+ * reconhece o padrão, preserva o valor bruto como fallback (nunca descarta).
+ */
+function dataParaIso(valorBruto)
+⋮----
+function epochSegundosParaIso(valorBruto)
+</file>
+
+<file path="apps/IA Service/backend/services/agente-local-provider.js">
+function _request(url, method, body, token)
+⋮----
+const _resolve = (v) =>
+const _reject = (e) =>
+⋮----
+async function testarAgente(url, token)
+⋮----
+async function listarConexoes(url, token,
+⋮----
+function _resolverParams(sql, params)
+⋮----
+async function executarSelect(url, token,
+</file>
+
+<file path="apps/IA Service/backend/services/avaliacao-criterios.js">
+function notasValidas(notas)
+</file>
+
+<file path="apps/IA Service/backend/services/crypto-envelope.js">
+function isEncryptedEnvelope(value)
+⋮----
+function normalizeKey(key)
+⋮----
+function generateKeyBase64()
+⋮----
+function _chaveSegredos()
+⋮----
+function encryptPayload(payload, key,
+⋮----
+function decryptPayload(envelope, key)
+⋮----
+function encryptSecret(plainText)
+⋮----
+function decryptSecret(encryptedText)
+⋮----
+// GCM lança "Unsupported state or unable to authenticate data" quando a
+// tag de autenticação não bate — na prática, sempre que SVC_DATA_CRYPTO_KEY
+// mudou depois que este segredo foi salvo (ver deploy/INSTRUCOES.md: essa
+// chave é fixa por instalação, nunca deveria trocar). Mensagem amigável
+// em vez do erro técnico do Node, que confundia o usuário final (2026-10).
+</file>
+
+<file path="apps/IA Service/backend/services/dossie-context-service.js">
+function _normalizar(texto)
+⋮----
+function _termos(texto)
+⋮----
+function _scoreItem(item, termos)
+⋮----
+function _ordenarRelevantes(itens, termos)
+⋮----
+function _linhaItem(item)
+⋮----
+function _placeholder(sql, ids)
+⋮----
+function _buscarEvidenciasBatch(empresaId, atendimentoId, relacoes, db)
+⋮----
+function add(tipo, row, texto)
+⋮----
+function montarMemoriaOperacional(
+</file>
+
+<file path="apps/IA Service/backend/services/extracao-conteudo.js">
+function _detectarEncoding(buffer)
+⋮----
+function _detectarMimeReal(buffer, mimeDeclarado, nomeOriginal)
+⋮----
+function _detectarLinguagemPorConteudo(texto)
+⋮----
+function _limitarExtracaoPersistida(texto, max = 250000)
+⋮----
+function _extrairTextoPdfBruto(buffer)
+⋮----
+async function _extrairPdf(buffer)
+⋮----
+async function extrairConteudo(
+</file>
+
+<file path="apps/IA Service/backend/services/homologacao-service.js">
+function _arredondar(numero, casas = 2)
+⋮----
+function obterRelatorioAgregado(empresaId,
+</file>
+
+<file path="apps/IA Service/backend/services/investigacao-dossie-atualizador-service.js">
+function _compactarEstado(estado)
+⋮----
+const mapItem = i => ({
+    codigo: i.codigo,
+    tipo: i.tipo,
+    titulo: i.titulo,
+    descricao: i.descricao,
+    status: i.status,
+    confianca: i.confianca,
+    dados: i.dados,
+  });
+⋮----
+function _codigoPorId(estado, itemId)
+⋮----
+function _montarPrompt(
+⋮----
+function _parseJson(texto)
+⋮----
+function _hashIdempotencia(dados)
+⋮----
+function _texto(valor, limite = 4000)
+⋮----
+function _norm(valor)
+⋮----
+function _temCampoProibido(obj)
+⋮----
+function _itemPorCodigo(estado, codigo)
+⋮----
+function _testesPendentes(estado)
+⋮----
+function _validarAlvo(empresaId, atendimentoId, evidencia, estado, db)
+⋮----
+function _evidenciasPadrao(dados)
+⋮----
+function _normalizarProposta(proposta)
+⋮----
+function _rejeitar(motivo, alteracao)
+⋮----
+function _validarAlteracao(alteracao, estado, interpretacao)
+⋮----
+function _criarItem(db, empresaId, atendimentoId, dossie, tipo, dados, refs)
+⋮----
+function _semUndefined(obj)
+⋮----
+function _relacionar(db, empresaId, atendimentoId, estado, item, evidencias)
+⋮----
+function _aplicarAlteracao(db, empresaId, atendimentoId, dossie, estado, alteracao, refs)
+⋮----
+function _updatesDossie(proposta, aceitas, refs)
+⋮----
+function _salvarFalha(empresaId, atendimentoId, estado, refs, idempotencyKey, erro, extra =
+⋮----
+async function atualizarAposTurno(empresaId, atendimentoId, dados =
+</file>
+
+<file path="apps/IA Service/backend/services/investigacao-dossie-service.js">
+function _erroConflito(mensagem)
+⋮----
+function _obrigatorio(valor, nome)
+⋮----
+function _validarStatusDossie(status)
+⋮----
+function _validarItem(tipo, dados =
+⋮----
+function _validarDossiePertence(empresaId, atendimentoId, dossie)
+⋮----
+function _validarAlvo(empresaId, atendimentoId, relacao, db = getDB())
+⋮----
+function _validarReferenciasDeAtualizacao(empresaId, atendimentoId, dados =
+⋮----
+function obterOuCriarDossie(empresaId, atendimentoId, dados =
+⋮----
+function obterEstadoCompleto(empresaId, atendimentoId)
+⋮----
+function atualizarDossie(empresaId, atendimentoId, dados =
+⋮----
+function marcarStale(empresaId, atendimentoId, stale, opcoes =
+⋮----
+function criarItem(empresaId, atendimentoId, dados =
+⋮----
+function atualizarItem(empresaId, atendimentoId, itemId, dados =
+⋮----
+function criarRelacao(empresaId, atendimentoId, itemId, dados =
+⋮----
+function listarItens(empresaId, atendimentoId, filtros =
+⋮----
+function listarRelacoes(empresaId, atendimentoId, filtros =
+</file>
+
+<file path="apps/IA Service/backend/services/pdf-visual-service.js">
+function detectarNecessidadeVisualPdf(
+⋮----
+// "pdf" fica de fora da regex: casaria com a extensao de todo arquivo .pdf
+// e forcaria rasterizacao visual mesmo com texto extraido de sobra.
+⋮----
+function selecionarPaginasPdf(
+⋮----
+async function rasterizarPdfPaginas(buffer, paginas = [1], opts =
+</file>
+
+<file path="apps/IA Service/backend/services/plano-resposta-rastreavel-service.js">
+function normalizar(texto)
+⋮----
+function compactar(texto, max = 280)
+⋮----
+function removerIdsInternos(texto)
+⋮----
+function tipoIdentificador(termo)
+⋮----
+function extrairTermosTecnicos(texto)
+⋮----
+function adicionarTermo(map, termo, origem, usoPermitido, extra =
+⋮----
+function montarPlano(
+⋮----
+// Varre o TEXTO COMPLETO das evidencias selecionadas (anexos e mensagens
+// de historico que de fato entraram no prompt), nao so o resumo compactado
+// do quadro investigativo — achado real, auditoria 2026-10: o PRR so
+// extraia termos tecnicos do quadro investigativo resumido (360 chars),
+// nunca do conteudo integral de anexos (PDF, log, codigo-fonte), bloqueando
+// citacao legitima de termo presente no proprio anexo selecionado.
+// Autorizado como 'contexto_ou_hipotese' (nao 'fato_do_chamado') e
+⋮----
+function reconciliarObservacoesVisuais(plano, observacoesVisuais = [])
+⋮----
+function formatarPlanoParaPrompt(plano)
+⋮----
+function _indicesTermo(texto, termo)
+⋮----
+function _extrairTrechoAfirmacao(texto, termo, idxNormalizado)
+⋮----
+function _classificarTrechoReferencia(trecho, termo)
+⋮----
+function _escapeRegExp(s)
+⋮----
+function _classificarUsosReferencia(texto, termo)
+⋮----
+function _usoBloqueadoPeloPRR(uso, permitido)
+⋮----
+function _detalhesDecisaoPRR(uso, permitido)
+⋮----
+function _afirmaConfirmacaoConclusiva(texto)
+⋮----
+function avaliarRespostaContraPlano(
+⋮----
+function _textoLimpo(texto, max = 360)
+⋮----
+function _termosPermitidosTexto(plano)
+⋮----
+function _temFalhaCriticaNaoRecuperavel(falhas)
+⋮----
+function _temBloqueioRecuperavel(falhas)
+⋮----
+function gerarRespostaSeguraDeterministica(
+</file>
+
+<file path="apps/IA Service/backend/services/pre-avaliacao-ia-service.js">
+function _montarSystemPrompt()
+⋮----
+function _montarUserPrompt(problemaOriginal, respostaInvestigacao)
+⋮----
+function _extrairJson(texto)
+⋮----
+// Nunca "clampa" uma nota fora de 0-5 (ex. 9 -> 5) -- isso corrigiria
+// silenciosamente um modelo que nao seguiu as instrucoes do prompt,
+// escondendo um sinal real de que a sugestao nao e confiavel. Fora da faixa
+// = sugestao inteira descartada (notasValidas rejeita), nunca ajustada.
+function _normalizarNota(valor)
+⋮----
+/**
+ * Gera uma sugestão de avaliação para uma mensagem do assistente. Nunca
+ * lança -- sempre devolve { sucesso: true, sugestao } ou { sucesso: false }.
+ */
+async function gerarPreAvaliacao(empresaId,
+</file>
+
+<file path="apps/IA Service/backend/services/sessao-externa-middleware.js">
+function requireSessaoExterna(req, res, next)
+</file>
+
+<file path="apps/IA Service/backend/services/trilha-investigacao-service.js">
+function _statusLabel(status)
+⋮----
+function _eventoLeituraHistorico(execucao)
+⋮----
+function _eventoAnexos(execucao)
+⋮----
+function _eventoPesquisaTecnica(execucao)
+⋮----
+function _eventoDiagnosticoEstruturado(execucao)
+⋮----
+function _tokensUsage(usage, valorRedigido, estimativa)
+⋮----
+function _eventoChamadaProvider(execucao)
+⋮----
+function _eventoQualityGate(execucao)
+⋮----
+function montarTrilhaDaExecucao(execucao)
+⋮----
+function montarTrilha(execucoes = [])
+</file>
+
+<file path="apps/IA Service/backend/services/turno-lock-service.js">
+function _chave(empresaId, atendimentoId)
+⋮----
+function tentarAdquirir(empresaId, atendimentoId)
+⋮----
+function liberar(empresaId, atendimentoId)
+⋮----
+function estaProcessando(empresaId, atendimentoId)
+</file>
+
+<file path="apps/IA Service/backend/services/validacao-solucao-service.js">
+function _naoEncontrado(mensagem)
+⋮----
+function _erroValidacao(mensagem)
+⋮----
+function _validarComentario(comentario)
+⋮----
+function _descricaoResultado(resultado, comentario)
+⋮----
+function _validarMensagemAssistenteDoAtendimento(empresaId, atendimentoId, mensagemAssistenteId)
+⋮----
+function _registrarValidacaoIndividualNoDossie(empresaId, atendimentoId, dossie, evento, mensagemAvaliada)
+⋮----
+async function confirmarSolucao(empresaId, {
+  atendimentoId, mensagemAssistenteId, anexoVersaoId = null, resultado, comentario = null, usuarioId,
+})
+⋮----
+function registrarEvidenciaExternaDeChamado(empresaId, {
+  atendimentoId, mensagemAssistenteId, chamadoId, statusEncerramentoTransicao,
+})
+⋮----
+function obterEstadoValidacao(empresaId, mensagemAssistenteId, atendimentoId = null)
+⋮----
+function obterEstadoValidacaoEmLote(empresaId, mensagemAssistenteIds)
+⋮----
+function obterResumoPendencias(empresaId)
+</file>
+
+<file path="apps/IA Service/backend/services/versao-fonte-service.js">
+function _nomeCorrigido(nomeOriginal)
+⋮----
+function validarConteudoCorrigido(conteudoCorrigido,
+⋮----
+/**
+ * Cria uma nova versão corrigida de um anexo de código já existente. O
+ * conteúdo corrigido é gravado em disco como um novo arquivo (mesmo diretório
+ * do atendimento), e os metadados apontam para o original — nunca sobrescreve
+ * o arquivo físico nem a linha original em `anexos`.
+ */
+function criarVersaoCorrigida(empresaId,
+⋮----
+function listarVersoes(empresaId, anexoOriginalId)
+⋮----
+function calcularDiff(textoOriginal, textoCorrigido)
+</file>
+
+<file path="apps/IA Service/backend/services/investigative-discipline-service.js">
+function normalizar(texto)
+⋮----
+function contem(texto, termo)
+⋮----
+function termos(texto)
+⋮----
+function overlap(texto, lista = [])
+⋮----
+function _add(arr, valor)
+⋮----
+function _textoEntrada(ctx =
+⋮----
+function analisarMaterial(ctx =
+⋮----
+function evidencia(label, suporte)
+function hipotese(label, teste)
+⋮----
+function _parseJsonProvider(raw)
+⋮----
+function _zonaCinzenta(ctx, analise)
+⋮----
+function _validarSemantica(parsed =
+⋮----
+async function _interpretarSemantica(ctx, analise, opts =
+⋮----
+function _aplicarSemanticaValidada(analise, semantica)
+⋮----
+async function analisarMaterialComSemantica(ctx =
+⋮----
+function aplicarDisciplinaPesquisa(plano =
+⋮----
+function avaliarAfirmacoes(
+</file>
+
+<file path="apps/IA Service/backend/services/redaction-service.js">
+function redigirTexto(texto)
+⋮----
+function redigirUrl(url)
+⋮----
+function redigirValor(valor)
+</file>
+
+<file path="apps/IA Service/backend/services/token-budget-service.js">
+function estimarTokens(texto)
+⋮----
+function estimarTokensImagem()
+⋮----
+function capacidadeModelo(modelo)
+⋮----
+function criarOrcamento(
+</file>
+
+<file path="apps/IA Service/backend/services/ai-config-service.js">
+function permitirConfigLegada()
+⋮----
+function resolverKeysEOrdem(empresaId)
+⋮----
+function resolverConfigPesquisa(empresaId)
+⋮----
+function salvarConfig(empresaId, dados)
+⋮----
+function getConfig(empresaId)
+</file>
+
+<file path="apps/IA Service/backend/services/safe-web-fetch-service.js">
+function _ipv4ToInt(ip)
+⋮----
+function _inCidr4(ip, base, bits)
+⋮----
+function _normalizeIPv6(ip)
+⋮----
+function isIpBloqueado(ip)
+⋮----
+async function resolverDestinoSeguro(hostname)
+⋮----
+function validarProtocolo(parsed)
+⋮----
+function _contentTypeAceito(contentType, aceitos)
+⋮----
+async function validarUrlSegura(url)
+⋮----
+async function fetchTextoSeguro(url, opts =
+⋮----
+// AbortController em vez de confiar só em req.setTimeout — achado real,
+// auditoria 2026-10 (mesma causa documentada em ai-provider-client.js:
+// _httpPost): req.setTimeout mede INATIVIDADE do socket, não duração
+// total da requisição. Um host que mantém a conexão TCP aberta sem
+// nunca enviar headers nunca dispara esse timeout. abort() força o
+// fechamento independente do estado do socket.
+⋮----
+lookup: (hostname, options, cb) =>
+⋮----
+async function resolverRedirectFinal(url, opts =
+</file>
+
+<file path="apps/IA Service/backend/services/consultor-service.js">
+function criarConsultor(empresaId, dados)
+⋮----
+function getConsultor(empresaId, consultorId)
+⋮----
+function getNomeExibicao(empresaId, consultorId)
+⋮----
+function getConsultorPorUsuario(empresaId, usuarioIdIahub)
+⋮----
+function getNomeExibicaoPorUsuarioIahub(usuarioIdIahub)
+⋮----
+function listarConsultores(empresaId, filtros)
+⋮----
+function atualizarConsultor(empresaId, consultorId, patch)
+⋮----
+function definirPreferenciaPessoal(empresaId, consultorId, valor)
+⋮----
+function excluirConsultor(empresaId, consultorId)
+</file>
+
+<file path="apps/IA Service/backend/services/login-externo-service.js">
+function normalizarTelefone(valor)
+⋮----
+function _hashCodigo(challengeId, telefone, codigo)
+⋮----
+function _hashToken(token)
+⋮----
+function _limparChallengesExpirados(db)
+⋮----
+function _consolidarVinculosPorEmpresa(itens)
+⋮----
+function listarEmpresasDoTelefone(telefoneBruto)
+⋮----
+function sincronizarPreferenciaDaPlatform(empresaId, consultorId)
+⋮----
+function iniciarLogin(telefoneBruto)
+⋮----
+function _validarChallenge(challengeId, telefoneBruto, codigoBruto)
+⋮----
+function _emitirSessao(empresaId, consultorId)
+⋮----
+function verificarLogin(challengeId, telefoneBruto, codigoBruto)
+⋮----
+function escolherEmpresa(telefoneBruto, empresaId)
+⋮----
+function trocarEmpresa(tokenAtual, novoEmpresaId)
+⋮----
+function validarSessaoExterna(token)
+</file>
+
+<file path="apps/IA Service/backend/services/resposta-operacional-service.js">
+function _limpar(texto)
+⋮----
+function _primeiraLinhaUtil(texto)
+⋮----
+function _semCodigo(texto)
+⋮----
+function _tipoDiagnostico(secoes =
+⋮----
+function _rotuloDiagnostico(tipo)
+⋮----
+function _diagnosticoPrincipal(secoes =
+⋮----
+function _acaoPrincipal(secoes =
+⋮----
+function _evidenciaPrincipal(secoes =
+⋮----
+function _validacaoPrincipal(secoes =
+⋮----
+function _proximoPasso(secoes =
+⋮----
+function _detalhes(secoes =
+⋮----
+function construirFichaOperacional({
+  diagnostico, nivelConfianca, conteudo, fontesCorrigidos = [], avisosFonteCorrigido = [],
+  validacaoSolucao = null, avaliacaoHumana = null, qualityGateBloqueado = false, avaliavel = true,
+} =
+⋮----
+function anexarFichaOperacional(mensagem, extras =
+⋮----
+function execucaoAvaliavel(statusExecucao, respostaCurta = null)
+</file>
+
+<file path="apps/IA Service/backend/services/anexos-softexpert-service.js">
+function _mimeTypePorExtensao(extensao)
+⋮----
+async function _buscarAnexosBrutos(empresaId, chamadoId)
+⋮----
+function _decodificarEValidar(bruto)
+⋮----
+function _arquivoLocalIntegro(anexo)
+⋮----
+function listarAnexosLocaisIndisponiveis(empresaId, atendimentoId)
+⋮----
+async function listarAnexosDoChamado(empresaId, chamadoId)
+⋮----
+async function baixarAnexo(empresaId, chamadoId, anexoOid)
+⋮----
+async function sincronizarAnexosParaAtendimento(empresaId, chamadoId, atendimentoId)
+⋮----
+async function sincronizarAnexosParaAtendimentoComReparo(empresaId, chamadoId, atendimentoId)
+⋮----
+async function sincronizarEValidarAnexosParaAtendimento(empresaId, chamadoId, atendimentoId)
+</file>
+
+<file path="apps/IA Service/backend/services/armazenamento-anexos.js">
+function _extensaoSegura(nomeOriginal)
+⋮----
+function validarAnexo(
+⋮----
+/**
+ * Persiste o binário em disco (fora do SQLite) e grava os metadados via
+ * anexo-repository. `bufferOuConteudo` é o conteúdo bruto do arquivo — a Etapa 2
+ * decide o transporte real (multipart/base64/etc.), esta função só recebe bytes.
+ */
+function salvarAnexo(empresaId, atendimentoId, {
+  nomeOriginal,
+  mimeType,
+  tamanho,
+  conteudo,
+  mensagemId,
+  usuarioId,
+  origemSistema,
+  origemOid,
+  origemTipo,
+  origemReferenciaOid,
+})
+⋮----
+function substituirArquivoAnexo(empresaId, atendimentoId, anexoExistente, {
+  nomeOriginal,
+  mimeType,
+  tamanho,
+  conteudo,
+  conteudoExtraido,
+  linguagemDetectada,
+  encodingDetectado,
+  eCodigo,
+})
+⋮----
+function removerDiretorioAtendimento(empresaId, atendimentoId)
+⋮----
+/**
+ * Varredura por exclusão: apaga QUALQUER subpasta de
+ * data/anexos/<empresaId>/ cujo nome (= atendimentoId) não está mais em
+ * `atendimentoIdsValidos` — usada depois de "reimportar do zero"/excluir
+ * fonte para garantir zero resquício físico, sem depender de uma lista
+ * de IDs previamente capturada por JOIN (que exige acertar toda consulta
+ * de captura; aqui não sobra margem para erro: o que não existe mais no
+ * banco, não pode continuar em disco). Decisão explícita do usuário:
+ * "reimportar do zero é sumir com o que tem" — nenhum anexo de execução
+ * anterior pode sobreviver à limpeza, nem os que já eram órfãos antes dela.
+ *
+ * Assíncrona (fs.promises) de propósito — achado real em produção (2026-10):
+ * a versão síncrona original (fs.readdirSync/rmSync) bloqueava o event loop
+ * inteiro do Node durante a varredura, travando TODAS as rotas do servidor
+ * (não só esta) até terminar. Com milhares de diretórios/arquivos acumulados
+ * ou disco mais lento que o ambiente de teste local, isso trava o processo
+ * de forma indistinguível de um deadlock — só reiniciar o serviço "resolvia"
+ * até a próxima execução da mesma rotina.
+ */
+async function limparDiretoriosOrfaos(empresaId, atendimentoIdsValidos)
+</file>
+
+<file path="apps/IA Service/backend/services/avaliacao-investigacao-service.js">
+function _naoEncontrado(mensagem)
+⋮----
+function _erroValidacao(mensagem)
+⋮----
+function _validarNotas(notas)
+⋮----
+function _validarObservacoes(observacoes)
+⋮----
+function _validarMensagemAssistenteDoAtendimento(empresaId, atendimentoId, mensagemAssistenteId)
+⋮----
+function _resolverNomeAvaliador(empresaId, usuarioId, origemIdentidade)
+⋮----
+async function avaliarInvestigacao(empresaId, {
+  atendimentoId, mensagemAssistenteId, notas, observacoes = null, erroTecnicoCritico = false, usuarioId,
+  origemIdentidade = null,
+})
+⋮----
+function obterAvaliacaoAtual(empresaId, mensagemAssistenteId, usuarioId, atendimentoId = null)
+⋮----
+function obterAvaliacoesAtuaisDaMensagem(empresaId, mensagemAssistenteId)
+⋮----
+function obterHistoricoDoUsuario(empresaId, mensagemAssistenteId, usuarioId)
+⋮----
+function obterAvaliacoesEmLote(empresaId, mensagemAssistenteIds)
+</file>
+
+<file path="apps/IA Service/backend/services/prompt-builder.js">
+function _formatarAnexoTexto(anexo)
+⋮----
+function _limitarTexto(texto, max = 2200)
+⋮----
+/**
+ * Monta o prompt de usuário a partir do histórico da conversa + anexos de
+ * texto do turno atual. Anexos de imagem NÃO entram aqui — são passados
+ * separadamente ao motor de IA (ai-provider-client) como blocos multimodais.
+ */
+function buildUserPrompt(
+</file>
+
+<file path="apps/IA Service/backend/services/import/softexpert-sqlserver-adapter.js">
+function inteiroNaoNegativo(valor, padrao = 0)
+⋮----
+function inteiroPositivo(valor, padrao = 500, maximo = 5000)
+⋮----
+function removerColunaControlePaginacao(row)
+⋮----
+async function listarChamadosPeriodo(empresaId, fonte,
+⋮----
+async function contarChamadosPeriodo(empresaId, fonte,
+⋮----
+async function contarPosicionamentosPeriodo(empresaId, fonte,
+⋮----
+async function listarPosicionamentosDoChamado(empresaId, fonte, idProcess)
+⋮----
+async function listarPosicionamentosDoLote(empresaId, fonte, idProcessList)
+⋮----
+/**
+ * Lista os anexos reais do chamado no SoftExpert (não os uploads feitos pelo
+ * próprio analista no IA Service — esses já existem via armazenamento-anexos.js).
+ * Componente "CONTAINER" do formulário SE não é uma coluna simples — o
+ * binário fica em SEBLOB (OID, NMNAME, IDEXTENSION, NRSIZE, FLDATA), referenciado
+ * a partir de três fontes distintas, cada chamado podendo ter 0..N no total
+ * (VALIDADO CONTRA DADOS REAIS em 2026-09, cobertura 100% em todas as três
+ * amostras testadas):
+ *   1. DYNITSM.OIDARQUIVO2 → SEBLOB.OID — anexo único "principal" do chamado
+ *      (OIDARQUIVO1 do próprio DYNITSM fica sempre vazio, não usar).
+ *   2. DYNITSMGRIDREGISTR.OIDARQUIVO2 → SEBLOB.OID — anexo de um posicionamento
+ *      específico (analista anexou algo ao responder).
+ *   3. DYNITSMGRIDANEXO (grid de múltiplos anexos) → SEBLOB.OID via
+ *      OIDARQUIVO1. O vínculo com o chamado NÃO é OIDREVISIONFORM (isso é
+ *      metadado de estrutura do formulário "GridAnexos", igual para todo
+ *      anexo do sistema, testado e descartado) — é OIDABC58815SXW3N8D, um
+ *      nome de coluna gerado automaticamente pelo motor de atributo
+ *      customizado do SE, confirmado por JOIN real contra DYNITSM.OID
+ *      (8144/8144 casos bateram).
+ *
+ * FLDATA vem do agente já em base64 (erp_executor.py converte bytes/bytearray
+ * antes de serializar a resposta JSON — sem essa conversão o agente quebraria
+ * ao tentar devolver uma coluna `image` do SQL Server). Cada linha aqui já
+ * inclui `origem` para o chamador saber de qual das três fontes veio.
+ */
+async function listarAnexosDoChamado(empresaId, fonte, idProcess)
+</file>
+
+<file path="apps/IA Service/backend/services/agente-local-service.js">
+async function _limparAnexosOrfaosDaEmpresa(empresaId)
+⋮----
+function permitirConfigLegada()
+⋮----
+function _resolverConfig(empresaId)
+⋮----
+function getConfig(empresaId)
+⋮----
+function salvarConfig(empresaId, dados)
+⋮----
+function getTokenRevelado(empresaId)
+⋮----
+function getCryptoKeyRevelada(empresaId)
+⋮----
+async function testarConexao(empresaId)
+⋮----
+async function listarConexoesDoAgente(empresaId)
+⋮----
+function criarFonte(empresaId,
+⋮----
+function atualizarFonte(empresaId, fonteId, patch)
+⋮----
+function getFonte(empresaId, fonteId)
+⋮----
+async function excluirFonte(empresaId, fonteId)
+⋮----
+async function limparHistoricoFonte(empresaId, fonteId)
+⋮----
+async function limparPesquisaIAFonte(empresaId, fonteId)
+⋮----
+async function zerarBaseFonte(empresaId, fonteId)
+⋮----
+function listarFontes(empresaId, filtros)
+⋮----
+async function testarFonte(empresaId, fonteId)
+⋮----
+async function executarSelectNaFonte(empresaId, fonteId,
+</file>
+
+<file path="apps/IA Service/backend/services/ai-provider-client.js">
+function _httpPost(hostname, path, headers, body, timeoutMs = 45000)
+⋮----
+function _normalizarTexto(data, providerName)
+⋮----
+function _estimarTokensPrompt(systemPrompt, userPrompt)
+⋮----
+function _maxTokensAjustadoPorProvider(cfg, systemPrompt, userPrompt, maxTokensPedido)
+⋮----
+async function _chamarOpenAICompatUmaVez(cfg, apiKey, systemPrompt, userPrompt, imagens, opts, maxTokens)
+⋮----
+async function _chamarOpenAICompat(cfg, apiKey, systemPrompt, userPrompt, imagens, opts =
+⋮----
+async function _chamarAnthropic(cfg, apiKey, systemPrompt, userPrompt, imagens, opts =
+⋮----
+async function _chamarGemini(cfg, apiKey, systemPrompt, userPrompt, imagens, opts =
+⋮----
+async function chamarProvedor(provedor, apiKey, systemPrompt, userPrompt, imagens, opts =
+⋮----
+function _normalizarOrdem(
+⋮----
+function _erroCotaOuCredito(msg)
+⋮----
+// Prompt maior que a janela de contexto do modelo: retry no MESMO provider
+// nunca resolve (o prompt nao muda de tamanho entre tentativas) — precisa
+// pular direto para o proximo candidato, nunca reentrar na mesma rodada.
+// Achado real, homologacao 2026-10: classificado antes como "transitorio"
+// (bate em nenhuma palavra-chave especifica, caia no catch-all), desperdicando
+// uma rodada inteira tentando de novo um prompt que nunca vai caber.
+function _erroContextoExcedido(msg)
+⋮----
+// Erro de validacao de certificado/handshake TLS — tipicamente ambiental
+// (proxy/antivirus interceptando HTTPS, ver IA_SERVICE_AUDITORIA_
+// ESTABILIZACAO_PRODUCAO.md secao 1), nao especifico de um provider. Se o
+// erro for esse, os demais hosts HTTPS tendem a falhar pelo mesmo motivo —
+// sinalizado para o chamador decidir interromper a sequencia de fallback em
+// vez de gastar uma tentativa por provider sabendo que todas vao repetir o
+// mesmo erro de ambiente.
+function _erroTlsGlobal(msg)
+⋮----
+function _erroPermanenteProvider(msg)
+⋮----
+// Rate limit (TPM/RPM/429) e SEMPRE transitorio, mesmo quando a mensagem do
+// provider inclui um link de upsell contendo a palavra "billing" (caso real
+// do GROQ: "...Upgrade to Dev Tier today at .../settings/billing" dentro de
+// uma mensagem de "Rate limit reached" — achado real na homologacao 2026-10,
+// o padrao solto de /billing/i classificava rate limit como permanente e
+// impedia o proprio provider de ser retentado em rodada futura).
+⋮----
+function _erroTransitorioProvider(msg)
+⋮----
+function _sleep(ms)
+⋮----
+/**
+ * Chama o motor de IA com fallback entre providers, na ordem configurada pela
+ * empresa (ai_config). `imagens` (pode ser []) restringe a ordem aos
+ * providers com suporte a visão quando não vazia — Groq é pulado nesse caso.
+ *
+ * Modelo por provedor (2026-09): `cfg.modelos` (vindo de
+ * ai-config-service.resolverKeysEOrdem) tem prioridade sobre `opts.model` —
+ * cada provedor tem seu próprio nome de modelo, então um `opts.model` único
+ * aplicado ao vencedor do fallback estaria errado na maioria dos casos
+ * (ex.: "gpt-4o-mini" não existe na API do Groq). `opts.model` continua
+ * funcionando como override GLOBAL para quem não tiver `cfg.modelos` (ex.:
+ * chamadas de teste avulsas, ver rota /config/ia/testar).
+ */
+async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts =
+⋮----
+// Candidatos na ORDEM cadastrada (primario + fallback), com chave e, quando
+// o turno envia imagem, com visao. Nenhum provider e promovido ou removido
+// por preferencia: a unica exclusao por capacidade e a de modalidade.
+⋮----
+// Guarda de janela: rede de seguranca APOS o preparo por candidato. Com
+// opts.prepararParaCandidato o prompt e reconstruido para o orcamento de
+// cada modelo e a guarda nao deve disparar; sem o callback (ex.: reescrita
+// final do Quality Gate) ela impede reenviar um prompt maior que a janela
+// do modelo, o que so gastaria uma tentativa para ser recusado.
+⋮----
+function candidatosElegiveis(keys, cfg,
+⋮----
+function primeiroCandidatoElegivel(keys, cfg,
+</file>
+
+<file path="apps/IA Service/backend/services/import/historical-import-service.js">
+function _mapearChamado(row)
+⋮----
+function _mapearPosicionamento(row)
+⋮----
+async function _processarChamado(empresaId, fonte, adapter, importacaoId, rowBruta, posicionamentosPreCarregados)
+⋮----
+async function _dispararPreAnaliseSePrimeiroContato(empresaId, chamado)
+⋮----
+async function _registrarEvidenciaExternaSeAplicavel(empresaId, chamado, statusEncerramentoTransicao)
+⋮----
+async function _sincronizarAnexosSeAtendimentoExistente(empresaId, chamado)
+⋮----
+async function executarFullLoad(empresaId, fonteId,
+</file>
+
+<file path="apps/IA Service/backend/services/radar-service.js">
+function getConfig(empresaId)
+⋮----
+function salvarConfig(empresaId,
+⋮----
+function _resolverTecnicoDoConsultor(empresaId, usuarioIdIahub)
+⋮----
+function _resolverTecnicoDoConsultorResolvido(empresaId, consultor)
+⋮----
+function getFila(empresaId, usuarioIdIahub,
+⋮----
+function getFilaPorConsultorId(empresaId, consultorId,
+⋮----
+function getRiscoSla(empresaId,
+⋮----
+function getRiscoSlaPorConsultorId(empresaId, consultorId,
+⋮----
+function getRiscoSlaUsuario(empresaId, usuarioIdIahub,
+⋮----
+function _formatarConteudoBruto(chamado, posicionamentos)
+⋮----
+function _normalizarNome(nome)
+⋮----
+function _textoAberturaChamado(chamado)
+⋮----
+function _textoPosicionamento(p)
+⋮----
+function _autorPosicionamento(p)
+⋮----
+function _formatarDataHoraPosicionamento(dataPosicionamentoIso)
+⋮----
+function _papelPosicionamento(chamado, p, tecnicoResponsavelNome)
+⋮----
+function _dataMensagemOrigem(dataOrigem, indice)
+⋮----
+function _gravarHistoricoComoMensagens(empresaId, atendimentoId, chamado, posicionamentos, usuarioIdIahub)
+⋮----
+function _sincronizarHistoricoImportado(empresaId, atendimentoId, chamado, posicionamentos, usuarioIdIahub)
+⋮----
+function buscarRelacionados(empresaId, chamadoId,
+⋮----
+function _resolverConsultorDaAbertura(empresaId,
+⋮----
+function _preAnaliseHabilitada(consultor, preAnaliseAutomatica)
+⋮----
+function _tentarDispararPreAnaliseEmBackground(empresaId, chamado, atendimento,
+⋮----
+function iniciarAnalise(empresaId, chamadoId,
+</file>
+
+</files>
