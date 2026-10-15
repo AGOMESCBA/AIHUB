@@ -1254,7 +1254,10 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
   falhas.push(..._avaliarEncaminhamentoComoResolucao(resposta, historicoMensagens));
   falhas.push(..._respostaPromoveEvidenciaIncidental(resposta, manifesto));
   falhas.push(..._avaliarEstadoOperacionalDoQuadro(resposta, manifesto));
-  if (/pesquis|tdn|totvs|softexpert|documenta[cç][aã]o|fonte oficial/i.test(perguntaTexto)) {
+  // Pesquisa externa dispensada de proposito pelo gate de pendencia externa
+  // (aguardando cliente/fornecedor) nao e "pesquisa que deveria ter ocorrido".
+  const pesquisaDispensadaPorPendencia = !!pesquisa?.plano?.bloqueioPendenciaExterna && pesquisa?.modo !== 'web';
+  if (!pesquisaDispensadaPorPendencia && /pesquis|tdn|totvs|softexpert|documenta[cç][aã]o|fonte oficial/i.test(perguntaTexto)) {
     if (!pesquisa?.configurado) falhas.push({ codigo: 'RESEARCH_REQUIRED_NOT_EXECUTED', legado: 'PESQUISA_NAO_CONFIGURADA', severidade: 'media', acaoCorretiva: 'informar_pesquisa_indisponivel' });
     else if (pesquisa?.modo !== 'web') falhas.push({ codigo: 'RESEARCH_CONFIGURED_WITHOUT_RESULTS', legado: 'PESQUISA_CONFIGURADA_SEM_RESULTADO', severidade: 'media', acaoCorretiva: 'executar_pesquisa_solicitada_ou_declarar_limite' });
     else if (!paginasComConteudo.length) {

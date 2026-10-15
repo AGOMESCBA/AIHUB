@@ -1500,7 +1500,7 @@ function formatarContextoParaPrompt(pesquisa, relacionados = []) {
       : 'Busca web: não configurada; use as consultas e links sugeridos apenas como trilha de pesquisa, não como evidência confirmada.',
     pesquisa.modo === 'nao_pesquisado'
       ? (pesquisa.plano?.bloqueioPendenciaExterna
-        ? `Busca externa nao executada neste turno: chamado com pendencia externa (aguardando ${pesquisa.plano.bloqueioPendenciaExterna.responsavel || 'terceiro'}).`
+        ? `Busca externa nao executada neste turno: chamado com pendencia externa (aguardando ${pesquisa.plano.bloqueioPendenciaExterna.responsavel || 'terceiro'}). Isto nao e uma falha: responda normalmente com o historico, anexos e evidencias ja disponiveis e informe ao analista, em uma frase natural e objetiva, que a pesquisa externa nao foi feita por estar aguardando o retorno do ${pesquisa.plano.bloqueioPendenciaExterna.responsavel || 'terceiro'}, podendo ser feita se ele pedir na conversa.`
         : 'Busca externa nao executada neste turno porque nao havia evidencia tecnica nova suficiente.')
       : null,
     pesquisa.consultasExecutadas?.length ? `Consultas executadas: ${pesquisa.consultasExecutadas.join(' | ')}` : null,

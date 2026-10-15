@@ -397,6 +397,25 @@ teste('pesquisarParaChamado (aba/selecao): sob pendencia externa nao pesquisa e 
   technicalResearchService.pesquisar = old;
 });
 
+// ── Quality Gate: pesquisa dispensada pelo gate nao e alerta; pesquisa devida sem resultado continua alertando
+teste('Quality Gate: pesquisa dispensada por pendencia externa nao gera RESEARCH_CONFIGURED_WITHOUT_RESULTS', () => {
+  const qg = require('../backend/services/quality-gate-service');
+  const base = { textoResposta: 'Aguardo a confirmacao do cliente sobre o teste em HMG.', manifesto: { selecionados: [], omitidos: [] }, pergunta: 'Revise o historico e pesquise uma solucao para este chamado.' };
+  const dispensada = qg.avaliarResposta({ ...base, pesquisa: { configurado: true, modo: 'nao_pesquisado', plano: { devePesquisar: false, bloqueioPendenciaExterna: { responsavel: 'cliente' } } } });
+  assert.ok(!dispensada.falhas.some(f => /RESEARCH_/.test(f.codigo)), JSON.stringify(dispensada.falhas.map(f => f.codigo)));
+  const devida = qg.avaliarResposta({ ...base, pesquisa: { configurado: true, modo: 'nao_pesquisado', plano: { devePesquisar: true } } });
+  assert.ok(devida.falhas.some(f => f.codigo === 'RESEARCH_CONFIGURED_WITHOUT_RESULTS'), 'pesquisa devida sem resultado continua alertando');
+  const naoConfigurada = qg.avaliarResposta({ ...base, pesquisa: { configurado: false, modo: 'nao_pesquisado', plano: { devePesquisar: true } } });
+  assert.ok(naoConfigurada.falhas.some(f => f.codigo === 'RESEARCH_REQUIRED_NOT_EXECUTED'));
+});
+
+teste('contexto da pesquisa dispensada orienta informar a dispensa de forma natural (sem tom de erro)', () => {
+  const tr = require('../backend/services/technical-research-service');
+  const txt = tr.formatarContextoParaPrompt({ configurado: true, modo: 'nao_pesquisado', plano: { devePesquisar: false, bloqueioPendenciaExterna: { responsavel: 'cliente' } }, consultasExecutadas: [], resultados: [] }, []);
+  assert.match(txt, /aguardando o retorno do cliente/);
+  assert.match(txt, /Isto nao e uma falha/);
+});
+
 async function main() {
   let falhas = 0;
   for (const t of testes) {
