@@ -1936,12 +1936,6 @@
       renderRisk();
     });
     $('toggle-risk-consultants').addEventListener('click', () => $('risk-layout').classList.toggle('consultants-collapsed'));
-    $('toggle-summary-btn').addEventListener('click', () => {
-      const layout = $('radar-layout');
-      const collapsed = layout.classList.contains('summary-collapsed') || layout.classList.contains('summary-auto-collapsed');
-      layout.classList.remove('summary-auto-collapsed');
-      layout.classList.toggle('summary-collapsed', !collapsed);
-    });
     // Fila recolhivel (desktop): espelha o recolher do painel direito; a escolha fica salva.
     const aplicarFilaRecolhida = (recolhida) => {
       $('radar-layout').classList.toggle('queue-collapsed', recolhida);
