@@ -989,8 +989,58 @@
 
         atualizarOpcoesAguardandoFila();
         renderizarFila();
+        posSincronizacaoFila(resultado.sincronizacao);
       } catch (err) {
         showError('Não foi possível carregar a fila: ' + err.message);
+      }
+    }
+
+    // O Refresh (botão ↻ e automático) sincroniza em segundo plano no servidor.
+    // A fila é exibida na hora com o que já está no banco e, enquanto a
+    // sincronização roda, esta função consulta de novo (sem forçar) até ela
+    // terminar — assim o analista vê os dados atualizados (fila, cabeçalho e
+    // mensagens do chat aberto) sem precisar clicar outra vez. Resultado
+    // parcial é sinalizado, nunca apresentado como atualização completa.
+    let _pollSyncTimer = null;
+    let _pollSyncTentativas = 0;
+    let _ultimoProgressoAplicado = null;
+    function posSincronizacaoFila(sinc) {
+      if (_pollSyncTimer) { clearTimeout(_pollSyncTimer); _pollSyncTimer = null; }
+      if (sinc?.status === 'em_andamento') {
+        if (_pollSyncTentativas === 0) showToast('Atualizando chamados a partir do SoftExpert...');
+        // Etapa prioritária concluída: a tela e o chat aberto já podem refletir os
+        // dados novos (a sincronização completa continua em segundo plano).
+        if (sinc.progresso?.etapa === 'tela_atualizada' && sinc.progresso.em !== _ultimoProgressoAplicado) {
+          _ultimoProgressoAplicado = sinc.progresso.em;
+          aplicarAtualizacaoAoChatAberto(sinc.progresso.chamadoIdsAtualizados || []);
+        }
+        if (_pollSyncTentativas < 60) {
+          _pollSyncTentativas++;
+          _pollSyncTimer = setTimeout(() => carregarFila(), 1500);
+        } else {
+          _pollSyncTentativas = 0;
+          showToast('A atualização está demorando; use ↻ para tentar novamente.');
+        }
+        return;
+      }
+      const veioDeSync = _pollSyncTentativas > 0 || sinc?.status === 'concluido';
+      _pollSyncTentativas = 0;
+      const res = sinc?.resultado;
+      if (!veioDeSync || !res) return;
+      if (res.falhou) showToast('Não foi possível atualizar agora; os dados exibidos podem estar desatualizados.');
+      else if (res.sucesso === true) showToast('Fila atualizada.');
+      else showToast('Atualização parcial: alguns chamados não puderam ser atualizados agora.');
+      aplicarAtualizacaoAoChatAberto(res.chamadoIdsAtualizados || []);
+    }
+
+    function aplicarAtualizacaoAoChatAberto(idsAtualizados) {
+      if (!chamadoSelecionadoId) return;
+      const atualizado = filaCache.find(c => c.id === chamadoSelecionadoId)
+        || (riscoCache.chamados || []).find(c => c.id === chamadoSelecionadoId);
+      if (atualizado) { chamadoAtual = atualizado; preencherCabecalho(atualizado); }
+      const mudou = (idsAtualizados || []).includes(chamadoSelecionadoId);
+      if (mudou && atendimentoAtualId && !atendimentosEmProcessamento.has(atendimentoAtualId)) {
+        carregarMensagens();
       }
     }
 

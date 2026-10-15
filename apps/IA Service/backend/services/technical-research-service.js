@@ -1526,7 +1526,10 @@ async function pesquisarParaChamado(empresaId, chamadoId, extras = {}) {
   // Aba "Banco de conhecimento"/seleção do chamado dispara esta rota sozinha
   // (sem pedido do analista): sob pendência externa não faz pesquisa externa;
   // chamados relacionados internos continuam sendo devolvidos.
-  const pendencia = await pendenciaExternaGate.avaliarPendencia({ chamado, posicionamentos });
+  const pendencia = await pendenciaExternaGate.avaliarPendencia({
+    chamado, posicionamentos,
+    consultarSituacaoOrigem: () => require('./situacao-origem-service').consultarSituacaoAtual(empresaId, chamado),
+  });
   const pesquisaExternaBloqueada = pendencia.externa
     ? { responsavel: pendencia.responsavel, origemAcao: pendenciaExternaGate.ORIGEM.AUTOMATICO, motivo: `consulta automatica da aba/selecao sem pedido do analista: aguardando ${pendencia.responsavel}` }
     : null;

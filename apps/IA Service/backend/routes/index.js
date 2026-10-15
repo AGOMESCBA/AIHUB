@@ -940,9 +940,18 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       const { apenas_minha, filtro_sla, limite, force_sync } = req.query || {};
       // aguardarMs: 0 — nao bloqueia a resposta esperando a sincronizacao com
       // o SoftExpert (ver mesmo ajuste em routes/externo-routes.js).
+      // Chamados que o consultor está vendo agora: o Refresh atualiza todos eles
+      // por ID (independente da data de abertura), além do que mudou na origem.
+      const opcoesFila = {
+        apenasMinha: apenas_minha === 'true',
+        filtroSla: filtro_sla || 'todos',
+        limite: limite ? Number(limite) : undefined,
+      };
+      const chamadoIdsTela = radarService.getFila(empresaId, req.session?.user_id || null, opcoesFila).chamados.map(c => c.id);
       const sincronizacao = await radarRefreshService.sincronizarAntesDaFila(empresaId, {
         force: force_sync === 'true',
         aguardarMs: 0,
+        chamadoIds: chamadoIdsTela,
       });
       const resultado = radarService.getFila(empresaId, req.session?.user_id || null, {
         apenasMinha: apenas_minha === 'true',

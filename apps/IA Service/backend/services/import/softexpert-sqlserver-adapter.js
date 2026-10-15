@@ -379,8 +379,79 @@ async function listarAnexosDoChamado(empresaId, fonte, idProcess) {
   });
 }
 
+/**
+ * Snapshot LEVE de todos os chamados ABERTOS na origem (mesmos filtros de
+ * JOIN_WFPROCESS + FGSTATUS=1): situação atual (AGUARDANDO da view), responsável
+ * e marcas de mudança — última transição de atividade (WFSTRUCT.DHENABLED) e
+ * quantidade/última hora de posicionamentos. Uma única consulta (sem colunas
+ * pesadas da view) usada pelo Refresh (detectar o que mudou) e pelo gate de
+ * pesquisa externa. A sincronização incremental filtra por DYNITSM.DT (data de
+ * abertura) e nunca relê chamados antigos; este snapshot independe de idade.
+ * Não grava nada. `truncado` = a origem tem mais linhas que o limite: o chamador
+ * NÃO pode tratar ausência no snapshot como prova de encerramento.
+ */
+async function listarSnapshotAbertos(empresaId, fonte, { limite = 3000 } = {}) {
+  const sql = `
+    SELECT P.IDPROCESS AS NUM,
+           ITC.AGUARDANDO AS AGUARDANDO,
+           ITC.CDUSERANA AS RESPONSAVEL,
+           (SELECT MAX(S.DHENABLED) FROM WFSTRUCT S WHERE S.IDPROCESS = P.IDOBJECT) AS ULT_TRANSICAO,
+           (SELECT COUNT(*) FROM DYNITSMGRIDREGISTR G WHERE G.CHAMADO = P.IDPROCESS) AS N_POS,
+           (SELECT MAX(G.HORAATUAL) FROM DYNITSMGRIDREGISTR G WHERE G.CHAMADO = P.IDPROCESS) AS ULT_POS,
+           -- Metadados de ANEXOS (sem FLDATA/binário): as 3 origens de listarAnexosDoChamado.
+           -- O grid de anexos do formulário (DYNITSMGRIDANEXO) NÃO tem vínculo com
+           -- DYNITSMGRIDREGISTR: um anexo novo pode surgir sem posicionamento novo.
+           (SELECT COUNT(*) FROM DYNITSM DA INNER JOIN DYNITSMGRIDANEXO A ON A.OIDABC58815SXW3N8D = DA.OID
+             WHERE DA.IDPROCESS = P.IDPROCESS AND A.OIDARQUIVO1 IS NOT NULL) AS N_ANEXOS_GRID,
+           (SELECT MAX(A2.BNCREATED) FROM DYNITSM DA2 INNER JOIN DYNITSMGRIDANEXO A2 ON A2.OIDABC58815SXW3N8D = DA2.OID
+             WHERE DA2.IDPROCESS = P.IDPROCESS AND A2.OIDARQUIVO1 IS NOT NULL) AS ULT_ANEXO_GRID,
+           (SELECT COUNT(*) FROM DYNITSMGRIDREGISTR G2 WHERE G2.CHAMADO = P.IDPROCESS AND G2.OIDARQUIVO2 IS NOT NULL) AS N_ANEXOS_POS,
+           (SELECT COUNT(*) FROM DYNITSM DA3 WHERE DA3.IDPROCESS = P.IDPROCESS AND DA3.OIDARQUIVO2 IS NOT NULL) AS N_ANEXO_CHAMADO
+    FROM WFPROCESS P
+    INNER JOIN ITSM_CHAMADOS ITC ON ITC.CHAMADO = P.IDPROCESS
+    WHERE P.CDPROCESSMODEL = 1759 AND P.FGWFGROUP = 1 AND P.FGSTATUS = 1
+      AND P.CDPRODAUTOMATION IS NOT NULL AND P.CDPRODAUTOMATION NOT IN (160, 202, 275)
+  `;
+  const rows = await agenteLocalService.executarSelectNaFonte(empresaId, fonte.id, {
+    sql, params: {}, limit: limite + 1,
+  });
+  const truncado = rows.length > limite;
+  return { linhas: truncado ? rows.slice(0, limite) : rows, truncado };
+}
+
+/**
+ * Chamados por ID (IDPROCESS), com EXATAMENTE as mesmas colunas/regras de
+ * listarChamadosPeriodo (mesmos JOINs, status, SLA, ITSM) — alimenta o mesmo
+ * _processarChamado da importação, sem filtro por data. Chamado que não
+ * volta aqui NÃO está provado encerrado (pode ser cancelado/fora do modelo).
+ */
+async function listarChamadosPorIds(empresaId, fonte, idProcessList, { leve = false } = {}) {
+  const valores = (idProcessList || [])
+    .filter(id => id !== null && id !== undefined && id !== '')
+    .map(id => `'${String(id).replace(/'/g, "''")}'`);
+  if (!valores.length) return [];
+  const colunasD = COLUNAS_DYNITSM.map(c => `D.${c}`).join(', ');
+  // leve: só ITC.AGUARDANDO — as colunas DIAS_DUR* da view são funções escalares
+  // por linha (medido: ~0,35 s por chamado vs ~0,05 s sem elas). O chamador
+  // preserva as durações já gravadas (informativas; a janela incremental e o
+  // modo completo as atualizam).
+  const colunasItsm = (leve ? ['ITC.AGUARDANDO'] : COLUNAS_ITSM_CHAMADOS).join(', ');
+  const sql = `
+    SELECT ${colunasD}, ${SQL_STATUS_CHAMADO} AS STATUS_ENCERRAMENTO, ${SQL_SLA_PRAZO} AS SLA_PRAZO, ${SQL_SLA_DATA_PREV_FIM} AS SLA_DATA_PREV_FIM, ${colunasItsm}
+    FROM DYNITSM D
+    ${JOIN_WFPROCESS}
+    ${JOIN_ITSM_CHAMADOS}
+    WHERE D.IDPROCESS IN (${valores.join(', ')})
+  `;
+  return agenteLocalService.executarSelectNaFonte(empresaId, fonte.id, {
+    sql, params: {}, limit: valores.length + 5,
+  });
+}
+
 module.exports = {
   SISTEMA_ORIGEM,
+  listarSnapshotAbertos,
+  listarChamadosPorIds,
   COLUNAS_DYNITSM,
   COLUNAS_POSICIONAMENTO,
   listarChamadosPeriodo,

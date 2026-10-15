@@ -213,7 +213,7 @@ function _mapearPosicionamento(row) {
  * função própria para que um erro num chamado não aborte o lote inteiro
  * (seção 20 do prompt) — o chamador (executarLote) captura exceções daqui.
  */
-async function _processarChamado(empresaId, fonte, adapter, importacaoId, rowBruta, posicionamentosPreCarregados) {
+async function _processarChamado(empresaId, fonte, adapter, importacaoId, rowBruta, posicionamentosPreCarregados, opcoes = {}) {
   const c = _mapearChamado(rowBruta);
   const inconsistencias = [];
 
@@ -333,7 +333,19 @@ async function _processarChamado(empresaId, fonte, adapter, importacaoId, rowBru
     else posSemAlteracao++;
   }
 
-  const anexos = await _sincronizarAnexosSeAtendimentoExistente(empresaId, chamado);
+  // opcoes.semAnexos: o Refresh por ID não baixa binários (SEBLOB/FLDATA) a
+  // cada ciclo — anexos continuam sob demanda (Pesquisar/aba de anexos).
+  // Também não baixa binários quando nada mudou (chamado sem alteração e nenhum
+  // posicionamento novo/alterado): cada ciclo relia FLDATA de todos os anexos de
+  // todos os chamados da janela — era o maior custo do Refresh (medido: ~15 s por
+  // ciclo). Anexo novo chega com posicionamento/alteração, e continua disponível
+  // sob demanda (aba de anexos e Pesquisar sincronizam).
+  const nadaMudou = resultado === 'sem_alteracao' && posInseridos === 0 && posAtualizados === 0;
+  const anexos = opcoes.semAnexos
+    ? { sincronizados: 0, ignorado: 'refresh_sem_anexos' }
+    : (nadaMudou
+      ? { sincronizados: 0, ignorado: 'sem_alteracao' }
+      : await _sincronizarAnexosSeAtendimentoExistente(empresaId, chamado));
   await _dispararPreAnaliseSePrimeiroContato(empresaId, chamado);
   const evidenciaValidacao = await _registrarEvidenciaExternaSeAplicavel(empresaId, chamado, statusEncerramentoTransicao);
 
@@ -568,8 +580,102 @@ async function executarFullLoad(empresaId, fonteId, { periodoInicio, periodoFim,
   return importacaoRepo.getImportacao(empresaId, importacao.id);
 }
 
+/**
+ * Atualiza chamados específicos (por IDPROCESS), independentemente da data de
+ * abertura — usado pelo Refresh. Reaproveita _processarChamado (mesmos
+ * mapeamentos/upserts da importação por janela) e os posicionamentos em lote.
+ * Chamado que não volta da origem NÃO é tratado como encerrado (vai em
+ * `naoEncontrados`). `deveIgnorar(numero)` permite pular chamados ocupados.
+ */
+async function atualizarChamadosPorIds(empresaId, fonteId, numeros, { deveIgnorar, tamanhoLote = 40, numerosCompletos = null } = {}) {
+  const fonte = agenteRepo.getFonte(empresaId, fonteId);
+  if (!fonte) throw new Error('Fonte histórica não encontrada.');
+  const adapter = resolverAdapter(fonte.adapter);
+  if (typeof adapter.listarChamadosPorIds !== 'function') {
+    throw new Error('Adapter não suporta atualização por ID de chamado.');
+  }
+  const lista = [...new Set((numeros || []).map(n => String(n)))].filter(Boolean);
+  const saida = { importacaoId: null, atualizados: [], semAlteracao: [], ignorados: [], naoEncontrados: [], erros: [], consultasOrigem: 0 };
+  if (!lista.length) return saida;
+
+  const importacao = importacaoRepo.criarImportacao(empresaId, { fonteId, tipo: 'refresh' });
+  saida.importacaoId = importacao.id;
+  importacaoRepo.atualizarImportacao(empresaId, importacao.id, { status: 'executando', inicioEm: new Date().toISOString() });
+  const contadores = { registrosLidos: 0, registrosInseridos: 0, registrosAtualizados: 0, registrosIgnorados: 0, registrosErro: 0,
+    posicionamentosLidos: 0, posicionamentosInseridos: 0, posicionamentosAtualizados: 0 };
+
+  try {
+    for (let i = 0; i < lista.length; i += tamanhoLote) {
+      const grupo = lista.slice(i, i + tamanhoLote);
+      // completo: colunas de duração da view (caras) só para quem precisa (tela);
+      // os demais vêm no modo leve e preservam as durações já gravadas.
+      const completos = numerosCompletos ? grupo.filter(n => numerosCompletos.has(n)) : grupo;
+      const leves = numerosCompletos ? grupo.filter(n => !numerosCompletos.has(n)) : [];
+      let linhas = [];
+      if (completos.length) {
+        linhas = linhas.concat(await adapter.listarChamadosPorIds(empresaId, fonte, completos));
+        saida.consultasOrigem++;
+      }
+      if (leves.length) {
+        const lv = await adapter.listarChamadosPorIds(empresaId, fonte, leves, { leve: true });
+        saida.consultasOrigem++;
+        for (const row of lv) {
+          const local = chamadoRepo.getChamadoPorNumero(empresaId, String(row.IDPROCESS), SISTEMA_ORIGEM);
+          if (local) {
+            row.DIAS_DUR = local.diasDur; row.HR_DUR = local.hrDur; row.DIAS_DUR_SUP = local.diasDurSup;
+            row.DIAS_DUR_FSW = local.diasDurFsw; row.DIAS_DUR_DIST = local.diasDurDist;
+            row.DIAS_DUR_CLI = local.diasDurCli; row.DIAS_DUR_TICLI = local.diasDurTicli;
+          }
+        }
+        linhas = linhas.concat(lv);
+      }
+      const encontrados = new Set(linhas.map(r => String(r.IDPROCESS)));
+      for (const n of grupo) if (!encontrados.has(n)) saida.naoEncontrados.push(n);
+
+      const processaveis = linhas.filter((r) => {
+        if (deveIgnorar && deveIgnorar(String(r.IDPROCESS))) { saida.ignorados.push(String(r.IDPROCESS)); return false; }
+        return true;
+      });
+      if (!processaveis.length) continue;
+
+      const posicionamentosPorChamado = typeof adapter.listarPosicionamentosDoLote === 'function'
+        ? await adapter.listarPosicionamentosDoLote(empresaId, fonte, processaveis.map(r => r.IDPROCESS))
+        : null;
+      if (posicionamentosPorChamado) saida.consultasOrigem++;
+
+      for (const rowBruta of processaveis) {
+        const numero = String(rowBruta.IDPROCESS);
+        contadores.registrosLidos++;
+        try {
+          const pre = posicionamentosPorChamado ? (posicionamentosPorChamado.get(numero) || []) : undefined;
+          const r = await _processarChamado(empresaId, fonte, adapter, importacao.id, rowBruta, pre, { semAnexos: true });
+          if (r.resultado === 'inserido') contadores.registrosInseridos++;
+          else if (r.resultado === 'atualizado') contadores.registrosAtualizados++;
+          else contadores.registrosIgnorados++;
+          contadores.posicionamentosLidos += r.posicionamentos.total;
+          contadores.posicionamentosInseridos += r.posicionamentos.inseridos;
+          contadores.posicionamentosAtualizados += r.posicionamentos.atualizados;
+          const mudou = r.resultado !== 'sem_alteracao' || r.posicionamentos.inseridos > 0 || r.posicionamentos.atualizados > 0;
+          (mudou ? saida.atualizados : saida.semAlteracao).push({
+            numero, chamadoId: r.chamadoId, resultado: r.resultado, posicionamentos: r.posicionamentos,
+          });
+        } catch (err) {
+          contadores.registrosErro++;
+          saida.erros.push({ numero, erro: err.message });
+        }
+      }
+    }
+    importacaoRepo.atualizarImportacao(empresaId, importacao.id, { ...contadores, status: 'concluido', terminoEm: new Date().toISOString() });
+  } catch (err) {
+    importacaoRepo.atualizarImportacao(empresaId, importacao.id, { ...contadores, status: 'falhou', mensagemErro: err.message, terminoEm: new Date().toISOString() });
+    throw err;
+  }
+  return saida;
+}
+
 module.exports = {
   TAMANHO_LOTE_PADRAO,
+  atualizarChamadosPorIds,
   _mapearChamado, _mapearPosicionamento, _processarChamado, _registrarEvidenciaExternaSeAplicavel, // exportados para teste unitário/regressão
   executarFullLoad,
 };

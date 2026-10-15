@@ -18,7 +18,8 @@ function _formatarYyyymmdd(data) {
 
 function _calcularPeriodoIncremental(empresaId, fonteId, { janelaDias = JANELA_PADRAO_DIAS, ateData } = {}) {
   const importacoesAnteriores = importacaoRepo.listarImportacoes(empresaId, { fonteId, limite: 50 });
-  const ultimaConcluida = importacoesAnteriores.find(i => i.status === 'concluido');
+  // 'refresh' (atualização por ID) não tem período: não pode servir de âncora da janela.
+  const ultimaConcluida = importacoesAnteriores.find(i => i.status === 'concluido' && i.tipo !== 'refresh');
 
   const fimRef = ateData ? new Date(ateData) : new Date();
   const fim = _formatarYyyymmdd(new Date(fimRef.getTime() + 24 * 60 * 60 * 1000));

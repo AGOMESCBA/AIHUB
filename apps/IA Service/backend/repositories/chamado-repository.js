@@ -466,6 +466,25 @@ function listarChamadosRelacionados(empresaId, chamadoId, { limite = 8 } = {}) {
     .slice(0, limiteSeguro);
 }
 
+/** Números (IDPROCESS) dos chamados que o banco local considera abertos, por fonte. */
+function listarNumerosAbertos(empresaId, fonteId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!fonteId) throw new Error('fonteId é obrigatório.');
+  const db = getDB();
+  return db.prepare(`
+    SELECT numero FROM chamados
+     WHERE empresa_id = ? AND fonte_id = ?
+       AND (status_encerramento IS NULL OR status_encerramento != 'Encerrado')
+  `).all(Number(empresaId), fonteId).map(r => r.numero);
+}
+
+function contarPosicionamentosDoChamado(empresaId, chamadoId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const db = getDB();
+  return db.prepare(`SELECT COUNT(*) AS total FROM posicionamentos WHERE empresa_id = ? AND chamado_id = ?`)
+    .get(Number(empresaId), chamadoId).total;
+}
+
 function contarPosicionamentos(empresaId, filtros = {}) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
@@ -479,4 +498,5 @@ module.exports = {
   hashConteudo,
   upsertChamado, getChamadoPorOid, getChamado, getChamadoPorNumero, listarChamados, contarChamados,
   upsertPosicionamento, listarPosicionamentosDoChamado, listarChamadosRelacionados, contarPosicionamentos,
+  listarNumerosAbertos, contarPosicionamentosDoChamado,
 };

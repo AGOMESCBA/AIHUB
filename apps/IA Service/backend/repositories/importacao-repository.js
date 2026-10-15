@@ -94,6 +94,9 @@ function listarImportacoes(empresaId, filtros = {}) {
   const condicoes = ['empresa_id = ?'];
   const params = [Number(empresaId)];
   if (filtros.fonteId) { condicoes.push('fonte_id = ?'); params.push(filtros.fonteId); }
+  // 'refresh' (atualização por ID do Refresh) fica fora das listagens e da âncora da
+  // janela incremental, salvo pedido explícito.
+  if (!filtros.incluirRefresh) condicoes.push("tipo != 'refresh'");
   const limite = Math.min(Number(filtros.limite) || 50, 500);
   const rows = db.prepare(`SELECT * FROM importacoes WHERE ${condicoes.join(' AND ')} ORDER BY criado_em DESC LIMIT ?`).all(...params, limite);
   return rows.map(_importacaoParaDominio);

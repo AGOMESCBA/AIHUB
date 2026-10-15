@@ -123,9 +123,12 @@ module.exports = function registrarRotasExterno(app) {
       // cada carregamento/auto-refresh). Dispara a sincronizacao em paralelo
       // e responde na hora com o que ja esta no banco local; o resultado
       // atualizado aparece no PROXIMO carregamento/auto-refresh.
+      const opcoesFila = { filtroSla: filtro_sla || 'todos', limite: limite ? Number(limite) : undefined };
+      const chamadoIdsTela = radarService.getFilaPorConsultorId(req.svcEmpresaId, req.svcConsultorExterno, opcoesFila).chamados.map(c => c.id);
       const sincronizacao = await radarRefreshService.sincronizarAntesDaFila(req.svcEmpresaId, {
         force: force_sync === 'true',
         aguardarMs: 0,
+        chamadoIds: chamadoIdsTela,
       });
       const resultado = radarService.getFilaPorConsultorId(req.svcEmpresaId, req.svcConsultorExterno, {
         filtroSla: filtro_sla || 'todos',

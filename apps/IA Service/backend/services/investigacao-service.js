@@ -25,6 +25,7 @@ const investigacaoDossieAtualizador = require('./investigacao-dossie-atualizador
 const dossieContextService = require('./dossie-context-service');
 const { redigirValor } = require('./redaction-service');
 const pendenciaExternaGate = require('./pendencia-externa-gate');
+const situacaoOrigemService = require('./situacao-origem-service');
 const planoRespostaRastreavel = require('./plano-resposta-rastreavel-service');
 
 const MAX_TENTATIVAS_TIMEOUT = 2;
@@ -687,11 +688,12 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
       // Falha de infraestrutura do gate nunca bloqueia o turno nem a pesquisa:
       // cai no comportamento atual (fail-safe).
       try {
-        // Decide com a situacao local (aguardando_consolidado). A confirmacao na
-        // origem entra por consultarSituacaoOrigem (ponto de extensao do gate).
+        // Usa a situacao mais recente disponivel: confirma na origem quando o
+        // valor local aponta pendencia externa (ver situacao-origem-service).
         const pendencia = await pendenciaExternaGate.avaliarPendencia({
           chamado,
           posicionamentos: chamadoRepo.listarPosicionamentosDoChamado(empresaId, chamado.id),
+          consultarSituacaoOrigem: () => situacaoOrigemService.consultarSituacaoAtual(empresaId, chamado),
         });
         if (pendencia.externa) {
           const { keys: keysGate, cfg: cfgGate } = aiConfigService.resolverKeysEOrdem(empresaId);

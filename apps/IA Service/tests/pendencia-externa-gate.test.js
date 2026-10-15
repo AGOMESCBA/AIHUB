@@ -25,6 +25,7 @@ const aiProviderClient = require('../backend/services/ai-provider-client');
 const technicalResearchService = require('../backend/services/technical-research-service');
 const investigacaoDossieAtualizador = require('../backend/services/investigacao-dossie-atualizador-service');
 const investigacaoService = require('../backend/services/investigacao-service');
+const situacaoOrigemService = require('../backend/services/situacao-origem-service');
 
 const EMPRESA = 99301;
 
@@ -236,14 +237,16 @@ function criarChamadoComAtendimento({ numero, aguardando, posicionamentos = [] }
   return { chamado, atendimento };
 }
 
-async function comProvidersFake({ decisaoGate }, fn) {
+async function comProvidersFake({ decisaoGate, situacaoOrigem = { ok: false, motivo: 'stub_sem_agente' } }, fn) {
   const old = {
+    situacao: situacaoOrigemService.consultarSituacaoAtual,
     resolver: aiConfigService.resolverKeysEOrdem,
     pesquisar: technicalResearchService.pesquisar,
     chamarIA: aiProviderClient.chamarIA,
     dossie: investigacaoDossieAtualizador.atualizarAposTurno,
   };
-  const registro = { pesquisarCtx: [], gateCalls: 0, promptsPrincipais: [], classificadorPrompts: [] };
+  const registro = { pesquisarCtx: [], gateCalls: 0, promptsPrincipais: [], origemCalls: 0, classificadorPrompts: [] };
+  situacaoOrigemService.consultarSituacaoAtual = async () => { registro.origemCalls++; return situacaoOrigem; };
   aiConfigService.resolverKeysEOrdem = () => ({
     keys: { groq: 'gsk-test' },
     cfg: { provedorPrimario: 'groq', fallbackOrdem: 'groq', modelos: { groq: 'openai/gpt-oss-20b' } },
@@ -281,6 +284,7 @@ async function comProvidersFake({ decisaoGate }, fn) {
     return await fn(registro);
   } finally {
     aiConfigService.resolverKeysEOrdem = old.resolver;
+    situacaoOrigemService.consultarSituacaoAtual = old.situacao;
     technicalResearchService.pesquisar = old.pesquisar;
     aiProviderClient.chamarIA = old.chamarIA;
     investigacaoDossieAtualizador.atualizarAposTurno = old.dossie;
@@ -322,6 +326,16 @@ teste('texto livre com pedido contextual: pesquisa externa liberada e tratada co
     assert.strictEqual(reg.gateCalls, 1);
     assert.strictEqual(reg.pesquisarCtx[0].pesquisaExternaBloqueada, undefined);
     assert.strictEqual(reg.pesquisarCtx[0].forcarPesquisa, true);
+  });
+});
+
+teste('processarTurno: origem confirma ao vivo que voltou ao atendente => pesquisa normal', async () => {
+  const { atendimento } = criarChamadoComAtendimento({ numero: '036760', aguardando: 'RETORNO - CLIENTE' });
+  await comProvidersFake({ decisaoGate: { pesquisa_externa: 'nao' }, situacaoOrigem: { ok: true, aguardando: 'RETORNO - ATENDENTE' } }, async (reg) => {
+    await investigacaoService.processarTurno(EMPRESA, atendimento.id, { texto: 'Qual a causa do erro 4010?', usuarioId: 1 });
+    assert.strictEqual(reg.origemCalls, 1);
+    assert.strictEqual(reg.gateCalls, 0);
+    assert.strictEqual(reg.pesquisarCtx[0].pesquisaExternaBloqueada, undefined);
   });
 });
 

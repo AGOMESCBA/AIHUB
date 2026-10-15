@@ -12,6 +12,8 @@ const radarConfigRepo = require('../repositories/radar-config-repository');
 const investigacaoService = require('./investigacao-service');
 const anexosSoftExpertService = require('./anexos-softexpert-service');
 const anexoRepo = require('../repositories/anexo-repository');
+const turnoLockService = require('./turno-lock-service');
+const { getDB } = require('../database');
 
 const SISTEMA_ORIGEM_PADRAO = 'softexpert';
 const AUTO_REFRESH_PADRAO_SEGUNDOS = 14400;
@@ -262,8 +264,72 @@ function _gravarHistoricoComoMensagens(empresaId, atendimentoId, chamado, posici
 }
 
 function _sincronizarHistoricoImportado(empresaId, atendimentoId, chamado, posicionamentos, usuarioIdIahub) {
-  mensagemRepo.removerHistoricoImportado(empresaId, atendimentoId);
-  _gravarHistoricoComoMensagens(empresaId, atendimentoId, chamado, posicionamentos, usuarioIdIahub);
+  // Transação única: nunca fica um chat sem o histórico importado (ou com ele
+  // pela metade) se o processo cair entre a remoção e a regravação.
+  getDB().transaction(() => {
+    mensagemRepo.removerHistoricoImportado(empresaId, atendimentoId);
+    _gravarHistoricoComoMensagens(empresaId, atendimentoId, chamado, posicionamentos, usuarioIdIahub);
+  })();
+}
+
+function _atendimentoDoChamado(empresaId, chamado) {
+  return atendimentoRepo.getAtendimentoPorReferencia(empresaId, {
+    origem: chamado.sistemaOrigem || SISTEMA_ORIGEM_PADRAO,
+    referenciaExterna: chamado.numero,
+  });
+}
+
+/**
+ * true quando o chamado tem um turno de IA (ou pré-análise) em andamento. O
+ * Refresh NÃO modifica chamados ocupados (tentará de novo no próximo ciclo).
+ */
+function chamadoOcupadoPorNumero(empresaId, numero, sistemaOrigem = SISTEMA_ORIGEM_PADRAO) {
+  const chamado = chamadoRepo.getChamadoPorNumero(empresaId, numero, sistemaOrigem);
+  if (!chamado) return false;
+  const atendimento = _atendimentoDoChamado(empresaId, chamado);
+  if (!atendimento) return false;
+  return turnoLockService.estaProcessando(empresaId, atendimento.id) || preAnalisesEmAndamento.has(atendimento.id);
+}
+
+/**
+ * Reconstrói as mensagens IMPORTADAS (abertura + posicionamentos) de um chamado
+ * já existente no chat, a partir dos posicionamentos locais atualizados.
+ * Preserva mensagens do analista, respostas da IA, anexos, dossiê e trilha
+ * (removerHistoricoImportado só apaga o que veio da origem). Roda numa única
+ * transação e sob o lock de turno do atendimento: sem duplicação nem leitura
+ * parcial, e nunca durante um turno de IA.
+ */
+function reconstruirHistoricoDoChamado(empresaId, chamadoId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const chamado = chamadoRepo.getChamado(empresaId, chamadoId);
+  if (!chamado) return { reconstruido: false, motivo: 'chamado_nao_encontrado' };
+  const atendimento = _atendimentoDoChamado(empresaId, chamado);
+  if (!atendimento) return { reconstruido: false, motivo: 'sem_atendimento' };
+  if (preAnalisesEmAndamento.has(atendimento.id)) return { reconstruido: false, motivo: 'pre_analise_em_andamento' };
+  if (!turnoLockService.tentarAdquirir(empresaId, atendimento.id)) return { reconstruido: false, motivo: 'turno_em_andamento' };
+  try {
+    const posicionamentos = chamadoRepo.listarPosicionamentosDoChamado(empresaId, chamadoId);
+    getDB().transaction(() => {
+      _sincronizarHistoricoImportado(empresaId, atendimento.id, chamado, posicionamentos, null);
+    })();
+    return { reconstruido: true, atendimentoId: atendimento.id, mensagensImportadas: posicionamentos.length + 1 };
+  } finally {
+    turnoLockService.liberar(empresaId, atendimento.id);
+  }
+}
+
+/**
+ * true quando o chat do chamado tem menos/mais mensagens importadas do que a
+ * base tem de posicionamentos (ex.: a importação por janela trouxe
+ * posicionamentos novos, mas o chat só reconstrói ao selecionar).
+ */
+function historicoImportadoDesatualizado(empresaId, chamadoId) {
+  const chamado = chamadoRepo.getChamado(empresaId, chamadoId);
+  if (!chamado) return false;
+  const atendimento = _atendimentoDoChamado(empresaId, chamado);
+  if (!atendimento) return false;
+  const esperadas = chamadoRepo.contarPosicionamentosDoChamado(empresaId, chamadoId) + (_textoAberturaChamado(chamado) ? 1 : 0);
+  return mensagemRepo.contarMensagensImportadas(empresaId, atendimento.id) !== esperadas;
 }
 
 function buscarRelacionados(empresaId, chamadoId, { limite = 8 } = {}) {
@@ -440,6 +506,9 @@ module.exports = {
   getRiscoSlaUsuario,
   getRiscoSlaPorConsultorId,
   iniciarAnalise,
+  chamadoOcupadoPorNumero,
+  historicoImportadoDesatualizado,
+  reconstruirHistoricoDoChamado,
   abrirOuCriarAtendimento: iniciarAnalise,
   buscarRelacionados,
   getConfig,

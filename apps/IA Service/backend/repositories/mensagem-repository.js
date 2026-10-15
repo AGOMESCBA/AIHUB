@@ -159,6 +159,16 @@ function removerHistoricoImportado(empresaId, atendimentoId) {
   `).run(Number(empresaId), atendimentoId);
 }
 
+/** Quantidade de mensagens importadas da origem (abertura + posicionamentos). */
+function contarMensagensImportadas(empresaId, atendimentoId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const db = getDB();
+  return db.prepare(`
+    SELECT COUNT(*) AS total FROM mensagens
+     WHERE empresa_id = ? AND atendimento_id = ? AND origem_sistema = 'softexpert'
+  `).get(Number(empresaId), atendimentoId).total;
+}
+
 function listarMensagens(empresaId, atendimentoId, filtros = {}) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   if (!atendimentoId) throw new Error('atendimentoId é obrigatório.');
@@ -215,4 +225,4 @@ function getUltimaMensagemAssistente(empresaId, atendimentoId) {
   return _rowParaDominio(row);
 }
 
-module.exports = { salvarMensagem, listarMensagens, getMensagem, getUltimaMensagemAssistente, removerHistoricoImportado, atualizarAvisosFonteCorrigido, PAPEIS_VALIDOS };
+module.exports = { salvarMensagem, contarMensagensImportadas, listarMensagens, getMensagem, getUltimaMensagemAssistente, removerHistoricoImportado, atualizarAvisosFonteCorrigido, PAPEIS_VALIDOS };

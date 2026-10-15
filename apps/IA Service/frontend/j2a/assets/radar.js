@@ -574,17 +574,59 @@
     }
   }
 
-  async function loadQueue({ forceSync = false } = {}) {
-    $('queue-list').innerHTML = '<div class="empty-block">Carregando fila...</div>';
+  async function loadQueue({ forceSync = false, silencioso = false } = {}) {
+    if (!silencioso) $('queue-list').innerHTML = '<div class="empty-block">Carregando fila...</div>';
     const params = new URLSearchParams({ filtro_sla: state.queueFilter });
     if (forceSync) params.set('force_sync', 'true');
     try {
       const body = await request(ext(`/radar/fila?${params.toString()}`));
       state.queue = body.chamados || [];
-      if (body.sincronizacao?.status === 'em_andamento') toast('Sincronizando SoftExpert em segundo plano...');
       renderQueue();
+      posSincronizacaoFila(body.sincronizacao);
     } catch (err) {
       $('queue-list').innerHTML = `<div class="empty-block">Nao foi possivel carregar a fila: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  // Refresh sincroniza em segundo plano: a fila aparece na hora e esta rotina
+  // consulta de novo (sem forcar) ate terminar, entao o analista ve fila,
+  // cabecalho e mensagens atualizados sem clicar outra vez. Parcial e sinalizado.
+  let pollSyncTimer = null;
+  let pollSyncTentativas = 0;
+  let ultimoProgressoAplicado = null;
+  function posSincronizacaoFila(sinc) {
+    if (pollSyncTimer) { clearTimeout(pollSyncTimer); pollSyncTimer = null; }
+    if (sinc?.status === 'em_andamento') {
+      if (pollSyncTentativas === 0) toast('Atualizando chamados a partir do SoftExpert...');
+      // Etapa prioritaria concluida: tela e chat aberto ja refletem os dados novos.
+      if (sinc.progresso?.etapa === 'tela_atualizada' && sinc.progresso.em !== ultimoProgressoAplicado) {
+        ultimoProgressoAplicado = sinc.progresso.em;
+        if (state.selected) {
+          const atualizado = state.queue.find((c) => c.id === state.selected.id);
+          if (atualizado) state.selected = atualizado;
+          if (!state.processing.has(state.atendimentoId)) sincronizarChatAtivo();
+        }
+      }
+      if (pollSyncTentativas < 60) {
+        pollSyncTentativas++;
+        pollSyncTimer = setTimeout(() => loadQueue({ silencioso: true }), 1500);
+      } else {
+        pollSyncTentativas = 0;
+        toast('A atualizacao esta demorando; use o botao de atualizar novamente.');
+      }
+      return;
+    }
+    const veioDeSync = pollSyncTentativas > 0 || sinc?.status === 'concluido';
+    pollSyncTentativas = 0;
+    const res = sinc?.resultado;
+    if (!veioDeSync || !res) return;
+    if (res.falhou) toast('Nao foi possivel atualizar agora; os dados exibidos podem estar desatualizados.');
+    else if (res.sucesso === true) toast('Fila atualizada.');
+    else toast('Atualizacao parcial: alguns chamados nao puderam ser atualizados agora.');
+    if (state.selected) {
+      const atualizado = state.queue.find((c) => c.id === state.selected.id);
+      if (atualizado) state.selected = atualizado;
+      if (!state.processing.has(state.atendimentoId)) sincronizarChatAtivo();
     }
   }
 
