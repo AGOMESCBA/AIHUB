@@ -41,11 +41,11 @@ async function _enviarCodigoViaWhatsApp({ empresaId, numero, codigo }) {
 
   const base = process.env.IA_COMMAND_INTERNAL_URL || 'http://127.0.0.1:' + (process.env.PORT || 3000);
 
-  const enviar = async (corpo) => {
+  const enviar = async (corpo, finalidadeEnvio) => {
     const r = await fetch(`${base}/api/ia-command/whatsapp/enviar-servico-externo`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-servico-externo-secret': secret },
-      body: JSON.stringify({ empresaId, numero, texto: corpo }),
+      body: JSON.stringify({ empresaId, numero, texto: corpo, finalidadeEnvio }),
     });
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
@@ -53,8 +53,8 @@ async function _enviarCodigoViaWhatsApp({ empresaId, numero, codigo }) {
     }
   };
 
-  await enviar(texto);
-  await enviar(codigo);
+  await enviar(texto, 'iaservice_aviso_acesso');
+  await enviar(codigo, 'iaservice_codigo_acesso');
 }
 
 module.exports = function registrarRotasLoginExterno(app) {

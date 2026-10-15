@@ -1065,11 +1065,11 @@ async function resolverCanalWhatsAppConectado(empresaId, deps = {}) {
   return { canal: canaisEmpresa[0] || null, svc: null, workerPort: null, totalCanais: totalCanaisEmpresa };
 }
 
-async function enviarTextoWhatsApp({ empresaId, numero, texto }) {
+async function enviarTextoWhatsApp({ empresaId, numero, texto, finalidadeEnvio = 'chatweb_encaminhamento' }) {
   const { canal, svc, workerPort, totalCanais } = await resolverCanalWhatsAppConectado(empresaId);
   if (!canal) throw new Error('Nenhum canal WhatsApp vinculado a esta empresa.');
   if (workerPort) {
-    await workerJson(workerPort, '/send-direct-message', { empresaId, numero, texto }, 30000);
+    await workerJson(workerPort, '/send-direct-message', { empresaId, numero, texto, finalidadeEnvio }, 30000);
     return { canalId: canal.id };
   }
   if (!svc) {
@@ -1334,6 +1334,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       await enviarTextoWhatsApp({
         empresaId: permissoes.empresaId,
         numero: celular,
+        finalidadeEnvio: 'chatweb_aviso_acesso',
         texto: [
           '🔐 IA Command - acesso ao Chat Web',
           '',
@@ -1348,6 +1349,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
         empresaId: permissoes.empresaId,
         numero: celular,
         texto: codigo,
+        finalidadeEnvio: 'chatweb_codigo_acesso',
       });
 
       perfLog('POST /web-login/start', inicio, { status: 200, empresaId: permissoes.empresaId, celular });

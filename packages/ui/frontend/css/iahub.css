@@ -20,6 +20,9 @@
   --success:      #16a34a;
   --error:        #dc2626;
   --warning:      #d97706;
+  --success-text: #166534;
+  --error-text:   #991b1b;
+  --warning-text: #92400e;
   --sidebar-w:    300px;
   --sidebar-mini: 64px;
   --radius:       10px;
@@ -30,11 +33,12 @@
 
 /* ── Tema escuro ─────────────────────────────────────────────
    Ativado via [data-theme="dark"] no <html> (nao por
-   prefers-color-scheme — o toggle decide, nao o SO). Hoje
-   aplicado apenas dentro do IA Command (ver auth.js); as demais
+   prefers-color-scheme — o toggle decide, nao o SO). Aplicado
+   nos modulos habilitados em auth.js; as demais
    variaveis/regras do arquivo ja usam essas custom properties,
    entao nao precisam de duplicacao — so o :root muda. */
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg-base:      #12161f;
   --bg-sidebar:   #181d29;
   --bg-card:      #181d29;
@@ -45,16 +49,41 @@
   --accent-glow:  rgba(91,141,239,.14);
   --accent-2:     #8b93e8;
   --text-hi:      #e2e6ed;
-  --text-md:      #9199a8;
-  --text-lo:      #6b7285;
+  --text-md:      #a8b1c1;
+  --text-lo:      #929db0;
   --border:       #262c3c;
   --border-hi:    #333a4d;
   --success:      #4ade80;
   --error:        #f87171;
   --warning:      #fbbf24;
+  --success-text: #a3ecc0;
+  --error-text:   #f3b0b0;
+  --warning-text: #f0d191;
   --shadow-sm:    0 1px 3px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.2);
   --shadow-md:    0 4px 16px rgba(0,0,0,.4);
 }
+
+/* Componentes compartilhados: os HTMLs antigos ainda definem cores claras
+   locais; o escopo de tema prevalece sem alterar a aparência no claro. */
+:root[data-theme="dark"] .info-banner {
+  background: rgba(91,141,239,.14); color: #a9c3f5; border-color: rgba(91,141,239,.35);
+}
+:root[data-theme="dark"] .error-banner {
+  background: rgba(248,113,113,.14); color: #f3b0b0; border-color: rgba(248,113,113,.35);
+}
+:root[data-theme="dark"] .btn-danger-soft {
+  background: rgba(248,113,113,.14) !important;
+  color: #f3b0b0 !important; border-color: rgba(248,113,113,.35) !important;
+}
+:root[data-theme="dark"] .btn-danger-soft:hover,
+:root[data-theme="dark"] .apagar-dropdown button:hover { background: rgba(248,113,113,.22) !important; }
+:root[data-theme="dark"] .apagar-dropdown button { color: #f3b0b0; }
+:root[data-theme="dark"] .status-badge.concluido { background: rgba(74,222,128,.20); color: #a3ecc0; }
+:root[data-theme="dark"] .status-badge.executando,
+:root[data-theme="dark"] .status-badge.pendente { background: rgba(251,191,36,.20); color: #f0d191; }
+:root[data-theme="dark"] .status-badge.falhou,
+:root[data-theme="dark"] .status-badge.interrompido { background: rgba(248,113,113,.20); color: #f3b0b0; }
+:root[data-theme="dark"] .grid-table tbody tr.importacao-destaque td { background: var(--bg-active); }
 
 /* Badges de modulo: fundo mais solido (nao so translucido) pra o chip se
    destacar do card ao redor — com opacidade baixa (.16) o texto parecia

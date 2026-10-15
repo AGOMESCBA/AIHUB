@@ -155,12 +155,12 @@ async function resolverCanalServicoExterno(empresaId, deps = {}) {
   return { canal: canaisEmpresa[0] || null, svc: null, workerPort: null, totalCanais: canaisEmpresa.length };
 }
 
-async function enviarTextoServicoExterno({ empresaId, numero, texto }, deps = {}) {
+async function enviarTextoServicoExterno({ empresaId, numero, texto, finalidadeEnvio = 'servico_externo' }, deps = {}) {
   const workerJsonFn = deps.workerJsonFn || workerJson;
   const { canal, svc, workerPort, totalCanais } = await resolverCanalServicoExterno(empresaId, deps);
   if (!canal) throw new Error('Nenhum canal WhatsApp vinculado a esta empresa.');
   if (workerPort) {
-    await workerJsonFn(workerPort, '/send-direct-message', { empresaId, numero, texto }, 30000);
+    await workerJsonFn(workerPort, '/send-direct-message', { empresaId, numero, texto, finalidadeEnvio }, 30000);
     return { canalId: canal.id };
   }
   if (!svc) {
@@ -200,7 +200,7 @@ function registrarRotaServicoExterno(app) {
     }
 
     try {
-      await enviarTextoServicoExterno({ empresaId, numero, texto });
+      await enviarTextoServicoExterno({ empresaId, numero, texto, finalidadeEnvio: req.body?.finalidadeEnvio });
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: err.message });

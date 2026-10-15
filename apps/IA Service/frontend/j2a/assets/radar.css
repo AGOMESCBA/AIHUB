@@ -791,11 +791,10 @@ button.loading .loader { display: block; }
 }
 .ticket.active { background: rgba(0, 107, 214, .09); border-left-color: var(--brand); }
 .ticket-top, .case-line, .case-actions, .case-badges { display: flex; align-items: center; gap: 8px; }
-.ticket-top { justify-content: space-between; }
+.ticket-top { justify-content: space-between; flex-wrap: wrap; }
+.ticket-statuses { display: inline-flex; align-items: center; gap: 10px; margin-left: auto; }
 .ticket-number { font-weight: 800; color: var(--brand-2); font-size: 12px; }
 .ticket-title { margin: 5px 0 4px; font-weight: 700; font-size: 13px; line-height: 1.26; }
-.ticket-waiting { display: block; margin: 5px 0; }
-.ticket-waiting .badge { max-width: 100%; white-space: normal; text-align: left; }
 .ticket-meta { color: var(--muted); font-size: 11px; line-height: 1.35; }
 .ticket-top .badge { padding: 2px 7px; font-size: 10px; }
 .badge {

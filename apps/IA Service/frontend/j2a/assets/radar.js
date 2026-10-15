@@ -335,7 +335,7 @@
     const tone = label === 'Aguardando Atendente' ? 'danger'
       : label === 'Aguardando Cliente' ? 'ok'
         : value ? 'warn' : '';
-    return `<span class="badge ${tone}">${escapeHtml(label)}</span>`;
+    return `<span class="sla-status waiting-status ${tone}">${escapeHtml(label)}</span>`;
   }
 
   function diasEntre(dataIso) {
@@ -686,11 +686,13 @@
       <button class="ticket ${state.selected?.id === c.id ? 'active' : ''}" data-ticket-id="${escapeHtml(c.id)}">
         <span class="ticket-top">
           <span class="ticket-number">#${escapeHtml(c.numero)}</span>
-          ${slaBadge(c.slaPrazo)}
           ${pesquisaBadge(c.id)}
+          <span class="ticket-statuses">
+            ${waitingBadge(c.aguardandoConsolidado || c.situacaoRetorno, 'Aguardando não informado')}
+            ${slaBadge(c.slaPrazo)}
+          </span>
         </span>
         <span class="ticket-title">${escapeHtml(currentTicketTitle(c))}</span>
-        <span class="ticket-waiting">${waitingBadge(c.aguardandoConsolidado || c.situacaoRetorno, 'Aguardando não informado')}</span>
         <span class="ticket-meta">${escapeHtml([c.clienteNome, c.produto].filter(Boolean).join(' | '))}<br>Aberto em ${escapeHtml(formatDate(c.dataAbertura))}</span>
       </button>
     `).join('');

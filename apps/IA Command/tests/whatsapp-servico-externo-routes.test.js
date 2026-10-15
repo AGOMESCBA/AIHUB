@@ -84,7 +84,20 @@ function canal(id, porta) {
         empresaId: 5,
         numero: '5511999999999',
         texto: '123456',
+        finalidadeEnvio: 'servico_externo',
       });
+
+      for (const finalidadeEnvio of ['iaservice_aviso_acesso', 'iaservice_codigo_acesso']) {
+        await enviarTextoServicoExterno(
+          { empresaId: 5, numero: '5511999999999', texto: 'mensagem', finalidadeEnvio },
+          {
+            channelStore: channelStoreFake({ porEmpresa: { 5: [compartilhado] } }),
+            manager: managerVazio(), workerJsonFn,
+          }
+        );
+        assert.strictEqual(enviados.at(-1).payload.finalidadeEnvio, finalidadeEnvio);
+        assert.strictEqual(enviados.at(-1).payload.texto, 'mensagem');
+      }
     }
 
     {

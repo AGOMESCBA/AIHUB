@@ -34,4 +34,18 @@ function formatarContatoParaLog(numero, { empresaId, channelId } = {}, obterDB =
   }
 }
 
-module.exports = { formatarContatoParaLog };
+// Somente descrições conhecidas: nunca inclui o conteúdo da mensagem ou o OTP.
+const acoesEnvio = new Map([
+  ['chatweb_aviso_acesso', 'IA Command: aviso de acesso ao Chat Web enviado'],
+  ['chatweb_codigo_acesso', 'IA Command: código de acesso ao Chat Web enviado'],
+  ['chatweb_encaminhamento', 'IA Command: resposta do Chat Web encaminhada'],
+  ['iaservice_aviso_acesso', 'IA Service: aviso de acesso ao chat enviado'],
+  ['iaservice_codigo_acesso', 'IA Service: código de acesso ao chat enviado'],
+  ['servico_externo', 'Mensagem de serviço externo enviada'],
+]);
+
+function formatarAcaoEnvioParaLog(finalidadeEnvio) {
+  return acoesEnvio.get(finalidadeEnvio) || 'Mensagem enviada';
+}
+
+module.exports = { formatarContatoParaLog, formatarAcaoEnvioParaLog };

@@ -34,7 +34,7 @@ function req(rel) { return require(path.join(IAC_APP_DIR, rel)); }
 const dbModule       = req('apps/IA Command/modules/database/index.js');
 const IACService     = req('apps/IA Command/modules/whatsapp/service.js');
 const channelStore   = req('apps/IA Command/modules/whatsapp/channel-store.js');
-const { formatarContatoParaLog } = req('apps/IA Command/modules/whatsapp/log-contact.js');
+const { formatarContatoParaLog, formatarAcaoEnvioParaLog } = req('apps/IA Command/modules/whatsapp/log-contact.js');
 
 // ── Log local ─────────────────────────────────────────────────────────────────
 function log(tipo, msg) {
@@ -299,7 +299,7 @@ const server = http.createServer((req, res) => {
     req.on('data', d => { body += d; });
     req.on('end', async () => {
       try {
-        const { empresaId, numero, texto } = JSON.parse(body || '{}');
+        const { empresaId, numero, texto, finalidadeEnvio } = JSON.parse(body || '{}');
         if (!empresaId || !numero || !texto) {
           res.writeHead(400);
           return res.end(JSON.stringify({ erro: 'empresaId, numero e texto sao obrigatorios.' }));
@@ -314,7 +314,7 @@ const server = http.createServer((req, res) => {
           return res.end(JSON.stringify({ erro: 'Numero nao autorizado para esta empresa.' }));
         }
         await svc.sendMessage(digits, texto);
-        _enfileirar('iac-log', { tipo: 'success', msg: `Encaminhamento enviado -> ${formatarContatoParaLog(digits, { empresaId })}` });
+        _enfileirar('iac-log', { tipo: 'success', msg: `${formatarAcaoEnvioParaLog(finalidadeEnvio)} -> ${formatarContatoParaLog(digits, { empresaId })}` });
         res.writeHead(200);
         res.end(JSON.stringify({ enviado: true }));
       } catch (err) {

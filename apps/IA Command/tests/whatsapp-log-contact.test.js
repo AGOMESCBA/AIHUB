@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const Database = require('better-sqlite3');
-const { formatarContatoParaLog } = require('../modules/whatsapp/log-contact');
+const { formatarContatoParaLog, formatarAcaoEnvioParaLog } = require('../modules/whatsapp/log-contact');
 
 function fixture(t) {
   const db = new Database(':memory:');
@@ -20,6 +20,22 @@ function fixture(t) {
   `);
   return (numero, escopo) => formatarContatoParaLog(numero, escopo, () => db);
 }
+
+test('distingue aviso, codigo e encaminhamento sem registrar conteudo livre', () => {
+  for (const prefixo of ['chatweb', 'iaservice']) {
+    const aviso = formatarAcaoEnvioParaLog(`${prefixo}_aviso_acesso`);
+    const codigo = formatarAcaoEnvioParaLog(`${prefixo}_codigo_acesso`);
+    assert.match(aviso, /aviso de acesso/);
+    assert.match(codigo, /código de acesso/);
+    assert.notEqual(aviso, codigo);
+    assert.match(aviso, prefixo === 'chatweb' ? /IA Command/ : /IA Service/);
+  }
+  assert.match(formatarAcaoEnvioParaLog('chatweb_encaminhamento'), /resposta do Chat Web encaminhada/);
+  assert.match(formatarAcaoEnvioParaLog('servico_externo'), /serviço externo/);
+  for (const desconhecido of [undefined, null, '123456', 'texto confidencial\nforjado', '__proto__']) {
+    assert.equal(formatarAcaoEnvioParaLog(desconhecido), 'Mensagem enviada');
+  }
+});
 
 test('mostra nome e preserva o numero original no escopo da empresa', t => {
   const formatar = fixture(t);
