@@ -179,6 +179,35 @@
     window.closeSidebarDrawer?.();
   });
 
+  // Monitor de Acessos (2026-10): sinal de presença a cada 30s, só com a
+  // janela visível. Tela = aba ativa do MDI (lida do título do topo, que o
+  // tab-manager já mantém). Nunca envia conteúdo das telas.
+  (function presencaInterna() {
+    function telaAtiva() {
+      const titulo = document.getElementById('shell-title')?.textContent || '';
+      return titulo.replace(/^[^\p{L}\d]+/u, '').trim() || 'Início';
+    }
+    function enviar() {
+      const empresaId = window._iahubEmpresa?.id;
+      if (document.hidden || !empresaId) return;
+      fetch('/api/ia-service/presenca', {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ empresa_id: empresaId, tela: telaAtiva(), acao: 'Rotina interna do IA Service', visivel: true }),
+      }).catch(() => null);
+    }
+    (window._iahubAuthReady || Promise.resolve()).then(() => {
+      enviar();
+      setInterval(enviar, 30 * 1000);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) enviar(); });
+      const titulo = document.getElementById('shell-title');
+      let espera = null;
+      if (titulo) new MutationObserver(() => { clearTimeout(espera); espera = setTimeout(enviar, 800); })
+        .observe(titulo, { childList: true, characterData: true, subtree: true });
+    });
+  })();
+
   // No shell MDI, trocar empresa atualiza todas as abas abertas sem
   // recarregar a janela — auth.js define _trocarEmpresa com
   // location.reload() por padrão; sobrescrevemos aqui (mesmo padrão do

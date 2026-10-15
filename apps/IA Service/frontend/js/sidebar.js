@@ -31,6 +31,7 @@
         { id: 'svc-radar',        label: 'Radar de Chamados', hrefDinamico: radarHref,                    icon: '📡', novaGuia: true },
         { id: 'svc-atendimentos', label: 'Atendimentos',      href: '/app/ia-service/atendimentos.html', icon: '💬' },
         { id: 'svc-homologacao',  label: 'Homologação da IA', href: '/app/ia-service/homologacao.html',  icon: '📊' },
+        { id: 'svc-monitor-acessos', label: 'Monitor de Acessos', href: '/app/ia-service/monitor-acessos.html', icon: '🛰' },
       ],
     },
     {

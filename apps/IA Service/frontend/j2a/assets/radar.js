@@ -519,6 +519,7 @@
       $('user-initials').textContent = initials(state.whoami.consultorNome);
       await Promise.allSettled([loadPreferences(), loadQueue(), loadRisk()]);
       setupAutoRefresh();
+      iniciarPresenca();
       setMobileTarget('queue');
     } catch (err) {
       showAccess(err.message);
@@ -1710,6 +1711,7 @@
     if (panel === 'risk') loadRisk();
     if (panel === 'knowledge') renderKnowledge();
     if (panel === 'trail') renderTrail();
+    enviarPresenca();
   }
 
   function setMobileTarget(target) {
@@ -1747,6 +1749,36 @@
       if (state.activePanel === 'risk') loadRisk().catch(() => null);
       state.nextRefreshAt = Date.now() + seconds * 1000;
     }, seconds * 1000);
+  }
+
+  // Monitor de Acessos (2026-10): sinal de presença a cada 30s, só com a aba
+  // visível. Leva apenas tela, ação e o id do chamado aberto (o número é
+  // resolvido no servidor) — nunca texto digitado pelo consultor. Falha de
+  // rede é silenciosa: o sinal nunca pode atrapalhar o uso do chat.
+  function presencaAtual() {
+    if (state.activePanel === 'risk') return { tela: 'Radar J2A', acao: 'Radar de Chamados (visão de risco)', chamadoId: null };
+    if (state.selected) {
+      const painel = ROTULOS_ROTINA[state.activePanel] || 'Conversa';
+      const rotulo = state.activePanel === 'conversation' ? 'Conversa com a IA' : painel;
+      return { tela: 'Radar J2A', acao: state.somenteLeitura ? `${rotulo} · somente leitura` : rotulo, chamadoId: state.selected.id };
+    }
+    return { tela: 'Radar J2A', acao: `Fila pessoal · filtro ${state.queueFilter}`, chamadoId: null };
+  }
+
+  function enviarPresenca() {
+    if (!state.token || document.hidden) return;
+    fetch(ext('/presenca'), {
+      method: 'POST',
+      cache: 'no-store',
+      headers: apiHeaders(),
+      body: JSON.stringify({ ...presencaAtual(), visivel: true }),
+    }).catch(() => null);
+  }
+
+  function iniciarPresenca() {
+    clearInterval(state.presencaTimer);
+    enviarPresenca();
+    state.presencaTimer = setInterval(enviarPresenca, 30 * 1000);
   }
 
   function renderCountdown() {
@@ -1832,8 +1864,12 @@
       state.token = '';
       clearInterval(state.autoTimer);
       clearInterval(state.countdownTimer);
+      clearInterval(state.presencaTimer);
       _resetEstadoDoChat();
       showAccess('Sessao encerrada.');
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) enviarPresenca();
     });
     $('theme-switch').addEventListener('click', (event) => {
       if (event.target.closest('#theme-toggle')) {

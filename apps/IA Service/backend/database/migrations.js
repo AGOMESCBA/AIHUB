@@ -1185,6 +1185,38 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 47,
+    descricao: 'Monitor de Acessos (2026-10): presença por sessão (chat J2A por telefone e rotinas internas do IA Service) alimentada por sinal periódico da tela, e trilha curta das telas visitadas. Nunca guarda texto digitado pelo usuário — só tela, ação e chamado.',
+    sql: `
+      CREATE TABLE svc_presenca (
+        id                TEXT PRIMARY KEY,
+        empresa_id        INTEGER NOT NULL,
+        origem            TEXT NOT NULL CHECK (origem IN ('chat', 'interno')),
+        sessao_ref        TEXT NOT NULL,
+        consultor_id      TEXT,
+        usuario_id_iahub  INTEGER,
+        inicio_em         TEXT NOT NULL,
+        ultimo_sinal_em   TEXT NOT NULL,
+        segundos_ativos   INTEGER NOT NULL DEFAULT 0,
+        tela              TEXT,
+        acao              TEXT,
+        chamado_id        TEXT,
+        chamado_numero    TEXT
+      );
+      CREATE UNIQUE INDEX idx_svc_presenca_sessao ON svc_presenca (empresa_id, origem, sessao_ref);
+      CREATE INDEX idx_svc_presenca_sinal ON svc_presenca (empresa_id, ultimo_sinal_em);
+      CREATE TABLE svc_presenca_eventos (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        presenca_id     TEXT NOT NULL REFERENCES svc_presenca(id) ON DELETE CASCADE,
+        tela            TEXT,
+        acao            TEXT,
+        chamado_numero  TEXT,
+        criado_em       TEXT NOT NULL
+      );
+      CREATE INDEX idx_svc_presenca_eventos ON svc_presenca_eventos (presenca_id, criado_em);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

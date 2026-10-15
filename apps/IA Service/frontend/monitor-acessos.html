@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Monitor de Acessos - IA Service</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    /* Só tokens do iahub.css (tema claro/escuro do sistema via data-theme) —
+       mesma sobrescrita de accent das demais páginas do IA Service. */
+    :root { --accent:#1d4ed8; --accent-light:#3b82f6; --accent-glow:rgba(29,78,216,.1); }
+    .sidebar-logo .logo-icon { background:var(--accent) !important; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px;max-width:70ch; }
+    .page-head { margin-bottom:16px; }
+    .error-banner { display:none;background:var(--bg-card);color:var(--error);border:1px solid var(--error);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px; }
+
+    .mon-stack { display:flex;flex-direction:column;gap:14px; }
+    .refresh-bar { display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 14px; }
+    .live { display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-md); }
+    .pulse { width:9px;height:9px;border-radius:50%;background:var(--success);position:relative;flex:none; }
+    .pulse::after { content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--success);opacity:.5;animation:mon-ping 1.8s infinite; }
+    .refresh-bar.paused .pulse { background:var(--text-lo); }
+    .refresh-bar.paused .pulse::after { display:none; }
+    @keyframes mon-ping { 0%{transform:scale(.6);opacity:.6} 100%{transform:scale(1.5);opacity:0} }
+    .ring { width:24px;height:24px;transform:rotate(-90deg);flex:none; }
+    .ring circle { fill:none;stroke-width:3; }
+    .ring .bg { stroke:var(--border); }
+    .ring .fg { stroke:var(--accent);stroke-linecap:round;transition:stroke-dashoffset 1s linear; }
+    .refresh-bar label { font-size:12.5px;color:var(--text-md);display:flex;align-items:center;gap:6px; }
+    .refresh-bar select { width:auto;padding:5px 8px;font-size:12.5px; }
+    .spacer { flex:1; }
+    .stamp { font-size:12px;color:var(--text-lo);font-variant-numeric:tabular-nums; }
+    #btn-refresh.girando svg { animation:mon-spin .7s linear; }
+    @keyframes mon-spin { to { transform:rotate(360deg); } }
+
+    .kpis { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px; }
+    .kpi { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:2px;cursor:pointer;transition:var(--transition);text-align:left;font:inherit;color:var(--text-hi); }
+    .kpi:hover { border-color:var(--border-hi); }
+    .kpi[aria-pressed="true"] { border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow); }
+    .kpi-label { font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-md);display:flex;align-items:center;gap:7px; }
+    .kpi-value { font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2; }
+    .kpi-foot { font-size:12px;color:var(--text-lo); }
+    .dot { width:8px;height:8px;border-radius:50%;display:inline-block;flex:none; }
+    .d-online { background:var(--success); } .d-ausente { background:var(--warning); } .d-inativo { background:var(--text-lo); }
+
+    .filters { display:flex;gap:8px;flex-wrap:wrap;align-items:center; }
+    .chip { font:inherit;font-size:12.5px;padding:5px 12px;border-radius:999px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-md);cursor:pointer; }
+    .chip[aria-pressed="true"] { background:var(--bg-active);border-color:var(--accent);color:var(--accent);font-weight:600; }
+    .filters .form-control { flex:1;min-width:200px;max-width:320px; }
+
+    .board { display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start; }
+    .board.com-gaveta { grid-template-columns:minmax(0,1fr) 370px; }
+    .grid-toolbar { display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);gap:12px;flex-wrap:wrap; }
+    .grid-title { font-weight:600;font-size:13.5px;color:var(--text-hi); }
+    .grid-meta, .hint { font-size:12px;color:var(--text-lo); }
+    .tabela-wrap { overflow-x:auto; }
+    .mon-table { width:100%;border-collapse:collapse;min-width:980px; }
+    .mon-table th { font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-md);text-align:left;padding:9px 12px;background:var(--bg-base);border-bottom:1px solid var(--border);white-space:nowrap; }
+    .mon-table td { padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle;color:var(--text-hi); }
+    .mon-table tbody tr { cursor:pointer;transition:background var(--transition); }
+    .mon-table tbody tr:hover { background:var(--bg-hover); }
+    .mon-table tbody tr.sel { background:var(--bg-active); }
+    .mon-table tr.flash td { animation:mon-flash 1.2s ease; }
+    @keyframes mon-flash { 0%{background:var(--accent-glow)} 100%{background:transparent} }
+    .user { display:flex;align-items:center;gap:10px;min-width:0; }
+    .avatar { width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;flex:none;position:relative; }
+    .avatar .dot { position:absolute;right:-1px;bottom:-1px;width:10px;height:10px;border:2px solid var(--bg-card); }
+    .nome { font-weight:600;white-space:nowrap; }
+    .fone { font-family:'Cascadia Code','Fira Code','Courier New',monospace;font-size:11.5px;color:var(--text-md);white-space:nowrap; }
+    .badge-neutro { background:var(--bg-hover);color:var(--text-md); }
+    .num { font-variant-numeric:tabular-nums;white-space:nowrap; }
+    .sub { color:var(--text-lo);font-size:12px; }
+    .tela { display:flex;flex-direction:column;line-height:1.35;min-width:0; }
+    .tela b { font-weight:600;font-size:12.5px; }
+    .tela span { font-size:12px;color:var(--text-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px; }
+    .link-chamado { font:inherit;font-size:12px;font-weight:600;color:var(--accent);background:none;border:none;padding:0;cursor:pointer;text-align:left; }
+    .link-chamado:hover { text-decoration:underline; }
+    .barra { height:6px;border-radius:3px;background:var(--border);overflow:hidden;width:90px;display:flex;margin-top:3px; }
+    .barra i { display:block;height:100%;background:var(--accent); }
+    .vazio { padding:40px 16px;text-align:center;color:var(--text-md);font-size:13px; }
+
+    .gaveta { position:sticky;top:0;display:flex;flex-direction:column; }
+    .gv-head { padding:16px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:center; }
+    .gv-head .avatar { width:44px;height:44px;font-size:15px; }
+    .gv-fechar { margin-left:auto;width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-md);cursor:pointer; }
+    .gv-fechar:hover { color:var(--accent);border-color:var(--accent); }
+    .gv-sec { padding:14px 16px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:10px; }
+    .gv-sec:last-child { border-bottom:none; }
+    .gv-titulo { font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-md); }
+    .kv { display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:12.5px;margin:0; }
+    .kv dt { color:var(--text-md); }
+    .kv dd { margin:0;text-align:right;font-variant-numeric:tabular-nums;color:var(--text-hi);min-width:0;overflow-wrap:anywhere; }
+    .tl { list-style:none;margin:0;padding:0; }
+    .tl li { display:grid;grid-template-columns:44px 14px 1fr;gap:8px;font-size:12.5px;align-items:start; }
+    .tl time { color:var(--text-lo);font-variant-numeric:tabular-nums;font-size:12px; }
+    .tl .ln { display:flex;flex-direction:column;align-items:center;height:100%; }
+    .tl .ln .dot { margin-top:6px; }
+    .tl .ln::after { content:"";flex:1;width:2px;background:var(--border);min-height:16px; }
+    .tl li:last-child .ln::after { display:none; }
+    .tl p { margin:0 0 10px;color:var(--text-hi); }
+    .chamado-box { border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--bg-base); }
+    .chamado-box h4 { margin:0;font-size:13px;color:var(--text-hi);line-height:1.4; }
+    .posic { font-size:12px;color:var(--text-md);border-top:1px solid var(--border);padding-top:6px; }
+    .posic b { color:var(--text-hi);font-weight:600; }
+
+    @media (max-width:1150px) { .board.com-gaveta { grid-template-columns:minmax(0,1fr); } .gaveta { position:static; } }
+    @media (max-width:720px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } .filters .form-control { max-width:none; } }
+    @media (prefers-reduced-motion:reduce) { .pulse::after, .mon-table tr.flash td, #btn-refresh.girando svg { animation:none; } }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Service</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Service ›</span> Monitor de Acessos</span>
+    </div>
+
+    <div class="page-content">
+      <div class="page-head">
+        <div class="page-kicker">Operação</div>
+        <div class="page-title">Monitor de Acessos</div>
+        <div class="page-subtitle">Quem está usando o Radar (J2A) e as rotinas do IA Service nesta empresa, há quanto tempo e em qual tela.</div>
+      </div>
+
+      <div id="error-banner" class="error-banner" role="alert"></div>
+
+      <div class="mon-stack">
+        <section class="card refresh-bar" id="refresh-bar" aria-label="Atualização automática">
+          <div class="live"><span class="pulse"></span><span id="live-txt">Atualização automática ligada</span></div>
+          <svg class="ring" viewBox="0 0 24 24" aria-hidden="true"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" id="ring" cx="12" cy="12" r="9" stroke-dasharray="56.55" stroke-dashoffset="0"/></svg>
+          <span class="stamp" id="countdown">-</span>
+          <label for="intervalo">A cada
+            <select id="intervalo" class="form-control">
+              <option value="15">15 segundos</option>
+              <option value="30">30 segundos</option>
+              <option value="60">1 minuto</option>
+              <option value="120">2 minutos</option>
+              <option value="0">Pausado</option>
+            </select>
+          </label>
+          <span class="spacer"></span>
+          <span class="stamp" id="stamp">Carregando...</span>
+          <button class="btn btn-primary" id="btn-refresh" type="button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+            Atualizar agora
+          </button>
+        </section>
+
+        <section class="kpis" aria-label="Resumo">
+          <button class="kpi" type="button" data-sit="online" aria-pressed="false"><span class="kpi-label"><span class="dot d-online"></span>Online agora</span><span class="kpi-value" id="k-online">-</span><span class="kpi-foot">sinal nos últimos 2 min</span></button>
+          <button class="kpi" type="button" data-sit="ausente" aria-pressed="false"><span class="kpi-label"><span class="dot d-ausente"></span>Ausentes</span><span class="kpi-value" id="k-ausente">-</span><span class="kpi-foot">sem sinal há 2 a 15 min</span></button>
+          <button class="kpi" type="button" data-sit="inativo" aria-pressed="false"><span class="kpi-label"><span class="dot d-inativo"></span>Logados inativos</span><span class="kpi-value" id="k-inativo">-</span><span class="kpi-foot">sessão válida, sem sinal há +15 min</span></button>
+          <button class="kpi" type="button" data-sit="todos" aria-pressed="true"><span class="kpi-label">Tempo de tela</span><span class="kpi-value" id="k-tempo">-</span><span class="kpi-foot" id="k-tempo-foot">soma do tempo ativo das sessões</span></button>
+        </section>
+
+        <section class="filters" aria-label="Filtros">
+          <button class="chip" type="button" data-orig="todos" aria-pressed="true">Todas as origens</button>
+          <button class="chip" type="button" data-orig="chat" aria-pressed="false">Chat (Radar J2A)</button>
+          <button class="chip" type="button" data-orig="interno" aria-pressed="false">IA Service interno</button>
+          <input id="busca" class="form-control" type="text" placeholder="Buscar nome, telefone ou chamado..." aria-label="Buscar">
+        </section>
+
+        <div class="board" id="board">
+          <section class="card" style="padding:0;overflow:hidden;min-width:0">
+            <div class="grid-toolbar">
+              <div><div class="grid-title">Sessões ativas</div><div class="grid-meta" id="contagem"></div></div>
+              <div class="hint">Clique numa linha para ver a atividade e o chamado</div>
+            </div>
+            <div class="tabela-wrap">
+              <table class="mon-table">
+                <thead><tr><th>Usuário</th><th>Situação</th><th>Origem</th><th>Entrou</th><th>Último sinal</th><th>Tempo de tela</th><th>O que está fazendo</th></tr></thead>
+                <tbody id="tbody"><tr><td colspan="7"><div class="vazio">Carregando sessões...</div></td></tr></tbody>
+              </table>
+            </div>
+          </section>
+          <aside class="card gaveta" id="gaveta" hidden style="padding:0"></aside>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-service/js/sidebar.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const INTERVALO_KEY = 'iasvc_monitor_intervalo';
+  const CIRC = 56.55;
+  const CORES = ['#2563eb', '#7c3aed', '#0891b2', '#c2410c', '#15803d', '#be185d', '#4f46e5', '#0f766e'];
+  const SIT = {
+    online:  { badge: 'badge-green',  rotulo: 'Online' },
+    ausente: { badge: 'badge-yellow', rotulo: 'Ausente' },
+    inativo: { badge: 'badge-neutro', rotulo: 'Inativo' },
+  };
+
+  const st = {
+    dados: null, filtroSit: 'todos', filtroOrig: 'todos', busca: '', selId: null,
+    chamado: null, chamadoErro: null, intervalo: 30, restante: 30, carregando: false, ultimoSinalPorId: new Map(),
+  };
+
+  try { const salvo = localStorage.getItem(INTERVALO_KEY); if (salvo !== null) st.intervalo = Number(salvo); } catch (_) {}
+  if (![0, 15, 30, 60, 120].includes(st.intervalo)) st.intervalo = 30;
+  $('intervalo').value = String(st.intervalo);
+  st.restante = st.intervalo;
+
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const hm = (iso) => iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-';
+  const dataHora = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';
+  function ha(iso) {
+    if (!iso) return '-';
+    const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+    if (m < 1) return 'agora';
+    if (m < 60) return `há ${m} min`;
+    return `há ${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`;
+  }
+  function dur(seg) {
+    const m = Math.round((seg || 0) / 60);
+    return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m} min`;
+  }
+  const iniciais = (n) => String(n || '?').split(/\s+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+  function cor(id) { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return CORES[h % CORES.length]; }
+  function fone(t) {
+    const d = String(t || '').replace(/\D/g, '');
+    if (d.length === 13) return `+${d.slice(0, 2)} ${d.slice(2, 4)} ${d.slice(4, 9)}-${d.slice(9)}`;
+    if (d.length === 12) return `+${d.slice(0, 2)} ${d.slice(2, 4)} ${d.slice(4, 8)}-${d.slice(8)}`;
+    return t || 'sem telefone';
+  }
+
+  function erro(msg) { const el = $('error-banner'); el.textContent = msg || ''; el.style.display = msg ? 'block' : 'none'; }
+
+  async function api(path) {
+    const r = await fetch(path, { cache: 'no-store' });
+    const body = await r.json().catch(() => ({}));
+    if (r.status === 403) throw new Error(body.error || 'Você não tem permissão para o Monitor de Acessos.');
+    if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
+    return body;
+  }
+  const empresaId = () => window._iahubEmpresa?.id || null;
+
+  async function carregar(manual) {
+    const emp = empresaId();
+    if (!emp || st.carregando) return;
+    st.carregando = true;
+    if (manual) { const b = $('btn-refresh'); b.classList.remove('girando'); void b.offsetWidth; b.classList.add('girando'); }
+    try {
+      const dados = await api(`/api/ia-service/monitor-acessos?empresa_id=${encodeURIComponent(emp)}`);
+      const mudaram = [];
+      for (const s of dados.sessoes) {
+        const anterior = st.ultimoSinalPorId.get(s.id);
+        if (st.dados && anterior !== s.ultimoSinalEm) mudaram.push(s.id);
+        st.ultimoSinalPorId.set(s.id, s.ultimoSinalEm);
+      }
+      st.dados = dados;
+      erro('');
+      $('stamp').textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR');
+      render(mudaram);
+      if (st.selId && st.chamado) carregarChamado(st.chamado.id, true);
+    } catch (e) {
+      erro('Não foi possível atualizar o monitor: ' + e.message);
+    } finally {
+      st.carregando = false;
+      st.restante = st.intervalo;
+    }
+  }
+
+  function visiveis() {
+    const q = st.busca.toLowerCase();
+    return (st.dados?.sessoes || []).filter((s) => {
+      if (st.filtroSit !== 'todos' && s.situacao !== st.filtroSit) return false;
+      if (st.filtroOrig !== 'todos' && s.origem !== st.filtroOrig) return false;
+      if (q && !`${s.nome} ${s.telefone || ''} ${s.chamadoNumero || ''} ${s.tela || ''} ${s.acao || ''}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }
+
+  function linha(s, flash) {
+    const sit = SIT[s.situacao] || SIT.inativo;
+    const logadoSeg = Math.max(1, (Date.now() - new Date(s.inicioEm).getTime()) / 1000);
+    const pct = Math.min(100, (s.segundosAtivos / logadoSeg) * 100);
+    const chamado = s.chamadoNumero
+      ? `<button type="button" class="link-chamado" data-chamado="${esc(s.chamadoId)}">Chamado #${esc(s.chamadoNumero)}</button>` : '';
+    return `<tr data-id="${esc(s.id)}" class="${s.id === st.selId ? 'sel' : ''} ${flash ? 'flash' : ''}">
+      <td><div class="user"><span class="avatar" style="background:${cor(s.id)}">${esc(iniciais(s.nome))}<span class="dot d-${s.situacao}"></span></span>
+        <div><div class="nome">${esc(s.nome)}</div><div class="fone">${esc(fone(s.telefone))}</div></div></div></td>
+      <td><span class="badge ${sit.badge}">${sit.rotulo}</span></td>
+      <td><span class="badge ${s.origem === 'chat' ? 'badge-blue' : 'badge-purple'}">${s.origem === 'chat' ? 'Chat J2A' : 'Interno'}</span></td>
+      <td class="num">${hm(s.inicioEm)}<div class="sub">${ha(s.inicioEm)}</div></td>
+      <td class="num">${ha(s.ultimoSinalEm)}</td>
+      <td><div class="num">${dur(s.segundosAtivos)} <span class="sub">de ${dur(logadoSeg)}</span></div>
+        <div class="barra" title="${Math.round(pct)}% do tempo logado com a tela em uso"><i style="width:${pct}%"></i></div></td>
+      <td><div class="tela"><b>${esc(s.tela || '-')}</b>${s.acao ? `<span>${esc(s.acao)}</span>` : ''}${chamado}</div></td>
+    </tr>`;
+  }
+
+  function render(mudaram = []) {
+    const d = st.dados;
+    if (!d) return;
+    $('k-online').textContent = d.resumo.online;
+    $('k-ausente').textContent = d.resumo.ausente;
+    $('k-inativo').textContent = d.resumo.inativo;
+    $('k-tempo').textContent = dur(d.resumo.segundosAtivos);
+    $('k-tempo-foot').textContent = `${d.resumo.total} ${d.resumo.total === 1 ? 'sessão válida' : 'sessões válidas'}`;
+    const vis = visiveis();
+    $('contagem').textContent = `${vis.length} de ${d.sessoes.length} sessões`;
+    $('tbody').innerHTML = vis.length
+      ? vis.map((s) => linha(s, mudaram.includes(s.id))).join('')
+      : `<tr><td colspan="7"><div class="vazio">${d.sessoes.length ? 'Nenhuma sessão com esses filtros.' : 'Ninguém conectado nesta empresa agora.'}</div></td></tr>`;
+    renderGaveta();
+  }
+
+  function renderGaveta() {
+    const g = $('gaveta');
+    const s = st.dados?.sessoes.find((x) => x.id === st.selId);
+    $('board').classList.toggle('com-gaveta', !!s);
+    g.hidden = !s;
+    if (!s) return;
+    const sit = SIT[s.situacao] || SIT.inativo;
+    const eventos = s.eventos.length
+      ? s.eventos.map((e, i) => `<li><time>${hm(e.em)}</time><span class="ln"><span class="dot ${i === 0 ? 'd-' + s.situacao : 'd-inativo'}"></span></span>
+          <p><b>${esc(e.tela || '-')}</b>${e.acao ? `<br><span class="sub">${esc(e.acao)}</span>` : ''}${e.chamadoNumero ? `<br><span class="sub">Chamado #${esc(e.chamadoNumero)}</span>` : ''}</p></li>`).join('')
+      : '<li><span></span><span></span><p class="sub">Nenhuma atividade registrada ainda.</p></li>';
+
+    let blocoChamado = '';
+    if (st.chamadoErro) blocoChamado = `<div class="gv-sec"><div class="gv-titulo">Chamado</div><div class="sub">${esc(st.chamadoErro)}</div></div>`;
+    else if (st.chamado) {
+      const c = st.chamado;
+      blocoChamado = `<div class="gv-sec"><div class="gv-titulo">Chamado #${esc(c.numero)}</div><div class="chamado-box">
+        <h4>${esc(c.titulo || 'Sem título')}</h4>
+        <dl class="kv"><dt>Cliente</dt><dd>${esc(c.cliente || '-')}</dd><dt>Módulo</dt><dd>${esc(c.modulo || c.produto || '-')}</dd>
+          <dt>Aberto em</dt><dd>${dataHora(c.abertoEm)}</dd><dt>Status</dt><dd>${esc(c.status || 'Em andamento')}</dd>
+          <dt>Aguardando</dt><dd>${esc(c.aguardando || '-')}</dd><dt>SLA</dt><dd>${esc(c.slaStatus || '-')}${c.slaPrazo ? ' · ' + dataHora(c.slaPrazo) : ''}</dd></dl>
+        ${c.posicionamentos.map((p) => `<div class="posic"><b>${dataHora(p.em)}</b> · ${esc(p.tecnico || '-')}<br>${esc(p.assunto || p.situacao || '')}</div>`).join('')}
+      </div></div>`;
+    } else if (s.chamadoId) {
+      blocoChamado = `<div class="gv-sec"><div class="gv-titulo">Chamado aberto</div>
+        <button type="button" class="btn btn-ghost" data-chamado="${esc(s.chamadoId)}">Ver chamado #${esc(s.chamadoNumero)}</button></div>`;
+    }
+
+    g.innerHTML = `
+      <div class="gv-head"><span class="avatar" style="background:${cor(s.id)}">${esc(iniciais(s.nome))}<span class="dot d-${s.situacao}"></span></span>
+        <div style="min-width:0"><div class="nome">${esc(s.nome)}</div><div class="fone">${esc(fone(s.telefone))}</div></div>
+        <button class="gv-fechar" type="button" id="gv-fechar" aria-label="Fechar detalhes">✕</button></div>
+      <div class="gv-sec"><div class="gv-titulo">Sessão</div>
+        <dl class="kv"><dt>Situação</dt><dd><span class="badge ${sit.badge}">${sit.rotulo}</span></dd>
+          <dt>Origem</dt><dd>${s.origem === 'chat' ? 'Chat (Radar J2A)' : 'IA Service interno'}</dd>
+          <dt>Entrou em</dt><dd>${dataHora(s.inicioEm)}</dd><dt>Último sinal</dt><dd>${ha(s.ultimoSinalEm)}</dd>
+          <dt>Tempo de tela ativa</dt><dd>${dur(s.segundosAtivos)}</dd>
+          ${s.expiraEm ? `<dt>Sessão expira</dt><dd>${dataHora(s.expiraEm)}</dd>` : ''}</dl></div>
+      ${blocoChamado}
+      <div class="gv-sec"><div class="gv-titulo">Atividade recente</div><ul class="tl">${eventos}</ul></div>`;
+    $('gv-fechar').onclick = () => { st.selId = null; st.chamado = null; st.chamadoErro = null; render(); };
+  }
+
+  async function carregarChamado(chamadoId, silencioso) {
+    try {
+      st.chamado = await api(`/api/ia-service/monitor-acessos/chamados/${encodeURIComponent(chamadoId)}?empresa_id=${encodeURIComponent(empresaId())}`);
+      st.chamadoErro = null;
+    } catch (e) {
+      if (!silencioso) { st.chamado = null; st.chamadoErro = 'Não foi possível carregar o chamado: ' + e.message; }
+    }
+    renderGaveta();
+  }
+
+  function tick() {
+    const bar = $('refresh-bar');
+    if (!st.intervalo) {
+      bar.classList.add('paused');
+      $('live-txt').textContent = 'Atualização automática pausada';
+      $('countdown').textContent = '';
+      $('ring').style.strokeDashoffset = CIRC;
+      return;
+    }
+    bar.classList.remove('paused');
+    $('live-txt').textContent = 'Atualização automática ligada';
+    if (document.hidden || st.carregando) return;
+    st.restante -= 1;
+    if (st.restante <= 0) { carregar(false); st.restante = st.intervalo; }
+    $('countdown').textContent = `próxima em ${st.restante}s`;
+    $('ring').style.strokeDashoffset = CIRC * (1 - st.restante / st.intervalo);
+  }
+
+  $('btn-refresh').addEventListener('click', () => carregar(true));
+  $('intervalo').addEventListener('change', (e) => {
+    st.intervalo = Number(e.target.value);
+    st.restante = st.intervalo;
+    try { localStorage.setItem(INTERVALO_KEY, String(st.intervalo)); } catch (_) {}
+    tick();
+  });
+  $('busca').addEventListener('input', (e) => { st.busca = e.target.value.trim(); render(); });
+  document.querySelectorAll('.kpi').forEach((k) => k.addEventListener('click', () => {
+    st.filtroSit = k.dataset.sit;
+    document.querySelectorAll('.kpi').forEach((x) => x.setAttribute('aria-pressed', String(x === k)));
+    render();
+  }));
+  document.querySelectorAll('.chip').forEach((c) => c.addEventListener('click', () => {
+    st.filtroOrig = c.dataset.orig;
+    document.querySelectorAll('.chip').forEach((x) => x.setAttribute('aria-pressed', String(x === c)));
+    render();
+  }));
+  $('tbody').addEventListener('click', (e) => {
+    const tr = e.target.closest('tr[data-id]');
+    if (!tr) return;
+    const trocouSessao = st.selId !== tr.dataset.id;
+    st.selId = tr.dataset.id;
+    if (trocouSessao) { st.chamado = null; st.chamadoErro = null; }
+    render();
+    const btn = e.target.closest('[data-chamado]');
+    if (btn) carregarChamado(btn.dataset.chamado);
+  });
+  $('gaveta').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-chamado]');
+    if (btn) carregarChamado(btn.dataset.chamado);
+  });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && st.intervalo) carregar(false); });
+
+  (window._iahubAuthReady || Promise.resolve()).then(() => {
+    carregar(false);
+    setInterval(tick, 1000);
+    tick();
+  });
+})();
+</script>
+</body>
+</html>
