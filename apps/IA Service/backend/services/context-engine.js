@@ -208,6 +208,12 @@ function _extrairChamadosCitados(mensagens, { numeroAtual = null, max = 8 } = {}
   return [...mapa.values()].slice(0, max);
 }
 
+// "Abertura" so confirma execucao com verbo de conclusao ("realizamos a
+// abertura", "a abertura foi feita"): o rotulo "Abertura do chamado por ..."
+// gerado pelo radar-service nao e acao executada.
+// Futuro ("vamos realizar a abertura") e negacao ("nao realizamos") nao contam.
+const _RE_ABERTURA_REALIZADA = /(?<!\bnao\s)\b(?:realizamos|realizei|realizou|realizaram|realizad[ao]|efetuamos|efetuei|efetuou|efetuad[ao]|fizemos|feit[ao])\s+(?:a\s+)?abertura\b|\babertura\s+(?:\w+\s+){0,4}foi\s+(?:realizad|efetuad|feit)[ao]\b/;
+
 function _coletarAcoesOperacionais(mensagens) {
   const acoes = [];
   const historico = (mensagens || []).map((m, idx) => ({
@@ -229,18 +235,23 @@ function _coletarAcoesOperacionais(mensagens) {
       criadoEm: m.criadoEm,
       origem: `mensagem:${m.idx + 1}`,
       evidencia: _compactarTexto(m.texto),
+      // Trecho mais longo para o quadro: o resultado da acao costuma vir no
+      // fim do apontamento ("...a rejeicao ainda ocorre"), alem dos 260 chars.
+      trecho: _compactarTexto(m.texto, 600),
     });
     if (/\b(meet|video\s*conferencia|videoconferencia|videochamada|chamada via google meet)\b/.test(m.norm)) {
       const realizada = /\b(realizad|foi realizado|demonstrar|demonstrado)\b/.test(m.norm);
       acoes.push(item(realizada ? 'reuniao_realizada' : 'reuniao_solicitada', realizada ? 'executada' : 'solicitada'));
     }
     if (/\b(fabrica|f[aá]brica|desenvolvimento)\b/.test(m.norm) && /\b(abert|abrir|retorn|encaminh|acompanhar|aguard)\w*/.test(m.norm)) {
-      const execucaoConfirmada = /\b(retorn|encaminh|abert[ao]|aberta|aberto|f[aá]brica\s+(?:aberta|foi aberta)|chamado\s+(?:foi\s+)?(?:encaminhado|aberto))\w*/.test(m.norm);
+      const execucaoConfirmada = /\b(retorn|encaminh|abert[ao]|aberta|aberto|f[aá]brica\s+(?:aberta|foi aberta)|chamado\s+(?:foi\s+)?(?:encaminhado|aberto))\w*/.test(m.norm)
+        || _RE_ABERTURA_REALIZADA.test(m.norm);
       const solicitada = /\b(favor|irei|vou|solicit|abrir)\w*/.test(m.norm) && !execucaoConfirmada;
       acoes.push(item('encaminhamento_fabrica', execucaoConfirmada ? 'executada_ou_em_andamento' : solicitada ? 'solicitada' : 'planejada'));
     }
     if (/\b(totvs|fornecedor|terceiro)\b/.test(m.norm) && /\b(chamado|ticket|encaminh|abert|solicit)\w*/.test(m.norm)) {
-      const execucaoConfirmada = /\b(encaminh|abert[ao]|aberta|aberto|ticket)\w*/.test(m.norm);
+      const execucaoConfirmada = /\b(encaminh|abert[ao]|aberta|aberto|ticket)\w*/.test(m.norm)
+        || _RE_ABERTURA_REALIZADA.test(m.norm);
       acoes.push(item('encaminhamento_terceiro', execucaoConfirmada ? 'executada_ou_em_andamento' : 'solicitada'));
     }
     // Flexões (plural/feminino) contam: "ajustes", "realizados", "testes" — a regex
@@ -485,7 +496,7 @@ function _montarQuadroInvestigativo({ atendimento, mensagens, mensagemAtual, sel
     } else if (ambienteCorrecao === 'producao') {
       acoesCandidatas.push('Correcao informada em producao: validar no fluxo afetado e confirmar se o sintoma original foi eliminado.');
     } else {
-      acoesCandidatas.push('Validar a correcao aplicada no fluxo afetado e confirmar se o sintoma original foi eliminado.');
+      acoesCandidatas.push('Verificar no historico se a correcao aplicada ja foi testada e com qual resultado; se ainda nao houver resultado registrado, validar no fluxo afetado se o sintoma original foi eliminado.');
     }
   } else if (ESTADOS_PENDENCIA_EXTERNA.has(estadoOperacional)) {
     // A pendencia externa continua registrada como fato operacional, mas nao e
@@ -498,7 +509,7 @@ function _montarQuadroInvestigativo({ atendimento, mensagens, mensagemAtual, sel
       const base = fontes.length ? fontes.join('; ') : 'o historico do chamado';
       const refs = sustentacaoInterna.referencias.length ? ` (referencias rastreaveis: ${sustentacaoInterna.referencias.join(', ')})` : '';
       const cautela = apenasIncidentais ? 'confirmando antes se guarda relacao com o problema principal e, se guardar, ' : '';
-      acoesCandidatas.push(`Verificar internamente, com base em ${base}${refs}, ${cautela}o que ja esta documentado e o que foi configurado ou gerado no ambiente, registrando o resultado sem depender do retorno externo.`);
+      acoesCandidatas.push(`Verificar internamente, com base em ${base}${refs}, ${cautela}apenas pontos que as tentativas ja registradas no historico nao cobriram (o que foi feito, o que funcionou e o que segue pendente), registrando o resultado sem depender do retorno externo.`);
       acoesCandidatas.push(`Manter em paralelo o acompanhamento do retorno externo (${pendencia}); nao tratar o acompanhamento como a unica acao.`);
     } else {
       acoesCandidatas.push(`Acompanhar/cobrar o retorno externo (${pendencia}): nao ha evidencia tecnica interna que sustente nova verificacao; explicitar o que depende desse retorno, sem inventar procedimentos.`);
@@ -571,11 +582,26 @@ function _formatarQuadroInvestigativo(quadro) {
     `Estado operacional: ${quadro.estadoOperacional}.`,
   ];
   if (quadro.acoesExecutadas?.length) {
-    linhas.push(`Acoes ja executadas/informadas: ${quadro.acoesExecutadas.map(a => `${a.tipo} (${a.status}; fonte ${a.origem})`).join('; ')}.`);
+    // Conteudo (nao so o rotulo) de cada acao executada, agrupado pela mensagem
+    // de origem. So com o rotulo, o modelo recomendava de novo o que o
+    // historico ja registrava (caso #036413).
+    const porOrigem = new Map();
+    for (const a of quadro.acoesExecutadas) {
+      const g = porOrigem.get(a.origem) || { origem: a.origem, criadoEm: a.criadoEm, tipos: [], trecho: a.trecho || a.evidencia };
+      g.tipos.push(`${a.tipo} (${a.status})`);
+      porOrigem.set(a.origem, g);
+    }
+    linhas.push('Acoes ja executadas/informadas (lista parcial; trecho original da mensagem; o rotulo entre colchetes e so indicio heuristico):');
+    for (const g of porOrigem.values()) {
+      linhas.push(`- ${g.origem}${g.criadoEm ? ` | ${g.criadoEm}` : ''} [${g.tipos.join(', ')}]: "${g.trecho}"`);
+    }
   }
-  if (quadro.acoesSolicitadasOuPlanejadas?.length) {
-    linhas.push(`Acoes solicitadas/planejadas/pendentes: ${quadro.acoesSolicitadasOuPlanejadas.map(a => `${a.tipo} (${a.status}; fonte ${a.origem})`).join('; ')}.`);
+  // Acao ja executada e em andamento aparece acima, nao como pendente.
+  const solicitadas = (quadro.acoesSolicitadasOuPlanejadas || []).filter(a => !/^executada/.test(a.status));
+  if (solicitadas.length) {
+    linhas.push(`Acoes solicitadas/planejadas/pendentes: ${solicitadas.map(a => `${a.tipo} (${a.status}; fonte ${a.origem})`).join('; ')}.`);
   }
+  linhas.push('Tentativas anteriores: leia o historico original em ordem cronologica e identifique o que ja foi tentado, o que funcionou e o que continua pendente no apontamento mais recente (este quadro nao classifica resultados). Nao recomende repetir uma acao ja registrada; se a repeticao for necessaria, explique qual informacao nova ou hipotese a justifica.');
   if (quadro.ambienteCorrecao && quadro.correcoesAplicadas?.length) {
     const rot = {
       homologacao: 'disponibilizada em HOMOLOGACAO (sem evidencia de implantacao em producao)',
@@ -618,7 +644,7 @@ function _formatarQuadroInvestigativo(quadro) {
   }
   if (quadro.lacunasInformacao?.length) linhas.push(`Lacunas: ${quadro.lacunasInformacao.join(' | ')}`);
   if (quadro.acoesParaReduzirIncerteza?.length) linhas.push(`Acoes candidatas para reduzir incerteza: ${quadro.acoesParaReduzirIncerteza.join(' | ')}`);
-  linhas.push('Use este quadro como organizacao das evidencias, nao como conclusao incontestavel. Se uma relacao causal estiver marcada como "Vinculo causal nao demonstrado.", nao a promova a causa ou proximo passo principal sem explicar a ponte causal a partir do historico/anexo/pesquisa.');
+  linhas.push('O historico original e a fonte principal; este quadro e auxiliar, organiza as evidencias e nao determina conclusoes tecnicas. Se uma relacao causal estiver marcada como "Vinculo causal nao demonstrado.", nao a promova a causa ou proximo passo principal sem explicar a ponte causal a partir do historico/anexo/pesquisa.');
   return linhas.join('\n');
 }
 
