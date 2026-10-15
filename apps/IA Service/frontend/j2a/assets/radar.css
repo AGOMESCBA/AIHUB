@@ -1304,6 +1304,82 @@ button.loading .loader { display: block; }
 .risk-table button { border: 0; background: transparent; color: var(--brand); font-weight: 800; font-size: 12px; padding: 3px 6px; border-radius: 5px; transition: background .12s ease; }
 .risk-table button:hover { background: rgba(0, 107, 214, .1); }
 .risk-table td .badge { font-size: 10.5px; padding: 3px 8px; }
+.risk-table td[style] { overflow: hidden; text-overflow: ellipsis; }
+.risk-table th { overflow: hidden; text-overflow: ellipsis; }
+.risk-table th[draggable="true"] { cursor: grab; }
+.risk-table th.dragging { opacity: .5; }
+.risk-table th.drop-before { box-shadow: inset 3px 0 0 var(--brand), 0 1px 0 var(--line); }
+.risk-table th.drop-after { box-shadow: inset -3px 0 0 var(--brand), 0 1px 0 var(--line); }
+.col-resizer { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; touch-action: none; }
+.col-resizer:hover, .col-resizing .col-resizer:active { background: rgba(0, 107, 214, .35); }
+body.col-resizing { cursor: col-resize; user-select: none; }
+
+/* Menu "Colunas" do Radar de Chamados */
+.risk-columns { position: relative; flex: none; }
+.risk-columns > summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-3);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+.risk-columns > summary::-webkit-details-marker { display: none; }
+.risk-columns > summary::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-1px);
+  opacity: .72;
+}
+.risk-columns[open] > summary { border-color: var(--brand); color: var(--brand); }
+.risk-columns > summary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(0, 107, 214, .12); border-color: var(--brand); }
+.risk-columns-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 70;
+  width: 280px;
+  max-height: min(70vh, 520px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 16px 38px rgba(0,0,0,.24);
+}
+.risk-columns-hint { margin: 0; font-size: 11px; color: var(--muted); }
+.risk-columns-list { list-style: none; margin: 0; padding: 0; overflow: auto; display: grid; gap: 2px; }
+.risk-columns-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 6px; border-radius: 6px; }
+.risk-columns-item:hover { background: var(--panel-2); }
+.risk-columns-item label { display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; }
+.risk-toolbar .risk-columns-item input[type="checkbox"] { flex: none; width: 14px; height: 14px; min-width: 0; padding: 0; margin: 0; border: 0; background: none; appearance: auto; -webkit-appearance: checkbox; border-radius: 3px; accent-color: var(--brand); }
+.risk-columns-move { display: inline-flex; gap: 2px; }
+.risk-columns-move button, .risk-columns-reset {
+  border: 1px solid var(--line);
+  background: var(--panel-3);
+  color: var(--text);
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.risk-columns-move button { width: 24px; height: 22px; padding: 0; }
+.risk-columns-move button:disabled { opacity: .35; cursor: default; }
+.risk-columns-reset { height: 30px; font-weight: 700; }
+.risk-columns-move button:not(:disabled):hover, .risk-columns-reset:hover { border-color: var(--brand); color: var(--brand); }
 
 .toast {
   position: fixed;

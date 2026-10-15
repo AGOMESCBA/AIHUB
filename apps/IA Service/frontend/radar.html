@@ -1267,6 +1267,8 @@
           placeholder: 'Nenhum chamado encontrado para este filtro.',
           columns: [
             { title: 'Chamado', field: 'numero', width: 90, headerSort: true },
+            { title: 'Status', field: 'status', width: 120, formatter: (cell) => badgeSla(cell.getValue()) },
+            { title: 'Aguardando retorno', field: 'aguardandoRetorno', width: 170 },
             { title: 'Título', field: 'titulo', width: 260 },
             { title: 'Cliente', field: 'cliente', width: 140 },
             { title: 'Usuário', field: 'usuario', width: 140 },

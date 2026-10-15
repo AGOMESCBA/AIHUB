@@ -1653,6 +1653,11 @@
       $('risk-grid').innerHTML = '<div class="empty-block">Nenhum chamado encontrado.</div>';
       return;
     }
+    const cols = visibleRiskColumns();
+    const header = cols.map((col) => {
+      const drag = col.fixed ? '' : ' draggable="true"';
+      return `<th data-col-id="${col.id}"${drag}${riskColumnStyle(col.id)}>${escapeHtml(col.title)}<span class="col-resizer" title="Arraste para ajustar a largura (duplo clique volta ao automático)"></span></th>`;
+    }).join('');
     let lastConsultant = '';
     const rows = [];
     for (const c of filtered) {
@@ -1661,25 +1666,226 @@
         rows.push(`<tr class="group-row"><td colspan="${cols.length}">${escapeHtml(consultant)}</td></tr>`);
         lastConsultant = consultant;
       }
-      rows.push(`<tr>
-        <td><button data-ticket-id="${escapeHtml(c.id)}">#${escapeHtml(c.numero || '-')}</button></td>
-        <td>${escapeHtml(currentTicketTitle(c))}</td>
-        <td>${escapeHtml(c.clienteNome || '-')}</td>
-        <td>${escapeHtml(c.solicitanteNome || '-')}</td>
-        <td>${escapeHtml(waitingLabel(c.aguardandoConsolidado || c.situacaoRetorno) || '-')}</td>
-        <td>${slaBadge(c.slaPrazo)}</td>
-        <td>${escapeHtml(c.slaDataPrevFim ? formatDateTime(c.slaDataPrevFim) : '-')}</td>
-        <td>${escapeHtml(formatDays(c.diasDur))}</td>
-        <td>${escapeHtml(formatHours(c.hrDur))}</td>
-        <td>${escapeHtml(formatDays(c.diasDurSup))}</td>
-        <td>${escapeHtml(formatDays(c.diasDurFsw))}</td>
-        <td>${escapeHtml(formatDays(c.diasDurDist))}</td>
-        <td>${escapeHtml(formatDays(c.diasDurCli))}</td>
-        <td>${escapeHtml(formatDays(c.diasDurTicli))}</td>
-        <td>${escapeHtml(formatDate(c.ultimoPosicionamentoEm))}</td>
-      </tr>`);
+      rows.push(`<tr>${cols.map((col) => `<td${riskColumnStyle(col.id)}>${col.render(c)}</td>`).join('')}</tr>`);
     }
-    $('risk-grid').innerHTML = `<table class="risk-table"><thead><tr><th>Chamado</th><th>Título</th><th>Cliente</th><th>Usuário</th><th>Aguardando retorno</th><th>Status</th><th>Previsão conclusão</th><th>Duração</th><th>Horas duração</th><th>Dias suporte</th><th>Dias desenv.</th><th>Dias distrib.</th><th>Dias cliente</th><th>Dias tecn. cliente</th><th>Último</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+    $('risk-grid').innerHTML = `<table class="risk-table"><thead><tr>${header}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+  }
+
+  // Colunas do Radar de Chamados. A ordem desta lista e o padrao; cada usuario
+  // pode reordenar, esconder e ajustar largura. A preferencia fica so no
+  // navegador (localStorage) e e saneada na leitura: ids que deixaram de existir
+  // sao ignorados e colunas novas entram no fim, visiveis.
+  const RISK_COLUMNS_KEY = 'iaservice.radarColunas';
+  const RISK_COLUMN_MIN_WIDTH = 60;
+  const RISK_COLUMN_MAX_WIDTH = 800;
+  const RISK_COLUMNS = [
+    { id: 'chamado', title: 'Chamado', fixed: true, render: (c) => `<button data-ticket-id="${escapeHtml(c.id)}">#${escapeHtml(c.numero || '-')}</button>` },
+    { id: 'status', title: 'Status', render: (c) => slaBadge(c.slaPrazo) },
+    { id: 'aguardando', title: 'Aguardando retorno', render: (c) => escapeHtml(waitingLabel(c.aguardandoConsolidado || c.situacaoRetorno) || '-') },
+    { id: 'titulo', title: 'Título', render: (c) => escapeHtml(currentTicketTitle(c)) },
+    { id: 'cliente', title: 'Cliente', render: (c) => escapeHtml(c.clienteNome || '-') },
+    { id: 'usuario', title: 'Usuário', render: (c) => escapeHtml(c.solicitanteNome || '-') },
+    { id: 'previsao', title: 'Previsão conclusão', render: (c) => escapeHtml(c.slaDataPrevFim ? formatDateTime(c.slaDataPrevFim) : '-') },
+    { id: 'duracao', title: 'Duração', render: (c) => escapeHtml(formatDays(c.diasDur)) },
+    { id: 'horasDuracao', title: 'Horas duração', render: (c) => escapeHtml(formatHours(c.hrDur)) },
+    { id: 'diasSuporte', title: 'Dias suporte', render: (c) => escapeHtml(formatDays(c.diasDurSup)) },
+    { id: 'diasDesenv', title: 'Dias desenv.', render: (c) => escapeHtml(formatDays(c.diasDurFsw)) },
+    { id: 'diasDistrib', title: 'Dias distrib.', render: (c) => escapeHtml(formatDays(c.diasDurDist)) },
+    { id: 'diasCliente', title: 'Dias cliente', render: (c) => escapeHtml(formatDays(c.diasDurCli)) },
+    { id: 'diasTecnCliente', title: 'Dias tecn. cliente', render: (c) => escapeHtml(formatDays(c.diasDurTicli)) },
+    { id: 'ultimo', title: 'Último', render: (c) => escapeHtml(formatDate(c.ultimoPosicionamentoEm)) },
+  ];
+  const RISK_COLUMNS_BY_ID = new Map(RISK_COLUMNS.map((col) => [col.id, col]));
+  let riskColumnsPref = loadRiskColumnsPref();
+  let riskResizing = false;
+
+  function sanitizeRiskColumnsPref(raw) {
+    const src = raw && typeof raw === 'object' ? raw : {};
+    const order = (Array.isArray(src.order) ? src.order : []).filter((id, i, arr) => RISK_COLUMNS_BY_ID.has(id) && arr.indexOf(id) === i);
+    for (const col of RISK_COLUMNS) if (!order.includes(col.id)) order.push(col.id);
+    // Colunas fixas (Chamado) sempre primeiro e sempre visiveis.
+    const fixed = RISK_COLUMNS.filter((col) => col.fixed).map((col) => col.id);
+    const finalOrder = [...fixed, ...order.filter((id) => !fixed.includes(id))];
+    const hidden = (Array.isArray(src.hidden) ? src.hidden : []).filter((id) => RISK_COLUMNS_BY_ID.has(id) && !fixed.includes(id));
+    const widths = {};
+    for (const [id, w] of Object.entries(src.widths && typeof src.widths === 'object' ? src.widths : {})) {
+      const n = Math.round(Number(w));
+      if (RISK_COLUMNS_BY_ID.has(id) && Number.isFinite(n)) widths[id] = Math.min(RISK_COLUMN_MAX_WIDTH, Math.max(RISK_COLUMN_MIN_WIDTH, n));
+    }
+    return { order: finalOrder, hidden: [...new Set(hidden)], widths };
+  }
+
+  function loadRiskColumnsPref() {
+    try {
+      return sanitizeRiskColumnsPref(JSON.parse(localStorage.getItem(RISK_COLUMNS_KEY) || 'null'));
+    } catch (_) {
+      return sanitizeRiskColumnsPref(null);
+    }
+  }
+
+  function saveRiskColumnsPref() {
+    riskColumnsPref = sanitizeRiskColumnsPref(riskColumnsPref);
+    try { localStorage.setItem(RISK_COLUMNS_KEY, JSON.stringify(riskColumnsPref)); } catch (_) { /* opcional */ }
+  }
+
+  function visibleRiskColumns() {
+    return riskColumnsPref.order.filter((id) => !riskColumnsPref.hidden.includes(id)).map((id) => RISK_COLUMNS_BY_ID.get(id));
+  }
+
+  function riskColumnStyle(id) {
+    const w = riskColumnsPref.widths[id];
+    return w ? ` style="width:${w}px;min-width:${w}px;max-width:${w}px"` : '';
+  }
+
+  function moveRiskColumn(id, targetId, after) {
+    if (!id || id === targetId || RISK_COLUMNS_BY_ID.get(id)?.fixed) return;
+    const order = riskColumnsPref.order.filter((x) => x !== id);
+    let idx = order.indexOf(targetId);
+    if (idx < 0) return;
+    if (after) idx += 1;
+    order.splice(idx, 0, id);
+    riskColumnsPref.order = order;
+    saveRiskColumnsPref();
+    renderRisk();
+    renderRiskColumnsMenu();
+  }
+
+  function renderRiskColumnsMenu() {
+    const list = $('risk-columns-list');
+    if (!list) return;
+    const movable = riskColumnsPref.order.filter((id) => !RISK_COLUMNS_BY_ID.get(id).fixed);
+    list.innerHTML = riskColumnsPref.order.map((id) => {
+      const col = RISK_COLUMNS_BY_ID.get(id);
+      const pos = movable.indexOf(id);
+      const checked = riskColumnsPref.hidden.includes(id) ? '' : ' checked';
+      const lock = col.fixed ? ' disabled title="Coluna fixa"' : '';
+      const upOff = col.fixed || pos <= 0 ? ' disabled' : '';
+      const downOff = col.fixed || pos === movable.length - 1 ? ' disabled' : '';
+      return `<li class="risk-columns-item">
+        <label><input type="checkbox" data-col-toggle="${id}"${checked}${lock}> ${escapeHtml(col.title)}</label>
+        <span class="risk-columns-move">
+          <button type="button" data-col-move="${id}" data-dir="-1" aria-label="Mover ${escapeHtml(col.title)} para a esquerda"${upOff}>↑</button>
+          <button type="button" data-col-move="${id}" data-dir="1" aria-label="Mover ${escapeHtml(col.title)} para a direita"${downOff}>↓</button>
+        </span>
+      </li>`;
+    }).join('');
+  }
+
+  function bindRiskColumns() {
+    const grid = $('risk-grid');
+    const menu = $('risk-columns-menu');
+    const clearDrop = () => grid.querySelectorAll('.drop-before, .drop-after').forEach((el) => el.classList.remove('drop-before', 'drop-after'));
+    const dropAfter = (th, event) => {
+      const rect = th.getBoundingClientRect();
+      return event.clientX > rect.left + rect.width / 2;
+    };
+
+    grid.addEventListener('dragstart', (event) => {
+      const th = event.target.closest?.('th[data-col-id]');
+      if (!th || riskResizing) { event.preventDefault(); return; }
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', th.dataset.colId);
+      th.classList.add('dragging');
+    });
+    grid.addEventListener('dragover', (event) => {
+      const th = event.target.closest('th[data-col-id]');
+      if (!th) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      clearDrop();
+      const fixed = RISK_COLUMNS_BY_ID.get(th.dataset.colId)?.fixed;
+      th.classList.add(fixed || dropAfter(th, event) ? 'drop-after' : 'drop-before');
+    });
+    grid.addEventListener('dragleave', (event) => {
+      if (!grid.contains(event.relatedTarget)) clearDrop();
+    });
+    grid.addEventListener('drop', (event) => {
+      const th = event.target.closest('th[data-col-id]');
+      if (!th) return;
+      event.preventDefault();
+      const id = event.dataTransfer.getData('text/plain');
+      const fixed = RISK_COLUMNS_BY_ID.get(th.dataset.colId)?.fixed;
+      clearDrop();
+      moveRiskColumn(id, th.dataset.colId, fixed || dropAfter(th, event));
+    });
+    grid.addEventListener('dragend', () => {
+      clearDrop();
+      grid.querySelectorAll('th.dragging').forEach((el) => el.classList.remove('dragging'));
+    });
+
+    // Ajuste de largura: arrasta a borda direita do cabecalho.
+    grid.addEventListener('pointerdown', (event) => {
+      const handle = event.target.closest('.col-resizer');
+      if (!handle) return;
+      event.preventDefault();
+      const th = handle.closest('th');
+      const id = th.dataset.colId;
+      const index = Array.from(th.parentElement.children).indexOf(th) + 1;
+      const startX = event.clientX;
+      const startWidth = th.getBoundingClientRect().width;
+      riskResizing = true;
+      document.body.classList.add('col-resizing');
+      const cells = () => grid.querySelectorAll(`thead th:nth-child(${index}), tbody tr:not(.group-row) > td:nth-child(${index})`);
+      let width = startWidth;
+      const onMove = (e) => {
+        width = Math.min(RISK_COLUMN_MAX_WIDTH, Math.max(RISK_COLUMN_MIN_WIDTH, Math.round(startWidth + e.clientX - startX)));
+        cells().forEach((cell) => { cell.style.width = cell.style.minWidth = cell.style.maxWidth = `${width}px`; });
+      };
+      const onUp = () => {
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        document.body.classList.remove('col-resizing');
+        riskResizing = false;
+        if (Math.abs(width - startWidth) >= 1) {
+          riskColumnsPref.widths[id] = width;
+          saveRiskColumnsPref();
+        }
+      };
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    });
+    grid.addEventListener('dblclick', (event) => {
+      const handle = event.target.closest('.col-resizer');
+      if (!handle) return;
+      delete riskColumnsPref.widths[handle.closest('th').dataset.colId];
+      saveRiskColumnsPref();
+      renderRisk();
+    });
+
+    // Menu "Colunas": mostrar/esconder, mover pelo teclado e restaurar padrao.
+    menu.addEventListener('toggle', () => { if (menu.open) renderRiskColumnsMenu(); });
+    $('risk-columns-list').addEventListener('change', (event) => {
+      const id = event.target.dataset.colToggle;
+      if (!id) return;
+      const hidden = new Set(riskColumnsPref.hidden);
+      if (event.target.checked) hidden.delete(id); else hidden.add(id);
+      riskColumnsPref.hidden = [...hidden];
+      saveRiskColumnsPref();
+      renderRisk();
+    });
+    $('risk-columns-list').addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-col-move]');
+      if (!btn) return;
+      const id = btn.dataset.colMove;
+      const movable = riskColumnsPref.order.filter((x) => !RISK_COLUMNS_BY_ID.get(x).fixed);
+      const target = movable[movable.indexOf(id) + Number(btn.dataset.dir)];
+      if (!target) return;
+      moveRiskColumn(id, target, Number(btn.dataset.dir) > 0);
+      $('risk-columns-list').querySelector(`[data-col-move="${id}"][data-dir="${btn.dataset.dir}"]:not([disabled])`)?.focus();
+    });
+    $('risk-columns-reset').addEventListener('click', () => {
+      riskColumnsPref = sanitizeRiskColumnsPref(null);
+      saveRiskColumnsPref();
+      renderRisk();
+      renderRiskColumnsMenu();
+      toast('Colunas restauradas ao padrão.');
+    });
+    document.addEventListener('click', (event) => {
+      if (menu.open && !menu.contains(event.target)) menu.open = false;
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && menu.open) { menu.open = false; menu.querySelector('summary').focus(); }
+    });
   }
 
   const ROTULOS_ROTINA = {
@@ -1925,6 +2131,7 @@
       const btn = event.target.closest('[data-ticket-id]');
       if (btn) selectTicket(btn.dataset.ticketId);
     });
+    bindRiskColumns();
     $('evidence-content').addEventListener('click', (event) => {
       const open = event.target.closest('[data-open-url]');
       if (open) openAttachment(open.dataset.openUrl);

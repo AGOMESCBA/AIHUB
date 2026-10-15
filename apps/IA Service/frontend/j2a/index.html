@@ -298,6 +298,14 @@
                   <option value="Aguardando Fornecedor">Aguardando Fornecedor</option>
                 </select>
                 <input id="risk-search" type="search" placeholder="Buscar por número, cliente, usuário...">
+                <details class="risk-columns" id="risk-columns-menu">
+                  <summary title="Organizar colunas da grade">Colunas</summary>
+                  <div class="risk-columns-panel">
+                    <p class="risk-columns-hint">Marque para exibir. Reordene com as setas ou arrastando o cabeçalho da grade.</p>
+                    <ul class="risk-columns-list" id="risk-columns-list"></ul>
+                    <button type="button" class="risk-columns-reset" id="risk-columns-reset">Restaurar padrão</button>
+                  </div>
+                </details>
               </div>
               <div class="risk-layout" id="risk-layout">
                 <aside class="risk-consultants-wrap">
