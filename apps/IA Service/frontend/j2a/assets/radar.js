@@ -661,6 +661,12 @@
     if (aviso) aviso.hidden = !ro;
   }
 
+  // Trilho da fila recolhida: mostra o numero do chamado aberto (clicavel para reabrir).
+  function atualizarRotuloFila(ticket) {
+    const el = $('queue-rail-label');
+    if (el) el.textContent = ticket?.numero ? `#${ticket.numero} · Fila` : 'Fila de chamados';
+  }
+
   function syncBotoesAcao() {
     const ocupado = !!state.atendimentoId && state.processing.has(state.atendimentoId);
     setBusy($('research-btn'), ocupado);
@@ -743,6 +749,7 @@
     if (!ticket) return;
     state.somenteLeitura = ticket.statusEncerramento === 'Encerrado';
     aplicarModoSomenteLeitura();
+    atualizarRotuloFila(ticket);
     const atendimentoConhecido = state.atendimentoIdPorChamado.get(String(ticket.id));
     if (atendimentoConhecido) state.concluidosNaoVistos.delete(atendimentoConhecido);
     state.selected = ticket;
