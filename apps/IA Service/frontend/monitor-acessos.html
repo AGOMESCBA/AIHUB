@@ -107,6 +107,13 @@
 
     @media (max-width:1150px) { .board.com-gaveta { grid-template-columns:minmax(0,1fr); } .gaveta { position:static; } }
     @media (max-width:720px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } .filters .form-control { max-width:none; } }
+    .btn-limpar { background:transparent;border:1px solid rgba(220,38,38,.45);color:#dc2626; }
+    .btn-limpar:hover { background:rgba(220,38,38,.08); }
+    .btn-limpar:disabled { opacity:.55;cursor:wait; }
+    .qtd-sessoes { display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700;background:rgba(37,99,235,.12);color:#2563eb;vertical-align:middle; }
+    .sessoes-lista { list-style:none;margin:0;padding:0;display:grid;gap:8px; }
+    .sessoes-lista li { padding:8px 10px;border:1px solid var(--border, rgba(127,127,127,.25));border-radius:8px;font-size:12.5px;line-height:1.45; }
+    .sessoes-lista li .badge { margin-right:6px; }
     @media (prefers-reduced-motion:reduce) { .pulse::after, .mon-table tr.flash td, #btn-refresh.girando svg { animation:none; } }
   </style>
 </head>
@@ -158,6 +165,10 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
             Atualizar agora
           </button>
+          <button class="btn btn-limpar" id="btn-limpar" type="button" title="Zera tempos de tela e atividade e encerra todos os logins do chat J2A desta empresa">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            Limpar
+          </button>
         </section>
 
         <section class="kpis" aria-label="Resumo">
@@ -177,7 +188,7 @@
         <div class="board" id="board">
           <section class="card" style="padding:0;overflow:hidden;min-width:0">
             <div class="grid-toolbar">
-              <div><div class="grid-title">Sessões ativas</div><div class="grid-meta" id="contagem"></div></div>
+              <div><div class="grid-title">Usuários conectados</div><div class="grid-meta" id="contagem"></div></div>
               <div class="hint">Clique numa linha para ver a atividade e o chamado</div>
             </div>
             <div class="tabela-wrap">
@@ -243,8 +254,8 @@
 
   function erro(msg) { const el = $('error-banner'); el.textContent = msg || ''; el.style.display = msg ? 'block' : 'none'; }
 
-  async function api(path) {
-    const r = await fetch(path, { cache: 'no-store' });
+  async function api(path, opts = {}) {
+    const r = await fetch(path, { cache: 'no-store', ...opts });
     const body = await r.json().catch(() => ({}));
     if (r.status === 403) throw new Error(body.error || 'Você não tem permissão para o Monitor de Acessos.');
     if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
@@ -259,11 +270,12 @@
     if (manual) { const b = $('btn-refresh'); b.classList.remove('girando'); void b.offsetWidth; b.classList.add('girando'); }
     try {
       const dados = await api(`/api/ia-service/monitor-acessos?empresa_id=${encodeURIComponent(emp)}`);
+      dados.pessoas = agrupar(dados.sessoes);
       const mudaram = [];
-      for (const s of dados.sessoes) {
-        const anterior = st.ultimoSinalPorId.get(s.id);
-        if (st.dados && anterior !== s.ultimoSinalEm) mudaram.push(s.id);
-        st.ultimoSinalPorId.set(s.id, s.ultimoSinalEm);
+      for (const p of dados.pessoas) {
+        const anterior = st.ultimoSinalPorId.get(p.id);
+        if (st.dados && anterior !== p.ultimoSinalEm) mudaram.push(p.id);
+        st.ultimoSinalPorId.set(p.id, p.ultimoSinalEm);
       }
       st.dados = dados;
       erro('');
@@ -278,9 +290,39 @@
     }
   }
 
+  // Uma linha por pessoa e origem: cada novo login (outro navegador, aba ou
+  // sessão expirada) cria uma sessão própria, e listar sessão a sessão
+  // repetia o mesmo consultor várias vezes. A linha mostra a sessão "mais
+  // viva" (online > ausente > inativo, depois a de sinal mais recente), soma
+  // o tempo de tela e guarda todas as sessões para o painel de detalhes.
+  const ORDEM_SIT = { online: 0, ausente: 1, inativo: 2 };
+  function agrupar(sessoes) {
+    const mapa = new Map();
+    for (const s of sessoes || []) {
+      const k = s.pessoaRef || s.id;
+      if (!mapa.has(k)) mapa.set(k, []);
+      mapa.get(k).push(s);
+    }
+    return [...mapa.entries()].map(([id, lista]) => {
+      lista.sort((a, b) => ((ORDEM_SIT[a.situacao] ?? 3) - (ORDEM_SIT[b.situacao] ?? 3))
+        || String(b.ultimoSinalEm || '').localeCompare(String(a.ultimoSinalEm || '')));
+      const principal = lista[0];
+      const eventos = lista.flatMap((s) => s.eventos || [])
+        .sort((a, b) => String(b.em || '').localeCompare(String(a.em || ''))).slice(0, 8);
+      return {
+        ...principal,
+        id,
+        sessoes: lista,
+        eventos,
+        segundosAtivos: lista.reduce((n, s) => n + (s.segundosAtivos || 0), 0),
+        inicioEm: lista.map((s) => s.inicioEm).filter(Boolean).sort()[0] || principal.inicioEm,
+      };
+    }).sort((a, b) => String(b.ultimoSinalEm || '').localeCompare(String(a.ultimoSinalEm || '')));
+  }
+
   function visiveis() {
     const q = st.busca.toLowerCase();
-    return (st.dados?.sessoes || []).filter((s) => {
+    return (st.dados?.pessoas || []).filter((s) => {
       if (st.filtroSit !== 'todos' && s.situacao !== st.filtroSit) return false;
       if (st.filtroOrig !== 'todos' && s.origem !== st.filtroOrig) return false;
       if (q && !`${s.nome} ${s.telefone || ''} ${s.chamadoNumero || ''} ${s.tela || ''} ${s.acao || ''}`.toLowerCase().includes(q)) return false;
@@ -296,7 +338,7 @@
       ? `<button type="button" class="link-chamado" data-chamado="${esc(s.chamadoId)}">Chamado #${esc(s.chamadoNumero)}</button>` : '';
     return `<tr data-id="${esc(s.id)}" class="${s.id === st.selId ? 'sel' : ''} ${flash ? 'flash' : ''}">
       <td><div class="user"><span class="avatar" style="background:${cor(s.id)}">${esc(iniciais(s.nome))}<span class="dot d-${s.situacao}"></span></span>
-        <div><div class="nome">${esc(s.nome)}</div><div class="fone">${esc(fone(s.telefone))}</div></div></div></td>
+        <div><div class="nome">${esc(s.nome)}${s.sessoes.length > 1 ? `<span class="qtd-sessoes" title="Sessões abertas por esta pessoa">${s.sessoes.length} sessões</span>` : ''}</div><div class="fone">${esc(fone(s.telefone))}</div></div></div></td>
       <td><span class="badge ${sit.badge}">${sit.rotulo}</span></td>
       <td><span class="badge ${s.origem === 'chat' ? 'badge-blue' : 'badge-purple'}">${s.origem === 'chat' ? 'Chat J2A' : 'Interno'}</span></td>
       <td class="num">${hm(s.inicioEm)}<div class="sub">${ha(s.inicioEm)}</div></td>
@@ -310,22 +352,25 @@
   function render(mudaram = []) {
     const d = st.dados;
     if (!d) return;
-    $('k-online').textContent = d.resumo.online;
-    $('k-ausente').textContent = d.resumo.ausente;
-    $('k-inativo').textContent = d.resumo.inativo;
+    // Indicadores contam pessoas (pela situação da sessão mais viva de cada uma).
+    const conta = { online: 0, ausente: 0, inativo: 0 };
+    for (const p of d.pessoas) conta[p.situacao] = (conta[p.situacao] || 0) + 1;
+    $('k-online').textContent = conta.online;
+    $('k-ausente').textContent = conta.ausente;
+    $('k-inativo').textContent = conta.inativo;
     $('k-tempo').textContent = dur(d.resumo.segundosAtivos);
-    $('k-tempo-foot').textContent = `${d.resumo.total} ${d.resumo.total === 1 ? 'sessão válida' : 'sessões válidas'}`;
+    $('k-tempo-foot').textContent = `${d.pessoas.length} ${d.pessoas.length === 1 ? 'usuário' : 'usuários'} · ${d.resumo.total} ${d.resumo.total === 1 ? 'sessão válida' : 'sessões válidas'}`;
     const vis = visiveis();
-    $('contagem').textContent = `${vis.length} de ${d.sessoes.length} sessões`;
+    $('contagem').textContent = `${vis.length} de ${d.pessoas.length} ${d.pessoas.length === 1 ? 'usuário' : 'usuários'}`;
     $('tbody').innerHTML = vis.length
       ? vis.map((s) => linha(s, mudaram.includes(s.id))).join('')
-      : `<tr><td colspan="7"><div class="vazio">${d.sessoes.length ? 'Nenhuma sessão com esses filtros.' : 'Ninguém conectado nesta empresa agora.'}</div></td></tr>`;
+      : `<tr><td colspan="7"><div class="vazio">${d.pessoas.length ? 'Nenhum usuário com esses filtros.' : 'Ninguém conectado nesta empresa agora.'}</div></td></tr>`;
     renderGaveta();
   }
 
   function renderGaveta() {
     const g = $('gaveta');
-    const s = st.dados?.sessoes.find((x) => x.id === st.selId);
+    const s = st.dados?.pessoas.find((x) => x.id === st.selId);
     $('board').classList.toggle('com-gaveta', !!s);
     g.hidden = !s;
     if (!s) return;
@@ -361,6 +406,10 @@
           <dt>Entrou em</dt><dd>${dataHora(s.inicioEm)}</dd><dt>Último sinal</dt><dd>${ha(s.ultimoSinalEm)}</dd>
           <dt>Tempo de tela ativa</dt><dd>${dur(s.segundosAtivos)}</dd>
           ${s.expiraEm ? `<dt>Sessão expira</dt><dd>${dataHora(s.expiraEm)}</dd>` : ''}</dl></div>
+      ${s.sessoes.length > 1 ? `<div class="gv-sec"><div class="gv-titulo">Sessões (${s.sessoes.length})</div><ul class="sessoes-lista">${s.sessoes.map((x) => {
+        const sx = SIT[x.situacao] || SIT.inativo;
+        return `<li><span class="badge ${sx.badge}">${sx.rotulo}</span>Entrou ${dataHora(x.inicioEm)} · último sinal ${ha(x.ultimoSinalEm)} · ${dur(x.segundosAtivos)} de tela<br><span class="sub">${esc(x.tela || '-')}${x.acao ? ' · ' + esc(x.acao) : ''}</span></li>`;
+      }).join('')}</ul></div>` : ''}
       ${blocoChamado}
       <div class="gv-sec"><div class="gv-titulo">Atividade recente</div><ul class="tl">${eventos}</ul></div>`;
     $('gv-fechar').onclick = () => { st.selId = null; st.chamado = null; st.chamadoErro = null; render(); };
@@ -395,6 +444,28 @@
   }
 
   $('btn-refresh').addEventListener('click', () => carregar(true));
+  $('btn-limpar').addEventListener('click', async () => {
+    const emp = empresaId();
+    if (!emp) return;
+    const nomeEmpresa = window._iahubEmpresa?.nome || 'esta empresa';
+    if (!confirm(`Limpar o Monitor de Acessos de ${nomeEmpresa}?\n\n`
+      + '• Apaga os tempos de tela e a atividade registrada.\n'
+      + '• ENCERRA todos os logins do chat (Radar J2A) desta empresa, inclusive de quem está usando agora: todos precisarão entrar de novo com o código. '
+      + 'Rascunhos de retorno ao SoftExpert que estiverem abertos serão perdidos.\n\n'
+      + 'As rotinas internas do IA Service não são desconectadas. Esta ação não pode ser desfeita.')) return;
+    const btn = $('btn-limpar');
+    btn.disabled = true;
+    try {
+      const r = await api(`/api/ia-service/monitor-acessos?empresa_id=${encodeURIComponent(emp)}`, { method: 'DELETE' });
+      st.selId = null; st.chamado = null; st.chamadoErro = null; st.ultimoSinalPorId.clear(); st.dados = null;
+      await carregar(true);
+      $('stamp').textContent = `Limpo: ${r.sessoesEncerradas} login(s) encerrado(s), ${r.presencasRemovidas} registro(s) de presença apagado(s).`;
+    } catch (e) {
+      erro('Não foi possível limpar o monitor: ' + e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
   $('intervalo').addEventListener('change', (e) => {
     st.intervalo = Number(e.target.value);
     st.restante = st.intervalo;

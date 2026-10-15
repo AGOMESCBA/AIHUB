@@ -47,6 +47,16 @@ function registrarInterno(app) {
     }
   });
 
+  // Limpar: zera a presença e encerra todos os logins do chat J2A da empresa
+  // da sessão (ver presencaService.limparMonitor). Mesma permissão da tela.
+  app.delete('/api/ia-service/monitor-acessos', podeMonitorar, (req, res) => {
+    try {
+      res.json(presencaService.limparMonitor(req.svcEmpresaId));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   app.get('/api/ia-service/monitor-acessos/chamados/:chamadoId', podeMonitorar, (req, res) => {
     try {
       const resumo = presencaService.resumoChamado(req.svcEmpresaId, req.params.chamadoId);

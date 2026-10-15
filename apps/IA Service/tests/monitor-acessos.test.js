@@ -148,6 +148,34 @@ try {
   assert.strictEqual(negado.passou, false);
   assert.strictEqual(negado.status, 403);
 
+  // 13. Agrupamento por pessoa: as duas sessões do chat do mesmo consultor
+  // trazem o mesmo pessoaRef (a tela junta numa linha só).
+  const doConsultor = painel.sessoes.filter(s => s.origem === 'chat');
+  assert.strictEqual(doConsultor.length, 2);
+  assert.ok(doConsultor.every(s => s.pessoaRef === `chat:${consultor.id}`), 'sessões do mesmo consultor devem ter o mesmo pessoaRef');
+
+  // 14. Limpar: zera presença e eventos da empresa e expira TODOS os logins do
+  // chat dela (o token deixa de valer); outra empresa fica intacta.
+  const loginExternoService = require('../backend/services/login-externo-service');
+  const tokenAtivo = 'token-limpar-' + crypto.randomBytes(8).toString('hex');
+  const idSessaoToken = crypto.randomUUID();
+  database.getDB().prepare(`
+    INSERT INTO svc_sessoes_externas (id, empresa_id, consultor_id, token_hash, expira_em, criado_em, ultimo_acesso_em)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(idSessaoToken, EMPRESA, consultor.id, crypto.createHash('sha256').update(tokenAtivo).digest('hex'),
+    new Date(Date.now() + 3600 * 1000).toISOString(), new Date().toISOString(), new Date().toISOString());
+  assert.ok(loginExternoService.validarSessaoExterna(tokenAtivo), 'pré-condição: token válido antes de limpar');
+
+  const limpo = presencaService.limparMonitor(EMPRESA);
+  assert.strictEqual(limpo.sessoesEncerradas, 3, 'duas sessões do teste 8 + a do token');
+  assert.ok(limpo.presencasRemovidas >= 2);
+  assert.strictEqual(loginExternoService.validarSessaoExterna(tokenAtivo), null, 'login encerrado não pode mais ser usado');
+  assert.strictEqual(database.getDB().prepare('SELECT COUNT(*) n FROM svc_presenca WHERE empresa_id = ?').get(EMPRESA).n, 0);
+  assert.strictEqual(database.getDB().prepare(`SELECT COUNT(*) n FROM svc_presenca_eventos e JOIN svc_presenca p ON p.id = e.presenca_id WHERE p.empresa_id = ?`).get(EMPRESA).n, 0);
+  assert.strictEqual(database.getDB().prepare('SELECT COUNT(*) n FROM svc_sessoes_externas WHERE id = ?').get(idSessaoToken).n, 1, 'sessão é expirada, não apagada');
+  assert.strictEqual(presencaService.listarMonitor(EMPRESA).sessoes.length, 0, 'painel da empresa fica vazio');
+  assert.strictEqual(presencaService.listarMonitor(OUTRA_EMPRESA).sessoes.length, 1, 'outra empresa não é afetada');
+
   console.log('monitor-acessos.test.js: OK');
 } finally {
   limparEDesligar();

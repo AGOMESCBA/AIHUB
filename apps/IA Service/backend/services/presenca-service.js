@@ -164,6 +164,7 @@ function listarMonitor(empresaId, agoraMs = Date.now()) {
     const ultimoSinal = s.ultimo_sinal_em || s.ultimo_acesso_em;
     lista.push({
       id: `chat:${s.sessao_id}`,
+      pessoaRef: `chat:${s.consultor_id}`,
       origem: 'chat',
       nome: consultorService.getNomeExibicao(Number(empresaId), s.consultor_id) || 'Consultor sem nome',
       telefone: consultor?.telefone || null,
@@ -189,6 +190,7 @@ function listarMonitor(empresaId, agoraMs = Date.now()) {
     const consultor = p.usuario_id_iahub ? consultorRepo.getConsultorPorUsuario(Number(empresaId), p.usuario_id_iahub) : null;
     lista.push({
       id: `interno:${p.id}`,
+      pessoaRef: p.usuario_id_iahub ? `interno:${p.usuario_id_iahub}` : `interno:${p.id}`,
       origem: 'interno',
       nome: usuario?.nome || usuario?.usuario || 'Usuário IAHub',
       telefone: consultor?.telefone || null,
@@ -213,6 +215,29 @@ function listarMonitor(empresaId, agoraMs = Date.now()) {
     resumo.segundosAtivos += item.segundosAtivos;
   }
   return { geradoEm: agoraIso, intervaloSinalSegundos: INTERVALO_SINAL_SEGUNDOS, resumo, sessoes: lista };
+}
+
+/**
+ * "Limpar" do painel (decisão do usuário, 2026-10): zera a presença da
+ * empresa (tempos de tela e trilha de telas) e ENCERRA todos os logins do
+ * chat J2A da empresa, inclusive de quem está online — todos precisam entrar
+ * de novo com o código. A sessão é expirada (expira_em no passado), não
+ * apagada: validarSessaoExterna já rejeita sessão vencida, e a linha de
+ * auditoria continua no banco. Rotinas internas (cookie do IAHub) não são
+ * deslogadas; voltam a aparecer no próximo sinal.
+ */
+function limparMonitor(empresaId, agoraMs = Date.now()) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const db = getDB();
+  const expirarEm = new Date(agoraMs - 1000).toISOString();
+  return db.transaction(() => {
+    const eventos = db.prepare('DELETE FROM svc_presenca_eventos WHERE presenca_id IN (SELECT id FROM svc_presenca WHERE empresa_id = ?)')
+      .run(Number(empresaId)).changes;
+    const presencas = db.prepare('DELETE FROM svc_presenca WHERE empresa_id = ?').run(Number(empresaId)).changes;
+    const sessoesEncerradas = db.prepare('UPDATE svc_sessoes_externas SET expira_em = ? WHERE empresa_id = ? AND expira_em > ?')
+      .run(expirarEm, Number(empresaId), new Date(agoraMs).toISOString()).changes;
+    return { presencasRemovidas: presencas, eventosRemovidos: eventos, sessoesEncerradas };
+  })();
 }
 
 /**
@@ -248,6 +273,7 @@ function resumoChamado(empresaId, chamadoId) {
 module.exports = {
   registrarSinal,
   listarMonitor,
+  limparMonitor,
   resumoChamado,
   situacaoPorSinal,
   hashSessaoInterna,
