@@ -173,9 +173,12 @@
               <button class="active" data-queue-filter="todos">Todos</button>
               <button data-queue-filter="em_atraso">Em atraso</button>
               <button data-queue-filter="em_dia">Em dia</button>
-              <select id="queue-waiting-filter" aria-label="Filtrar chamados por situação Aguardando" title="Aguardando">
-                <option value="todos">Aguardando: todos</option>
-              </select>
+              <span class="queue-waiting-control" id="queue-waiting-control">
+                <span aria-hidden="true">Aguardando ▾</span>
+                <select id="queue-waiting-filter" aria-label="Filtrar chamados por situação Aguardando" title="Aguardando">
+                  <option value="todos">Todos</option>
+                </select>
+              </span>
             </div>
             <div class="queue-options">
               <span id="queue-count">0 chamado(s)</span>

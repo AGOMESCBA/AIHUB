@@ -329,6 +329,15 @@
     return `Aguardando: ${value}`;
   }
 
+  function waitingBadge(value, fallback = '') {
+    const label = waitingLabel(value) || fallback;
+    if (!label) return '';
+    const tone = label === 'Aguardando Atendente' ? 'danger'
+      : label === 'Aguardando Cliente' ? 'ok'
+        : value ? 'warn' : '';
+    return `<span class="badge ${tone}">${escapeHtml(label)}</span>`;
+  }
+
   function diasEntre(dataIso) {
     if (!dataIso) return null;
     const inicio = new Date(dataIso);
@@ -341,8 +350,8 @@
     const label = text(value, '');
     if (!label) return '';
     const cls = label === 'Em atraso' ? 'danger' : label === 'Proxima do vencimento' ? 'warn' : label === 'Em dia' ? 'ok' : '';
-    const display = label === 'Proxima do vencimento' ? 'Prox. vencimento' : label;
-    return `<span class="badge ${cls}">${escapeHtml(display)}</span>`;
+    const display = label === 'Proxima do vencimento' ? 'Próximo a vencer' : label;
+    return `<span class="sla-status ${cls}">${escapeHtml(display)}</span>`;
   }
 
   function safeUrl(url) {
@@ -653,13 +662,14 @@
     if (state.queueWaiting !== 'todos' && !options.includes(state.queueWaiting)) {
       state.queueWaiting = 'todos';
     }
-    $('queue-waiting-filter').innerHTML = '<option value="todos">Aguardando: todos</option>'
+    $('queue-waiting-filter').innerHTML = '<option value="todos">Todos</option>'
       + options.map((label) => `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`).join('');
     $('queue-waiting-filter').value = state.queueWaiting;
   }
 
   function renderQueue() {
     syncBotoesAcao();
+    $('queue-waiting-control').classList.toggle('active', state.queueWaiting !== 'todos');
     const term = $('queue-search').value.trim().toLowerCase();
     const filtered = state.queue.filter((c) => {
       if (state.queueWaiting !== 'todos' && queueWaitingLabel(c) !== state.queueWaiting) return false;
@@ -680,7 +690,7 @@
           ${pesquisaBadge(c.id)}
         </span>
         <span class="ticket-title">${escapeHtml(currentTicketTitle(c))}</span>
-        <span class="ticket-waiting"><span class="badge warn">${escapeHtml(queueWaitingLabel(c))}</span></span>
+        <span class="ticket-waiting">${waitingBadge(c.aguardandoConsolidado || c.situacaoRetorno, 'Aguardando não informado')}</span>
         <span class="ticket-meta">${escapeHtml([c.clienteNome, c.produto].filter(Boolean).join(' | '))}<br>Aberto em ${escapeHtml(formatDate(c.dataAbertura))}</span>
       </button>
     `).join('');
@@ -763,7 +773,7 @@
     $('case-title').textContent = currentTicketTitle(c);
     $('case-number').textContent = `#${c.numero || '-'}`;
     $('case-badges').innerHTML = [
-      waitingLabel(c.aguardandoConsolidado || c.situacaoRetorno) ? `<span class="badge warn">${escapeHtml(waitingLabel(c.aguardandoConsolidado || c.situacaoRetorno))}</span>` : '',
+      waitingBadge(c.aguardandoConsolidado || c.situacaoRetorno),
       slaBadge(c.slaPrazo),
       c.tecnicoResponsavelNome ? `<span class="badge">Consultor: ${escapeHtml(c.tecnicoResponsavelNome)}</span>` : '',
     ].filter(Boolean).join('');

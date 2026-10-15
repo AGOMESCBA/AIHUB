@@ -670,18 +670,25 @@ button.loading .loader { display: block; }
 }
 .segmented { display: flex; gap: 5px; }
 .queue-tools .segmented > * { min-width: 0; }
-.queue-tools .segmented select {
+.queue-tools .queue-waiting-control {
   flex: 1.5;
   width: 0;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--panel-2);
-  color: var(--text);
-  padding: 6px 4px;
-  font-size: 12px;
-  font-weight: 700;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
 }
-.segmented button, .subtabs button {
+.queue-waiting-control select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.queue-waiting-control:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+.segmented button, .queue-tools .queue-waiting-control, .subtabs button {
   flex: 1;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -692,7 +699,7 @@ button.loading .loader { display: block; }
   font-weight: 700;
   text-align: center;
 }
-.segmented button.active, .subtabs button.active {
+.segmented button.active, .queue-waiting-control.active, .subtabs button.active {
   background: var(--brand);
   color: #fff;
   border-color: var(--brand);
@@ -806,6 +813,28 @@ button.loading .loader { display: block; }
 .badge.danger { color: #ffffff; background: #e10600; border-color: #e10600; }
 .badge.warn { color: #241c02; background: #ecc222; border-color: #ecc222; }
 .badge.ok { color: #ffffff; background: #1a9c4a; border-color: #1a9c4a; }
+.sla-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.sla-status::before {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sla-color, var(--muted));
+}
+.sla-status.danger { --sla-color: #e10600; }
+.sla-status.warn { --sla-color: #ecc222; }
+.sla-status.ok { --sla-color: #1a9c4a; }
+.ticket-top .sla-status { font-size: 10px; }
+.case-badges .sla-status { font-size: 10.5px; }
 .badge.pulsing { animation: badge-pulse 1.4s infinite ease-in-out; }
 @keyframes badge-pulse {
   0%, 100% { opacity: .6; }
