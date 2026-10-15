@@ -58,7 +58,16 @@
     .validacao-link { font-size:11px; background:none; border:none; color:var(--accent); cursor:pointer; text-decoration:underline; padding:0; }
     .validacao-evidencia-hint { font-size:11.5px; color:var(--text-lo); width:100%; }
     .ficha-operacional-avaliacao { margin-top:8px; border-top:1px solid rgba(0,0,0,.08); padding-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-    .avaliacao-link { font-size:13px; background:none; border:none; color:var(--accent); cursor:pointer; text-decoration:underline; padding:0; }
+    .avaliacao-link {
+      display:inline-flex; align-items:center; gap:6px;
+      font-size:13px; font-weight:600; color:var(--accent); cursor:pointer;
+      background:color-mix(in srgb, var(--accent) 14%, transparent);
+      border:1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+      border-radius:99px; padding:4px 12px;
+      transition:background .15s, border-color .15s;
+    }
+    .avaliacao-link::before { content:"★"; font-size:12px; }
+    .avaliacao-link:hover { background:color-mix(in srgb, var(--accent) 24%, transparent); border-color:var(--accent); }
     .avaliacao-resumo { font-size:11.5px; color:var(--text-md); font-weight:700; }
     .avaliacao-outras { font-size:11px; color:var(--text-lo); }
     .avaliacao-modal-body { display:flex; flex-direction:column; gap:12px; padding:4px; }

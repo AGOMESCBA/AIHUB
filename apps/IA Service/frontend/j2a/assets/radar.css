@@ -957,7 +957,16 @@ button.loading .loader { display: block; }
 /* Avaliacao Humana (2026-10) -- utilidade tecnica real da resposta da IA,
    independente do Quality Gate. Portado de atendimento.html. */
 .message-avaliacao { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.avaliacao-link { font-size: 13px; background: none; border: none; color: var(--brand); cursor: pointer; text-decoration: underline; padding: 0; }
+.avaliacao-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600; color: var(--brand); cursor: pointer;
+  background: color-mix(in srgb, var(--brand) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand) 45%, transparent);
+  border-radius: 99px; padding: 4px 12px;
+  transition: background .15s, border-color .15s;
+}
+.avaliacao-link::before { content: "★"; font-size: 12px; }
+.avaliacao-link:hover { background: color-mix(in srgb, var(--brand) 24%, transparent); border-color: var(--brand); }
 .avaliacao-resumo { font-size: 11.5px; color: var(--text); font-weight: 700; }
 .avaliacao-outras { font-size: 11px; color: var(--muted); }
 

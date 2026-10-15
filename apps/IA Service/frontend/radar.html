@@ -115,6 +115,7 @@
     .fila-item-numero { font-size:11.5px; font-weight:800; color:var(--wa-accent); }
     .fila-item-titulo { font-size:13px; font-weight:700; color:var(--wa-text); line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
     .fila-item-meta { font-size:11px; color:var(--wa-text-tertiary); display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+    .fila-item-situacao { margin:4px 0 2px; }
     .fila-item-aguardando { font-size:10.5px; font-weight:800; padding:2px 7px; border-radius:99px; background:rgba(234,179,8,.14); color:#fde68a; border:1px solid rgba(234,179,8,.28); white-space:nowrap; }
     .badge { font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; padding:2px 7px; border-radius:99px; flex-shrink:0; }
     .badge-em-atraso { background:rgba(248,113,113,.18); color:#fca5a5; }
@@ -544,6 +545,9 @@
               <button class="fila-filtro ativo" id="filtro-todos" onclick="setFiltroSla('todos')">Todos</button>
               <button class="fila-filtro" id="filtro-atraso" onclick="setFiltroSla('em_atraso')">Em atraso</button>
               <button class="fila-filtro" id="filtro-dia" onclick="setFiltroSla('em_dia')">Em dia</button>
+              <select class="risco-filtro-select" id="fila-filtro-aguardando" title="Filtrar por situação (Aguardando)" onchange="setFiltroAguardandoFila(this.value)">
+                <option value="todos">Aguardando: todos</option>
+              </select>
             </div>
             <div class="fila-refresh-row">
               <button class="fila-atualizar-btn" id="fila-atualizar-btn" type="button" title="Atualizar agora" onclick="atualizarFilaManual()">
@@ -758,6 +762,8 @@
     // caía num `atendimentoAtualId` que já tinha mudado).
     const atendimentosEmProcessamento = new Set();
     let filaCache = [];
+    let filaCompleta = [];
+    let filaAguardandoFiltro = 'todos';
     let ultimaPerguntaPendente = null; // contexto da pergunta associada à próxima resposta da IA (card "Pergunta")
     let pesquisaAbaAtual = 'interna';
     let sessaoExternaInvalida = false;
@@ -902,6 +908,25 @@
       carregarFila();
     }
 
+    // Filtro "Aguardando" da fila: client-side sobre a fila já carregada;
+    // as opções são os valores distintos de situação presentes nela.
+    function setFiltroAguardandoFila(valor) {
+      filaAguardandoFiltro = valor;
+      renderizarFila();
+    }
+    function _labelAguardandoFila(c) {
+      return labelSituacaoRetorno(c.aguardandoConsolidado || c.situacaoRetorno);
+    }
+    function atualizarOpcoesAguardandoFila() {
+      const sel = document.getElementById('fila-filtro-aguardando');
+      if (!sel) return;
+      const distintos = [...new Set(filaCompleta.map(_labelAguardandoFila).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      if (filaAguardandoFiltro !== 'todos' && !distintos.includes(filaAguardandoFiltro)) filaAguardandoFiltro = 'todos';
+      sel.innerHTML = '<option value="todos">Aguardando: todos</option>'
+        + distintos.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+      sel.value = filaAguardandoFiltro;
+    }
+
     function setFiltroRisco(filtro) {
       filtroRiscoAtual = filtro;
       riscoConsultorSelecionado = 'todos';
@@ -955,25 +980,36 @@
         if (forceSync) params.force_sync = 'true';
         const qs = new URLSearchParams(params);
         const resultado = await api(`/radar/fila?${qs.toString()}`);
-        filaCache = resultado.chamados;
-        if (resultado.sincronizacao?.status === 'em_andamento') {
-          showToast('Sincronizando SoftExpert em segundo plano...');
-        }
+        filaCompleta = resultado.chamados;
 
         const avisoEl = document.getElementById('fila-aviso');
         avisoEl.innerHTML = resultado.avisoSemVinculo
           ? '<div class="fila-aviso">Seu número não tem ID SoftExpert vinculado — cadastre em IAHub Platform > Números Autorizados > IA Service para ver sua fila pessoal.</div>'
           : '';
 
-        document.getElementById('fila-contador').textContent = `${resultado.chamados.length} chamado(s)`;
+        atualizarOpcoesAguardandoFila();
+        renderizarFila();
+      } catch (err) {
+        showError('Não foi possível carregar a fila: ' + err.message);
+      }
+    }
+
+    function renderizarFila() {
+      try {
+        filaCache = filaAguardandoFiltro === 'todos'
+          ? filaCompleta
+          : filaCompleta.filter(c => _labelAguardandoFila(c) === filaAguardandoFiltro);
+        document.getElementById('fila-contador').textContent = `${filaCache.length} chamado(s)`;
 
         const lista = document.getElementById('fila-lista');
-        if (!resultado.chamados.length) {
-          lista.innerHTML = '<div class="fila-empty">Nenhum chamado aguardando retorno do atendente no momento.</div>';
+        if (!filaCache.length) {
+          lista.innerHTML = filaCompleta.length
+            ? '<div class="fila-empty">Nenhum chamado para este filtro.</div>'
+            : '<div class="fila-empty">Nenhum chamado aguardando retorno do atendente no momento.</div>';
           return;
         }
 
-        lista.innerHTML = resultado.chamados.map(c => {
+        lista.innerHTML = filaCache.map(c => {
           const tituloBruto = c.titulo || c.assunto || c.breveDescricao || '(sem título)';
           // Título vem como "Cliente | Produto | Assunto real" (mesmo padrão
           // usado em chamado-repository._tituloSemPrefixo no backend) — exibir
@@ -983,17 +1019,17 @@
           // ao selecionar o chamado.
           const partesTitulo = tituloBruto.split('|');
           const tituloExibido = partesTitulo.length >= 3 ? partesTitulo.slice(2).join('|').trim() : tituloBruto;
-          const aguardandoLabel = labelSituacaoRetorno(c.aguardandoConsolidado || c.situacaoRetorno);
+          const aguardandoLabel = _labelAguardandoFila(c);
           return `
           <div class="fila-item ${c.id === chamadoSelecionadoId ? 'selecionado' : ''}" onclick="selecionarChamado('${c.id}')">
             <div class="fila-item-top">
               <span class="fila-item-numero">#${escapeHtml(c.numero)}</span>
               ${badgeSla(c.slaPrazo)}
             </div>
+            ${aguardandoLabel ? `<div class="fila-item-situacao"><span class="fila-item-aguardando">${escapeHtml(aguardandoLabel)}</span></div>` : ''}
             <div class="fila-item-titulo">${escapeHtml(tituloExibido)}</div>
             <div class="fila-item-meta">
               <span>Aberto em ${formatarData(c.dataAbertura)}</span>
-              ${aguardandoLabel ? `<span class="fila-item-aguardando">${escapeHtml(aguardandoLabel)}</span>` : ''}
             </div>
           </div>
         `;
