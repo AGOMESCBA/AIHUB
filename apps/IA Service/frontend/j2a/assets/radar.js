@@ -631,7 +631,18 @@
     }
   }
 
+  // Estado dos botoes Enviar/Pesquisar e POR CHAMADO: so ficam ocupados se o
+  // atendimento que esta na tela esta em state.processing. Antes, setBusy
+  // mexia no botao global e o spinner de um chamado vazava para o outro,
+  // bloqueando pesquisas paralelas em chamados diferentes.
+  function syncBotoesAcao() {
+    const ocupado = !!state.atendimentoId && state.processing.has(state.atendimentoId);
+    setBusy($('research-btn'), ocupado);
+    setBusy($('send-btn'), ocupado, 'Enviando');
+  }
+
   function renderQueue() {
+    syncBotoesAcao();
     const term = $('queue-search').value.trim().toLowerCase();
     const filtered = state.queue.filter((c) => {
       if (!term) return true;
@@ -703,6 +714,7 @@
       state.atendimentoId = open.atendimentoId;
       state.atendimentoIdPorChamado.set(String(ticket.id), open.atendimentoId);
       state.concluidosNaoVistos.delete(open.atendimentoId);
+      syncBotoesAcao();
       await Promise.allSettled([
         loadMessages(),
         loadLocalAttachments(),
@@ -1085,7 +1097,6 @@
     const atendimentoId = state.atendimentoId;
     state.processing.add(atendimentoId);
     renderQueue();
-    setBusy($('send-btn'), true, 'Enviando');
     showChatStatus('Pesquisando e analisando o chamado com a IA...', atendimentoId);
     let concluiu = false;
     try {
@@ -1108,7 +1119,6 @@
       state.processing.delete(atendimentoId);
       if (concluiu) marcarConcluidoSeNaoVisivel(atendimentoId);
       renderQueue();
-      setBusy($('send-btn'), false);
       hideChatStatus(atendimentoId);
     }
   }
@@ -1135,7 +1145,6 @@
     const atendimentoId = state.atendimentoId;
     state.processing.add(atendimentoId);
     renderQueue();
-    setBusy($('research-btn'), true);
     showChatStatus('Pesquisando no histórico completo do chamado...', atendimentoId);
     let concluiu = false;
     try {
@@ -1165,7 +1174,6 @@
       state.processing.delete(atendimentoId);
       if (concluiu) marcarConcluidoSeNaoVisivel(atendimentoId);
       renderQueue();
-      setBusy($('research-btn'), false);
       hideChatStatus(atendimentoId);
     }
   }
