@@ -1,6 +1,6 @@
-.retorno-button { flex: 0 0 auto; min-height: 44px; padding: 6px 10px; border: 1px solid var(--line, var(--wa-border, #64748b)); border-radius: 8px; background: var(--panel, var(--wa-panel, #fff)); color: var(--text, var(--wa-text, #0f172a)); cursor: pointer; font: inherit; }
-#composer.composer:has(> .retorno-button) { grid-template-columns: 38px auto minmax(0, 1fr) 42px; }
-#composer.composer > .retorno-button { width: auto; height: 44px; border-radius: 8px; background: var(--panel, #fff); color: var(--text, #0f172a); font-size: 13px; font-weight: 600; }
+.retorno-button { box-sizing: border-box; flex: 0 0 40px; width: 40px; height: 40px; padding: 0; display: grid; place-items: center; border: 1px solid var(--line, var(--wa-border, #64748b)); border-radius: 8px; background: var(--panel, var(--wa-panel, #fff)); color: var(--text, var(--wa-text, #0f172a)); cursor: pointer; font: inherit; }
+.retorno-button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.retorno-button:disabled { opacity: .55; cursor: not-allowed; }
 .retorno-panel { --rt-bg: var(--panel, var(--wa-panel, #fff)); --rt-text: var(--text, var(--wa-text, #0f172a)); --rt-line: var(--line, var(--wa-border, #cbd5e1)); position: fixed; z-index: 200; inset: 80px 12px 12px auto; width: min(var(--retorno-width, 460px), calc(100vw - 440px)); min-width: 360px; display: flex; flex-direction: column; color: var(--rt-text); background: var(--rt-bg); border: 1px solid var(--rt-line); border-radius: 10px; box-shadow: 0 8px 28px #0003; font: 14px/1.5 'Segoe UI', sans-serif; }
 .retorno-panel, .retorno-panel *, .retorno-confirm, .retorno-confirm * { box-sizing: border-box; }
 .retorno-panel[hidden] { display: none; }

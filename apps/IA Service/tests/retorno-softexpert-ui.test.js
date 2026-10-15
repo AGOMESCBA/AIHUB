@@ -41,11 +41,11 @@ after(async () => { if (browser) await browser.close(); if (server) await new Pr
 test('rascunhos, anexos e confirmação explícita no desktop', async () => {
   const page = await browserPage({ width: 1440, height: 900 });
   try {
-    await page.getByRole('button', { name: 'Retorno', exact: true }).click();
+    await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
     await page.locator('[name=DESCRICAO]').fill('Texto do posicionamento');
     await page.locator('[data-retorno-files]').setInputFiles({ name: 'log.txt', mimeType: 'text/plain', buffer: Buffer.from('log') });
     await page.getByRole('button', { name: 'Voltar ao chat' }).click();
-    await page.getByRole('button', { name: 'Retorno', exact: true }).click();
+    await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
     assert.equal(await page.locator('[name=DESCRICAO]').inputValue(), 'Texto do posicionamento');
     assert.ok((await page.locator('[data-retorno-file-list]').textContent()).includes('log.txt'));
     await page.getByRole('button', { name: 'Registrar retorno', exact: true }).click();
@@ -61,11 +61,11 @@ test('rascunhos, anexos e confirmação explícita no desktop', async () => {
     assert.equal(await page.locator('[name=DESCRICAO]').inputValue(), '');
     await page.locator('[data-retorno-close]').click();
     await page.evaluate(() => { window.currentContext = {scopeKey:'sessao-a',chamadoId:'b',numero:'0002'}; window.editor.contextChanged(); });
-    await page.getByRole('button', { name: 'Retorno', exact: true }).click();
+    await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
     assert.equal(await page.locator('[name=DESCRICAO]').inputValue(), '');
     await page.locator('[name=DESCRICAO]').fill('Rascunho B');
     await page.evaluate(() => { window.currentContext = {scopeKey:'sessao-a',chamadoId:'a',numero:'00012345'}; window.editor.contextChanged(); });
-    await page.getByRole('button', { name: 'Retorno', exact: true }).click();
+    await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
     assert.equal(await page.locator('[name=DESCRICAO]').inputValue(), '');
     const resize = page.locator('.retorno-resize');
     const oldWidth = await page.locator('.retorno-panel').evaluate((el) => el.clientWidth);
@@ -90,7 +90,7 @@ test('mobile 390 e 320 px: tela inteira, ações acessíveis e rascunho preserva
     const page = await browserPage({ width, height: 844 });
     try {
       await page.evaluate(() => { window.ready = false; });
-      await page.getByRole('button', { name: 'Retorno', exact: true }).click();
+      await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
       await page.locator('[name=DESCRICAO]').fill('Retorno no celular');
       const bounds = await page.locator('.retorno-panel').boundingBox();
       assert.equal(Math.round(bounds.width), width);
@@ -102,12 +102,12 @@ test('mobile 390 e 320 px: tela inteira, ações acessíveis e rascunho preserva
       assert.equal(await page.evaluate(() => window.posts), 0);
       await page.locator('[data-retorno-confirm-cancel]').click();
       await page.locator('[data-retorno-close]').click();
-      await page.getByRole('button', { name: 'Retorno', exact: true }).click();
+      await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
       assert.equal(await page.locator('[name=DESCRICAO]').inputValue(), 'Retorno no celular');
       assert.equal(await page.locator('.retorno-panel').evaluate((el) => el.scrollWidth <= el.clientWidth), true);
       await page.screenshot({ path: path.join(__dirname, `../../../tmp/retorno-mobile-${width}.png`) });
       await page.evaluate(() => window.editor.clear());
-      await page.getByRole('button', { name: 'Retorno', exact: true }).click();
+      await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
       assert.equal(await page.locator('[name=DESCRICAO]').inputValue(), '');
     } finally { await page.close(); }
   }
@@ -119,7 +119,11 @@ test('J2A real integra o painel e mantém o chat utilizável no desktop e no mob
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     const errors = [];
     page.on('pageerror', (err) => errors.push(err.message));
-    await page.addInitScript(() => localStorage.setItem('svc_token_externo', 'sessao-simulada'));
+    await page.addInitScript(() => {
+      localStorage.setItem('svc_token_externo', 'sessao-simulada');
+      // Acesso HTTP por IP não disponibiliza randomUUID.
+      Object.defineProperty(crypto, 'randomUUID', { value: undefined });
+    });
     await page.route('**/api/ia-service-externo/**', async (route) => {
       const pathname = new URL(route.request().url()).pathname;
       let body = {};
@@ -137,6 +141,22 @@ test('J2A real integra o painel e mantém o chat utilizável no desktop e no mob
     try {
       await page.goto(new URL('j2a', url).href);
       await page.locator('#queue-list [data-ticket-id]').first().click();
+      await page.locator('#message-input').evaluate((el) => { el.style.height = '120px'; });
+      for (const selector of ['.attach-button', '#send-btn']) {
+        const bounds = await page.locator(selector).boundingBox();
+        assert.equal(bounds.width, 40, `${selector}: largura fixa`);
+        assert.equal(bounds.height, 40, `${selector}: altura fixa mesmo com mensagem alta`);
+      }
+      // Retornar Chamado fica no cabeçalho, ao lado de Pesquisar, com o símbolo SoftExpert.
+      assert.equal(await page.locator('#composer #retorno-btn').count(), 0);
+      assert.equal(await page.locator('.case-actions #retorno-btn').count(), 1);
+      assert.equal(await page.locator('#retorno-btn').getAttribute('aria-label'), 'Retornar Chamado');
+      assert.equal(await page.locator('#retorno-btn').getAttribute('title'), 'Retornar Chamado');
+      const retornoBox = await page.locator('#retorno-btn').boundingBox();
+      const pesquisarBox = await page.locator('#research-btn').boundingBox();
+      assert.equal(retornoBox.height, pesquisarBox.height, 'mesma altura do Pesquisar');
+      assert.ok(retornoBox.x < pesquisarBox.x, 'Retornar Chamado à esquerda do Pesquisar');
+      await page.screenshot({ path: path.join(__dirname, `../../../tmp/retorno-j2a-header-${width}.png`) });
       await page.locator('#retorno-btn').click();
       await page.locator('[name=DESCRICAO]').fill('Descrição preparada pelo analista');
       await page.screenshot({ path: path.join(__dirname, `../../../tmp/retorno-j2a-${width}.png`) });
@@ -193,7 +213,7 @@ test('sucesso parcial preserva conteúdo e chave na retomada confirmada', async 
   const page = await browserPage({ width: 390, height: 844 });
   try {
     await page.evaluate(() => { window.replies = [{status:'parcial',posicionamento:'registrado',mensagem:'Um anexo falhou.'},{status:'registrado',posicionamento:'registrado'}]; });
-    await page.getByRole('button', { name: 'Retorno', exact: true }).click();
+    await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
     await page.locator('[name=DESCRICAO]').fill('Conteúdo a retomar');
     await page.getByRole('button', { name: 'Registrar retorno', exact: true }).click();
     await page.locator('[data-retorno-confirm-send]').click();
@@ -212,7 +232,7 @@ test('falha de rede exige consulta; resultado confirmado não causa outro POST',
   const page = await browserPage({ width: 1440, height: 900 });
   try {
     await page.evaluate(() => { window.failNetwork = true; window.serverStatus = {status:'registrado',posicionamento:'registrado'}; });
-    await page.getByRole('button', { name: 'Retorno', exact: true }).click();
+    await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
     await page.locator('[name=DESCRICAO]').fill('Conteúdo enviado');
     await page.getByRole('button', { name: 'Registrar retorno', exact: true }).click();
     await page.locator('[data-retorno-confirm-send]').click();

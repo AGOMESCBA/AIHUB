@@ -226,6 +226,12 @@
                   <h1 id="case-title">Chamado</h1>
                 </div>
                 <div class="case-actions">
+                  <button id="retorno-btn" class="retorno-se-button" type="button" title="Retornar Chamado" aria-label="Retornar Chamado" data-retorno-custom>
+                    <svg viewBox="-0.4 0.6 25.8 22.8" width="19" height="17" aria-hidden="true" focusable="false">
+                      <path d="M11.1326 6.24455H15.776C15.8493 6.24455 15.9146 6.28542 15.9476 6.34231L18.2689 10.3502C18.3422 10.48 18.5388 10.48 18.6121 10.3502L21.3749 5.58672C21.408 5.52984 21.408 5.44891 21.3749 5.39202L18.9392 1.18863C18.9062 1.12373 18.8409 1.09088 18.7676 1.09088H13.8954C13.8221 1.09088 13.7569 1.13175 13.7238 1.18863L10.961 5.9521C10.8877 6.0819 10.9771 6.25257 11.1326 6.25257V6.24455Z" fill="#0075FF"/>
+                      <path d="M22.4167 7.11472L24.9822 11.3638C25.1779 11.6971 25.0861 12.2035 24.8895 12.5368L19.1923 22.365C18.9965 22.6983 18.6363 22.9099 18.252 22.9099H6.86556C6.47317 22.9099 6.11382 22.7064 5.92528 22.365L0.147468 12.4559C-0.0483219 12.1226 -0.0483219 11.7083 0.147468 11.375L5.91723 1.63574C6.11302 1.30241 6.47317 1.09088 6.8575 1.09088H11.8932C12.0318 1.09088 12.1221 1.24552 12.0568 1.36731L6.20406 11.4551C6.00827 11.7884 6.00827 12.2027 6.20406 12.536L8.98299 17.1961C9.17878 17.5294 9.46561 17.7466 9.84994 17.7466H15.2612C15.6535 17.7466 15.8953 17.5911 16.083 17.2498L22.0985 7.11392C22.1718 6.99213 22.3434 6.99213 22.4176 7.11392L22.4167 7.11472Z" fill="#002080"/>
+                    </svg>
+                  </button>
                   <button id="research-btn" class="primary-button icon-only" title="Pesquisar Soluções"><span class="loader" aria-hidden="true"></span><span class="icon-label" aria-hidden="true">🔎</span></button>
                   <button id="toggle-header-btn" class="icon-button ghost-icon chevron-toggle" title="Mostrar/ocultar detalhes do chamado">
                     <svg viewBox="0 0 20 20" width="16" height="16" fill="none" aria-hidden="true">
@@ -259,7 +265,6 @@
               <form id="composer" class="composer">
                 <label class="attach-button" for="file-input" title="Anexar arquivo">📎</label>
                 <input id="file-input" type="file" multiple hidden>
-                <button id="retorno-btn" class="retorno-button" type="button">Retorno</button>
                 <div class="composer-main">
                   <div id="pending-files" class="pending-files"></div>
                   <textarea id="message-input" rows="1" placeholder="Digite sua mensagem para a IA Service..."></textarea>

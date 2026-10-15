@@ -1,7 +1,24 @@
 (() => {
   'use strict';
 
+  function requestId() {
+    if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
   function mount({ button, getContext, request, onSuccess = async () => {} }) {
+    button.setAttribute('aria-expanded', 'false');
+    // data-retorno-custom: a tela ja traz rotulo e icone proprios no HTML
+    // (ex.: J2A, simbolo SoftExpert no cabecalho) -- nao sobrescrever.
+    if (!button.hasAttribute('data-retorno-custom')) {
+      button.title = 'Retorno ao SoftExpert';
+      button.setAttribute('aria-label', 'Retorno ao SoftExpert');
+      button.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"/><path d="M14 2v6h6M8 13l-3 3 3 3M5 16h9a3 3 0 0 0 0-6"/></svg>';
+    }
     const drafts = new Map();
     let current = null;
     let draft = null;
@@ -64,7 +81,7 @@
     const confirmSend = find('[data-retorno-confirm-send]');
     const fieldNames = ['DESCRICAO', 'ASSUNTO', 'RESULTADO', 'HORAINI', 'HORAFIM', 'HORAINT', 'HORATOTALNUM', 'DTAGEND', 'HRAGEND', 'SITUACAOCHAMADO', 'TIPOPOSICIONAME', 'MOTIVOAPONTAMEN', 'AGUARDANRETORNO'];
     const keyFor = (c) => JSON.stringify([c.scopeKey, c.chamadoId]);
-    const newDraft = () => ({ fields: {}, files: [], requestId: crypto.randomUUID() });
+    const newDraft = () => ({ fields: {}, files: [], requestId: requestId() });
 
     function applyRules() {
       for (const name of fieldNames) {
@@ -103,6 +120,7 @@
       revision++;
       if (dialog.open) dialog.close();
       panel.hidden = true;
+      button.setAttribute('aria-expanded', 'false');
       document.body.classList.remove('retorno-open', 'retorno-wide');
       panel.classList.remove('retorno-expanded');
       button.focus();
@@ -113,6 +131,7 @@
       current = draft = metadata = null;
       if (dialog.open) dialog.close();
       panel.hidden = true;
+      button.setAttribute('aria-expanded', 'false');
       document.body.classList.remove('retorno-open', 'retorno-wide');
       panel.classList.remove('retorno-expanded');
       form.reset();
@@ -130,7 +149,7 @@
         remove.textContent = 'Remover';
         remove.disabled = sending || !!draft?.locked;
         remove.setAttribute('aria-label', `Remover ${file.name}`);
-        remove.addEventListener('click', () => { draft.files.splice(index, 1); draft.requestId = crypto.randomUUID(); renderFiles(); });
+        remove.addEventListener('click', () => { draft.files.splice(index, 1); draft.requestId = requestId(); renderFiles(); });
         li.append(text, remove);
         list.append(li);
       });
@@ -147,6 +166,7 @@
       for (const name of fieldNames) form.elements.namedItem(name).value = draft.fields[name] || '';
       metadata = null;
       panel.hidden = false;
+      button.setAttribute('aria-expanded', 'true');
       document.body.classList.add('retorno-open');
       find('[data-retorno-context]').textContent = `Chamado ${current.numero || ''}`;
       status.textContent = 'Verificando disponibilidade do registro…';
@@ -170,7 +190,7 @@
       button.disabled = !context?.chamadoId || context.readonly;
       if (current && keyFor(context || {}) !== keyFor(current)) close();
     }
-    form.addEventListener('input', () => { save(); if (draft && !draft.locked) draft.requestId = crypto.randomUUID(); });
+    form.addEventListener('input', () => { save(); if (draft && !draft.locked) draft.requestId = requestId(); });
     find('[data-retorno-files]').addEventListener('change', (event) => {
       if (!draft || draft.locked) return;
       const added = [...event.target.files];
@@ -182,7 +202,7 @@
         return;
       }
       draft.files = files;
-      draft.requestId = crypto.randomUUID();
+      draft.requestId = requestId();
       renderFiles();
     });
     find('[data-retorno-add-files]').addEventListener('click', () => find('[data-retorno-files]').click());
