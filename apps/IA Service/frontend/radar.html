@@ -493,6 +493,7 @@
     body.tela-cheia .main { margin-left:0 !important; }
     body.tela-cheia .page-content.radar-content { height:100vh; }
   </style>
+  <link rel="stylesheet" href="/iaservice/j2a/assets/retorno-softexpert.css">
 </head>
 <body>
   <script>
@@ -628,6 +629,7 @@
                 <div class="composer-row">
                   <input type="file" id="anexo-input" multiple style="display:none" accept=".txt,.log,.xml,.json,.sql,.csv,.prw,.tlpp,.png,.jpg,.jpeg,.webp,.pdf">
                   <button class="composer-btn" type="button" title="Anexar arquivo" onclick="document.getElementById('anexo-input').click()">📎</button>
+                  <button class="retorno-button" id="retorno-btn" type="button">Retorno</button>
                   <textarea id="composer-texto" placeholder="Descreva o problema, cole a mensagem de erro, ou responda à investigação..."></textarea>
                   <button class="composer-btn enviar" type="button" title="Enviar" onclick="enviarMensagem()">➤</button>
                 </div>
@@ -787,6 +789,7 @@
       location.href = apelido ? '/entrar-servico/' + encodeURIComponent(apelido) : '/entrar-servico';
     }
     function showSessaoExternaInvalida(msg) {
+      window._retornoSoftExpert?.clear();
       sessaoExternaInvalida = true;
       if (timerAutoRefresh) { clearInterval(timerAutoRefresh); timerAutoRefresh = null; }
       if (timerContagemRegressiva) { clearInterval(timerContagemRegressiva); timerContagemRegressiva = null; }
@@ -1267,8 +1270,6 @@
             { title: 'Título', field: 'titulo', width: 260 },
             { title: 'Cliente', field: 'cliente', width: 140 },
             { title: 'Usuário', field: 'usuario', width: 140 },
-            { title: 'Aguardando retorno', field: 'aguardandoRetorno', width: 170 },
-            { title: 'Status', field: 'status', width: 120, formatter: (cell) => badgeSla(cell.getValue()) },
             { title: 'Consultor', field: 'consultor', visible: false },
             { title: 'Previsão conclusão', field: 'previsao', width: 140 },
             { title: 'Duração', field: 'duracao', width: 90, hozAlign: 'right' },
@@ -1333,6 +1334,7 @@
     // ── Seleção de chamado → inicia/reabre análise assistida e carrega o chat ──────
     async function selecionarChamado(chamadoId) {
       chamadoSelecionadoId = chamadoId;
+      window._retornoSoftExpert?.contextChanged();
       document.querySelectorAll('.fila-item').forEach(el => el.classList.remove('selecionado'));
       renderizarSelecaoNaLista();
 
@@ -1348,6 +1350,7 @@
       // deixando o cabeçalho vazio mesmo com a conversa carregando certo.
       const chamado = filaCache.find(c => c.id === chamadoId) || riscoCache.chamados.find(c => c.id === chamadoId);
       chamadoAtual = chamado || null;
+      window._retornoSoftExpert?.contextChanged();
       if (chamado) preencherCabecalho(chamado);
       await carregarAnexosSoftExpert(chamadoId);
       trocarAbaChat('conversa');
@@ -2801,6 +2804,7 @@
     // sair do radar externo além de fechar a aba, o que mantinha o token
     // salvo no navegador indefinidamente (até expirar em 8h sozinho).
     function sairSessaoExterna() {
+      window._retornoSoftExpert?.clear();
       const apelido = localStorage.getItem(LOGIN_APELIDO_KEY);
       localStorage.removeItem(TOKEN_EXTERNO_KEY);
       location.href = apelido ? `/entrar-servico/${encodeURIComponent(apelido)}` : '/entrar-servico';
@@ -2860,6 +2864,27 @@
     window._iahubAuthReady?.then(iniciar) ?? iniciar();
   </script>
   <script src="/iaservice/j2a/assets/tab-export.js"></script>
+  <script src="/iaservice/j2a/assets/retorno-softexpert.js"></script>
+  <script>
+    window._retornoSoftExpert = window.IaRetornoSoftExpert.mount({
+      button: document.getElementById('retorno-btn'),
+      getContext: () => ({
+        scopeKey: modoExterno ? tokenExterno : empresaIdAtual(),
+        chamadoId: chamadoSelecionadoId, numero: chamadoAtual?.numero,
+        readonly: chamadoAtual?.statusEncerramento === 'Encerrado',
+      }),
+      request: async (context, options) => {
+        const qs = qsEmpresa(empresaIdAtual());
+        const suffix = options.consultaChave ? `/por-chave/${encodeURIComponent(options.consultaChave)}` : '';
+        const url = apiPath(`/radar/chamados/${encodeURIComponent(context.chamadoId)}/retorno${suffix}${qs ? '?' + qs : ''}`);
+        const response = await fetch(url, { ...options, cache: 'no-store', headers: modoExterno ? { 'x-sessao-externa': tokenExterno } : {} });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw Object.assign(new Error(body.error || 'Não foi possível preparar o retorno.'), { status: response.status });
+        return body;
+      },
+      onSuccess: async () => { await carregarMensagens(); await carregarAnexosSoftExpert(chamadoSelecionadoId); },
+    });
+  </script>
   <script>
     const exportHost = document.createElement('div');
     exportHost.style.cssText = 'position:absolute;right:12px;top:6px;z-index:30';

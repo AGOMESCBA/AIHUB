@@ -674,6 +674,7 @@
     const codeInputs = [...document.querySelectorAll('#code-row input')];
     let challengeId = null;
     let telefoneValidado = null;
+    let tokenEscolha = null;
 
     // 2026-09: login é por telefone (a empresa é descoberta depois do OTP,
     // /entrar-servico sozinho nunca sabe qual empresa é). O apelido opcional
@@ -827,7 +828,7 @@
         const r = await fetch('/api/ia-service-publico/login/escolher-empresa', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ telefone: telefoneValidado, empresaId }),
+          body: JSON.stringify({ telefone: telefoneValidado, empresaId, tokenEscolha }),
         });
         const body = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
@@ -856,6 +857,7 @@
         const body = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
         if (body.escolhaEmpresa) {
+          tokenEscolha = body.tokenEscolha || null;
           telefoneValidado = telefone;
           mostrarEscolhaEmpresa(body.empresas);
           return;

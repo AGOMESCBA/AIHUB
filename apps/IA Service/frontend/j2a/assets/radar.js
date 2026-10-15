@@ -4,11 +4,13 @@
   const TOKEN_KEY = 'svc_token_externo';
   const THEME_KEY = 'iaservice_j2a_theme';
   const $ = (id) => document.getElementById(id);
+  let retornoPanel = null;
 
   const state = {
     token: localStorage.getItem(TOKEN_KEY) || '',
     phone: '',
     challengeId: '',
+    tokenEscolha: '',
     whoami: null,
     queueFilter: 'todos',
     queueWaiting: 'todos',
@@ -260,6 +262,8 @@
   }
 
   function showAccess(message) {
+    state.tokenEscolha = '';
+    retornoPanel?.clear();
     // Sempre volta ao passo do telefone com os digitos limpos -- antes, depois
     // de Sair a tela reaparecia no passo "Codigo" com o codigo antigo.
     codeInputs().forEach((input) => { input.value = ''; });
@@ -414,6 +418,7 @@
         body: JSON.stringify({ challengeId: state.challengeId, telefone: state.phone, codigo: code }),
       });
       if (body.escolhaEmpresa) {
+        state.tokenEscolha = body.tokenEscolha || '';
         renderCompanyChoice(body.empresas || []);
         return;
       }
@@ -439,7 +444,7 @@
     try {
       const body = await request('/api/ia-service-publico/login/escolher-empresa', {
         method: 'POST',
-        body: JSON.stringify({ telefone: state.phone, empresaId: btn.dataset.companyId }),
+        body: JSON.stringify({ telefone: state.phone, empresaId: btn.dataset.companyId, tokenEscolha: state.tokenEscolha }),
       });
       finishLogin(body.token);
     } catch (err) {
@@ -449,6 +454,7 @@
   }
 
   function finishLogin(token) {
+    state.tokenEscolha = '';
     state.token = token || '';
     localStorage.setItem(TOKEN_KEY, state.token);
     bootRadar();
@@ -461,6 +467,7 @@
   // dar F5). Mantem so token/preferencias de tema, que sao do dispositivo,
   // nao da sessao.
   function _resetEstadoDoChat() {
+    retornoPanel?.clear();
     state.queue = [];
     state.risk = { consultores: [], chamados: [] };
     state.selected = null;
@@ -755,6 +762,7 @@
     const atendimentoConhecido = state.atendimentoIdPorChamado.get(String(ticket.id));
     if (atendimentoConhecido) state.concluidosNaoVistos.delete(atendimentoConhecido);
     state.selected = ticket;
+    retornoPanel?.contextChanged();
     state.research = null;
     state.dossie = null;
     state.investigations = [];
@@ -1649,7 +1657,7 @@
     for (const c of filtered) {
       const consultant = c.tecnicoResponsavelNome || 'Sem consultor';
       if (consultant !== lastConsultant) {
-        rows.push(`<tr class="group-row"><td colspan="15">${escapeHtml(consultant)}</td></tr>`);
+        rows.push(`<tr class="group-row"><td colspan="${cols.length}">${escapeHtml(consultant)}</td></tr>`);
         lastConsultant = consultant;
       }
       rows.push(`<tr>
@@ -1999,6 +2007,20 @@
   }
 
   function init() {
+    retornoPanel = window.IaRetornoSoftExpert.mount({
+      button: $('retorno-btn'),
+      getContext: () => ({ scopeKey: state.token, chamadoId: state.selected?.id, numero: state.selected?.numero, readonly: state.somenteLeitura }),
+      request: async (context, options) => {
+        const suffix = options.consultaChave ? `/por-chave/${encodeURIComponent(options.consultaChave)}` : '';
+        const response = await fetch(ext(`/radar/chamados/${encodeURIComponent(context.chamadoId)}/retorno${suffix}`), {
+          ...options, cache: 'no-store', headers: apiHeaders(false),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw Object.assign(new Error(body.error || 'Não foi possível preparar o retorno.'), { status: response.status });
+        return body;
+      },
+      onSuccess: async () => { await Promise.allSettled([loadMessages(), loadSoftAttachments(state.selected.id)]); },
+    });
     applyTheme(localStorage.getItem(THEME_KEY) || 'system');
   window.IaTabExport.mount(document.querySelector('.case-actions'), () => ({
     element: $(`panel-${state.activePanel}`),

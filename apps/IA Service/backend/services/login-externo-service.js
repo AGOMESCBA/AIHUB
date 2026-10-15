@@ -40,6 +40,7 @@ function _hashToken(token) {
 }
 
 function _limparChallengesExpirados(db) {
+  db.prepare('DELETE FROM svc_login_escolhas WHERE expira_em < ? OR usado_em IS NOT NULL').run(new Date().toISOString());
   db.prepare(`
     DELETE FROM svc_login_challenges
      WHERE expira_em < ? OR usado_em IS NOT NULL
@@ -221,7 +222,7 @@ function _validarChallenge(challengeId, telefoneBruto, codigoBruto) {
   return { ok: true, telefone };
 }
 
-function _emitirSessao(empresaId, consultorId) {
+function _emitirSessao(empresaId, consultorId, otpVerificadoEm = null) {
   const db = getDB();
   const token = crypto.randomBytes(32).toString('hex');
   const agora = new Date();
@@ -229,9 +230,9 @@ function _emitirSessao(empresaId, consultorId) {
   const id = crypto.randomUUID();
 
   db.prepare(`
-    INSERT INTO svc_sessoes_externas (id, empresa_id, consultor_id, token_hash, expira_em, criado_em, ultimo_acesso_em)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, Number(empresaId), consultorId, _hashToken(token), expiraEm.toISOString(), agora.toISOString(), agora.toISOString());
+    INSERT INTO svc_sessoes_externas (id, empresa_id, consultor_id, token_hash, expira_em, criado_em, ultimo_acesso_em, otp_verificado_em)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, Number(empresaId), consultorId, _hashToken(token), expiraEm.toISOString(), agora.toISOString(), agora.toISOString(), otpVerificadoEm);
 
   return { token, expiraEm: expiraEm.toISOString() };
 }
@@ -251,11 +252,15 @@ function verificarLogin(challengeId, telefoneBruto, codigoBruto) {
   if (empresas.length === 0) throw new Error('Permissão sincronizada não encontrada.');
 
   if (empresas.length > 1) {
-    return { escolhaEmpresa: true, telefone: validacao.telefone, empresas: empresas.map(e => ({ id: e.id, nome: e.nome })) };
+    const tokenEscolha = crypto.randomBytes(32).toString('hex');
+    const agora = new Date().toISOString();
+    getDB().prepare('INSERT INTO svc_login_escolhas (token_hash, telefone, expira_em, otp_verificado_em) VALUES (?, ?, ?, ?)')
+      .run(_hashToken(tokenEscolha), validacao.telefone, new Date(Date.now() + TTL_CODIGO_MS).toISOString(), agora);
+    return { escolhaEmpresa: true, tokenEscolha, telefone: validacao.telefone, empresas: empresas.map(e => ({ id: e.id, nome: e.nome })) };
   }
 
   const unica = empresas[0];
-  const sessao = _emitirSessao(unica.id, unica.consultorId);
+  const sessao = _emitirSessao(unica.id, unica.consultorId, new Date().toISOString());
   return { escolhaEmpresa: false, token: sessao.token, expiraEm: sessao.expiraEm, empresaId: unica.id, consultorId: unica.consultorId };
 }
 
@@ -265,14 +270,20 @@ function verificarLogin(challengeId, telefoneBruto, codigoBruto) {
  * Reconfirma que o telefone de fato tem consultor ativo naquela empresa —
  * nunca confia cegamente no empresaId vindo do cliente.
  */
-function escolherEmpresa(telefoneBruto, empresaId) {
+function escolherEmpresa(telefoneBruto, empresaId, tokenEscolha) {
   const telefone = normalizarTelefone(telefoneBruto);
-  const empresas = listarEmpresasDoTelefone(telefone);
-  const escolhida = empresas.find(e => Number(e.id) === Number(empresaId));
-  if (!escolhida) throw new Error('Empresa não disponível para este telefone.');
+  if (typeof tokenEscolha !== 'string' || tokenEscolha.length !== 64) throw new Error('Confirmação de identidade ausente. Solicite um novo código.');
+  return getDB().transaction(() => {
+    const prova = getDB().prepare('SELECT * FROM svc_login_escolhas WHERE token_hash = ? AND telefone = ?').get(_hashToken(tokenEscolha), telefone);
+    if (!prova || prova.usado_em || new Date(prova.expira_em).getTime() <= Date.now()) throw new Error('Confirmação de identidade inválida ou expirada.');
+    const empresas = listarEmpresasDoTelefone(telefone);
+    const escolhida = empresas.find(e => Number(e.id) === Number(empresaId));
+    if (!escolhida) throw new Error('Empresa não disponível para este telefone.');
 
-  const sessao = _emitirSessao(escolhida.id, escolhida.consultorId);
-  return { token: sessao.token, expiraEm: sessao.expiraEm, empresaId: escolhida.id, consultorId: escolhida.consultorId };
+    const sessao = _emitirSessao(escolhida.id, escolhida.consultorId, prova.otp_verificado_em);
+    getDB().prepare('UPDATE svc_login_escolhas SET usado_em = ? WHERE token_hash = ?').run(new Date().toISOString(), _hashToken(tokenEscolha));
+    return { token: sessao.token, expiraEm: sessao.expiraEm, empresaId: escolhida.id, consultorId: escolhida.consultorId };
+  })();
 }
 
 /**
@@ -294,7 +305,7 @@ function trocarEmpresa(tokenAtual, novoEmpresaId) {
   const destino = empresas.find(e => Number(e.id) === Number(novoEmpresaId));
   if (!destino) throw new Error('Empresa não disponível para este telefone.');
 
-  const sessao = _emitirSessao(destino.id, destino.consultorId);
+  const sessao = _emitirSessao(destino.id, destino.consultorId, sessaoAtual.otpVerificadoEm);
   return { token: sessao.token, expiraEm: sessao.expiraEm, empresaId: destino.id, consultorId: destino.consultorId };
 }
 
@@ -315,7 +326,7 @@ function validarSessaoExterna(token) {
   db.prepare(`UPDATE svc_sessoes_externas SET ultimo_acesso_em = ?, expira_em = ? WHERE id = ?`)
     .run(agora.toISOString(), novaExpiracao.toISOString(), row.id);
 
-  return { empresaId: row.empresa_id, consultorId: row.consultor_id };
+  return { sessaoId: row.id, empresaId: row.empresa_id, consultorId: row.consultor_id, otpVerificadoEm: row.otp_verificado_em || null };
 }
 
 module.exports = {

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>IA Service - Radar de Chamados</title>
   <link rel="stylesheet" href="/iaservice/j2a/assets/radar.css">
+  <link rel="stylesheet" href="/iaservice/j2a/assets/retorno-softexpert.css">
 </head>
 <body>
   <div id="app" class="app-shell" data-view="loading">
@@ -258,6 +259,7 @@
               <form id="composer" class="composer">
                 <label class="attach-button" for="file-input" title="Anexar arquivo">📎</label>
                 <input id="file-input" type="file" multiple hidden>
+                <button id="retorno-btn" class="retorno-button" type="button">Retorno</button>
                 <div class="composer-main">
                   <div id="pending-files" class="pending-files"></div>
                   <textarea id="message-input" rows="1" placeholder="Digite sua mensagem para a IA Service..."></textarea>
@@ -365,6 +367,7 @@
     </div>
   </div>
   <script src="/iaservice/j2a/assets/tab-export.js"></script>
+  <script src="/iaservice/j2a/assets/retorno-softexpert.js"></script>
   <script src="/iaservice/j2a/assets/radar.js"></script>
 </body>
 </html>

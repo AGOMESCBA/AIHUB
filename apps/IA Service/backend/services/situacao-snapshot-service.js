@@ -49,7 +49,7 @@ function _normalizarLinhas(linhas) {
       ultPos: l.ULT_POS != null ? Number(l.ULT_POS) : null,
       // Metadados de anexos (sem binário). null = origem não informou.
       nAnexos: temAnexos ? nGrid + nPosAnexo + nChamado : null,
-      anexosSig: temAnexos ? [nGrid, l.ULT_ANEXO_GRID ?? '', nPosAnexo, nChamado].join('|') : null,
+      anexosSig: temAnexos ? [nGrid, l.ULT_ANEXO_GRID ?? '', nPosAnexo, nChamado, l.ULT_ANEXO_POS ?? ''].join('|') : null,
     });
   }
   return mapa;

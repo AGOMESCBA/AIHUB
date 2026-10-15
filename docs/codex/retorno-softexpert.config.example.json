@@ -1,0 +1,48 @@
+{
+  "versao": 1,
+  "empresas": [
+    {
+      "empresaId": null,
+      "fonteId": null,
+      "origem": "https://DOMINIO_DA_HOMOLOGACAO",
+      "envioHabilitado": false,
+      "contratoValidado": false,
+      "evidenciaContrato": null,
+      "authorizationMode": null,
+      "encoding": null,
+      "mainEntityId": null,
+      "childRelationshipId": null,
+      "campos": {
+        "DESCRICAO": { "id": null, "tipo": "texto", "obrigatorio": true, "maxLength": 100000 }
+      },
+      "automaticos": [],
+      "autoria": {
+        "validada": false,
+        "modo": null,
+        "analistas": {
+          "ID_SOFTEXPERT_DO_ANALISTA": {
+            "apiKeyEnv": "SOFTEXPERT_API_KEY_HOMOLOGACAO",
+            "userId": null
+          }
+        }
+      },
+      "anexos": {
+        "habilitado": false,
+        "contratoValidado": false,
+        "armazenamentoValidado": false,
+        "transporte": null,
+        "tableId": null,
+        "relacionamentoId": null,
+        "campoArquivoId": null
+      },
+      "historico": {
+        "modo": "desabilitado",
+        "envioAutomatico": false,
+        "equivalenciaValidada": false,
+        "evidencia": null,
+        "privado": null,
+        "activityId": null
+      }
+    }
+  ]
+}

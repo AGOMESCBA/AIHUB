@@ -197,7 +197,7 @@ module.exports = function registrarRotasLoginExterno(app) {
     try {
       const resultado = loginExternoService.verificarLogin(req.body?.challengeId, req.body?.telefone, req.body?.codigo);
       if (resultado.escolhaEmpresa) {
-        return res.json({ ok: true, escolhaEmpresa: true, empresas: resultado.empresas });
+        return res.json({ ok: true, escolhaEmpresa: true, tokenEscolha: resultado.tokenEscolha, empresas: resultado.empresas });
       }
       res.json({ ok: true, escolhaEmpresa: false, token: resultado.token, expiraEm: resultado.expiraEm });
     } catch (err) {
@@ -210,7 +210,7 @@ module.exports = function registrarRotasLoginExterno(app) {
   // empresas o consultor quer acessar agora (sem pedir novo código).
   app.post('/api/ia-service-publico/login/escolher-empresa', rateLimitLoginExterno, (req, res) => {
     try {
-      const resultado = loginExternoService.escolherEmpresa(req.body?.telefone, req.body?.empresaId);
+      const resultado = loginExternoService.escolherEmpresa(req.body?.telefone, req.body?.empresaId, req.body?.tokenEscolha);
       res.json({ ok: true, token: resultado.token, expiraEm: resultado.expiraEm });
     } catch (err) {
       res.status(400).json({ error: err.message });

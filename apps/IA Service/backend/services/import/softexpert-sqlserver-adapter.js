@@ -350,6 +350,15 @@ async function listarPosicionamentosDoLote(empresaId, fonte, idProcessList) {
  * inclui `origem` para o chamador saber de qual das três fontes veio.
  */
 async function listarAnexosDoChamado(empresaId, fonte, idProcess) {
+  const incluirAnexosPosicionamento = require('../retorno-softexpert-config').leituraAnexosHabilitada(empresaId, fonte.id);
+  const sqlAnexosPosicionamento = incluirAnexosPosicionamento ? `
+    UNION ALL
+    SELECT 'posicionamento_anexo' AS origem, P.OID AS OID_REFERENCIA, P.DATAATUAL AS DATA_REFERENCIA, P.ANALISTAJ2A AS AUTOR_REFERENCIA,
+           B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, B.FLDATA
+    FROM DYNITSMGRIDREGISTR P
+    INNER JOIN DYNITSMGRIDANEXOAP A ON A.OIDABCCMV6IBMOTU70 = P.OID
+    INNER JOIN SEBLOB B ON B.OID = A.OIDARQUIVO1
+    WHERE P.CHAMADO = @idProcess` : '';
   const sql = `
     SELECT 'chamado' AS origem, D.OID AS OID_REFERENCIA, D.DT AS DATA_REFERENCIA, D.NMSOLICITANTE AS AUTOR_REFERENCIA,
            B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, B.FLDATA
@@ -364,6 +373,8 @@ async function listarAnexosDoChamado(empresaId, fonte, idProcess) {
     FROM DYNITSMGRIDREGISTR P
     INNER JOIN SEBLOB B ON B.OID = P.OIDARQUIVO2
     WHERE P.CHAMADO = @idProcess
+
+    ${sqlAnexosPosicionamento}
 
     UNION ALL
 
@@ -391,6 +402,9 @@ async function listarAnexosDoChamado(empresaId, fonte, idProcess) {
  * NÃO pode tratar ausência no snapshot como prova de encerramento.
  */
 async function listarSnapshotAbertos(empresaId, fonte, { limite = 3000 } = {}) {
+  const incluirAnexosPosicionamento = require('../retorno-softexpert-config').leituraAnexosHabilitada(empresaId, fonte.id);
+  const quantidadeAnexosPos = incluirAnexosPosicionamento ? `+ (SELECT COUNT(*) FROM DYNITSMGRIDANEXOAP AP INNER JOIN DYNITSMGRIDREGISTR GP ON GP.OID = AP.OIDABCCMV6IBMOTU70 WHERE GP.CHAMADO = P.IDPROCESS AND AP.OIDARQUIVO1 IS NOT NULL)` : '';
+  const ultimaAlteracaoAnexo = incluirAnexosPosicionamento ? `(SELECT MAX(COALESCE(AP.BNUPDATED, AP.BNCREATED)) FROM DYNITSMGRIDANEXOAP AP INNER JOIN DYNITSMGRIDREGISTR GP ON GP.OID = AP.OIDABCCMV6IBMOTU70 WHERE GP.CHAMADO = P.IDPROCESS)` : 'NULL';
   const sql = `
     SELECT P.IDPROCESS AS NUM,
            ITC.AGUARDANDO AS AGUARDANDO,
@@ -405,7 +419,9 @@ async function listarSnapshotAbertos(empresaId, fonte, { limite = 3000 } = {}) {
              WHERE DA.IDPROCESS = P.IDPROCESS AND A.OIDARQUIVO1 IS NOT NULL) AS N_ANEXOS_GRID,
            (SELECT MAX(A2.BNCREATED) FROM DYNITSM DA2 INNER JOIN DYNITSMGRIDANEXO A2 ON A2.OIDABC58815SXW3N8D = DA2.OID
              WHERE DA2.IDPROCESS = P.IDPROCESS AND A2.OIDARQUIVO1 IS NOT NULL) AS ULT_ANEXO_GRID,
-           (SELECT COUNT(*) FROM DYNITSMGRIDREGISTR G2 WHERE G2.CHAMADO = P.IDPROCESS AND G2.OIDARQUIVO2 IS NOT NULL) AS N_ANEXOS_POS,
+           ((SELECT COUNT(*) FROM DYNITSMGRIDREGISTR G2 WHERE G2.CHAMADO = P.IDPROCESS AND G2.OIDARQUIVO2 IS NOT NULL)
+             ${quantidadeAnexosPos}) AS N_ANEXOS_POS,
+           ${ultimaAlteracaoAnexo} AS ULT_ANEXO_POS,
            (SELECT COUNT(*) FROM DYNITSM DA3 WHERE DA3.IDPROCESS = P.IDPROCESS AND DA3.OIDARQUIVO2 IS NOT NULL) AS N_ANEXO_CHAMADO
     FROM WFPROCESS P
     INNER JOIN ITSM_CHAMADOS ITC ON ITC.CHAMADO = P.IDPROCESS

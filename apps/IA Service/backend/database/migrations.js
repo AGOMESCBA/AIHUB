@@ -1132,6 +1132,59 @@ const MIGRATIONS = [
       ALTER TABLE consultores ADD COLUMN pre_analise_pessoal INTEGER DEFAULT NULL;
     `,
   },
+  {
+    version: 45,
+    descricao: 'Rastreabilidade e idempotência das tentativas de retorno ao SoftExpert, sem armazenar descrição ou arquivos.',
+    sql: `
+      CREATE TABLE retornos_softexpert (
+        id TEXT PRIMARY KEY,
+        empresa_id INTEGER NOT NULL,
+        chamado_id TEXT NOT NULL,
+        consultor_id TEXT NOT NULL,
+        origem_identidade TEXT NOT NULL,
+        usuario_id TEXT NOT NULL,
+        chave_idempotencia TEXT NOT NULL,
+        payload_hash TEXT NOT NULL,
+        quantidade_anexos INTEGER NOT NULL,
+        status_posicionamento TEXT NOT NULL,
+        status_anexos TEXT NOT NULL,
+        criado_em TEXT NOT NULL,
+        UNIQUE (empresa_id, consultor_id, chamado_id, chave_idempotencia)
+      );
+      CREATE INDEX idx_svc_retornos_chamado ON retornos_softexpert (empresa_id, chamado_id, criado_em);
+    `,
+  },
+  {
+    version: 46,
+    descricao: 'Etapas independentes do retorno SoftExpert, recuperação sem duplicação e prova de OTP para sessões de escrita.',
+    sql: `
+      ALTER TABLE retornos_softexpert ADD COLUMN fonte_id TEXT;
+      ALTER TABLE retornos_softexpert ADD COLUMN numero_chamado TEXT;
+      ALTER TABLE retornos_softexpert ADD COLUMN posicionamento_chave TEXT;
+      ALTER TABLE retornos_softexpert ADD COLUMN posicionamento_oid TEXT;
+      ALTER TABLE retornos_softexpert ADD COLUMN status_historico TEXT NOT NULL DEFAULT 'desabilitado';
+      ALTER TABLE retornos_softexpert ADD COLUMN sincronizacao_status TEXT NOT NULL DEFAULT 'pendente';
+      ALTER TABLE retornos_softexpert ADD COLUMN contrato_hash TEXT;
+      ALTER TABLE retornos_softexpert ADD COLUMN atualizado_em TEXT;
+      ALTER TABLE retornos_softexpert ADD COLUMN em_processamento INTEGER NOT NULL DEFAULT 0;
+      CREATE TABLE retorno_softexpert_anexos (
+        id TEXT PRIMARY KEY, retorno_id TEXT NOT NULL REFERENCES retornos_softexpert(id),
+        indice INTEGER NOT NULL, arquivo_hash TEXT NOT NULL, nome TEXT NOT NULL,
+        tamanho INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pendente', registro_id TEXT,
+        UNIQUE (retorno_id, indice)
+      );
+      CREATE TABLE retorno_softexpert_eventos (
+        id TEXT PRIMARY KEY, retorno_id TEXT NOT NULL REFERENCES retornos_softexpert(id),
+        etapa TEXT NOT NULL, status TEXT NOT NULL, criado_em TEXT NOT NULL
+      );
+      CREATE INDEX idx_retorno_eventos ON retorno_softexpert_eventos(retorno_id, criado_em);
+      ALTER TABLE svc_sessoes_externas ADD COLUMN otp_verificado_em TEXT;
+      CREATE TABLE svc_login_escolhas (
+        token_hash TEXT PRIMARY KEY, telefone TEXT NOT NULL, expira_em TEXT NOT NULL,
+        otp_verificado_em TEXT NOT NULL, usado_em TEXT
+      );
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

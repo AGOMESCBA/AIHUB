@@ -84,17 +84,23 @@ try {
   );
 
   // ── escolherEmpresa: emite sessão para a empresa escolhida, sem novo OTP ─
-  const sessaoJ2A = loginExternoService.escolherEmpresa(TELEFONE_MULTIEMPRESA, EMPRESA_J2A);
+  assert.throws(() => loginExternoService.escolherEmpresa(TELEFONE_MULTIEMPRESA, EMPRESA_J2A), /identidade/i);
+  assert.throws(() => loginExternoService.escolherEmpresa(TELEFONE_MULTIEMPRESA, EMPRESA_J2A, '0'.repeat(64)), /identidade/i);
+  assert.throws(() => loginExternoService.escolherEmpresa(TELEFONE_UNICA_EMPRESA, EMPRESA_J2A, verificacao.tokenEscolha), /identidade/i);
+  assert.throws(() => loginExternoService.escolherEmpresa(TELEFONE_MULTIEMPRESA, 3, verificacao.tokenEscolha), /não disponível/i);
+  const sessaoJ2A = loginExternoService.escolherEmpresa(TELEFONE_MULTIEMPRESA, EMPRESA_J2A, verificacao.tokenEscolha);
   assert.ok(sessaoJ2A.token);
   const validadaJ2A = loginExternoService.validarSessaoExterna(sessaoJ2A.token);
   assert.strictEqual(validadaJ2A.empresaId, EMPRESA_J2A);
   assert.strictEqual(validadaJ2A.consultorId, consultorJ2A.id);
+  assert.ok(validadaJ2A.otpVerificadoEm);
+  assert.throws(() => loginExternoService.escolherEmpresa(TELEFONE_MULTIEMPRESA, EMPRESA_J2A, verificacao.tokenEscolha), /inválida|expirada/i);
 
   // Nunca aceitar empresaId arbitrário — telefone multiempresa não tem
   // consultor numa empresa 3 qualquer.
   assert.throws(
     () => loginExternoService.escolherEmpresa(TELEFONE_MULTIEMPRESA, 3),
-    /não disponível/i,
+    /identidade/i,
     'escolherEmpresa deve rejeitar empresa sem consultor para aquele telefone'
   );
 
