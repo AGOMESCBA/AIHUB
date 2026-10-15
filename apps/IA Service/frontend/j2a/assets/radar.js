@@ -296,7 +296,10 @@
     if (!value) return '-';
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return String(value);
-    return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    // Hora no padrao brasileiro com "h" (05h40 / 17h40): deixa claro que e
+    // relogio de 24 horas, sem AM/PM.
+    const p = (n) => String(n).padStart(2, '0');
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}h${p(d.getMinutes())}`;
   }
 
   function formatNumber(value, decimals = 1) {
