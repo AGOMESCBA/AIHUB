@@ -293,6 +293,7 @@ teste('refresh: chamado com turno de IA em andamento NAO e modificado; e retenta
     const r = await refreshService.atualizarPorSnapshot(EMPRESA, ctx.fonte, { chamadoIds: [c.id] });
     assert.deepStrictEqual(r.ignoradosOcupados, ['200004']);
     assert.strictEqual(r.parcial, true, 'resultado parcial sinalizado');
+    assert.ok(r.motivosParcial.some(m => /^chamados_ocupados:200004/.test(m)), 'motivo identificavel: chamado ocupado');
     const depois = chamadoRepo.getChamadoPorNumero(EMPRESA, '200004', 'softexpert');
     assert.strictEqual(depois.aguardandoConsolidado, 'RETORNO - CLIENTE', 'chamado ocupado intocado');
     assert.strictEqual(chamadoRepo.contarPosicionamentosDoChamado(EMPRESA, c.id), 1);
@@ -327,6 +328,7 @@ teste('refresh: snapshot truncado => nao verifica ausentes e sinaliza parcial', 
   const r = await refreshService.atualizarPorSnapshot(EMPRESA, ctx.fonte, { chamadoIds: [] });
   assert.strictEqual(r.snapshot.truncado, true);
   assert.strictEqual(r.parcial, true);
+  assert.ok(r.motivosParcial.includes('snapshot_truncado'));
   assert.strictEqual(r.candidatos.ausente_do_snapshot, undefined);
   ORIGEM.snapshotTruncado = false;
 });
@@ -340,6 +342,7 @@ teste('refresh: origem fora do ar => snapshot ok:false, parcial, mas a tela aind
   ORIGEM.snapshotLanca = false;
   assert.strictEqual(r.snapshot.ok, false);
   assert.strictEqual(r.parcial, true);
+  assert.ok(r.motivosParcial.some(m => /^snapshot_indisponivel: .*origem fora do ar/.test(m)));
   assert.deepStrictEqual(ORIGEM.idsConsultados, ['200001']);
 });
 
@@ -550,6 +553,8 @@ teste('semantica de resultado: sucesso so quando nada ficou parcial; falha da ja
   ORIGEM.janelaLanca = false;
   assert.strictEqual(janelaFalhou.resultado.sucesso, false, 'falha da janela nao e sucesso');
   assert.strictEqual(janelaFalhou.resultado.parcial, true);
+  assert.ok(janelaFalhou.resultado.motivosParcial.some(m => /^janela_incremental_falhou: .*recusou a janela/.test(m)),
+    'motivo da falha da janela identificavel no resultado');
 
   const originalFontes = snapshotService.fontesElegiveis;
   snapshotService.fontesElegiveis = () => { throw new Error('banco indisponivel'); };
@@ -558,6 +563,7 @@ teste('semantica de resultado: sucesso so quando nada ficou parcial; falha da ja
     assert.strictEqual(total.status, 'concluido');
     assert.strictEqual(total.resultado.falhou, true);
     assert.strictEqual(total.resultado.sucesso, false);
+    assert.ok(total.resultado.motivosParcial.some(m => /^ciclo_falhou: banco indisponivel/.test(m)));
     // a consulta seguinte (polling da tela) NAO herda o sucesso anterior
     const depois = await refreshService.sincronizarAntesDaFila(EMPRESA, { aguardarMs: 0 });
     assert.strictEqual(depois.status, 'recente');
@@ -577,6 +583,7 @@ teste('snapshot em cache antigo (origem fora do ar) nao conta como sucesso', asy
   ORIGEM.snapshotLanca = false;
   assert.strictEqual(r.snapshot.origem, 'cache_antigo');
   assert.strictEqual(r.parcial, true);
+  assert.ok(r.motivosParcial.some(m => /^snapshot_em_cache_antigo/.test(m)));
 });
 
 // ── Reconstrucao preserva tudo que nao e historico importado ────────────────
@@ -624,6 +631,23 @@ teste('reconstrucao: preserva analista, IA, anexos (inclusive da origem), dossie
   assert.strictEqual(anexoDepois.mensagemId, msgAnalista.id, 'vinculo do anexo com a mensagem do analista preservado');
   const exec = db.prepare(`SELECT mensagem_id FROM investigacao_execucoes WHERE id = 'exec-1'`).get();
   assert.strictEqual(exec.mensagem_id, msgIa.id, 'trilha continua ligada a resposta da IA');
+});
+
+teste('log do servidor identifica os motivos do refresh parcial', async () => {
+  reiniciarEstado();
+  const avisos = [];
+  const original = console.warn;
+  console.warn = (...args) => { avisos.push(args.join(' ')); };
+  try {
+    ORIGEM.janelaLanca = true;
+    const r = await refreshService.sincronizarAntesDaFila(EMPRESA, { force: true, aguardarMs: 5000, chamadoIds: [] });
+    ORIGEM.janelaLanca = false;
+    assert.strictEqual(r.resultado.parcial, true);
+  } finally {
+    console.warn = original;
+  }
+  assert.ok(avisos.some(l => /Refresh do Radar PARCIAL/.test(l) && /janela_incremental_falhou/.test(l)),
+    'o log deve citar o motivo, nao so "parcial"');
 });
 
 teste('importacoes tipo refresh nao entram na janela incremental nem na listagem padrao', async () => {

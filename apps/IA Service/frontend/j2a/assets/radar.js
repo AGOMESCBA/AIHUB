@@ -620,6 +620,7 @@
     pollSyncTentativas = 0;
     const res = sinc?.resultado;
     if (!veioDeSync || !res) return;
+    if (res.motivosParcial?.length) console.warn('[Refresh] atualizacao parcial/falha — motivos:', res.motivosParcial);
     if (res.falhou) toast('Nao foi possivel atualizar agora; os dados exibidos podem estar desatualizados.');
     else if (res.sucesso === true) toast('Fila atualizada.');
     else toast('Atualizacao parcial: alguns chamados nao puderam ser atualizados agora.');

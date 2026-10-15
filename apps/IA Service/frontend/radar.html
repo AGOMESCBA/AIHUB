@@ -1027,6 +1027,7 @@
       _pollSyncTentativas = 0;
       const res = sinc?.resultado;
       if (!veioDeSync || !res) return;
+      if (res.motivosParcial?.length) console.warn('[Refresh] atualização parcial/falha — motivos:', res.motivosParcial);
       if (res.falhou) showToast('Não foi possível atualizar agora; os dados exibidos podem estar desatualizados.');
       else if (res.sucesso === true) showToast('Fila atualizada.');
       else showToast('Atualização parcial: alguns chamados não puderam ser atualizados agora.');

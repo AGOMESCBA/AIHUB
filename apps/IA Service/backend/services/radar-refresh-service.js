@@ -93,8 +93,8 @@ async function sincronizarAnexosModificados(empresaId, fonte, snap, saida) {
       const locais = anexoRepo.listarAnexos(empresaId, atendimento.id).filter(a => a.origemSistema === SISTEMA_ORIGEM).length;
       if (item.nAnexos != null && locais >= item.nAnexos) { assinaturas.set(numero, item.anexosSig); continue; }
     }
-    if (radarService.chamadoOcupadoPorNumero(empresaId, numero)) { saida.parcial = true; continue; }
-    if (feitos >= MAX_SINCRONIZACOES_ANEXOS_POR_CICLO) { saida.parcial = true; continue; }
+    if (radarService.chamadoOcupadoPorNumero(empresaId, numero)) { marcarParcial(saida, `anexos_adiados_turno_em_andamento:${numero}`); continue; }
+    if (feitos >= MAX_SINCRONIZACOES_ANEXOS_POR_CICLO) { marcarParcial(saida, `anexos_adiados_limite_por_ciclo:${MAX_SINCRONIZACOES_ANEXOS_POR_CICLO}`); continue; }
     try {
       const baixados = await anexosSoftExpertService.sincronizarAnexosParaAtendimento(empresaId, chamado.id, atendimento.id);
       assinaturas.set(numero, item.anexosSig);
@@ -102,9 +102,19 @@ async function sincronizarAnexosModificados(empresaId, fonte, snap, saida) {
       saida.anexosSincronizados.push({ numero, novos: Array.isArray(baixados) ? baixados.length : 0 });
     } catch (err) {
       saida.erros.push({ numero, erro: `sincronizacao_anexos: ${err.message}` });
-      saida.parcial = true;
+      marcarParcial(saida, `anexos_falha:${numero}: ${err.message}`);
     }
   }
+}
+
+/**
+ * Marca um resultado como parcial E registra o motivo (identificável na tela,
+ * na trilha técnica e no log). Nunca marque parcial sem motivo.
+ */
+function marcarParcial(alvo, motivo) {
+  alvo.parcial = true;
+  alvo.motivosParcial = alvo.motivosParcial || [];
+  if (motivo && !alvo.motivosParcial.includes(motivo)) alvo.motivosParcial.push(motivo);
 }
 
 function _marcas(empresaId, fonteId) {
@@ -179,6 +189,7 @@ async function atualizarPorSnapshot(empresaId, fonte, { chamadoIds = [], prioMin
     erros: [],
     pendentes: 0,
     parcial: false,
+    motivosParcial: [],
     consultasOrigem: 0,
     duracaoMs: 0,
   };
@@ -188,7 +199,9 @@ async function atualizarPorSnapshot(empresaId, fonte, { chamadoIds = [], prioMin
     ok: !!snap.ok, origem: snap.origem || null, truncado: !!snap.truncado,
     itens: snap.mapa ? snap.mapa.size : 0, erro: snap.erro || null,
   };
-  if (!snap.ok || snap.origem === 'cache_antigo' || snap.truncado) saida.parcial = true;
+  if (!snap.ok) marcarParcial(saida, `snapshot_indisponivel: ${snap.erro || 'sem detalhe'}`);
+  else if (snap.origem === 'cache_antigo') marcarParcial(saida, `snapshot_em_cache_antigo: ${snap.erro || 'origem indisponivel'}`);
+  if (snap.ok && snap.truncado) marcarParcial(saida, 'snapshot_truncado');
 
   const marcas = _marcas(empresaId, fonte.id);
   const candidatosTodos = selecionarCandidatos({ empresaId, fonteId: fonte.id, snap, chamadoIdsTela: chamadoIds, marcas });
@@ -198,7 +211,7 @@ async function atualizarPorSnapshot(empresaId, fonte, { chamadoIds = [], prioMin
   const ordenados = [...candidatos.entries()].sort((a, b) => a[1].prio - b[1].prio).map(([n]) => n);
   const lote = ordenados.slice(0, MAX_ATUALIZACOES_POR_CICLO);
   saida.pendentes = ordenados.length - lote.length;
-  if (saida.pendentes > 0) saida.parcial = true;
+  if (saida.pendentes > 0) marcarParcial(saida, `atualizacoes_adiadas_por_limite:${saida.pendentes}`);
 
   if (lote.length) {
     // Leitura completa (com durações): novos na base e tela com leitura completa
@@ -219,7 +232,8 @@ async function atualizarPorSnapshot(empresaId, fonte, { chamadoIds = [], prioMin
     saida.ignoradosOcupados = r.ignorados;
     saida.naoEncontradosNaOrigem = r.naoEncontrados;
     saida.erros = r.erros;
-    if (r.ignorados.length || r.erros.length) saida.parcial = true;
+    if (r.ignorados.length) marcarParcial(saida, `chamados_ocupados:${r.ignorados.join(',')}`);
+    if (r.erros.length) marcarParcial(saida, `erros_leitura_por_id:${r.erros.map(e => `${e.numero}: ${e.erro}`).join('; ')}`);
 
     const reconstruirFalhou = new Set();
     for (const a of r.atualizados) {
@@ -230,12 +244,12 @@ async function atualizarPorSnapshot(empresaId, fonte, { chamadoIds = [], prioMin
         if (rec.reconstruido) saida.reconstruidos++;
         else if (rec.motivo === 'turno_em_andamento' || rec.motivo === 'pre_analise_em_andamento') {
           reconstruirFalhou.add(a.numero); // retenta no próximo ciclo (marca não é gravada)
-          saida.parcial = true;
+          marcarParcial(saida, `reconstrucao_adiada_${rec.motivo}:${a.numero}`);
         }
       } catch (err) {
         reconstruirFalhou.add(a.numero);
         saida.erros.push({ numero: a.numero, erro: `reconstrucao_historico: ${err.message}` });
-        saida.parcial = true;
+        marcarParcial(saida, `reconstrucao_falhou:${a.numero}: ${err.message}`);
       }
     }
 
@@ -261,7 +275,7 @@ async function atualizarPorSnapshot(empresaId, fonte, { chamadoIds = [], prioMin
       await sincronizarAnexosModificados(empresaId, fonte, snap, saida);
     } catch (err) {
       saida.erros.push({ numero: null, erro: `anexos: ${err.message}` });
-      saida.parcial = true;
+      marcarParcial(saida, `anexos_falha_geral: ${err.message}`);
     }
   }
 
@@ -282,11 +296,11 @@ async function atualizarPorSnapshot(empresaId, fonte, { chamadoIds = [], prioMin
         if (radarService.historicoImportadoDesatualizado(empresaId, c.id)) {
           const rec = radarService.reconstruirHistoricoDoChamado(empresaId, c.id);
           if (rec.reconstruido) { saida.reconstruidos++; saida.chamadoIdsAtualizados.push(c.id); }
-          else if (rec.motivo === 'turno_em_andamento' || rec.motivo === 'pre_analise_em_andamento') saida.parcial = true;
+          else if (rec.motivo === 'turno_em_andamento' || rec.motivo === 'pre_analise_em_andamento') marcarParcial(saida, `reconciliacao_adiada_${rec.motivo}:${numero}`);
         }
       } catch (err) {
         saida.erros.push({ numero, erro: `reconciliacao_historico: ${err.message}` });
-        saida.parcial = true;
+        marcarParcial(saida, `reconciliacao_falhou:${numero}: ${err.message}`);
       }
     }
   }
@@ -346,9 +360,12 @@ function _executar(empresaId, { janelaDias, chamadoIds } = {}) {
     const resultados = [];
     const idsAtualizados = new Set();
     let parcial = false;
+    const motivosParcial = [];
+    const motivo = (m) => { parcial = true; if (m && !motivosParcial.includes(m)) motivosParcial.push(m); };
+    const absorver = (r, etapa) => { if (r?.parcial) { parcial = true; for (const m of r.motivosParcial || []) motivo(`${etapa}: ${m}`); } };
     try {
     fontes = snapshotService.fontesElegiveis(empresaId);
-    if (!fontes.length) parcial = true; // nada a sincronizar não é sucesso
+    if (!fontes.length) motivo('sem_fontes_elegiveis'); // nada a sincronizar não é sucesso
 
     for (const fonte of fontes) {
       const item = { fonteId: fonte.id, ok: true, janela: { ok: true }, porId: null, housekeeping: null };
@@ -357,9 +374,9 @@ function _executar(empresaId, { janelaDias, chamadoIds } = {}) {
       try {
         item.porId = await atualizarPorSnapshot(empresaId, fonte, { chamadoIds, prioMax: PRIO_PRIORITARIA_MAX });
         item.porId.chamadoIdsAtualizados.forEach(id => idsAtualizados.add(id));
-        if (item.porId.parcial) parcial = true;
+        absorver(item.porId, 'tela');
       } catch (err) {
-        item.ok = false; parcial = true;
+        item.ok = false; motivo(`etapa_prioritaria_falhou: ${err.message}`);
         item.porId = { erro: err.message };
         console.error(`[IA Service] Refresh por ID falhou na fonte ${fonte.nome || fonte.id}:`, err.message);
       }
@@ -375,7 +392,7 @@ function _executar(empresaId, { janelaDias, chamadoIds } = {}) {
         item.janela = { ok: true, importacaoId: importacao?.id || null };
       } catch (err) {
         item.janela = { ok: false, erro: err.message };
-        item.ok = false; parcial = true;
+        item.ok = false; motivo(`janela_incremental_falhou: ${err.message}`);
         console.error(`[IA Service] Refresh do Radar falhou na janela da fonte ${fonte.nome || fonte.id}:`, err.message);
       }
       // Etapa 3: conferências (novos na base, ausentes do snapshot) + chat dos
@@ -383,9 +400,9 @@ function _executar(empresaId, { janelaDias, chamadoIds } = {}) {
       try {
         item.housekeeping = await atualizarPorSnapshot(empresaId, fonte, { chamadoIds, prioMin: PRIO_PRIORITARIA_MAX + 1, forcarSnapshot: false });
         item.housekeeping.chamadoIdsAtualizados.forEach(id => idsAtualizados.add(id));
-        if (item.housekeeping.parcial) parcial = true;
+        absorver(item.housekeeping, 'conferencias');
       } catch (err) {
-        parcial = true;
+        motivo(`conferencias_falharam: ${err.message}`);
         item.housekeeping = { erro: err.message };
         console.error(`[IA Service] Conferencia pos-janela falhou na fonte ${fonte.nome || fonte.id}:`, err.message);
       }
@@ -400,9 +417,9 @@ function _executar(empresaId, { janelaDias, chamadoIds } = {}) {
         try {
           const r = await atualizarPorSnapshot(empresaId, fonte, { chamadoIds: ids });
           r.chamadoIdsAtualizados.forEach(id => idsAtualizados.add(id));
-          if (r.parcial) parcial = true;
+          absorver(r, 'telas_adicionais');
         } catch (err) {
-          parcial = true;
+          motivo(`telas_adicionais_falharam: ${err.message}`);
           console.error('[IA Service] Refresh por ID (extras) falhou:', err.message);
         }
       }
@@ -418,10 +435,14 @@ function _executar(empresaId, { janelaDias, chamadoIds } = {}) {
     // Semântica explícita para a tela: sucesso SÓ quando nada ficou parcial/falhou.
     // (parcial = alguma etapa falhou, foi limitada ou adiada; falhou = o ciclo
     // inteiro não pôde ser executado.)
+    if (parcial) {
+      console.warn(`[IA Service] Refresh do Radar PARCIAL (empresa ${empresaId}): ${motivosParcial.join(' | ') || 'motivo nao informado'}`);
+    }
     return {
       fontes: resultados,
       sucesso: !parcial,
       parcial,
+      motivosParcial,
       falhou: false,
       chamadoIdsAtualizados: [...idsAtualizados],
       concluidoEm: new Date().toISOString(),
@@ -430,6 +451,7 @@ function _executar(empresaId, { janelaDias, chamadoIds } = {}) {
       console.error('[IA Service] Refresh do Radar falhou por completo:', err.message);
       return {
         fontes: resultados, sucesso: false, parcial: true, falhou: true, erro: err.message,
+        motivosParcial: [`ciclo_falhou: ${err.message}`],
         chamadoIdsAtualizados: [...idsAtualizados],
         concluidoEm: new Date().toISOString(),
       };
