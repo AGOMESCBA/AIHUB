@@ -1658,17 +1658,57 @@
       const drag = col.fixed ? '' : ' draggable="true"';
       return `<th data-col-id="${col.id}"${drag}${riskColumnStyle(col.id)}>${escapeHtml(col.title)}<span class="col-resizer" title="Arraste para ajustar a largura (duplo clique volta ao automático)"></span></th>`;
     }).join('');
+    const consultantOf = (c) => c.tecnicoResponsavelNome || 'Sem consultor';
+    const groupCount = new Map();
+    for (const c of filtered) groupCount.set(consultantOf(c), (groupCount.get(consultantOf(c)) || 0) + 1);
     let lastConsultant = '';
     const rows = [];
     for (const c of filtered) {
-      const consultant = c.tecnicoResponsavelNome || 'Sem consultor';
+      const consultant = consultantOf(c);
+      const collapsed = riskCollapsedGroups.has(consultant);
       if (consultant !== lastConsultant) {
-        rows.push(`<tr class="group-row"><td colspan="${cols.length}">${escapeHtml(consultant)}</td></tr>`);
+        rows.push(`<tr class="group-row${collapsed ? ' collapsed' : ''}"><td colspan="${cols.length}"><button type="button" class="group-toggle" data-group-toggle="${escapeHtml(consultant)}" aria-expanded="${collapsed ? 'false' : 'true'}" title="${collapsed ? 'Expandir' : 'Recolher'} chamados de ${escapeHtml(consultant)}"><span class="group-sign" aria-hidden="true"></span>${escapeHtml(consultant)} <small>(${groupCount.get(consultant)})</small></button></td></tr>`);
         lastConsultant = consultant;
       }
+      if (collapsed) continue;
       rows.push(`<tr>${cols.map((col) => `<td${riskColumnStyle(col.id)}>${col.render(c)}</td>`).join('')}</tr>`);
     }
     $('risk-grid').innerHTML = `<table class="risk-table"><thead><tr>${header}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+    const allCollapsed = groupCount.size > 0 && [...groupCount.keys()].every((g) => riskCollapsedGroups.has(g));
+    const toggleAll = $('risk-groups-toggle');
+    if (toggleAll) {
+      toggleAll.textContent = allCollapsed ? '⊞ Expandir todos' : '⊟ Recolher todos';
+      toggleAll.dataset.action = allCollapsed ? 'expand' : 'collapse';
+      toggleAll.hidden = groupCount.size === 0;
+    }
+  }
+
+  // Grupos (consultores) recolhidos no Radar de Chamados. Fica so no
+  // navegador, como a organizacao das colunas.
+  const RISK_GROUPS_KEY = 'iaservice.radarGruposRecolhidos';
+  let riskCollapsedGroups = (() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(RISK_GROUPS_KEY) || '[]');
+      return new Set(Array.isArray(saved) ? saved.filter((g) => typeof g === 'string') : []);
+    } catch (_) { return new Set(); }
+  })();
+
+  function saveRiskCollapsedGroups() {
+    try { localStorage.setItem(RISK_GROUPS_KEY, JSON.stringify([...riskCollapsedGroups])); } catch (_) { /* opcional */ }
+  }
+
+  function toggleRiskGroup(name) {
+    if (riskCollapsedGroups.has(name)) riskCollapsedGroups.delete(name); else riskCollapsedGroups.add(name);
+    saveRiskCollapsedGroups();
+    renderRisk();
+    $('risk-grid').querySelector(`[data-group-toggle="${CSS.escape(name)}"]`)?.focus();
+  }
+
+  function toggleAllRiskGroups(action) {
+    const visible = [...new Set([...$('risk-grid').querySelectorAll('[data-group-toggle]')].map((b) => b.dataset.groupToggle))];
+    visible.forEach((g) => (action === 'expand' ? riskCollapsedGroups.delete(g) : riskCollapsedGroups.add(g)));
+    saveRiskCollapsedGroups();
+    renderRisk();
   }
 
   // Colunas do Radar de Chamados. A ordem desta lista e o padrao; cada usuario
@@ -1912,6 +1952,12 @@
     // Radar de Chamados lista todos os chamados: cabecalho e descricao do
     // chamado selecionado nao se aplicam e so tomam espaco da grade.
     $('case-view').classList.toggle('modo-radar', panel === 'risk');
+    // O Radar nao depende de chamado selecionado: sem chamado aberto, mostra a
+    // area do Radar no lugar do "Selecione um chamado" (antes ficava vazia).
+    if (!state.selected) {
+      $('case-view').hidden = panel !== 'risk';
+      $('empty-state').hidden = panel === 'risk';
+    }
     // No Radar a Fila tambem recolhe (o Resumo ja recolhe acima), para a grade
     // usar a largura toda. Nao grava preferencia: ao sair, volta ao que o
     // usuario deixou salvo.
@@ -2145,9 +2191,12 @@
     $('risk-grid').addEventListener('click', (event) => {
       const open = event.target.closest('[data-open-url]');
       if (open) return openAttachment(open.dataset.openUrl);
+      const group = event.target.closest('[data-group-toggle]');
+      if (group) return toggleRiskGroup(group.dataset.groupToggle);
       const btn = event.target.closest('[data-ticket-id]');
       if (btn) selectTicket(btn.dataset.ticketId);
     });
+    $('risk-groups-toggle').addEventListener('click', (event) => toggleAllRiskGroups(event.currentTarget.dataset.action));
     bindRiskColumns();
     $('evidence-content').addEventListener('click', (event) => {
       const open = event.target.closest('[data-open-url]');
@@ -2203,7 +2252,13 @@
       state.riskConsultant = btn.dataset.consultantId;
       renderRisk();
     });
-    $('toggle-risk-consultants').addEventListener('click', () => $('risk-layout').classList.toggle('consultants-collapsed'));
+    $('toggle-risk-consultants').addEventListener('click', (event) => {
+      const collapsed = $('risk-layout').classList.toggle('consultants-collapsed');
+      const btn = event.currentTarget;
+      btn.textContent = collapsed ? '⇥' : '⇤';
+      btn.title = collapsed ? 'Expandir lista de consultores' : 'Recolher lista de consultores';
+      btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    });
     // Fila recolhivel (desktop): espelha o recolher do painel direito; a escolha fica salva.
     const aplicarFilaRecolhida = (recolhida) => {
       $('radar-layout').classList.toggle('queue-collapsed', recolhida);

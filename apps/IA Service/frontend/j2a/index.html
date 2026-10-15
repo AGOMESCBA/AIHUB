@@ -303,6 +303,7 @@
                   <option value="Aguardando Fornecedor">Aguardando Fornecedor</option>
                 </select>
                 <input id="risk-search" type="search" placeholder="Buscar por número, cliente, usuário...">
+                <button type="button" class="risk-groups-toggle" id="risk-groups-toggle" title="Recolher ou expandir os chamados de todos os consultores" hidden>⊟ Recolher todos</button>
                 <details class="risk-columns" id="risk-columns-menu">
                   <summary title="Organizar colunas da grade">Colunas</summary>
                   <div class="risk-columns-panel">
@@ -316,7 +317,7 @@
                 <aside class="risk-consultants-wrap">
                   <div class="risk-consultants-head">
                     <span>Consultores</span>
-                    <button id="toggle-risk-consultants" class="icon-button ghost-icon" title="Recolher lista">⇤</button>
+                    <button id="toggle-risk-consultants" class="icon-button ghost-icon" type="button" title="Recolher lista de consultores" aria-expanded="true">⇤</button>
                   </div>
                   <div class="risk-consultants" id="risk-consultants"></div>
                 </aside>

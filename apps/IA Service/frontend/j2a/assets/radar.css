@@ -1280,8 +1280,13 @@ button.loading .loader { display: block; }
   grid-template-columns: 240px 1fr;
   gap: 0;
 }
-.risk-layout.consultants-collapsed { grid-template-columns: 0 1fr; }
-.risk-layout.consultants-collapsed .risk-consultants-wrap { display: none; }
+/* Lista de consultores recolhida: vira um trilho com o botao de reabrir
+   (antes sumia inteira, levando o botao junto, e a grade ia para uma coluna
+   de largura zero). */
+.risk-layout.consultants-collapsed { grid-template-columns: 44px 1fr; }
+.risk-layout.consultants-collapsed .risk-consultants { display: none; }
+.risk-layout.consultants-collapsed .risk-consultants-head { flex-direction: column-reverse; justify-content: flex-end; gap: 12px; padding: 9px 0; border-bottom: 0; }
+.risk-layout.consultants-collapsed .risk-consultants-head span { writing-mode: vertical-rl; transform: rotate(180deg); }
 .risk-consultants-wrap { min-height: 0; display: grid; grid-template-rows: auto 1fr; border-right: 1px solid var(--line); background: var(--panel-2); }
 .risk-consultants-head {
   display: flex;
@@ -1341,6 +1346,60 @@ button.loading .loader { display: block; }
 .col-resizer { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; touch-action: none; }
 .col-resizer:hover, .col-resizing .col-resizer:active { background: rgba(0, 107, 214, .35); }
 body.col-resizing { cursor: col-resize; user-select: none; }
+
+/* Grupos por consultor recolhiveis (+ / −) */
+.risk-table .group-row td { padding: 0; }
+.risk-table .group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 900;
+  text-align: left;
+  cursor: pointer;
+}
+.risk-table .group-toggle:hover { background: rgba(0, 168, 132, .08); }
+.risk-table .group-toggle:focus-visible { outline: 2px solid var(--brand-2); outline-offset: -2px; }
+.risk-table .group-toggle small { color: var(--muted); font-weight: 700; }
+/* Sinal desenhado (− expandido / + recolhido), centralizado em qualquer fonte. */
+.group-sign {
+  position: relative;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+}
+.group-sign::before, .group-sign::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+}
+.group-sign::before { width: 8px; height: 2px; }
+.group-sign::after { width: 2px; height: 8px; display: none; }
+.group-row.collapsed .group-sign::after { display: block; }
+.risk-groups-toggle {
+  flex: none;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-3);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.risk-groups-toggle:hover { border-color: var(--brand); color: var(--brand); }
+.risk-groups-toggle[hidden] { display: none; }
 
 /* Menu "Colunas" do Radar de Chamados */
 .risk-columns { position: relative; flex: none; }
@@ -1473,7 +1532,9 @@ body.col-resizing { cursor: col-resize; user-select: none; }
   .composer { padding: 10px 12px; }
   .summary-panel { grid-template-rows: auto 1fr; }
   .risk-toolbar { grid-template-columns: 1fr; }
-  .risk-layout { grid-template-columns: 1fr; min-height: 360px; }
+  .risk-layout, .risk-layout.consultants-collapsed { grid-template-columns: 1fr; min-height: 360px; }
+  .risk-layout.consultants-collapsed .risk-consultants-head { flex-direction: row; justify-content: space-between; padding: 9px 12px; }
+  .risk-layout.consultants-collapsed .risk-consultants-head span { writing-mode: horizontal-tb; transform: none; }
   .risk-consultants { max-height: 180px; border-right: 0; border-bottom: 1px solid var(--line); }
   .mobile-nav {
     position: sticky;
