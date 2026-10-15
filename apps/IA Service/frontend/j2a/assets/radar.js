@@ -665,6 +665,8 @@
   function atualizarRotuloFila(ticket) {
     const el = $('queue-rail-label');
     if (el) el.textContent = ticket?.numero ? `#${ticket.numero} · Fila` : 'Fila de chamados';
+    const resumo = $('summary-rail-label');
+    if (resumo) resumo.textContent = ticket?.numero ? `#${ticket.numero} · Resumo` : 'Resumo da investigação';
   }
 
   function syncBotoesAcao() {
@@ -1948,6 +1950,11 @@
     try { if (localStorage.getItem('iaservice.filaRecolhida') === '1') $('radar-layout').classList.add('queue-collapsed'); } catch (_) { /* opcional */ }
     $('toggle-queue-btn').addEventListener('click', () => aplicarFilaRecolhida(true));
     $('queue-reopen-rail').addEventListener('click', () => aplicarFilaRecolhida(false));
+    $('collapse-summary-btn')?.addEventListener('click', () => {
+      const layout = $('radar-layout');
+      layout.classList.remove('summary-auto-collapsed');
+      layout.classList.add('summary-collapsed');
+    });
     $('summary-reopen-rail').addEventListener('click', () => {
       $('radar-layout').classList.remove('summary-collapsed', 'summary-auto-collapsed');
     });
