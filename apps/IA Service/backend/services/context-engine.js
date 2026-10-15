@@ -148,6 +148,63 @@ function _extrairProblemaPrincipal({ atendimento, mensagens, mensagemAtual }) {
   return _compactarTexto(base, 340) || 'nao identificado';
 }
 
+// Verbos de entrega de correcao (flexionados). O texto ja vem normalizado
+// (sem acento, minusculo). Sao SINAIS para o quadro heuristico — o modelo
+// continua interpretando o historico original (ver _formatarQuadroInvestigativo).
+const _VERBOS_ENTREGA = 'aplicad\\w*|realizad\\w*|implantad\\w*|disponibilizad\\w*|enviad\\w*|entregue\\w*|liberad\\w*|publicad\\w*';
+const _RE_SUBSTANTIVO_CORRECAO = /\b(correc(?:ao|oes)|ajustes?|patch(?:es|s)?|pontos? de entrada|alterac(?:ao|oes))\b/;
+const _RE_ENTREGA = new RegExp(`\\b(?:${_VERBOS_ENTREGA})\\b`);
+const _RE_ENTREGA_PRODUCAO = new RegExp(
+  `\\b(?:${_VERBOS_ENTREGA})\\s+(?:\\w+\\s+){0,3}(?:em|no|na)\\s+(?:ambiente\\s+(?:de\\s+)?)?producao\\b`
+  + `|\\b(?:em|no)\\s+(?:ambiente\\s+(?:de\\s+)?)?producao\\s+(?:\\w+\\s+){0,2}(?:${_VERBOS_ENTREGA})\\b`
+  + `|\\b(?:esta|estao|foi|foram)\\s+(?:\\w+\\s+){0,2}em\\s+producao\\b`);
+const _RE_ALVO_ENTREGA = '(?:\\s+(?:em|no|na|para|ao)\\s+(?:o\\s+|a\\s+)?(?:ambiente\\s+(?:de\\s+)?)?\\w+)?';
+
+/**
+ * Remove do texto os trechos que NAO afirmam entrega concluida: perguntas,
+ * acoes futuras ("serao aplicados em producao"), negacoes ("nao foi aplicado")
+ * e espera de entrega. Evita tratar simples mencoes como correcao concluida.
+ */
+function _trechosAfirmativos(norm) {
+  return String(norm || '')
+    .replace(/[^.!?\n]*\?/g, ' ')
+    .replace(new RegExp(`\\b(?:serao|sera|vai|vao|vamos|iremos|ira|pretend\\w*|previst\\w*|a ser|para ser|podera\\w*|poderao)\\s+(?:\\w+\\s+){0,2}(?:${_VERBOS_ENTREGA})${_RE_ALVO_ENTREGA}`, 'g'), ' ')
+    .replace(new RegExp(`\\bnao\\s+(?:\\w+\\s+){0,3}(?:${_VERBOS_ENTREGA})${_RE_ALVO_ENTREGA}`, 'g'), ' ')
+    .replace(/\b(?:ainda\s+)?(?:pendente|aguardando|aguardam|aguarda|falta)\s+(?:de\s+)?(?:\w+\s+){0,2}(?:aplicac\w+|implantac\w+|envio|liberac\w+)\b/g, ' ');
+}
+
+/** 'producao' | 'homologacao' | 'nao_informado' — onde a correcao foi entregue. */
+function _ambienteDaCorrecao(afirmativo) {
+  if (_RE_ENTREGA_PRODUCAO.test(afirmativo)) return 'producao';
+  if (/\b(hmg\w*|homolog\w*|ambiente de teste)\b/.test(afirmativo)) return 'homologacao';
+  return 'nao_informado';
+}
+
+/**
+ * Numeros de chamado explicitamente citados no historico (ex.: "chamado 035988",
+ * "#035988"). Retorna so referencias — nao consulta nem carrega os chamados.
+ */
+function _extrairChamadosCitados(mensagens, { numeroAtual = null, max = 8 } = {}) {
+  const pad = n => String(n).padStart(6, '0');
+  const atual = numeroAtual ? pad(String(numeroAtual).replace(/\D/g, '')) : null;
+  const re = /\b(?:chamado|ticket|fsw|protocolo)\s*(?:n(?:umero|[oº°.])?\s*)?#?\s*(\d{4,7})\b|#(\d{4,7})\b|\b(0\d{5})\b/gi;
+  const mapa = new Map();
+  (mensagens || []).forEach((m, idx) => {
+    if (m.papel === 'assistant') return;
+    const texto = String(m.conteudo || '');
+    for (const hit of texto.matchAll(re)) {
+      const bruto = hit[1] || hit[2] || hit[3];
+      const numero = pad(bruto);
+      if (numero === atual) continue;
+      const trecho = _compactarTexto(texto.slice(Math.max(0, hit.index - 60), hit.index + hit[0].length + 80), 180);
+      const atualItem = mapa.get(numero);
+      if (atualItem) { atualItem.mencoes++; continue; }
+      mapa.set(numero, { numero, mencoes: 1, origem: `mensagem:${idx + 1}`, criadoEm: m.criadoEm || null, trecho });
+    }
+  });
+  return [...mapa.values()].slice(0, max);
+}
+
 function _coletarAcoesOperacionais(mensagens) {
   const acoes = [];
   const historico = (mensagens || []).map((m, idx) => ({
@@ -183,10 +240,17 @@ function _coletarAcoesOperacionais(mensagens) {
       const execucaoConfirmada = /\b(encaminh|abert[ao]|aberta|aberto|ticket)\w*/.test(m.norm);
       acoes.push(item('encaminhamento_terceiro', execucaoConfirmada ? 'executada_ou_em_andamento' : 'solicitada'));
     }
-    if (/\b(corre[cç][aã]o|ajuste|ponto de entrada|alterac[aã]o)\b/.test(m.norm) && /\b(aplicad|realizad|implantad|produ[cç][aã]o)\b/.test(m.norm)) {
-      acoes.push(item('correcao_aplicada', 'informada'));
+    // Flexões (plural/feminino) contam: "ajustes", "realizados", "testes" — a regex
+    // exata deixava o estado cair em "encaminhado_fabrica" (caso #036287).
+    // Perguntas, futuro ("serao aplicados em producao") e negacao nao afirmam
+    // entrega; o ambiente (homologacao/producao) acompanha a acao.
+    const afirmativo = _trechosAfirmativos(m.norm);
+    if (_RE_SUBSTANTIVO_CORRECAO.test(afirmativo) && (_RE_ENTREGA.test(afirmativo) || _RE_ENTREGA_PRODUCAO.test(afirmativo))) {
+      const a = item('correcao_aplicada', 'informada');
+      a.ambiente = _ambienteDaCorrecao(afirmativo);
+      acoes.push(a);
     }
-    if (/\b(validac[aã]o|validar|teste|homolog)\b/.test(m.norm) && /\b(enviand|aguard|confirm|solicit)\w*/.test(m.norm)) {
+    if (/\b(validac[aã]o|validar|testes?|homolog\w*|hmg\w*)\b/.test(m.norm) && /\b(enviad|enviand|aguard|confirm|solicit)\w*/.test(m.norm)) {
       acoes.push(item('validacao', /\b(aguard|confirm)\w*/.test(m.norm) ? 'pendente' : 'solicitada'));
     }
     if (/\b(compil|fonte|rpo|atualiza[cç][aã]o)\b/.test(m.norm) && /\b(pendente|aguard|falta|erro|falh)\w*/.test(m.norm)) {
@@ -203,7 +267,7 @@ function _definirEstadoOperacional(acoes, pendenciaConsolidada) {
   const temCorrecao = !!ultima('correcao_aplicada');
   const validacao = ultima('validacao');
   const temValidacaoPendente = !!validacao && /pendente|solicitada/.test(validacao.status);
-  if (temCorrecao && temValidacaoPendente) return 'correcao_aplicada_pendente_validacao';
+  if (temCorrecao && (temValidacaoPendente || pendenciaConsolidada?.responsavel === 'cliente')) return 'correcao_aplicada_pendente_validacao';
   if (temCorrecao) return 'correcao_aplicada_sem_validacao_comprovada';
   if (temValidacaoPendente) return 'validacao_solicitada_ou_aguardando_confirmacao';
   if (ordenadas.some(a => a.tipo === 'encaminhamento_fabrica' && /executada|andamento/.test(a.status))) return 'encaminhado_fabrica_em_andamento';
@@ -349,7 +413,7 @@ function _avaliarSustentacaoInterna(selecionadosEfetivos, evidencias) {
   };
 }
 
-function _montarQuadroInvestigativo({ atendimento, mensagens, mensagemAtual, selecionadosEfetivos, omitidos = [], pesquisaSelecionada, pendenciaConsolidada, chamado = null }) {
+function _montarQuadroInvestigativo({ atendimento, mensagens, mensagemAtual, selecionadosEfetivos, omitidos = [], pesquisaSelecionada, pendenciaConsolidada, chamado = null, resolverChamado = null }) {
   const problemaPrincipal = _extrairProblemaPrincipal({ atendimento, mensagens, mensagemAtual });
   const dominioPrincipal = _dominiosPrincipais(
     problemaPrincipal,
@@ -367,6 +431,17 @@ function _montarQuadroInvestigativo({ atendimento, mensagens, mensagemAtual, sel
     .slice(0, 12);
 
   const correcoesAplicadas = acoes.filter(a => a.tipo === 'correcao_aplicada');
+  const ambienteCorrecao = correcoesAplicadas.length
+    ? (correcoesAplicadas[correcoesAplicadas.length - 1].ambiente || 'nao_informado')
+    : null;
+  // Referencias a outros chamados citados no historico: so numero + trecho (e,
+  // quando resolvivel localmente, titulo/situacao). Nao carrega o historico deles.
+  const chamadosCitados = _extrairChamadosCitados(mensagens, { numeroAtual: atendimento?.referenciaExterna || chamado?.numero })
+    .map((c) => {
+      let info = null;
+      try { info = resolverChamado ? resolverChamado(c.numero) : null; } catch (_) { info = null; }
+      return info ? { ...c, titulo: info.titulo || null, situacao: info.situacao || null, aguardando: info.aguardando || null } : c;
+    });
   const pendencias = [];
   if (pendenciaConsolidada) {
     pendencias.push({
@@ -402,7 +477,13 @@ function _montarQuadroInvestigativo({ atendimento, mensagens, mensagemAtual, sel
   const pendenciaExternaAtiva = ESTADOS_PENDENCIA_EXTERNA.has(estadoOperacional);
   const acoesCandidatas = [];
   if (estadoOperacional === 'correcao_aplicada_pendente_validacao' || estadoOperacional === 'correcao_aplicada_sem_validacao_comprovada') {
-    acoesCandidatas.push('Validar a correcao aplicada no fluxo afetado e confirmar se o sintoma original foi eliminado.');
+    if (ambienteCorrecao === 'homologacao') {
+      acoesCandidatas.push('Correcao disponibilizada em homologacao: obter do cliente o resultado do teste do cenario original (incluindo o caso que gerava o sintoma) antes de liberar para producao.');
+    } else if (ambienteCorrecao === 'producao') {
+      acoesCandidatas.push('Correcao informada em producao: validar no fluxo afetado e confirmar se o sintoma original foi eliminado.');
+    } else {
+      acoesCandidatas.push('Validar a correcao aplicada no fluxo afetado e confirmar se o sintoma original foi eliminado.');
+    }
   } else if (ESTADOS_PENDENCIA_EXTERNA.has(estadoOperacional)) {
     // A pendencia externa continua registrada como fato operacional, mas nao e
     // a unica acao possivel: verificacoes internas entram quando ha evidencia
@@ -442,6 +523,8 @@ function _montarQuadroInvestigativo({ atendimento, mensagens, mensagemAtual, sel
     acoesExecutadas: acoes.filter(a => /executada|informada/.test(a.status)).slice(0, 8),
     acoesSolicitadasOuPlanejadas: acoes.filter(a => /solicitada|andamento|pendente/.test(a.status)).slice(0, 8),
     correcoesAplicadas,
+    ambienteCorrecao,
+    chamadosCitados,
     correcoesPendentesValidacao: correcoesAplicadas.length && /validacao|sem_validacao/.test(estadoOperacional)
       ? correcoesAplicadas.map(a => ({ evidencia: a.evidencia, origem: a.origem }))
       : [],
@@ -489,6 +572,18 @@ function _formatarQuadroInvestigativo(quadro) {
   }
   if (quadro.acoesSolicitadasOuPlanejadas?.length) {
     linhas.push(`Acoes solicitadas/planejadas/pendentes: ${quadro.acoesSolicitadasOuPlanejadas.map(a => `${a.tipo} (${a.status}; fonte ${a.origem})`).join('; ')}.`);
+  }
+  if (quadro.ambienteCorrecao && quadro.correcoesAplicadas?.length) {
+    const rot = {
+      homologacao: 'disponibilizada em HOMOLOGACAO (sem evidencia de implantacao em producao)',
+      producao: 'informada em PRODUCAO',
+      nao_informado: 'ambiente nao informado',
+    }[quadro.ambienteCorrecao];
+    linhas.push(`Ultima correcao informada: ${rot}.`);
+  }
+  if (quadro.chamadosCitados?.length) {
+    const itens = quadro.chamadosCitados.map(c => `#${c.numero}${c.titulo ? ` "${c.titulo}"` : ''}${c.situacao ? ` [${c.situacao}${c.aguardando ? `; ${c.aguardando}` : ''}]` : ''} citado em ${c.origem} ("${c.trecho}")`);
+    linhas.push(`Chamados citados no historico (referencias; NAO foram consultados): ${itens.join('; ')}. Se o vinculo for relevante, reconheca-o na resposta e sugira consultar o chamado citado; nao presuma o conteudo dele.`);
   }
   if (quadro.correcoesPendentesValidacao?.length) {
     linhas.push(`Correcoes pendentes de validacao: ${quadro.correcoesPendentesValidacao.map(c => `${c.origem}: ${c.evidencia}`).join('; ')}.`);
@@ -1138,6 +1233,13 @@ function montarContextoInvestigacao({
     pesquisaSelecionada,
     pendenciaConsolidada,
     chamado,
+    // Resolve so titulo/situacao do chamado citado na base local (1 SELECT por
+    // numero, no maximo 8). Nao carrega historico nem consulta a origem.
+    resolverChamado: (numero) => {
+      const c = require('../repositories/chamado-repository')
+        .getChamadoPorNumero(atendimento.empresaId, numero, atendimento.origem || chamado?.sistemaOrigem || 'softexpert');
+      return c ? { titulo: c.titulo, situacao: c.statusEncerramento, aguardando: c.aguardandoConsolidado } : null;
+    },
   });
 
   // Indice transitorio (nao persistido) dos tokens presentes no texto ENVIADO
@@ -1257,4 +1359,4 @@ function montarContextoInvestigacao({
   };
 }
 
-module.exports = { montarContextoInvestigacao, _termos, _janelaLinhasRelevantes, _selecionarPesquisaExterna, _montarQuadroInvestigativo };
+module.exports = { montarContextoInvestigacao, _termos, _janelaLinhasRelevantes, _selecionarPesquisaExterna, _montarQuadroInvestigativo, _formatarQuadroInvestigativo, _extrairChamadosCitados };
