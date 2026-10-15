@@ -13,6 +13,7 @@ const investigacaoService = require('./investigacao-service');
 const anexosSoftExpertService = require('./anexos-softexpert-service');
 const anexoRepo = require('../repositories/anexo-repository');
 const turnoLockService = require('./turno-lock-service');
+const pendenciaExternaGate = require('./pendencia-externa-gate');
 const { getDB } = require('../database');
 
 const SISTEMA_ORIGEM_PADRAO = 'softexpert';
@@ -444,7 +445,13 @@ function iniciarAnalise(empresaId, chamadoId, { usuarioIdIahub, consultorId, pre
   if (!chamado) throw new Error('Chamado não encontrado.');
 
   const consultor = _resolverConsultorDaAbertura(empresaId, { usuarioIdIahub, consultorId });
-  const preAnaliseLigada = _preAnaliseHabilitada(consultor, preAnaliseAutomatica);
+  // Chamado encerrado na origem: abre so para consulta (historico), sem pre-analise
+  // automatica nem qualquer chamada de IA.
+  const somenteLeitura = chamado.statusEncerramento === 'Encerrado';
+  // Aguardando retorno do Cliente/Fornecedor: a pre-analise automatica nao roda
+  // (sem gasto de tokens); o botao Pesquisar e o chat seguem disponiveis.
+  const pendenciaExterna = pendenciaExternaGate.classificarPendencia(chamado).externa;
+  const preAnaliseLigada = !somenteLeitura && !pendenciaExterna && _preAnaliseHabilitada(consultor, preAnaliseAutomatica);
   const posicionamentos = chamadoRepo.listarPosicionamentosDoChamado(empresaId, chamadoId);
 
   // Busca-ou-cria ATÔMICO (atendimento-repository.buscarOuCriarAtendimentoPorReferencia)
@@ -478,7 +485,7 @@ function iniciarAnalise(empresaId, chamadoId, { usuarioIdIahub, consultorId, pre
     const preAnaliseDisparada = _tentarDispararPreAnaliseEmBackground(empresaId, chamado, atendimento, {
       chamadoId, preAnaliseHabilitada: preAnaliseLigada, verificarRespostaExistente: true,
     });
-    return { atendimento, reaberto: true, preAnaliseDisparada };
+    return { atendimento, reaberto: true, preAnaliseDisparada, somenteLeitura, chamado: radarRepo.getChamadoDetalhe(empresaId, chamadoId) };
   }
 
   _gravarHistoricoComoMensagens(empresaId, atendimento.id, chamado, posicionamentos, usuarioIdIahub);
@@ -496,7 +503,7 @@ function iniciarAnalise(empresaId, chamadoId, { usuarioIdIahub, consultorId, pre
     chamadoId, preAnaliseHabilitada: preAnaliseLigada, verificarRespostaExistente: false,
   });
 
-  return { atendimento, reaberto: false, preAnaliseDisparada };
+  return { atendimento, reaberto: false, preAnaliseDisparada, somenteLeitura, chamado: radarRepo.getChamadoDetalhe(empresaId, chamadoId) };
 }
 
 module.exports = {

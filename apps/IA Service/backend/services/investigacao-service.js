@@ -555,9 +555,28 @@ async function _classificarTurno(texto, { keys, cfg }) {
  * IA que analise o que já está no histórico. `texto` vira uma instrução
  * fixa, não uma mensagem do analista.
  */
+function _garantirChamadoNaoEncerrado(empresaId, atendimento) {
+  let encerrado = false;
+  try {
+    const chamado = atendimento.referenciaExterna
+      ? chamadoRepo.getChamadoPorNumero(empresaId, atendimento.referenciaExterna, atendimento.origem)
+      : null;
+    encerrado = chamado?.statusEncerramento === 'Encerrado';
+  } catch (_) { encerrado = false; }
+  if (encerrado) {
+    const err = new Error('Chamado encerrado: a conversa está disponível apenas para consulta (sem interação nem pesquisa).');
+    err.status = 409;
+    err.codigo = 'CHAMADO_ENCERRADO';
+    throw err;
+  }
+}
+
 async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anexoIds = [], automatico = false, anexosComoContexto = false, forcarPesquisa = false, analistaAtualNome = null, origemAcao: origemAcaoInformada = null }) {
   const atendimento = mensagemService.getAtendimento(empresaId, atendimentoId);
   if (!atendimento) throw new Error('Atendimento não encontrado nesta empresa.');
+  // Chamado encerrado na origem: somente consulta — nenhuma interacao, pesquisa
+  // ou chamada de IA (vale para botao, texto livre e pre-analise automatica).
+  _garantirChamadoNaoEncerrado(empresaId, atendimento);
   // Origem EFETIVA da ação (botao_pesquisar | texto_livre | automatico): gravada
   // com a mensagem do analista e usada pelo gate de pesquisa externa.
   const origemAcao = pendenciaExternaGate.resolverOrigemAcao({ origemAcao: origemAcaoInformada, automatico, forcarPesquisa });

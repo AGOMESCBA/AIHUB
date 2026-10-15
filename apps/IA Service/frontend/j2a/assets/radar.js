@@ -646,10 +646,26 @@
   // atendimento que esta na tela esta em state.processing. Antes, setBusy
   // mexia no botao global e o spinner de um chamado vazava para o outro,
   // bloqueando pesquisas paralelas em chamados diferentes.
+  // Chamado encerrado: consulta apenas — sem enviar mensagem, anexar nem pesquisar
+  // (o backend tambem recusa: 409 CHAMADO_ENCERRADO).
+  function aplicarModoSomenteLeitura() {
+    const ro = !!state.somenteLeitura;
+    ['message-input', 'file-input', 'send-btn'].forEach((id) => { const el = $(id); if (el) el.disabled = ro; });
+    const composer = $('composer');
+    if (composer) composer.classList.toggle('somente-leitura', ro);
+    const msg = $('message-input');
+    if (msg) msg.placeholder = ro ? 'Chamado encerrado: somente consulta.' : 'Digite sua mensagem para a IA Service...';
+    const pesquisar = $('research-btn');
+    if (pesquisar) { pesquisar.disabled = ro || pesquisar.disabled; pesquisar.title = ro ? 'Chamado encerrado: pesquisa indisponivel' : 'Pesquisar Soluções'; }
+    const aviso = $('case-readonly-banner');
+    if (aviso) aviso.hidden = !ro;
+  }
+
   function syncBotoesAcao() {
     const ocupado = !!state.atendimentoId && state.processing.has(state.atendimentoId);
     setBusy($('research-btn'), ocupado);
     setBusy($('send-btn'), ocupado, 'Enviando');
+    if (state.somenteLeitura) aplicarModoSomenteLeitura();
   }
 
   function queueWaitingLabel(chamado) {
@@ -721,8 +737,12 @@
   }
 
   async function selectTicket(id) {
-    const ticket = state.queue.find((c) => String(c.id) === String(id)) || state.risk.chamados.find((c) => String(c.id) === String(id));
+    const ticket = state.queue.find((c) => String(c.id) === String(id))
+      || state.risk.chamados.find((c) => String(c.id) === String(id))
+      || state.relatedById?.get(String(id));
     if (!ticket) return;
+    state.somenteLeitura = ticket.statusEncerramento === 'Encerrado';
+    aplicarModoSomenteLeitura();
     const atendimentoConhecido = state.atendimentoIdPorChamado.get(String(ticket.id));
     if (atendimentoConhecido) state.concluidosNaoVistos.delete(atendimentoConhecido);
     state.selected = ticket;
@@ -743,6 +763,13 @@
       await loadSoftAttachments(ticket.id);
       const open = await request(ext(`/radar/chamados/${encodeURIComponent(ticket.id)}/abrir-atendimento`), { method: 'POST' });
       state.atendimentoId = open.atendimentoId;
+      if (open.chamado) {
+        // Chamado aberto fora da fila (ex.: Base de Conhecimento): completa nomes/prazos.
+        state.selected = { ...ticket, ...open.chamado };
+        state.somenteLeitura = open.somenteLeitura === true || state.selected.statusEncerramento === 'Encerrado';
+        aplicarModoSomenteLeitura();
+        renderCaseShell();
+      }
       state.atendimentoIdPorChamado.set(String(ticket.id), open.atendimentoId);
       state.concluidosNaoVistos.delete(open.atendimentoId);
       syncBotoesAcao();
@@ -1121,6 +1148,7 @@
 
   async function sendMessage(event) {
     event.preventDefault();
+    if (state.somenteLeitura) return;
     if (!state.atendimentoId || state.processing.has(state.atendimentoId)) return;
     const textarea = $('message-input');
     const texto = textarea.value.trim();
@@ -1172,6 +1200,7 @@
   }
 
   async function researchSolutions() {
+    if (state.somenteLeitura) return;
     if (!state.atendimentoId || !state.selected || state.processing.has(state.atendimentoId)) return;
     const atendimentoId = state.atendimentoId;
     state.processing.add(atendimentoId);
@@ -1457,9 +1486,11 @@
       content.innerHTML = results || links || '<div class="empty-block">Nenhuma trilha técnica encontrada.</div>';
       return;
     }
+    state.relatedById = new Map(internal.map((r) => r.chamado || r).filter((c) => c?.id).map((c) => [String(c.id), c]));
     content.innerHTML = internal.map((r) => {
       const c = r.chamado || r;
-      return `<div class="knowledge-card"><h3>#${escapeHtml(c.numero || '')} ${escapeHtml(currentTicketTitle(c))}</h3><p>${escapeHtml(c.descricao || c.breveDescricao || '')}</p><div class="case-badges"><span class="badge">score ${escapeHtml(r.score ?? '-')}</span>${r.temSolucaoAplicada ? '<span class="badge ok">Possui solução</span>' : ''}</div></div>`;
+      const encerrado = c.statusEncerramento === 'Encerrado';
+      return `<div class="knowledge-card knowledge-card-link" data-related-id="${escapeHtml(c.id || '')}" role="button" tabindex="0" title="Abrir mensagens do chamado"><h3>#${escapeHtml(c.numero || '')} ${escapeHtml(currentTicketTitle(c))}${encerrado ? ' <span class="badge">Encerrado</span>' : ''}</h3><p>${escapeHtml(c.descricao || c.breveDescricao || '')}</p><div class="case-badges"><span class="badge">score ${escapeHtml(r.score ?? '-')}</span>${r.temSolucaoAplicada ? '<span class="badge ok">Possui solução</span>' : ''}</div></div>`;
     }).join('') || '<div class="empty-block">Nenhum chamado semelhante encontrado.</div>';
   }
 
@@ -1577,7 +1608,7 @@
       state.risk = { consultores: body.consultores || [], chamados: body.chamados || [] };
       renderRisk();
     } catch (err) {
-      $('risk-grid').innerHTML = `<div class="empty-block">Nao foi possivel carregar Risco SLA: ${escapeHtml(err.message)}</div>`;
+      $('risk-grid').innerHTML = `<div class="empty-block">Nao foi possivel carregar o Radar de Chamados: ${escapeHtml(err.message)}</div>`;
     }
   }
 
@@ -1635,7 +1666,7 @@
 
   const ROTULOS_ROTINA = {
     conversation: 'Chamados',
-    risk: 'Risco SLA',
+    risk: 'Radar de Chamados',
     evidence: 'Evidências',
     trail: 'Trilha de Investigação',
     details: 'Detalhes',
@@ -1845,6 +1876,15 @@
       const open = event.target.closest('[data-open-url]');
       if (open) openAttachment(open.dataset.openUrl);
     });
+    const abrirRelacionado = (event) => {
+      if (event.target.closest('a, [data-open-url]')) return;
+      const card = event.target.closest('[data-related-id]');
+      if (card?.dataset.relatedId) selectTicket(card.dataset.relatedId);
+    };
+    $('knowledge-content').addEventListener('click', abrirRelacionado);
+    $('knowledge-content').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); abrirRelacionado(event); }
+    });
     $('trail-content').addEventListener('click', (event) => {
       const execToggle = event.target.closest('[data-trail-toggle]');
       if (execToggle) {
@@ -1893,6 +1933,14 @@
       layout.classList.remove('summary-auto-collapsed');
       layout.classList.toggle('summary-collapsed', !collapsed);
     });
+    // Fila recolhivel (desktop): espelha o recolher do painel direito; a escolha fica salva.
+    const aplicarFilaRecolhida = (recolhida) => {
+      $('radar-layout').classList.toggle('queue-collapsed', recolhida);
+      try { localStorage.setItem('iaservice.filaRecolhida', recolhida ? '1' : '0'); } catch (_) { /* opcional */ }
+    };
+    try { if (localStorage.getItem('iaservice.filaRecolhida') === '1') $('radar-layout').classList.add('queue-collapsed'); } catch (_) { /* opcional */ }
+    $('toggle-queue-btn').addEventListener('click', () => aplicarFilaRecolhida(true));
+    $('queue-reopen-rail').addEventListener('click', () => aplicarFilaRecolhida(false));
     $('summary-reopen-rail').addEventListener('click', () => {
       $('radar-layout').classList.remove('summary-collapsed', 'summary-auto-collapsed');
     });

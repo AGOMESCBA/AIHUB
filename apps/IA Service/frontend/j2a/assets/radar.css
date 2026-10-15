@@ -1421,3 +1421,38 @@ button.loading .loader { display: block; }
 .routine-title { grid-row: 3; }
 .tab-panel { grid-row: 4; }
 #research-btn[hidden] { display: none; }
+
+/* Chamado encerrado: conversa somente para consulta */
+.readonly-banner { margin: 0 0 8px; padding: 8px 12px; border: 1px solid var(--line, #35507a); border-radius: 8px; background: rgba(255, 193, 7, 0.10); color: var(--text, #e8eefc); font-size: 13px; }
+.composer.somente-leitura { opacity: 0.55; pointer-events: none; }
+.knowledge-card-link { cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.knowledge-card-link:hover, .knowledge-card-link:focus-visible { border-color: #3b82f6; outline: none; }
+.knowledge-card-link h3 { text-decoration: underline; text-underline-offset: 3px; }
+
+/* Fila de chamados recolhivel (so desktop: no mobile a fila ja e uma tela propria). */
+.queue-reopen-rail { display: none; }
+#toggle-queue-btn { display: none; }
+@media (min-width: 901px) {
+  #toggle-queue-btn { display: inline-flex; }
+  .radar-layout.queue-collapsed { grid-template-columns: 20px minmax(420px, 1fr) 360px; }
+  .radar-layout.queue-collapsed.summary-collapsed,
+  .radar-layout.queue-collapsed.summary-auto-collapsed { grid-template-columns: 20px minmax(420px, 1fr) 0; }
+  .radar-layout.queue-collapsed .queue-panel { display: none; }
+  .radar-layout.queue-collapsed .workspace { grid-column: 2; }
+  .radar-layout.queue-collapsed .summary-panel { grid-column: 3; }
+  .radar-layout.queue-collapsed .queue-reopen-rail {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    grid-column: 1;
+    grid-row: 1;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    color: var(--muted);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+  }
+  .queue-reopen-rail:hover { color: var(--brand); background: var(--panel-2); }
+}

@@ -443,6 +443,48 @@ teste('contexto da pesquisa dispensada orienta informar a dispensa de forma natu
   assert.match(txt, /Isto nao e uma falha/);
 });
 
+// ── Chamado ENCERRADO: somente consulta (sem interacao, pesquisa nem pre-analise)
+teste('chamado encerrado: processarTurno recusa (409) em botao, texto livre e automatico, sem gravar mensagem nem chamar IA', async () => {
+  const { chamado, atendimento } = criarChamadoComAtendimento({ numero: 'ENC-1', aguardando: 'RETORNO - CLIENTE' });
+  chamadoRepo.upsertChamado(EMPRESA, { fonteId: chamado.fonteId, sistemaOrigem: 'softexpert', oidOrigem: 'OID-ENC-1', numero: 'ENC-1', titulo: 'x', statusEncerramento: 'Encerrado' });
+  const antes = mensagemRepo.listarMensagens(EMPRESA, atendimento.id).length;
+  let chamadasIA = 0;
+  const old = aiProviderClient.chamarIA;
+  aiProviderClient.chamarIA = async () => { chamadasIA++; throw new Error('nao deveria chamar IA'); };
+  try {
+    for (const opcoes of [
+      { texto: 'pesquise uma solucao', forcarPesquisa: true, origemAcao: 'botao_pesquisar' },
+      { texto: 'o que voce acha?', origemAcao: 'texto_livre' },
+      { automatico: true },
+    ]) {
+      await assert.rejects(() => investigacaoService.processarTurno(EMPRESA, atendimento.id, opcoes), (err) => err.status === 409 && err.codigo === 'CHAMADO_ENCERRADO');
+    }
+  } finally { aiProviderClient.chamarIA = old; }
+  assert.strictEqual(chamadasIA, 0);
+  assert.strictEqual(mensagemRepo.listarMensagens(EMPRESA, atendimento.id).length, antes, 'nenhuma mensagem gravada');
+});
+
+teste('chamado encerrado: iniciarAnalise abre para consulta, sem pre-analise, devolvendo detalhe do chamado', () => {
+  const radarService = require('../backend/services/radar-service');
+  const { chamado } = criarChamadoComAtendimento({ numero: 'ENC-2', aguardando: null });
+  const { chamado: c2 } = chamadoRepo.upsertChamado(EMPRESA, { fonteId: chamado.fonteId, sistemaOrigem: 'softexpert', oidOrigem: 'OID-ENC-2', numero: 'ENC-2', titulo: 'Encerrado', statusEncerramento: 'Encerrado' });
+  const r = radarService.iniciarAnalise(EMPRESA, c2.id, { preAnaliseAutomatica: true });
+  assert.strictEqual(r.somenteLeitura, true);
+  assert.strictEqual(r.preAnaliseDisparada, false, 'sem pre-analise para encerrado mesmo com a opcao ligada');
+  assert.strictEqual(r.chamado.id, c2.id);
+  assert.strictEqual(r.chamado.statusEncerramento, 'Encerrado');
+});
+
+teste('pre-analise automatica nao dispara quando o chamado aguarda cliente/fornecedor (zero tokens)', () => {
+  const radarService = require('../backend/services/radar-service');
+  for (const [numero, aguardando] of [['PRE-CLI', 'RETORNO - CLIENTE'], ['PRE-FOR', 'RETORNO - FORNECEDOR']]) {
+    const { chamado } = criarChamadoComAtendimento({ numero, aguardando });
+    const r = radarService.iniciarAnalise(EMPRESA, chamado.id, { preAnaliseAutomatica: true });
+    assert.strictEqual(r.preAnaliseDisparada, false, aguardando);
+    assert.strictEqual(r.somenteLeitura, false);
+  }
+});
+
 async function main() {
   let falhas = 0;
   for (const t of testes) {

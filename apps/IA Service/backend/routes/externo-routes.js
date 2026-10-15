@@ -202,10 +202,10 @@ module.exports = function registrarRotasExterno(app) {
 
   function iniciarAnaliseRadarExterno(req, res) {
     try {
-      const { atendimento, reaberto, preAnaliseDisparada } = radarService.iniciarAnalise(req.svcEmpresaId, req.params.chamadoId, {
+      const { atendimento, reaberto, preAnaliseDisparada, somenteLeitura, chamado } = radarService.iniciarAnalise(req.svcEmpresaId, req.params.chamadoId, {
         consultorId: req.svcConsultorExterno,
       });
-      res.status(reaberto ? 200 : 201).json({ atendimentoId: atendimento.id, reaberto, preAnaliseDisparada: !!preAnaliseDisparada });
+      res.status(reaberto ? 200 : 201).json({ atendimentoId: atendimento.id, reaberto, preAnaliseDisparada: !!preAnaliseDisparada, somenteLeitura: !!somenteLeitura, chamado });
     } catch (err) {
       _handleErro(res, err);
     }

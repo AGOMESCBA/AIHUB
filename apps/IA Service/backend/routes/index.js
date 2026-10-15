@@ -986,10 +986,10 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   function iniciarAnaliseRadar(req, res) {
     try {
       const empresaId = req.svcEmpresaId;
-      const { atendimento, reaberto, preAnaliseDisparada } = radarService.iniciarAnalise(empresaId, req.params.chamadoId, {
+      const { atendimento, reaberto, preAnaliseDisparada, somenteLeitura, chamado } = radarService.iniciarAnalise(empresaId, req.params.chamadoId, {
         usuarioIdIahub: req.session?.user_id || null,
       });
-      res.status(reaberto ? 200 : 201).json({ atendimentoId: atendimento.id, reaberto, preAnaliseDisparada: !!preAnaliseDisparada });
+      res.status(reaberto ? 200 : 201).json({ atendimentoId: atendimento.id, reaberto, preAnaliseDisparada: !!preAnaliseDisparada, somenteLeitura: !!somenteLeitura, chamado });
     } catch (err) {
       _handleErro(res, err);
     }

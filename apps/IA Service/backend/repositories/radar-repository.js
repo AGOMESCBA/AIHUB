@@ -234,4 +234,36 @@ function listarRiscoSla(empresaId, { tecnicoId, filtroRisco = 'todos', limite = 
   return { consultores, chamados };
 }
 
-module.exports = { listarFila, listarRiscoSla };
+/**
+ * Detalhe de um chamado (mesmos campos da fila, com nomes de cliente/solicitante/
+ * consultor), aberto fora da fila — ex.: chamado da Base de Conhecimento, que
+ * pode estar encerrado e nunca aparece na fila nem no Risco SLA.
+ */
+function getChamadoDetalhe(empresaId, chamadoId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const db = getDB();
+  const row = db.prepare(`
+    SELECT
+      c.id, c.numero, c.titulo, c.assunto, c.breve_descricao, c.descricao,
+      c.servico, c.tipo_chamado, c.tipo_chamado_final, c.natureza, c.nivel,
+      c.solucao_aplicada, c.avaliacao, c.total_horas,
+      c.produto, c.familia, c.modulo,
+      c.cliente_id, cl.nome AS cliente_nome, c.data_abertura,
+      c.status_encerramento, c.sla, c.sla_horas, c.sla_status, c.sla_status_final,
+      c.sla_inicial, c.sla_anterior, c.sla_prazo, c.sla_data_prev_fim, c.chamado_referencia,
+      c.kanban_id, c.kanban_key, c.kanban_atributos, c.kanban_data_inicio,
+      c.dias_dur, c.hr_dur, c.dias_dur_sup, c.dias_dur_fsw, c.dias_dur_dist, c.dias_dur_cli, c.dias_dur_ticli,
+      c.aguardando_consolidado,
+      c.solicitante_id, uc.nome AS solicitante_nome, uc.email AS solicitante_email,
+      c.tecnico_responsavel_id, t.nome AS tecnico_responsavel_nome,
+      (SELECT MAX(p.data_posicionamento) FROM posicionamentos p WHERE p.chamado_id = c.id) AS ultimo_posicionamento_em
+    FROM chamados c
+    LEFT JOIN clientes cl ON cl.id = c.cliente_id
+    LEFT JOIN usuarios_cliente uc ON uc.id = c.solicitante_id
+    LEFT JOIN tecnicos t ON t.id = c.tecnico_responsavel_id
+    WHERE c.empresa_id = ? AND c.id = ?
+  `).get(Number(empresaId), chamadoId);
+  return row ? _chamadoFilaParaDominio(row) : null;
+}
+
+module.exports = { listarFila, listarRiscoSla, getChamadoDetalhe };

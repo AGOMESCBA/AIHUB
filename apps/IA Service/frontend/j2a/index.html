@@ -111,7 +111,7 @@
         <nav class="topbar-nav" aria-label="Áreas do Radar">
           <button class="nav-item" data-panel-tab="conversation">Chamados</button>
           <button class="nav-item" data-panel-tab="details">Detalhes</button>
-          <button class="nav-item" data-panel-tab="risk">Risco SLA</button>
+          <button class="nav-item" data-panel-tab="risk">Radar de Chamados</button>
           <details class="topbar-menu more-menu">
             <summary class="nav-item">Mais</summary>
             <div class="topbar-menu-panel compact" role="menu">
@@ -166,6 +166,7 @@
             <div>
               <h2>Fila de Chamados</h2>
             </div>
+            <button id="toggle-queue-btn" class="icon-button ghost-icon" type="button" title="Recolher fila de chamados" aria-label="Recolher fila de chamados">◂</button>
           </div>
           <div class="queue-tools">
             <input id="queue-search" type="search" placeholder="Buscar por chamado, cliente ou assunto...">
@@ -213,7 +214,7 @@
           <div id="empty-state" class="empty-state">
             <div class="empty-icon">💬</div>
             <h2>Selecione um chamado</h2>
-            <p>Abra um item da fila pessoal ou da aba Risco SLA para iniciar ou continuar a investigação.</p>
+            <p>Abra um item da fila pessoal ou da aba Radar de Chamados para iniciar ou continuar a investigação.</p>
           </div>
 
           <article id="case-view" class="case-view" hidden>
@@ -253,6 +254,7 @@
             <div id="routine-title" class="routine-title" hidden></div>
 
             <section id="panel-conversation" class="tab-panel active">
+              <div id="case-readonly-banner" class="readonly-banner" hidden>Chamado encerrado: a conversa está disponível apenas para consulta. Não é possível interagir nem pesquisar.</div>
               <div id="messages" class="messages"></div>
               <form id="composer" class="composer">
                 <label class="attach-button" for="file-input" title="Anexar arquivo">📎</label>
@@ -324,6 +326,7 @@
           </div>
         </aside>
 
+        <button id="queue-reopen-rail" class="queue-reopen-rail" type="button" title="Mostrar fila de chamados" aria-label="Mostrar fila de chamados" hidden>▸</button>
         <button id="summary-reopen-rail" class="summary-reopen-rail" title="Mostrar resumo da investigação" hidden>◂</button>
       </main>
 
