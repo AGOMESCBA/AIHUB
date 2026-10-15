@@ -6,9 +6,8 @@ Sempre responda em **português do Brasil (pt-BR)**. Toda UI e mensagens de usu�
 # Projeto: Instruções de Contexto e Escopo
 
 ## Economia de Contexto e Tokens
-- `./repomix-output.xml` é um mapa compactado do código (assinaturas, sem lógica interna; ~2,5 MB, ~700 mil tokens). **Nunca ler inteiro.**
-- Para orientação: `Grep` por `<file path="...` ou por nome de função no XML e ler só a faixa do trecho encontrado.
-- Para entender ou alterar lógica: ir ao arquivo-fonte real, localizar com `Grep` e ler com `offset`/`limit` (~60–120 linhas). Não reler arquivo já presente na conversa.
+- Não há mapa pré-gerado do código. Localizar com `Grep`/`Glob` e ler com `offset`/`limit` (~60–120 linhas); não ler arquivos grandes inteiros nem reler o que já está na conversa.
+- Arquivos mais caros (muito lidos): `apps/IA Service/frontend/radar.html`, `.../services/investigacao-service.js`, `.../technical-research-service.js`, `apps/IA Command/frontend/guia/index.html`. Usar `Grep` para achar a região antes de ler.
 - Baseie suas respostas e análises de código estritamente nas tags estruturadas desse XML para evitar leituras redundantes de disco e desperdício de tokens.
 
 ---
