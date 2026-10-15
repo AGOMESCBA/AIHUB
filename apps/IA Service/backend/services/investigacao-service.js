@@ -24,6 +24,7 @@ const investigacaoDossieService = require('./investigacao-dossie-service');
 const investigacaoDossieAtualizador = require('./investigacao-dossie-atualizador-service');
 const dossieContextService = require('./dossie-context-service');
 const { redigirValor } = require('./redaction-service');
+const pendenciaExternaGate = require('./pendencia-externa-gate');
 const planoRespostaRastreavel = require('./plano-resposta-rastreavel-service');
 
 const MAX_TENTATIVAS_TIMEOUT = 2;
@@ -553,9 +554,12 @@ async function _classificarTurno(texto, { keys, cfg }) {
  * IA que analise o que já está no histórico. `texto` vira uma instrução
  * fixa, não uma mensagem do analista.
  */
-async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anexoIds = [], automatico = false, anexosComoContexto = false, forcarPesquisa = false, analistaAtualNome = null }) {
+async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anexoIds = [], automatico = false, anexosComoContexto = false, forcarPesquisa = false, analistaAtualNome = null, origemAcao: origemAcaoInformada = null }) {
   const atendimento = mensagemService.getAtendimento(empresaId, atendimentoId);
   if (!atendimento) throw new Error('Atendimento não encontrado nesta empresa.');
+  // Origem EFETIVA da ação (botao_pesquisar | texto_livre | automatico): gravada
+  // com a mensagem do analista e usada pelo gate de pesquisa externa.
+  const origemAcao = pendenciaExternaGate.resolverOrigemAcao({ origemAcao: origemAcaoInformada, automatico, forcarPesquisa });
 
   let historico;
   let mensagemUsuario = null;
@@ -572,6 +576,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
       conteudo: texto,
       usuarioId,
       origemAutor: analistaAtualNome || null,
+      origemAcao,
     });
     historico = mensagemRepo.listarMensagens(empresaId, atendimentoId)
       .filter(m => m.id !== mensagemUsuario.id); // histórico ANTERIOR a este turno
@@ -673,10 +678,41 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
         contextoResumo: { tokensEstimados: 0, degraded: true },
       };
     }
+    // Política de pesquisa externa sob pendência externa (cliente/fornecedor):
+    // decidida no backend, para pré-análise, botão e chat, antes de qualquer
+    // consulta. Não limita a conversa — só o acionamento externo. Ver
+    // pendencia-externa-gate.js. Pendência não reconhecida → comportamento atual.
+    let decisaoPesquisaExterna = null;
+    if (chamado) {
+      // Falha de infraestrutura do gate nunca bloqueia o turno nem a pesquisa:
+      // cai no comportamento atual (fail-safe).
+      try {
+        // Decide com a situacao local (aguardando_consolidado). A confirmacao na
+        // origem entra por consultarSituacaoOrigem (ponto de extensao do gate).
+        const pendencia = await pendenciaExternaGate.avaliarPendencia({
+          chamado,
+          posicionamentos: chamadoRepo.listarPosicionamentosDoChamado(empresaId, chamado.id),
+        });
+        if (pendencia.externa) {
+          const { keys: keysGate, cfg: cfgGate } = aiConfigService.resolverKeysEOrdem(empresaId);
+          decisaoPesquisaExterna = await pendenciaExternaGate.decidirPesquisaExterna({
+            pendencia, origemAcao, texto, historico,
+            chamarIA: (sys, prompt, opts) => aiProviderClient.chamarIA(keysGate, cfgGate, sys, prompt, [], opts),
+          });
+        }
+      } catch (gateErr) {
+        console.error('[IA Service] Gate de pendencia externa falhou, mantendo comportamento atual:', gateErr.message);
+        decisaoPesquisaExterna = null;
+      }
+    }
+    const pesquisaExternaBloqueada = decisaoPesquisaExterna && !decisaoPesquisaExterna.liberada
+      ? { responsavel: decisaoPesquisaExterna.pendencia.responsavel, origemAcao, motivo: decisaoPesquisaExterna.motivo }
+      : null;
     const pesquisa = await technicalResearchService.pesquisar({
       empresaId,
       atendimentoId,
       chamado,
+      ...(pesquisaExternaBloqueada ? { pesquisaExternaBloqueada } : {}),
       atendimento,
       mensagens: historico,
       anexos: anexosTextoParaPesquisa,
@@ -688,7 +724,10 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
       // investigative-discipline-service.aplicarDisciplinaPesquisa). Só é
       // true quando o caller explicitamente pede reexecução; nunca setado em
       // turnos automáticos.
-      forcarPesquisa,
+      // Pedido de investigação externa reconhecido semanticamente sob pendência
+      // externa (gate) tem a mesma garantia de um pedido explícito: o analista
+      // pediu de propósito, não deve cair em dedup/atalhos de "sem novidade".
+      forcarPesquisa: forcarPesquisa || !!(decisaoPesquisaExterna?.liberada && decisaoPesquisaExterna.chamadaIA),
       // Etapa 4B (disciplina investigativa) existia implementada e testada
       // isoladamente, mas nunca conectada ao fluxo real — nenhum atendimento
       // de produção jamais chamou com esse flag (achado real, Caso #001,
@@ -704,8 +743,25 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
       // OpenAI reaproveitando a chave de IA já cadastrada da empresa).
       searchConfig: aiConfigService.resolverConfigPesquisa(empresaId),
     });
+    if (decisaoPesquisaExterna) {
+      // Trilha: motivo de pesquisar OU dispensar a pesquisa externa.
+      pesquisa.decisaoPendenciaExterna = {
+        liberada: decisaoPesquisaExterna.liberada,
+        motivo: decisaoPesquisaExterna.motivo,
+        origemAcao,
+        responsavel: decisaoPesquisaExterna.pendencia.responsavel,
+        classificadorUsouIA: decisaoPesquisaExterna.chamadaIA,
+        fonteSituacao: decisaoPesquisaExterna.pendencia.fonteSituacao || null,
+        situacaoConsiderada: decisaoPesquisaExterna.pendencia.valor || null,
+        situacaoLocal: decisaoPesquisaExterna.pendencia.situacaoLocal || null,
+        situacaoOrigem: decisaoPesquisaExterna.pendencia.situacaoOrigem || null,
+      };
+    }
     pesquisaTecnica = pesquisa;
-    pesquisaTecnicaTexto = technicalResearchService.formatarContextoParaPrompt(pesquisa, relacionados);
+    pesquisaTecnicaTexto =technicalResearchService.formatarContextoParaPrompt(pesquisa, relacionados);
+    if (pesquisaExternaBloqueada) {
+      pesquisaTecnicaTexto += `\n\n${pendenciaExternaGate.instrucaoParaPrompt(decisaoPesquisaExterna)}`;
+    }
   } catch (err) {
     pesquisaTecnicaTexto = [
       '## Pesquisa técnica assistida',

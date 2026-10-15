@@ -1049,7 +1049,7 @@
       const anexoIds = await uploadPendingFiles(atendimentoId);
       const body = await request(ext(`/atendimentos/${encodeURIComponent(atendimentoId)}/investigar`), {
         method: 'POST',
-        body: JSON.stringify({ texto: texto || 'Analise os anexos enviados.', anexoIds, anexosComoContexto: anexoIds.length > 0 }),
+        body: JSON.stringify({ texto: texto || 'Analise os anexos enviados.', anexoIds, anexosComoContexto: anexoIds.length > 0, origemAcao: 'texto_livre' }),
       });
       textarea.value = '';
       state.pendingFiles = [];
@@ -1109,6 +1109,7 @@
           anexoIds,
           anexosComoContexto: true,
           forcarPesquisa: true,
+          origemAcao: 'botao_pesquisar',
         }),
       });
       state.trilhaExpandida = new Set();

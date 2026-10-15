@@ -762,7 +762,7 @@
       try {
         const resposta = await api(`/api/ia-service/atendimentos/${atendimentoId}/investigar?empresa_id=${empresaId}`, {
           method: 'POST',
-          body: JSON.stringify({ texto, anexoIds: anexosDoTurno.map(a => a.id) }),
+          body: JSON.stringify({ texto, anexoIds: anexosDoTurno.map(a => a.id), origemAcao: 'texto_livre' }),
         });
         hideTyping();
         _mensagensCarregadas.set(resposta.id, resposta);

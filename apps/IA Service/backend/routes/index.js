@@ -364,7 +364,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       return res.status(409).json({ error: 'Este atendimento já está processando uma investigação. Aguarde a resposta atual.' });
     }
     try {
-      const { texto, anexoIds, anexosComoContexto, forcarPesquisa } = req.body || {};
+      const { texto, anexoIds, anexosComoContexto, forcarPesquisa, origemAcao } = req.body || {};
       if (!texto || !String(texto).trim()) {
         return res.status(400).json({ error: 'texto é obrigatório.' });
       }
@@ -375,6 +375,9 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
         anexoIds: Array.isArray(anexoIds) ? anexoIds : [],
         anexosComoContexto: anexosComoContexto === true,
         forcarPesquisa: forcarPesquisa === true,
+        // Origem EXPLICITA da acao (botao_pesquisar | texto_livre): preservada ate o gate
+        // de pesquisa externa; valor invalido e ignorado la (nunca confiado cegamente).
+        origemAcao: typeof origemAcao === 'string' ? origemAcao : undefined,
         analistaAtualNome,
       });
       res.status(201).json(mensagemAssistente);

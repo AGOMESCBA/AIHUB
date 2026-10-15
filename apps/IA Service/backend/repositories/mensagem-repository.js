@@ -11,28 +11,37 @@ const META_AVISOS_FONTE_CORRIGIDO = '__avisosFonteCorrigido';
 // fora_de_escopo): nao veio de uma investigacao, entao nao e avaliavel como
 // pesquisa da IA. Guardado no proprio diagnostico_json (sem coluna nova).
 const META_RESPOSTA_CURTA = '__respostaCurta';
+// Origem EXPLICITA da acao que gerou a mensagem do analista ('botao_pesquisar'
+// | 'texto_livre' | 'automatico'), preservada do frontend ate o gate de
+// pesquisa externa (2026-10) — evita inferir a origem pelo texto da mensagem.
+// Mesmo padrao: dentro do diagnostico_json, sem coluna nova.
+const META_ORIGEM_ACAO = '__origemAcao';
 
 function _parseDiagnostico(json) {
-  if (!json) return { diagnostico: null, avisosFonteCorrigido: [], respostaCurta: null };
+  if (!json) return { diagnostico: null, avisosFonteCorrigido: [], respostaCurta: null, origemAcao: null };
   const parsed = JSON.parse(json);
   const avisosFonteCorrigido = Array.isArray(parsed?.[META_AVISOS_FONTE_CORRIGIDO])
     ? parsed[META_AVISOS_FONTE_CORRIGIDO]
     : [];
   const respostaCurta = typeof parsed?.[META_RESPOSTA_CURTA] === 'string' ? parsed[META_RESPOSTA_CURTA] : null;
+  const origemAcao = typeof parsed?.[META_ORIGEM_ACAO] === 'string' ? parsed[META_ORIGEM_ACAO] : null;
   if (parsed && typeof parsed === 'object') {
     delete parsed[META_AVISOS_FONTE_CORRIGIDO];
     delete parsed[META_RESPOSTA_CURTA];
+    delete parsed[META_ORIGEM_ACAO];
   }
   return {
     diagnostico: parsed && Object.keys(parsed).length ? parsed : null,
     avisosFonteCorrigido,
     respostaCurta,
+    origemAcao,
   };
 }
 
-function _serializarDiagnostico(diagnostico, avisosFonteCorrigido = [], respostaCurta = null) {
+function _serializarDiagnostico(diagnostico, avisosFonteCorrigido = [], respostaCurta = null, origemAcao = null) {
   const payload = { ...(diagnostico || {}) };
   if (respostaCurta) payload[META_RESPOSTA_CURTA] = String(respostaCurta);
+  if (origemAcao) payload[META_ORIGEM_ACAO] = String(origemAcao);
   if (Array.isArray(avisosFonteCorrigido) && avisosFonteCorrigido.length) {
     payload[META_AVISOS_FONTE_CORRIGIDO] = avisosFonteCorrigido;
   }
@@ -41,7 +50,7 @@ function _serializarDiagnostico(diagnostico, avisosFonteCorrigido = [], resposta
 
 function _rowParaDominio(row) {
   if (!row) return null;
-  const { diagnostico, avisosFonteCorrigido, respostaCurta } = _parseDiagnostico(row.diagnostico_json);
+  const { diagnostico, avisosFonteCorrigido, respostaCurta, origemAcao } = _parseDiagnostico(row.diagnostico_json);
   return {
     id: row.id,
     empresaId: row.empresa_id,
@@ -53,6 +62,7 @@ function _rowParaDominio(row) {
     diagnostico,
     avisosFonteCorrigido,
     respostaCurta,
+    origemAcao,
     nivelConfianca: row.nivel_confianca,
     provider: row.provider,
     model: row.model,
@@ -96,7 +106,7 @@ function salvarMensagem(empresaId, atendimentoId, dados) {
     dados.conteudo,
     dados.usuarioId ?? null,
     agora,
-    _serializarDiagnostico(dados.diagnostico, dados.avisosFonteCorrigido, dados.respostaCurta),
+    _serializarDiagnostico(dados.diagnostico, dados.avisosFonteCorrigido, dados.respostaCurta, dados.origemAcao),
     dados.nivelConfianca ?? null,
     dados.provider ?? null,
     dados.model ?? null,
@@ -115,12 +125,12 @@ function atualizarAvisosFonteCorrigido(empresaId, mensagemId, avisosFonteCorrigi
   const db = getDB();
   const row = db.prepare(`SELECT diagnostico_json FROM mensagens WHERE id = ? AND empresa_id = ?`).get(mensagemId, Number(empresaId));
   if (!row) throw new Error('Mensagem não encontrada nesta empresa.');
-  const { diagnostico, respostaCurta } = _parseDiagnostico(row.diagnostico_json);
+  const { diagnostico, respostaCurta, origemAcao } = _parseDiagnostico(row.diagnostico_json);
   db.prepare(`
     UPDATE mensagens
        SET diagnostico_json = ?
      WHERE id = ? AND empresa_id = ?
-  `).run(_serializarDiagnostico(diagnostico, avisosFonteCorrigido, respostaCurta), mensagemId, Number(empresaId));
+  `).run(_serializarDiagnostico(diagnostico, avisosFonteCorrigido, respostaCurta, origemAcao), mensagemId, Number(empresaId));
   return getMensagem(empresaId, mensagemId);
 }
 

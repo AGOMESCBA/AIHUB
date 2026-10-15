@@ -9,6 +9,7 @@ const safeFetch = require('./safe-web-fetch-service');
 const tokenBudget = require('./token-budget-service');
 const { redigirUrl, redigirTexto } = require('./redaction-service');
 const investigativeDiscipline = require('./investigative-discipline-service');
+const pendenciaExternaGate = require('./pendencia-externa-gate');
 const RAW_URL = Symbol('rawUrl');
 
 const STATUS_URL_REUTILIZAVEL = new Set(['lida', 'reutilizada']);
@@ -712,6 +713,27 @@ async function planejarPesquisaComSemantica(ctxBruto = {}, opts = {}) {
   return _aplicarInterpretacaoSemantica({ ...plano, preAnalise: pre }, interpretacao, ctx);
 }
 
+function _planoPesquisaBloqueada(ctx = {}) {
+  const det = detectarDominio(ctx);
+  const bloqueio = ctx.pesquisaExternaBloqueada || {};
+  return {
+    dominio: det.dominio,
+    confianca: det.confianca,
+    devePesquisar: false,
+    motivo: `pesquisa externa dispensada: ${bloqueio.motivo || 'pendencia externa'}`,
+    objetivo: null,
+    lacunas: [],
+    consultas: [],
+    consultasDetalhadas: [],
+    consultasIgnoradas: [],
+    bloqueioPendenciaExterna: {
+      responsavel: bloqueio.responsavel || null,
+      origemAcao: bloqueio.origemAcao || null,
+      motivo: bloqueio.motivo || null,
+    },
+  };
+}
+
 function planejarPesquisa(ctx = {}) {
   const det = detectarDominio(ctx);
   const perfil = PERFIS[det.dominio] || PERFIS.generico;
@@ -1297,7 +1319,13 @@ function _normalizarOrdemPesquisa({ provedorPrimario, fallbackOrdem } = {}) {
 
 async function pesquisar(ctx = {}, { limitePorConsulta = 3, buscarSerper, buscarBing, buscarGemini, buscarOpenai, abrirResultados, forcarRefresh = false, interpretarSemantico, timeoutMsSemantico, searchConfig } = {}) {
   const inicio = Date.now();
-  const plano = await planejarPesquisaComSemantica(ctx, { interpretarSemantico, timeoutMsSemantico });
+  // Pendência externa (cliente/fornecedor): a política de pesquisa externa é
+  // decidida ANTES (pendencia-externa-gate) e chega aqui em ctx.pesquisaExternaBloqueada.
+  // Não planeja consultas nem chama a interpretação semântica (sem custo de
+  // provider) — só devolve o plano "não pesquisado" com o motivo para a trilha.
+  const plano = ctx.pesquisaExternaBloqueada
+    ? _planoPesquisaBloqueada(ctx)
+    : await planejarPesquisaComSemantica(ctx, { interpretarSemantico, timeoutMsSemantico });
   const perfil = PERFIS[plano.dominio] || PERFIS.generico;
   let resultados = [];
   let modo = 'links';
@@ -1470,7 +1498,11 @@ function formatarContextoParaPrompt(pesquisa, relacionados = []) {
     pesquisa.configurado
       ? `Busca web: ${pesquisa.modo === 'web' ? 'resultados recuperados automaticamente' : pesquisa.modo === 'nao_pesquisado' ? 'configurada, mas dispensada pelo plano investigativo' : 'configurada, sem resultados nesta tentativa'}`
       : 'Busca web: não configurada; use as consultas e links sugeridos apenas como trilha de pesquisa, não como evidência confirmada.',
-    pesquisa.modo === 'nao_pesquisado' ? 'Busca externa nao executada neste turno porque nao havia evidencia tecnica nova suficiente.' : null,
+    pesquisa.modo === 'nao_pesquisado'
+      ? (pesquisa.plano?.bloqueioPendenciaExterna
+        ? `Busca externa nao executada neste turno: chamado com pendencia externa (aguardando ${pesquisa.plano.bloqueioPendenciaExterna.responsavel || 'terceiro'}).`
+        : 'Busca externa nao executada neste turno porque nao havia evidencia tecnica nova suficiente.')
+      : null,
     pesquisa.consultasExecutadas?.length ? `Consultas executadas: ${pesquisa.consultasExecutadas.join(' | ')}` : null,
     pesquisa.consultasDeduplicadas?.length ? `Consultas deduplicadas/ignoradas: ${pesquisa.consultasDeduplicadas.map(c => `${c.consulta} (${c.motivo})`).join(' | ')}` : null,
     pesquisa.resultados?.length ? '\nResultados técnicos recuperados:' : null,
@@ -1491,7 +1523,18 @@ async function pesquisarParaChamado(empresaId, chamadoId, extras = {}) {
   if (!chamado) throw new Error('Chamado não encontrado.');
   const posicionamentos = chamadoRepo.listarPosicionamentosDoChamado(empresaId, chamadoId);
   const relacionados = chamadoRepo.listarChamadosRelacionados(empresaId, chamadoId, { limite: extras.limiteRelacionados || 5 });
-  const pesquisa = await pesquisar({ empresaId, chamado, mensagens: posicionamentos.map(p => ({ conteudo: [p.assunto, p.descricao, p.resultado].filter(Boolean).join('\n') })) });
+  // Aba "Banco de conhecimento"/seleção do chamado dispara esta rota sozinha
+  // (sem pedido do analista): sob pendência externa não faz pesquisa externa;
+  // chamados relacionados internos continuam sendo devolvidos.
+  const pendencia = await pendenciaExternaGate.avaliarPendencia({ chamado, posicionamentos });
+  const pesquisaExternaBloqueada = pendencia.externa
+    ? { responsavel: pendencia.responsavel, origemAcao: pendenciaExternaGate.ORIGEM.AUTOMATICO, motivo: `consulta automatica da aba/selecao sem pedido do analista: aguardando ${pendencia.responsavel}` }
+    : null;
+  const pesquisa = await pesquisar({
+    empresaId, chamado,
+    mensagens: posicionamentos.map(p => ({ conteudo: [p.assunto, p.descricao, p.resultado].filter(Boolean).join('\n') })),
+    ...(pesquisaExternaBloqueada ? { pesquisaExternaBloqueada } : {}),
+  });
   return { pesquisa, relacionados };
 }
 

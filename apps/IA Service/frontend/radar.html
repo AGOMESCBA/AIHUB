@@ -2451,7 +2451,7 @@
         const qs = qsEmpresa(empresaId);
         const resposta = await api(`/atendimentos/${atendimentoIdDoTurno}/investigar${qs ? '?' + qs : ''}`, {
           method: 'POST',
-          body: JSON.stringify({ texto, anexoIds: anexosDoTurno.map(a => a.id) }),
+          body: JSON.stringify({ texto, anexoIds: anexosDoTurno.map(a => a.id), origemAcao: 'texto_livre' }),
         });
         atendimentosEmProcessamento.delete(atendimentoIdDoTurno);
         if (atendimentoIdDoTurno === atendimentoAtualId) {
@@ -2515,7 +2515,7 @@
         if (atendimentoIdDoTurno === atendimentoAtualId) anexosAtendimentoCache = anexosAtuais || [];
         const resposta = await api(`/atendimentos/${atendimentoIdDoTurno}/investigar${sufixo}`, {
           method: 'POST',
-          body: JSON.stringify({ texto: TEXTO_PESQUISAR_SOLUCOES, anexoIds, anexosComoContexto: true, forcarPesquisa: true }),
+          body: JSON.stringify({ texto: TEXTO_PESQUISAR_SOLUCOES, anexoIds, anexosComoContexto: true, forcarPesquisa: true, origemAcao: 'botao_pesquisar' }),
         });
         atendimentosEmProcessamento.delete(atendimentoIdDoTurno);
         if (atendimentoIdDoTurno === atendimentoAtualId) {
