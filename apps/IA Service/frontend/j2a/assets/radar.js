@@ -1897,6 +1897,10 @@
     knowledge: 'Base de Conhecimento',
   };
 
+  function filaRecolhidaSalva() {
+    try { return localStorage.getItem('iaservice.filaRecolhida') === '1'; } catch (_) { return false; }
+  }
+
   function setPanel(panel) {
     state.activePanel = panel;
     document.querySelectorAll('[data-panel-tab]').forEach((btn) => btn.classList.toggle('active', btn.dataset.panelTab === panel));
@@ -1905,6 +1909,19 @@
       if (el) el.classList.toggle('active', name === panel);
     });
     $('radar-layout').classList.toggle('summary-auto-collapsed', panel !== 'conversation');
+    // Radar de Chamados lista todos os chamados: cabecalho e descricao do
+    // chamado selecionado nao se aplicam e so tomam espaco da grade.
+    $('case-view').classList.toggle('modo-radar', panel === 'risk');
+    // No Radar a Fila tambem recolhe (o Resumo ja recolhe acima), para a grade
+    // usar a largura toda. Nao grava preferencia: ao sair, volta ao que o
+    // usuario deixou salvo.
+    $('radar-layout').classList.toggle('queue-collapsed', panel === 'risk' || filaRecolhidaSalva());
+    if (panel === 'risk' && $('retorno-btn')?.getAttribute('aria-expanded') === 'true') retornoPanel?.close();
+    // O menu de exportar (⋯) mora no cabecalho; no Radar ele vai para a barra
+    // de filtros, para continuar disponivel com o cabecalho escondido.
+    const exportMenu = document.querySelector('.ia-export-menu');
+    const exportHost = panel === 'risk' ? document.querySelector('.risk-toolbar') : document.querySelector('.case-actions');
+    if (exportMenu && exportHost && exportMenu.parentElement !== exportHost) exportHost.append(exportMenu);
     // Pesquisar Soluções só faz sentido na tela de mensagens.
     const pesquisarBtn = $('research-btn');
     if (pesquisarBtn) pesquisarBtn.hidden = panel !== 'conversation';
@@ -2192,7 +2209,7 @@
       $('radar-layout').classList.toggle('queue-collapsed', recolhida);
       try { localStorage.setItem('iaservice.filaRecolhida', recolhida ? '1' : '0'); } catch (_) { /* opcional */ }
     };
-    try { if (localStorage.getItem('iaservice.filaRecolhida') === '1') $('radar-layout').classList.add('queue-collapsed'); } catch (_) { /* opcional */ }
+    if (filaRecolhidaSalva()) $('radar-layout').classList.add('queue-collapsed');
     $('toggle-queue-btn').addEventListener('click', () => aplicarFilaRecolhida(true));
     $('queue-reopen-rail').addEventListener('click', () => aplicarFilaRecolhida(false));
     $('collapse-summary-btn')?.addEventListener('click', () => {
@@ -2252,6 +2269,7 @@
   function init() {
     retornoPanel = window.IaRetornoSoftExpert.mount({
       button: $('retorno-btn'),
+      alignTo: () => $('case-view'),
       getContext: () => ({ scopeKey: state.token, chamadoId: state.selected?.id, numero: state.selected?.numero, readonly: state.somenteLeitura }),
       request: async (context, options) => {
         const suffix = options.consultaChave ? `/por-chave/${encodeURIComponent(options.consultaChave)}` : '';

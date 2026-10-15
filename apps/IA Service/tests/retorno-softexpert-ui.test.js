@@ -164,6 +164,11 @@ test('J2A real integra o painel e mantém o chat utilizável no desktop e no mob
         const chat = await page.locator('#case-view').boundingBox();
         const panel = await page.locator('.retorno-panel').boundingBox();
         assert.ok(chat.x + chat.width <= panel.x + 2, 'painel não deve cobrir o chat');
+        // Alinhado à grade do J2A: mesmo topo e base do chat e respiro de 12px entre os dois.
+        assert.ok(Math.abs(panel.y - chat.y) <= 1, `topo desalinhado: chat ${chat.y} x painel ${panel.y}`);
+        assert.ok(Math.abs((panel.y + panel.height) - (chat.y + chat.height)) <= 1, 'base desalinhada');
+        assert.ok(Math.abs(panel.x - (chat.x + chat.width) - 12) <= 1, `respiro entre chat e painel: ${panel.x - (chat.x + chat.width)}`);
+        assert.ok(Math.abs(panel.width - chat.width) <= 2, `deve abrir meio a meio: chat ${chat.width} x painel ${panel.width}`);
         const closeButton = await page.locator('[data-retorno-close]').boundingBox();
         const actions = await page.locator('.retorno-form > footer').boundingBox();
         assert.ok(closeButton.x + closeButton.width <= width, `fechar fora da tela: ${JSON.stringify(closeButton)}`);

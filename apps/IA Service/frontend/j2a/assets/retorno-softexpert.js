@@ -10,7 +10,7 @@
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   }
 
-  function mount({ button, getContext, request, onSuccess = async () => {} }) {
+  function mount({ button, getContext, request, onSuccess = async () => {}, alignTo = null }) {
     button.setAttribute('aria-expanded', 'false');
     // data-retorno-custom: a tela ja traz rotulo e icone proprios no HTML
     // (ex.: J2A, simbolo SoftExpert no cabecalho) -- nao sobrescrever.
@@ -168,6 +168,7 @@
       panel.hidden = false;
       button.setAttribute('aria-expanded', 'true');
       document.body.classList.add('retorno-open');
+      alignPanel();
       find('[data-retorno-context]').textContent = `Chamado ${current.numero || ''}`;
       status.textContent = 'Verificando disponibilidade do registro…';
       renderFiles();
@@ -185,6 +186,21 @@
         if (version === revision) status.textContent = err.message;
       }
     }
+    // alignTo (opcional): elemento cujo topo/base o painel acompanha no
+    // desktop, para ficar alinhado aos quadros da tela (ex.: chat do J2A).
+    // No mobile o CSS ocupa a tela inteira, entao limpa o ajuste.
+    function alignPanel() {
+      const ref = typeof alignTo === 'function' ? alignTo() : alignTo;
+      if (panel.hidden || !ref || window.innerWidth <= 1100) {
+        panel.style.top = panel.style.bottom = '';
+        return;
+      }
+      const rect = ref.getBoundingClientRect();
+      if (!rect.height) return;
+      panel.style.top = `${Math.round(rect.top)}px`;
+      panel.style.bottom = `${Math.round(window.innerHeight - rect.bottom)}px`;
+    }
+    window.addEventListener('resize', alignPanel);
     function contextChanged() {
       const context = getContext();
       button.disabled = !context?.chamadoId || context.readonly;

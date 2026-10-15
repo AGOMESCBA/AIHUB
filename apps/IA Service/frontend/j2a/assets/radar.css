@@ -903,6 +903,9 @@ button.loading .loader { display: block; }
 .case-header-extra { display: contents; }
 .case-header.collapsed .case-header-extra { display: none; }
 .case-view.header-collapsed .case-description { display: none; }
+/* Aba Radar de Chamados: sem cabecalho/descricao do chamado selecionado
+   (as linhas 1 e 2 da grade ficam vazias e com altura zero). */
+.case-view.modo-radar > .case-header, .case-view.modo-radar > .case-description { display: none; }
 .case-second-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .case-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .case-badges .badge { font-size: 10.5px; padding: 3px 8px; }
@@ -1274,7 +1277,7 @@ button.loading .loader { display: block; }
 .risk-layout {
   min-height: 0;
   display: grid;
-  grid-template-columns: 200px 1fr;
+  grid-template-columns: 240px 1fr;
   gap: 0;
 }
 .risk-layout.consultants-collapsed { grid-template-columns: 0 1fr; }
@@ -1310,13 +1313,14 @@ button.loading .loader { display: block; }
   background: transparent;
   color: var(--text);
   text-align: left;
-  padding: 9px 12px;
+  padding: 12px 16px 12px 14px;
   font-size: 12.5px;
+  line-height: 1.35;
   transition: background .12s ease;
 }
 .risk-consultant:hover { background: var(--panel-3); }
 .risk-consultant strong { font-weight: 700; }
-.risk-consultant small { color: var(--muted); font-size: 11px; }
+.risk-consultant small { display: inline-block; margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.4; }
 .risk-consultant.active { background: rgba(0, 168, 132, .1); border-left-color: var(--brand-2); color: var(--brand-2); }
 .risk-grid-wrap { min-width: 0; min-height: 0; height: 100%; display: flex; padding: 8px; }
 .risk-grid { flex: 1; min-height: 0; min-width: 0; overflow: auto; border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 1px 3px rgba(18, 36, 58, .06); }

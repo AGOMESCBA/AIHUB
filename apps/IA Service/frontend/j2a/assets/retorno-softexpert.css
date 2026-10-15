@@ -32,11 +32,20 @@
 .retorno-resize { position: absolute; left: -7px; top: 0; bottom: 0; width: 14px; cursor: ew-resize; touch-action: none; }
 .retorno-panel.retorno-expanded { width: min(900px, calc(100vw - 440px)); }
 @media (min-width: 1101px) {
-  body.retorno-open #radar-layout { margin-right: min(var(--retorno-width, 460px), calc(100vw - 440px)); grid-template-columns: minmax(0, 1fr); }
+  /* J2A: o painel ocupa a coluna direita da grade, com o mesmo respiro de
+     12px entre colunas e o mesmo acabamento dos demais quadros. Topo e base
+     acompanham o quadro do chat (opcao alignTo do mount). */
+  /* Abre dividindo meio a meio com o chat: (tela - 3 respiros de 12px) / 2.
+     Arrastar a borda grava --retorno-width inline no body e prevalece. */
+  body:has(#radar-layout) { --retorno-width: calc((100vw - 36px) / 2); }
+  body:has(#radar-layout) .retorno-panel.retorno-expanded { width: calc(100vw - 440px); }
+  body.retorno-wide:has(#radar-layout) #radar-layout { margin-right: calc(100vw - 440px + 12px); }
+  body.retorno-open #radar-layout { margin-right: calc(min(var(--retorno-width, 460px), calc(100vw - 440px)) + 12px); grid-template-columns: minmax(0, 1fr); }
+  body.retorno-open:has(#radar-layout) .retorno-panel { right: 12px; border-color: var(--line); border-radius: var(--radius, 8px); box-shadow: var(--shadow, 0 8px 28px #0003); font-family: inherit; }
   body.retorno-open #radar-layout > .summary-panel, body.retorno-open #radar-layout > .queue-panel, body.retorno-open #summary-reopen-rail { display: none; }
   body.retorno-open .radar-shell { width: calc(100% - min(var(--retorno-width, 460px), calc(100vw - 440px))); grid-template-columns: minmax(0, 1fr); }
   body.retorno-open .radar-shell > .fila-col { display: none; }
-  body.retorno-wide #radar-layout { margin-right: min(900px, calc(100vw - 440px)); }
+  body.retorno-wide #radar-layout { margin-right: calc(min(900px, calc(100vw - 440px)) + 12px); }
   body.retorno-wide .radar-shell { width: calc(100% - min(900px, calc(100vw - 440px))); }
 }
 @media (max-width: 1100px) {
