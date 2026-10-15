@@ -11,6 +11,7 @@
     challengeId: '',
     whoami: null,
     queueFilter: 'todos',
+    queueWaiting: 'todos',
     riskFilter: 'todos',
     riskWaiting: 'todos',
     riskConsultant: 'todos',
@@ -581,6 +582,7 @@
     try {
       const body = await request(ext(`/radar/fila?${params.toString()}`));
       state.queue = body.chamados || [];
+      updateQueueWaitingOptions();
       renderQueue();
       posSincronizacaoFila(body.sincronizacao);
     } catch (err) {
@@ -641,15 +643,31 @@
     setBusy($('send-btn'), ocupado, 'Enviando');
   }
 
+  function queueWaitingLabel(chamado) {
+    return waitingLabel(chamado.aguardandoConsolidado || chamado.situacaoRetorno) || 'Aguardando não informado';
+  }
+
+  function updateQueueWaitingOptions() {
+    const options = [...new Set(state.queue.map(queueWaitingLabel))]
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    if (state.queueWaiting !== 'todos' && !options.includes(state.queueWaiting)) {
+      state.queueWaiting = 'todos';
+    }
+    $('queue-waiting-filter').innerHTML = '<option value="todos">Aguardando: todos</option>'
+      + options.map((label) => `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`).join('');
+    $('queue-waiting-filter').value = state.queueWaiting;
+  }
+
   function renderQueue() {
     syncBotoesAcao();
     const term = $('queue-search').value.trim().toLowerCase();
     const filtered = state.queue.filter((c) => {
+      if (state.queueWaiting !== 'todos' && queueWaitingLabel(c) !== state.queueWaiting) return false;
       if (!term) return true;
       return [c.numero, c.clienteNome, c.solicitanteNome, c.produto, currentTicketTitle(c)]
         .some((v) => String(v || '').toLowerCase().includes(term));
     });
-    $('queue-count').textContent = `${state.queue.length} chamado(s)`;
+    $('queue-count').textContent = `${filtered.length} chamado(s)`;
     if (!filtered.length) {
       $('queue-list').innerHTML = '<div class="empty-block">Nenhum chamado encontrado para este filtro.</div>';
       return;
@@ -662,6 +680,7 @@
           ${pesquisaBadge(c.id)}
         </span>
         <span class="ticket-title">${escapeHtml(currentTicketTitle(c))}</span>
+        <span class="ticket-waiting"><span class="badge warn">${escapeHtml(queueWaitingLabel(c))}</span></span>
         <span class="ticket-meta">${escapeHtml([c.clienteNome, c.produto].filter(Boolean).join(' | '))}<br>Aberto em ${escapeHtml(formatDate(c.dataAbertura))}</span>
       </button>
     `).join('');
@@ -1785,6 +1804,10 @@
       if (seconds) state.nextRefreshAt = Date.now() + seconds * 1000;
     });
     $('queue-search').addEventListener('input', renderQueue);
+    $('queue-waiting-filter').addEventListener('change', () => {
+      state.queueWaiting = $('queue-waiting-filter').value;
+      renderQueue();
+    });
     document.querySelectorAll('[data-queue-filter]').forEach((btn) => btn.addEventListener('click', () => {
       state.queueFilter = btn.dataset.queueFilter;
       document.querySelectorAll('[data-queue-filter]').forEach((b) => b.classList.toggle('active', b === btn));

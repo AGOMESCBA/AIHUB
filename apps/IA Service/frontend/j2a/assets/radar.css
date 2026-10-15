@@ -669,6 +669,18 @@ button.loading .loader { display: block; }
   font-size: 13px;
 }
 .segmented { display: flex; gap: 5px; }
+.queue-tools .segmented > * { min-width: 0; }
+.queue-tools .segmented select {
+  flex: 1.5;
+  width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 6px 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
 .segmented button, .subtabs button {
   flex: 1;
   border: 1px solid var(--line);
@@ -775,6 +787,8 @@ button.loading .loader { display: block; }
 .ticket-top { justify-content: space-between; }
 .ticket-number { font-weight: 800; color: var(--brand-2); font-size: 12px; }
 .ticket-title { margin: 5px 0 4px; font-weight: 700; font-size: 13px; line-height: 1.26; }
+.ticket-waiting { display: block; margin: 5px 0; }
+.ticket-waiting .badge { max-width: 100%; white-space: normal; text-align: left; }
 .ticket-meta { color: var(--muted); font-size: 11px; line-height: 1.35; }
 .ticket-top .badge { padding: 2px 7px; font-size: 10px; }
 .badge {
