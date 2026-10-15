@@ -19,9 +19,12 @@
  *  - Texto livre: uma chamada curta classifica pesquisar|nao_pesquisar|incerto.
  *    Só "pesquisar" libera. Incerto ou falha do classificador → não pesquisa.
  *
- * "Distribuidor" NÃO é reconhecido: não consta entre os valores reais
- * confirmados de ITC.AGUARDANDO (RETORNO - CLIENTE / FORNECEDOR / ATENDENTE).
- * Incluir exige confirmar o valor real antes (sem classificação especulativa).
+ * Responsáveis externos: cliente, fornecedor e distribuidor. Valores reais
+ * confirmados de ITC.AGUARDANDO: RETORNO - CLIENTE / FORNECEDOR / ATENDENTE;
+ * "distribuidor" ainda não apareceu na base, mas foi incluído por decisão
+ * explícita do usuário (2026-10) — a view já fatia a duração por distribuidor
+ * (dias_dur_dist). Reconhecimento por substring do responsável, então
+ * "RETORNO - X" e "AGUARDANDO X" são equivalentes.
  */
 
 const { redigirValor } = require('./redaction-service');
@@ -66,6 +69,7 @@ function classificarPendencia(chamado, posicionamentos = []) {
 
   let responsavel = null;
   if (v.includes('fornecedor')) responsavel = 'fornecedor';
+  else if (v.includes('distribuidor')) responsavel = 'distribuidor';
   else if (v.includes('cliente')) responsavel = 'cliente';
   else if (v.includes('atendente')) responsavel = 'atendente';
 
@@ -102,7 +106,7 @@ async function avaliarPendencia({ chamado, posicionamentos = [], consultarSituac
 
 const SYSTEM_PROMPT_DECISAO =`Você decide, para um chat de suporte técnico, se a ÚLTIMA mensagem do analista pede que a IA faça uma PESQUISA EXTERNA (consultar internet, documentação oficial, bases públicas de conhecimento) para investigar o problema.
 
-O chamado está aguardando retorno de terceiro (cliente ou fornecedor); por isso a pesquisa externa NÃO deve ocorrer sozinha — só quando o analista pedir. Considere o CONTEXTO da conversa: expressões como "verifique isso", "pode aprofundar?", "procure alternativas", "e se for outra causa?" contam como pedido quando, pelo contexto, representam investigar/consultar fontes externas. Não dependa de palavras exatas.
+O chamado está aguardando retorno de terceiro (cliente, fornecedor ou distribuidor); por isso a pesquisa externa NÃO deve ocorrer sozinha — só quando o analista pedir. Considere o CONTEXTO da conversa: expressões como "verifique isso", "pode aprofundar?", "procure alternativas", "e se for outra causa?" contam como pedido quando, pelo contexto, representam investigar/consultar fontes externas. Não dependa de palavras exatas.
 
 NÃO é pedido de pesquisa externa: perguntas sobre o histórico, o andamento, o que alguém respondeu, o estado do chamado, pedir resumo/explicação do que já existe, discutir hipóteses com base no que já está no chamado, ou conversa administrativa.
 

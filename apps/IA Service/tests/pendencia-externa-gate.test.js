@@ -50,8 +50,35 @@ teste('classificarPendencia: cliente e fornecedor reconhecidos como externos', (
   assert.strictEqual(gate.classificarPendencia({ aguardandoConsolidado: 'Retorno do Cliente' }, []).externa, true);
 });
 
+teste('classificarPendencia: distribuidor e nomenclatura "AGUARDANDO X" equivalem a "RETORNO - X"', () => {
+  const casos = {
+    'RETORNO - DISTRIBUIDOR': 'distribuidor',
+    'Aguardando Distribuidor': 'distribuidor',
+    'AGUARDANDO FORNECEDOR': 'fornecedor',
+    'AGUARDANDO CLIENTE': 'cliente',
+  };
+  for (const [v, resp] of Object.entries(casos)) {
+    const r = gate.classificarPendencia({ aguardandoConsolidado: v }, []);
+    assert.deepStrictEqual({ externa: r.externa, responsavel: r.responsavel }, { externa: true, responsavel: resp }, v);
+  }
+  assert.strictEqual(gate.classificarPendencia({ aguardandoConsolidado: 'AGUARDANDO ATENDENTE' }, []).externa, false);
+});
+
+teste('botao e automatico nao pesquisam sob pendencia de distribuidor; texto livre segue o classificador', async () => {
+  const pend = gate.classificarPendencia({ aguardandoConsolidado: 'RETORNO - DISTRIBUIDOR' }, []);
+  const calls = [];
+  for (const origem of [gate.ORIGEM.BOTAO, gate.ORIGEM.AUTOMATICO]) {
+    const d = await gate.decidirPesquisaExterna({ pendencia: pend, origemAcao: origem, texto: 'pesquise', historico: [], chamarIA: chamarIAFixa({ pesquisa_externa: 'sim' }, calls) });
+    assert.strictEqual(d.liberada, false, origem);
+  }
+  assert.strictEqual(calls.length, 0);
+  const livre = await gate.decidirPesquisaExterna({ pendencia: pend, origemAcao: gate.ORIGEM.TEXTO_LIVRE, texto: 'pesquise na documentacao oficial outra causa', historico: [], chamarIA: chamarIAFixa({ pesquisa_externa: 'sim' }, calls) });
+  assert.strictEqual(livre.liberada, true);
+  assert.match(gate.instrucaoParaPrompt({ pendencia: pend, origemAcao: gate.ORIGEM.BOTAO }), /aguarda retorno de distribuidor/);
+});
+
 teste('classificarPendencia: atendente, vazio e desconhecido NAO sao externos (fail-safe)', () => {
-  for (const v of ['RETORNO - ATENDENTE', null, '', 'CRM - DOC044', 'RETORNO - DISTRIBUIDOR']) {
+  for (const v of ['RETORNO - ATENDENTE', null, '', 'CRM - DOC044']) {
     const r = gate.classificarPendencia({ aguardandoConsolidado: v }, []);
     assert.strictEqual(r.externa, false, `valor "${v}" nao deve ser externo`);
   }

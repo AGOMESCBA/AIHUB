@@ -37,17 +37,20 @@ function _removerIdsInternosDoPrompt(texto) {
 // instrucao final, que pede para priorizar "a evidencia mais especifica" \u2014
 // sem reforco equivalente no fechamento, o modelo seguia a instrucao mais
 // recente e ignorava a pendencia.
+// Distribuidor (decisao do usuario, 2026-10) segue a mesma regra do fornecedor
+// e do pendencia-externa-gate; "AGUARDANDO X" equivale a "RETORNO - X".
 function _interpretarPendenciaConsolidada(valor) {
   const v = _normalizar(valor || '');
-  if (!v.startsWith('retorno')) return null;
+  if (!v.startsWith('retorno') && !v.startsWith('aguardando')) return null;
   const responsavel = v.includes('fornecedor') ? 'fornecedor'
+    : v.includes('distribuidor') ? 'distribuidor'
     : v.includes('cliente') ? 'cliente'
     : v.includes('atendente') ? 'atendente'
     : null;
   if (!responsavel) return null;
   return {
     responsavel,
-    bloqueante: responsavel === 'fornecedor',
+    bloqueante: responsavel === 'fornecedor' || responsavel === 'distribuidor',
     textoOriginal: valor,
   };
 }
@@ -1359,4 +1362,4 @@ function montarContextoInvestigacao({
   };
 }
 
-module.exports = { montarContextoInvestigacao, _termos, _janelaLinhasRelevantes, _selecionarPesquisaExterna, _montarQuadroInvestigativo, _formatarQuadroInvestigativo, _extrairChamadosCitados };
+module.exports = { montarContextoInvestigacao, _termos, _janelaLinhasRelevantes, _selecionarPesquisaExterna, _montarQuadroInvestigativo, _formatarQuadroInvestigativo, _extrairChamadosCitados, _interpretarPendenciaConsolidada };
