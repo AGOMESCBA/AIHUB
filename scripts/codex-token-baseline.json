@@ -1,0 +1,153 @@
+﻿{
+  "schema_version": 1,
+  "measured_at": "2026-10-14T19:26:20.181Z",
+  "sessions": [
+    {
+      "file": "rollout-2026-10-14T08-33-14-01a13a67-0d34-7ba1-8427-fd7720b06b1f.jsonl",
+      "thread_id": "01a13a67-0d34-7ba1-8427-fd7720b06b1f",
+      "parent_thread_id": null,
+      "source": "vscode",
+      "models": [
+        "gpt-5.5"
+      ],
+      "reasoning_efforts": [
+        "medium"
+      ],
+      "accounting": "unique_response_id",
+      "requests": 111,
+      "input_tokens": 14598003,
+      "cached_input_tokens": 13139584,
+      "uncached_input_tokens": 1458419,
+      "output_tokens": 67335,
+      "reasoning_output_tokens": 13337,
+      "total_tokens": 14665338,
+      "peak_request_input_tokens": 238235,
+      "tool_outputs": 173,
+      "tool_output_chars": 1278759,
+      "largest_tool_output_chars": 40212,
+      "truncated_tool_outputs": 12,
+      "compactions": 2,
+      "invalid_lines": 0
+    },
+    {
+      "file": "rollout-2026-10-14T08-33-15-01a13a67-0f49-7bb1-a752-462ec0938fa5.jsonl",
+      "thread_id": "01a13a67-0f49-7bb1-a752-462ec0938fa5",
+      "parent_thread_id": "01a13a67-0d34-7ba1-8427-fd7720b06b1f",
+      "source": {
+        "subagent": {
+          "other": "guardian"
+        }
+      },
+      "models": [
+        "codex-auto-review"
+      ],
+      "reasoning_efforts": [
+        "low"
+      ],
+      "accounting": "unique_response_id",
+      "requests": 8,
+      "input_tokens": 307595,
+      "cached_input_tokens": 242688,
+      "uncached_input_tokens": 64907,
+      "output_tokens": 516,
+      "reasoning_output_tokens": 220,
+      "total_tokens": 308111,
+      "peak_request_input_tokens": 55868,
+      "tool_outputs": 0,
+      "tool_output_chars": 0,
+      "largest_tool_output_chars": 0,
+      "truncated_tool_outputs": 0,
+      "compactions": 0,
+      "invalid_lines": 0
+    },
+    {
+      "file": "rollout-2026-10-14T08-56-10-01a13a7c-0a8a-73f0-9bc5-fffa3f5afacc.jsonl",
+      "thread_id": "01a13a7c-0a8a-73f0-9bc5-fffa3f5afacc",
+      "parent_thread_id": "01a13a67-0d34-7ba1-8427-fd7720b06b1f",
+      "source": {
+        "subagent": {
+          "other": "guardian"
+        }
+      },
+      "models": [
+        "codex-auto-review"
+      ],
+      "reasoning_efforts": [
+        "low"
+      ],
+      "accounting": "unique_response_id",
+      "requests": 33,
+      "input_tokens": 2200789,
+      "cached_input_tokens": 2067200,
+      "uncached_input_tokens": 133589,
+      "output_tokens": 3258,
+      "reasoning_output_tokens": 1044,
+      "total_tokens": 2204047,
+      "peak_request_input_tokens": 111546,
+      "tool_outputs": 0,
+      "tool_output_chars": 0,
+      "largest_tool_output_chars": 0,
+      "truncated_tool_outputs": 0,
+      "compactions": 0,
+      "invalid_lines": 0
+    },
+    {
+      "file": "rollout-2026-10-14T14-10-32-01a13b9b-d7e6-74d0-9962-69b84c08a96c.jsonl",
+      "thread_id": "01a13b9b-d7e6-74d0-9962-69b84c08a96c",
+      "parent_thread_id": null,
+      "source": "vscode",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "reasoning_efforts": [
+        "medium"
+      ],
+      "accounting": "unique_response_id",
+      "requests": 52,
+      "input_tokens": 4004679,
+      "cached_input_tokens": 3866496,
+      "uncached_input_tokens": 138183,
+      "output_tokens": 39302,
+      "reasoning_output_tokens": 7183,
+      "total_tokens": 4043981,
+      "peak_request_input_tokens": 140045,
+      "tool_outputs": 42,
+      "tool_output_chars": 782454,
+      "largest_tool_output_chars": 235366,
+      "truncated_tool_outputs": 12,
+      "compactions": 0,
+      "invalid_lines": 0
+    },
+    {
+      "file": "rollout-2026-10-14T14-10-33-01a13b9b-dbca-78c0-9be3-3331d731d399.jsonl",
+      "thread_id": "01a13b9b-dbca-78c0-9be3-3331d731d399",
+      "parent_thread_id": "01a13b9b-d7e6-74d0-9962-69b84c08a96c",
+      "source": {
+        "subagent": {
+          "other": "guardian"
+        }
+      },
+      "models": [
+        "codex-auto-review"
+      ],
+      "reasoning_efforts": [
+        "low"
+      ],
+      "accounting": "unique_response_id",
+      "requests": 32,
+      "input_tokens": 1350174,
+      "cached_input_tokens": 1261568,
+      "uncached_input_tokens": 88606,
+      "output_tokens": 2804,
+      "reasoning_output_tokens": 959,
+      "total_tokens": 1352978,
+      "peak_request_input_tokens": 71331,
+      "tool_outputs": 0,
+      "tool_output_chars": 0,
+      "largest_tool_output_chars": 0,
+      "truncated_tool_outputs": 0,
+      "compactions": 0,
+      "invalid_lines": 0
+    }
+  ]
+}
