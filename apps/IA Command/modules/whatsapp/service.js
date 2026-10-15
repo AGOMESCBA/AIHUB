@@ -16,6 +16,7 @@ const canonicalWhatsappFormat = require('../erp/core/canonical-whatsapp-format')
 const interpretationLog   = require('../ai/interpretation-log');
 const interpretationPipeline = require('../ai/interpretation-pipeline');
 const channelStore        = require('./channel-store');
+const { formatarContatoParaLog } = require('./log-contact');
 const messageTemplates    = require('./message-templates');
 const dialogResolver      = require('../ai/dialog-resolver');
 const conversationService = require('../ai/conversation-service');
@@ -396,6 +397,12 @@ class IACWhatsAppService extends EventEmitter {
   getMsgCount()  { return this._msgCount; }
   getLogBuffer() { return this._logBuffer; }
   clearBuffer()  { this._logBuffer = []; }
+
+  _contatoParaLog(sender) {
+    return formatarContatoParaLog(sender, this._channelId
+      ? { channelId: this._channelId }
+      : { empresaId: this._empresaId });
+  }
 
   log(message, type = 'info') {
     const entry = { message, type, timestamp: new Date().toLocaleTimeString('pt-BR') };
@@ -4230,7 +4237,7 @@ class IACWhatsAppService extends EventEmitter {
     const sender = await this._resolverSender(msg);
 
     this._msgCount++;
-    this.log(`━━ Mensagem #${this._msgCount} — tipo: ${tipo} | de: ${sender}`, 'info');
+    this.log(`━━ Mensagem #${this._msgCount} — tipo: ${tipo} | de: ${this._contatoParaLog(sender)}`, 'info');
 
     if (!this._isSenderAuthorized(sender)) {
       this.log(`Numero nao autorizado para empresa #${this._empresaId}: ${sender}`, 'warning');
@@ -4266,7 +4273,7 @@ class IACWhatsAppService extends EventEmitter {
         this.log(`Tipo "${tipo}" ignorado nesta fase.`, 'info');
       }
     } catch (err) {
-      this.log(`Erro ao processar mensagem de ${sender}: ${err.message}`, 'error');
+      this.log(`Erro ao processar mensagem de ${this._contatoParaLog(sender)}: ${err.message}`, 'error');
     }
   }
 
@@ -4344,12 +4351,12 @@ class IACWhatsAppService extends EventEmitter {
         const partesEnviadas = await this._sendReplyMessageSafe(chat, sender, resposta);
         const entregueMs = Date.now() - t0;
         if (partesEnviadas > 1) this.log(`Resposta dividida em ${partesEnviadas} partes para ${sender}.`, 'info');
-        this.log(`✅ Resposta enviada para ${sender} (${entregueMs}ms)`, 'success');
+        this.log(`✅ Resposta enviada para ${this._contatoParaLog(sender)} (${entregueMs}ms)`, 'success');
         if (_timingCtx.logId) {
           try { interpretationLog.atualizarEntregue(_timingCtx.logId, entregueMs); } catch (_) {}
         }
       } catch (sendErr) {
-        this.log(`❌ Falha ao enviar resposta para ${sender} (WhatsApp desconectado?): ${sendErr.message}`, 'error');
+        this.log(`❌ Falha ao enviar resposta para ${this._contatoParaLog(sender)} (WhatsApp desconectado?): ${sendErr.message}`, 'error');
       }
     } catch (err) {
       clearInterval(heartbeatId);
@@ -4376,7 +4383,7 @@ class IACWhatsAppService extends EventEmitter {
 
   async _handleAudio(msg, sender = msg.from) {
     this._tipoMensagemAtual = msg.type || 'audio';
-    this.log(`Áudio recebido de ${sender} (${msg.type}) — baixando...`, 'info');
+    this.log(`Áudio recebido de ${this._contatoParaLog(sender)} (${msg.type}) — baixando...`, 'info');
 
     fs.mkdirSync(TEMP_DIR, { recursive: true });
 
@@ -4424,12 +4431,12 @@ class IACWhatsAppService extends EventEmitter {
             resposta,
           }));
           const _audioEntregueMs = Date.now() - _audioT0;
-          this.log(`Resposta de áudio enviada para ${sender} (${_audioEntregueMs}ms)`, 'success');
+          this.log(`Resposta de áudio enviada para ${this._contatoParaLog(sender)} (${_audioEntregueMs}ms)`, 'success');
           if (_audioTimingCtx.logId) {
             try { interpretationLog.atualizarEntregue(_audioTimingCtx.logId, _audioEntregueMs); } catch (_) {}
           }
         } catch (sendErr) {
-          this.log(`❌ Falha ao enviar resposta de áudio para ${sender} (WhatsApp desconectado?): ${sendErr.message}`, 'error');
+          this.log(`❌ Falha ao enviar resposta de áudio para ${this._contatoParaLog(sender)} (WhatsApp desconectado?): ${sendErr.message}`, 'error');
         }
       } catch (err) {
         this.log(`Pipeline (áudio) falhou: ${err.message}`, 'error');

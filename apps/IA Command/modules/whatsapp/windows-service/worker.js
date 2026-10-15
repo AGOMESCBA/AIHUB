@@ -34,6 +34,7 @@ function req(rel) { return require(path.join(IAC_APP_DIR, rel)); }
 const dbModule       = req('apps/IA Command/modules/database/index.js');
 const IACService     = req('apps/IA Command/modules/whatsapp/service.js');
 const channelStore   = req('apps/IA Command/modules/whatsapp/channel-store.js');
+const { formatarContatoParaLog } = req('apps/IA Command/modules/whatsapp/log-contact.js');
 
 // ── Log local ─────────────────────────────────────────────────────────────────
 function log(tipo, msg) {
@@ -254,10 +255,10 @@ const server = http.createServer((req, res) => {
         const statusEmoji = resultado.ok === false ? '⚠️' : '✅';
         const nomeJob = jobNome ? `"${jobNome}"` : 'Agendamento';
         if (resultado.no_data === true) {
-          _enfileirar('iac-log', { tipo: 'info', msg: `ℹ️ ${nomeJob} sem dados; mensagem nao enviada → ${numero}` });
+          _enfileirar('iac-log', { tipo: 'info', msg: `ℹ️ ${nomeJob} sem dados; mensagem nao enviada → ${formatarContatoParaLog(numero, { empresaId })}` });
         } else {
           await svc.sendScheduledQuestionDelivery({ empresaId, numero, resposta: resultado.resposta, ok: resultado.ok });
-          _enfileirar('iac-log', { tipo: resultado.ok === false ? 'warning' : 'success', msg: `${statusEmoji} ${nomeJob} enviado → ${numero}` });
+          _enfileirar('iac-log', { tipo: resultado.ok === false ? 'warning' : 'success', msg: `${statusEmoji} ${nomeJob} enviado → ${formatarContatoParaLog(numero, { empresaId })}` });
         }
         res.writeHead(200);
         res.end(JSON.stringify(resultado));
@@ -282,7 +283,7 @@ const server = http.createServer((req, res) => {
         await svc.sendScheduledQuestionDelivery({ empresaId, numero, resposta, ok, preservarLayout: !!preservarLayout });
         const statusEmoji = ok === false ? '⚠️' : '✅';
         const nomeJob = jobNome ? `"${jobNome}"` : 'Agendamento';
-        _enfileirar('iac-log', { tipo: ok === false ? 'warning' : 'success', msg: `${statusEmoji} ${nomeJob} enviado → ${numero}` });
+        _enfileirar('iac-log', { tipo: ok === false ? 'warning' : 'success', msg: `${statusEmoji} ${nomeJob} enviado → ${formatarContatoParaLog(numero, { empresaId })}` });
         res.writeHead(200);
         res.end(JSON.stringify({ enviado: true }));
       } catch (err) {
@@ -313,7 +314,7 @@ const server = http.createServer((req, res) => {
           return res.end(JSON.stringify({ erro: 'Numero nao autorizado para esta empresa.' }));
         }
         await svc.sendMessage(digits, texto);
-        _enfileirar('iac-log', { tipo: 'success', msg: `Encaminhamento enviado -> ${digits}` });
+        _enfileirar('iac-log', { tipo: 'success', msg: `Encaminhamento enviado -> ${formatarContatoParaLog(digits, { empresaId })}` });
         res.writeHead(200);
         res.end(JSON.stringify({ enviado: true }));
       } catch (err) {
@@ -351,7 +352,7 @@ const server = http.createServer((req, res) => {
           filename: arquivo.filename,
           caption: texto || '',
         });
-        _enfileirar('iac-log', { tipo: 'success', msg: `Anexo encaminhado -> ${digits}` });
+        _enfileirar('iac-log', { tipo: 'success', msg: `Anexo encaminhado -> ${formatarContatoParaLog(digits, { empresaId })}` });
         res.writeHead(200);
         res.end(JSON.stringify({ enviado: true }));
       } catch (err) {
