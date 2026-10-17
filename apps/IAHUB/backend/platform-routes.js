@@ -491,6 +491,7 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
           papel: r.papel,
           codigoIdentidade: r.codigo_identidade,
           liberado: !!r.liberado,
+          origemId: r.origem_id || null,
           metadata: parseJson(r.metadata_json, {}),
         }));
       }
@@ -509,8 +510,11 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
     const id = atual?.id || body.id || uuid();
     const stamp = now();
     if (atual) {
+      // Mescla com o metadata atual: a tela só envia tipo/iaService, e os campos
+      // vindos da importação do IA Command (erp_tipo, erp_id...) não podem sumir.
+      const metadata = { ...parseJson(atual.metadata_json, {}), ...(body.metadata || {}) };
       getDB().prepare('UPDATE platform_whatsapp_identities SET nome=?, numero=?, numero_normalizado=?, observacoes=?, ativo=?, metadata_json=?, atualizado_em=? WHERE empresa_id=? AND id=?')
-        .run(body.nome || normalized, body.numero || normalized, normalized, body.observacoes || '', body.ativo === false ? 0 : 1, JSON.stringify(body.metadata || {}), stamp, eid, id);
+        .run(body.nome || normalized, body.numero || normalized, normalized, body.observacoes || '', body.ativo === false ? 0 : 1, JSON.stringify(metadata), stamp, eid, id);
     } else {
       getDB().prepare('INSERT INTO platform_whatsapp_identities (id, empresa_id, nome, numero, numero_normalizado, observacoes, ativo, metadata_json, criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .run(id, eid, body.nome || normalized, body.numero || normalized, normalized, body.observacoes || '', body.ativo === false ? 0 : 1, JSON.stringify(body.metadata || {}), stamp, stamp);
@@ -522,11 +526,50 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
     const eid = empresaId(req);
     const identityId = req.params.id;
     const roles = Array.isArray(req.body?.roles) ? req.body.roles : [];
+    // Sincroniza por diferença em vez de apagar e recriar tudo: apagar/recriar
+    // perdia origem_sistema/origem_id/importado_em, e a importação seguinte do
+    // IA Command não reconhecia os roles e criava duplicatas a cada rodada.
+    // - role com id existente: só é tocado se algo mudou (atualizado_em marca
+    //   a edição manual, que a importação passa a respeitar);
+    // - role sem id: reaproveita linha idêntica ainda não usada, senão insere;
+    // - linhas idênticas repetidas no envio são descartadas;
+    // - linhas que não vieram no envio são removidas.
     const tx = getDB().transaction(() => {
-      getDB().prepare('DELETE FROM platform_identity_roles WHERE empresa_id = ? AND identity_id = ?').run(eid, identityId);
+      const atuais = getDB().prepare('SELECT * FROM platform_identity_roles WHERE empresa_id = ? AND identity_id = ?').all(eid, identityId);
+      const porId = new Map(atuais.map(r => [r.id, r]));
+      const chave = r => [r.sistema, r.modulo, r.papel || '', r.codigo_identidade || ''].map(v => String(v).trim().toLowerCase()).join('|');
+      const manter = new Set();
+      const chavesVistas = new Set();
+      const stamp = now();
       for (const role of roles) {
-        getDB().prepare('INSERT INTO platform_identity_roles (id, identity_id, empresa_id, sistema, modulo, papel, codigo_identidade, liberado, metadata_json, criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-          .run(uuid(), identityId, eid, role.sistema || 'ia-service', role.modulo || 'chat-web', role.papel || 'analista', role.codigoIdentidade || null, role.liberado === false ? 0 : 1, JSON.stringify(role.metadata || {}), now(), now());
+        const dados = {
+          sistema: role.sistema || 'ia-service',
+          modulo: role.modulo || 'chat-web',
+          papel: role.papel || 'analista',
+          codigo_identidade: role.codigoIdentidade || null,
+        };
+        const k = chave(dados);
+        if (chavesVistas.has(k)) continue;
+        chavesVistas.add(k);
+
+        let atual = role.id && porId.get(role.id) && !manter.has(role.id) ? porId.get(role.id) : null;
+        if (!atual) atual = atuais.find(r => !manter.has(r.id) && chave(r) === k) || null;
+
+        if (atual) {
+          manter.add(atual.id);
+          const liberado = role.liberado === undefined ? (Number(atual.liberado) === 0 ? 0 : 1) : (role.liberado === false ? 0 : 1);
+          const metadataJson = role.metadata === undefined ? atual.metadata_json : JSON.stringify({ ...parseJson(atual.metadata_json, {}), ...role.metadata });
+          const mudou = chave(atual) !== k || Number(atual.liberado) !== liberado || (atual.metadata_json || '') !== (metadataJson || '');
+          if (!mudou) continue;
+          getDB().prepare('UPDATE platform_identity_roles SET sistema=?, modulo=?, papel=?, codigo_identidade=?, liberado=?, metadata_json=?, atualizado_em=? WHERE id=?')
+            .run(dados.sistema, dados.modulo, dados.papel, dados.codigo_identidade, liberado, metadataJson, stamp, atual.id);
+        } else {
+          getDB().prepare('INSERT INTO platform_identity_roles (id, identity_id, empresa_id, sistema, modulo, papel, codigo_identidade, liberado, metadata_json, criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            .run(uuid(), identityId, eid, dados.sistema, dados.modulo, dados.papel, dados.codigo_identidade, role.liberado === false ? 0 : 1, JSON.stringify(role.metadata || {}), stamp, stamp);
+        }
+      }
+      for (const r of atuais) {
+        if (!manter.has(r.id)) getDB().prepare('DELETE FROM platform_identity_roles WHERE id = ?').run(r.id);
       }
     });
     tx();

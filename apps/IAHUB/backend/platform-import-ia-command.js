@@ -14,38 +14,65 @@ function parseJson(value, fallback = {}) {
 }
 
 function roleDefaults(row, modulo) {
-  const papel = row.papel || row.erp_tipo || (row.erp === 'softexpert' ? 'gestor' : 'usuario');
+  const erp = String(row.erp || 'protheus').toLowerCase();
+  const papel = row.papel || row.erp_tipo || (erp === 'softexpert' ? 'gestor' : 'usuario');
+  // erp_id/cod_aprov_erp/cod_cliente_erp são códigos PROTHEUS do número —
+  // nunca servem de identidade para módulos de outro ERP (ex.: SoftExpert,
+  // cuja identidade é só o codigo_identidade do próprio módulo).
   const codigo =
     row.codigo_identidade ||
-    (papel === 'aprovador' ? row.cod_aprov_erp : null) ||
-    (papel === 'cliente' ? row.cod_cliente_erp : null) ||
-    row.erp_id ||
+    (erp === 'protheus' && papel === 'aprovador' ? row.cod_aprov_erp : null) ||
+    (erp === 'protheus' && papel === 'cliente' ? row.cod_cliente_erp : null) ||
+    (erp === 'protheus' ? row.erp_id : null) ||
     null;
   return { papel, codigo: codigo || null, modulo };
 }
 
+function mesmoValor(a, b) { return String(a ?? '') === String(b ?? ''); }
+
+// A importação COMPLEMENTA o cadastro do IAHub, nunca o destrói. Acha o role
+// pela origem (origem_id) ou, se ele foi recriado pela tela sem origem, pela
+// combinação sistema/módulo/papel — e o "adota" em vez de criar duplicata (era
+// o ciclo importar → salvar → importar que multiplicava as linhas).
+// Os acessos por empresa são somente consulta na tela do IAHub (espelho do IA
+// Command), então papel/código/liberado sempre refletem o IA Command.
 function upsertRole(platformDb, identityId, empresaId, role) {
   const stamp = now();
-  const existing = role.origemId
+  let existing = role.origemId
     ? platformDb.prepare(`
-        SELECT id FROM platform_identity_roles
+        SELECT * FROM platform_identity_roles
          WHERE empresa_id = ? AND origem_sistema = 'ia-command' AND origem_id = ?
       `).get(empresaId, role.origemId)
-    : platformDb.prepare(`
-        SELECT id FROM platform_identity_roles
-         WHERE empresa_id = ? AND identity_id = ? AND sistema = ? AND modulo = ?
-           AND COALESCE(papel, '') = COALESCE(?, '') AND COALESCE(codigo_identidade, '') = COALESCE(?, '')
-      `).get(empresaId, identityId, role.sistema, role.modulo, role.papel || null, role.codigoIdentidade || null);
+    : null;
+  if (!existing) {
+    // Linha sem origem (criada/regravada pela tela): primeiro a idêntica; senão
+    // a do mesmo sistema/módulo/papel (o código pode divergir do IA Command).
+    existing = platformDb.prepare(`
+      SELECT * FROM platform_identity_roles
+       WHERE empresa_id = ? AND identity_id = ? AND lower(sistema) = lower(?) AND lower(modulo) = lower(?)
+         AND COALESCE(papel, '') = COALESCE(?, '') AND origem_id IS NULL
+       ORDER BY CASE WHEN COALESCE(codigo_identidade, '') = COALESCE(?, '') THEN 0 ELSE 1 END, criado_em ASC
+       LIMIT 1
+    `).get(empresaId, identityId, role.sistema, role.modulo, role.papel || null, role.codigoIdentidade || null);
+  }
 
   if (existing) {
+    const adotado = !existing.origem_id;
+    const papel = role.papel || null;
+    const codigo = role.codigoIdentidade || null;
+    const liberado = role.liberado === false ? 0 : 1;
+    const metadata = { ...parseJson(existing.metadata_json, {}), ...(role.metadata || {}) };
+    const mudou = adotado || !mesmoValor(existing.papel, papel) || !mesmoValor(existing.codigo_identidade, codigo)
+      || Number(existing.liberado) !== liberado || existing.metadata_json !== JSON.stringify(metadata);
     platformDb.prepare(`
       UPDATE platform_identity_roles
-         SET sistema = ?, modulo = ?, papel = ?, codigo_identidade = ?, liberado = ?,
-             metadata_json = ?, origem_sistema = 'ia-command', origem_id = ?, importado_em = ?, atualizado_em = ?
+         SET papel = ?, codigo_identidade = ?, liberado = ?, metadata_json = ?,
+             origem_sistema = 'ia-command', origem_id = ?, importado_em = ?, atualizado_em = ?
        WHERE id = ?
-    `).run(role.sistema, role.modulo, role.papel || null, role.codigoIdentidade || null, role.liberado === false ? 0 : 1,
-      JSON.stringify(role.metadata || {}), role.origemId || existing.id, stamp, stamp, existing.id);
-    return 'updated';
+    `).run(papel, codigo, liberado, JSON.stringify(metadata), role.origemId || existing.origem_id || existing.id,
+      stamp, stamp, existing.id);
+    if (adotado) return 'adopted';
+    return mudou ? 'updated' : 'unchanged';
   }
 
   platformDb.prepare(`
@@ -68,7 +95,11 @@ function importarNumerosJ2A() {
 
   const runId = uuid();
   const inicio = now();
-  const resumo = { empresaId, identidadesCriadas: 0, identidadesAtualizadas: 0, rolesCriadas: 0, rolesAtualizadas: 0 };
+  const resumo = {
+    empresaId,
+    identidadesCriadas: 0, identidadesAtualizadas: 0, identidadesPreservadas: 0,
+    rolesCriadas: 0, rolesAtualizadas: 0, rolesReaproveitadas: 0, rolesSemAlteracao: 0,
+  };
 
   const tx = platformDb.transaction(() => {
     platformDb.prepare(`
@@ -88,7 +119,7 @@ function importarNumerosJ2A() {
       const numeroNormalizado = normalizePhone(n.numero);
       if (!numeroNormalizado) continue;
       const stamp = now();
-      const metadata = {
+      const metadataIaCommand = {
         ...parseJson(n.metadata_json, {}),
         erp_tipo: n.erp_tipo || null,
         erp_id: n.erp_id || null,
@@ -102,15 +133,35 @@ function importarNumerosJ2A() {
       const identityId = existing?.id || uuid();
 
       if (existing) {
+        // Metadados MESCLADOS: os campos do IA Command são atualizados, mas o que
+        // só existe no IAHub (bloco iaService — ID SoftExpert, usuário IAHub,
+        // pré-análise — e o "tipo") nunca é apagado. Antes o metadata_json era
+        // substituído inteiro e o login do IA Service perdia o ID SoftExpert.
+        const metadataAtual = parseJson(existing.metadata_json, {});
+        const metadata = { ...metadataAtual, ...metadataIaCommand };
+        if (metadataAtual.iaService !== undefined) metadata.iaService = metadataAtual.iaService;
+        if (metadataAtual.tipo !== undefined) metadata.tipo = metadataAtual.tipo;
+        // Cadastro nunca importado ou editado na tela depois da última
+        // importação: nome/observações/status ficam como estão no IAHub.
+        const editadoManualmente = !existing.importado_em || String(existing.atualizado_em || '') > String(existing.importado_em);
         platformDb.prepare(`
           UPDATE platform_whatsapp_identities
              SET nome = ?, numero = ?, numero_normalizado = ?, wa_lid = ?, observacoes = ?, ativo = ?,
                  origem_sistema = 'ia-command', origem_id = ?, metadata_json = ?, importado_em = ?, atualizado_em = ?
            WHERE id = ?
-        `).run(n.nome || numeroNormalizado, n.numero || numeroNormalizado, numeroNormalizado, n.wa_lid || null,
-          n.observacoes || '', Number(n.ativo) === 0 ? 0 : 1, n.id, JSON.stringify(metadata), stamp, stamp, identityId);
+        `).run(
+          editadoManualmente ? existing.nome : (n.nome || numeroNormalizado),
+          n.numero || numeroNormalizado, numeroNormalizado, n.wa_lid || existing.wa_lid || null,
+          editadoManualmente ? (existing.observacoes || '') : (n.observacoes || ''),
+          editadoManualmente ? (Number(existing.ativo) === 0 ? 0 : 1) : (Number(n.ativo) === 0 ? 0 : 1),
+          n.id, JSON.stringify(metadata),
+          editadoManualmente ? existing.importado_em : stamp,
+          editadoManualmente ? existing.atualizado_em : stamp,
+          identityId);
         resumo.identidadesAtualizadas += 1;
+        if (editadoManualmente) resumo.identidadesPreservadas += 1;
       } else {
+        const metadata = metadataIaCommand;
         platformDb.prepare(`
           INSERT INTO platform_whatsapp_identities (
             id, empresa_id, nome, numero, numero_normalizado, wa_lid, observacoes, ativo,
@@ -147,9 +198,22 @@ function importarNumerosJ2A() {
       // módulo de origem — se o SoftExpert for desativado no IA Command, a
       // reimportação reflete isso aqui também (não é "importar uma vez e
       // nunca mais sincronizar").
+      //
+      // O ID SoftExpert vem SÓ do codigo_identidade do módulo SoftExpert — o
+      // erp_id do número é código Protheus (ex.: '000007') e, quando tinha
+      // prioridade, o consultor logava com um ID inexistente no SoftExpert
+      // (fila vazia no Radar). Se o IAHub já tem um vínculo chat-web
+      // configurado na tela (aba IA Service), ele é a fonte de verdade e a
+      // importação não cria um segundo.
       const moduloSoftexpert = modulosDoNumero.find(m => String(m.erp || '').toLowerCase() === 'softexpert' && String(m.modulo || '').toLowerCase() === 'chamados');
-      if (moduloSoftexpert) {
-        const idSoftexpert = n.erp_id || moduloSoftexpert.codigo_identidade || null;
+      const chatWebManual = platformDb.prepare(`
+        SELECT 1 FROM platform_identity_roles
+         WHERE empresa_id = ? AND identity_id = ? AND lower(sistema) = 'ia-service' AND lower(modulo) = 'chat-web'
+           AND COALESCE(origem_id, '') <> ?
+         LIMIT 1
+      `).get(empresaId, identityId, `${n.id}:ia-service-auto`);
+      if (moduloSoftexpert && !chatWebManual) {
+        const idSoftexpert = moduloSoftexpert.codigo_identidade || null;
         if (idSoftexpert) {
           roles.push({
             sistema: 'ia-service',
@@ -166,7 +230,9 @@ function importarNumerosJ2A() {
       for (const role of roles) {
         const op = upsertRole(platformDb, identityId, empresaId, role);
         if (op === 'created') resumo.rolesCriadas += 1;
-        else resumo.rolesAtualizadas += 1;
+        else if (op === 'adopted') resumo.rolesReaproveitadas += 1;
+        else if (op === 'updated') resumo.rolesAtualizadas += 1;
+        else resumo.rolesSemAlteracao += 1;
       }
     }
 
