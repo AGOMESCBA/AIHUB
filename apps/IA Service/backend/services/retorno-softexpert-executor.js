@@ -3,19 +3,34 @@ const repository = require('../repositories/retorno-softexpert-repository');
 const soapClient = require('./softexpert-soap-client');
 const { mapearCampos } = require('./retorno-softexpert-config');
 
-function criarExecutor({ repo = repository, soap = soapClient, resolverOid, sincronizar }) {
+function criarExecutor({ repo = repository, soap = soapClient, resolverResponsavel, resolverOid, sincronizar }) {
   async function executar({ tentativaId, config, chamado, consultor, campos, arquivos, validarAutorizacao = () => {} }) {
+    if (config.contrato.anexos?.destino === 'campo_grid' && arquivos.length > 1) throw Object.assign(new Error('É permitido apenas um anexo por posicionamento.'), { status: 400 });
     const manifesto = arquivos.map((f) => ({ hash: crypto.createHash('sha256').update(f.buffer).digest('hex'), nome: f.originalname, tamanho: f.size }));
     // Serializa por tentativa no banco, inclusive entre processos. Um envio interrompido nunca é retomado cegamente.
     let state = repo.adquirir(tentativaId, config.contratoHash, manifesto);
+    let responsavelConfirmado;
     const snapshot = () => resultado({ ...repo.obter(tentativaId), em_processamento: 0 });
     try {
       repo.atualizar(tentativaId, { fonte_id: chamado.fonteId, numero_chamado: chamado.numero });
       const contrato = config.contrato;
       if (contrato.historico?.modo === 'comentario_validado' && state.status_historico === 'desabilitado') repo.atualizar(tentativaId, { status_historico: 'pendente' });
-      const xmlGrid = soap.montarInclusaoGrid({ workflowId: chamado.numero, mainEntityId: contrato.mainEntityId, childRelationshipId: contrato.childRelationshipId, campos: mapearCampos(campos, contrato, { chamado, consultor, instante: state.criado_em }) });
       if (['enviando', 'indeterminado'].includes(state.status_posicionamento)) return snapshot();
       if (state.status_posicionamento !== 'registrado') {
+        const responsavel = await resolverResponsavel({ chamado });
+        if (!responsavel?.codigo || !responsavel.nome?.trim()) throw Object.assign(new Error('Responsável técnico do chamado não confirmado.'), { status: 409 });
+        if (String(responsavel.codigo) !== String(consultor.idSoftexpert)) throw Object.assign(new Error('O responsável técnico mudou na origem. Atualize o chamado antes de registrar retorno.'), { status: 403 });
+        responsavelConfirmado = responsavel;
+        const atributos = mapearCampos(campos, contrato, { chamado, consultor, instante: state.criado_em });
+        // Campos lógicos ITSM confirmados no dicionário. A conta da API não é o dono técnico.
+        for (const id of Object.keys(atributos)) if (['cduserana', 'analistaj2a'].includes(id.toLowerCase())) delete atributos[id];
+        atributos.cduserana = String(responsavel.codigo);
+        atributos.analistaj2a = responsavel.nome.trim();
+        if (contrato.mainEntityId.toLowerCase() === 'itsm' && contrato.childRelationshipId.toLowerCase() === 'relagridregistr') {
+          for (const id of Object.keys(atributos)) if (id.toLowerCase() === 'texto4') delete atributos[id];
+          atributos.texto4 = 'IA SERVICE';
+        }
+        const xmlGrid = soap.montarInclusaoGrid({ workflowId: chamado.numero, mainEntityId: contrato.mainEntityId, childRelationshipId: contrato.childRelationshipId, campos: atributos });
         validarAutorizacao();
         repo.atualizar(tentativaId, { status_posicionamento: 'enviando' });
         repo.evento(tentativaId, 'posicionamento', 'enviando');
@@ -47,15 +62,21 @@ function criarExecutor({ repo = repository, soap = soapClient, resolverOid, sinc
         if (!state.posicionamento_oid) break;
         const file = arquivos[anexo.indice];
         const contentId = contrato.anexos.transporte === 'cid_multipart' ? `arquivo-${anexo.id}@iahub` : undefined;
-        const xml = soap.montarInclusaoAnexo({ ...contrato.anexos, posicionamentoOid: state.posicionamento_oid, nome: file.originalname, conteudo: file.buffer, userId: config.userId, contentId });
+        const campoGrid = contrato.anexos.destino === 'campo_grid';
+        const operacao = campoGrid ? 'editChildEntityRecord' : 'newTableRecord';
+        const xml = campoGrid
+          ? soap.montarEdicaoGrid({ workflowId: chamado.numero, mainEntityId: contrato.mainEntityId, childRelationshipId: contrato.childRelationshipId, childRecordOid: state.posicionamento_oid, arquivo: { campoId: contrato.anexos.campoArquivoId, nome: file.originalname, conteudo: file.buffer } })
+          : soap.montarInclusaoAnexo({ ...contrato.anexos, posicionamentoOid: state.posicionamento_oid, nome: file.originalname, conteudo: file.buffer, userId: config.userId, contentId });
         validarAutorizacao();
         repo.atualizarAnexo(anexo.id, 'enviando');
         repo.evento(tentativaId, `anexo:${anexo.indice}`, 'enviando');
         try {
-          const response = await soap.enviarOperacao({ ...config.transporte, xml, operacao: 'newTableRecord', anexosSoap: contentId ? [{ contentId, conteudo: file.buffer }] : [] });
+          const response = await soap.enviarOperacao({ ...config.transporte, xml, operacao, anexosSoap: !campoGrid && contentId ? [{ contentId, conteudo: file.buffer }] : [] });
           const ok = response.Status === 'SUCCESS' && response.Code === '1';
-          const status = ok ? (response.RecordID ? 'registrado' : 'indeterminado') : 'falhou';
-          repo.atualizarAnexo(anexo.id, status, ok ? response.RecordID || null : null);
+          // Documentação pública usa RecordID; o WSDL instalado do fm_ws retorna RecordKey.
+          const registroId = campoGrid ? state.posicionamento_oid : response.RecordID || response.RecordKey || null;
+          const status = ok ? (registroId ? 'registrado' : 'indeterminado') : 'falhou';
+          repo.atualizarAnexo(anexo.id, status, status === 'registrado' ? registroId : null);
           repo.evento(tentativaId, `anexo:${anexo.indice}`, status);
         } catch (_) {
           repo.atualizarAnexo(anexo.id, 'indeterminado');
@@ -68,7 +89,12 @@ function criarExecutor({ repo = repository, soap = soapClient, resolverOid, sinc
       if (historico.modo === 'automatico_validado') {
         repo.atualizar(tentativaId, { status_historico: 'automatico_previsto' });
       } else if (historico.modo === 'comentario_validado' && !['registrado', 'enviando', 'indeterminado'].includes(state.status_historico)) {
-        const xml = soap.montarComentario({ workflowId: chamado.numero, texto: campos.DESCRICAO, activityId: historico.activityId, privado: historico.privado });
+        // Em uma retomada, confirma novamente quem está autorizado antes de atribuir a mensagem.
+        const autor = responsavelConfirmado || await resolverResponsavel({ chamado });
+        if (!autor?.codigo || !autor.nome?.trim()) throw Object.assign(new Error('Identificação do consultor não confirmada para o histórico.'), { status: 409 });
+        if (String(autor.codigo) !== String(consultor.idSoftexpert)) throw Object.assign(new Error('O responsável técnico mudou na origem. Atualize o chamado antes de registrar retorno.'), { status: 403 });
+        const identificacao = `${autor.codigo} - ${autor.nome.trim().replace(/\s+/g, ' ')} - IA Service`;
+        const xml = soap.montarComentario({ workflowId: chamado.numero, texto: `${identificacao}\n\n${campos.DESCRICAO}`, activityId: historico.activityId, privado: historico.privado });
         validarAutorizacao();
         repo.atualizar(tentativaId, { status_historico: 'enviando' });
         repo.evento(tentativaId, 'historico', 'enviando');

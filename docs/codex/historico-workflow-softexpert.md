@@ -2,6 +2,10 @@
 
 ## Conclusão
 
+**Homologação real em 16/10/2026:** `newComment` acrescentou o texto do Memo ao histórico padrão do [chamado 036807](softexpert-homologacao-036807.md), associado à atividade sem movimentá-la. `WFHISTORY` confirmou uma ocorrência, autoria da credencial e evento tipo 11; o usuário confirmou a exibição normal dos acentos. A grid não havia produzido uma cópia do Memo antes dessa chamada. A comparação SQL do texto precisou considerar a representação UTF-8 do armazenamento. Isso valida o comentário deste teste, sem comprovar todas as regras do botão manual ou de outras atividades.
+
+**Atualização de 16/10/2026:** o catálogo real confirmou `WFHISTORY`, PK `IDOBJECT`, vínculo `IDPROCESS → WFPROCESS.IDOBJECT`, campos de atividade, usuário, texto e data/hora. [Evidências e limites atuais](softexpert-itsm-investigacao-tabelas.md). O parecer original abaixo relata a documentação local; a ausência de identificação da tabela ali não representa o conhecimento atual do banco. A equivalência ao posicionamento manual continua sem homologação de escrita.
+
 As referências acessíveis comprovam duas operações diferentes: `newChildEntityRecord` inclui uma linha descendente de formulário e `newComment` acrescenta um comentário à instância, opcionalmente associado a uma atividade. Não comprovam que inserir um posicionamento reproduza automaticamente o evento nativo gerado pelo botão do formulário ITSM. Também não comprovam que um comentário equivalha a esse evento.
 
 Consequentemente, não está demonstrada uma operação única, nem uma sequência definitiva, que garanta a presença do retorno nas duas superfícies sem duplicação. A solução candidata é gravar a grid pelo serviço de formulário/Workflow validado e acrescentar `newComment` somente se o processo não gerar o registro desejado automaticamente e se comentário for a representação funcional aceita no histórico.

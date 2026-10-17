@@ -1,0 +1,677 @@
+{
+  "versao": 1,
+  "metadadosConsultadosEm": "2026-10-15",
+  "apisRevalidadasEm": "2026-10-16",
+  "empresaId": 1,
+  "fonteId": "1cf6904d-6f08-4ea6-ba75-63036c14f5a5",
+  "origemApiValidada": "https://j2a.c3isystems.com.br",
+  "envioHabilitado": false,
+  "entidades": [
+    {
+      "OID": "8a80938c7e297a61017e2ac1d0ac0d38",
+      "IDNAME": "itsm",
+      "NMDISPLAYNAME": "ITSM01",
+      "OIDPARENT": null,
+      "FGSTATUS": "2",
+      "FGDISABLE": "0",
+      "FGTYPEENTITY": "0"
+    },
+    {
+      "OID": "8a80938c8561d5cf018564ec2972107b",
+      "IDNAME": "ITSMGRIDANEXOAP",
+      "NMDISPLAYNAME": "GRID ANEXO P/ APONTAMENTOS",
+      "OIDPARENT": null,
+      "FGSTATUS": "2",
+      "FGDISABLE": "0",
+      "FGTYPEENTITY": null
+    },
+    {
+      "OID": "8a80938c83894b86018389e319ae012e",
+      "IDNAME": "ITSMGRIDREGISTR",
+      "NMDISPLAYNAME": "Registro",
+      "OIDPARENT": null,
+      "FGSTATUS": "2",
+      "FGDISABLE": "0",
+      "FGTYPEENTITY": null
+    }
+  ],
+  "relacionamentos": [
+    {
+      "OID": "8a80938c83894b9a01838a7892ed091e",
+      "IDNAME": "relagridregistr",
+      "NMDESCRIPTION": "Relacionamento Grid Registros Chamado",
+      "OIDENTITYFROM": "8a80938c7e297a61017e2ac1d0ac0d38",
+      "OIDENTITYTO": "8a80938c83894b86018389e319ae012e",
+      "ENTIDADE_ORIGEM": "itsm",
+      "ENTIDADE_DESTINO": "ITSMGRIDREGISTR",
+      "OIDCONFIGFROM": "8a80938c83894b9a01838a7892ed091f",
+      "OIDCONFIGTO": "8a80938c83894b9a01838a7892ed0920",
+      "FGSTATUS": "2",
+      "FGDISABLE": "0"
+    },
+    {
+      "OID": "8a80938c8561d5c2018564ef85fd2039",
+      "IDNAME": "relregistroanex",
+      "NMDESCRIPTION": "Relacionamento Grid Anexo com Apontamento",
+      "OIDENTITYFROM": "8a80938c83894b86018389e319ae012e",
+      "OIDENTITYTO": "8a80938c8561d5cf018564ec2972107b",
+      "ENTIDADE_ORIGEM": "ITSMGRIDREGISTR",
+      "ENTIDADE_DESTINO": "ITSMGRIDANEXOAP",
+      "OIDCONFIGFROM": "8a80938c8561d5c2018564ef85fd203a",
+      "OIDCONFIGTO": "8a80938c8561d5c2018564ef85fd203b",
+      "FGSTATUS": "2",
+      "FGDISABLE": "0"
+    }
+  ],
+  "atributos": [
+    {
+      "entidade": "ITSMGRIDANEXOAP",
+      "id": "data1",
+      "oid": "8a80938c8561d5cf018564ecbb751084",
+      "rotulo": "Data",
+      "tipoDicionario": "6",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDANEXOAPONTAMENTO",
+          "id": "element-date-001",
+          "obrigatorio": false,
+          "desabilitado": false,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDANEXOAP",
+      "id": "arquivo1",
+      "oid": "8a80938c8561d5cf018564eceb911087",
+      "rotulo": "Anexo",
+      "tipoDicionario": "8",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDANEXOAPONTAMENTO",
+          "id": "element-file-001",
+          "obrigatorio": false,
+          "desabilitado": false,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "arquivo1",
+      "oid": "8a80938c83894b8601838e917c6706ee",
+      "rotulo": "Anexo",
+      "tipoDicionario": "8",
+      "elementos": []
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "texto1",
+      "oid": "8a80938c83894b8601838fedce6b0a3c",
+      "rotulo": "Cód Chamado TOTVS/SOFTEXPERT",
+      "tipoDicionario": "1",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-text-002",
+          "obrigatorio": false,
+          "desabilitado": false,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "dataatual",
+      "oid": "8a80938c83894b9a01838a7aa4e70924",
+      "rotulo": "Data Atual",
+      "tipoDicionario": "6",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-date-001",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "empresa",
+      "oid": "8a80938c83894b9a01838a7ef9370930",
+      "rotulo": "Empresa",
+      "tipoDicionario": "1",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-text-003",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "colabcliente",
+      "oid": "8a80938c83894b9a01838a8042740933",
+      "rotulo": "Colaborador Cliente",
+      "tipoDicionario": "1",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-text-004",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "situacaochamado",
+      "oid": "8a80938c83894b9a01838a8089530936",
+      "rotulo": "Situação Chamado",
+      "tipoDicionario": "1",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-text-005",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "analistaj2a",
+      "oid": "8a80938c83894b9a01838a80e06f0939",
+      "rotulo": "Analista J2A",
+      "tipoDicionario": "1",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-text-006",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "horaatual",
+      "oid": "8a80938c83894b9a01838a816c47093c",
+      "rotulo": "Hora Atual",
+      "tipoDicionario": "5",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-time-002",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "horainicial",
+      "oid": "8a80938c83894b9a01838a81b148093f",
+      "rotulo": "Hora Inicial",
+      "tipoDicionario": "5",
+      "elementos": []
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "horafinal",
+      "oid": "8a80938c83894b9a01838a81f2f40943",
+      "rotulo": "Hora Final",
+      "tipoDicionario": "5",
+      "elementos": []
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "totalhoras",
+      "oid": "8a80938c83894b9a01838a82351e0946",
+      "rotulo": "Total Horas",
+      "tipoDicionario": "5",
+      "elementos": []
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "aguardanretorno",
+      "oid": "8a80938c83894b9a01838a82ad1c0949",
+      "rotulo": "Aguardando Retorno",
+      "tipoDicionario": "1",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-text-007",
+          "obrigatorio": true,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "tipoposicioname",
+      "oid": "8a80938c83894b9a01838a82faaa094c",
+      "rotulo": "Tipo Posicionamento",
+      "tipoDicionario": "1",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-text-008",
+          "obrigatorio": true,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "motivoapontamen",
+      "oid": "8a80938c83894b9a01838a8341880972",
+      "rotulo": "Motivo Apontamento",
+      "tipoDicionario": "1",
+      "elementos": []
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "assunto",
+      "oid": "8a80938c83894b9a01838a836844098b",
+      "rotulo": "Assunto",
+      "tipoDicionario": "1",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-text-009",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "descricao",
+      "oid": "8a80938c83894b9a01838a83b26e098f",
+      "rotulo": "Descrição",
+      "tipoDicionario": "11",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-paragraph-001",
+          "obrigatorio": true,
+          "desabilitado": false,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "chamado",
+      "oid": "8a80938c83894b9a01838a8e9bbf09f5",
+      "rotulo": "Chamado",
+      "tipoDicionario": "1",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-text-001",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "horaini",
+      "oid": "8a80938c83f89fe201841f0451a04e3a",
+      "rotulo": "Hora Inicial",
+      "tipoDicionario": "0",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-text-010",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "horafim",
+      "oid": "8a80938c83f89fe201841f0497444e47",
+      "rotulo": "Hora Final",
+      "tipoDicionario": "0",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-text-012",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "horaint",
+      "oid": "8a80938c83f89fe201841f04e0714e4a",
+      "rotulo": "Hora Intervalo",
+      "tipoDicionario": "0",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-text-011",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "horatotalnum",
+      "oid": "8a80938c83f89fe201841f055bbe4e4d",
+      "rotulo": "Hora Total",
+      "tipoDicionario": "4",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-decimal-004",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "emailenviado",
+      "oid": "8a80938c843021c2018434fb7d5c3279",
+      "rotulo": "EMAILENVIADO",
+      "tipoDicionario": "1",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-text-013",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "caracter",
+      "oid": "8a80938c843021c2018434fc73133289",
+      "rotulo": "CARACTER",
+      "tipoDicionario": "1",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-text-014",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "resultado",
+      "oid": "8a80938c843d93ad01844441fcea458e",
+      "rotulo": "Resultado(Hora total)",
+      "tipoDicionario": "1",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-text-015",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "horainiconv",
+      "oid": "8a80938c843d93ad0184444ade3e45f7",
+      "rotulo": "HORAINI_CONV",
+      "tipoDicionario": "4",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-decimal-003",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "horaintconv",
+      "oid": "8a80938c843d93ad0184444b173345fb",
+      "rotulo": "HORAINT_CONV",
+      "tipoDicionario": "4",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-decimal-002",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "horafimconv",
+      "oid": "8a80938c843d93ad0184444b739845fe",
+      "rotulo": "HORAFIM_CONV",
+      "tipoDicionario": "4",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-decimal-001",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "arquivo2",
+      "oid": "8a80938c857149380185740c2887187e",
+      "rotulo": "Anexo",
+      "tipoDicionario": "8",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-file-001",
+          "obrigatorio": false,
+          "desabilitado": false,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "cduserana",
+      "oid": "8a80938c859baaef0185abd57bae6eab",
+      "rotulo": "CDUSERANA",
+      "tipoDicionario": "13",
+      "elementos": []
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "texto2",
+      "oid": "8a80938c86fc183801872dec049a5ec2",
+      "rotulo": "Texto",
+      "tipoDicionario": "1",
+      "elementos": []
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "cdapontakanban",
+      "oid": "8a80938c8d81b152018d84cd9d990e95",
+      "rotulo": "Código de apontamento do kanban",
+      "tipoDicionario": "3",
+      "elementos": []
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "dtrecl",
+      "oid": "8a80938c8f52158f018f59ad90582349",
+      "rotulo": "Data retorno por e-mail Cliente",
+      "tipoDicionario": "1",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-text-017",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": true
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "hrrecl",
+      "oid": "8a80938c8f52158f018f59adea09234c",
+      "rotulo": "Hora retorno por e-mail Cliente",
+      "tipoDicionario": "1",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-text-016",
+          "obrigatorio": false,
+          "desabilitado": true,
+          "oculto": true
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "stgd",
+      "oid": "8a80938c8f52158f018f59b58329239b",
+      "rotulo": "Status grid",
+      "tipoDicionario": "1",
+      "elementos": []
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "dtgd",
+      "oid": "8a80938c8f52158f018f59b60287239e",
+      "rotulo": "Detail grid",
+      "tipoDicionario": "1",
+      "elementos": []
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "texto3",
+      "oid": "8a80938c8f521749018f59abe10034f6",
+      "rotulo": "Texto",
+      "tipoDicionario": "1",
+      "elementos": []
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "texto4",
+      "oid": "8a80938c8f521749018f59abe89734f9",
+      "rotulo": "Texto",
+      "tipoDicionario": "1",
+      "elementos": []
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "dtagend",
+      "oid": "8a80938c985f84b9019860fd2d680698",
+      "rotulo": "Data do Agendamento do Patch",
+      "tipoDicionario": "6",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-date-002",
+          "obrigatorio": false,
+          "desabilitado": false,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "hragend",
+      "oid": "8a80938c985f84b9019860fd5b09069a",
+      "rotulo": "Hora do Agendamento do Patch",
+      "tipoDicionario": "5",
+      "elementos": [
+        {
+          "formulario": "ITSMGRIDREGISTRO",
+          "id": "element-time-001",
+          "obrigatorio": false,
+          "desabilitado": false,
+          "oculto": false
+        }
+      ]
+    },
+    {
+      "entidade": "ITSMGRIDREGISTR",
+      "id": "dthragen",
+      "oid": "8a80938c985f84b9019861d8a24e0a9e",
+      "rotulo": "Data e Hora do Agendamento",
+      "tipoDicionario": "1",
+      "elementos": []
+    }
+  ],
+  "historico": {
+    "tabela": "WFHISTORY",
+    "chavePrimaria": "IDOBJECT",
+    "workflow": "IDPROCESS -> WFPROCESS.IDOBJECT",
+    "codigoInstancia": "WFPROCESS.IDPROCESS",
+    "atividade": "IDSTRUCT",
+    "usuario": "CDUSER",
+    "nomeUsuario": "NMUSER",
+    "texto": "DSCOMMENT",
+    "tipoEvento": "FGTYPE",
+    "data": "DTHISTORY",
+    "hora": "TMHISTORY",
+    "dataHora": "DHHISTORY",
+    "privado": "FGPRIVATE",
+    "equivalenciaNewCommentComManual": "nao comprovada",
+    "homologacao": {
+      "chamado": "036807",
+      "data": "2026-10-16",
+      "operacao": "newComment",
+      "fgType": "11",
+      "exibicaoConfirmadaPeloUsuario": true,
+      "textoIgualAposDecodificarUtf8": true,
+      "privado": "1"
+    }
+  },
+  "anexos": {
+    "tipoWsdl": "xsd:base64Binary",
+    "tabela": "ITSMGRIDANEXOAP",
+    "relacionamento": "relregistroanex",
+    "campoArquivo": "arquivo1",
+    "campoVisivelNoPosicionamento": "arquivo2",
+    "gridAnexosOculta": true,
+    "registrosComArquivoEncontrados": 0,
+    "armazenamentoValidadoPorAmostra": true,
+    "homologacao": {
+      "chamado": "036807",
+      "data": "2026-10-16",
+      "arquivoBytes": 170,
+      "hashConferido": true
+    }
+  }
+}

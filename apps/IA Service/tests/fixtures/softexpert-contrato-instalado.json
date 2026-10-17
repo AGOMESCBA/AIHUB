@@ -1,0 +1,219 @@
+{
+  "origem": "https://j2a.c3isystems.com.br",
+  "consultadoEm": "2026-10-16T13:45:50.659Z",
+  "observacao": "Contrato obtido por GET autenticado. Sem credenciais ou dados de atendimento.",
+  "servicos": {
+    "wf_ws.php": {
+      "operacoes": [
+        "cancelWorkflow",
+        "clearChildEntityRecord",
+        "deleteAccessException",
+        "deleteChildEntityRecord",
+        "editAttributeValue",
+        "editChildEntityRecord",
+        "editEntityRecord",
+        "editWorkflowData",
+        "executeActivity",
+        "executeSystemActivity",
+        "getWorkflow",
+        "newAccessException",
+        "newAssocDocument",
+        "newAssocWorkflow",
+        "newAttachment",
+        "newChildEntityRecord",
+        "newChildEntityRecordList",
+        "newComment",
+        "newWorkflow",
+        "newWorkflowEditData",
+        "newWorkflowTypeEditData",
+        "reactivateWorkflow",
+        "unlinkActivityFromUser"
+      ],
+      "tipos": {
+        "editEntityRecordRequestType": [
+          { "nome": "WorkflowID", "tipo": "xsd:string", "minimo": "1" },
+          { "nome": "EntityID", "tipo": "xsd:string", "minimo": "1" },
+          { "nome": "EntityAttributeList", "tipo": "tns:entityAttributeArray", "minimo": "0" },
+          { "nome": "RelationshipList", "tipo": "tns:relationshipListArray", "minimo": "0" },
+          { "nome": "EntityAttributeFileList", "tipo": "tns:entityAttributeFileArray", "minimo": "0" }
+        ],
+        "newChildEntityRecordRequestType": [
+          {
+            "nome": "WorkflowID",
+            "tipo": "xsd:string",
+            "minimo": "1"
+          },
+          {
+            "nome": "MainEntityID",
+            "tipo": "xsd:string",
+            "minimo": "1"
+          },
+          {
+            "nome": "ChildRelationshipID",
+            "tipo": "xsd:string",
+            "minimo": "1"
+          },
+          {
+            "nome": "EntityAttributeList",
+            "tipo": "tns:entityAttributeArray",
+            "minimo": "0"
+          },
+          {
+            "nome": "RelationshipList",
+            "tipo": "tns:relationshipListArray",
+            "minimo": "0"
+          },
+          {
+            "nome": "EntityAttributeFileList",
+            "tipo": "tns:entityAttributeFileArray",
+            "minimo": "0"
+          }
+        ],
+        "newCommentRequestType": [
+          {
+            "nome": "WorkflowID",
+            "tipo": "xsd:string",
+            "minimo": "1"
+          },
+          {
+            "nome": "ActivityID",
+            "tipo": "xsd:string",
+            "minimo": "1"
+          },
+          {
+            "nome": "Text",
+            "tipo": "xsd:string",
+            "minimo": "1"
+          },
+          {
+            "nome": "Private",
+            "tipo": "xsd:integer",
+            "minimo": "1"
+          }
+        ],
+        "getWorkflowRequestType": [
+          {
+            "nome": "WorkflowID",
+            "tipo": "xsd:string",
+            "minimo": "1"
+          }
+        ],
+        "editChildEntityRecordRequestType": [
+          {
+            "nome": "WorkflowID",
+            "tipo": "xsd:string",
+            "minimo": "1"
+          },
+          {
+            "nome": "MainEntityID",
+            "tipo": "xsd:string",
+            "minimo": "1"
+          },
+          {
+            "nome": "ChildRelationshipID",
+            "tipo": "xsd:string",
+            "minimo": "1"
+          },
+          {
+            "nome": "ChildRecordOID",
+            "tipo": "xsd:string",
+            "minimo": "1"
+          },
+          {
+            "nome": "EntityAttributeList",
+            "tipo": "tns:entityAttributeArray",
+            "minimo": "0"
+          },
+          {
+            "nome": "RelationshipList",
+            "tipo": "tns:relationshipListArray",
+            "minimo": "0"
+          },
+          {
+            "nome": "EntityAttributeFileList",
+            "tipo": "tns:entityAttributeFileArray",
+            "minimo": "0"
+          }
+        ]
+      }
+    },
+    "fm_ws.php": {
+      "operacoes": [
+        "deleteTableRecord",
+        "deleteTableRecordList",
+        "editTableRecord",
+        "getTableRecord",
+        "newTableRecord",
+        "newTableRecordList"
+      ],
+      "tipos": {
+        "newTableRecordRequestType": [
+          {
+            "nome": "UserID",
+            "tipo": "xsd:string",
+            "minimo": "1"
+          },
+          {
+            "nome": "TableID",
+            "tipo": "xsd:string",
+            "minimo": "1"
+          },
+          {
+            "nome": "TableFieldList",
+            "tipo": "tns:tableFieldArray",
+            "minimo": "1"
+          },
+          {
+            "nome": "RelationshipList",
+            "tipo": "tns:relationshipListArray",
+            "minimo": "1"
+          },
+          {
+            "nome": "TableFieldFileList",
+            "tipo": "tns:tableFieldFileArray",
+            "minimo": "1"
+          },
+          {
+            "nome": "RelatedTo",
+            "tipo": "tns:RelatedToData",
+            "minimo": "1"
+          }
+        ],
+        "getTableRecordRequestType": [
+          {
+            "nome": "TableID",
+            "tipo": "xsd:string",
+            "minimo": "1"
+          },
+          {
+            "nome": "Pagination",
+            "tipo": "xsd:integer",
+            "minimo": "1"
+          },
+          {
+            "nome": "TableFieldList",
+            "tipo": "tns:tableFieldArray",
+            "minimo": "1"
+          }
+        ],
+        "fieldFileData": [
+          {
+            "nome": "TableFieldID",
+            "tipo": "xsd:string",
+            "minimo": "1"
+          },
+          {
+            "nome": "FileName",
+            "tipo": "xsd:string",
+            "minimo": "1"
+          },
+          {
+            "nome": "FileContent",
+            "tipo": "xsd:base64Binary",
+            "minimo": "1"
+          }
+        ]
+      }
+    }
+  }
+}

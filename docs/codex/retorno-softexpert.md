@@ -2,6 +2,12 @@
 
 ## Estado da entrega
 
+**Dono técnico corrigido em 16/10/2026:** [Edson Assis/124 no chamado 036807](softexpert-correcao-responsavel-036807.md), por edição oficial do mesmo registro. Novos envios consultam o responsável na origem e nunca usam a conta da API como dono técnico. Corrigida também a sincronização local de alterações somente no analista; auditoria nativa preservada.
+
+**Homologação real em 16/10/2026:** as três operações foram executadas com sucesso no [chamado 036807](softexpert-homologacao-036807.md), após autorização específica. Confirmados texto, anexo, autoria da credencial, ausência de duplicação e atividade inalterada. O usuário confirmou acentuação correta no histórico. O chamado e o arquivo foram importados. Envio geral permanece desabilitado; esta atualização prevalece sobre o estado pré-homologação relatado abaixo.
+
+**Atualização de 16/10/2026:** [metadados e acessos reais](softexpert-itsm-investigacao-tabelas.md) confirmam os IDs ITSM, WFHISTORY, consultas reais pelo cliente do IA Service e base64 no WSDL instalado. Essas evidências atualizam as pendências de identificação descritas abaixo. Foram corrigidos SOAP obrigatório, confiança TLS e consulta vazia. Escrita real continua sem homologação e não foi habilitada.
+
 O fluxo foi conectado ao executor SOAP configurável, reaproveitando interface, autorização, auditoria, importação e chat existentes. A configuração de exemplo permanece desabilitada. Nenhuma credencial real foi cadastrada, nenhuma migração foi aplicada ao banco real por estes testes e nenhuma gravação no SoftExpert foi executada.
 
 Não existe mais bloqueio fixo no código. O envio depende de um contrato completo e validado para a empresa, fonte e analista: nomes físicos de tabelas não comprovam os identificadores lógicos das APIs.
@@ -20,7 +26,7 @@ Não existe mais bloqueio fixo no código. O envio depende de um contrato comple
 | Etapa | Operação e endpoint | Requisição e resposta |
 |---|---|---|
 | Posicionamento | `newChildEntityRecord`, `POST /apigateway/se/ws/wf_ws.php`, `urn:workflow` | `WorkflowID`, `MainEntityID`, `ChildRelationshipID`, `EntityAttributeList/EntityAttribute/EntityAttributeID/EntityAttributeValue`. Resposta: `Status`, `Code`, `Detail`, `RecordKey`. |
-| Arquivo | `newTableRecord`, `POST /apigateway/se/ws/fm_ws.php`, `urn:form` | `UserID` quando configurado, `TableID`, `TableFieldFileList/TableFieldFile` com `TableFieldID`, `FileName`, `FileContent`; `RelatedTo/RelatedRelationshipID/RelatedRelationshipValue`. Resposta: `Status`, `Code`, `Detail`, `RecordID`. Transportes multipart/CID e base64 inline preparados, sujeitos ao contrato instalado. |
+| Arquivo | `newTableRecord`, `POST /apigateway/se/ws/fm_ws.php`, `urn:form` | `UserID` quando configurado, `TableID`, `TableFieldFileList/TableFieldFile` com `TableFieldID`, `FileName`, `FileContent`; `RelatedTo/RelatedRelationshipID/RelatedRelationshipValue`. Resposta: `Status`, `Code`, `Detail`, `RecordID` na documentação pública e `RecordKey` no WSDL instalado, ambos reconhecidos pelo executor. Base64 inline confirmado por teste real; multipart/CID preparado. |
 | Comentário opcional | `newComment`, `POST /apigateway/se/ws/wf_ws.php`, `urn:workflow` | `WorkflowID`, `Text`, `ActivityID` opcional, `Private` explícito. Resposta: `Status`, `Code`, `Detail`. Sem parâmetro de autoria inventado. Desabilitado por padrão. |
 
 Referências locais: `.claude/skills/softexpert-wf-ws/references/newChildEntityRecord.md` e `references/newComment.md`, seções **Parâmetros**, **Estrutura da requisição** e **Retorno**; `references/00-overview.md`, autenticação e formatos. Referência de formulário: [documentação oficial newTableRecord](https://developer.softexpert.com/docs/data-integration/reference/web-service-soap/form/newTableRecord). Não existe referência Markdown própria dessa operação na cópia local. O WSDL real continua necessário para confirmar o transporte na instalação.

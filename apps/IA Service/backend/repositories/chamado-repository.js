@@ -259,7 +259,11 @@ function upsertPosicionamento(empresaId, dados) {
   `).get(Number(empresaId), dados.fonteId, dados.oidOrigem);
 
   if (existente) {
-    if (existente.hash_conteudo === hashAtual) {
+    // Correção só de analista também precisa sincronizar. Preserva o formato dos hashes existentes.
+    const mesmaIdentidade = existente.tecnico_id === (dados.tecnicoId ?? null)
+      && existente.tecnico_nome_origem === (dados.tecnicoNomeOrigem ?? null)
+      && existente.usuario_cliente_id === (dados.usuarioClienteId ?? null);
+    if (existente.hash_conteudo === hashAtual && mesmaIdentidade) {
       return { posicionamento: _posicionamentoParaDominio(existente), resultado: 'sem_alteracao' };
     }
     const sets = CAMPOS_POSICIONAMENTO.map(c => `${COLUNA_POR_CAMPO_POS[c]} = ?`).join(', ');

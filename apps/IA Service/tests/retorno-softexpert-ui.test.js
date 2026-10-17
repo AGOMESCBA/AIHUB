@@ -48,6 +48,7 @@ test('rascunhos, anexos e confirmação explícita no desktop', async () => {
     await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
     assert.equal(await page.locator('[name=DESCRICAO]').inputValue(), 'Texto do posicionamento');
     assert.ok((await page.locator('[data-retorno-file-list]').textContent()).includes('log.txt'));
+    await preencherHoras(page);
     await page.getByRole('button', { name: 'Registrar retorno', exact: true }).click();
     assert.equal(await page.locator('dialog').isVisible(), true);
     assert.ok((await page.locator('[data-retorno-confirm-context]').textContent()).includes('00012345 · 1 anexo'));
@@ -85,6 +86,12 @@ async function browserPage(viewport) {
   return page;
 }
 
+async function preencherHoras(page) {
+  await page.locator('[name=HORAINI]').selectOption('08:00');
+  await page.locator('[name=HORAINT]').selectOption('00:00');
+  await page.locator('[name=HORAFIM]').selectOption('08:30');
+}
+
 test('mobile 390 e 320 px: tela inteira, ações acessíveis e rascunho preservado', async () => {
   for (const width of [390, 320]) {
     const page = await browserPage({ width, height: 844 });
@@ -97,6 +104,7 @@ test('mobile 390 e 320 px: tela inteira, ações acessíveis e rascunho preserva
       assert.equal(Math.round(bounds.x), 0);
       const footer = await page.locator('.retorno-form > footer').boundingBox();
       assert.ok(footer.y + footer.height <= 845);
+      await preencherHoras(page);
       await page.getByRole('button', { name: 'Registrar retorno', exact: true }).click();
       assert.equal(await page.locator('[data-retorno-confirm-send]').isDisabled(), true);
       assert.equal(await page.evaluate(() => window.posts), 0);
@@ -220,6 +228,7 @@ test('sucesso parcial preserva conteúdo e chave na retomada confirmada', async 
     await page.evaluate(() => { window.replies = [{status:'parcial',posicionamento:'registrado',mensagem:'Um anexo falhou.'},{status:'registrado',posicionamento:'registrado'}]; });
     await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
     await page.locator('[name=DESCRICAO]').fill('Conteúdo a retomar');
+    await preencherHoras(page);
     await page.getByRole('button', { name: 'Registrar retorno', exact: true }).click();
     await page.locator('[data-retorno-confirm-send]').click();
     await page.waitForFunction(() => window.posts === 1 && !document.querySelector('dialog').open);
@@ -233,12 +242,55 @@ test('sucesso parcial preserva conteúdo e chave na retomada confirmada', async 
   } finally { await page.close(); }
 });
 
+test('horas, agendamento, Memo e anexo único no desktop e no mobile', async () => {
+  for (const width of [1440, 320]) {
+    const page = await browserPage({ width, height: 900 });
+    try {
+      await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
+      await page.locator('[name=DESCRICAO]').fill('Descrição longa\n' + 'Memo com acentuação. '.repeat(600));
+      assert.equal(await page.locator('[name=HORAINI] option').count(), 49);
+      assert.equal(await page.locator('[name=HORAINI] option').last().getAttribute('value'), '23:30');
+      assert.equal(await page.locator('[name=HORAFIM]').getAttribute('required'), '');
+      await page.getByRole('button', { name: 'Registrar retorno', exact: true }).click();
+      assert.equal(await page.locator('dialog').isVisible(), false);
+      await page.locator('[name=HORAINI]').selectOption('08:30');
+      await page.locator('[name=HORAINT]').selectOption('00:30');
+      await page.locator('[name=HORAFIM]').selectOption('08:00');
+      assert.equal(await page.locator('[name=HORAFIM]').evaluate(e => e.checkValidity()), false);
+      await page.locator('[name=HORAFIM]').selectOption('10:30');
+      assert.equal(await page.locator('[name=HORATOTALNUM]').inputValue(), '1,50');
+      assert.equal(await page.locator('[name=HORATOTALNUM]').evaluate(e => e.readOnly), true);
+      await page.locator('[name=HORAINT]').selectOption('03:00');
+      assert.equal(await page.locator('[name=HORAINT]').evaluate(e => e.checkValidity()), false);
+      await page.locator('[name=HORAINT]').selectOption('00:30');
+      await page.locator('[name=DTAGEND]').fill('2026-10-18');
+      await page.locator('[name=HRAGEND]').fill('19:00');
+      assert.equal(await page.locator('[data-retorno-files]').evaluate(e => e.multiple), false);
+      await page.locator('[data-retorno-files]').setInputFiles({ name: 'primeiro.txt', mimeType: 'text/plain', buffer: Buffer.from('1') });
+      await page.locator('[data-retorno-files]').setInputFiles({ name: 'segundo.txt', mimeType: 'text/plain', buffer: Buffer.from('2') });
+      assert.equal(await page.locator('[data-retorno-file-list] li').count(), 1);
+      assert.equal((await page.locator('[data-retorno-file-list]').textContent()).includes('primeiro.txt'), false);
+      assert.equal((await page.locator('[data-retorno-file-list]').textContent()).includes('segundo.txt'), true);
+      await page.getByRole('button', { name: 'Voltar ao chat' }).click();
+      await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
+      assert.equal(await page.locator('[name=HORATOTALNUM]').inputValue(), '1,50');
+      await page.getByRole('button', { name: 'Registrar retorno', exact: true }).click();
+      assert.equal(await page.locator('dialog').isVisible(), true);
+      assert.match(await page.locator('[data-retorno-confirm-context]').textContent(), /1 anexo/);
+      await page.locator('[data-retorno-confirm-cancel]').click();
+      await page.locator('[name=HORAINI]').scrollIntoViewIfNeeded();
+      await page.screenshot({ path: path.join(__dirname, `../../../tmp/retorno-horas-${width}.png`) });
+    } finally { await page.close(); }
+  }
+});
+
 test('falha de rede exige consulta; resultado confirmado não causa outro POST', async () => {
   const page = await browserPage({ width: 1440, height: 900 });
   try {
     await page.evaluate(() => { window.failNetwork = true; window.serverStatus = {status:'registrado',posicionamento:'registrado'}; });
     await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
     await page.locator('[name=DESCRICAO]').fill('Conteúdo enviado');
+    await preencherHoras(page);
     await page.getByRole('button', { name: 'Registrar retorno', exact: true }).click();
     await page.locator('[data-retorno-confirm-send]').click();
     await page.waitForFunction(() => window.posts === 1 && !document.querySelector('dialog').open);

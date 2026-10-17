@@ -8,7 +8,8 @@ const retornoRepo = require('../repositories/retorno-softexpert-repository');
 const configService = require('./retorno-softexpert-config');
 const { criarExecutor, resultado } = require('./retorno-softexpert-executor');
 const source = require('./retorno-softexpert-source');
-const executor = criarExecutor({ resolverOid: source.resolverOid, sincronizar: source.sincronizar });
+const { normalizarHoras } = require('./retorno-softexpert-horas');
+const executor = criarExecutor({ resolverResponsavel: (args) => source.resolverResponsavel(args), resolverOid: source.resolverOid, sincronizar: source.sincronizar });
 
 const CAMPOS = configService.ALIASES;
 const MOTIVO = 'O registro aguarda a configuração validada dos campos, relacionamentos, regras e credenciais do SoftExpert. Seu rascunho pode ser preparado, mas nenhum dado será enviado.';
@@ -44,7 +45,7 @@ function obterFormulario(contexto) {
     chamadoId: chamado.id, numero: chamado.numero, analista: consultor.id,
     disponivel: config.disponivel && provaValida,
     motivo: !provaValida ? 'Entre novamente pelo código de acesso para autorizar gravações.' : config.motivo || 'Revise o conteúdo antes de confirmar o envio.',
-    limites: { arquivos: 10, arquivoBytes: armazenamento.TAMANHO_MAXIMO_BYTES, totalBytes: 50 * 1024 * 1024 },
+    limites: { arquivos: 1, arquivoBytes: armazenamento.TAMANHO_MAXIMO_BYTES, totalBytes: armazenamento.TAMANHO_MAXIMO_BYTES },
     campos: CAMPOS, regrasCampos, mapeamentoValidado: !!config.disponivel,
     anexosDisponiveis: !!config.contrato?.anexos?.habilitado,
     historico: config.contrato?.historico?.modo || 'desabilitado',
@@ -64,13 +65,13 @@ function validarEntrada(dados, arquivos = []) {
     campos[campo] = value;
   }
   if (!campos.DESCRICAO.trim()) throw erro(400, 'Informe a descrição do retorno.');
-  if (arquivos.length > 10 || arquivos.reduce((n, f) => n + f.size, 0) > 50 * 1024 * 1024) throw erro(400, 'Limite de anexos excedido.');
+  if (arquivos.length > 1) throw erro(400, 'É permitido apenas um anexo por posicionamento.');
   for (const file of arquivos) {
     const validacao = armazenamento.validarAnexo({ nomeOriginal: file.originalname, mimeType: file.mimetype, tamanho: file.size });
     if (!validacao.ok) throw erro(400, validacao.erro);
     if (!Buffer.isBuffer(file.buffer) || file.size !== file.buffer.length) throw erro(400, 'Conteúdo do anexo inválido.');
   }
-  return campos;
+  return normalizarHoras(campos);
 }
 
 function registrar(contexto, dados, arquivos = []) {

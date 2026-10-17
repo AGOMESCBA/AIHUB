@@ -1,7 +1,8 @@
 const fs = require('fs');
 const crypto = require('crypto');
+const { normalizarHoras } = require('./retorno-softexpert-horas');
 
-const ALIASES = ['DESCRICAO', 'ASSUNTO', 'RESULTADO', 'HORAINI', 'HORAFIM', 'HORAINT', 'HORATOTALNUM', 'DTAGEND', 'HRAGEND', 'SITUACAOCHAMADO', 'TIPOPOSICIONAME', 'MOTIVOAPONTAMEN', 'AGUARDANRETORNO'];
+const ALIASES = ['DESCRICAO', 'ASSUNTO', 'RESULTADO', 'HORAINI', 'HORAFIM', 'HORAINT', 'HORATOTALNUM', 'HORAINICONV', 'HORAINTCONV', 'HORAFIMCONV', 'DTAGEND', 'HRAGEND', 'SITUACAOCHAMADO', 'TIPOPOSICIONAME', 'MOTIVOAPONTAMEN', 'AGUARDANRETORNO'];
 const TIPOS = ['texto', 'inteiro', 'decimal', 'data', 'hora'];
 const ORIGENS = ['numero_chamado', 'oid_chamado', 'analista_softexpert', 'data_iso', 'instante_unix', 'valor_fixo'];
 const texto = (v) => typeof v === 'string' && v.trim().length > 0;
@@ -26,7 +27,7 @@ function validarContrato(c) {
     ids.add(campo.id);
   }
   if (!c.autoria?.validada || !['credencial_analista', 'conta_integracao'].includes(c.autoria.modo)) throw new Error('Autoria não validada.');
-  if (c.anexos?.habilitado && (!c.anexos.contratoValidado || !c.anexos.armazenamentoValidado || !['base64_inline', 'cid_multipart'].includes(c.anexos.transporte) || ![c.anexos.tableId, c.anexos.relacionamentoId, c.anexos.campoArquivoId].every(texto))) throw new Error('Contrato de anexos incompleto ou transporte/armazenamento não validado.');
+  if (c.anexos?.habilitado && (!c.anexos.contratoValidado || !c.anexos.armazenamentoValidado || c.anexos.destino !== 'campo_grid' || c.anexos.transporte !== 'base64_inline' || c.anexos.campoArquivoId !== 'arquivo2')) throw new Error('O contrato exige anexo único no campo arquivo2 da grid, com transporte e armazenamento validados.');
   if (!['desabilitado', 'automatico_validado', 'comentario_validado'].includes(c.historico?.modo || 'desabilitado')) throw new Error('Modo de histórico inválido.');
   if ((c.historico?.modo || 'desabilitado') !== 'desabilitado' && (!c.historico?.equivalenciaValidada || !texto(c.historico.evidencia))) throw new Error('Equivalência do histórico não validada.');
   if (c.historico?.modo === 'comentario_validado' && (c.historico.envioAutomatico !== true || typeof c.historico.privado !== 'boolean')) throw new Error('Envio e visibilidade do comentário precisam de configuração explícita.');
@@ -60,6 +61,7 @@ function resolver({ empresaId, fonteId, consultor }) {
 }
 
 function mapearCampos(campos, contrato, { chamado, consultor, instante }) {
+  if (contrato.campos.HORAINI || contrato.campos.HORAFIM || campos.HORAINI || campos.HORAFIM || campos.HORAINT) campos = normalizarHoras(campos);
   const valores = {};
   for (const [alias, value] of Object.entries(campos)) {
     const campo = contrato.campos[alias];

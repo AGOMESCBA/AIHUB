@@ -3,8 +3,8 @@ const service = require('../services/retorno-softexpert-service');
 const armazenamento = require('../services/armazenamento-anexos');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: {
-  fileSize: armazenamento.TAMANHO_MAXIMO_BYTES, files: 10, fields: 1, fieldSize: 500000, parts: 11,
-} }).array('arquivos', 10);
+  fileSize: armazenamento.TAMANHO_MAXIMO_BYTES, files: 1, fields: 1, fieldSize: 500000, parts: 2,
+} }).array('arquivos', 1);
 
 module.exports = function registrarRotasRetorno(app, prefixo) {
   const path = `${prefixo}/radar/chamados/:chamadoId/retorno`;

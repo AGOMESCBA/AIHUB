@@ -1,5 +1,7 @@
 (() => {
   'use strict';
+  const horarios = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
+  const opcoesHoras = '<option value="">Selecione</option>' + horarios.map(h => `<option value="${h}">${h}</option>`).join('');
 
   function requestId() {
     if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -49,20 +51,20 @@
               <label>Aguardando retorno<select name="AGUARDANRETORNO" disabled aria-label="Aguardando retorno"><option value="">Aguardando configuração</option></select></label>
             </div>
           </details>
-          <details><summary>Horas e agendamento</summary>
-            <p class="retorno-help">Campos de rascunho. Formatos, cálculos e obrigatoriedades precisam ser validados no formulário do SoftExpert antes do envio.</p>
+          <details open><summary>Horas e agendamento</summary>
+            <p class="retorno-help">Selecione as horas no mesmo dia. O total desconta o intervalo.</p>
             <div class="retorno-fields">
-              <label>Hora inicial<input name="HORAINI" type="text" maxlength="40"></label>
-              <label>Hora final<input name="HORAFIM" type="text" maxlength="40"></label>
-              <label>Intervalo<input name="HORAINT" type="text" maxlength="40"></label>
-              <label>Total de horas<input name="HORATOTALNUM" type="text" maxlength="40"></label>
-              <label>Data do agendamento<input name="DTAGEND" type="date"></label>
-              <label>Hora do agendamento<input name="HRAGEND" type="text" maxlength="40"></label>
+              <label>Hora inicial *<select name="HORAINI" required>${opcoesHoras}</select></label>
+              <label>Intervalo *<select name="HORAINT" required>${opcoesHoras}</select></label>
+              <label>Hora final *<select name="HORAFIM" required>${opcoesHoras}</select></label>
+              <label>Hora total<input name="HORATOTALNUM" type="text" readonly placeholder="0,00"></label>
+              <label>Data do agendamento<input name="DTAGEND" type="date" lang="pt-BR" aria-label="Data do agendamento (dia, mês e ano)"></label>
+              <label>Hora do agendamento<input name="HRAGEND" type="time" step="60" lang="pt-BR"></label>
             </div>
           </details>
-          <section class="retorno-attachments" aria-label="Anexos do retorno">
-            <button type="button" data-retorno-add-files>Adicionar anexos</button><input type="file" multiple data-retorno-files hidden>
-            <p class="retorno-help">Os arquivos serão enviados somente após sua confirmação. O rascunho é preservado ao fechar o painel; recarregar ou sair limpa os dados.</p>
+          <section class="retorno-attachments" aria-label="Anexo do retorno">
+            <button type="button" data-retorno-add-files>Selecionar anexo</button><input type="file" data-retorno-files hidden>
+            <p class="retorno-help">Um arquivo por posicionamento, enviado somente após sua confirmação. O rascunho é preservado ao fechar o painel; recarregar ou sair limpa os dados.</p>
             <ul data-retorno-file-list></ul>
           </section>
         </div>
@@ -87,13 +89,14 @@
       for (const name of fieldNames) {
         const field = form.elements.namedItem(name);
         const rule = metadata?.regrasCampos?.[name];
-        if (field.tagName === 'SELECT' && rule?.opcoes) {
+        const hora = ['HORAINI', 'HORAINT', 'HORAFIM'].includes(name);
+        if (field.tagName === 'SELECT' && rule?.opcoes && !hora) {
           field.replaceChildren(new Option('Selecione', ''));
           rule.opcoes.forEach((o) => field.add(new Option(o.rotulo, o.valor)));
           field.value = draft?.fields[name] || '';
         }
-        field.required = name === 'DESCRICAO' || !!rule?.obrigatorio;
-        field.disabled = !!draft?.locked || (metadata?.regrasCampos ? !rule || !!rule.calculado : field.tagName === 'SELECT');
+        field.required = name === 'DESCRICAO' || hora || !!rule?.obrigatorio;
+        field.disabled = !!draft?.locked || (metadata?.regrasCampos ? !rule || (!!rule.calculado && name !== 'HORATOTALNUM') : field.tagName === 'SELECT' && !hora);
         if (rule?.maxLength && field.tagName !== 'SELECT') field.maxLength = rule.maxLength;
       }
       find('[data-retorno-add-files]').disabled = !!draft?.locked || metadata?.anexosDisponiveis === false;
@@ -103,7 +106,25 @@
       submit.textContent = draft?.locked ? 'Retomar tentativa' : 'Registrar retorno';
       submit.disabled = !draft || ['indeterminado'].includes(draft?.result?.status) || !!draft?.result?.emProcessamento;
       renderFiles();
+      calcularHoras();
     }
+
+    function calcularHoras() {
+      const inicio = form.elements.namedItem('HORAINI');
+      const fim = form.elements.namedItem('HORAFIM');
+      const intervalo = form.elements.namedItem('HORAINT');
+      const total = form.elements.namedItem('HORATOTALNUM');
+      const min = v => Number(v.slice(0, 2)) * 60 + Number(v.slice(3));
+      fim.setCustomValidity(''); intervalo.setCustomValidity('');
+      total.value = '';
+      if (!inicio.value || !fim.value || !intervalo.value) return;
+      const periodo = min(fim.value) - min(inicio.value);
+      const saldo = periodo - min(intervalo.value);
+      if (periodo < 0) { fim.setCustomValidity('A hora final não pode ser menor que a hora inicial.'); return; }
+      if (saldo < 0) { intervalo.setCustomValidity('O intervalo não pode exceder o período trabalhado.'); return; }
+      total.value = (saldo / 60).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    ['HORAINI', 'HORAFIM', 'HORAINT'].forEach(name => form.elements.namedItem(name).addEventListener('change', calcularHoras));
 
     function showResult(result) {
       const files = (result.arquivos || []).map((a) => `${a.nome}: ${a.status}`).join(' · ');
@@ -112,7 +133,10 @@
 
     function save() {
       if (!draft) return;
-      for (const name of fieldNames) draft.fields[name] = form.elements.namedItem(name).value;
+      for (const name of fieldNames) {
+        // Total é exibido em pt-BR e recalculado no servidor, em horas decimais.
+        if (name !== 'HORATOTALNUM') draft.fields[name] = form.elements.namedItem(name).value;
+      }
     }
     function close() {
       if (sending) return;
@@ -211,10 +235,11 @@
       if (!draft || draft.locked) return;
       const added = [...event.target.files];
       event.target.value = '';
-      const files = [...draft.files, ...added];
+      if (!added.length) return;
+      const files = added;
       const maxSize = metadata?.limites?.arquivoBytes || 25 * 1024 * 1024;
-      if (files.length > 10 || files.some((f) => !f.size || f.size > maxSize) || files.reduce((n, f) => n + f.size, 0) > 50 * 1024 * 1024) {
-        status.textContent = 'Selecione até 10 arquivos não vazios, de até 25 MB cada e 50 MB no total.';
+      if (files.length > 1 || files.some((f) => !f.size || f.size > maxSize)) {
+        status.textContent = 'Selecione apenas um arquivo não vazio, de até 25 MB.';
         return;
       }
       draft.files = files;
@@ -224,6 +249,7 @@
     find('[data-retorno-add-files]').addEventListener('click', () => find('[data-retorno-files]').click());
     form.addEventListener('submit', (event) => {
       event.preventDefault();
+      calcularHoras();
       if (sending || !draft || !form.reportValidity()) return;
       save();
       if (!draft.fields.DESCRICAO.trim()) { status.textContent = 'Informe a descrição do retorno.'; return; }

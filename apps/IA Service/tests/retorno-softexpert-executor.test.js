@@ -9,7 +9,7 @@ const { criarExecutor } = require('../backend/services/retorno-softexpert-execut
 const configService = require('../backend/services/retorno-softexpert-config');
 after(() => dbModule.fecharDB());
 
-function fixture({ files = 0, historico = { modo: 'desabilitado' }, responder, resolveOid = async () => 'oid-confirmado', sync = async () => {} } = {}) {
+function fixture({ files = 0, historico = { modo: 'desabilitado' }, responder, resolveOid = async () => 'oid-confirmado', resolveOwner = async () => ({ codigo: 'analista-fixture', nome: 'Analista responsável' }), sync = async () => {} } = {}) {
   const chamado = { id: crypto.randomUUID(), empresaId: 99001, fonteId: 'fonte-fixture', numero: '00012345', oidOrigem: 'oid-pai' };
   const consultor = { id: 'consultor-fixture', idSoftexpert: 'analista-fixture' };
   const config = { contratoHash: 'hash-fixture', userId: 'matricula-fixture', transporte: { origem: 'https://invalid.example', apiKey: 'mock-only', encoding: 'utf8', authorizationMode: 'jwt' }, contrato: {
@@ -25,7 +25,7 @@ function fixture({ files = 0, historico = { modo: 'desabilitado' }, responder, r
   } };
   const tentativaId = repo.registrarTentativa({ empresaId: chamado.empresaId, chamadoId: chamado.id, consultorId: consultor.id, origemIdentidade: 'consultor_externo', usuarioId: consultor.id, chave: crypto.randomUUID(), hash: 'payload-fixture', quantidadeAnexos: files });
   const args = { tentativaId, config, chamado, consultor, campos: { DESCRICAO: 'Retorno aprovado' }, arquivos: Array.from({ length: files }, (_, i) => ({ originalname: `arquivo-${i}.txt`, mimetype: 'text/plain', buffer: Buffer.from(`conteudo-${i}`), size: 10 })) };
-  const executor = criarExecutor({ repo, soap, resolverOid: resolveOid, sincronizar: sync });
+  const executor = criarExecutor({ repo, soap, resolverResponsavel: resolveOwner, resolverOid: resolveOid, sincronizar: sync });
   return { args, calls, run: () => executor.executar(args) };
 }
 
@@ -38,6 +38,85 @@ test('posicionamento sem anexos: autoria mapeada e comentário desabilitado', as
   assert.ok(f.calls[0].xml.includes('<urn:EntityAttributeValue>analista-fixture</urn:EntityAttributeValue>'));
   await f.run();
   assert.equal(f.calls.length, 1, 'reenvio não recria posicionamento');
+});
+
+test('dono técnico vem da origem e prevalece sobre conta da API e valores fixos do contrato', async () => {
+  const f = fixture({ resolveOwner: async () => ({ codigo: '124', nome: 'Edson Assis' }) });
+  f.args.config.userId = 'se';
+  f.args.consultor.idSoftexpert = '124';
+  f.args.config.contrato.automaticos = [{ id: 'ANALISTAJ2A', origem: 'valor_fixo', valor: 'se Config' }, { id: 'CDUSERANA', origem: 'valor_fixo', valor: '35' }];
+  await f.run();
+  assert.ok(f.calls[0].xml.includes('<urn:EntityAttributeID>analistaj2a</urn:EntityAttributeID><urn:EntityAttributeValue>Edson Assis</urn:EntityAttributeValue>'));
+  assert.ok(f.calls[0].xml.includes('<urn:EntityAttributeID>cduserana</urn:EntityAttributeID><urn:EntityAttributeValue>124</urn:EntityAttributeValue>'));
+  assert.equal(f.calls[0].xml.includes('se Config'), false);
+  assert.equal(f.calls[0].xml.includes('<urn:EntityAttributeID>CDUSERANA</urn:EntityAttributeID>'), false);
+});
+
+test('responsável ausente impede envio e libera a tentativa sem usar a conta da API como fallback', async () => {
+  const f = fixture({ resolveOwner: async () => null });
+  await assert.rejects(f.run(), { status: 409 });
+  assert.equal(f.calls.length, 0);
+  assert.equal(repo.obter(f.args.tentativaId).em_processamento, 0);
+});
+
+test('marca de origem texto4 é fixa na grid ITSM e não cria novo posicionamento na retomada', async () => {
+  const f = fixture();
+  f.args.config.contrato.mainEntityId = 'itsm';
+  f.args.config.contrato.childRelationshipId = 'relagridregistr';
+  f.args.config.contrato.automaticos = [{ id: 'TEXTO4', origem: 'valor_fixo', valor: 'Outra origem' }];
+  await f.run();
+  assert.match(f.calls[0].xml, /<urn:EntityAttributeID>texto4<\/urn:EntityAttributeID><urn:EntityAttributeValue>IA SERVICE<\/urn:EntityAttributeValue>/);
+  assert.equal(f.calls[0].xml.includes('Outra origem'), false);
+  await f.run();
+  assert.equal(f.calls.length, 1);
+});
+
+test('anexo único usa arquivo2 no mesmo posicionamento e sucesso da edição não exige nova chave', async () => {
+  const f = fixture({ files: 1, responder: req => ({ Status: 'SUCCESS', Code: '1', ...(req.operacao === 'newChildEntityRecord' ? { RecordKey: 'pos' } : {}) }) });
+  f.args.config.contrato.anexos = { habilitado: true, destino: 'campo_grid', campoArquivoId: 'arquivo2', transporte: 'base64_inline' };
+  assert.equal((await f.run()).status, 'registrado');
+  assert.deepEqual(f.calls.map(c => c.operacao), ['newChildEntityRecord', 'editChildEntityRecord']);
+  assert.match(f.calls[1].xml, /<urn:ChildRecordOID>oid-confirmado<\/urn:ChildRecordOID>/);
+  assert.match(f.calls[1].xml, /<urn:EntityAttributeID>arquivo2<\/urn:EntityAttributeID>/);
+  assert.match(f.calls[1].xml, /<urn:FileContent>Y29udGV1ZG8tMA==<\/urn:FileContent>/);
+  assert.equal(f.calls[1].xml.includes('newTableRecord'), false);
+  await f.run();
+  assert.equal(f.calls.length, 2);
+});
+
+test('anexo único falho é retomado sem recriar posicionamento; mais de um arquivo é rejeitado', async () => {
+  let falhar = true;
+  const f = fixture({ files: 1, responder: req => req.operacao === 'editChildEntityRecord' && falhar ? { Status: 'FAILURE', Code: '-1' } : { Status: 'SUCCESS', Code: '1', RecordKey: 'pos' } });
+  f.args.config.contrato.anexos = { habilitado: true, destino: 'campo_grid', campoArquivoId: 'arquivo2', transporte: 'base64_inline' };
+  assert.equal((await f.run()).status, 'parcial');
+  falhar = false;
+  assert.equal((await f.run()).status, 'registrado');
+  assert.deepEqual(f.calls.map(c => c.operacao), ['newChildEntityRecord', 'editChildEntityRecord', 'editChildEntityRecord']);
+  const outro = fixture({ files: 2 });
+  outro.args.config.contrato.anexos = f.args.config.contrato.anexos;
+  await assert.rejects(outro.run(), { status: 400 });
+  assert.equal(outro.calls.length, 0);
+});
+
+test('transferência na origem bloqueia escrita por antigo responsável ainda presente no cache local', async () => {
+  const f = fixture({ resolveOwner: async () => ({ codigo: 'outro-responsavel', nome: 'Outro analista' }) });
+  await assert.rejects(f.run(), { status: 403 });
+  assert.equal(f.calls.length, 0);
+});
+
+test('retomada de anexo não resolve outro dono nem reescreve o posicionamento confirmado', async () => {
+  let resolveCount = 0;
+  let falhar = true;
+  const f = fixture({ files: 1, resolveOwner: async () => { resolveCount++; return { codigo: '124', nome: 'Edson Assis' }; }, responder: (request) => {
+    if (request.operacao === 'newTableRecord' && falhar) return { Status: 'FAILURE', Code: '-1' };
+    return { Status: 'SUCCESS', Code: '1', RecordKey: 'pos', RecordID: 'anexo' };
+  } });
+  f.args.consultor.idSoftexpert = '124';
+  assert.equal((await f.run()).status, 'parcial');
+  falhar = false;
+  assert.equal((await f.run()).status, 'registrado');
+  assert.equal(resolveCount, 1);
+  assert.equal(f.calls.filter((c) => c.operacao === 'newChildEntityRecord').length, 1);
 });
 
 test('arquivos vinculados somente ao OID confirmado do posicionamento', async () => {
@@ -105,10 +184,18 @@ test('timeout de anexo não recria o arquivo nem o posicionamento', async () => 
 });
 
 test('sucesso de upload sem identificador exige reconciliação, sem reenviar', async () => {
-  const f = fixture({ files: 1, responder: () => ({ Status: 'SUCCESS', Code: '1', RecordKey: 'chave' }) });
+  const f = fixture({ files: 1, responder: req => ({ Status: 'SUCCESS', Code: '1', ...(req.operacao === 'newChildEntityRecord' ? { RecordKey: 'chave' } : {}) }) });
   assert.equal((await f.run()).status, 'indeterminado');
   await f.run();
   assert.equal(f.calls.length, 2);
+});
+
+test('upload aceita RecordKey do WSDL instalado sem reenviar arquivo confirmado', async () => {
+  const f = fixture({ files: 2, responder: () => ({ Status: 'SUCCESS', Code: '1', RecordKey: 'chave-instalada' }) });
+  assert.equal((await f.run()).status, 'registrado');
+  assert.ok(repo.obter(f.args.tentativaId).anexos.every(a => a.registro_id === 'chave-instalada'));
+  await f.run();
+  assert.equal(f.calls.length, 3);
 });
 
 test('revogação de autorização entre grid e anexo interrompe a etapa seguinte', async () => {
@@ -133,6 +220,31 @@ test('comentário explicitamente configurado: operação isolada e não repetida
   await f.run();
   assert.deepEqual(f.calls.map((c) => c.operacao), ['newChildEntityRecord', 'newComment']);
   assert.ok(f.calls[1].xml.includes('<urn:Private>1</urn:Private>'));
+});
+
+test('histórico começa com ID e nome confirmados do consultor seguidos de IA Service', async () => {
+  const f = fixture({ historico: { modo: 'comentario_validado', privado: true }, resolveOwner: async () => ({ codigo: '124', nome: 'Edson Assis' }) });
+  f.args.consultor.idSoftexpert = '124';
+  f.args.consultor.nome = 'Nome recebido que não deve prevalecer';
+  f.args.campos.DESCRICAO = 'Descrição com acentuação <teste> & retorno.';
+  await f.run();
+  assert.match(f.calls[1].xml, /<urn:Text>124 - Edson Assis - IA Service\n\nDescrição com acentuação &lt;teste&gt; &amp; retorno\.<\/urn:Text>/);
+  assert.equal(f.calls[1].xml.includes('Nome recebido'), false);
+  assert.equal(f.calls[0].xml.includes('124 - Edson Assis - IA Service'), false);
+  await f.run();
+  assert.equal(f.calls.length, 2);
+});
+
+test('retomada do histórico reconfirma o consultor sem duplicar a grid ou repetir o prefixo', async () => {
+  let falhar = true;
+  const f = fixture({ historico: { modo: 'comentario_validado', privado: true }, resolveOwner: async () => ({ codigo: '124', nome: 'Edson Assis' }), responder: req => req.operacao === 'newComment' && falhar ? { Status: 'FAILURE', Code: '-1' } : { Status: 'SUCCESS', Code: '1', RecordKey: 'pos' } });
+  f.args.consultor.idSoftexpert = '124';
+  assert.equal((await f.run()).status, 'parcial');
+  falhar = false;
+  assert.equal((await f.run()).status, 'registrado');
+  assert.deepEqual(f.calls.map(c => c.operacao), ['newChildEntityRecord', 'newComment', 'newComment']);
+  assert.equal(f.calls[1].xml, f.calls[2].xml);
+  assert.equal((f.calls[2].xml.match(/124 - Edson Assis - IA Service/g) || []).length, 1);
 });
 
 test('comentário com timeout não é reenviado; grid permanece confirmada', async () => {

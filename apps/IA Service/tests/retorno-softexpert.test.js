@@ -21,7 +21,7 @@ const tecnico = clientes.upsertTecnico(99101, { sistemaOrigem: 'softexpert', idO
 const consultor = consultores.upsertConsultorPlatform(99101, { platformIdentityId: 'teste-ana', telefone: '5565999999999', idSoftexpert: 'ana-1', ativo: true });
 const chamado = chamados.upsertChamado(99101, { fonteId: fonte.id, oidOrigem: 'oid-teste', numero: '00012345', sistemaOrigem: 'softexpert', tecnicoResponsavelId: tecnico.id }).chamado;
 const context = { empresaId: 99101, consultorId: consultor.id, chamadoId: chamado.id };
-const entrada = () => ({ confirmado: true, idempotencyKey: crypto.randomUUID(), campos: { DESCRICAO: 'Descrição aprovada <teste> & dados.' } });
+const entrada = () => ({ confirmado: true, idempotencyKey: crypto.randomUUID(), campos: { DESCRICAO: 'Descrição aprovada <teste> & dados.', HORAINI: '08:00', HORAINT: '00:00', HORAFIM: '08:30' } });
 const response = (fields) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" xmlns:w="urn:workflow"><s:Body><w:newChildEntityRecordResponse>${fields}</w:newChildEntityRecordResponse></s:Body></s:Envelope>`;
 after(() => { platform.listarIaServicePorTelefone = originalListar; database.fecharDB(); });
 
@@ -47,6 +47,7 @@ test('confirmação, descrição e campos permitidos são obrigatórios', () => 
   assert.throws(() => service.registrar(context, { ...entrada(), campos: { DESCRICAO: ' ' } }), { status: 400 });
   assert.throws(() => service.registrar(context, { ...entrada(), campos: { DESCRICAO: 'x', UserID: 'outro' } }), { status: 400 });
   assert.throws(() => service.registrar(context, entrada(), [{ originalname: 'arquivo.exe', mimetype: 'application/octet-stream', size: 1, buffer: Buffer.from('x') }]), { status: 400 });
+  assert.throws(() => service.validarEntrada(entrada(), Array.from({ length: 2 }, () => ({ originalname: 'teste.txt', mimetype: 'text/plain', size: 1, buffer: Buffer.from('x') }))), /apenas um anexo/);
 });
 test('tentativa bloqueada é idempotente, auditada sem Memo e sem sucesso fictício', () => {
   const dados = entrada();
@@ -57,8 +58,26 @@ test('tentativa bloqueada é idempotente, auditada sem Memo e sem sucesso fictí
   assert.equal(first.posicionamento, 'nao_enviado');
   assert.equal(db.prepare('SELECT count(*) AS n FROM retornos_softexpert').get().n, 1);
   assert.equal(JSON.stringify(db.prepare('SELECT * FROM retornos_softexpert').get()).includes(dados.campos.DESCRICAO), false);
-  assert.throws(() => service.registrar(context, { ...dados, campos: { DESCRICAO: 'outro' } }), { status: 409 });
+  assert.throws(() => service.registrar(context, { ...dados, campos: { ...dados.campos, DESCRICAO: 'outro' } }), { status: 409 });
 });
+test('sincronização atualiza somente o analista, preserva OID/conteúdo e continua idempotente', () => {
+  const outro = clientes.upsertTecnico(99101, { sistemaOrigem: 'softexpert', idOrigem: 'edson-fixture', nome: 'Edson Assis' }).tecnico;
+  const dados = { fonteId: fonte.id, oidOrigem: 'oid-correcao-analista', chamadoId: chamado.id, descricao: 'Mesmo Memo', tecnicoId: tecnico.id, tecnicoNomeOrigem: 'se Config' };
+  const first = chamados.upsertPosicionamento(99101, dados);
+  const corrected = { ...dados, tecnicoId: outro.id, tecnicoNomeOrigem: 'Edson Assis' };
+  const second = chamados.upsertPosicionamento(99101, corrected);
+  assert.equal(second.resultado, 'atualizado');
+  assert.equal(second.posicionamento.id, first.posicionamento.id);
+  assert.equal(second.posicionamento.descricao, 'Mesmo Memo');
+  assert.equal(second.posicionamento.tecnicoNomeOrigem, 'Edson Assis');
+  assert.equal(second.posicionamento.hashConteudo, first.posicionamento.hashConteudo);
+  assert.equal(chamados.upsertPosicionamento(99101, corrected).resultado, 'sem_alteracao');
+  const renamed = chamados.upsertPosicionamento(99101, { ...corrected, tecnicoNomeOrigem: 'Edson A.' });
+  assert.equal(renamed.resultado, 'atualizado');
+  assert.equal(renamed.posicionamento.id, first.posicionamento.id);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM posicionamentos WHERE oid_origem = ?').get(dados.oidOrigem).n, 1);
+});
+
 test('SOAP escapa o Memo e exige identificadores explícitos', () => {
   const xml = soap.montarInclusaoGrid({ workflowId: '0001', mainEntityId: 'principal', childRelationshipId: 'filho', campos: { descricao: '<texto> & "teste"' } });
   assert.ok(xml.includes('&lt;texto&gt; &amp; &quot;teste&quot;'));
@@ -114,11 +133,14 @@ test('configuração validada conecta o serviço real somente após prova de OTP
   const originalSoap = soap.enviarOperacao;
   const importService = require('../backend/services/import/historical-import-service');
   const originalImport = importService.atualizarChamadosPorIds;
+  const source = require('../backend/services/retorno-softexpert-source');
+  const originalResolverResponsavel = source.resolverResponsavel;
   let calls = 0;
   const contrato = {
     empresaId: context.empresaId, fonteId: fonte.id, contratoValidado: true, envioHabilitado: true,
     evidenciaContrato: 'fixture automatizada', origem: 'https://invalid.example', authorizationMode: 'jwt', encoding: 'utf8',
-    mainEntityId: 'principal-fixture', childRelationshipId: 'rel-fixture', campos: { DESCRICAO: { id: 'memo-fixture', tipo: 'texto', obrigatorio: true } },
+    mainEntityId: 'principal-fixture', childRelationshipId: 'rel-fixture', campos: { DESCRICAO: { id: 'memo-fixture', tipo: 'texto', obrigatorio: true },
+      ...Object.fromEntries(['HORAINI', 'HORAINT', 'HORAFIM', 'HORAINICONV', 'HORAINTCONV', 'HORAFIMCONV', 'HORATOTALNUM'].map(k => [k, { id: k.toLowerCase(), tipo: k.endsWith('CONV') || k === 'HORATOTALNUM' ? 'decimal' : 'hora' }])) },
     autoria: { validada: true, modo: 'credencial_analista', analistas: { 'ana-1': { apiKeyEnv: 'RETORNO_TEST_KEY', userId: 'ana-fixture' } } },
     historico: { modo: 'desabilitado' },
   };
@@ -127,6 +149,7 @@ test('configuração validada conecta o serviço real somente após prova de OTP
   process.env.RETORNO_TEST_KEY = 'credencial-falsa-sem-rede';
   soap.enviarOperacao = async () => { calls++; return { Status: 'SUCCESS', Code: '1', RecordKey: 'chave-fixture' }; };
   importService.atualizarChamadosPorIds = async () => ({ erros: [], naoEncontrados: [] });
+  source.resolverResponsavel = async () => ({ codigo: 'ana-1', nome: 'Analista' });
   try {
     assert.equal(service.obterFormulario(context).disponivel, false);
     const strong = { ...context, otpVerificadoEm: new Date().toISOString() };
@@ -148,6 +171,7 @@ test('configuração validada conecta o serviço real somente após prova de OTP
   } finally {
     soap.enviarOperacao = originalSoap;
     importService.atualizarChamadosPorIds = originalImport;
+    source.resolverResponsavel = originalResolverResponsavel;
     if (previousConfig === undefined) delete process.env.SVC_SOFTEXPERT_RETORNO_CONFIG; else process.env.SVC_SOFTEXPERT_RETORNO_CONFIG = previousConfig;
     if (previousKey === undefined) delete process.env.RETORNO_TEST_KEY; else process.env.RETORNO_TEST_KEY = previousKey;
     fs.unlinkSync(file); fs.rmdirSync(dir);
