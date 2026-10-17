@@ -588,6 +588,8 @@ require('./apps/IA Service/backend/database').inicializarDB();
 require('./apps/IA Service/backend/routes')(app, { requireAuth, requireIaService });
 require('./apps/IA Service/backend/routes/login-externo-routes')(app);
 require('./apps/IA Service/backend/routes/externo-routes')(app);
+// Chat interno do J2A: tempo real em namespace próprio do Socket.IO (ver chat-interno-realtime.js).
+require('./apps/IA Service/backend/services/chat-interno-realtime').iniciar(io);
 
 // ── Master Crypto AI ─────────────────────────────────────────────────────────
 const masterCryptoService = require('./apps/Master Crypto/backend/service-manager');

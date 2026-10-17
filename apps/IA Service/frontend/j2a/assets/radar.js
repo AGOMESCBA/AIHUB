@@ -5,6 +5,7 @@
   const THEME_KEY = 'iaservice_j2a_theme';
   const $ = (id) => document.getElementById(id);
   let retornoPanel = null;
+  let chatInterno = null;
 
   const state = {
     token: localStorage.getItem(TOKEN_KEY) || '',
@@ -264,6 +265,7 @@
   function showAccess(message) {
     state.tokenEscolha = '';
     retornoPanel?.clear();
+    chatInterno?.stop();
     // Sempre volta ao passo do telefone com os digitos limpos -- antes, depois
     // de Sair a tela reaparecia no passo "Codigo" com o codigo antigo.
     codeInputs().forEach((input) => { input.value = ''; });
@@ -523,6 +525,7 @@
       await Promise.allSettled([loadPreferences(), loadQueue(), loadRisk()]);
       setupAutoRefresh();
       iniciarPresenca();
+      chatInterno?.start();
       setMobileTarget('queue');
     } catch (err) {
       showAccess(err.message);
@@ -2132,6 +2135,12 @@
     });
     $('company-list').addEventListener('click', chooseCompany);
     $('logout-btn').addEventListener('click', () => {
+      // Encerra a sessão também no servidor (antes só apagava o token local e
+      // a sessão seguia válida por até 8h). keepalive: conclui mesmo se a aba
+      // for fechada logo em seguida.
+      if (state.token) {
+        fetch(ext('/sessao/encerrar'), { method: 'POST', keepalive: true, headers: apiHeaders() }).catch(() => null);
+      }
       localStorage.removeItem(TOKEN_KEY);
       state.token = '';
       clearInterval(state.autoTimer);
@@ -2142,6 +2151,12 @@
     });
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) enviarPresenca();
+    });
+    // Aba fechada/recarregada: avisa o Monitor de Acessos na hora, sem esperar
+    // o ciclo de 2 min. Recarregar manda um sinal novo logo em seguida.
+    window.addEventListener('pagehide', () => {
+      if (!state.token) return;
+      fetch(ext('/presenca/saindo'), { method: 'POST', keepalive: true, headers: apiHeaders() }).catch(() => null);
     });
     $('theme-switch').addEventListener('click', (event) => {
       if (event.target.closest('#theme-toggle')) {
@@ -2325,6 +2340,15 @@
   }
 
   function init() {
+    // Chat interno da equipe (2026-10): botão "Mensagens" no topo, ao lado da Ajuda.
+    if (window.IaChatInterno) {
+      chatInterno = window.IaChatInterno.mount({
+        anchor: document.querySelector('#radar-screen .topbar-actions'),
+        getToken: () => state.token,
+        request,
+        ext,
+      });
+    }
     retornoPanel = window.IaRetornoSoftExpert.mount({
       button: $('retorno-btn'),
       alignTo: () => $('case-view'),

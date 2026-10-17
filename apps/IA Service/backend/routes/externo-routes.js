@@ -56,6 +56,7 @@ module.exports = function registrarRotasExterno(app) {
   app.use('/api/ia-service-externo', requireSessaoExterna);
   require('./retorno-softexpert-routes')(app, '/api/ia-service-externo');
   require('./monitor-acessos-routes').registrarExterno(app);
+  require('./chat-interno-routes')(app);
 
   // Identidade da sessão externa — usado para exibir o badge fixo de
   // empresa/consultor no cabeçalho do chat (ver radar.html) e, agora, para

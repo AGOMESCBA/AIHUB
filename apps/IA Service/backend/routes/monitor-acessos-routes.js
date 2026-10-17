@@ -39,6 +39,20 @@ function registrarInterno(app) {
     }
   });
 
+  // Aba/janela fechada (pagehide com keepalive) — ver presencaService.registrarSaida.
+  app.post('/api/ia-service/presenca/saindo', (req, res) => {
+    try {
+      if (!req.sessionID) return res.status(401).json({ error: 'Sessão ausente.' });
+      res.json(presencaService.registrarSaida({
+        empresaId: req.svcEmpresaId,
+        origem: 'interno',
+        sessaoRef: presencaService.hashSessaoInterna(req.sessionID),
+      }));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   app.get('/api/ia-service/monitor-acessos', podeMonitorar, (req, res) => {
     try {
       res.json(presencaService.listarMonitor(req.svcEmpresaId));
@@ -79,6 +93,23 @@ function registrarExterno(app) {
         consultorId: req.svcConsultorExterno,
         ..._corpoSinal(req),
       }));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.post('/api/ia-service-externo/presenca/saindo', (req, res) => {
+    try {
+      res.json(presencaService.registrarSaida({ empresaId: req.svcEmpresaId, origem: 'chat', sessaoRef: req.svcSessaoExternaId }));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // Botão "Sair" do J2A: encerra a sessão no servidor (não só no navegador).
+  app.post('/api/ia-service-externo/sessao/encerrar', (req, res) => {
+    try {
+      res.json(presencaService.encerrarSessaoChat(req.svcEmpresaId, req.svcSessaoExternaId));
     } catch (err) {
       _handleErro(res, err);
     }

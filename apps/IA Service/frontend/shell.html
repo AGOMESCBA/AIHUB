@@ -201,6 +201,16 @@
       enviar();
       setInterval(enviar, 30 * 1000);
       document.addEventListener('visibilitychange', () => { if (!document.hidden) enviar(); });
+      window.addEventListener('pagehide', () => {
+        const empresaId = window._iahubEmpresa?.id;
+        if (!empresaId) return;
+        fetch('/api/ia-service/presenca/saindo', {
+          method: 'POST',
+          keepalive: true,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ empresa_id: empresaId }),
+        }).catch(() => null);
+      });
       const titulo = document.getElementById('shell-title');
       let espera = null;
       if (titulo) new MutationObserver(() => { clearTimeout(espera); espera = setTimeout(enviar, 800); })

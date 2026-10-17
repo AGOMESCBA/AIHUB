@@ -329,7 +329,19 @@ function validarSessaoExterna(token) {
   return { sessaoId: row.id, empresaId: row.empresa_id, consultorId: row.consultor_id, otpVerificadoEm: row.otp_verificado_em || null };
 }
 
+/**
+ * Só confere se a sessão ainda vale — SEM renovar o prazo. Usado pelo tempo
+ * real do Chat interno: um socket aberto não pode manter a sessão viva para
+ * sempre (quem renova é a atividade real nas rotas).
+ */
+function sessaoExternaAtiva(sessaoId) {
+  if (!sessaoId) return false;
+  const row = getDB().prepare('SELECT expira_em FROM svc_sessoes_externas WHERE id = ?').get(String(sessaoId));
+  return !!row && new Date(row.expira_em).getTime() > Date.now();
+}
+
 module.exports = {
+  sessaoExternaAtiva,
   sincronizarPreferenciaDaPlatform,
   normalizarTelefone,
   listarEmpresasDoTelefone,

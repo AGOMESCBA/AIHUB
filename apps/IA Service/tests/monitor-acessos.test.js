@@ -176,6 +176,36 @@ try {
   assert.strictEqual(presencaService.listarMonitor(EMPRESA).sessoes.length, 0, 'painel da empresa fica vazio');
   assert.strictEqual(presencaService.listarMonitor(OUTRA_EMPRESA).sessoes.length, 1, 'outra empresa não é afetada');
 
+  // 15. Fechar a tela (pagehide) tira de "Online" na hora, sem esperar 2 min;
+  // um sinal novo (recarregou / outra aba) volta a Online.
+  const tokenSaida = 'token-saida-' + crypto.randomBytes(8).toString('hex');
+  const sessaoSaida = crypto.randomUUID();
+  database.getDB().prepare(`
+    INSERT INTO svc_sessoes_externas (id, empresa_id, consultor_id, token_hash, expira_em, criado_em, ultimo_acesso_em)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(sessaoSaida, EMPRESA, consultor.id, crypto.createHash('sha256').update(tokenSaida).digest('hex'),
+    new Date(Date.now() + 3600 * 1000).toISOString(), new Date().toISOString(), new Date().toISOString());
+  presencaService.registrarSinal({ empresaId: EMPRESA, origem: 'chat', sessaoRef: sessaoSaida, tela: 'Radar J2A', acao: 'Conversa com a IA' });
+  assert.strictEqual(presencaService.listarMonitor(EMPRESA).sessoes[0].situacao, 'online');
+  presencaService.registrarSaida({ empresaId: EMPRESA, origem: 'chat', sessaoRef: sessaoSaida });
+  let item = presencaService.listarMonitor(EMPRESA).sessoes[0];
+  assert.strictEqual(item.situacao, 'inativo', 'tela fechada não pode continuar Online');
+  assert.strictEqual(item.tela, 'Fora da tela');
+  assert.ok(loginExternoService.validarSessaoExterna(tokenSaida), 'fechar a tela não derruba o login');
+  presencaService.registrarSinal({ empresaId: EMPRESA, origem: 'chat', sessaoRef: sessaoSaida, tela: 'Radar J2A', acao: 'Fila pessoal' });
+  item = presencaService.listarMonitor(EMPRESA).sessoes[0];
+  assert.strictEqual(item.situacao, 'online', 'novo sinal visível volta a Online');
+  assert.strictEqual(item.tela, 'Radar J2A');
+
+  // 16. "Sair" do J2A encerra a sessão no servidor: token deixa de valer e a
+  // sessão sai do painel. Só a própria sessão, da própria empresa.
+  presencaService.encerrarSessaoChat(OUTRA_EMPRESA, sessaoSaida);
+  assert.ok(loginExternoService.validarSessaoExterna(tokenSaida), 'empresa errada não encerra a sessão');
+  presencaService.encerrarSessaoChat(EMPRESA, sessaoSaida);
+  assert.strictEqual(loginExternoService.validarSessaoExterna(tokenSaida), null, 'token encerrado não pode mais ser usado');
+  assert.strictEqual(presencaService.listarMonitor(EMPRESA).sessoes.length, 0, 'sessão encerrada sai do painel');
+  assert.strictEqual(presencaService.listarMonitor(OUTRA_EMPRESA).sessoes.length, 1, 'outra empresa não é afetada');
+
   console.log('monitor-acessos.test.js: OK');
 } finally {
   limparEDesligar();

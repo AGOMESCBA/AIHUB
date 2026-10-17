@@ -1217,6 +1217,53 @@ const MIGRATIONS = [
       CREATE INDEX idx_svc_presenca_eventos ON svc_presenca_eventos (presenca_id, criado_em);
     `,
   },
+  {
+    version: 48,
+    descricao: 'Monitor de Acessos: registra quando a tela foi fechada (saiu_em). Achado na homologação (2026-10): fechar a aba ou sair do J2A deixava o usuário como "Online" até o próximo ciclo, porque só existia o sinal periódico. Um novo sinal visível limpa saiu_em (recarregar a página ou outra aba aberta na mesma sessão).',
+    sql: `
+      ALTER TABLE svc_presenca ADD COLUMN saiu_em TEXT;
+    `,
+  },
+  {
+    version: 49,
+    descricao: 'Chat interno (2026-10, modelo WhatsApp): conversas diretas entre analistas do chat J2A da mesma empresa, mensagens e recibos por destinatário (entregue/visto). "Enviar para todos" vira uma mensagem em cada conversa direta (como lista de transmissão), marcada com transmissao=1. Texto em claro, mesmo critério das mensagens de atendimento do IA Service.',
+    sql: `
+      CREATE TABLE svc_chat_conversas (
+        id            TEXT PRIMARY KEY,
+        empresa_id    INTEGER NOT NULL,
+        chave_direta  TEXT NOT NULL,
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL,
+        UNIQUE (empresa_id, chave_direta)
+      );
+      CREATE TABLE svc_chat_participantes (
+        conversa_id   TEXT NOT NULL REFERENCES svc_chat_conversas(id) ON DELETE CASCADE,
+        empresa_id    INTEGER NOT NULL,
+        consultor_id  TEXT NOT NULL,
+        PRIMARY KEY (conversa_id, consultor_id)
+      );
+      CREATE INDEX idx_svc_chat_participantes_consultor ON svc_chat_participantes (empresa_id, consultor_id);
+      CREATE TABLE svc_chat_mensagens (
+        id            TEXT PRIMARY KEY,
+        conversa_id   TEXT NOT NULL REFERENCES svc_chat_conversas(id) ON DELETE CASCADE,
+        empresa_id    INTEGER NOT NULL,
+        remetente_id  TEXT NOT NULL,
+        texto         TEXT NOT NULL,
+        transmissao   INTEGER NOT NULL DEFAULT 0,
+        criado_em     TEXT NOT NULL
+      );
+      CREATE INDEX idx_svc_chat_mensagens_conversa ON svc_chat_mensagens (conversa_id, criado_em);
+      CREATE INDEX idx_svc_chat_mensagens_transmissao ON svc_chat_mensagens (empresa_id, remetente_id, transmissao, criado_em);
+      CREATE TABLE svc_chat_recibos (
+        mensagem_id     TEXT NOT NULL REFERENCES svc_chat_mensagens(id) ON DELETE CASCADE,
+        destinatario_id TEXT NOT NULL,
+        entregue_em     TEXT,
+        visto_em        TEXT,
+        PRIMARY KEY (mensagem_id, destinatario_id)
+      );
+      CREATE INDEX idx_svc_chat_recibos_destinatario ON svc_chat_recibos (destinatario_id, visto_em);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;
