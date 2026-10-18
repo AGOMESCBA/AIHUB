@@ -9,6 +9,7 @@
 
 const path = require('path');
 const pdfParse = require('pdf-parse');
+const { ehFonteTextual } = require('./armazenamento-anexos');
 
 // MIME types tratados como "texto legível" — seu conteúdo é extraído como
 // string e enviado para a IA. Imagens e PDFs seguem caminhos diferentes
@@ -25,8 +26,10 @@ const MIME_IMAGEM = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp
 const LINGUAGEM_POR_EXTENSAO = {
   '.prw': 'advpl', '.tlpp': 'tlpp', '.ch': 'advpl-header',
   '.sql': 'sql', '.json': 'json', '.xml': 'xml', '.log': 'log',
-  '.js': 'javascript', '.ts': 'typescript', '.py': 'python', '.java': 'java',
-  '.cs': 'csharp', '.php': 'php', '.html': 'html', '.css': 'css',
+  '.js': 'javascript', '.mjs': 'javascript', '.cjs': 'javascript', '.jsx': 'javascript',
+  '.ts': 'typescript', '.tsx': 'typescript', '.py': 'python', '.java': 'java',
+  '.cs': 'csharp', '.php': 'php', '.html': 'html', '.css': 'css', '.vue': 'vue',
+  '.go': 'go', '.rb': 'ruby', '.kt': 'kotlin',
   '.sh': 'shell', '.ps1': 'powershell', '.yml': 'yaml', '.yaml': 'yaml',
   '.ini': 'ini', '.cfg': 'config', '.conf': 'config', '.csv': 'csv',
   '.txt': null, // .txt é ambíguo por natureza — decidido por conteúdo, ver _detectarPorConteudo
@@ -37,6 +40,7 @@ const LINGUAGEM_POR_EXTENSAO = {
 const LINGUAGENS_CODIGO = new Set([
   'advpl', 'tlpp', 'advpl-header', 'sql', 'javascript', 'typescript', 'python',
   'java', 'csharp', 'php', 'shell', 'powershell',
+  'html', 'css', 'vue', 'go', 'ruby', 'kotlin',
 ]);
 
 function _detectarEncoding(buffer) {
@@ -76,6 +80,9 @@ function _detectarMimeReal(buffer, mimeDeclarado, nomeOriginal) {
   // de texto não executa nada, só lê como string).
   const declaraBinarioComAssinatura = MIME_IMAGEM.has(mimeDeclarado) || mimeDeclarado === 'application/pdf' || mimeDeclarado === 'image/gif' || mimeDeclarado === 'image/webp';
   if (declaraBinarioComAssinatura) return 'text/plain';
+  // Fonte textual: o MIME do navegador/Windows não decide (ex.: .ts como
+  // video/mp2t, .js como text/javascript). Sempre tratado como texto puro.
+  if (ehFonteTextual(nomeOriginal)) return 'text/plain';
 
   return mimeDeclarado || 'text/plain';
 }
@@ -87,9 +94,12 @@ function _detectarLinguagemPorConteudo(texto) {
     try { JSON.parse(texto); return 'json'; } catch (_) { /* não é JSON válido, segue tentando outros formatos */ }
   }
   if (/^\s*<\?xml|^\s*<[a-zA-Z]/.test(amostra)) return 'xml';
+  // Log com carimbo de data/hora vem antes das linguagens: "=>" ou "function"
+  // dentro de uma linha de log não fazem dele um fonte.
+  if (/^\s*\[?\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}|^\s*\d{2}\/\d{2}\/\d{4}.*\b(?:ERROR|WARN)|^\s*THREAD ERROR\b/im.test(amostra)) return 'log';
   // TXT e extensões desconhecidas também passam por conteúdo. "function"
-  // isolado não distingue JavaScript de ADVPL.
-  if (/^\s*(?:(?:export|default|async)\s+)*function\s+\w*\s*\([^)]*\)\s*\{|^\s*(?:const|let|var)\s+\w+\s*=|=>/m.test(amostra)) return 'javascript';
+  // isolado não distingue JavaScript de ADVPL, e "=>" sozinho não prova JS.
+  if (/^\s*(?:(?:export|default|async)\s+)*function\s+\w*\s*\([^)]*\)\s*\{|^\s*(?:const|let|var)\s+\w+\s*=|^\s*(?:import\s.+\sfrom\s|module\.exports\s*=|export\s+(?:default|const|function|class)\b)/m.test(amostra)) return 'javascript';
   if (/^\s*(?:async\s+)?def\s+\w+\s*\([^)]*\)\s*:/m.test(amostra)) return 'python';
   if (/\bFUNCTION\b|\bSTATIC\s+FUNCTION\b|::New\(\)/i.test(amostra)) return 'advpl';
   if (/^\s*\[\d{4}-\d{2}-\d{2}|^\s*\d{2}\/\d{2}\/\d{4}.*ERROR|EXCEPTION/im.test(amostra)) return 'log';

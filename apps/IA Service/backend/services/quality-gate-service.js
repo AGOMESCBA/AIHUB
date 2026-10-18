@@ -81,9 +81,16 @@ function _temAcaoOuProximoPasso(texto) {
 function _propostaDeCorrecao(texto) {
   // Uma ação já feita no histórico não é uma nova prescrição. Exigir teste
   // só pela palavra "ajuste" gerava reprovação sem correção proposta.
+  // Alterações ancoradas sempre são uma correção proposta.
+  if (/```iahub-alteracao/.test(String(texto || ''))) return '```iahub-alteracao';
+  const IMPERATIVO = '(?:aplique|ajuste|altere|corrija|configure|atualize|substitua|remova|adicione|inclua|troque|instale|habilite|desabilite|recompile|compile)';
+  const INFINITIVO = '(?:aplicar|ajustar|alterar|corrigir|configurar|atualizar|substituir|remover|adicionar|incluir|trocar|instalar|habilitar|desabilitar|compilar|recompilar)';
   return String(texto || '').split(/\n|(?<=[.!?])\s+/).find(frase =>
-    /(?:^|[:,;])\s*(?:\d+[.)]\s*)?(?:[-*]\s*)?(?:\*\*)?(?:aplique|ajuste|altere|corrija|configure|atualize|substitua|remova|adicione|instale|habilite|desabilite|recompile|compile)\b/i.test(frase)
-    || /\b(?:proponho|recomendo|deve|precisa|necess[aá]rio|corre[cç][aã]o proposta)\b[^.!?\n]{0,100}\b(?:aplicar|ajustar|alterar|corrigir|configurar|atualizar|substituir|remover|instalar|compilar)\b/i.test(frase));
+    // Necessidade relatada no passado ("foi necessário ajustar") é histórico.
+    !/\b(?:foi|foram|era|eram|tinha|tinham|houve)\s+(?:necess[aá]ri\w*|precis\w*)\b/i.test(frase) && (
+      new RegExp(`(?:^|[:,;]|\\b(?:e|ou|depois|ent[aã]o|em seguida)\\s)\\s*(?:\\d+[.)]\\s*)?(?:[-*]\\s*)?(?:\\*\\*)?${IMPERATIVO}\\b`, 'i').test(frase)
+      // Limites com acentos: \b não reconhece "é" como letra.
+      || new RegExp(`(?<![\\wÀ-ú])(?:proponho|propomos|recomendo|recomendamos|sugiro|sugerimos|deve|devem|deveria|precisa|precisam|(?:é|e) preciso|necess[aá]rio|vale|conv[eé]m|basta|pode|podem|corre[cç][aã]o proposta|a corre[cç][aã]o (?:é|e|seria)|a solu[cç][aã]o (?:é|e|seria))(?![\\wÀ-ú])[^.!?\\n]{0,100}\\b${INFINITIVO}\\b`, 'i').test(frase)));
 }
 
 function _temRespostaCurtaObjetiva(texto) {
@@ -1415,4 +1422,4 @@ function montarInstrucaoRetry(gate, contexto = {}) {
   ].filter(Boolean).join('\n');
 }
 
-module.exports = { avaliarResposta, montarInstrucaoRetry, classificarProvenienciaReferencias, temFalhaDeIntegridade, ehFalhaDeIntegridade, FALHAS_DE_INTEGRIDADE, _avaliarRegressaoInvestigativa, _similaridadeShingles, _extrairAncorasTecnicas };
+module.exports = { avaliarResposta, montarInstrucaoRetry, classificarProvenienciaReferencias, temFalhaDeIntegridade, ehFalhaDeIntegridade, FALHAS_DE_INTEGRIDADE, _avaliarRegressaoInvestigativa, _similaridadeShingles, _extrairAncorasTecnicas, _propostaDeCorrecao };

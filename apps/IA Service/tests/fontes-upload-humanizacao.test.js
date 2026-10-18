@@ -1,4 +1,6 @@
 'use strict';
+// Ambiente de teste: exercita o mecanismo de fonte corrigido (desativado por padrão no servidor).
+process.env.SVC_ALLOW_FONTE_CORRIGIDO = '1';
 // Integração LOCAL: rotas/upload/SQLite/extração/motor/gate/versionamento/download
 // reais; autenticação e provider substituídos por fixtures, sem executar fontes.
 const { test, before, after } = require('node:test');
@@ -37,7 +39,7 @@ function substituir(obj, key, valor) { originais.push(() => { obj[key] = valor; 
 let server, base, tecnicas = 0, editoriais = 0, prompts = [], respostaDoProvider;
 const original = 'User Function MeuWF()\nreturn cRet';
 const corrigido = 'User Function MeuWF()\nLocal cRet := ""\nreturn cRet';
-const resposta = `O PRW anexado retorna cRet sem inicializar a variavel. A correcao tecnica e inicializar cRet antes do retorno e validar em homologacao no mesmo fluxo que gerava o erro.\n\n**Fonte corrigido**\n\`\`\`advpl\n${corrigido}\n\`\`\`\n\n**Alterações realizadas**\nInicializacao de cRet antes do retorno.\n\n**Validação**\nValidar em homologacao no mesmo fluxo. A compilacao e a execucao ainda precisam ser realizadas pela equipe.`;
+const resposta = `O PRW anexado retorna cRet sem inicializar a variavel. A correcao tecnica e inicializar cRet antes do retorno e validar em homologacao no mesmo fluxo que gerava o erro.\n\n**Fonte corrigido**\n\`\`\`iahub-alteracao\narquivo: MeuWorkflow.PRW\njustificativa: inicializa cRet antes do retorno\n[[ORIGINAL]]\nreturn cRet\n[[SUBSTITUTO]]\nLocal cRet := ""\nreturn cRet\n[[FIM]]\n\`\`\`\n\n**Alterações realizadas**\nInicializacao de cRet antes do retorno.\n\n**Validação**\nValidar em homologacao no mesmo fluxo. A compilacao e a execucao ainda precisam ser realizadas pela equipe.`;
 before(async () => {
   substituir(config, 'resolverKeysEOrdem', () => ({ keys: {}, cfg: {} }));
   substituir(consultores, 'getConsultorPorUsuario', () => ({ id: 'consultor-teste' }));
@@ -48,6 +50,8 @@ before(async () => {
   const montar = contexto.montarContextoInvestigacao;
   substituir(contexto, 'montarContextoInvestigacao', args => { const r = montar(args); prompts.push(r.userPrompt); return r; });
   substituir(provider, 'chamarIA', async (_keys, _cfg, system, user) => {
+    // Verificação de consistência antes de gerar o arquivo (não é investigação).
+    if (system.includes('verificador de consistência')) return { texto: '{"contradicao": false, "motivo": "", "evidencia": ""}', provider: 'fixture-local', model: 'fixture' };
     if (system.includes('especialista em comunicação técnica')) {
       editoriais++;
       const texto = JSON.parse(user).resposta.replace('O PRW anexado retorna', 'No PRW anexado, o retorno usa');
@@ -90,7 +94,8 @@ test('upload reconhece linguagens, TXT, extensão aberta e conserva bytes do ori
     ['codigo.txt', original, 'advpl'], ['javascript.txt', 'function soma(a,b) { return a+b; }', 'javascript'],
     ['python.txt', 'def soma(a,b):\n    return a+b', 'python'], ['consulta.fonte', 'SELECT CAMPO FROM TABELA;', 'sql'],
   ];
-  const proibido = new FormData(); proibido.set('arquivo', new Blob(['function soma(a,b) { return a+b; }'], { type: 'text/plain' }), 'calculo.js');
+  // .js passou a ser fonte textual; executáveis continuam bloqueados.
+  const proibido = new FormData(); proibido.set('arquivo', new Blob(['conteudo'], { type: 'text/plain' }), 'calculo.exe');
   const bloqueio = await fetch(`${base}/api/ia-service/atendimentos/${at.id}/anexos`, { method: 'POST', headers, body: proibido });
   assert.equal(bloqueio.status, 400); assert.match((await bloqueio.json()).error, /Extensão não permitida/);
   for (const [nome, texto, linguagem] of fixtures) {
@@ -120,7 +125,7 @@ test('fonte e log chegam juntos ao motor; versão real é baixável com humaniza
   assert.equal(anexoRepo.getAnexo(88101, fonte.id).conteudoExtraido, original);
   for (const [prefixo, cabecalho] of [['ia-service', headers], ['ia-service-externo', { 'x-sessao-externa': 'empresa-a' }]]) {
     const download = await fetch(`${base}/api/${prefixo}/anexos/${versao.id}/download`, { headers: cabecalho });
-    assert.equal(download.status, 200); assert.equal(await download.text(), corrigido + '\n');
+    assert.equal(download.status, 200); assert.equal(await download.text(), corrigido);
     const historico = await (await fetch(`${base}/api/${prefixo}/atendimentos/${at.id}/mensagens`, { headers: cabecalho })).json();
     const persistida = historico.find(x => x.id === m.id);
     assert.equal(persistida.diagnostico.humanizacao.respostaOriginal, resposta);
@@ -146,12 +151,12 @@ test('consulta de mensagem e download preservam escopo da sessão e da empresa',
   assert.deepEqual(mensagensOutro, []);
 });
 
-test('correção de outra linguagem aceita fence c# e CRLF, sem compilação alegada', async () => {
+test('correção de outra linguagem aceita bloco ancorado com CRLF, sem compilação alegada', async () => {
   const at = criarAtendimento();
   const codigoOriginal = 'class Calculo { public int Soma(int a, int b) { return a - b; } }';
   const codigoCorrigido = 'class Calculo { public int Soma(int a, int b) { return a + b; } }';
   const fonte = await upload(at, 'Calculo.cs', codigoOriginal);
-  respostaDoProvider = `O fonte anexado usa subtracao na funcao Soma, mas o resultado esperado e soma. A correcao proposta troca o operador.\n\n**Fonte corrigido**\n\`\`\`c#\r\n${codigoCorrigido}\r\n\`\`\`\n\n**Alterações realizadas**\nTrocado o operador de subtracao por adicao.\n\n**Validação**\nCompilar e executar os testes em homologacao com os mesmos parametros de entrada. Ainda nao houve compilacao ou execucao.`;
+  respostaDoProvider = `O fonte anexado usa subtracao na funcao Soma, mas o resultado esperado e soma. A correcao proposta troca o operador.\n\n**Fonte corrigido**\n\`\`\`iahub-alteracao\r\narquivo: Calculo.cs\r\njustificativa: troca o operador\r\n[[ORIGINAL]]\r\nreturn a - b;\r\n[[SUBSTITUTO]]\r\nreturn a + b;\r\n[[FIM]]\r\n\`\`\`\n\n**Alterações realizadas**\nTrocado o operador de subtracao por adicao.\n\n**Validação**\nCompilar e executar os testes em homologacao com os mesmos parametros de entrada. Ainda nao houve compilacao ou execucao.`;
   try {
     const r = await fetch(`${base}/api/ia-service/atendimentos/${at.id}/investigar`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ texto: 'A funcao Soma deveria somar os parametros, mas esta subtraindo. Corrija o fonte anexado.', anexoIds: [fonte.id] }) });
     assert.equal(r.status, 201, await r.clone().text());
@@ -161,7 +166,7 @@ test('correção de outra linguagem aceita fence c# e CRLF, sem compilação ale
     const versao = m.fontesCorrigidos[0].versao;
     assert.equal(path.extname(versao.nomeOriginal), '.cs');
     const download = await fetch(`${base}/api/ia-service/anexos/${versao.id}/download`, { headers });
-    assert.equal(download.status, 200); assert.equal(await download.text(), codigoCorrigido + '\r\n');
+    assert.equal(download.status, 200); assert.equal(await download.text(), codigoCorrigido);
     assert.equal(anexoRepo.getAnexo(88101, fonte.id).conteudoExtraido, codigoOriginal);
   } finally { respostaDoProvider = null; }
 });

@@ -26,9 +26,46 @@ const MIME_PERMITIDOS = new Set([
   'application/octet-stream', // .log e .prw/.tlpp costumam chegar como octet-stream
 ]);
 
+// Executáveis e binários continuam proibidos. Scripts textuais (.js, .sh,
+// .ps1) são aceitos como fonte: o IA Service nunca executa nem compila anexos.
 const EXTENSOES_PROIBIDAS = new Set([
-  '.exe', '.bat', '.cmd', '.sh', '.ps1', '.msi', '.com', '.scr', '.vbs', '.js', '.jar', '.dll',
+  '.exe', '.bat', '.cmd', '.msi', '.com', '.scr', '.vbs', '.jar', '.dll',
 ]);
+
+// Fontes textuais: aceitas pela extensão, com conteúdo obrigatoriamente
+// textual, e sempre gravadas/servidas como text/plain. O MIME declarado pelo
+// navegador varia por sistema (.ts chega como video/mp2t no Windows) e não
+// decide o tratamento.
+const FONTES_TEXTUAIS = new Set([
+  '.prw', '.tlpp', '.ch',
+  '.js', '.mjs', '.cjs', '.ts', '.jsx', '.tsx',
+  '.py', '.cs', '.java', '.php',
+  '.html', '.css', '.vue',
+  '.go', '.rb', '.kt',
+  '.sql', '.sh', '.ps1',
+]);
+
+function ehFonteTextual(nomeOriginal) {
+  return FONTES_TEXTUAIS.has(_extensaoSegura(nomeOriginal));
+}
+
+// Caminho físico de um anexo, sempre dentro de ANEXOS_DIR.
+function resolverCaminhoSeguro(caminhoRelativo) {
+  const base = path.resolve(ANEXOS_DIR);
+  const destino = path.resolve(base, String(caminhoRelativo || ''));
+  if (destino === base || !destino.startsWith(base + path.sep)) throw new Error('Caminho de anexo invalido.');
+  return destino;
+}
+
+// Bytes nulos ou assinatura de formato binário conhecido (PE/ELF/ZIP/PDF/
+// imagens) indicam conteúdo que não é fonte textual.
+function _pareceBinario(buffer) {
+  if (!Buffer.isBuffer(buffer)) return false;
+  const inicio = buffer.subarray(0, 8);
+  const assinaturas = [[0x4d, 0x5a], [0x7f, 0x45, 0x4c, 0x46], [0x50, 0x4b, 0x03, 0x04], [0x25, 0x50, 0x44, 0x46], [0x89, 0x50, 0x4e, 0x47], [0xff, 0xd8, 0xff], [0x47, 0x49, 0x46, 0x38], [0xca, 0xfe, 0xba, 0xbe]];
+  if (assinaturas.some(a => a.every((b, i) => inicio[i] === b))) return true;
+  return buffer.includes(0x00);
+}
 
 const TAMANHO_MAXIMO_BYTES = 20 * 1024 * 1024; // 20 MB — configurável, ver seção 13 do prompt
 
@@ -37,12 +74,20 @@ function _extensaoSegura(nomeOriginal) {
   return /^\.[a-z0-9]{1,10}$/.test(ext) ? ext : '';
 }
 
-function validarAnexo({ nomeOriginal, mimeType, tamanho }) {
+// Bloqueio anterior à política de fontes textuais. Continua valendo para quem
+// não a ativa explicitamente (ex.: anexo de retorno ao SoftExpert).
+const EXTENSOES_PROIBIDAS_SEM_FONTES = new Set([...EXTENSOES_PROIBIDAS, '.js', '.sh', '.ps1']);
+
+function validarAnexo({ nomeOriginal, mimeType, tamanho, conteudo, aceitarFontesTextuais = false }) {
   const ext = _extensaoSegura(nomeOriginal);
-  if (EXTENSOES_PROIBIDAS.has(ext)) {
+  if ((aceitarFontesTextuais ? EXTENSOES_PROIBIDAS : EXTENSOES_PROIBIDAS_SEM_FONTES).has(ext)) {
     return { ok: false, erro: `Extensão não permitida: ${ext}` };
   }
-  if (!MIME_PERMITIDOS.has(mimeType)) {
+  const fonteTextual = aceitarFontesTextuais && FONTES_TEXTUAIS.has(ext);
+  if (fonteTextual && _pareceBinario(conteudo)) {
+    return { ok: false, erro: `Conteúdo binário não permitido como fonte textual (${ext}).` };
+  }
+  if (!fonteTextual && !MIME_PERMITIDOS.has(mimeType)) {
     return { ok: false, erro: `Tipo de arquivo não permitido: ${mimeType}` };
   }
   if (!tamanho || tamanho <= 0) {
@@ -51,7 +96,7 @@ function validarAnexo({ nomeOriginal, mimeType, tamanho }) {
   if (tamanho > TAMANHO_MAXIMO_BYTES) {
     return { ok: false, erro: `Arquivo excede o limite de ${TAMANHO_MAXIMO_BYTES / 1024 / 1024}MB.` };
   }
-  return { ok: true, extensao: ext };
+  return { ok: true, extensao: ext, mimeType: fonteTextual ? 'text/plain' : mimeType };
 }
 
 /**
@@ -74,7 +119,7 @@ function salvarAnexo(empresaId, atendimentoId, {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   if (!atendimentoId) throw new Error('atendimentoId é obrigatório.');
 
-  const validacao = validarAnexo({ nomeOriginal, mimeType, tamanho });
+  const validacao = validarAnexo({ nomeOriginal, mimeType, tamanho, conteudo, aceitarFontesTextuais: true });
   if (!validacao.ok) throw new Error(validacao.erro);
 
   const nomeInterno = `${crypto.randomUUID()}${validacao.extensao}`;
@@ -89,7 +134,7 @@ function salvarAnexo(empresaId, atendimentoId, {
   return anexoRepo.salvarMetadadosAnexo(empresaId, atendimentoId, {
     nomeOriginal,
     nomeInterno,
-    mimeType,
+    mimeType: validacao.mimeType,
     tamanho,
     caminhoRelativo,
     mensagemId,
@@ -115,7 +160,7 @@ function substituirArquivoAnexo(empresaId, atendimentoId, anexoExistente, {
   if (!atendimentoId) throw new Error('atendimentoId é obrigatório.');
   if (!anexoExistente?.id) throw new Error('anexoExistente é obrigatório.');
 
-  const validacao = validarAnexo({ nomeOriginal, mimeType, tamanho });
+  const validacao = validarAnexo({ nomeOriginal, mimeType, tamanho, conteudo, aceitarFontesTextuais: true });
   if (!validacao.ok) throw new Error(validacao.erro);
 
   const nomeInterno = `${crypto.randomUUID()}${validacao.extensao}`;
@@ -130,7 +175,7 @@ function substituirArquivoAnexo(empresaId, atendimentoId, anexoExistente, {
   const atualizado = anexoRepo.atualizarArquivoSincronizado(empresaId, anexoExistente.id, {
     nomeOriginal,
     nomeInterno,
-    mimeType,
+    mimeType: validacao.mimeType,
     tamanho,
     caminhoRelativo,
     conteudoExtraido,
@@ -206,7 +251,10 @@ module.exports = {
   ANEXOS_DIR,
   MIME_PERMITIDOS,
   EXTENSOES_PROIBIDAS,
+  FONTES_TEXTUAIS,
   TAMANHO_MAXIMO_BYTES,
+  ehFonteTextual,
+  resolverCaminhoSeguro,
   validarAnexo,
   salvarAnexo,
   substituirArquivoAnexo,

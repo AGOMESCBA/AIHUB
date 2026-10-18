@@ -1093,6 +1093,9 @@ button.loading .loader { display: block; }
   width: fit-content;
 }
 .message-attachment:hover { text-decoration: underline; }
+.message-source-warnings { margin-top: 6px; padding: 6px 8px; border-left: 3px solid var(--warn); border-radius: 4px; font-size: 11.5px; overflow-wrap: anywhere; }
+.message-source-warnings p { margin: 0; }
+.message-source-warnings p + p { margin-top: 4px; }
 .composer {
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr) 40px;

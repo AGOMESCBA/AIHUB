@@ -14,6 +14,8 @@ const respostaHumanizada = require('./resposta-humanizada-service');
 const consultorService = require('./consultor-service');
 const promptBuilder = require('./prompt-builder');
 const versaoFonteService = require('./versao-fonte-service');
+const alteracaoAncorada = require('./alteracao-ancorada-service');
+const verificacaoConsistencia = require('./verificacao-consistencia-fonte-service');
 const respostaOperacionalService = require('./resposta-operacional-service');
 const chamadoRepo = require('../repositories/chamado-repository');
 const technicalResearchService = require('./technical-research-service');
@@ -76,6 +78,176 @@ function _extrairFonteCorrigido(secoes) {
   if (!secoes?.['Fonte corrigido']) return null;
   const blocoCodigo = secoes['Fonte corrigido'].match(/```[^\r\n`]*\r?\n([\s\S]*?)```/);
   return blocoCodigo ? blocoCodigo[1] : null;
+}
+
+const AVISO_CORRECAO_SEM_ARQUIVO = 'Foi apresentada uma proposta de correção, mas não foi possível gerar um arquivo corrigido com segurança. O código original permanece intacto.';
+
+/**
+ * Proposta de código corrigido fora do formato ancorado: há fonte de código
+ * no atendimento, a resposta traz um bloco de código que NÃO é cópia literal
+ * de nenhum fonte anexado (código novo ou modificado) e o texto fala em
+ * correção. Citar o código original para explicá-lo não dispara o aviso.
+ */
+function _propoeCodigoSemAncoras(empresaId, atendimentoId, textoResposta) {
+  const texto = String(textoResposta || '');
+  const blocos = [...texto.matchAll(/```[^\r\n`]*\r?\n([\s\S]*?)```/g)].map(m => m[1].replace(/\r\n/g, '\n').trim()).filter(Boolean);
+  if (!blocos.length) return false;
+  const fontes = anexoRepo.listarAnexos(empresaId, atendimentoId).filter(a => a.eCodigo)
+    .map(a => String(a.conteudoExtraido || '').replace(/\r\n/g, '\n'));
+  if (!fontes.length) return false;
+  const codigoNovo = blocos.some(b => !fontes.some(f => f.includes(b)));
+  const prosa = texto.replace(/```[\s\S]*?```/g, ' ');
+  const falaEmCorrecao = /\b(corre[cç][aã]o|corrigid[oa]s?|corrigir|corrija|alterad[oa]s?|ajustad[oa]s?)\b/i.test(prosa)
+    && !/\bn[aã]o\s+(?:[eé]|h[aá])\s+(?:necess[aá]ri[oa]\s+)?(?:nenhuma\s+)?(?:corre[cç][aã]o|altera[cç][aã]o)/i.test(prosa);
+  return codigoNovo && falaEmCorrecao;
+}
+
+/**
+ * Gera versões corrigidas a partir das alterações ancoradas da resposta.
+ * Só versiona fonte que a IA recebeu INTEGRALMENTE neste turno, cujo
+ * conteúdo analisado é idêntico ao arquivo em disco, e cujas alterações
+ * foram todas aplicadas sem ambiguidade. Na dúvida, avisa e não gera.
+ */
+const AVISO_GERACAO_DESATIVADA = 'A geração do arquivo corrigido está temporariamente indisponível. A proposta de correção, quando houver, está apenas no texto da resposta; o código original permanece intacto.';
+
+// Geração de arquivo corrigido desativada por padrão (publicação controlada,
+// 2026-10-18): só o servidor a habilita, com SVC_ALLOW_FONTE_CORRIGIDO=1.
+// Desativada, nada é lido, verificado ou versionado; o mecanismo de
+// alterações ancoradas fica preservado para reativação.
+function geracaoFonteCorrigidoHabilitada() {
+  return process.env.SVC_ALLOW_FONTE_CORRIGIDO === '1';
+}
+
+async function _gerarFontesCorrigidos(empresaId, atendimentoId, opcoes) {
+  if (!geracaoFonteCorrigidoHabilitada()) {
+    const { alteracoes, erros } = alteracaoAncorada.extrairAlteracoes(opcoes.textoResposta);
+    const propoe = alteracoes.length || erros.length || opcoes.fonteCorrigidoTexto
+      || _propoeCodigoSemAncoras(empresaId, atendimentoId, opcoes.textoResposta);
+    return { fontes: [], avisos: propoe ? [AVISO_GERACAO_DESATIVADA] : [] };
+  }
+  const resultado = await _gerarFontesCorrigidosDetalhado(empresaId, atendimentoId, opcoes);
+  // Nenhum arquivo gerado para uma proposta de correção: o analista vê
+  // primeiro o aviso padrão e, em seguida, os motivos específicos.
+  if (!resultado.fontes.length && resultado.avisos.length && resultado.avisos[0] !== AVISO_CORRECAO_SEM_ARQUIVO) {
+    resultado.avisos.unshift(AVISO_CORRECAO_SEM_ARQUIVO);
+  }
+  return resultado;
+}
+
+async function _gerarFontesCorrigidosDetalhado(empresaId, atendimentoId, { mensagemId, textoResposta, fonteCorrigidoTexto, manifesto, respostaTruncada, explicacaoGeral, aprovadaQualityGate = false, pedido = '' }) {
+  const fs = require('fs');
+  const armazenamento = require('./armazenamento-anexos');
+  const fontes = [];
+  const avisos = [];
+  const { alteracoes, erros } = alteracaoAncorada.extrairAlteracoes(textoResposta);
+  if (!alteracoes.length && !erros.length) {
+    if (fonteCorrigidoTexto || _propoeCodigoSemAncoras(empresaId, atendimentoId, textoResposta)) avisos.push(AVISO_CORRECAO_SEM_ARQUIVO);
+    return { fontes, avisos };
+  }
+  // Correção reprovada pelo Quality Gate (inclusive por falta de orientação
+  // de validação) não vira arquivo baixável: fica só no texto, com alerta.
+  if (!aprovadaQualityGate) {
+    avisos.push('A resposta técnica não foi aprovada pelo Quality Gate; a versão corrigida não foi gerada.');
+    return { fontes, avisos };
+  }
+  if (respostaTruncada) {
+    avisos.push('A resposta da IA foi truncada; nenhuma versão corrigida foi gerada.');
+    return { fontes, avisos };
+  }
+  // Bloco malformado sem arquivo pode pertencer a qualquer fonte.
+  if (erros.some(e => !e.arquivo)) {
+    avisos.push('Há bloco de alteração malformado sem identificação do arquivo; nenhuma versão corrigida foi gerada.');
+    return { fontes, avisos };
+  }
+  const bloqueados = new Set(erros.map(e => e.arquivo.toLowerCase()));
+  for (const nome of bloqueados) avisos.push(`Bloco de alteração malformado para ${nome}; a versão corrigida desse arquivo não foi gerada.`);
+
+  const codigos = anexoRepo.listarAnexos(empresaId, atendimentoId).filter(a => a.eCodigo);
+  const integrais = new Set((manifesto?.selecionados || [])
+    .filter(s => s.tipo === 'anexo' && s.status === 'ANALISADA' && (s.cobertura?.percentualIncluido ?? 100) >= 100)
+    .map(s => String(s.id)));
+  const nomeBase = nome => String(nome || '').split(/[\\/]/).pop().trim().toLowerCase();
+
+  const grupos = new Map();
+  for (const alt of alteracoes) {
+    let alvo = null;
+    if (!alt.arquivo) {
+      const possiveis = codigos.filter(a => integrais.has(String(a.id)));
+      if (possiveis.length !== 1) {
+        avisos.push('Uma alteração não identifica o arquivo-alvo e há mais de um fonte possível (ou nenhum); nenhuma versão corrigida foi gerada.');
+        return { fontes: [], avisos };
+      }
+      alvo = possiveis[0];
+    } else {
+      const mesmoNome = codigos.filter(a => nomeBase(a.nomeOriginal) === nomeBase(alt.arquivo));
+      // Reenvio com o mesmo nome: vale o que entrou integralmente no contexto.
+      const candidatos = mesmoNome.length > 1 ? mesmoNome.filter(a => integrais.has(String(a.id))) : mesmoNome;
+      if (!mesmoNome.length) {
+        avisos.push(`O arquivo ${alt.arquivo} indicado na alteração não está entre os fontes do atendimento; nenhuma versão corrigida foi gerada.`);
+        return { fontes: [], avisos };
+      }
+      if (candidatos.length !== 1) {
+        avisos.push(`Há mais de um anexo chamado ${alt.arquivo}; o arquivo-alvo não é inequívoco e a versão corrigida não foi gerada.`);
+        continue;
+      }
+      alvo = candidatos[0];
+    }
+    if (bloqueados.has(nomeBase(alvo.nomeOriginal))) continue;
+    if (!grupos.has(alvo.id)) grupos.set(alvo.id, { anexo: alvo, alteracoes: [] });
+    grupos.get(alvo.id).alteracoes.push(alt);
+  }
+
+  for (const { anexo, alteracoes: doArquivo } of grupos.values()) {
+    if (!integrais.has(String(anexo.id))) {
+      avisos.push(`O fonte ${anexo.nomeOriginal} não foi analisado integralmente pela IA (análise parcial ou fora do contexto); a versão corrigida não foi gerada.`);
+      continue;
+    }
+    let buffer;
+    try {
+      buffer = fs.readFileSync(armazenamento.resolverCaminhoSeguro(anexo.caminhoRelativo));
+    } catch (_) {
+      avisos.push(`O arquivo original ${anexo.nomeOriginal} não está disponível em disco; a versão corrigida não foi gerada.`);
+      continue;
+    }
+    const encoding = anexo.encodingDetectado === 'latin1' ? 'latin1' : 'utf-8';
+    if (buffer.toString(encoding === 'latin1' ? 'latin1' : 'utf8') !== anexo.conteudoExtraido) {
+      avisos.push(`O conteúdo analisado de ${anexo.nomeOriginal} difere do arquivo em disco; a versão corrigida não foi gerada.`);
+      continue;
+    }
+    const aplicado = alteracaoAncorada.aplicarAlteracoes({ buffer, encoding, alteracoes: doArquivo });
+    if (!aplicado.ok) {
+      avisos.push(`As alterações para ${anexo.nomeOriginal} não puderam ser aplicadas com segurança (${[...new Set(aplicado.falhas.map(f => f.codigo))].join(', ')}); nenhuma versão foi gerada.`);
+      continue;
+    }
+    // Contradição evidente entre o diagnóstico e o próprio fonte (com trecho
+    // do original como prova) impede o arquivo; o texto segue para o analista.
+    const consistencia = await verificacaoConsistencia.verificar({
+      empresaId, pedido, diagnostico: textoResposta, arquivo: anexo.nomeOriginal, alteracoes: doArquivo, textoOriginal: anexo.conteudoExtraido,
+    });
+    if (consistencia.status === 'contradicao') {
+      avisos.push(`A correção proposta para ${anexo.nomeOriginal} contradiz o fonte original (${consistencia.motivo || 'diagnóstico incompatível com o código'}; trecho do original: "${consistencia.evidencia}"). O arquivo corrigido não foi gerado; revise o diagnóstico antes de alterar o código.`);
+      continue;
+    }
+    const rastreio = [
+      `Alterações ancoradas aplicadas sobre o original (${encoding}, quebras ${aplicado.quebraDeLinha}); demais linhas preservadas byte a byte:`,
+      ...aplicado.aplicadas.map(a => `- Alteração ${a.alteracao}, linha ${a.linha}: ${a.justificativa || 'sem justificativa informada'}`),
+      `Verificação de consistência com o fonte: ${{ consistente: 'sem contradição detectada', inconclusiva: 'inconclusiva (sem evidência literal no original)', indisponivel: 'indisponível' }[consistencia.status]}. Não substitui a validação técnica.`,
+    ].join('\n');
+    try {
+      const versao = versaoFonteService.criarVersaoCorrigida(empresaId, {
+        anexoOriginalId: anexo.id,
+        atendimentoId,
+        mensagemOrigemId: mensagemId,
+        conteudoBuffer: aplicado.buffer,
+        explicacaoAlteracao: explicacaoGeral ? `${explicacaoGeral}\n\n${rastreio}` : rastreio,
+        usuarioId: null,
+      });
+      fontes.push({ versao, original: anexo, status: 'Correção proposta — aguardando validação', alteracoes: aplicado.aplicadas });
+    } catch (err) {
+      avisos.push(`A versão corrigida de ${anexo.nomeOriginal} não foi gerada: ${err.message}`);
+    }
+  }
+  return { fontes, avisos };
 }
 
 function _adicionarInstrucaoObservacaoVisual(userPrompt, contexto) {
@@ -1340,39 +1512,21 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     }
   }
 
-  // Se a IA produziu um fonte corrigido E há exatamente um anexo de código
-  // neste turno para servir de "original", versiona automaticamente (seção 9
-  // do prompt: nunca sobrescrever, sempre nova versão vinculada).
-  const anexosCodigoDoTurno = anexosDoTurno.filter(a => a.eCodigo);
-  mensagemAssistente.fontesCorrigidos = [];
-  mensagemAssistente.avisosFonteCorrigido = [];
-  if (fonteCorrigidoTexto) {
-    const validacaoFonte = versaoFonteService.validarConteudoCorrigido(fonteCorrigidoTexto, {
-      respostaTruncada: !!resultado.truncado,
-    });
-
-    if (!validacaoFonte.ok) {
-      mensagemAssistente.avisosFonteCorrigido.push(validacaoFonte.motivo);
-    } else if (anexosCodigoDoTurno.length === 1) {
-      const versaoCorrigida = versaoFonteService.criarVersaoCorrigida(empresaId, {
-        anexoOriginalId: anexosCodigoDoTurno[0].id,
-        atendimentoId,
-        mensagemOrigemId: mensagemAssistente.id,
-        conteudoCorrigido: fonteCorrigidoTexto,
-        explicacaoAlteracao: secoes?.['Alterações realizadas'] || null,
-        usuarioId: null,
-      });
-      mensagemAssistente.fontesCorrigidos.push({
-        versao: versaoCorrigida,
-        original: anexosCodigoDoTurno[0],
-        status: 'Correção proposta — aguardando validação',
-      });
-    } else if (anexosCodigoDoTurno.length > 1) {
-      mensagemAssistente.avisosFonteCorrigido.push('Ha mais de um anexo de codigo no turno; nenhuma versao corrigida foi gerada automaticamente.');
-    } else {
-      mensagemAssistente.avisosFonteCorrigido.push('A resposta trouxe Fonte corrigido, mas nenhum anexo de codigo do turno foi identificado como original.');
-    }
-  }
+  // Versões corrigidas vêm das alterações ancoradas da resposta TÉCNICA
+  // (nunca da redação humanizada), aplicadas sobre os bytes do original:
+  // nunca sobrescreve, sempre nova versão vinculada (seção 9 do prompt).
+  const geracaoFontes = await _gerarFontesCorrigidos(empresaId, atendimentoId, {
+    mensagemId: mensagemAssistente.id,
+    pedido: texto,
+    textoResposta: textoFinal,
+    fonteCorrigidoTexto,
+    manifesto: contexto.manifesto,
+    respostaTruncada: !!resultado.truncado,
+    explicacaoGeral: secoes?.['Alterações realizadas'] || null,
+    aprovadaQualityGate: qualityGate?.aprovado === true && !revisaoNecessariaQualityGate && !resultado.truncado,
+  });
+  mensagemAssistente.fontesCorrigidos = geracaoFontes.fontes;
+  mensagemAssistente.avisosFonteCorrigido = geracaoFontes.avisos;
   if (mensagemAssistente.avisosFonteCorrigido.length) {
     mensagemRepo.atualizarAvisosFonteCorrigido(empresaId, mensagemAssistente.id, mensagemAssistente.avisosFonteCorrigido);
   }
@@ -1418,6 +1572,7 @@ module.exports = {
   _extrairSecoes,
   _extrairNivelConfianca,
   _extrairFonteCorrigido,
+  _gerarFontesCorrigidos,
   _calcularRevisaoNecessariaQualityGate,
   _statusFinalQualityGate,
   _statusFinalExecucao,

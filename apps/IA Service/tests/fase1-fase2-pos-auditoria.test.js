@@ -1,3 +1,5 @@
+// Ambiente de teste: exercita o mecanismo de fonte corrigido (desativado por padrão no servidor).
+process.env.SVC_ALLOW_FONTE_CORRIGIDO = '1';
 ﻿// Correcoes pos-auditoria Claude Code - A1, M1 e M2.
 // Executar: node "apps/IA Service/tests/fase1-fase2-pos-auditoria.test.js"
 
@@ -109,15 +111,15 @@ function respostaComFonteCorrigido() {
   return `O log mostra array out of bounds na ROTINA_A.PRW e os fontes anexados usam aItens[nPos]. A correcao tecnica e validar o indice antes do acesso ao array e compilar em homologacao reproduzindo a operacao original.
 
 **Fonte corrigido**
-\`\`\`advpl
-#Include "protheus.ch"
-User Function ROTINA_A()
-Local aItens := {}
-Local nPos := 1
+\`\`\`iahub-alteracao
+justificativa: valida o indice antes do acesso ao array
+[[ORIGINAL]]
+ConOut(aItens[nPos])
+[[SUBSTITUTO]]
 If nPos >= 1 .And. nPos <= Len(aItens)
   ConOut(aItens[nPos])
 EndIf
-Return
+[[FIM]]
 \`\`\`
 
 **Validacao**
@@ -158,15 +160,15 @@ async function main() {
     }));
 
     assert.strictEqual(resposta.fontesCorrigidos.length, 0, 'M1: ambiguidade nao deve gerar arquivo arbitrario');
-    assert.ok(resposta.avisosFonteCorrigido.some(a => /mais de um anexo/i.test(a)), 'M1: resposta imediata deve trazer aviso');
+    assert.ok(resposta.avisosFonteCorrigido.some(a => /mais de um fonte/i.test(a)), 'M1: resposta imediata deve trazer aviso');
 
     const mensagensPersistidas = mensagemRepo.listarMensagens(EMPRESA, atendimento.id);
     const assistenteReaberto = mensagensPersistidas.find(m => m.id === resposta.id);
-    assert.ok(assistenteReaberto.avisosFonteCorrigido.some(a => /mais de um anexo/i.test(a)), 'M1: aviso deve sobreviver a listagem/reabertura');
+    assert.ok(assistenteReaberto.avisosFonteCorrigido.some(a => /mais de um fonte/i.test(a)), 'M1: aviso deve sobreviver a listagem/reabertura');
 
     const viaRota = respostaOperacionalService.anexarFichaOperacional(assistenteReaberto);
-    assert.ok(viaRota.avisosFonteCorrigido.some(a => /mais de um anexo/i.test(a)), 'M1: contrato de API deve manter avisos para Atendimento V1/Radar');
-    assert.ok(viaRota.respostaOperacional.avisos.some(a => /mais de um anexo/i.test(a)), 'M1: ficha operacional deve receber avisos persistidos');
+    assert.ok(viaRota.avisosFonteCorrigido.some(a => /mais de um fonte/i.test(a)), 'M1: contrato de API deve manter avisos para Atendimento V1/Radar');
+    assert.ok(viaRota.respostaOperacional.avisos.some(a => /mais de um fonte/i.test(a)), 'M1: ficha operacional deve receber avisos persistidos');
 
     const respostasComAcao = [
       'A evidÃªncia do log mostra array out of bounds na ROTINA.PRW. Corrija a validaÃ§Ã£o de Ã­ndice e compile em homologaÃ§Ã£o.',

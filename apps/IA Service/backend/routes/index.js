@@ -479,7 +479,10 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       const caminhoAbsoluto = _resolverCaminhoAnexoSeguro(anexo.caminhoRelativo);
       if (!fs.existsSync(caminhoAbsoluto)) return res.status(404).json({ error: 'Arquivo não encontrado em disco.' });
 
-      res.setHeader('Content-Type', anexo.mimeType || 'application/octet-stream');
+      // Fonte (inclusive HTML/JS) nunca é interpretado pelo navegador.
+      const ehFonte = anexo.eCodigo || armazenamento.ehFonteTextual(anexo.nomeOriginal);
+      res.setHeader('Content-Type', ehFonte ? 'text/plain' : (anexo.mimeType || 'application/octet-stream'));
+      res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(anexo.nomeOriginal)}"`);
       fs.createReadStream(caminhoAbsoluto).pipe(res);
     } catch (err) {

@@ -82,7 +82,18 @@ Quando o problema envolver fonte/customização e você tiver material suficient
 **Chamados semelhantes** — quando houver base interna recuperada, explique quais casos parecem úteis, por que são semelhantes, e se a solução anterior se aplica ou não.
 **Pesquisa técnica** — quando houver resultados ou links técnicos recuperados, indique o que foi usado como apoio e diferencie resultado confirmado de trilha de pesquisa sugerida.
 **Correção proposta** — o que deve ser alterado, objetivamente.
-**Fonte corrigido** — quando houver informação suficiente e a alteração for seguramente identificável, o código-fonte COMPLETO corrigido (não apenas fragmentos soltos), em um bloco de código.
+**Fonte corrigido** — somente quando o anexo estiver marcado como [FONTE INTEGRAL] e a alteração for seguramente identificável. NÃO reescreva o fonte inteiro: descreva cada alteração em um bloco próprio, exatamente neste formato:
+\`\`\`iahub-alteracao
+arquivo: <nome exato do anexo>
+justificativa: <motivo técnico curto>
+[[ORIGINAL]]
+<trecho copiado exatamente do fonte, com as mesmas linhas, espaços e tabulações, longo o bastante para aparecer uma única vez no arquivo>
+[[SUBSTITUTO]]
+<trecho substituto completo>
+[[FIM]]
+\`\`\`
+Afirmações do analista ou do cliente sobre o comportamento do código são hipóteses a conferir no fonte, não fatos. Antes de propor uma alteração, confirme no próprio fonte que o problema descrito existe. Se o fonte contradiz a afirmação (por exemplo, a verificação dita ausente já está implementada), diga isso explicitamente, cite o trecho e não proponha alteração baseada nessa premissa. A justificativa de cada bloco deve indicar o que está errado no trecho [[ORIGINAL]]. Sem evidência suficiente no fonte, apresente hipótese e o que precisa ser validado, sem conclusão definitiva.
+O sistema aplica os blocos sobre o arquivo original e gera a nova versão, preservando todo o restante. Se um trecho não for encontrado exatamente uma vez, nenhum arquivo é gerado. Nunca use "...", "restante do código" ou omissões dentro dos blocos. Se o anexo estiver marcado como [ANALISE PARCIAL], não proponha blocos para ele: diga que a análise foi parcial e quais trechos foram vistos.
 **Alterações realizadas** — resumo do que mudou, onde, e por quê.
 **Validação** — como testar a correção antes de usar em produção.
 

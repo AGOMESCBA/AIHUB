@@ -161,9 +161,20 @@ function testarCodigoELogMantemComportamentoAnterior() {
   const ctx = montar(at, OPENAI);
   const f = sel(ctx, 'fonte.prw');
   const l = sel(ctx, 'erro.log');
-  assert.strictEqual(f.status, 'PARCIALMENTE_ANALISADA');
-  assert.ok(/estruturas de codigo|inicio\/fim/.test(f.motivo + (f.cobertura.motivoReducao || '')) || f.cobertura.estrategia === 'trechos_codigo_ou_log');
+  // Fonte de código vai inteiro quando cabe na janela do modelo (sem o antigo
+  // corte fixo de 14 mil caracteres); o log mantém a janela ao redor do erro.
+  assert.strictEqual(f.status, 'ANALISADA');
+  assert.strictEqual(f.cobertura.percentualIncluido, 100);
+  assert.ok(ctx.userPrompt.includes(codigo), 'fonte integral no prompt');
+  assert.ok(ctx.userPrompt.includes('[FONTE INTEGRAL'), 'prompt sinaliza fonte integral');
   assert.strictEqual(l.status, 'PARCIALMENTE_ANALISADA');
+  // Janela pequena: o fonte é reduzido e marcado como análise parcial.
+  const ctxPequeno = montar(at, GROQ);
+  const fPequeno = sel(ctxPequeno, 'fonte.prw');
+  assert.strictEqual(fPequeno.status, 'PARCIALMENTE_ANALISADA');
+  assert.ok(fPequeno.cobertura.percentualIncluido < 100);
+  assert.ok(/estruturas de codigo|inicio\/fim/.test(fPequeno.motivo + (fPequeno.cobertura.motivoReducao || '')) || fPequeno.cobertura.estrategia === 'trechos_codigo_ou_log');
+  assert.ok(ctxPequeno.userPrompt.includes('[ANALISE PARCIAL'), 'prompt sinaliza análise parcial');
   assert.ok(ctx.userPrompt.includes('XPTO-900 falha'), 'janela do log deve preservar a regiao do erro');
   assert.ok(f.cobertura.extraidoChars === codigo.length && l.cobertura.extraidoChars === log.length, 'auditoria tambem para codigo/log');
 }

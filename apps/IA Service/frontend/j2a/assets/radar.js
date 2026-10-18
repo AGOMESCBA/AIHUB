@@ -1072,6 +1072,11 @@
           <a class="message-attachment" href="${escapeHtml(ext(`/anexos/${encodeURIComponent(a.id)}/download`))}" data-download-name="${escapeHtml(a.nome || a.nomeOriginal || 'Anexo')}">📎 ${escapeHtml(a.nome || a.nomeOriginal || 'Anexo')}${a.anexoOriginalId ? ' — Correção proposta: validar antes de usar' : ''}</a>
         `).join('')}</div>
       ` : '';
+      // Avisos de fonte corrigido vêm do servidor (persistidos na mensagem),
+      // independentes da redação humanizada.
+      const avisosFonte = assistant && Array.isArray(m.avisosFonteCorrigido) ? m.avisosFonteCorrigido : [];
+      const avisosFonteHtml = avisosFonte.length
+        ? `<div class="message-source-warnings" role="note">${avisosFonte.map((a) => `<p>⚠️ ${escapeHtml(a)}</p>`).join('')}</div>` : '';
       const avaliacaoHtml = assistant ? renderizarAvaliacaoHumana(m) : '';
       return `
         <article class="message message-${side} ${assistant ? 'assistant' : ''}">
@@ -1080,6 +1085,7 @@
             <div class="message-head"><strong>${escapeHtml(messageRole(m))}</strong><span>${escapeHtml(formatDateTime(messageTimestamp(m)))}</span></div>
             <div class="message-text">${escapeHtml(messageText(m))}</div>
             ${attachmentsHtml}
+            ${avisosFonteHtml}
             ${window.IaDetalhesTecnicos.botao(m, 'primary-button')}
             ${avaliacaoHtml}
           </div>

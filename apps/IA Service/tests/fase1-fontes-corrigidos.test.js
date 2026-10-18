@@ -1,3 +1,5 @@
+// Ambiente de teste: exercita o mecanismo de fonte corrigido (desativado por padrão no servidor).
+process.env.SVC_ALLOW_FONTE_CORRIGIDO = '1';
 // Fase 1 - entrega operacional de fontes corrigidos.
 // Executar: node "apps/IA Service/tests/fase1-fontes-corrigidos.test.js"
 
@@ -32,12 +34,19 @@ const registrarRotas = require('../backend/routes');
 const EMPRESA_A = 99101;
 const EMPRESA_B = 99102;
 
-function respostaIA(fonteCorrigido) {
+// Correção por alteração ancorada: a IA indica o trecho exato e o substituto;
+// o servidor aplica sobre o original (não há mais fonte reescrito pela IA).
+function respostaIA(substituto, { original = 'return cRet', arquivo = null } = {}) {
   return `O PRW anexado retorna cRet sem inicializar a variavel. A correcao tecnica e inicializar cRet antes do retorno e validar em homologacao no mesmo fluxo que gerava o erro.
 
 **Fonte corrigido**
-\`\`\`advpl
-${fonteCorrigido}
+\`\`\`iahub-alteracao
+${arquivo ? `arquivo: ${arquivo}\n` : ''}justificativa: inicializa cRet antes do retorno
+[[ORIGINAL]]
+${original}
+[[SUBSTITUTO]]
+${substituto}
+[[FIM]]
 \`\`\`
 
 **Validacao**
@@ -156,7 +165,7 @@ async function main() {
     });
     const original = criarAnexoCodigo(EMPRESA_A, atendimento.id, 'MeuWorkflow.prw', 'User Function MeuWF()\nreturn cRet');
 
-    const resposta = await comIAFake(respostaIA('User Function MeuWF()\nLocal cRet := ""\nreturn cRet'), () =>
+    const resposta = await comIAFake(respostaIA('Local cRet := ""\nreturn cRet', { arquivo: 'MeuWorkflow.prw' }), () =>
       investigacaoService.processarTurno(EMPRESA_A, atendimento.id, {
         texto: 'Corrija o fonte anexado.',
         usuarioId: 1,
@@ -211,7 +220,7 @@ async function main() {
     });
     const fonteA = criarAnexoCodigo(EMPRESA_A, atendimentoAmbiguo.id, 'A.prw', 'User Function A()\nreturn cRet');
     const fonteB = criarAnexoCodigo(EMPRESA_A, atendimentoAmbiguo.id, 'B.prw', 'User Function B()\nreturn cRet');
-    const respostaAmbigua = await comIAFake(respostaIA('User Function A()\nLocal cRet := ""\nreturn cRet'), () =>
+    const respostaAmbigua = await comIAFake(respostaIA('Local cRet := ""\nreturn cRet'), () =>
       investigacaoService.processarTurno(EMPRESA_A, atendimentoAmbiguo.id, {
         texto: 'Corrija o fonte.',
         usuarioId: 1,
@@ -219,7 +228,7 @@ async function main() {
       })
     );
     assert.strictEqual(respostaAmbigua.fontesCorrigidos.length, 0, 'dois fontes ambiguos nao devem gerar versao automatica');
-    assert.ok(respostaAmbigua.avisosFonteCorrigido.some(a => /mais de um anexo/i.test(a)), 'ambiguidade deve ser informada');
+    assert.ok(respostaAmbigua.avisosFonteCorrigido.some(a => /arquivo-alvo/i.test(a)), 'ambiguidade deve ser informada');
 
     const atendimentoTruncado = atendimentoRepo.criarAtendimento(EMPRESA_A, {
       origem: 'manual',
@@ -227,7 +236,7 @@ async function main() {
       conteudoBruto: 'Fonte incompleto.',
     });
     const fonteTruncado = criarAnexoCodigo(EMPRESA_A, atendimentoTruncado.id, 'Curto.prw', 'User Function Curto()\nreturn cRet');
-    const respostaCurta = await comIAFake(respostaIA('x'), () =>
+    const respostaCurta = await comIAFake(respostaIA('// ... restante do código permanece igual ...'), () =>
       investigacaoService.processarTurno(EMPRESA_A, atendimentoTruncado.id, {
         texto: 'Corrija o fonte.',
         usuarioId: 1,

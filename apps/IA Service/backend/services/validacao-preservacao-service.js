@@ -26,14 +26,19 @@ function conceitos(texto) {
   const s = normalizar(texto);
   const incerta = /\b(hipotes\w*|possivel|possivelmente|pode|podem|poderia\w*|talvez|provavel|provavelmente|sugere|parece|suspeit\w*|indicio\w*|a confirmar|quem sabe)\b/.test(s);
   const negativa = /\b(nao|sem|falt\w*|ausen\w*|indispon\w*)\b/.test(s);
-  const solicitada = /\b(solicit\w*|peca|pedir|envie|forneca|fornecer|fornecesse|fornecam|colet\w*|obtenha|obter|precis\w*|necessari\w*|verifi\w*|confira|conferir|confirmar|confirme|revis\w*|desabilite|reinicie|aplique|ajuste|altere|corrija|configure|atualize|substitua|remova|instale|habilite)\b/.test(s);
+  const solicitada = /\b(solicit\w*|peca|pedir|envie|forneca|fornecer|fornecesse|fornecam|colet\w*|obtenha|obter|precis\w*|necessari\w*|verifi\w*|confira|conferir|confirmar|confirme|revis\w*|desabilite|reinicie|aplique|ajuste|altere|corrija|configure|atualize|substitua|remova|instale|habilite|acesse|veja|consulte|filtre|cheque|checar|valide|validar|teste|testar|execute|documente|registre)\b/.test(s);
   // "Já fizemos os ajustes, mas o erro não foi resolvido" contém uma ação
   // concluída e uma resolução negada; a segunda não apaga a primeira.
   const clausula = s.split(/\b(?:mas|porem|no entanto)\b/)[0];
   const concluida = !incerta && !solicitada && !/\b(nao|sem|se)\b/.test(clausula)
-    && (/\b(?:ja\s+\w+[\s\S]{0,45}|foi|foram|realizamos|efetuamos|fizemos)\b[\s\S]{0,70}\b(?:feit\w*|realizad\w*|aplicad\w*|atualizad\w*|enviad\w*|encaminhad\w*|abert\w*|adicionad\w*|modificad\w*|ajustad\w*)\b/.test(clausula) || /\bja tentamos\b/.test(clausula));
+    && (/\b(?:ja\s+\w+[\s\S]{0,45}|foi|foram|realizamos|efetuamos|fizemos)\b[\s\S]{0,70}\b(?:feit\w*|realizad\w*|aplicad\w*|atualizad\w*|enviad\w*|encaminhad\w*|abert\w*|adicionad\w*|modificad\w*|ajustad\w*)\b/.test(clausula) || /\bja tentamos\b/.test(clausula)
+      // Pretérito de terceiros ("a TOTVS já respondeu") também encerra uma pendência.
+      || /\b(?:respondeu|responderam|retornou|retornaram|enviou|enviaram|entregou|entregaram|forneceu|forneceram|concluiu|concluiram|liberou|liberaram|aprovou|aprovaram|corrigiu|corrigiram|ajustou|ajustaram|resolveu|resolveram)\b/.test(clausula));
   const resolvida = !negativa && !incerta && !solicitada && /\b(resolvid\w*|solucionad\w*|corrigid\w*|normalizad\w*|encerrad\w*|restabelecid\w*)\b/.test(s);
-  const confirmada = !negativa && !incerta && !solicitada && /\b(confirmad\w*|comprovad\w*|garantid\w*|a causa e|causad\w* (?:por|pel[oa]s?)|ocorre porque|(?:log|evidencia|teste)\w* (?:confirma|comprova))\b|\b(?:erro|falha|problema)\b.{0,35}\b(?:e|esta|vem|decorre)\s+(?:no|na|do|da|por)\b/.test(s);
+  // Formas afirmativas de causalidade: sem marca de incerteza na frase,
+  // "está ligada a", "vem de" ou "identificou que" afirmam a causa.
+  const confirmada = !negativa && !incerta && !solicitada && (/\b(confirmad\w*|comprovad\w*|garantid\w*|a causa e|causad\w* (?:por|pel[oa]s?)|ocorre porque|(?:log|evidencia|teste)\w* (?:confirma|comprova))\b|\b(?:erro|falha|problema)\b.{0,35}\b(?:e|esta|vem|decorre)\s+(?:no|na|do|da|por)\b/.test(s)
+    || /\b(?:identific\w* que|constat\w*|(?:ligad|relacionad|associad)\w* (?:a|ao|aos|as|com)\b|vem d[eoa]s?|vem de|decorre\w* d[eoa]s?|se deve a|(?:esta|estao) (?:incorret|errad|invalid|mal configurad)\w*|a causa (?:da|do|de)\b[^.]{0,60}\be\b)/.test(s));
   const pendente = /\b(aguard\w*|pend\w*|espera\w*|depende\w*|acompanh\w*|falta\w*|precis\w*|fique de olho)\b/.test(s);
   const ausenciaProblema = /\bnao\b[\s\S]{0,35}\b(ocorre|acontece|apresenta)\b|\b(funciona|comporta)\b[\s\S]{0,35}\b(corretamente|normalmente|esperado)\b/.test(s);
   return { incerta, negativa, solicitada, concluida, resolvida, confirmada, pendente, ausenciaProblema };
@@ -107,7 +112,7 @@ function analisarPreservacao(original, candidata) {
       if (b[estado] && !a[estado]) falhar('ESTADO_OU_CERTEZA_ALTERADO', 'Pedido, hipótese ou pendência promovido a fato concluído ou confirmado.', [par.unidade.texto, u.texto]);
     }
   }
-  for (const u of origem) {
+  for (const [indice, u] of origem.entries()) {
     if (u.palavras.size < 3 && !u.refs.size && !Object.values(u.conceitos).some(Boolean)) continue;
     const par = correspondente(u, destino);
     if (!par || par.score < 0.2) {
@@ -116,11 +121,21 @@ function analisarPreservacao(original, candidata) {
     }
     // Duas frases do mesmo parágrafo podem dividir a ressalva e sua ação
     // ("Se conseguir, obtenha..."). Isso não exige repetir a palavra exata.
-    const a = u.conceitos, b = par.unidade.contexto;
+    const a = u.conceitos, b = par.unidade.contexto, f = par.unidade.conceitos;
     if (a.concluida && !par.unidade.conceitos.concluida && !b.concluida) falhar('ACAO_REALIZADA_PERDIDA', 'Ação já realizada passou a ser omitida ou apresentada como pendente.', [u.texto, par.unidade.texto]);
-    if (a.incerta && !b.incerta && !b.negativa && !b.solicitada) falhar('INCERTEZA_REMOVIDA', 'Hipótese perdeu o caráter de incerteza.', [u.texto, par.unidade.texto]);
+    // Incerteza e pendência são avaliadas na frase correspondente. Um pedido
+    // ou um "não" em outra frase do parágrafo não preserva a hipótese; o
+    // parágrafo só conta se a própria frase não afirmar certeza ou conclusão.
+    const fraseAfirma = f.confirmada || f.concluida || f.resolvida;
+    // Frase anafórica ("Essa pendência é crucial...") retoma a frase
+    // anterior; seu estado é conferido na reescrita dessa frase.
+    const anterior = origem[indice - 1];
+    const anaforica = anterior?.paragrafo === u.paragrafo && /^(essa|esse|essas|esses|isso|isto)\b/i.test(u.texto) && !a.confirmada && !a.concluida && !a.resolvida;
+    const parAnterior = anaforica ? correspondente(anterior, destino) : null;
+    const contextoAnaforico = parAnterior?.score >= 0.2 ? parAnterior.unidade.conceitos : null;
+    if (a.incerta && !f.incerta && !f.negativa && !f.solicitada && !(b.incerta && !fraseAfirma) && !contextoAnaforico?.incerta) falhar('INCERTEZA_REMOVIDA', 'Hipótese perdeu o caráter de incerteza.', [u.texto, par.unidade.texto]);
     if (a.negativa && !b.negativa && !b.pendente && !(a.ausenciaProblema && b.ausenciaProblema)) falhar('RESSALVA_REMOVIDA', 'Negação ou ausência relevante deixou de estar representada.', [u.texto, par.unidade.texto]);
-    if (a.pendente && !b.pendente && !b.solicitada) falhar('PENDENCIA_REMOVIDA', 'Espera ou dependência deixou de estar representada.', [u.texto, par.unidade.texto]);
+    if (a.pendente && !f.pendente && !f.solicitada && !(b.pendente && !fraseAfirma) && !contextoAnaforico?.pendente) falhar('PENDENCIA_REMOVIDA', 'Espera ou dependência deixou de estar representada.', [u.texto, par.unidade.texto]);
     if (a.solicitada && !b.solicitada && !b.pendente && b.concluida) falhar('ACAO_SOLICITADA_VIROU_CONCLUIDA', 'Ação solicitada passou a ser descrita como realizada.', [u.texto, par.unidade.texto]);
     else if (a.solicitada && !b.solicitada && !b.pendente) falhar('ACAO_ESSENCIAL_OMITIDA', 'Próxima ação necessária deixou de estar representada.', [u.texto, par.unidade.texto]);
   }

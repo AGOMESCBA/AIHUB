@@ -28,6 +28,10 @@ for (const tela of ['j2a', 'radar-externo']) for (const width of [1440, 390]) {
     page.on('pageerror', e => erros.push(e.message));
     await page.addInitScript(() => localStorage.setItem('svc_token_externo', 'sessao-teste'));
     const mensagens = ['NATURAL', 'DIRETO', 'DESCONTRAIDO', 'ORIGINAL'].map((s, i) => mensagem(`m${i}`, s));
+    // Aviso de correção sem arquivo, em mensagem humanizada: vem do servidor e
+    // é exibido como texto (HTML embutido não é interpretado).
+    const AVISO = 'Foi apresentada uma proposta de correção, mas não foi possível gerar um arquivo corrigido com segurança. O código original permanece intacto.';
+    mensagens[0].avisosFonteCorrigido = [AVISO, 'Motivo <b class="injetado">x</b>'];
     mensagens.push(mensagem('fallback', 'NATURAL', 'fallback'));
     const semOriginal = mensagem('sem-original'); delete semOriginal.diagnostico.humanizacao.respostaOriginal; mensagens.push(semOriginal);
     const historica = mensagem('historica'); delete historica.diagnostico.humanizacao.aprovacaoTecnica; mensagens.push(historica);
@@ -64,6 +68,9 @@ for (const tela of ['j2a', 'radar-externo']) for (const width of [1440, 390]) {
       const botoes = page.locator('[data-detalhes-tecnicos]');
       await botoes.first().waitFor();
       assert.equal(await botoes.count(), 4);
+      assert.equal(await page.getByText(AVISO).count(), 1, 'aviso de correção sem arquivo aparece uma vez');
+      assert.ok(await page.getByText(AVISO).isVisible());
+      assert.equal(await page.locator('.injetado').count(), 0, 'HTML do aviso não é interpretado');
       const painel = page.locator('.technical-details-panel');
       for (const id of ['m0', 'm1', 'm2', 'historica']) {
         const botao = page.locator(`[data-detalhes-tecnicos="${id}"]`);

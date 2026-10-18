@@ -216,7 +216,7 @@
     // (```...```), sem depender de lib de markdown externa — suficiente para
     // o formato que o prompt builder pede à IA (seção "Fonte corrigido").
     function renderizarTextoComCodigo(texto) {
-      const partes = String(texto ?? '').split(/```[a-zA-Z]*\n?/);
+      const partes = String(texto ?? '').split(/```[^\n`]*\n?/);
       return partes.map((parte, i) => {
         const escapado = escapeHtml(parte);
         return i % 2 === 1 ? `<pre><code>${escapado}</code></pre>` : escapado;

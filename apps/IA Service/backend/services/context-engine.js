@@ -878,15 +878,24 @@ function _prepararConteudoAnexo(anexo, termos, { maxChars = null } = {}) {
     }
     return _selecionarTrechosDocumento(conteudo, termos, limite);
   }
-  const prep = _prepararConteudoCodigoOuLog(anexo, termos, conteudo, linguagem);
+  const prep = _prepararConteudoCodigoOuLog(anexo, termos, conteudo, linguagem, { maxChars });
   return _metricasConteudo(conteudo, prep, prep.parcial ? 'trechos_codigo_ou_log' : 'integral');
 }
 
 // Comportamento ORIGINAL para codigo-fonte, logs e demais anexos (inalterado).
-function _prepararConteudoCodigoOuLog(anexo, termos, conteudo, linguagem) {
-  const isLog = linguagem === 'log' || /\.log$/i.test(anexo.nomeOriginal || '') || /error|exception|stack/i.test(conteudo);
+function _prepararConteudoCodigoOuLog(anexo, termos, conteudo, linguagem, { maxChars = null } = {}) {
+  // Fonte com "ErrorBlock"/"UserException" continua sendo fonte: só é log o
+  // que foi classificado assim ou não é código.
+  const isLog = linguagem === 'log' || /\.log$/i.test(anexo.nomeOriginal || '') || (!anexo.eCodigo && /error|exception|stack/i.test(conteudo));
   if (isLog) return _janelaLinhasRelevantes(conteudo, { maxChars: 14000 });
-  if (conteudo.length <= 14000) return { texto: conteudo, parcial: false, motivo: null };
+  // Código-fonte vai inteiro; a redução aos trechos só acontece quando o
+  // orçamento do modelo não comporta o arquivo (ver _reduzirCandidatoCodigo).
+  if (anexo.eCodigo && maxChars === null) return { texto: conteudo, parcial: false, motivo: null };
+  return _selecionarTrechosCodigo(conteudo, termos, maxChars || 14000);
+}
+
+function _selecionarTrechosCodigo(conteudo, termos, maxChars) {
+  if (conteudo.length <= maxChars) return { texto: conteudo, parcial: false, motivo: null };
 
   const linhas = conteudo.split(/\r?\n/);
   const relevantes = [];
@@ -900,12 +909,12 @@ function _prepararConteudoCodigoOuLog(anexo, termos, conteudo, linguagem) {
   const unicos = [...new Set(relevantes)].sort((a, b) => a - b);
   if (!unicos.length) {
     return {
-      texto: `${conteudo.slice(0, 9000)}\n\n[...codigo intermediario omitido por orcamento...]\n\n${conteudo.slice(-4000)}`,
+      texto: `${conteudo.slice(0, Math.floor(maxChars * 0.65))}\n\n[...codigo intermediario omitido por orcamento...]\n\n${conteudo.slice(-Math.floor(maxChars * 0.28))}`,
       parcial: true,
       motivo: 'arquivo grande sem referencia especifica; preservado inicio/fim',
     };
   }
-  const texto = unicos.map(i => `${i + 1}: ${linhas[i]}`).join('\n').slice(0, 14000);
+  const texto = unicos.map(i => `${i + 1}: ${linhas[i]}`).join('\n').slice(0, maxChars);
   return { texto, parcial: true, motivo: 'selecionados trechos por termos e estruturas de codigo' };
 }
 
@@ -942,7 +951,7 @@ function _reduzirCandidatoDocumento(c, maxTokens) {
   }
   if (!preparado || tokens >= c.tokens) return false;
   c.tokens = tokens;
-  c.texto = _formatarAnexo(anexo, preparado.texto);
+  c.texto = _formatarAnexo(anexo, preparado.texto, preparado);
   c.parcial = preparado.parcial;
   c.conteudoMeta = _resumirMetaConteudo({ ...preparado, motivo: preparado.motivo || 'documento reduzido ao orcamento de contexto restante' });
   return true;
@@ -956,10 +965,20 @@ function _formatarMensagem(m) {
   return `[${papel} | ${m.criadoEm || 'sem data'}]\n${m.conteudo}`;
 }
 
-function _formatarAnexo(anexo, textoPreparado) {
+function _formatarAnexo(anexo, textoPreparado, preparado = null) {
   const linguagem = anexo.linguagemDetectada ? ` (${anexo.linguagemDetectada})` : '';
   const marcador = anexo.eCodigo ? 'CODIGO/CONFIG' : anexo.mimeType || 'ANEXO';
-  return `--- Anexo: ${anexo.nomeOriginal}${linguagem} [${marcador}] ---\n${textoPreparado}\n--- fim de ${anexo.nomeOriginal} ---`;
+  // A IA precisa saber se viu o fonte inteiro: só assim pode propor
+  // alterações ancoradas e afirmar uma análise integral.
+  let cobertura = '';
+  if (anexo.eCodigo && preparado) {
+    const extraido = preparado.extraidoChars || 0;
+    const pct = extraido ? Math.round((100 * (preparado.incluidoChars ?? extraido)) / extraido) : 100;
+    cobertura = preparado.parcial
+      ? `[ANALISE PARCIAL: somente cerca de ${Math.min(pct, 99)}% deste arquivo foi enviado; linhas numeradas sao trechos selecionados. Nao apresente conclusoes como analise integral deste fonte e nao proponha alteracoes ancoradas para ele.]\n`
+      : `[FONTE INTEGRAL: conteudo completo do arquivo, sem omissoes. Para propor correcao deste arquivo, use EXCLUSIVAMENTE blocos \`\`\`iahub-alteracao com "arquivo: ${anexo.nomeOriginal}", o trecho exato em [[ORIGINAL]] e o novo trecho em [[SUBSTITUTO]], encerrando com [[FIM]]. Nao reescreva funcoes ou o arquivo em bloco de codigo comum: so os blocos iahub-alteracao geram o arquivo corrigido.]\n`;
+  }
+  return `--- Anexo: ${anexo.nomeOriginal}${linguagem} [${marcador}] ---\n${cobertura}${textoPreparado}\n--- fim de ${anexo.nomeOriginal} ---`;
 }
 
 function _selecionarPesquisaExterna(pesquisa, pesquisaTecnicaTexto, tokensDisponiveis) {
@@ -1177,7 +1196,7 @@ function montarContextoInvestigacao({
       prioridade: forcado || atual || nomeCitado || (anexoCodigoCustomizacao && contextoCustomizacao) ? 'CRITICA' : score >= 25 ? 'ALTA' : 'MEDIA',
       motivo: forcado ? 'evidencia forçada por retry do Quality Gate' : atual ? 'anexo do turno atual' : nomeCitado ? 'nome de arquivo citado' : anexoCodigoCustomizacao && contextoCustomizacao ? 'codigo de customizacao relacionado ao chamado' : preparado.parcial ? preparado.motivo : 'termos/evidencia relacionada',
       tokens: tokenBudget.estimarTokens(preparado.texto) + (enviarPdfVisual ? paginasPdfSelecionadas.length * tokenBudget.estimarTokensImagem() : 0),
-      texto: _formatarAnexo(anexo, preparado.texto),
+      texto: _formatarAnexo(anexo, preparado.texto, preparado),
       ref: anexo,
       parcial: preparado.parcial,
       pdfVisual: enviarPdfVisual,
@@ -1186,7 +1205,9 @@ function montarContextoInvestigacao({
       // Documentos textuais podem ser reduzidos de forma controlada ao
       // orcamento restante (em vez de tudo-ou-nada); codigo/log mantem o
       // comportamento anterior.
-      documentoReduzivel: _ehDocumentoTextual(anexo, conteudo),
+      // Fonte de código também: inteiro quando cabe; senão, trechos marcados
+      // como análise parcial (nunca o antigo corte fixo de 14 mil caracteres).
+      documentoReduzivel: _ehDocumentoTextual(anexo, conteudo) || (!!anexo.eCodigo && !preparado.parcial),
       termosPreparo: termosDocumento,
       custoVisualTokens: enviarPdfVisual ? paginasPdfSelecionadas.length * tokenBudget.estimarTokensImagem() : 0,
     });
@@ -1388,4 +1409,4 @@ function montarContextoInvestigacao({
   };
 }
 
-module.exports = { montarContextoInvestigacao, _termos, _janelaLinhasRelevantes, _selecionarPesquisaExterna, _montarQuadroInvestigativo, _formatarQuadroInvestigativo, _extrairChamadosCitados, _interpretarPendenciaConsolidada };
+module.exports = { montarContextoInvestigacao, _prepararConteudoAnexo, _termos, _janelaLinhasRelevantes, _selecionarPesquisaExterna, _montarQuadroInvestigativo, _formatarQuadroInvestigativo, _extrairChamadosCitados, _interpretarPendenciaConsolidada };
