@@ -43,6 +43,55 @@ function conceitos(texto) {
   const ausenciaProblema = /\bnao\b[\s\S]{0,35}\b(ocorre|acontece|apresenta)\b|\b(funciona|comporta)\b[\s\S]{0,35}\b(corretamente|normalmente|esperado)\b/.test(s);
   return { incerta, negativa, solicitada, concluida, resolvida, confirmada, pendente, ausenciaProblema };
 }
+
+// Força da afirmação sobre a relação entre fatos: 1 associação ("relacionada
+// a"), 2 causalidade ("causada por"), 3 certeza ("confirmado"). A hipótese é
+// tratada à parte (conceitos().incerta), pois pode acompanhar qualquer nível.
+function forcaAfirmacao(texto) {
+  const s = normalizar(texto);
+  if (/\b(confirmad\w*|confirmou|confirmaram|comprovad\w*|comprovou|comprovaram|garantid\w*|certamente|com certeza|sem duvida|definitivamente|(?:e|foi) a causa)\b/.test(s)) return 3;
+  if (/\b(causad\w*|causa|causam|causar|causando|provoc\w*|originad\w*|tem origem|decorre\w*|resulta(?:m|do|da)? de|devido (?:a|ao|aos|as)|por causa d\w*|em razao d\w*|ocorre porque|se deve a|vem d[eoa]s?|leva a|levam a|levar a|levou a|levando a|acarret\w*|ocasion\w*|faz com que|fazem com que)\b/.test(s)) return 2;
+  if (/\b(relacionad\w*|ligad\w*|associad\w*|envolv\w*|tem relacao|relacao com|conexao com|correlac\w*)\b/.test(s)) return 1;
+  return 0;
+}
+
+// Conclusão de cortesia ou previsão genérica de resultado ("Essas ações devem
+// ajudar...", "Fico à disposição"). Só é genérica se não tiver referência
+// técnica nem termo de ressalva, risco, pendência ou validação.
+const CONCLUSAO_GENERICA = [
+  /^(?:e\s+)?(?:com\s+)?(?:todas\s+)?(?:essas|estas|tais)\s+(?:acoes|medidas|verificacoes|etapas|orientacoes|recomendacoes|passos|sugestoes|analises|informacoes)\b[^.!?]{0,40}?\b(?:devem|deve|podem|pode|vao|irao)\s+(?:nos\s+|te\s+)?(?:ajudar|contribuir|auxiliar|facilitar)\b/,
+  /^(?:espero (?:ter ajudado|que (?:isso|essas informacoes) (?:ajude|ajudem))|fico a disposicao|estou a disposicao|qualquer (?:duvida|coisa)|se precisar de (?:mais )?(?:algo|ajuda|alguma coisa|algum detalhe))/,
+];
+const TERMO_RELEVANTE = /\b(nao|nunca|sem|risco\w*|atencao|cuidado|antes de|producao|homologacao|backup|aguard\w*|pend\w*|depend\w*|exceto|desde que|caso|enquanto|confirm\w*|valid\w*|test\w*|evite|somente|apenas|obrigat\w*|importante|crucial|urgente|impacto|perda|bloque\w*)\b/;
+function ehConclusaoGenerica(frase) {
+  const texto = String(frase || '').trim();
+  const s = normalizar(texto);
+  if (!texto || texto.length > 240 || /`/.test(texto) || referencias(texto).size) return false;
+  return CONCLUSAO_GENERICA.some(re => re.test(s)) && !TERMO_RELEVANTE.test(s);
+}
+
+/**
+ * Remove, de forma conservadora, até duas frases genéricas no FINAL do texto.
+ * Frases no meio do texto nunca são removidas. O resultado deve passar
+ * novamente pelo validador de preservação.
+ */
+function limparConclusaoGenerica(texto) {
+  let resultado = String(texto || '').replace(/\s+$/, '');
+  const removidas = [];
+  for (let i = 0; i < 2; i++) {
+    const inicioParagrafo = resultado.lastIndexOf('\n') + 1;
+    const paragrafo = resultado.slice(inicioParagrafo);
+    const frases = paragrafo.split(/(?<=[.!?])\s+/);
+    const ultima = frases[frases.length - 1];
+    if (!ehConclusaoGenerica(ultima)) break;
+    const restante = (resultado.slice(0, inicioParagrafo) + frases.slice(0, -1).join(' ')).replace(/\s+$/, '');
+    if (!restante.trim()) break; // nunca esvazia a resposta
+    removidas.push(ultima.trim());
+    resultado = restante;
+  }
+  return { texto: removidas.length ? resultado : String(texto || ''), removidas };
+}
+
 function unidades(texto) {
   return semNumeracao(texto.replace(CODIGO, '')).replace(/\*\*/g, '').split(/\n\s*\n/).flatMap(paragrafo =>
     paragrafo.split(/\n+|(?<=[.!?;])\s+(?=[A-ZÀ-Ú0-9])/).map(s => s.trim()).filter(Boolean)
@@ -58,7 +107,10 @@ function unidades(texto) {
     .filter(u => !(/^(?:com (?:essas|estas) informa[cç][oõ]es|essas informa[cç][oõ]es|dessa forma|assim que tivermos)/i.test(u.texto)
       && /\b(para|poderemos|vamos|permit|conseguir|vis[aã]o|importantes|cruciais)\b/i.test(u.texto)
       && !/\b(desabilite|reinicie|aplique|ajuste|altere|corrija|configure|envie|solicite|obtenha)\b/i.test(u.texto)
-      && !u.conceitos.concluida && !u.conceitos.resolvida && !u.conceitos.confirmada));
+      && !u.conceitos.concluida && !u.conceitos.resolvida && !u.conceitos.confirmada))
+    // Conclusão genérica (mesma regra da limpeza) não é proposição técnica:
+    // não exige correspondência em nenhum dos dois lados.
+    .filter(u => !ehConclusaoGenerica(u.texto));
 }
 function similaridade(a, b) {
   const comuns = [...a.palavras].filter(p => b.palavras.has(p)).length;
@@ -136,10 +188,16 @@ function analisarPreservacao(original, candidata) {
     if (a.incerta && !f.incerta && !f.negativa && !f.solicitada && !(b.incerta && !fraseAfirma) && !contextoAnaforico?.incerta) falhar('INCERTEZA_REMOVIDA', 'Hipótese perdeu o caráter de incerteza.', [u.texto, par.unidade.texto]);
     if (a.negativa && !b.negativa && !b.pendente && !(a.ausenciaProblema && b.ausenciaProblema)) falhar('RESSALVA_REMOVIDA', 'Negação ou ausência relevante deixou de estar representada.', [u.texto, par.unidade.texto]);
     if (a.pendente && !f.pendente && !f.solicitada && !(b.pendente && !fraseAfirma) && !contextoAnaforico?.pendente) falhar('PENDENCIA_REMOVIDA', 'Espera ou dependência deixou de estar representada.', [u.texto, par.unidade.texto]);
+    // Força da afirmação: associação ou hipótese não pode virar causalidade
+    // ou certeza, e uma certeza não pode virar hipótese. Mesmo nível é
+    // paráfrase aceita ("relacionada a" -> "ligada a").
+    const forcaOriginal = forcaAfirmacao(u.texto), forcaCandidata = forcaAfirmacao(par.unidade.texto);
+    if (forcaCandidata >= 2 && forcaCandidata > forcaOriginal) falhar('FORCA_AFIRMACAO_ALTERADA', 'Associação ou hipótese promovida a causalidade ou certeza.', [u.texto, par.unidade.texto]);
+    else if (forcaOriginal === 3 && !a.incerta && f.incerta) falhar('FORCA_AFIRMACAO_ALTERADA', 'Certeza rebaixada a hipótese.', [u.texto, par.unidade.texto]);
     if (a.solicitada && !b.solicitada && !b.pendente && b.concluida) falhar('ACAO_SOLICITADA_VIROU_CONCLUIDA', 'Ação solicitada passou a ser descrita como realizada.', [u.texto, par.unidade.texto]);
     else if (a.solicitada && !b.solicitada && !b.pendente) falhar('ACAO_ESSENCIAL_OMITIDA', 'Próxima ação necessária deixou de estar representada.', [u.texto, par.unidade.texto]);
   }
   return { aprovado: falhas.length === 0, falhas };
 }
 
-module.exports = { analisarPreservacao, referencias };
+module.exports = { analisarPreservacao, referencias, limparConclusaoGenerica, ehConclusaoGenerica, forcaAfirmacao };

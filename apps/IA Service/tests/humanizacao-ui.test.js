@@ -54,16 +54,19 @@ for (const tela of ['j2a', 'radar-externo']) {
         assert.equal(await seletor.inputValue(), 'NATURAL');
         const box = await seletor.boundingBox();
         assert.ok(box.x >= 0 && box.x + box.width <= width + 1, 'seletor dentro da tela');
-        await seletor.selectOption('DIRETO');
+        // Somente dois estilos: Técnica (ORIGINAL) e Objetiva (NATURAL).
+        assert.deepEqual(await seletor.locator('option').evaluateAll(os => os.map(o => [o.value, o.textContent.trim()])),
+          [['ORIGINAL', 'Técnica'], ['NATURAL', 'Objetiva']]);
+        await seletor.selectOption('ORIGINAL');
         await page.waitForFunction(id => !document.getElementById(id).disabled, tela === 'j2a' ? 'response-style-select' : 'estiloRespostaSelect');
-        assert.equal(estilo, 'DIRETO');
-        assert.deepEqual(escritas.filter(x => x.estiloResposta), [{ estiloResposta: 'DIRETO' }]);
+        assert.equal(estilo, 'ORIGINAL');
+        assert.deepEqual(escritas.filter(x => x.estiloResposta), [{ estiloResposta: 'ORIGINAL' }]);
         assert.equal(await toggle.isChecked(), false);
         await page.reload();
-        await page.waitForFunction(id => document.getElementById(id).value === 'DIRETO' && !document.getElementById(id).disabled, tela === 'j2a' ? 'response-style-select' : 'estiloRespostaSelect');
+        await page.waitForFunction(id => document.getElementById(id).value === 'ORIGINAL' && !document.getElementById(id).disabled, tela === 'j2a' ? 'response-style-select' : 'estiloRespostaSelect');
         falhar = true;
-        await seletor.selectOption('DESCONTRAIDO');
-        await page.waitForFunction(id => document.getElementById(id).value === 'DIRETO' && !document.getElementById(id).disabled, tela === 'j2a' ? 'response-style-select' : 'estiloRespostaSelect');
+        await seletor.selectOption('NATURAL');
+        await page.waitForFunction(id => document.getElementById(id).value === 'ORIGINAL' && !document.getElementById(id).disabled, tela === 'j2a' ? 'response-style-select' : 'estiloRespostaSelect');
         assert.equal(await toggle.isChecked(), false);
         assert.equal(escritas.some(x => /investigar|pesquis/.test(x.endpoint || '')), false);
         if (tela === 'radar-externo') {

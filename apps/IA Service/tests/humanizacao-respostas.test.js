@@ -77,7 +77,8 @@ test('cadastros antigos usam ORIGINAL; mudança mantém metadados e isola empres
   assert.equal(store.obterEstiloResposta(1, '5599999999999'), 'ORIGINAL');
   store.definirEstiloResposta(1, '5599999999999', 'NATURAL');
   assert.equal(store.obterEstiloResposta(1, '5599999999999'), 'NATURAL');
-  assert.equal(store.obterEstiloResposta(2, '5599999999999'), 'DIRETO');
+  // Cadastro antigo com estilo descontinuado (DIRETO) passa a valer como NATURAL.
+  assert.equal(store.obterEstiloResposta(2, '5599999999999'), 'NATURAL');
   assert.equal(store.obterEstiloResposta(3, '5599999999999'), 'ORIGINAL');
   assert.throws(() => store.definirEstiloResposta(3, '5599999999999', 'NATURAL'), /não encontrado/);
   assert.throws(() => store.definirEstiloResposta(1, '5599999999999', 'inventado'), /inválido/);
@@ -92,14 +93,15 @@ test('alterar estilo pelo chat sincroniza cadastro e preserva resposta automáti
   const salvo = consultores.salvarPreferencias(1, consultor.id, { estiloResposta: 'DESCONTRAIDO' });
   assert.equal(salvo.preAnaliseAutomatica, false);
   assert.equal(salvo.preAnalisePessoal, false);
-  assert.equal(store.listarIaServicePorTelefone(consultor.telefone)[0].estiloResposta, 'DESCONTRAIDO');
-  assert.equal(consultores.obterEstiloResposta(1, consultor.id), 'DESCONTRAIDO');
+  // Cliente antigo enviando estilo descontinuado: gravado e lido como NATURAL.
+  assert.equal(store.listarIaServicePorTelefone(consultor.telefone)[0].estiloResposta, 'NATURAL');
+  assert.equal(consultores.obterEstiloResposta(1, consultor.id), 'NATURAL');
   assert.equal(consultores.obterEstiloResposta(2, consultor.id), 'ORIGINAL');
   assert.throws(() => consultores.salvarPreferencias(2, consultor.id, { estiloResposta: 'NATURAL' }), /não encontrado/);
   assert.throws(() => consultores.salvarPreferencias(1, consultor.id, { estiloResposta: 'invalido', preAnaliseAutomatica: true }), /inválido/);
   assert.equal(consultorRepo.getConsultor(1, consultor.id).preAnaliseAutomatica, false);
-  store.definirEstiloResposta(1, consultor.telefone, 'DIRETO');
-  assert.equal(consultores.obterEstiloResposta(1, consultor.id), 'DIRETO', 'alteração no cadastro chega ao chat sem novo login');
+  store.definirEstiloResposta(1, consultor.telefone, 'ORIGINAL');
+  assert.equal(consultores.obterEstiloResposta(1, consultor.id), 'ORIGINAL', 'alteração no cadastro chega ao chat sem novo login');
 });
 
 test('ORIGINAL mantém texto exato sem resolver provider nem chamar IA', async () => {
@@ -110,11 +112,13 @@ test('ORIGINAL mantém texto exato sem resolver provider nem chamar IA', async (
   assert.equal(chamadas.length, 0);
 });
 
+// DIRETO/DESCONTRAIDO foram descontinuados: preferências antigas aplicam NATURAL.
 for (const estilo of ['NATURAL', 'DIRETO', 'DESCONTRAIDO']) {
-  test(`${estilo}: só reescreve comunicação, preserva referências, ressalvas e registra consumo`, async () => {
+  test(`${estilo}: aplica NATURAL, só reescreve comunicação, preserva referências, ressalvas e registra consumo`, async () => {
     chamadas = []; respostaMock = reescritaValida;
     const r = await humanizador.humanizar({ empresaId: 1, respostaOriginal: original, estilo });
     assert.equal(r.status, 'aplicada');
+    assert.equal(r.estilo, 'NATURAL');
     assert.equal(r.respostaOriginal, original);
     assert.ok(r.respostaFinal.includes('A rejeição 1031 aparece'));
     assert.ok(r.respostaFinal.includes('A hipótese ainda precisa de confirmação em homologação.'));
@@ -234,7 +238,7 @@ test('rotas internas e externas salvam estilo da identidade autenticada, sem ace
       assert.equal(salvo.status, 200);
       assert.equal((await salvo.json()).preAnaliseAutomatica, false);
       const leitura = await (await fetch(url, { headers })).json();
-      assert.equal(leitura.estiloResposta, 'DESCONTRAIDO');
+      assert.equal(leitura.estiloResposta, 'NATURAL', 'estilo descontinuado enviado é gravado como NATURAL');
       assert.equal(leitura.consultorId, consultor.id);
       assert.equal((await fetch(url, { method: 'PUT', headers, body: '{"estiloResposta":"inventado"}' })).status, 400);
       assert.equal((await fetch(url, { method: 'PUT', headers: { ...headers, 'x-empresa': '2' }, body: '{"estiloResposta":"NATURAL"}' })).status, 404);
@@ -247,7 +251,7 @@ test('rotas internas e externas salvam estilo da identidade autenticada, sem ace
       assert.equal(etapas[1].detalhes.consumoAdicional.total, 42);
       assert.equal((await fetch(trilhaUrl, { headers: { ...headers, 'x-empresa': '2' } })).status, 404);
     }
-    assert.equal(store.obterEstiloResposta(2, consultor.telefone), 'DIRETO');
+    assert.equal(store.obterEstiloResposta(2, consultor.telefone), 'NATURAL');
   } finally { await new Promise(resolve => server.close(resolve)); }
 });
 

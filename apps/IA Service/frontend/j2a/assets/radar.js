@@ -1078,6 +1078,9 @@
       const avisosFonteHtml = avisosFonte.length
         ? `<div class="message-source-warnings" role="note">${avisosFonte.map((a) => `<p>⚠️ ${escapeHtml(a)}</p>`).join('')}</div>` : '';
       const avaliacaoHtml = assistant ? renderizarAvaliacaoHumana(m) : '';
+      // Avaliação à esquerda e Detalhes Técnicos à direita, na mesma faixa.
+      const detalhesHtml = window.IaDetalhesTecnicos.botao(m, 'detalhes-tecnicos-link');
+      const acoesHtml = avaliacaoHtml || detalhesHtml ? `<div class="message-acoes">${avaliacaoHtml}${detalhesHtml}</div>` : '';
       return `
         <article class="message message-${side} ${assistant ? 'assistant' : ''}">
           <div class="message-avatar">${escapeHtml(messageAvatar(m))}</div>
@@ -1086,8 +1089,7 @@
             <div class="message-text">${escapeHtml(messageText(m))}</div>
             ${attachmentsHtml}
             ${avisosFonteHtml}
-            ${window.IaDetalhesTecnicos.botao(m, 'primary-button')}
-            ${avaliacaoHtml}
+            ${acoesHtml}
           </div>
         </article>
       `;

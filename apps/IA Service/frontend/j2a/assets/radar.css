@@ -766,6 +766,9 @@ button.loading .loader { display: block; }
   background: var(--panel-2);
 }
 .switch-row .switch-label { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; overflow: hidden; }
+/* Pré-análise e Estilo lado a lado, sem ocupar duas linhas da coluna. */
+.preference-row { display: flex; gap: 6px; }
+.preference-row .switch-row { flex: 1 1 0; min-width: 0; gap: 6px; padding: 6px 8px; }
 .switch-row strong { font-size: 12px; }
 .trail-response-text { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; margin: 0; }
 .switch-row select {
@@ -1045,6 +1048,24 @@ button.loading .loader { display: block; }
 }
 .avaliacao-link::before { content: "★"; font-size: 12px; }
 .avaliacao-link:hover { background: color-mix(in srgb, var(--brand) 24%, transparent); border-color: var(--brand); }
+/* Faixa de ações da resposta: avaliação à esquerda, Detalhes Técnicos à
+   direita, com a mesma aparência de pílula. A linha separadora fica na faixa. */
+.message-acoes { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.message-acoes .message-avaliacao { margin-top: 0; border-top: 0; padding-top: 0; }
+.message-card .message-acoes .detalhes-tecnicos-link {
+  margin: 0 0 0 auto; line-height: inherit;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600; color: var(--brand); cursor: pointer;
+  background: color-mix(in srgb, var(--brand) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand) 45%, transparent);
+  border-radius: 99px; padding: 4px 12px;
+  transition: background .15s, border-color .15s;
+}
+.message-card .message-acoes .detalhes-tecnicos-link:hover { background: color-mix(in srgb, var(--brand) 24%, transparent); border-color: var(--brand); }
+@media (max-width: 520px) {
+  .message-acoes { gap: 6px; }
+  .message-acoes .avaliacao-link, .message-card .message-acoes .detalhes-tecnicos-link { font-size: 11px; line-height: 16px; padding: 3px 7px; gap: 4px; }
+}
 .avaliacao-resumo { font-size: 11.5px; color: var(--text); font-weight: 700; }
 .avaliacao-outras { font-size: 11px; color: var(--muted); }
 
