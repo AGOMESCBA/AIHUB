@@ -19,6 +19,45 @@
 const crypto = require('crypto');
 const { getDB } = require('../database');
 const consultorService = require('./consultor-service');
+const consultorRepo = require('../repositories/consultor-repository');
+const platformStore = require('../../../IAHUB/backend/platform-store');
+const cryptoEnvelope = require('./crypto-envelope');
+
+// ── Texto cifrado em repouso (AES-256-GCM) ─────────────────────────────
+// Mesma chave-mestra de instalação já exigida pelo deploy (SVC_DATA_CRYPTO_KEY,
+// ver deploy/INSTRUCOES.md) — nenhuma chave nova para gerenciar. Sem chave
+// válida, grava em claro como antes e avisa no log (nunca derruba o chat).
+// Texto cifrado leva o prefixo abaixo; texto sem prefixo (mensagens antigas)
+// continua sendo lido normalmente.
+const PREFIXO_CIFRA = 'svcchat:v1:';
+let _avisouSemChave = false;
+function _chaveChat() {
+  const bruta = process.env.SVC_DATA_CRYPTO_KEY;
+  try {
+    if (bruta) return cryptoEnvelope.normalizeKey(bruta) && bruta;
+  } catch (_) { /* chave em formato inválido: trata como ausente */ }
+  if (!_avisouSemChave) {
+    _avisouSemChave = true;
+    console.warn('[IA Service] Chat interno gravando mensagens SEM criptografia: SVC_DATA_CRYPTO_KEY ausente ou inválida.');
+  }
+  return null;
+}
+function _cifrar(texto) {
+  const chave = _chaveChat();
+  if (!chave) return texto;
+  const envelope = cryptoEnvelope.encryptPayload({ t: texto }, chave, { kid: 'chat-interno' });
+  return PREFIXO_CIFRA + Buffer.from(JSON.stringify(envelope), 'utf8').toString('base64');
+}
+function _decifrar(valor) {
+  const s = String(valor ?? '');
+  if (!s.startsWith(PREFIXO_CIFRA)) return s;
+  try {
+    const envelope = JSON.parse(Buffer.from(s.slice(PREFIXO_CIFRA.length), 'base64').toString('utf8'));
+    return cryptoEnvelope.decryptPayload(envelope, process.env.SVC_DATA_CRYPTO_KEY).t;
+  } catch (_) {
+    return '[mensagem protegida — não foi possível abrir com a chave atual]';
+  }
+}
 
 const MAX_TEXTO = 1000;
 const INTERVALO_TRANSMISSAO_MS = 60 * 1000;
@@ -93,7 +132,7 @@ function _mensagemParaDominio(row, eu) {
     conversaId: row.conversa_id,
     remetenteId: row.remetente_id,
     minha: row.remetente_id === String(eu),
-    texto: row.texto,
+    texto: _decifrar(row.texto),
     transmissao: !!row.transmissao,
     criadoEm: row.criado_em,
     entregueEm: row.entregue_em || null,
@@ -101,14 +140,63 @@ function _mensagemParaDominio(row, eu) {
   };
 }
 
+// Analistas com chamados em andamento (mesma base da grade do Radar), por
+// técnico do SoftExpert — inclusive quem nunca entrou no J2A.
+function _tecnicosComChamados(db, empresaId) {
+  return db.prepare(`
+    SELECT t.id, t.id_origem, t.nome, COUNT(c.id) AS total
+      FROM chamados c
+      JOIN tecnicos t ON t.id = c.tecnico_responsavel_id AND t.empresa_id = c.empresa_id
+     WHERE c.empresa_id = ?
+       AND (c.status_encerramento IS NULL OR c.status_encerramento != 'Encerrado')
+     GROUP BY t.id
+  `).all(Number(empresaId));
+}
+
+// Quem tem chamados e número autorizado na Platform (vínculo IA Service)
+// mas ainda não entrou no J2A não tem cadastro de consultor — e sem ele não
+// dá para receber mensagem. Cria/atualiza a partir da Platform, exatamente
+// como o login por telefone faz (upsertConsultorPlatform). No máximo a cada
+// 5 min por empresa; falha aqui nunca derruba a lista.
+const _ultimaSincronizacaoAutorizados = new Map();
+function _sincronizarAutorizadosComChamados(db, empresaId) {
+  const agora = Date.now();
+  if (agora - (_ultimaSincronizacaoAutorizados.get(Number(empresaId)) || 0) < 5 * 60 * 1000) return;
+  _ultimaSincronizacaoAutorizados.set(Number(empresaId), agora);
+  try {
+    const comConsultor = new Set(db.prepare('SELECT id_softexpert FROM consultores WHERE empresa_id = ? AND ativo = 1 AND id_softexpert IS NOT NULL')
+      .all(Number(empresaId)).map(r => String(r.id_softexpert)));
+    const faltando = new Set(_tecnicosComChamados(db, empresaId).map(t => String(t.id_origem)).filter(id => !comConsultor.has(id)));
+    if (!faltando.size) return;
+    for (const item of platformStore.listarIaServicePorEmpresa(Number(empresaId))) {
+      if (!item.idSoftexpert || !faltando.has(String(item.idSoftexpert))) continue;
+      consultorRepo.upsertConsultorPlatform(Number(empresaId), {
+        platformIdentityId: item.platformIdentityId,
+        usuarioIdIahub: item.usuarioIdIahub,
+        idSoftexpert: item.idSoftexpert,
+        telefone: item.telefone,
+        ativo: item.ativo,
+        preAnaliseAutomatica: item.preAnaliseAutomatica,
+      });
+      faltando.delete(String(item.idSoftexpert));
+    }
+  } catch (err) {
+    console.error('[IA Service] Chat interno: falha ao sincronizar autorizados da Platform:', err.message);
+  }
+}
+
 /**
- * Lista de contatos do analista: todos os consultores ativos da empresa
- * (menos ele), com online, chamados em andamento e a última conversa.
- * Ordem modelo WhatsApp: conversas mais recentes primeiro; depois quem tem
- * chamados em andamento; depois o resto por nome.
+ * Lista de contatos do analista (modelo WhatsApp):
+ *  - TODOS os analistas com chamados em andamento (mesma base do Radar),
+ *    online ou offline — offline recebe quando entrar no J2A;
+ *  - quem tem chamados mas não tem acesso ao J2A (número não autorizado na
+ *    Platform) aparece com semAcesso=true e não pode receber mensagem;
+ *  - demais consultores ativos da empresa (sem chamados) também aparecem.
+ * Ordem: conversas recentes; quem tem chamados; online; nome. Sem acesso por último.
  */
 function listarContatos(empresaId, eu) {
   const db = getDB();
+  _sincronizarAutorizadosComChamados(db, empresaId);
   const chamados = _chamadosPorConsultor(db, empresaId);
   const online = _onlinePorConsultor(db, empresaId);
   const consultores = db.prepare('SELECT id, telefone FROM consultores WHERE empresa_id = ? AND ativo = 1 AND id != ?')
@@ -137,11 +225,33 @@ function listarContatos(empresaId, eu) {
       chamadosEmAndamento: chamados.get(c.id) || 0,
       conversaId: conv?.conversa_id || null,
       naoLidas: conv?.nao_lidas || 0,
-      ultimaMensagem: ultima ? { texto: ultima.texto.slice(0, 140), em: ultima.criado_em, minha: ultima.remetente_id === String(eu) } : null,
+      ultimaMensagem: ultima ? { texto: _decifrar(ultima.texto).slice(0, 140), em: ultima.criado_em, minha: ultima.remetente_id === String(eu) } : null,
     };
   });
 
+  // Técnicos com chamados sem consultor ativo (nunca autorizados no J2A):
+  // aparecem para a equipe saber que existem, mas não recebem mensagem.
+  const meuIdSoftexpert = db.prepare('SELECT id_softexpert FROM consultores WHERE id = ? AND empresa_id = ?').get(String(eu), Number(empresaId))?.id_softexpert;
+  const ativosPorSoftexpert = new Set(db.prepare('SELECT id_softexpert FROM consultores WHERE empresa_id = ? AND ativo = 1 AND id_softexpert IS NOT NULL')
+    .all(Number(empresaId)).map(r => String(r.id_softexpert)));
+  for (const t of _tecnicosComChamados(db, empresaId)) {
+    if (ativosPorSoftexpert.has(String(t.id_origem)) || String(t.id_origem) === String(meuIdSoftexpert || '')) continue;
+    contatos.push({
+      consultorId: null,
+      tecnicoId: t.id,
+      nome: t.nome || 'Analista sem nome',
+      semAcesso: true,
+      online: false,
+      ultimoSinalEm: null,
+      chamadosEmAndamento: t.total,
+      conversaId: null,
+      naoLidas: 0,
+      ultimaMensagem: null,
+    });
+  }
+
   contatos.sort((a, b) => {
+    if (!!a.semAcesso !== !!b.semAcesso) return a.semAcesso ? 1 : -1;
     const ea = a.ultimaMensagem?.em || '';
     const eb = b.ultimaMensagem?.em || '';
     if (ea !== eb) return eb.localeCompare(ea);
@@ -151,7 +261,7 @@ function listarContatos(empresaId, eu) {
   });
 
   const naoLidasTotal = contatos.reduce((s, c) => s + c.naoLidas, 0);
-  const comChamados = contatos.filter(c => c.chamadosEmAndamento > 0).length;
+  const comChamados = contatos.filter(c => c.chamadosEmAndamento > 0 && !c.semAcesso).length;
   return { contatos, naoLidasTotal, destinatariosTransmissao: comChamados };
 }
 
@@ -205,7 +315,7 @@ function _inserirMensagem(db, empresaId, conversaId, eu, texto, transmissao) {
   const id = crypto.randomUUID();
   const agora = new Date().toISOString();
   db.prepare('INSERT INTO svc_chat_mensagens (id, conversa_id, empresa_id, remetente_id, texto, transmissao, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(id, String(conversaId), Number(empresaId), String(eu), texto, transmissao ? 1 : 0, agora);
+    .run(id, String(conversaId), Number(empresaId), String(eu), _cifrar(texto), transmissao ? 1 : 0, agora);
   if (destinatario) {
     db.prepare('INSERT INTO svc_chat_recibos (mensagem_id, destinatario_id) VALUES (?, ?)').run(id, destinatario);
   }
@@ -221,6 +331,7 @@ function enviarMensagem(empresaId, eu, conversaId, texto) {
   const db = getDB();
   const limpo = _textoValido(texto);
   if (!_participa(db, conversaId, empresaId, eu)) throw _erro('Conversa não encontrada.', 404);
+  if (!_consultorAtivo(db, empresaId, eu)) throw _erro('Sessão sem consultor ativo.', 403);
   const destinatario = _outroParticipante(db, conversaId, eu);
   if (destinatario && !_consultorAtivo(db, empresaId, destinatario)) throw _erro('Este analista não está mais ativo.', 409);
   return db.transaction(() => _inserirMensagem(db, empresaId, conversaId, eu, limpo, false))();

@@ -2,6 +2,9 @@
 // Executar: node "apps/IA Service/tests/fase3-pos-auditoria.test.js"
 
 const assert = require('assert');
+// Consultores deste teste sao criados direto no IA Service (sem cadastro na
+// Platform): modo legado, senao a revogacao de acesso por Platform os derruba.
+process.env.SVC_ALLOW_LEGACY_CONSULTORES = '1';
 const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');

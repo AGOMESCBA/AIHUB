@@ -138,7 +138,21 @@ function sincronizarPreferenciaDaPlatform(empresaId, consultorId) {
     if (!consultor?.telefone) return false;
     const item = _consolidarVinculosPorEmpresa(platformStore.listarIaServicePorTelefone(normalizarTelefone(consultor.telefone)))
       .find(i => Number(i.empresaId) === Number(empresaId));
-    if (!item) return false;
+    if (!item) {
+      // A Platform só lista números ATIVOS com o vínculo ia-service/chat-web
+      // liberado. Sumir da lista = número desativado, removido ou vínculo
+      // revogado — antes isso caía aqui como "nada a fazer" e quem já estava
+      // logado seguia usando o J2A (e o Chat interno) indefinidamente, porque
+      // a sessão se renova a cada uso (achado na revisão de segurança, 2026-10).
+      // Nunca revoga se a Platform não está instalada (lista vazia por
+      // ausência de tabela) nem no modo legado (consultores fora da Platform).
+      if (consultor.ativo && process.env.SVC_ALLOW_LEGACY_CONSULTORES !== '1' && platformStore.iaServicePlatformDisponivel()) {
+        consultorRepo.atualizarConsultor(empresaId, consultorId, { ativo: false });
+        console.warn(`[IA Service] Acesso revogado: consultor ${consultorId} (empresa ${empresaId}) não está mais liberado na Platform.`);
+        return true;
+      }
+      return false;
+    }
     // So o PADRAO e sincronizado; a escolha pessoal do analista nunca e tocada.
     if (item.preAnaliseAutomatica === consultor.preAnalisePadrao && item.ativo === consultor.ativo) return false;
 
@@ -320,6 +334,7 @@ function validarSessaoExterna(token) {
   const row = db.prepare(`SELECT * FROM svc_sessoes_externas WHERE token_hash = ?`).get(_hashToken(token));
   if (!row) return null;
   if (new Date(row.expira_em).getTime() < Date.now()) return null;
+  if (!_consultorSegueLiberado(db, row)) return null;
 
   const agora = new Date();
   const novaExpiracao = new Date(agora.getTime() + TTL_SESSAO_MS);
@@ -336,8 +351,25 @@ function validarSessaoExterna(token) {
  */
 function sessaoExternaAtiva(sessaoId) {
   if (!sessaoId) return false;
-  const row = getDB().prepare('SELECT expira_em FROM svc_sessoes_externas WHERE id = ?').get(String(sessaoId));
-  return !!row && new Date(row.expira_em).getTime() > Date.now();
+  const db = getDB();
+  const row = db.prepare('SELECT id, empresa_id, consultor_id, expira_em FROM svc_sessoes_externas WHERE id = ?').get(String(sessaoId));
+  if (!row || new Date(row.expira_em).getTime() <= Date.now()) return false;
+  return _consultorSegueLiberado(db, row);
+}
+
+/**
+ * Analista desativado/removido na Platform perde o acesso na hora (no máximo
+ * no intervalo de sincronização, 30s): sincroniza com a Platform e, se o
+ * consultor estiver inativo, expira a sessão (fica no banco para auditoria).
+ * Vale para o J2A inteiro e para o tempo real do Chat interno.
+ */
+function _consultorSegueLiberado(db, sessaoRow) {
+  sincronizarPreferenciaDaPlatform(sessaoRow.empresa_id, sessaoRow.consultor_id);
+  const consultor = consultorRepo.getConsultor(sessaoRow.empresa_id, sessaoRow.consultor_id);
+  if (consultor?.ativo) return true;
+  db.prepare('UPDATE svc_sessoes_externas SET expira_em = ? WHERE id = ?')
+    .run(new Date(Date.now() - 1000).toISOString(), sessaoRow.id);
+  return false;
 }
 
 module.exports = {

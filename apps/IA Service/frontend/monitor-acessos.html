@@ -126,6 +126,13 @@
     @media (max-width:1150px) { .board.com-gaveta { grid-template-columns:minmax(0,1fr); } }
     @media (max-width:760px) { .gaveta.ampliada .gv-corpo { display:block; } .gaveta.ampliada .gv-col + .gv-col { border-left:none; } }
     @media (max-width:720px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } .filters .form-control { max-width:none; } }
+    .btn-derrubar-leve { align-self:flex-start;background:transparent;border:1px solid var(--error);color:var(--error); }
+    .btn-derrubar-leve:hover { background:var(--bg-hover); }
+    .btn-derrubar { background:var(--error);border:1px solid var(--error);color:#fff; }
+    .btn-derrubar:disabled { opacity:.6;cursor:wait; }
+    .derrubar-box { border:1px solid var(--error);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:var(--text-md); }
+    .derrubar-box b { color:var(--text-hi); }
+    .derrubar-acoes { display:flex;gap:8px;flex-wrap:wrap; }
     .btn-limpar { background:transparent;border:1px solid rgba(220,38,38,.45);color:#dc2626; }
     .btn-limpar:hover { background:rgba(220,38,38,.08); }
     .btn-limpar:disabled { opacity:.55;cursor:wait; }
@@ -457,9 +464,51 @@
         return `<li><span class="badge ${sx.badge}">${sx.rotulo}</span>Entrou ${dataHora(x.inicioEm)} · último sinal ${ha(x.ultimoSinalEm)} · ${dur(x.segundosAtivos)} de tela<br><span class="sub">${esc(x.tela || '-')}${x.acao ? ' · ' + esc(x.acao) : ''}</span></li>`;
       }).join('')}</ul></div>` : ''}
       ${blocoChamado}
+      ${blocoAcesso(s)}
       </div><div class="gv-col">
       <div class="gv-sec"><div class="gv-titulo">Atividade recente</div><ul class="tl">${eventos}</ul></div>
       </div></div>`;
+    const motivo = $('gv-motivo');
+    if (motivo) { motivo.value = st.motivo || ''; if (st.focoMotivo) motivo.focus(); }
+  }
+
+  // Derrubar o acesso ao chat J2A (todas as sessões da pessoa). Só para o
+  // chat: rotinas internas usam o login do IAHub, administrado lá.
+  function blocoAcesso(s) {
+    if (s.origem !== 'chat') return '';
+    if (st.confirmarDerrubar === s.id) {
+      return `<div class="gv-sec"><div class="gv-titulo">Acesso</div><div class="derrubar-box">
+        <b>Derrubar o acesso de ${esc(s.nome)} ao chat?</b>
+        <span>A tela volta para o login na hora. A pessoa pode entrar de novo com um novo código — para bloquear de vez, desative o número na Platform.</span>
+        <input type="text" id="gv-motivo" class="form-control" maxlength="120" placeholder="Motivo (opcional, fica registrado)">
+        <div class="derrubar-acoes">
+          <button type="button" class="btn btn-derrubar" data-gv="derrubar-ok" ${st.derrubando ? 'disabled' : ''}>${st.derrubando ? 'Derrubando…' : 'Derrubar agora'}</button>
+          <button type="button" class="btn btn-ghost" data-gv="derrubar-cancelar">Cancelar</button>
+        </div></div></div>`;
+    }
+    return `<div class="gv-sec"><div class="gv-titulo">Acesso</div>
+      <button type="button" class="btn btn-derrubar-leve" data-gv="derrubar">Derrubar acesso ao chat</button></div>`;
+  }
+
+  async function derrubar(s) {
+    st.derrubando = true;
+    renderGaveta();
+    try {
+      const r = await api(`/api/ia-service/monitor-acessos/derrubar?empresa_id=${encodeURIComponent(empresaId())}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ empresa_id: empresaId(), consultorId: s.id.replace(/^chat:/, ''), motivo: st.motivo || null }),
+      });
+      st.confirmarDerrubar = null; st.motivo = '';
+      fecharGaveta();
+      await carregar(true);
+      $('stamp').textContent = `${s.nome}: ${r.sessoesEncerradas} sessão(ões) encerrada(s).`;
+    } catch (e) {
+      erro('Não foi possível derrubar o acesso: ' + e.message);
+    } finally {
+      st.derrubando = false;
+      renderGaveta();
+    }
   }
 
   function fecharGaveta() {
@@ -566,9 +615,13 @@
     if (acao === 'ampliar') { st.ampliada = !st.ampliada; return renderGaveta(); }
     if (acao === 'anterior') return navegar(-1);
     if (acao === 'proximo') return navegar(1);
+    if (acao === 'derrubar') { st.confirmarDerrubar = st.selId; st.motivo = ''; st.focoMotivo = true; renderGaveta(); st.focoMotivo = false; return; }
+    if (acao === 'derrubar-cancelar') { st.confirmarDerrubar = null; st.motivo = ''; return renderGaveta(); }
+    if (acao === 'derrubar-ok') { const p = st.dados?.pessoas.find((x) => x.id === st.selId); if (p && !st.derrubando) derrubar(p); return; }
     const btn = e.target.closest('[data-chamado]');
     if (btn) carregarChamado(btn.dataset.chamado);
   });
+  $('gaveta').addEventListener('input', (e) => { if (e.target.id === 'gv-motivo') st.motivo = e.target.value; });
   // Fundo escurecido / Esc: ampliado volta ao painel lateral; em tela
   // estreita (painel sempre sobreposto) fecha.
   function recuar() {

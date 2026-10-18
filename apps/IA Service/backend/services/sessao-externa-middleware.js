@@ -18,7 +18,8 @@ function requireSessaoExterna(req, res, next) {
   req.svcConsultorExterno = sessao.consultorId;
   req.svcSessaoExternaId = sessao.sessaoId; // Monitor de Acessos (presença por sessão)
   req.svcOtpVerificadoEm = sessao.otpVerificadoEm;
-  loginExternoService.sincronizarPreferenciaDaPlatform(sessao.empresaId, sessao.consultorId);
+  // A sincronização com a Platform (preferências + revogação de acesso) agora
+  // roda dentro de validarSessaoExterna, ANTES de aceitar a sessão.
   next();
 }
 

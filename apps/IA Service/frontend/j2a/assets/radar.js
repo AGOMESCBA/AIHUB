@@ -522,10 +522,13 @@
       if (accountCompany) accountCompany.textContent = state.whoami.empresaNome || '-';
       if (accountConsultant) accountConsultant.textContent = state.whoami.consultorNome || 'Consultor';
       $('user-initials').textContent = initials(state.whoami.consultorNome);
-      await Promise.allSettled([loadPreferences(), loadQueue(), loadRisk()]);
-      setupAutoRefresh();
+      // Presença (Monitor de Acessos) e Chat interno ligam JÁ — antes esperavam
+      // a fila e o Radar terminarem de carregar (pode demorar com a
+      // atualização do SoftExpert) e o botão Mensagens aparecia atrasado.
       iniciarPresenca();
       chatInterno?.start();
+      await Promise.allSettled([loadPreferences(), loadQueue(), loadRisk()]);
+      setupAutoRefresh();
       setMobileTarget('queue');
     } catch (err) {
       showAccess(err.message);
@@ -2053,7 +2056,41 @@
   function iniciarPresenca() {
     clearInterval(state.presencaTimer);
     enviarPresenca();
-    state.presencaTimer = setInterval(enviarPresenca, 30 * 1000);
+    verificarVersaoServidor();
+    state.presencaTimer = setInterval(() => { enviarPresenca(); verificarVersaoServidor(); }, 30 * 1000);
+  }
+
+  // Limpa a sessão SÓ no navegador e volta ao login (Sair, ou sessão derrubada
+  // pelo administrador no Monitor de Acessos).
+  function encerrarSessaoLocal(mensagem) {
+    localStorage.removeItem(TOKEN_KEY);
+    state.token = '';
+    clearInterval(state.autoTimer);
+    clearInterval(state.countdownTimer);
+    clearInterval(state.presencaTimer);
+    _resetEstadoDoChat();
+    showAccess(mensagem);
+  }
+
+  // Aba aberta ANTES de uma atualização do servidor continua rodando o código
+  // antigo (caso real 2026-10: "Sair" de uma aba antiga não encerrava a sessão
+  // e o Monitor seguia mostrando a pessoa). Quando a versão do servidor muda,
+  // recarrega sozinho — mas nunca no meio de algo: texto digitado, análise da
+  // IA em andamento ou aba em segundo plano (espera o próximo ciclo).
+  function verificarVersaoServidor() {
+    fetch('/api/version', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        const v = body?.v;
+        if (!v) return;
+        if (!state.versaoServidor) { state.versaoServidor = v; return; }
+        if (v === state.versaoServidor) return;
+        const editando = [...document.querySelectorAll('textarea, input[type="text"], input[type="search"]')]
+          .some((el) => el.value && el.value.trim() && el.offsetParent !== null);
+        if (document.hidden || editando || state.processing.size) return;
+        location.reload();
+      })
+      .catch(() => null);
   }
 
   function renderCountdown() {
@@ -2141,13 +2178,7 @@
       if (state.token) {
         fetch(ext('/sessao/encerrar'), { method: 'POST', keepalive: true, headers: apiHeaders() }).catch(() => null);
       }
-      localStorage.removeItem(TOKEN_KEY);
-      state.token = '';
-      clearInterval(state.autoTimer);
-      clearInterval(state.countdownTimer);
-      clearInterval(state.presencaTimer);
-      _resetEstadoDoChat();
-      showAccess('Sessao encerrada.');
+      encerrarSessaoLocal('Sessao encerrada.');
     });
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) enviarPresenca();
@@ -2347,6 +2378,7 @@
         getToken: () => state.token,
         request,
         ext,
+        onSessaoEncerrada: (mensagem) => encerrarSessaoLocal(mensagem),
       });
     }
     retornoPanel = window.IaRetornoSoftExpert.mount({

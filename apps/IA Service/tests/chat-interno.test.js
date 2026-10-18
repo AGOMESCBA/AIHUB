@@ -124,6 +124,64 @@ async function esperaErro(fn, status, trecho) {
     msgs = chat.listarMensagens(EMPRESA, ana.id, conv).mensagens;
     assert.deepStrictEqual(msgs.map(m => m.texto), ['Oi Beto <script>alert(1)</script>', 'Oi Ana!']);
 
+    // 9. Criptografia em repouso: banco guarda cifrado; a API devolve legível.
+    const bruto = database.getDB().prepare("SELECT texto FROM svc_chat_mensagens WHERE conversa_id = ? AND remetente_id = ? ORDER BY criado_em LIMIT 1").get(conv, ana.id).texto;
+    assert.ok(bruto.startsWith('svcchat:v1:'), 'texto deve estar cifrado no banco');
+    assert.ok(!bruto.includes('Oi Beto'), 'texto puro não pode aparecer no banco');
+    // Mensagem antiga (gravada antes da criptografia) continua legível.
+    database.getDB().prepare('INSERT INTO svc_chat_mensagens (id, conversa_id, empresa_id, remetente_id, texto, transmissao, criado_em) VALUES (?, ?, ?, ?, ?, 0, ?)')
+      .run(crypto.randomUUID(), conv, EMPRESA, beto.id, 'mensagem antiga em claro', new Date().toISOString());
+    msgs = chat.listarMensagens(EMPRESA, ana.id, conv).mensagens;
+    assert.strictEqual(msgs[msgs.length - 1].texto, 'mensagem antiga em claro');
+    assert.strictEqual(chat.listarContatos(EMPRESA, ana.id).contatos.find(c => c.consultorId === beto.id).ultimaMensagem.texto, 'mensagem antiga em claro');
+
+    // 10. Lista = TODOS os analistas com chamados (base do Radar):
+    //  - quem tem chamados e número autorizado na Platform vira contato e
+    //    recebe mensagem mesmo sem nunca ter entrado no J2A;
+    //  - quem tem chamados e NÃO tem acesso aparece com semAcesso (sem conversa).
+    const E3 = 99303;
+    const platformStore = require('../../IAHUB/backend/platform-store');
+    const fonte3 = agenteRepo.criarFonte(E3, { connectionKey: 'se-chat-3', nome: 'SE', sistemaOrigem: 'softexpert', adapter: 'SoftExpertSqlServerAdapter' });
+    const eu3 = consultorRepo.criarConsultor(E3, { telefone: '5565990003001', idSoftexpert: 'T3-EU' });
+    const tAutorizado = clienteRepo.upsertTecnico(E3, { sistemaOrigem: 'softexpert', idOrigem: 'T3-AUT', nome: 'Kelbyr Cruz' }).tecnico;
+    const tSemAcesso = clienteRepo.upsertTecnico(E3, { sistemaOrigem: 'softexpert', idOrigem: 'T3-SEM', nome: 'Fernan Hudson' }).tecnico;
+    chamadoRepo.upsertChamado(E3, { fonteId: fonte3.id, sistemaOrigem: 'softexpert', oidOrigem: 'E3-1', numero: '31', tecnicoResponsavelId: tAutorizado.id });
+    chamadoRepo.upsertChamado(E3, { fonteId: fonte3.id, sistemaOrigem: 'softexpert', oidOrigem: 'E3-2', numero: '32', tecnicoResponsavelId: tSemAcesso.id });
+    const listarOriginal = platformStore.listarIaServicePorEmpresa;
+    platformStore.listarIaServicePorEmpresa = (emp) => (Number(emp) === E3 ? [{
+      platformIdentityId: 'plat-kelbyr', empresaId: E3, telefone: '5565990003002', ativo: true,
+      usuarioIdIahub: null, idSoftexpert: 'T3-AUT', preAnaliseAutomatica: true, atualizadoEm: new Date().toISOString(),
+    }] : []);
+    try {
+      const r3 = chat.listarContatos(E3, eu3.id);
+      const kelbyr = r3.contatos.find(c => c.nome === 'Kelbyr Cruz');
+      const fernan = r3.contatos.find(c => c.nome === 'Fernan Hudson');
+      assert.ok(kelbyr && kelbyr.consultorId && !kelbyr.semAcesso, 'autorizado na Platform vira contato antes do 1º login');
+      assert.strictEqual(kelbyr.online, false, 'nunca entrou: offline');
+      assert.ok(fernan && fernan.semAcesso && fernan.consultorId === null, 'sem acesso aparece marcado');
+      assert.strictEqual(fernan.chamadosEmAndamento, 1);
+      assert.strictEqual(r3.contatos[r3.contatos.length - 1].nome, 'Fernan Hudson', 'sem acesso fica por último');
+      assert.strictEqual(r3.destinatariosTransmissao, 1, '"para todos" não conta quem não tem acesso');
+      // Mensagem para quem está offline fica guardada e conta como não lida para ele.
+      const convK = chat.abrirConversaDireta(E3, eu3.id, kelbyr.consultorId);
+      chat.enviarMensagem(E3, eu3.id, convK, 'Kelbyr, quando entrar me chama?');
+      assert.strictEqual(chat.listarContatos(E3, kelbyr.consultorId).naoLidasTotal, 1, 'offline recebe ao entrar');
+      // Falha na Platform nunca derruba a lista (empresa nova, sem throttle).
+      platformStore.listarIaServicePorEmpresa = () => { throw new Error('platform fora'); };
+      const E4 = 99304;
+      const eu4 = consultorRepo.criarConsultor(E4, { telefone: '5565990004001', idSoftexpert: 'T4-EU' });
+      const fonte4 = agenteRepo.criarFonte(E4, { connectionKey: 'se-chat-4', nome: 'SE', sistemaOrigem: 'softexpert', adapter: 'SoftExpertSqlServerAdapter' });
+      const t4 = clienteRepo.upsertTecnico(E4, { sistemaOrigem: 'softexpert', idOrigem: 'T4-OUTRO', nome: 'Henrique Simões' }).tecnico;
+      chamadoRepo.upsertChamado(E4, { fonteId: fonte4.id, sistemaOrigem: 'softexpert', oidOrigem: 'E4-1', numero: '41', tecnicoResponsavelId: t4.id });
+      let chamouPlatform = false;
+      platformStore.listarIaServicePorEmpresa = () => { chamouPlatform = true; throw new Error('platform fora'); };
+      const r4 = chat.listarContatos(E4, eu4.id);
+      assert.ok(chamouPlatform, 'a Platform foi consultada (e falhou)');
+      assert.ok(r4.contatos.find(c => c.nome === 'Henrique Simões')?.semAcesso, 'lista continua, quem não sincronizou fica sem acesso');
+    } finally {
+      platformStore.listarIaServicePorEmpresa = listarOriginal;
+    }
+
     console.log('chat-interno.test.js: OK');
   } finally {
     limparEDesligar();

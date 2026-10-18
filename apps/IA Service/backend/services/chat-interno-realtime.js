@@ -14,9 +14,36 @@
 
 const loginExternoService = require('./login-externo-service');
 const chatService = require('./chat-interno-service');
+const presencaService = require('./presenca-service');
 
 const NAMESPACE = '/ia-service-chat';
+// Tolerância antes de marcar "saiu": recarregar a página (F5) derruba e
+// reconecta o socket em ~1-2s e não pode aparecer como saída.
+const TOLERANCIA_SAIDA_MS = 8 * 1000;
 let _ns = null;
+const _saidasPendentes = new Map(); // sessaoId -> timeout
+
+function _socketsDaSessao(sessaoId) {
+  if (!_ns) return [];
+  return [..._ns.sockets.values()].filter((s) => s.data.sessaoId === sessaoId);
+}
+
+/**
+ * Derrubar pelo Monitor: avisa a tela (que volta para o login na hora) e
+ * fecha os sockets das sessões encerradas.
+ */
+function encerrarSessoes(sessaoIds, mensagem = 'Sua sessão foi encerrada pelo administrador.') {
+  const ids = new Set((sessaoIds || []).map(String));
+  if (!_ns || !ids.size) return 0;
+  let n = 0;
+  for (const socket of _ns.sockets.values()) {
+    if (!ids.has(String(socket.data.sessaoId))) continue;
+    socket.emit('sessao:encerrada', { mensagem });
+    socket.disconnect(true);
+    n += 1;
+  }
+  return n;
+}
 
 function _sala(empresaId, consultorId) {
   return `e${Number(empresaId)}:c${String(consultorId)}`;
@@ -55,8 +82,25 @@ function iniciar(io) {
   });
 
   _ns.on('connection', (socket) => {
-    const { empresaId, consultorId } = socket.data;
+    const { empresaId, consultorId, sessaoId } = socket.data;
     socket.join(_sala(empresaId, consultorId));
+    clearTimeout(_saidasPendentes.get(sessaoId));
+    _saidasPendentes.delete(sessaoId);
+
+    // Saída detectada pelo SERVIDOR: aba/navegador fechado, logoff, queda de
+    // internet ou PC suspenso derrubam o socket — não depende de a página
+    // conseguir avisar (pagehide falha em fechamento brusco e em abas com
+    // código antigo). Sem outro socket da mesma sessão após a tolerância,
+    // o Monitor de Acessos passa a mostrar "Fora da tela" na hora.
+    socket.on('disconnect', () => {
+      if (_socketsDaSessao(sessaoId).length) return;
+      clearTimeout(_saidasPendentes.get(sessaoId));
+      _saidasPendentes.set(sessaoId, setTimeout(() => {
+        _saidasPendentes.delete(sessaoId);
+        if (_socketsDaSessao(sessaoId).length) return;
+        try { presencaService.registrarSaida({ empresaId, origem: 'chat', sessaoRef: sessaoId }); } catch (_) { /* melhor esforço */ }
+      }, TOLERANCIA_SAIDA_MS));
+    });
 
     socket.on('chat:entregue', (payload) => {
       try {
@@ -74,4 +118,4 @@ function iniciar(io) {
   }, 60 * 1000).unref();
 }
 
-module.exports = { iniciar, emitirMensagem, emitirRecibos, NAMESPACE };
+module.exports = { iniciar, emitirMensagem, emitirRecibos, encerrarSessoes, NAMESPACE };

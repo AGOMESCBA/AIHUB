@@ -175,6 +175,42 @@ function listarIaServicePorTelefone(telefoneNormalizado) {
   });
 }
 
+// Autorizados do IA Service (vínculo ia-service/chat-web liberado, número
+// ativo) de UMA empresa — usado pelo Chat interno para que analistas com
+// chamados possam receber mensagem mesmo antes do primeiro login no J2A.
+// Mesmas regras de listarIaServicePorTelefone; só muda o filtro.
+function listarIaServicePorEmpresa(empresaId) {
+  if (!empresaId) return [];
+  const rows = safeAll(`
+    SELECT i.id, i.empresa_id, i.nome, i.numero, i.numero_normalizado, i.ativo, i.metadata_json,
+           i.atualizado_em AS identidade_atualizada_em, r.atualizado_em AS role_atualizado_em,
+           r.codigo_identidade, r.metadata_json AS role_metadata_json
+      FROM platform_whatsapp_identities i
+      JOIN platform_identity_roles r ON r.identity_id = i.id AND r.empresa_id = i.empresa_id
+     WHERE i.empresa_id = ?
+       AND i.ativo = 1
+       AND r.liberado = 1
+       AND lower(r.sistema) = 'ia-service'
+       AND lower(r.modulo) = 'chat-web'
+  `, [Number(empresaId)]);
+  return rows.map(row => {
+    const metadata = parseJson(row.metadata_json, {});
+    const roleMetadata = parseJson(row.role_metadata_json, {});
+    const iaService = metadata.iaService || {};
+    return {
+      platformIdentityId: row.id,
+      empresaId: row.empresa_id,
+      nome: row.nome,
+      telefone: row.numero || row.numero_normalizado,
+      ativo: !!row.ativo,
+      usuarioIdIahub: iaService.usuarioIdIahub || roleMetadata.usuarioIdIahub || null,
+      idSoftexpert: iaService.idSoftexpert || roleMetadata.idSoftexpert || row.codigo_identidade || null,
+      preAnaliseAutomatica: iaService.preAnaliseAutomatica !== false && roleMetadata.preAnaliseAutomatica !== false,
+      atualizadoEm: [row.identidade_atualizada_em, row.role_atualizado_em].filter(Boolean).sort().pop() || null,
+    };
+  });
+}
+
 // Resolve a empresa a partir do apelido configurável do login externo do IA
 // Service (/entrar-servico/:apelido) — só identidade visual (nome/logo na
 // tela de entrada), o login continua funcionando 100% por telefone mesmo
@@ -189,4 +225,12 @@ function getConfigPorApelido(apelido) {
   return { empresaId: row.empresa_id };
 }
 
-module.exports = { getAiConfig, getSearchConfig, getAgentConfig, listarIaServicePorTelefone, getConfigPorApelido };
+// A Platform está instalada (tabelas de números autorizados existem)?
+// Usado pelo IA Service para distinguir "número saiu do cadastro" (revogar
+// acesso) de "Platform ausente" (listarIaServicePorTelefone também devolve []
+// nesse caso — nunca pode virar desativação em massa).
+function iaServicePlatformDisponivel() {
+  return !!safeGet("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = 'platform_identity_roles'");
+}
+
+module.exports = { getAiConfig, getSearchConfig, getAgentConfig, listarIaServicePorTelefone, listarIaServicePorEmpresa, iaServicePlatformDisponivel, getConfigPorApelido };

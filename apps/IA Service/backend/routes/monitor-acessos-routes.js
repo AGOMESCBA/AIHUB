@@ -8,6 +8,7 @@
 
 const presencaService = require('../services/presenca-service');
 const { requireRotinaSvc } = require('../services/rotina-permissao');
+const realtime = require('../services/chat-interno-realtime');
 
 const ROTINA = 'svc-monitor-acessos';
 
@@ -65,7 +66,26 @@ function registrarInterno(app) {
   // da sessão (ver presencaService.limparMonitor). Mesma permissão da tela.
   app.delete('/api/ia-service/monitor-acessos', podeMonitorar, (req, res) => {
     try {
-      res.json(presencaService.limparMonitor(req.svcEmpresaId));
+      const resultado = presencaService.limparMonitor(req.svcEmpresaId);
+      presencaService.registrarAuditoria({ empresaId: req.svcEmpresaId, acao: 'limpar', usuarioId: Number(req.session?.user_id) || null, detalhe: resultado });
+      res.json(resultado);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // Derrubar o acesso de UMA pessoa ao chat J2A (todas as sessões dela). A
+  // tela dela volta para o login na hora (socket) e o registro fica auditado.
+  app.post('/api/ia-service/monitor-acessos/derrubar', podeMonitorar, (req, res) => {
+    try {
+      const consultorId = String(req.body?.consultorId || '');
+      const { sessaoIds } = presencaService.derrubarPessoaChat(req.svcEmpresaId, consultorId);
+      realtime.encerrarSessoes(sessaoIds);
+      presencaService.registrarAuditoria({
+        empresaId: req.svcEmpresaId, acao: 'derrubar', alvo: `chat:${consultorId}`,
+        usuarioId: Number(req.session?.user_id) || null, motivo: req.body?.motivo, detalhe: { sessoes: sessaoIds.length },
+      });
+      res.json({ sessoesEncerradas: sessaoIds.length });
     } catch (err) {
       _handleErro(res, err);
     }

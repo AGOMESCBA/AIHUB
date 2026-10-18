@@ -41,7 +41,7 @@
     todos: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>',
   };
 
-  function mount({ anchor, getToken, request, ext }) {
+  function mount({ anchor, getToken, request, ext, onSessaoEncerrada = () => {} }) {
     const st = {
       ativo: false, aberto: false, view: 'lista', busca: '',
       contatos: [], naoLidasTotal: 0, destinatariosTransmissao: 0,
@@ -106,11 +106,18 @@
         <div class="ci-busca"><input type="search" id="ci-busca" placeholder="Buscar analista..." value="${esc(st.busca)}" aria-label="Buscar analista"></div>
         ${st.destinatariosTransmissao > 0 ? `<button type="button" class="ci-todos" data-ci="todos">${ICONES.todos}<span>Enviar para todos com chamados em andamento</span><b>${st.destinatariosTransmissao}</b></button>` : ''}
         <div class="ci-lista" role="list">
-          ${lista.length ? lista.map((c) => `
+          ${lista.length ? lista.map((c) => c.semAcesso ? `
+            <div class="ci-contato ci-sem-acesso" role="listitem" title="Este analista não tem acesso ao J2A (número não autorizado na Platform) e não recebe mensagens.">
+              <span class="ci-avatar" style="background:${cor(c.tecnicoId)}">${esc(iniciais(c.nome))}</span>
+              <span class="ci-contato-meio">
+                <span class="ci-contato-nome">${esc(c.nome)}</span>
+                <span class="ci-contato-sub">Sem acesso ao J2A · ${c.chamadosEmAndamento} chamado(s)</span>
+              </span>
+            </div>` : `
             <button type="button" class="ci-contato" role="listitem" data-ci-contato="${esc(c.consultorId)}">
               ${avatar(c)}
               <span class="ci-contato-meio">
-                <span class="ci-contato-nome">${esc(c.nome)}</span>
+                <span class="ci-contato-nome">${esc(c.nome)} <small class="ci-st ${c.online ? 'ci-st-on' : ''}">${c.online ? 'online' : 'offline'}</small></span>
                 <span class="ci-contato-sub">${c.ultimaMensagem
                   ? `${c.ultimaMensagem.minha ? 'Você: ' : ''}${esc(c.ultimaMensagem.texto)}`
                   : (c.chamadosEmAndamento ? `${c.chamadosEmAndamento} chamado(s) em andamento` : (c.online ? 'Online agora' : 'Sem conversa ainda'))}</span>
@@ -145,7 +152,7 @@
 
     function renderConversa() {
       const c = contato(st.conversa.consultorId) || { consultorId: st.conversa.consultorId, nome: st.conversa.nome };
-      const status = c.online ? 'online' : (c.chamadosEmAndamento ? `${c.chamadosEmAndamento} chamado(s) em andamento` : 'offline');
+      const status = c.online ? 'online' : 'offline · recebe quando entrar no J2A';
       return `
         <header class="ci-head">
           <button type="button" class="ci-icone" data-ci="voltar" title="Voltar" aria-label="Voltar">${ICONES.voltar}</button>
@@ -326,6 +333,25 @@
       pilha.append(el);
     }
 
+    function resumoNaoLidas(n) {
+      const el = document.createElement('div');
+      el.className = 'ci-toast ci-toast-msg ci-toast-resumo';
+      el.setAttribute('role', 'button');
+      el.tabIndex = 0;
+      el.innerHTML = `<span class="ci-avatar ci-avatar-resumo">${ICONES.chat}</span>
+        <span class="ci-toast-corpo"><span class="ci-toast-topo"><strong>Você tem ${n} mensage${n === 1 ? 'm nova' : 'ns novas'}</strong></span>
+          <span class="ci-toast-texto">Recebidas enquanto você estava fora do J2A.</span>
+          <span class="ci-toast-acoes"><span class="ci-link">Ver mensagens</span></span></span>
+        <button type="button" class="ci-icone ci-toast-x" aria-label="Dispensar">${ICONES.fechar}</button>`;
+      const timer = setTimeout(() => el.remove(), 12000);
+      el.addEventListener('click', (e) => {
+        clearTimeout(timer);
+        el.remove();
+        if (!e.target.closest('.ci-toast-x')) abrirPainel('lista');
+      });
+      pilha.append(el);
+    }
+
     function notificarSistema(c, m) {
       if (!('Notification' in window) || Notification.permission !== 'granted') return;
       try {
@@ -409,6 +435,8 @@
       });
       socket.on('chat:mensagem', (m) => { receber(m).catch(() => null); });
       socket.on('chat:recibo', receberRecibo);
+      // Derrubado pelo Monitor de Acessos: volta para o login na hora.
+      socket.on('sessao:encerrada', (p) => onSessaoEncerrada(p?.mensagem || 'Sua sessão foi encerrada pelo administrador.'));
       socket.on('connect_error', (err) => { if (err?.message === 'nao_autorizado') socket.disconnect(); });
     }
 
@@ -457,7 +485,11 @@
       st.ativo = true;
       botao.hidden = false;
       carregarContatos()
-        .then(() => request(api('/entregues'), { method: 'POST', body: JSON.stringify({}) }))
+        .then((r) => {
+          // Chegou mensagem enquanto estava offline: avisa uma vez ao entrar.
+          if (r?.naoLidasTotal) resumoNaoLidas(r.naoLidasTotal);
+          return request(api('/entregues'), { method: 'POST', body: JSON.stringify({}) });
+        })
         .catch(() => null);
       conectarSocket();
       st.timer = setInterval(() => { sincronizar().catch(() => null); }, 30 * 1000);

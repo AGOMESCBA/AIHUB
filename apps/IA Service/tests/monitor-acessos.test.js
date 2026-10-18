@@ -3,6 +3,9 @@
 // Executar: node "apps/IA Service/tests/monitor-acessos.test.js"
 
 const assert = require('assert');
+// Consultores deste teste sao criados direto no IA Service (sem cadastro na
+// Platform): modo legado, senao a revogacao de acesso por Platform os derruba.
+process.env.SVC_ALLOW_LEGACY_CONSULTORES = '1';
 const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
@@ -205,6 +208,26 @@ try {
   assert.strictEqual(loginExternoService.validarSessaoExterna(tokenSaida), null, 'token encerrado não pode mais ser usado');
   assert.strictEqual(presencaService.listarMonitor(EMPRESA).sessoes.length, 0, 'sessão encerrada sai do painel');
   assert.strictEqual(presencaService.listarMonitor(OUTRA_EMPRESA).sessoes.length, 1, 'outra empresa não é afetada');
+
+  // 17. Derrubar UMA pessoa: encerra todas as sessões dela (duas abas), só dela,
+  // só na empresa informada; auditoria registrada.
+  const tokA = 'tok-a-' + crypto.randomBytes(8).toString('hex');
+  const tokB = 'tok-b-' + crypto.randomBytes(8).toString('hex');
+  for (const t of [tokA, tokB]) {
+    database.getDB().prepare('INSERT INTO svc_sessoes_externas (id, empresa_id, consultor_id, token_hash, expira_em, criado_em, ultimo_acesso_em) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(crypto.randomUUID(), EMPRESA, consultor.id, crypto.createHash('sha256').update(t).digest('hex'), new Date(Date.now() + 3600e3).toISOString(), new Date().toISOString(), new Date().toISOString());
+  }
+  assert.deepStrictEqual(presencaService.derrubarPessoaChat(OUTRA_EMPRESA, consultor.id).sessaoIds, [], 'empresa errada não derruba ninguém');
+  assert.ok(loginExternoService.validarSessaoExterna(tokA));
+  const derrubadas = presencaService.derrubarPessoaChat(EMPRESA, consultor.id).sessaoIds;
+  assert.strictEqual(derrubadas.length, 2, 'as duas abas da pessoa caem');
+  assert.strictEqual(loginExternoService.validarSessaoExterna(tokA), null);
+  assert.strictEqual(loginExternoService.validarSessaoExterna(tokB), null);
+  assert.strictEqual(presencaService.listarMonitor(OUTRA_EMPRESA).sessoes.length, 1, 'outra empresa intacta');
+  presencaService.registrarAuditoria({ empresaId: EMPRESA, acao: 'derrubar', alvo: `chat:${consultor.id}`, usuarioId: 7, motivo: 'teste '.repeat(50), detalhe: { sessoes: 2 } });
+  const aud = database.getDB().prepare('SELECT * FROM svc_monitor_auditoria WHERE empresa_id = ? AND acao = ?').get(EMPRESA, 'derrubar');
+  assert.strictEqual(aud.usuario_id, 7);
+  assert.ok(aud.motivo.length <= 120, 'motivo é limitado');
 
   console.log('monitor-acessos.test.js: OK');
 } finally {

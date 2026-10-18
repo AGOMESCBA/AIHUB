@@ -159,6 +159,29 @@ function encerrarSessaoChat(empresaId, sessaoId) {
   return { ok: true };
 }
 
+// "Derrubar" do Monitor: encerra TODAS as sessões válidas do chat J2A de um
+// analista (a pessoa pode estar em mais de uma aba/aparelho). Devolve os ids
+// das sessões encerradas para o tempo real derrubar os sockets na hora.
+// A pessoa pode entrar de novo com um novo código (decisão do usuário: só
+// derrubar, sem bloquear — para bloquear, desativar na Platform).
+function derrubarPessoaChat(empresaId, consultorId) {
+  if (!empresaId || !consultorId) throw Object.assign(new Error('Analista obrigatório.'), { status: 400 });
+  const db = getDB();
+  const agora = Date.now();
+  const sessoes = db.prepare('SELECT id FROM svc_sessoes_externas WHERE empresa_id = ? AND consultor_id = ? AND expira_em > ?')
+    .all(Number(empresaId), String(consultorId), new Date(agora).toISOString()).map(r => r.id);
+  if (!sessoes.length) return { sessaoIds: [] };
+  db.transaction(() => sessoes.forEach((id) => encerrarSessaoChat(empresaId, id)))();
+  return { sessaoIds: sessoes };
+}
+
+function registrarAuditoria({ empresaId, acao, alvo = null, usuarioId = null, motivo = null, detalhe = null }) {
+  getDB().prepare(`
+    INSERT INTO svc_monitor_auditoria (id, empresa_id, acao, alvo, usuario_id, motivo, detalhe, criado_em)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(crypto.randomUUID(), Number(empresaId), String(acao), alvo, usuarioId, _texto(motivo), detalhe ? JSON.stringify(detalhe) : null, new Date().toISOString());
+}
+
 function _saiuDaTela(p) {
   return !!(p.saiu_em && p.ultimo_sinal_em && p.saiu_em >= p.ultimo_sinal_em);
 }
@@ -313,6 +336,8 @@ module.exports = {
   registrarSinal,
   registrarSaida,
   encerrarSessaoChat,
+  derrubarPessoaChat,
+  registrarAuditoria,
   listarMonitor,
   limparMonitor,
   resumoChamado,

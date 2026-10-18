@@ -30,6 +30,7 @@ function limpar() {
 
 async function main() {
   const originalLista = platformStore.listarIaServicePorTelefone;
+  const originalDisponibilidade = platformStore.iaServicePlatformDisponivel;
   const originalNow = Date.now;
   let relogioExtra = 0;
   Date.now = () => originalNow() + relogioExtra;
@@ -100,6 +101,9 @@ async function main() {
     console.log('[5/6] Vinculos duplicados do mesmo telefone: vence o mais recente em qualquer ordem: ok');
 
     // 6) Falha ou ausencia na Platform: nada muda e nunca lanca.
+    // Ausência de instalação é diferente de cadastro instalado sem vínculo
+    // (revogação de acesso). Não consultar o banco Platform real do ambiente.
+    platformStore.iaServicePlatformDisponivel = () => false;
     platformStore.listarIaServicePorTelefone = () => [];
     avancarThrottle();
     assert.strictEqual(loginExternoService.sincronizarPreferenciaDaPlatform(EMPRESA, consultor.id), false);
@@ -112,6 +116,7 @@ async function main() {
     console.log('sincronizacao-preferencia-platform.test.js: ok (6/6 cenarios validados)');
   } finally {
     platformStore.listarIaServicePorTelefone = originalLista;
+    platformStore.iaServicePlatformDisponivel = originalDisponibilidade;
     Date.now = originalNow;
     limpar();
   }

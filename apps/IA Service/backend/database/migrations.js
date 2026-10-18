@@ -1264,6 +1264,23 @@ const MIGRATIONS = [
       CREATE INDEX idx_svc_chat_recibos_destinatario ON svc_chat_recibos (destinatario_id, visto_em);
     `,
   },
+  {
+    version: 50,
+    descricao: 'Monitor de Acessos: auditoria das ações administrativas (derrubar acesso de uma pessoa, limpar o monitor) — quem fez, quando, contra quem e o motivo informado.',
+    sql: `
+      CREATE TABLE svc_monitor_auditoria (
+        id          TEXT PRIMARY KEY,
+        empresa_id  INTEGER NOT NULL,
+        acao        TEXT NOT NULL,
+        alvo        TEXT,
+        usuario_id  INTEGER,
+        motivo      TEXT,
+        detalhe     TEXT,
+        criado_em   TEXT NOT NULL
+      );
+      CREATE INDEX idx_svc_monitor_auditoria ON svc_monitor_auditoria (empresa_id, criado_em);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;
