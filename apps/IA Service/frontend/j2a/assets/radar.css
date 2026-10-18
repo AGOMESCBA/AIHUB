@@ -325,7 +325,9 @@ button.loading .loader { display: block; }
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 70;
+  /* Acima dos painéis laterais (Retorno ao SoftExpert = 200, Mensagens = 1200):
+     com 70, o menu da conta (Sair, Tema) abria ATRÁS do painel de Retorno. */
+  z-index: 1250;
   min-width: 220px;
   padding: 6px;
   border: 1px solid var(--line);
@@ -765,6 +767,17 @@ button.loading .loader { display: block; }
 }
 .switch-row .switch-label { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; overflow: hidden; }
 .switch-row strong { font-size: 12px; }
+.trail-response-text { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; margin: 0; }
+.switch-row select {
+  min-width: 0;
+  max-width: 125px;
+  padding: 4px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 12px;
+}
 .switch-row small { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
 .switch-row input[type="checkbox"] {
   appearance: none;

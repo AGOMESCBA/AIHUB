@@ -419,7 +419,8 @@ module.exports = function registrarRotasExterno(app) {
       if (!atendimento) return res.status(404).json({ error: 'Atendimento não encontrado.' });
       const limite = Math.min(Number(req.query?.limite) || 20, 100);
       const execucoes = investigacaoExecucaoRepo.listarPorAtendimento(req.svcEmpresaId, req.params.id, { limite });
-      res.json({ trilha: trilhaInvestigacaoService.montarTrilha(execucoes) });
+      const mensagens = atendimentoService.listarMensagens(req.svcEmpresaId, req.params.id);
+      res.json({ trilha: trilhaInvestigacaoService.montarTrilha(execucoes, mensagens).slice(-limite) });
     } catch (err) {
       _handleErro(res, err);
     }
@@ -492,6 +493,7 @@ module.exports = function registrarRotasExterno(app) {
       const mensagemAssistente = await investigacaoService.processarTurno(empresaId, atendimentoId, {
         texto: String(texto).trim(),
         usuarioId: null,
+        consultorId: req.svcConsultorExterno,
         anexoIds: Array.isArray(anexoIds) ? anexoIds : [],
         anexosComoContexto: anexosComoContexto === true,
         forcarPesquisa: forcarPesquisa === true,
@@ -518,6 +520,7 @@ module.exports = function registrarRotasExterno(app) {
         preAnaliseAutomatica: consultor.preAnaliseAutomatica !== false,
         preAnalisePadrao: consultor.preAnalisePadrao !== false,
         preAnalisePessoal: consultor.preAnalisePessoal,
+        estiloResposta: consultorService.obterEstiloResposta(req.svcEmpresaId, consultor.id),
       });
     } catch (err) {
       _handleErro(res, err);
@@ -530,16 +533,14 @@ module.exports = function registrarRotasExterno(app) {
       if (!consultor) return res.status(404).json({ error: 'Consultor não encontrado nesta empresa.' });
 
       // null = "voltar ao padrao" (remove a escolha pessoal); true/false = escolha do analista.
-      const { preAnaliseAutomatica } = req.body || {};
-      const atualizado = consultorService.definirPreferenciaPessoal(
-        req.svcEmpresaId, consultor.id, preAnaliseAutomatica === null ? null : !!preAnaliseAutomatica,
-      );
+      const atualizado = consultorService.salvarPreferencias(req.svcEmpresaId, consultor.id, req.body || {});
       res.json({
         consultorEncontrado: true,
         consultorId: atualizado.id,
         preAnaliseAutomatica: atualizado.preAnaliseAutomatica !== false,
         preAnalisePadrao: atualizado.preAnalisePadrao !== false,
         preAnalisePessoal: atualizado.preAnalisePessoal,
+        estiloResposta: atualizado.estiloResposta,
       });
     } catch (err) {
       _handleErro(res, err);

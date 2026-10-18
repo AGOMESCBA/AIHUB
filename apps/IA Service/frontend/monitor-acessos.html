@@ -198,10 +198,10 @@
         </section>
 
         <section class="kpis" aria-label="Resumo">
-          <button class="kpi" type="button" data-sit="online" aria-pressed="false"><span class="kpi-label"><span class="dot d-online"></span>Online agora</span><span class="kpi-value" id="k-online">-</span><span class="kpi-foot">sinal nos últimos 2 min</span></button>
+          <button class="kpi" type="button" data-sit="online" aria-pressed="false"><span class="kpi-label"><span class="dot d-online"></span>On Line agora</span><span class="kpi-value" id="k-online">-</span><span class="kpi-foot">sinal nos últimos 2 min</span></button>
           <button class="kpi" type="button" data-sit="ausente" aria-pressed="false"><span class="kpi-label"><span class="dot d-ausente"></span>Ausentes</span><span class="kpi-value" id="k-ausente">-</span><span class="kpi-foot">sem sinal há 2 a 15 min</span></button>
-          <button class="kpi" type="button" data-sit="inativo" aria-pressed="false"><span class="kpi-label"><span class="dot d-inativo"></span>Logados inativos</span><span class="kpi-value" id="k-inativo">-</span><span class="kpi-foot">sessão válida, sem sinal há +15 min</span></button>
-          <button class="kpi" type="button" data-sit="todos" aria-pressed="true"><span class="kpi-label">Tempo de tela</span><span class="kpi-value" id="k-tempo">-</span><span class="kpi-foot" id="k-tempo-foot">soma do tempo ativo das sessões</span></button>
+          <button class="kpi" type="button" data-sit="inativo" aria-pressed="false"><span class="kpi-label"><span class="dot d-inativo"></span>Off Line</span><span class="kpi-value" id="k-inativo">-</span><span class="kpi-foot">fora do J2A há +15 min (login ainda válido)</span></button>
+          <button class="kpi" type="button" data-sit="todos" aria-pressed="false" title="Mostrar todos, inclusive Off Line"><span class="kpi-label">Tempo de tela</span><span class="kpi-value" id="k-tempo">-</span><span class="kpi-foot" id="k-tempo-foot">soma do tempo ativo das sessões</span></button>
         </section>
 
         <section class="filters" aria-label="Filtros">
@@ -241,13 +241,13 @@
   const CIRC = 56.55;
   const CORES = ['#2563eb', '#7c3aed', '#0891b2', '#c2410c', '#15803d', '#be185d', '#4f46e5', '#0f766e'];
   const SIT = {
-    online:  { badge: 'badge-green',  rotulo: 'Online' },
+    online:  { badge: 'badge-green',  rotulo: 'On Line' },
     ausente: { badge: 'badge-yellow', rotulo: 'Ausente' },
-    inativo: { badge: 'badge-neutro', rotulo: 'Inativo' },
+    inativo: { badge: 'badge-neutro', rotulo: 'Off Line' },
   };
 
   const st = {
-    dados: null, filtroSit: 'todos', filtroOrig: 'todos', busca: '', selId: null,
+    dados: null, filtroSit: 'ativos', filtroOrig: 'todos', busca: '', selId: null,
     chamado: null, chamadoErro: null, intervalo: 30, restante: 30, carregando: false, ultimoSinalPorId: new Map(),
     ampliada: false,
   };
@@ -360,7 +360,10 @@
   function visiveis() {
     const q = st.busca.toLowerCase();
     return (st.dados?.pessoas || []).filter((s) => {
-      if (st.filtroSit !== 'todos' && s.situacao !== st.filtroSit) return false;
+      // Padrão (decisão do usuário, 2026-10): esconde quem está Off Line; aparece
+      // ao clicar no card Off Line (ou em Tempo de tela, que mostra todos).
+      if (st.filtroSit === 'ativos' && s.situacao === 'inativo') return false;
+      if (st.filtroSit !== 'todos' && st.filtroSit !== 'ativos' && s.situacao !== st.filtroSit) return false;
       if (st.filtroOrig !== 'todos' && s.origem !== st.filtroOrig) return false;
       if (q && !`${s.nome} ${s.telefone || ''} ${s.chamadoNumero || ''} ${s.tela || ''} ${s.acao || ''}`.toLowerCase().includes(q)) return false;
       return true;
@@ -398,10 +401,12 @@
     $('k-tempo').textContent = dur(d.resumo.segundosAtivos);
     $('k-tempo-foot').textContent = `${d.pessoas.length} ${d.pessoas.length === 1 ? 'usuário' : 'usuários'} · ${d.resumo.total} ${d.resumo.total === 1 ? 'sessão válida' : 'sessões válidas'}`;
     const vis = visiveis();
-    $('contagem').textContent = `${vis.length} de ${d.pessoas.length} ${d.pessoas.length === 1 ? 'usuário' : 'usuários'}`;
+    const offOcultos = st.filtroSit === 'ativos' ? d.pessoas.filter((p) => p.situacao === 'inativo').length : 0;
+    $('contagem').textContent = `${vis.length} de ${d.pessoas.length} ${d.pessoas.length === 1 ? 'usuário' : 'usuários'}`
+      + (offOcultos ? ` · ${offOcultos} Off Line oculto${offOcultos === 1 ? '' : 's'} (clique no card Off Line para ver)` : '');
     $('tbody').innerHTML = vis.length
       ? vis.map((s) => linha(s, mudaram.includes(s.id))).join('')
-      : `<tr><td colspan="7"><div class="vazio">${d.pessoas.length ? 'Nenhum usuário com esses filtros.' : 'Ninguém conectado nesta empresa agora.'}</div></td></tr>`;
+      : `<tr><td colspan="7"><div class="vazio">${!d.pessoas.length ? 'Ninguém conectado nesta empresa agora.' : st.filtroSit === 'ativos' ? 'Ninguém On Line agora. Quem está Off Line aparece ao clicar no card Off Line.' : 'Nenhum usuário com esses filtros.'}</div></td></tr>`;
     renderGaveta();
   }
 
@@ -593,8 +598,9 @@
   });
   $('busca').addEventListener('input', (e) => { st.busca = e.target.value.trim(); render(); });
   document.querySelectorAll('.kpi').forEach((k) => k.addEventListener('click', () => {
-    st.filtroSit = k.dataset.sit;
-    document.querySelectorAll('.kpi').forEach((x) => x.setAttribute('aria-pressed', String(x === k)));
+    const jaMarcado = k.getAttribute('aria-pressed') === 'true';
+    st.filtroSit = jaMarcado ? 'ativos' : k.dataset.sit;
+    document.querySelectorAll('.kpi').forEach((x) => x.setAttribute('aria-pressed', String(!jaMarcado && x === k)));
     render();
   }));
   document.querySelectorAll('.chip').forEach((c) => c.addEventListener('click', () => {

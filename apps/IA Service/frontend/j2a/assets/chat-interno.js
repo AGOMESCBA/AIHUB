@@ -117,10 +117,10 @@
             <button type="button" class="ci-contato" role="listitem" data-ci-contato="${esc(c.consultorId)}">
               ${avatar(c)}
               <span class="ci-contato-meio">
-                <span class="ci-contato-nome">${esc(c.nome)} <small class="ci-st ${c.online ? 'ci-st-on' : ''}">${c.online ? 'online' : 'offline'}</small></span>
+                <span class="ci-contato-nome">${esc(c.nome)} <small class="ci-st ${c.online ? 'ci-st-on' : ''}">${c.online ? 'On Line' : 'Off Line'}</small></span>
                 <span class="ci-contato-sub">${c.ultimaMensagem
                   ? `${c.ultimaMensagem.minha ? 'Você: ' : ''}${esc(c.ultimaMensagem.texto)}`
-                  : (c.chamadosEmAndamento ? `${c.chamadosEmAndamento} chamado(s) em andamento` : (c.online ? 'Online agora' : 'Sem conversa ainda'))}</span>
+                  : (c.chamadosEmAndamento ? `${c.chamadosEmAndamento} chamado(s) em andamento` : (c.online ? 'On Line agora' : 'Sem conversa ainda'))}</span>
               </span>
               <span class="ci-contato-fim">
                 <span class="ci-contato-hora${c.naoLidas ? ' ci-novo' : ''}">${c.ultimaMensagem ? quando(c.ultimaMensagem.em) : ''}</span>
@@ -152,7 +152,7 @@
 
     function renderConversa() {
       const c = contato(st.conversa.consultorId) || { consultorId: st.conversa.consultorId, nome: st.conversa.nome };
-      const status = c.online ? 'online' : 'offline · recebe quando entrar no J2A';
+      const status = c.online ? 'On Line' : 'Off Line · recebe quando entrar no J2A';
       return `
         <header class="ci-head">
           <button type="button" class="ci-icone" data-ci="voltar" title="Voltar" aria-label="Voltar">${ICONES.voltar}</button>

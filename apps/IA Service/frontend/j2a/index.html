@@ -6,6 +6,7 @@
   <title>IA Service - Radar de Chamados</title>
   <link rel="stylesheet" href="/iaservice/j2a/assets/radar.css">
   <link rel="stylesheet" href="/iaservice/j2a/assets/retorno-softexpert.css">
+  <link rel="stylesheet" href="/iaservice/j2a/assets/detalhes-tecnicos.css">
   <link rel="stylesheet" href="/iaservice/j2a/assets/chat-interno.css">
 </head>
 <body>
@@ -208,6 +209,15 @@
               <span id="pre-analysis-padrao-texto"></span>
               <button type="button" id="pre-analysis-padrao-btn" class="link-button">Voltar ao padrão</button>
             </div>
+            <label class="switch-row" for="response-style-select">
+              <span class="switch-label"><strong>Estilo da Resposta</strong></span>
+              <select id="response-style-select" disabled>
+                <option value="ORIGINAL">Original</option>
+                <option value="NATURAL">Natural</option>
+                <option value="DIRETO">Direto</option>
+                <option value="DESCONTRAIDO">Descontraído</option>
+              </select>
+            </label>
           </div>
           <div id="queue-list" class="queue-list"></div>
         </aside>
@@ -383,6 +393,7 @@
   </div>
   <script src="/iaservice/j2a/assets/tab-export.js"></script>
   <script src="/iaservice/j2a/assets/retorno-softexpert.js"></script>
+  <script src="/iaservice/j2a/assets/detalhes-tecnicos.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/iaservice/j2a/assets/chat-interno.js"></script>
   <script src="/iaservice/j2a/assets/radar.js"></script>

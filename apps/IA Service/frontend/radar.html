@@ -88,6 +88,7 @@
     .fila-preferencia-ia-texto { min-width:0; }
     .fila-preferencia-ia-titulo { font-size:11.5px; font-weight:800; color:var(--wa-text); }
     .fila-preferencia-ia-sub { font-size:10.5px; color:var(--wa-text-tertiary); margin-top:2px; }
+    #estiloRespostaSelect { max-width:125px; min-width:0; padding:4px 6px; color:var(--wa-text); background:var(--wa-panel); border:1px solid var(--wa-border); border-radius:6px; font-size:11.5px; }
     .switch-ia { position:relative; width:38px; height:22px; flex:none; }
     .switch-ia input { opacity:0; width:0; height:0; }
     .switch-ia span { position:absolute; inset:0; border-radius:999px; background:rgba(255,255,255,.16); border:1px solid var(--wa-border); cursor:pointer; transition:.18s ease; }
@@ -494,6 +495,8 @@
     body.tela-cheia .page-content.radar-content { height:100vh; }
   </style>
   <link rel="stylesheet" href="/iaservice/j2a/assets/retorno-softexpert.css">
+  <link rel="stylesheet" href="/iaservice/j2a/assets/detalhes-tecnicos.css">
+  <script src="/iaservice/j2a/assets/detalhes-tecnicos.js"></script>
 </head>
 <body>
   <script>
@@ -573,6 +576,15 @@
                 <input type="checkbox" id="preAnaliseAutomaticaToggle" onchange="salvarPreferenciaPreAnalise()">
                 <span></span>
               </label>
+            </div>
+            <div class="fila-preferencia-ia visivel" id="estilo-resposta-preferencia">
+              <label class="fila-preferencia-ia-titulo" for="estiloRespostaSelect">Estilo da Resposta</label>
+              <select id="estiloRespostaSelect" onchange="salvarEstiloResposta()" disabled>
+                <option value="ORIGINAL">Original</option>
+                <option value="NATURAL">Natural</option>
+                <option value="DIRETO">Direto</option>
+                <option value="DESCONTRAIDO">Descontraído</option>
+              </select>
             </div>
           </div>
           <div id="fila-aviso"></div>
@@ -750,6 +762,8 @@
     let chamadoSelecionadoId = null;
     let chamadoAtual = null;
     let atendimentoAtualId = null;
+    const mensagensDetalhesTecnicos = new Map();
+    const contextoDetalhesTecnicos = () => atendimentoAtualId ? `${modoExterno ? tokenExterno : empresaIdAtual()}:${chamadoSelecionadoId}:${atendimentoAtualId}` : null;
     let anexosPendentes = [];
     let enviando = false; // true somente enquanto o ATENDIMENTO ATUAL (visível na tela) está processando
     // Processamento em segundo plano é por atendimento, não pela aba visível:
@@ -789,6 +803,8 @@
       location.href = apelido ? '/entrar-servico/' + encodeURIComponent(apelido) : '/entrar-servico';
     }
     function showSessaoExternaInvalida(msg) {
+      window._detalhesTecnicos?.close(false);
+      mensagensDetalhesTecnicos.clear();
       window._retornoSoftExpert?.clear();
       sessaoExternaInvalida = true;
       if (timerAutoRefresh) { clearInterval(timerAutoRefresh); timerAutoRefresh = null; }
@@ -1335,6 +1351,8 @@
 
     // ── Seleção de chamado → inicia/reabre análise assistida e carrega o chat ──────
     async function selecionarChamado(chamadoId) {
+      window._detalhesTecnicos?.close(false);
+      mensagensDetalhesTecnicos.clear();
       chamadoSelecionadoId = chamadoId;
       window._retornoSoftExpert?.contextChanged();
       document.querySelectorAll('.fila-item').forEach(el => el.classList.remove('selecionado'));
@@ -2101,6 +2119,9 @@
     }
 
     function renderizarRespostaOperacional(ficha, diagnostico, nivelConfianca, texto, mensagemId) {
+      if (diagnostico?.humanizacao && (diagnostico.humanizacao.status === 'aplicada' || !ficha?.temEstrutura)) {
+        return renderizarTextoComCodigo(texto) + (ficha ? renderizarValidacaoSolucao(mensagemId, ficha.validacaoSolucao) : '');
+      }
       if (!ficha?.temEstrutura) return diagnostico ? renderizarDiagnostico(diagnostico, nivelConfianca) : renderizarTextoComCodigo(texto);
       const itens = [
         ['Diagnostico', ficha.diagnostico],
@@ -2275,7 +2296,10 @@
         : renderizarTextoComCodigo(texto);
 
       const fontesHtml = (fontesCorrigidos || []).map(renderizarFonteCorrigidoCard).join('');
-      bubble.innerHTML = cabecalhoMensagem + cabecalhoPergunta + corpo + fontesHtml + renderizarAvisosFonteCorrigido(avisosFonteCorrigido);
+      const mensagemTecnica = { id, papel, conteudo: texto, diagnostico, respostaOperacional };
+      if (id) mensagensDetalhesTecnicos.set(String(id), { contexto: contextoDetalhesTecnicos(), mensagem: mensagemTecnica });
+      bubble.innerHTML = cabecalhoMensagem + cabecalhoPergunta + corpo + fontesHtml + renderizarAvisosFonteCorrigido(avisosFonteCorrigido)
+        + window.IaDetalhesTecnicos.botao(mensagemTecnica, 'chat-header-pesquisar');
 
       if (anexos && anexos.length) {
         const chaveAnexos = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -2335,7 +2359,7 @@
         anexosAtendimentoCache = aindaEhOAtual ? (anexosDoAtendimento || []) : anexosAtendimentoCache;
         if (aindaEhOAtual) renderizarResumoAnexos();
         const chatBody = aindaEhOAtual ? document.getElementById('chat-body') : null;
-        if (chatBody) chatBody.innerHTML = '';
+        if (chatBody) { chatBody.innerHTML = ''; mensagensDetalhesTecnicos.clear(); }
         const anexosPorMensagem = {};
         const fontesCorrigidosPorMensagem = montarFontesCorrigidosPorMensagem(anexosDoAtendimento);
         for (const a of anexosDoAtendimento) {
@@ -2671,10 +2695,16 @@
       const box = document.getElementById('pre-analise-preferencia');
       const toggle = document.getElementById('preAnaliseAutomaticaToggle');
       const sub = document.getElementById('pre-analise-preferencia-sub');
+      const estilo = document.getElementById('estiloRespostaSelect');
+      estilo.disabled = true;
       if (!empresaId || !box || !toggle) return;
       try {
         const qs = qsEmpresa(empresaId);
         const pref = await api(`/radar/minhas-preferencias${qs ? '?' + qs : ''}`);
+        if (String(empresaIdAtual()) !== String(empresaId)) return;
+        estilo.value = pref.estiloResposta || 'ORIGINAL';
+        estilo.dataset.salvo = estilo.value;
+        estilo.disabled = pref.consultorEncontrado === false;
         if (!pref.consultorEncontrado) {
           box.classList.remove('visivel');
           return;
@@ -2707,6 +2737,29 @@
         toggle.checked = valorAnterior;
         sub.textContent = toggle.checked ? 'Ao iniciar análise' : 'Somente quando eu perguntar';
         showError('Não foi possível salvar a preferência da IA: ' + err.message);
+      }
+    }
+
+    async function salvarEstiloResposta() {
+      const empresaId = empresaIdAtual();
+      const seletor = document.getElementById('estiloRespostaSelect');
+      if (!empresaId) return;
+      seletor.disabled = true;
+      try {
+        const qs = qsEmpresa(empresaId);
+        const pref = await api(`/radar/minhas-preferencias${qs ? '?' + qs : ''}`, {
+          method: 'PUT', body: JSON.stringify({ estiloResposta: seletor.value }),
+        });
+        if (String(empresaIdAtual()) !== String(empresaId)) return;
+        seletor.value = pref.estiloResposta || 'ORIGINAL';
+        seletor.dataset.salvo = seletor.value;
+        showToast('Estilo salvo para as próximas respostas.');
+      } catch (err) {
+        if (String(empresaIdAtual()) !== String(empresaId)) return;
+        seletor.value = seletor.dataset.salvo || 'ORIGINAL';
+        showError('Não foi possível salvar o estilo: ' + err.message);
+      } finally {
+        if (String(empresaIdAtual()) === String(empresaId)) seletor.disabled = false;
       }
     }
 
@@ -2806,6 +2859,8 @@
     // sair do radar externo além de fechar a aba, o que mantinha o token
     // salvo no navegador indefinidamente (até expirar em 8h sozinho).
     function sairSessaoExterna() {
+      window._detalhesTecnicos?.close(false);
+      mensagensDetalhesTecnicos.clear();
       window._retornoSoftExpert?.clear();
       const apelido = localStorage.getItem(LOGIN_APELIDO_KEY);
       localStorage.removeItem(TOKEN_EXTERNO_KEY);
@@ -2886,6 +2941,15 @@
       },
       onSuccess: async () => { await carregarMensagens(); await carregarAnexosSoftExpert(chamadoSelecionadoId); },
     });
+    window._detalhesTecnicos = window.IaDetalhesTecnicos.mount({
+      getContext: contextoDetalhesTecnicos,
+      getMessage: id => {
+        const registro = mensagensDetalhesTecnicos.get(String(id));
+        return registro?.contexto === contextoDetalhesTecnicos() ? registro.mensagem : null;
+      },
+      onOpen: () => { window._retornoSoftExpert.close(); return document.getElementById('retorno-btn').getAttribute('aria-expanded') !== 'true'; },
+    });
+    document.getElementById('retorno-btn').addEventListener('click', () => window._detalhesTecnicos.close(false), true);
   </script>
   <script>
     const exportHost = document.createElement('div');

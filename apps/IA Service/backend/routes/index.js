@@ -343,7 +343,8 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       if (!atendimento) return res.status(404).json({ error: 'Atendimento não encontrado.' });
       const limite = Math.min(Number(req.query?.limite) || 20, 100);
       const execucoes = investigacaoExecucaoRepo.listarPorAtendimento(empresaId, req.params.id, { limite });
-      res.json({ trilha: trilhaInvestigacaoService.montarTrilha(execucoes) });
+      const mensagens = atendimentoService.listarMensagens(empresaId, req.params.id);
+      res.json({ trilha: trilhaInvestigacaoService.montarTrilha(execucoes, mensagens).slice(-limite) });
     } catch (err) {
       _handleErro(res, err);
     }
@@ -1091,7 +1092,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       const usuarioId = req.session?.user_id;
       const consultor = usuarioId ? consultorService.getConsultorPorUsuario(empresaId, usuarioId) : null;
       if (!consultor) {
-        return res.json({ consultorEncontrado: false, preAnaliseAutomatica: false });
+        return res.json({ consultorEncontrado: false, preAnaliseAutomatica: false, estiloResposta: 'ORIGINAL' });
       }
       res.json({
         consultorEncontrado: true,
@@ -1099,6 +1100,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
         preAnaliseAutomatica: consultor.preAnaliseAutomatica !== false,
         preAnalisePadrao: consultor.preAnalisePadrao !== false,
         preAnalisePessoal: consultor.preAnalisePessoal,
+        estiloResposta: consultorService.obterEstiloResposta(empresaId, consultor.id),
       });
     } catch (err) {
       _handleErro(res, err);
@@ -1112,16 +1114,14 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       const consultor = usuarioId ? consultorService.getConsultorPorUsuario(empresaId, usuarioId) : null;
       if (!consultor) return res.status(404).json({ error: 'Consultor não encontrado para este usuário nesta empresa.' });
 
-      const { preAnaliseAutomatica } = req.body || {};
-      const atualizado = consultorService.definirPreferenciaPessoal(
-        empresaId, consultor.id, preAnaliseAutomatica === null ? null : !!preAnaliseAutomatica,
-      );
+      const atualizado = consultorService.salvarPreferencias(empresaId, consultor.id, req.body || {});
       res.json({
         consultorEncontrado: true,
         consultorId: atualizado.id,
         preAnaliseAutomatica: atualizado.preAnaliseAutomatica !== false,
         preAnalisePadrao: atualizado.preAnalisePadrao !== false,
         preAnalisePessoal: atualizado.preAnalisePessoal,
+        estiloResposta: atualizado.estiloResposta,
       });
     } catch (err) {
       _handleErro(res, err);

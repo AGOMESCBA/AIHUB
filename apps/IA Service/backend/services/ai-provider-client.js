@@ -158,7 +158,7 @@ async function _chamarOpenAICompat(cfg, apiKey, systemPrompt, userPrompt, imagen
   // é orçamento de tokens insuficiente para concluir a resposta. Uma única
   // retentativa com o dobro do orçamento resolve o caso real (teste de
   // conexão com maxTokens: 10) sem mascarar erro genuíno de outro provider.
-  if (cfg.usaRaciocinio && !String(resultado.content || '').trim() && resultado.truncado) {
+  if (!opts.semRetryRaciocinio && cfg.usaRaciocinio && !String(resultado.content || '').trim() && resultado.truncado) {
     resultado = await _chamarOpenAICompatUmaVez(cfg, apiKey, systemPrompt, userPrompt, imagens, opts, maxTokensInicial * 2);
   }
 
@@ -310,6 +310,10 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
     let houveTransitorioNaRodada = false;
 
     for (const provedor of candidatos) {
+      // Limite opcional para a operação inteira (humanização). Os demais
+      // chamadores mantêm seus timeouts e sua política de retry existentes.
+      const restanteMs = opts.totalTimeoutMs ? opts.totalTimeoutMs - (Date.now() - inicioGeral) : null;
+      if (restanteMs !== null && restanteMs <= 0) break;
       if (providersPermanentes.has(provedor) || ignoradosPorJanela.has(provedor)) continue;
 
       const modeloDoProvedor = cfg?.modelos?.[provedor] || opts.model || PROVIDER_CONFIGS[provedor].model;
@@ -352,7 +356,10 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
       const inicioTentativa = Date.now();
       const extraTentativa = { tokensPromptEstimados: ultimoTokensPrompt, ...(preparo ? { preparo } : {}) };
       try {
-        const resultado = await chamarProvedor(provedor, keys[provedor], systemPrompt, promptTentativa, imagensTentativa, { ...opts, model: modeloDoProvedor });
+        const resultado = await chamarProvedor(provedor, keys[provedor], systemPrompt, promptTentativa, imagensTentativa, {
+          ...opts, model: modeloDoProvedor,
+          ...(restanteMs !== null ? { timeoutMs: Math.min(opts.timeoutMs || 45000, restanteMs) } : {}),
+        });
         tentativas.push({ provider: provedor, model: modeloDoProvedor, status: 'ok', rodada, latenciaMs: Date.now() - inicioTentativa, ...extraTentativa });
         return { ...resultado, provider: provedor, model: modeloDoProvedor, tentativas, latenciaMs: Date.now() - inicioGeral };
       } catch (erro) {

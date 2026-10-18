@@ -2,9 +2,9 @@
 // cronológicos para a aba "Trilha de Investigação" do chat. Não executa
 // nenhuma chamada de IA nova e não acrescenta nenhum dado que não exista já
 // em manifesto_json/pesquisa_json/quality_gate_json/tentativas_json/usage_json
-// — só reorganiza o que já foi persistido por investigacao-service.js em
-// passos legíveis. Toda string já vem redigida pelo próprio repositório
-// (investigacao-execucao-repository.js usa redigirValor na leitura).
+// e nos metadados de humanização da mensagem — só reorganiza o que já foi persistido em
+// passos legíveis. A execução vem redigida pelo repositório; os textos da
+// mensagem passam pelo mesmo redator antes de aparecer na trilha.
 
 const STATUS_EXECUCAO_LABEL = {
   concluido: 'Concluída',
@@ -13,6 +13,52 @@ const STATUS_EXECUCAO_LABEL = {
   erro_imagem: 'Erro ao processar evidência visual',
   erro_provider: 'Erro no provider de IA',
 };
+const { redigirValor } = require('./redaction-service');
+
+function _eventosComunicacao(mensagem) {
+  const h = mensagem?.diagnostico?.humanizacao;
+  const original = h?.respostaOriginal ?? mensagem?.conteudo;
+  if (mensagem?.papel !== 'assistant' || typeof original !== 'string') return [];
+  const primaria = {
+    tipo: 'resposta_tecnica_original', titulo: 'Resposta técnica original', status: 'concluido',
+    resumo: 'Resposta primária preservada antes de qualquer ajuste de comunicação.',
+    detalhes: { mensagemId: mensagem.id, conteudo: redigirValor(original) },
+  };
+  if (!h || typeof h.respostaOriginal !== 'string') return [primaria];
+  const aplicada = h.status === 'aplicada';
+  const numeroUso = (...chaves) => {
+    const valor = chaves.map(chave => h.usage?.[chave]).find(v => typeof v === 'number' && Number.isFinite(v));
+    return valor ?? null;
+  };
+  const metadados = {
+    mensagemId: mensagem.id,
+    estilo: h.estilo || 'ORIGINAL',
+    statusHumanizacao: h.status || 'original',
+    motivo: h.motivo || null,
+    provider: h.provider || null,
+    model: h.model || null,
+    latenciaMs: h.latenciaMs ?? null,
+  };
+  return [
+    primaria,
+    {
+      tipo: 'resposta_ajustada', titulo: 'Resposta ajustada',
+      status: aplicada ? 'concluido' : h.status === 'fallback' ? 'alerta' : 'dispensada',
+      resumo: aplicada ? `Comunicação ajustada no estilo ${h.estilo}.` : 'Ajuste não aplicado; resposta original entregue ao analista.',
+      detalhes: {
+        ...redigirValor(metadados),
+        respostaCandidata: h.respostaCandidata ? redigirValor(h.respostaCandidata) : null,
+        validacaoPreservacao: h.validacaoPreservacao ? redigirValor(h.validacaoPreservacao) : null,
+        conteudo: redigirValor(aplicada && typeof h.respostaHumanizada === 'string' ? h.respostaHumanizada : h.respostaOriginal),
+        consumoAdicional: {
+          entrada: numeroUso('prompt_tokens', 'input_tokens', 'promptTokens', 'promptTokenCount'),
+          saida: numeroUso('completion_tokens', 'output_tokens', 'completionTokens', 'candidatesTokenCount'),
+          total: numeroUso('total_tokens', 'totalTokens', 'totalTokenCount'),
+        },
+      },
+    },
+  ];
+}
 
 function _statusLabel(status) {
   return STATUS_EXECUCAO_LABEL[status] || status || 'Desconhecido';
@@ -273,7 +319,7 @@ function _eventoQualityGate(execucao) {
  * Monta a trilha de uma única execução: lista ordenada de eventos + metadados
  * de cabeçalho (status geral, timestamps, ids de mensagem).
  */
-function montarTrilhaDaExecucao(execucao) {
+function montarTrilhaDaExecucao(execucao, mensagem = null) {
   return {
     execucaoId: execucao.id,
     criadoEm: execucao.criadoEm,
@@ -292,6 +338,7 @@ function montarTrilhaDaExecucao(execucao) {
       _eventoDiagnosticoEstruturado(execucao),
       _eventoChamadaProvider(execucao),
       _eventoQualityGate(execucao),
+      ..._eventosComunicacao(mensagem),
     ],
   };
 }
@@ -301,11 +348,20 @@ function montarTrilhaDaExecucao(execucao) {
  * ordenadas da mais antiga para a mais recente (ordem de leitura natural de
  * uma linha do tempo).
  */
-function montarTrilha(execucoes = []) {
-  return execucoes
-    .slice()
-    .sort((a, b) => new Date(a.criadoEm) - new Date(b.criadoEm))
-    .map(montarTrilhaDaExecucao);
+function montarTrilha(execucoes = [], mensagens = []) {
+  const porId = new Map(mensagens.map(m => [m.id, m]));
+  const vinculadas = new Set(execucoes.map(e => e.mensagemId));
+  const trilha = execucoes.map(e => montarTrilhaDaExecucao(e, porId.get(e.mensagemId)));
+  // Conversas curtas não criam execução investigativa. A auditoria usa a
+  // própria mensagem, sem inventar uma investigação nem duplicar persistência.
+  for (const m of mensagens) {
+    if (m.papel !== 'assistant' || vinculadas.has(m.id) || !m.respostaCurta) continue;
+    const eventos = _eventosComunicacao(m);
+    if (!eventos.length) continue;
+    trilha.push({ execucaoId: `conversa-${m.id}`, origem: 'conversa', criadoEm: m.criadoEm,
+      mensagemId: m.id, status: 'concluido', statusLabel: 'Conversa com a IA', eventos });
+  }
+  return trilha.sort((a, b) => new Date(a.criadoEm) - new Date(b.criadoEm));
 }
 
 module.exports = { montarTrilha, montarTrilhaDaExecucao };

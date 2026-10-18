@@ -502,6 +502,11 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
   app.post('/api/iahub/platform/whatsapp-identities', requireAuth, requireAdmin, requireEmpresa, (req, res) => {
     const eid = empresaId(req);
     const body = req.body || {};
+    const estiloResposta = body.metadata?.iaService?.estiloResposta;
+    if (estiloResposta !== undefined) {
+      try { require('./estilos-resposta').validarEstilo(estiloResposta); }
+      catch (err) { return res.status(400).json({ error: err.message }); }
+    }
     const normalized = normalizePhone(body.numero || body.numeroNormalizado);
     if (!normalized) return res.status(400).json({ error: 'Numero obrigatorio.' });
     const atual = body.id
@@ -512,7 +517,9 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
     if (atual) {
       // Mescla com o metadata atual: a tela só envia tipo/iaService, e os campos
       // vindos da importação do IA Command (erp_tipo, erp_id...) não podem sumir.
-      const metadata = { ...parseJson(atual.metadata_json, {}), ...(body.metadata || {}) };
+      const anterior = parseJson(atual.metadata_json, {});
+      const metadata = { ...anterior, ...(body.metadata || {}) };
+      if (body.metadata?.iaService) metadata.iaService = { ...anterior.iaService, ...body.metadata.iaService };
       getDB().prepare('UPDATE platform_whatsapp_identities SET nome=?, numero=?, numero_normalizado=?, observacoes=?, ativo=?, metadata_json=?, atualizado_em=? WHERE empresa_id=? AND id=?')
         .run(body.nome || normalized, body.numero || normalized, normalized, body.observacoes || '', body.ativo === false ? 0 : 1, JSON.stringify(metadata), stamp, eid, id);
     } else {

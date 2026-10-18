@@ -78,6 +78,14 @@ function _temAcaoOuProximoPasso(texto) {
   return /\b(apli(?:que|car|cado|cada|ca[cç][aã]o)|execut(?:e|ar|ado|ada)|valid(?:e|ar|ado|ada|a[cç][aã]o)|envi(?:e|ar|ado|ada)|anex(?:e|ar|ado|ada)|corrij\w*|corrig\w*|corre[cç][aã]o|test(?:e|ar|ado|ada)|compar(?:e|ar|ado|ada)|verifi(?:que|car|cado|cada)|colet(?:e|ar|ado|ada))\b/i.test(texto || '');
 }
 
+function _propostaDeCorrecao(texto) {
+  // Uma ação já feita no histórico não é uma nova prescrição. Exigir teste
+  // só pela palavra "ajuste" gerava reprovação sem correção proposta.
+  return String(texto || '').split(/\n|(?<=[.!?])\s+/).find(frase =>
+    /(?:^|[:,;])\s*(?:\d+[.)]\s*)?(?:[-*]\s*)?(?:\*\*)?(?:aplique|ajuste|altere|corrija|configure|atualize|substitua|remova|adicione|instale|habilite|desabilite|recompile|compile)\b/i.test(frase)
+    || /\b(?:proponho|recomendo|deve|precisa|necess[aá]rio|corre[cç][aã]o proposta)\b[^.!?\n]{0,100}\b(?:aplicar|ajustar|alterar|corrigir|configurar|atualizar|substituir|remover|instalar|compilar)\b/i.test(frase));
+}
+
 function _temRespostaCurtaObjetiva(texto) {
   const s = _normalizar(texto);
   const temEvidenciaTecnica = /\b(evidencia|log|fonte|print|anexo|trecho|linha|stack|exception|erro|rotina|campo|tabela|parametro|advpl|prw|tlpp|array|indice)\b/i.test(s);
@@ -1192,11 +1200,13 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
       acaoCorretiva: 'explicitar_evidencia_ou_rebaixar_para_hipotese',
     });
   }
-  if (/\b(corrig|corre[cç][aã]o|aplicar|ajuste|alterar)\b/i.test(resposta) && !/\b(valid\w*|homologa\w*|teste\w*|reteste\w*|reproduz\w*|compil\w*)\b/i.test(resposta)) {
+  const propostaCorrecao = _propostaDeCorrecao(resposta);
+  if (propostaCorrecao && !/\b(valid\w*|homologa\w*|teste\w*|reteste\w*|reproduz\w*|compil\w*)\b/i.test(resposta)) {
     falhas.push({
       codigo: 'CORRECTION_WITHOUT_VALIDATION',
       severidade: 'media',
       detalhe: 'resposta propos correcao sem orientar validacao',
+      evidencia: propostaCorrecao.trim().slice(0, 500),
       acaoCorretiva: 'incluir_validacao_objetiva_da_correcao',
     });
   }
@@ -1234,6 +1244,7 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
         codigo: 'VISUAL_EVIDENCE_TOO_GENERIC',
         severidade: 'media',
         detalhe: 'resposta cita imagens/prints sem mencionar texto, campo, percentual ou mensagem visivel nos anexos',
+        evidencia: imagensAnalisadas.map(e => e.nome || e.id).join('; '),
         acaoCorretiva: 'citar_evidencia_visual_concreta',
       });
     }

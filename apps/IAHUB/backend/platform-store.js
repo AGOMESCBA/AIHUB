@@ -2,6 +2,7 @@ const path = require('path');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const { ensurePlatformSchema } = require('./platform-schema');
+const { normalizarEstilo, validarEstilo } = require('./estilos-resposta');
 
 const DB_PATH = path.join(__dirname, '..', 'data', 'iahub-platform.db');
 const PREFIX = 'iahub-aes-gcm:';
@@ -170,6 +171,7 @@ function listarIaServicePorTelefone(telefoneNormalizado) {
       usuarioIdIahub: iaService.usuarioIdIahub || roleMetadata.usuarioIdIahub || null,
       idSoftexpert: iaService.idSoftexpert || roleMetadata.idSoftexpert || row.codigo_identidade || null,
       preAnaliseAutomatica: iaService.preAnaliseAutomatica !== false && roleMetadata.preAnaliseAutomatica !== false,
+      estiloResposta: normalizarEstilo(iaService.estiloResposta ?? roleMetadata.estiloResposta),
       atualizadoEm: [row.identidade_atualizada_em, row.role_atualizado_em].filter(Boolean).sort().pop() || null,
     };
   });
@@ -225,6 +227,36 @@ function getConfigPorApelido(apelido) {
   return { empresaId: row.empresa_id };
 }
 
+// Uma preferência por telefone e empresa, inclusive quando há identidades
+// duplicadas por importação. Não altera acesso, pré-análise ou outros metadados.
+function obterEstiloResposta(empresaId, telefone) {
+  if (!empresaId || !telefone) return 'ORIGINAL';
+  const itens = listarIaServicePorTelefone(telefone)
+    .filter(i => Number(i.empresaId) === Number(empresaId))
+    .sort((a, b) => String(b.atualizadoEm || '').localeCompare(String(a.atualizadoEm || '')));
+  return itens[0]?.estiloResposta || 'ORIGINAL';
+}
+
+function definirEstiloResposta(empresaId, telefone, valor) {
+  const estilo = validarEstilo(valor);
+  const numero = String(telefone || '').replace(/\D/g, '');
+  if (!empresaId || !numero) throw Object.assign(new Error('Número autorizado não encontrado.'), { status: 404 });
+  const database = getDB();
+  return database.transaction(() => {
+    const itens = listarIaServicePorTelefone(numero).filter(i => Number(i.empresaId) === Number(empresaId));
+    if (!itens.length) throw Object.assign(new Error('Número autorizado não encontrado nesta empresa.'), { status: 404 });
+    const stamp = new Date().toISOString();
+    for (const id of new Set(itens.map(i => i.platformIdentityId))) {
+      const atual = database.prepare('SELECT metadata_json FROM platform_whatsapp_identities WHERE empresa_id = ? AND id = ?').get(Number(empresaId), id);
+      const meta = parseJson(atual.metadata_json, {});
+      meta.iaService = { ...meta.iaService, estiloResposta: estilo };
+      database.prepare('UPDATE platform_whatsapp_identities SET metadata_json = ?, atualizado_em = ? WHERE empresa_id = ? AND id = ?')
+        .run(JSON.stringify(meta), stamp, Number(empresaId), id);
+    }
+    return estilo;
+  }).immediate();
+}
+
 // A Platform está instalada (tabelas de números autorizados existem)?
 // Usado pelo IA Service para distinguir "número saiu do cadastro" (revogar
 // acesso) de "Platform ausente" (listarIaServicePorTelefone também devolve []
@@ -233,4 +265,4 @@ function iaServicePlatformDisponivel() {
   return !!safeGet("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = 'platform_identity_roles'");
 }
 
-module.exports = { getAiConfig, getSearchConfig, getAgentConfig, listarIaServicePorTelefone, listarIaServicePorEmpresa, iaServicePlatformDisponivel, getConfigPorApelido };
+module.exports = { getAiConfig, getSearchConfig, getAgentConfig, listarIaServicePorTelefone, listarIaServicePorEmpresa, iaServicePlatformDisponivel, getConfigPorApelido, obterEstiloResposta, definirEstiloResposta };

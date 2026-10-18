@@ -168,6 +168,8 @@ Quando houver evidencias suficientes, a correcao proposta precisa ser acionavel.
 
 A primeira acao tecnica deve atacar a evidencia mais especifica do caso. Se houver mensagem de erro, stack trace, campo bloqueado, tela com estado incorreto ou excecao clara, use isso como trilha principal. Documentacao e parametros oficiais entram como apoio, nao como substituto da mensagem de erro observada.
 
+Antes de propor uma acao, confira as tentativas anteriores e seus resultados. Se ajustes, testes ou atualizacoes ja foram realizados e o sintoma persistiu, reconheca isso e nao os apresente novamente como primeiro passo. Uma nova verificacao precisa dizer qual evidencia nova ou lacuna concreta a diferencia da tentativa anterior. Se nao houver essa diferenca demonstravel e o material ja estiver com o fornecedor, acompanhar o retorno e um proximo passo valido; nao invente uma tarefa interna so para parecer acionavel. Codigo ou mensagem de erro identifica o sintoma, mas nao prova por si so uma configuracao incorreta ou a causa: explicite a evidencia que sustenta a conclusao ou mantenha a hipotese como hipotese.
+
 Se ainda faltar evidencia para corrigir com seguranca, seja especifico: informe qual arquivo, rotina, parametro, log, tela ou passo de reproducao falta. Nao peca evidencias genericas.
 
 Quando houver prints ou imagens, cite textos, campos, percentuais, botoes, mensagens ou estados visiveis na tela. Nao escreva apenas "as imagens mostram" sem dizer o que foi visto.

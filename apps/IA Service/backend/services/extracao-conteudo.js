@@ -87,6 +87,10 @@ function _detectarLinguagemPorConteudo(texto) {
     try { JSON.parse(texto); return 'json'; } catch (_) { /* não é JSON válido, segue tentando outros formatos */ }
   }
   if (/^\s*<\?xml|^\s*<[a-zA-Z]/.test(amostra)) return 'xml';
+  // TXT e extensões desconhecidas também passam por conteúdo. "function"
+  // isolado não distingue JavaScript de ADVPL.
+  if (/^\s*(?:(?:export|default|async)\s+)*function\s+\w*\s*\([^)]*\)\s*\{|^\s*(?:const|let|var)\s+\w+\s*=|=>/m.test(amostra)) return 'javascript';
+  if (/^\s*(?:async\s+)?def\s+\w+\s*\([^)]*\)\s*:/m.test(amostra)) return 'python';
   if (/\bFUNCTION\b|\bSTATIC\s+FUNCTION\b|::New\(\)/i.test(amostra)) return 'advpl';
   if (/^\s*\[\d{4}-\d{2}-\d{2}|^\s*\d{2}\/\d{2}\/\d{4}.*ERROR|EXCEPTION/im.test(amostra)) return 'log';
   return null;

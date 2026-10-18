@@ -14,6 +14,25 @@
 
 const consultorRepo = require('../repositories/consultor-repository');
 const usuariosDb = require('../../../IAHUB/backend/usuarios/database');
+const platformStore = require('../../../IAHUB/backend/platform-store');
+const { validarEstilo } = require('../../../IAHUB/backend/estilos-resposta');
+
+function obterEstiloResposta(empresaId, consultorId) {
+  const consultor = consultorId ? consultorRepo.getConsultor(empresaId, consultorId) : null;
+  return consultor?.ativo ? platformStore.obterEstiloResposta(empresaId, consultor.telefone) : 'ORIGINAL';
+}
+
+function salvarPreferencias(empresaId, consultorId, patch = {}) {
+  const consultor = consultorRepo.getConsultor(empresaId, consultorId);
+  if (!consultor?.ativo) throw Object.assign(new Error('Consultor ativo não encontrado nesta empresa.'), { status: 404 });
+  if (Object.hasOwn(patch, 'estiloResposta')) validarEstilo(patch.estiloResposta);
+  if (Object.hasOwn(patch, 'preAnaliseAutomatica') && patch.preAnaliseAutomatica !== null && typeof patch.preAnaliseAutomatica !== 'boolean') {
+    throw Object.assign(new Error('Preferência de pré-análise inválida.'), { status: 400 });
+  }
+  if (Object.hasOwn(patch, 'estiloResposta')) platformStore.definirEstiloResposta(empresaId, consultor.telefone, patch.estiloResposta);
+  if (Object.hasOwn(patch, 'preAnaliseAutomatica')) consultorRepo.definirPreferenciaPessoal(empresaId, consultorId, patch.preAnaliseAutomatica);
+  return { ...consultorRepo.getConsultor(empresaId, consultorId), estiloResposta: obterEstiloResposta(empresaId, consultorId) };
+}
 
 function criarConsultor(empresaId, dados) {
   if (dados.usuarioIdIahub) {
@@ -85,6 +104,8 @@ function excluirConsultor(empresaId, consultorId) {
 }
 
 module.exports = {
+  obterEstiloResposta,
+  salvarPreferencias,
   criarConsultor,
   getConsultor,
   getConsultorPorUsuario,

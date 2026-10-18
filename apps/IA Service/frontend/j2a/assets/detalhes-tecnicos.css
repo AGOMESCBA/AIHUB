@@ -1,0 +1,10 @@
+/* Usa o painel lateral e os botões do chat existentes. */
+.technical-markdown { overflow-wrap: anywhere; white-space: normal; }
+.technical-markdown pre { overflow: auto; padding: 12px; border: 1px solid var(--rt-line); border-radius: 7px; white-space: pre; }
+.technical-markdown code { font-family: 'Cascadia Code', 'Consolas', monospace; }
+.technical-markdown :not(pre) > code { white-space: pre-wrap; }
+.technical-markdown a { color: var(--accent, #2563eb); }
+.technical-markdown .technical-table { overflow-x: auto; }
+.technical-markdown table { border-collapse: collapse; width: 100%; }
+.technical-markdown th, .technical-markdown td { border: 1px solid var(--rt-line); padding: 8px; text-align: left; }
+.message-card [data-detalhes-tecnicos], .bubble [data-detalhes-tecnicos] { margin-top: 10px; font-size: 12px; }

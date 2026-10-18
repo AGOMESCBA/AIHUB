@@ -5,6 +5,7 @@
   const THEME_KEY = 'iaservice_j2a_theme';
   const $ = (id) => document.getElementById(id);
   let retornoPanel = null;
+  let detalhesTecnicos = null;
   let chatInterno = null;
 
   const state = {
@@ -472,6 +473,9 @@
   // dar F5). Mantem so token/preferencias de tema, que sao do dispositivo,
   // nao da sessao.
   function _resetEstadoDoChat() {
+    detalhesTecnicos?.close(false);
+    $('response-style-select').value = 'ORIGINAL';
+    $('response-style-select').disabled = true;
     retornoPanel?.clear();
     state.queue = [];
     state.risk = { consultores: [], chamados: [] };
@@ -537,6 +541,9 @@
 
   async function loadPreferences() {
     const toggle = $('pre-analysis-toggle');
+    const estilo = $('response-style-select');
+    const tokenDoPedido = state.token;
+    estilo.disabled = true;
     let pref;
     try {
       pref = await request(ext('/radar/minhas-preferencias'));
@@ -547,9 +554,13 @@
       toast(`Nao foi possivel carregar a preferencia de pre-analise: ${err.message}`);
       throw err;
     }
+    if (state.token !== tokenDoPedido) return;
     toggle.disabled = false;
     toggle.title = '';
     toggle.checked = pref.preAnaliseAutomatica !== false;
+    estilo.value = pref.estiloResposta || 'ORIGINAL';
+    estilo.dataset.salvo = estilo.value;
+    estilo.disabled = pref.consultorEncontrado === false;
     renderPreferenciaPadrao(pref);
     try {
       const config = await request(ext('/radar/config'));
@@ -586,6 +597,27 @@
       toast(enviar === null ? 'Voltou ao padrão do cadastro.' : 'Preferencia salva.');
     } catch (err) {
       toast(`Nao foi possivel salvar: ${err.message}`);
+    }
+  }
+
+  async function saveResponseStyle() {
+    const seletor = $('response-style-select');
+    const tokenDoPedido = state.token;
+    seletor.disabled = true;
+    try {
+      const pref = await request(ext('/radar/minhas-preferencias'), {
+        method: 'PUT', body: JSON.stringify({ estiloResposta: seletor.value }),
+      });
+      if (state.token !== tokenDoPedido) return;
+      seletor.value = pref.estiloResposta || 'ORIGINAL';
+      seletor.dataset.salvo = seletor.value;
+      toast('Estilo salvo para as próximas respostas.');
+    } catch (err) {
+      if (state.token !== tokenDoPedido) return;
+      seletor.value = seletor.dataset.salvo || 'ORIGINAL';
+      toast(`Não foi possível salvar o estilo: ${err.message}`);
+    } finally {
+      if (state.token === tokenDoPedido) seletor.disabled = false;
     }
   }
 
@@ -772,6 +804,7 @@
     const atendimentoConhecido = state.atendimentoIdPorChamado.get(String(ticket.id));
     if (atendimentoConhecido) state.concluidosNaoVistos.delete(atendimentoConhecido);
     state.selected = ticket;
+    detalhesTecnicos?.close(false);
     retornoPanel?.contextChanged();
     state.research = null;
     state.dossie = null;
@@ -957,7 +990,7 @@
   }
 
   function messageAttachments(m) {
-    return state.localAttachments.filter((a) => a.mensagemId != null && String(a.mensagemId) === String(m.id));
+    return state.localAttachments.filter((a) => [a.mensagemId, a.mensagemOrigemId].some(id => id != null && String(id) === String(m.id)));
   }
 
   // Analista rolando para cima para ler mensagens antigas nao deve ser
@@ -1036,7 +1069,7 @@
       const attachments = messageAttachments(m);
       const attachmentsHtml = attachments.length ? `
         <div class="message-attachments">${attachments.map((a) => `
-          <a class="message-attachment" href="${escapeHtml(ext(`/anexos/${encodeURIComponent(a.id)}/download`))}" target="_blank" rel="noopener">📎 ${escapeHtml(a.nome || a.nomeOriginal || 'Anexo')}</a>
+          <a class="message-attachment" href="${escapeHtml(ext(`/anexos/${encodeURIComponent(a.id)}/download`))}" data-download-name="${escapeHtml(a.nome || a.nomeOriginal || 'Anexo')}">📎 ${escapeHtml(a.nome || a.nomeOriginal || 'Anexo')}${a.anexoOriginalId ? ' — Correção proposta: validar antes de usar' : ''}</a>
         `).join('')}</div>
       ` : '';
       const avaliacaoHtml = assistant ? renderizarAvaliacaoHumana(m) : '';
@@ -1047,6 +1080,7 @@
             <div class="message-head"><strong>${escapeHtml(messageRole(m))}</strong><span>${escapeHtml(formatDateTime(messageTimestamp(m)))}</span></div>
             <div class="message-text">${escapeHtml(messageText(m))}</div>
             ${attachmentsHtml}
+            ${window.IaDetalhesTecnicos.botao(m, 'primary-button')}
             ${avaliacaoHtml}
           </div>
         </article>
@@ -1389,6 +1423,18 @@
   function trilhaEventoDetalhes(evento) {
     const d = evento.detalhes;
     if (!d) return '';
+    if (evento.tipo === 'resposta_tecnica_original' || evento.tipo === 'resposta_ajustada') {
+      const meta = evento.tipo === 'resposta_ajustada'
+        ? `<div class="summary-item"><span>Estilo / status</span><strong>${escapeHtml(d.estilo || '-')} · ${escapeHtml(d.statusHumanizacao || '-')}</strong></div>
+           <div class="summary-item"><span>Provider / modelo</span><strong>${escapeHtml(d.provider || '-')}${d.model ? ` · ${escapeHtml(d.model)}` : ''}</strong></div>
+           ${d.motivo ? `<div class="summary-item"><span>Motivo</span><strong>${escapeHtml(d.motivo)}</strong></div>` : ''}
+           <div class="summary-item"><span>Tokens adicionais (entrada / saída / total)</span><strong>${d.consumoAdicional?.entrada ?? '-'} / ${d.consumoAdicional?.saida ?? '-'} / ${d.consumoAdicional?.total ?? '-'}</strong></div>` : '';
+      const rejeicoes = (d.validacaoPreservacao?.falhas || []).map(f =>
+        `<div class="knowledge-card"><h3>${escapeHtml(f.codigo)}</h3><p>${escapeHtml(f.detalhe || '')}</p><pre class="trail-response-text">${escapeHtml((f.informacoes || []).join('\n'))}</pre></div>`).join('');
+      const candidata = d.respostaCandidata && d.validacaoPreservacao?.aprovado === false
+        ? `<details><summary>Candidata rejeitada — não entregue ao analista</summary><pre class="trail-response-text">${escapeHtml(d.respostaCandidata)}</pre></details>` : '';
+      return meta + rejeicoes + candidata + `<div class="knowledge-card"><pre class="trail-response-text">${escapeHtml(d.conteudo || '')}</pre></div>`;
+    }
     if (evento.tipo === 'processamento_anexos') {
       const linhas = [...(d.processados || []).map((p) => `<div class="summary-item"><span>${escapeHtml(p.nome)}</span><strong>${escapeHtml(p.status)}${p.enviadoComoImagem ? ' · imagem' : ''}</strong></div>`),
         ...(d.omitidos || []).map((o) => `<div class="summary-item"><span>${escapeHtml(o.nome)}</span><strong>Omitido — ${escapeHtml(o.motivo || o.status)}</strong></div>`)];
@@ -1485,7 +1531,7 @@
       return `
         <div class="trail-execution">
           <button type="button" class="trail-execution-head" data-trail-toggle="${execucao.execucaoId}">
-            <span class="trail-execution-title">Execução investigativa #${state.trilha.length - idx} — ${escapeHtml(formatDateTime(execucao.criadoEm))}</span>
+            <span class="trail-execution-title">${execucao.origem === 'conversa' ? 'Conversa com a IA' : `Execução investigativa #${state.trilha.length - idx}`} — ${escapeHtml(formatDateTime(execucao.criadoEm))}</span>
             <span class="badge ${escapeHtml(badge)}">${escapeHtml(execucao.statusLabel)}</span>
           </button>
           <div class="trail-execution-body" ${aberta ? '' : 'hidden'}>${eventosHtml}</div>
@@ -1951,6 +1997,7 @@
   }
 
   function setPanel(panel) {
+    if (panel !== 'conversation') detalhesTecnicos?.close(false);
     state.activePanel = panel;
     document.querySelectorAll('[data-panel-tab]').forEach((btn) => btn.classList.toggle('active', btn.dataset.panelTab === panel));
     ['conversation', 'evidence', 'knowledge', 'trail', 'details', 'risk'].forEach((name) => {
@@ -2232,6 +2279,7 @@
       saveAutoRefreshConfig();
     });
     $('pre-analysis-toggle').addEventListener('change', () => savePreferences());
+    $('response-style-select').addEventListener('change', saveResponseStyle);
     $('pre-analysis-padrao-btn').addEventListener('click', () => savePreferences(null));
     $('queue-list').addEventListener('click', (event) => {
       const btn = event.target.closest('[data-ticket-id]');
@@ -2346,6 +2394,8 @@
     // "Avaliar investigação"/"editar" e reconstruido a cada renderMessages,
     // mesmo padrao ja usado para data-ticket-id/data-open-url).
     $('messages').addEventListener('click', (event) => {
+      const download = event.target.closest('.message-attachment');
+      if (download) { event.preventDefault(); openAttachment(download.href, download.dataset.downloadName); return; }
       const btn = event.target.closest('[data-avaliacao-abrir]');
       if (btn) abrirModalAvaliacao(btn.dataset.avaliacaoAbrir);
     });
@@ -2357,13 +2407,17 @@
     $('avaliacao-modal-salvar').addEventListener('click', salvarAvaliacaoInvestigacao);
   }
 
-  async function openAttachment(url) {
+  async function openAttachment(url, nomeDownload = null) {
     try {
       const res = await fetch(url, { headers: apiHeaders(false) });
       const body = res.ok ? null : await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.error || `Erro ${res.status}`);
       const blobUrl = URL.createObjectURL(await res.blob());
-      window.open(blobUrl, '_blank', 'noopener');
+      if (nomeDownload) {
+        const a = document.createElement('a');
+        a.href = blobUrl; a.download = nomeDownload;
+        document.body.append(a); a.click(); a.remove();
+      } else window.open(blobUrl, '_blank', 'noopener');
       setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
     } catch (err) {
       toast(`Nao foi possivel abrir o anexo: ${err.message}`);
@@ -2396,6 +2450,13 @@
       },
       onSuccess: async () => { await Promise.allSettled([loadMessages(), loadSoftAttachments(state.selected.id)]); },
     });
+    detalhesTecnicos = window.IaDetalhesTecnicos.mount({
+      getContext: () => state.atendimentoId ? `${state.token}:${state.atendimentoId}` : null,
+      getMessage: id => state.messages.find(m => String(m.id) === String(id) && (!m.atendimentoId || String(m.atendimentoId) === String(state.atendimentoId))),
+      alignTo: () => $('case-view'),
+      onOpen: () => { retornoPanel.close(); return $('retorno-btn').getAttribute('aria-expanded') !== 'true'; },
+    });
+    $('retorno-btn').addEventListener('click', () => detalhesTecnicos.close(false), true);
     applyTheme(localStorage.getItem(THEME_KEY) || 'system');
   window.IaTabExport.mount(document.querySelector('.case-actions'), () => ({
     element: $(`panel-${state.activePanel}`),

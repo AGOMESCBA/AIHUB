@@ -10,6 +10,8 @@ const mensagemRepo = require('../repositories/mensagem-repository');
 const anexoRepo = require('../repositories/anexo-repository');
 const aiConfigService = require('./ai-config-service');
 const aiProviderClient = require('./ai-provider-client');
+const respostaHumanizada = require('./resposta-humanizada-service');
+const consultorService = require('./consultor-service');
 const promptBuilder = require('./prompt-builder');
 const versaoFonteService = require('./versao-fonte-service');
 const respostaOperacionalService = require('./resposta-operacional-service');
@@ -72,7 +74,7 @@ function _extrairNivelConfianca(texto) {
 
 function _extrairFonteCorrigido(secoes) {
   if (!secoes?.['Fonte corrigido']) return null;
-  const blocoCodigo = secoes['Fonte corrigido'].match(/```[a-zA-Z]*\n([\s\S]*?)```/);
+  const blocoCodigo = secoes['Fonte corrigido'].match(/```[^\r\n`]*\r?\n([\s\S]*?)```/);
   return blocoCodigo ? blocoCodigo[1] : null;
 }
 
@@ -571,9 +573,13 @@ function _garantirChamadoNaoEncerrado(empresaId, atendimento) {
   }
 }
 
-async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anexoIds = [], automatico = false, anexosComoContexto = false, forcarPesquisa = false, analistaAtualNome = null, origemAcao: origemAcaoInformada = null }) {
+async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, consultorId = null, anexoIds = [], automatico = false, anexosComoContexto = false, forcarPesquisa = false, analistaAtualNome = null, origemAcao: origemAcaoInformada = null }) {
   const atendimento = mensagemService.getAtendimento(empresaId, atendimentoId);
   if (!atendimento) throw new Error('Atendimento não encontrado nesta empresa.');
+  // Turno manual usa a identidade autenticada, nunca a preferência do dono
+  // de outro atendimento. Pré-análise usa o consultor vinculado na abertura.
+  const consultorDoTurno = automatico ? atendimento.consultorId
+    : consultorId || (usuarioId ? consultorService.getConsultorPorUsuario(empresaId, usuarioId)?.id : null);
   // Chamado encerrado na origem: somente consulta — nenhuma interacao, pesquisa
   // ou chamada de IA (vale para botao, texto livre e pre-analise automatica).
   _garantirChamadoNaoEncerrado(empresaId, atendimento);
@@ -601,6 +607,12 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
     historico = mensagemRepo.listarMensagens(empresaId, atendimentoId)
       .filter(m => m.id !== mensagemUsuario.id); // histórico ANTERIOR a este turno
   }
+
+  // A humanização é apresentação. Nos próximos turnos, pesquisa e Context
+  // Engine continuam recebendo a resposta técnica completa, sem alterar o
+  // conteúdo persistido/exibido ao analista.
+  historico = historico.map(m => m.papel === 'assistant' && typeof m.diagnostico?.humanizacao?.respostaOriginal === 'string'
+    ? { ...m, conteudo: m.diagnostico.humanizacao.respostaOriginal } : m);
 
   _garantirDossieSeguro(empresaId, atendimentoId, mensagemUsuario);
 
@@ -657,8 +669,13 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
           keysClassificacao, cfgClassificacao, promptBuilder.SYSTEM_PROMPT, promptCurto, [],
           { maxTokens: tipoTurno === 'fora_de_escopo' ? 200 : 500, timeoutMs: 20000 },
         );
+        const comunicacao = await respostaHumanizada.prepararResposta({
+          empresaId, consultorId: consultorDoTurno, respostaOriginal: resultadoCurto.texto, aprovado: !resultadoCurto.truncado,
+        });
+        const { respostaFinal, ...auditoriaHumanizacao } = comunicacao;
         return mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
-          papel: 'assistant', conteudo: resultadoCurto.texto, usuarioId: null,
+          papel: 'assistant', conteudo: respostaFinal, usuarioId: null,
+          diagnostico: comunicacao.estilo !== 'ORIGINAL' || comunicacao.status === 'fallback' ? { humanizacao: auditoriaHumanizacao } : null,
           provider: resultadoCurto.provider, model: resultadoCurto.model,
           respostaCurta: tipoTurno,
         });
@@ -1245,10 +1262,17 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, anex
   const nivelConfianca = _extrairNivelConfianca(textoFinal);
   const fonteCorrigidoTexto = _extrairFonteCorrigido(secoes);
 
+  const comunicacao = await respostaHumanizada.prepararResposta({
+    empresaId, consultorId: consultorDoTurno, respostaOriginal: textoFinal,
+    aprovado: qualityGate?.aprovado === true && !revisaoNecessariaQualityGate && !resultado.truncado,
+    avaliacaoTecnica: qualityGate,
+  });
+  const { respostaFinal, ...auditoriaHumanizacao } = comunicacao;
+
   const mensagemAssistente = mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
     papel: 'assistant',
-    conteudo: textoFinal,
-    diagnostico: secoes,
+    conteudo: respostaFinal,
+    diagnostico: comunicacao.estilo !== 'ORIGINAL' || comunicacao.status === 'fallback' ? { ...secoes, humanizacao: auditoriaHumanizacao } : secoes,
     nivelConfianca,
     provider: resultado.provider,
     model: resultado.model,
