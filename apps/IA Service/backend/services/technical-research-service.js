@@ -1020,6 +1020,28 @@ function _rankearResultados(resultados, plano) {
   }).sort((a, b) => b.rankingScore - a.rankingScore || Number(b.oficial) - Number(a.oficial));
 }
 
+// Central de Atendimento TOTVS (Zendesk): a página HTML do artigo é bloqueada
+// por proteção anti-bot (HTTP 403 "Just a moment...", confirmado em 2026-10 no
+// chamado #036765), mas o mesmo artigo público é servido em JSON pela API do
+// Help Center. Lê o corpo por lá; se falhar, segue o caminho normal da página.
+const ARTIGO_CENTRAL_TOTVS = /^https:\/\/centraldeatendimento\.totvs\.com\/hc\/([a-z]{2}(?:-[a-z]{2})?)\/articles\/(\d+)/i;
+function _urlApiArtigoCentralTotvs(url) {
+  const m = String(url || '').match(ARTIGO_CENTRAL_TOTVS);
+  return m ? `https://centraldeatendimento.totvs.com/api/v2/help_center/${m[1].toLowerCase()}/articles/${m[2]}.json` : null;
+}
+async function _lerArtigoCentralTotvs(url) {
+  const api = _urlApiArtigoCentralTotvs(url);
+  if (!api) return null;
+  try {
+    const pagina = await safeFetch.fetchTextoSeguro(api, { contentTypes: ['application/json'] });
+    const artigo = JSON.parse(pagina.raw)?.article;
+    if (!artigo?.body) return null;
+    return { ...pagina, url: redigirUrl(artigo.html_url || url), raw: `<h1>${artigo.title || ''}</h1>${artigo.body}` };
+  } catch (_) {
+    return null;
+  }
+}
+
 function _selecionarTrechoRelevante(raw, plano, { maxChars = 2200, janela = 500 } = {}) {
   const texto = _limparHtml(raw);
   if (texto.length <= maxChars) return { trecho: redigirTexto(texto), omitido: 0, motivo: 'pagina curta' };
@@ -1101,7 +1123,7 @@ async function _abrirResultados(resultados, limite = 4, plano = {}, opts = {}) {
     try {
       let pagina;
       try {
-        pagina = await safeFetch.fetchTextoSeguro(r[RAW_URL] || r.url);
+        pagina = (await _lerArtigoCentralTotvs(r[RAW_URL] || r.url)) || await safeFetch.fetchTextoSeguro(r[RAW_URL] || r.url);
       } catch (err) {
         const oficial = _fonteOficial(r[RAW_URL] || r.url);
         if (!oficial || !/limite de download/i.test(String(err.message || ''))) throw err;
@@ -1579,6 +1601,8 @@ async function pesquisarParaChamado(empresaId, chamadoId, extras = {}) {
 }
 
 module.exports = {
+  _urlApiArtigoCentralTotvs,
+  _lerArtigoCentralTotvs,
   PERFIS,
   detectarDominio,
   montarConsultas,

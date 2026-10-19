@@ -476,6 +476,31 @@ function _adicionarLimitePesquisaSemPaginaLida(texto, pesquisa) {
   return `${s}\n\nA pesquisa externa retornou links, mas nenhuma pagina foi lida com conteudo tecnico utilizavel nesta execucao; por isso, a orientacao acima usa as evidencias internas do chamado e nao documentacao externa como confirmacao.`;
 }
 
+// Fontes da pesquisa externa entram na resposta Técnica pelo código, não pela
+// memória do modelo: título, link e o que aconteceu com cada uma (achado real,
+// chamado #036765: a pesquisa abriu o artigo oficial da TOTVS, mas a resposta
+// não citou o link). A Objetiva herda o bloco, e o validador de preservação
+// exige que os links continuem lá.
+function _anexarFontesConsultadas(texto, pesquisa) {
+  const s = String(texto || '').trim();
+  const paginas = Array.isArray(pesquisa?.paginasLidas) ? pesquisa.paginasLidas : [];
+  const vistos = new Set();
+  const itens = [];
+  for (const p of paginas) {
+    const url = String(p?.url || '').trim();
+    if (!/^https?:\/\//i.test(url) || /\/\/(?:www\.)?google\.[a-z.]+\/search/i.test(url) || vistos.has(url)) continue;
+    vistos.add(url);
+    const situacao = p.status === 'lida' ? 'conteúdo lido'
+      : p.status === 'reutilizada' ? 'conteúdo lido em pesquisa anterior'
+      : `conteúdo não recuperado${p.erro ? ` (${String(p.erro).replace(/\s+/g, ' ').slice(0, 80)})` : ''}`;
+    const titulo = String(p.titulo || p.dominio || 'Fonte').replace(/\s+/g, ' ').trim().slice(0, 160);
+    itens.push(`- ${titulo} — ${url} — ${situacao}`);
+    if (itens.length >= 8) break;
+  }
+  if (!itens.length) return s;
+  return `${s}\n\nFontes consultadas na pesquisa:\n${itens.join('\n')}`;
+}
+
 function _prepararTextoResposta(texto, pesquisa) {
   return _adicionarLimitePesquisaSemPaginaLida(_limparBastidoresRetryTexto(texto), pesquisa);
 }
@@ -776,6 +801,19 @@ Na dúvida entre os dois, responda "investigacao" (nunca deixe de investigar uma
  * inválido) devolve 'investigacao' — o comportamento padrão já existente,
  * nunca pior do que o que já estava em produção antes desta função existir.
  */
+// Contexto da pergunta curta (pergunta de processo / fora de escopo). A última
+// resposta da IA vai inteira, com links e fontes: cortada em 600 caracteres, a
+// IA não viu o link que ela mesma tinha enviado e inventou uma justificativa
+// (achado real, chamado #036765). As demais mensagens seguem resumidas para a
+// pergunta curta continuar barata.
+function _historicoParaPerguntaCurta(historico) {
+  const recentes = (Array.isArray(historico) ? historico : []).slice(-8);
+  const ultimaDaIA = recentes.map(m => m.papel).lastIndexOf('assistant');
+  return recentes
+    .map((m, i) => `[${m.papel === 'user' ? 'Analista' : 'Você'}]: ${redigirValor(String(m.conteudo || '').slice(0, i === ultimaDaIA ? 8000 : 600))}`)
+    .join('\n');
+}
+
 async function _classificarTurno(texto, { keys, cfg }) {
   if (!texto || texto.length > 400) return 'investigacao';
   try {
@@ -911,9 +949,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       // aplica a redacao no fluxo principal) — sem isso, CPF/senha/token do
       // historico iam em texto claro para o provider sempre que o turno fosse
       // classificado como pergunta_processo (achado real, homologacao 2026-10).
-      const historicoRecente = historico.slice(-8)
-        .map(m => `[${m.papel === 'user' ? 'Analista' : 'Você'}]: ${redigirValor(String(m.conteudo || '').slice(0, 600))}`)
-        .join('\n');
+      const historicoRecente = _historicoParaPerguntaCurta(historico);
       // fora_de_escopo: resposta curta que não reabre o chamado (2026-10,
       // pedido do usuário: pergunta de clima/data gerava resposta longa
       // reabrindo o chamado inteiro). Este atalho não grava execução de
@@ -921,7 +957,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       // resposta-operacional-service.execucaoAvaliavel).
       const instrucaoFinal = tipoTurno === 'fora_de_escopo'
         ? 'Esta pergunta não tem relação com o chamado. Responda em no máximo 2 frases: se souber responder com segurança (sem inventar dados em tempo real, que você não tem), responda; caso contrário, diga que não tem como consultar isso aqui. Não reabra, não resuma e não repita nada do chamado; apenas convide o analista a seguir com o chamado quando quiser.'
-        : 'Responda SOMENTE essa pergunta, de forma direta e breve (poucas frases). Não reabra nem repita o diagnóstico técnico já dado nas mensagens anteriores.';
+        : 'Responda SOMENTE essa pergunta, de forma direta e breve (poucas frases). Não reabra nem repita o diagnóstico técnico já dado nas mensagens anteriores. Use apenas o contexto acima: se a resposta estiver nele (por exemplo, um link ou fonte já enviado), aponte-a; se não estiver, diga claramente que não tem essa informação. Nunca invente justificativa sobre o seu próprio comportamento ou sobre o que estava disponível em mensagens anteriores.';
       const promptCurto = `## Contexto recente da conversa\n${historicoRecente}\n\n## Pergunta atual do analista\n${redigirValor(texto)}\n\n${instrucaoFinal}`;
       try {
         const resultadoCurto = await aiProviderClient.chamarIA(
@@ -1525,6 +1561,10 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     ? `${resultado.texto}\n\n⚠️ *Resposta cortada pelo limite de tamanho da IA — peça para "continuar" ou reformule de forma mais objetiva.*`
     : resultado.texto;
 
+  // Depois do Quality Gate (não altera o que ele avaliou) e fora da resposta
+  // bloqueada por ele.
+  if (!revisaoNecessariaQualityGate) textoFinal = _anexarFontesConsultadas(textoFinal, pesquisaTecnica);
+
   let secoes = _extrairSecoes(textoFinal);
   let nivelConfianca = _extrairNivelConfianca(textoFinal);
   const fonteCorrigidoTexto = _extrairFonteCorrigido(secoes);
@@ -1682,6 +1722,8 @@ async function processarPreAnalise(empresaId, atendimentoId, { anexoIds = [] } =
 }
 
 module.exports = {
+  _anexarFontesConsultadas,
+  _historicoParaPerguntaCurta,
   processarTurno,
   processarPreAnalise,
   _criarPreparadorPorCandidato,
