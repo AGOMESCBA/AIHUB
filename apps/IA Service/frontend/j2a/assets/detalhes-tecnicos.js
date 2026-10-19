@@ -1,11 +1,21 @@
 (function () {
   'use strict';
   const escape = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Texto técnico completo de uma resposta da IA. Com a Objetiva aplicada, é a
+  // Técnica guardada; quando o analista já vê a Técnica (estilo Técnica ou
+  // Objetiva rejeitada), é o próprio conteúdo. Fica sem botão só a análise
+  // bloqueada pelo Quality Gate e o registro antigo de Objetiva que não guardou
+  // a Técnica (não há o que mostrar sem apresentar o texto humanizado como técnico).
+  function textoTecnico(m) {
+    if (m?.papel !== 'assistant' || !m.id || m.respostaOperacional?.qualityGateBloqueado) return null;
+    if (typeof m.conteudo !== 'string' || !m.conteudo.trim()) return null;
+    const h = m.diagnostico?.humanizacao;
+    if (typeof h?.respostaOriginal === 'string' && h.respostaOriginal.trim()) return h.respostaOriginal;
+    if (h?.status === 'aplicada' && h.estilo !== 'ORIGINAL') return null;
+    return m.conteudo;
+  }
   function disponivel(m) {
-    const h = m?.diagnostico?.humanizacao;
-    return m?.papel === 'assistant' && !!m.id && h?.status === 'aplicada' && h.estilo !== 'ORIGINAL'
-      && typeof h.respostaOriginal === 'string' && !!h.respostaOriginal.trim()
-      && typeof m.conteudo === 'string' && !!m.conteudo.trim() && !m.respostaOperacional?.qualityGateBloqueado;
+    return !!textoTecnico(m);
   }
   function botao(m, classe) {
     return disponivel(m) ? `<button type="button" class="${escape(classe)}" data-detalhes-tecnicos="${escape(m.id)}" aria-expanded="false" title="Detalhes Técnicos"><span aria-hidden="true">📄</span> Detalhes Técnicos</button>` : '';
@@ -103,9 +113,9 @@
       if (onOpen?.() === false) return;
       close(false);
       origem = botao; contexto = atual;
-      textoAtual = m.diagnostico.humanizacao.respostaOriginal; resetCopia();
+      textoAtual = textoTecnico(m); resetCopia();
       conteudo.innerHTML = markdown(textoAtual);
-      painel.querySelector('[data-technical-status]').hidden = m.respostaCurta !== null || m.diagnostico.humanizacao.aprovacaoTecnica?.aprovado !== true;
+      painel.querySelector('[data-technical-status]').hidden = m.respostaCurta !== null || m.diagnostico?.humanizacao?.aprovacaoTecnica?.aprovado !== true;
       painel.hidden = false;
       document.body.classList.add('retorno-open');
       origem.setAttribute('aria-expanded', 'true');

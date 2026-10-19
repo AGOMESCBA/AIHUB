@@ -35,6 +35,10 @@ for (const tela of ['j2a', 'radar-externo']) for (const width of [1440, 390]) {
     mensagens.push(mensagem('fallback', 'NATURAL', 'fallback'));
     const semOriginal = mensagem('sem-original'); delete semOriginal.diagnostico.humanizacao.respostaOriginal; mensagens.push(semOriginal);
     const historica = mensagem('historica'); delete historica.diagnostico.humanizacao.aprovacaoTecnica; mensagens.push(historica);
+    // Resposta entregue já como Técnica (estilo Técnica): sem humanização gravada.
+    mensagens.push({ id: 'tecnica-pura', papel: 'assistant', atendimentoId: 'at-a', criadoEm: '2026-10-18T12:00:00Z', conteudo: 'Resposta técnica pura, sem humanização.', respostaCurta: null, diagnostico: null, respostaOperacional: { avaliavel: false } });
+    // Análise bloqueada pelo Quality Gate: não há Técnica válida para mostrar.
+    const bloqueada = mensagem('bloqueada'); bloqueada.respostaOperacional = { avaliavel: false, qualityGateBloqueado: true }; mensagens.push(bloqueada);
     await page.route('**/api/ia-service-externo/**', async route => {
       const req = route.request(), p = new URL(req.url()).pathname;
       requests.push({ p, method: req.method(), token: req.headers()['x-sessao-externa'] });
@@ -67,7 +71,11 @@ for (const tela of ['j2a', 'radar-externo']) for (const width of [1440, 390]) {
       }
       const botoes = page.locator('[data-detalhes-tecnicos]');
       await botoes.first().waitFor();
-      assert.equal(await botoes.count(), 4);
+      // Toda resposta da IA tem o botão (Objetiva, Técnica, Objetiva rejeitada),
+      // menos a bloqueada pelo Quality Gate e a Objetiva antiga sem Técnica guardada.
+      assert.equal(await botoes.count(), 7);
+      for (const id of ['m3', 'fallback', 'tecnica-pura']) assert.equal(await page.locator(`[data-detalhes-tecnicos="${id}"]`).count(), 1, `${id} tem botão`);
+      for (const id of ['sem-original', 'bloqueada']) assert.equal(await page.locator(`[data-detalhes-tecnicos="${id}"]`).count(), 0, `${id} sem botão`);
       assert.equal(await page.getByText(AVISO).count(), 1, 'aviso de correção sem arquivo aparece uma vez');
       assert.ok(await page.getByText(AVISO).isVisible());
       assert.equal(await page.locator('.injetado').count(), 0, 'HTML do aviso não é interpretado');
@@ -88,6 +96,11 @@ for (const tela of ['j2a', 'radar-externo']) for (const width of [1440, 390]) {
         await painel.getByRole('button', { name: 'Fechar Detalhes Técnicos' }).click();
         assert.equal(await painel.isVisible(), false);
       }
+      // Resposta já entregue como Técnica: o painel mostra o próprio texto.
+      await page.locator('[data-detalhes-tecnicos="tecnica-pura"]').click();
+      await painel.waitFor({ state: 'visible' });
+      assert.ok((await painel.innerText()).includes('Resposta técnica pura, sem humanização.'));
+      await painel.getByRole('button', { name: 'Fechar Detalhes Técnicos' }).click();
       assert.equal(requests.some(r => /investigar|\/retorno|pesquisar/.test(r.p)), false, 'abrir detalhes não processa nem busca retorno externo');
       if (tela === 'j2a') {
         const download = page.waitForEvent('download');
