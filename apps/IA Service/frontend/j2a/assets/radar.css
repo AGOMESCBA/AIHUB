@@ -1119,7 +1119,7 @@ button.loading .loader { display: block; }
 .message-source-warnings p + p { margin-top: 4px; }
 .composer {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  grid-template-columns: 40px auto minmax(0, 1fr) 40px;
   align-items: end;
   gap: 8px;
   padding: 10px 16px;
@@ -1163,6 +1163,17 @@ button.loading .loader { display: block; }
   font-size: 16px;
   display: grid;
   place-items: center;
+}
+/* Retorno ao SoftExpert no rodapé: mantém a aparência do botão (fundo branco,
+   cantos levemente arredondados) e fica afastado do Anexar (8px do gap + 12px). */
+.composer > .retorno-se-button {
+  width: 40px;
+  height: 40px;
+  margin-left: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  color: inherit;
 }
 
 .section-stack { padding: 12px 16px; display: grid; gap: 10px; }

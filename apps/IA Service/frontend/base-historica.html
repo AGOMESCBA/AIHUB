@@ -270,7 +270,35 @@
 <script src="/js/auth.js"></script>
 <script src="/app/ia-service/js/sidebar.js"></script>
 <script>
-  const impState = { rows: [], sortField: 'criadoEm', sortDir: 'desc', destaqueId: null };
+  const impState = { rows: [], sortField: 'criadoEm', sortDir: 'desc', destaqueId: null, operacaoLocal: false };
+
+  // Enquanto uma Importação de Período ou Reimportação roda, as demais ações
+  // da barra ficam desabilitadas (só "Atualizar tela" continua livre). Uma
+  // linha "executando" sem atividade há mais de 20 min é tratada como
+  // abandonada (ex.: servidor reiniciado), para não travar a tela para sempre.
+  const BOTOES_TRAVAVEIS_IMPORTACAO = ['btn-importacao-inicial', 'btn-reimportar-zero', 'btn-sincronizar-agora', 'btn-diagnosticar-periodo', 'btn-apagar'];
+  const INATIVIDADE_MAXIMA_MS = 20 * 60 * 1000;
+  function importacaoEmAndamento() {
+    if (impState.operacaoLocal) return true;
+    return impState.rows.some(i => {
+      // full = Importação de Período/Reimportação; incremental = Sincronizar.
+      if (!['full', 'incremental'].includes(i.tipo) || !['pendente', 'executando'].includes(i.status)) return false;
+      const ultima = Date.parse(i.atualizadoEm || i.inicioEm || i.criadoEm || '');
+      return Number.isNaN(ultima) || (Date.now() - ultima) < INATIVIDADE_MAXIMA_MS;
+    });
+  }
+  function aplicarTravaImportacao() {
+    const travado = importacaoEmAndamento();
+    for (const id of BOTOES_TRAVAVEIS_IMPORTACAO) {
+      const btn = document.getElementById(id);
+      if (!btn) continue;
+      // Um botão em "carregando" já está desabilitado por setButtonLoading.
+      btn.disabled = travado || btn.dataset.carregando === '1';
+      btn.title = travado ? 'Aguarde o fim da importação em andamento.' : '';
+    }
+    if (travado) document.getElementById('apagar-dropdown')?.classList.remove('open');
+    document.querySelectorAll('[data-acao-retomar]').forEach(b => { b.disabled = travado; });
+  }
 
   // Ícones SVG inline (stroke="currentColor" — herdam a cor do texto do botão,
   // inclusive em .btn-danger-soft). Texto puro sem ícone fica "feio" em botões
@@ -325,8 +353,12 @@
     const btn = document.getElementById(id);
     if (!btn) return;
     if (!btn.dataset.textoOriginal) btn.dataset.textoOriginal = btn.textContent;
+    btn.dataset.carregando = loading ? '1' : '0';
     btn.disabled = !!loading;
     btn.textContent = loading ? textoLoading : btn.dataset.textoOriginal;
+    // Ao terminar de "carregar", a importação disparada continua rodando em
+    // background: o botão só volta quando ela acabar.
+    aplicarTravaImportacao();
   }
   function totaisImportacao(i) {
     return Number(i?.registrosLidos || 0) + Number(i?.posicionamentosLidos || 0);
@@ -751,11 +783,13 @@
   async function iniciarImportacao() {
     hideError();
     hideInfo();
+    if (importacaoEmAndamento()) return;
+    impState.operacaoLocal = true;
     setButtonLoading('btn-importacao-inicial', true, 'Iniciando...');
     try {
       await dispararImportacaoSelecionada();
     } catch (err) { showError('Não foi possível iniciar a importação: ' + err.message); }
-    finally { setButtonLoading('btn-importacao-inicial', false); }
+    finally { impState.operacaoLocal = false; setButtonLoading('btn-importacao-inicial', false); }
   }
 
   async function sincronizarIncremental() {
@@ -811,6 +845,8 @@
     const fim = dataParaYyyymmdd(document.getElementById('importar-fim').value);
     if (!confirm(`Reimportar do zero a fonte "${fonteNome}"?\n\nIsso apaga as importações anteriores, os chamados/posicionamentos históricos e os atendimentos do Radar criados a partir dessa fonte, incluindo respostas, pesquisas e dossiês antigos da IA. Depois inicia uma nova importação do período ${inicio} a ${fim}.`)) return;
 
+    if (importacaoEmAndamento()) return;
+    impState.operacaoLocal = true;
     setButtonLoading('btn-reimportar-zero', true, 'Reimportando...');
     mostrarOperacaoEmAndamento('Zerando a base antes de reimportar…');
     try {
@@ -822,6 +858,7 @@
     } catch (err) {
       showError('Não foi possível reimportar do zero: ' + err.message);
     } finally {
+      impState.operacaoLocal = false;
       setButtonLoading('btn-reimportar-zero', false);
     }
   }
@@ -847,12 +884,13 @@
           Tempo: ${escapeHtml(formatarDuracao(i.inicioEm || i.criadoEm, ['pendente', 'executando'].includes(i.status) ? null : (i.terminoEm || i.atualizadoEm)))} · Início: ${escapeHtml(formatarDataHora(i.inicioEm || i.criadoEm))}
           ${i.mensagemErro ? `<br><span style="color:var(--error-text)">${escapeHtml(i.mensagemErro)}</span>` : ''}
           <div style="margin-top:6px;display:flex;gap:8px">
-            ${i.status === 'falhou' || i.status === 'interrompido' ? `<button class="btn btn-ghost" type="button" onclick="retomarImportacao('${i.fonteId}','${i.id}')">Retomar</button>` : ''}
+            ${i.status === 'falhou' || i.status === 'interrompido' ? `<button class="btn btn-ghost" type="button" data-acao-retomar onclick="retomarImportacao('${i.fonteId}','${i.id}')">Retomar</button>` : ''}
             ${Number(i.registrosErro) > 0 ? `<button class="btn btn-ghost btn-danger-soft" type="button" onclick="verErrosImportacao('${i.id}')">Ver erros (${i.registrosErro})</button>` : ''}
           </div>
         </td>
       </tr>
     `).join('');
+    aplicarTravaImportacao();
   }
 
   function _linhaInconsistencia(inc) {

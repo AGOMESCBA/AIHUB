@@ -12,43 +12,51 @@
     .sidebar-logo .logo-icon { background:var(--accent) !important; }
     .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
     .page-title { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
-    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px;max-width:70ch; }
-    .page-head { margin-bottom:16px; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+    .page-head { margin-bottom:12px; }
     .error-banner { display:none;background:var(--bg-card);color:var(--error);border:1px solid var(--error);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px; }
 
-    .mon-stack { display:flex;flex-direction:column;gap:14px; }
-    .refresh-bar { display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 14px; }
+    .mon-stack { display:flex;flex-direction:column;gap:10px; }
+    .refresh-bar { display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:8px 12px; }
+    .refresh-controls, .monitor-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .refresh-controls { margin-left:auto; }
+    .refresh-bar .btn { white-space:nowrap; }
+    .refresh-bar .filters { flex:1 1 560px; }
+    #btn-resumo svg { transition:transform .2s; }
+    #btn-resumo[aria-expanded="false"] svg { transform:rotate(180deg); }
+    #btn-situacao[hidden], .kpis[hidden] { display:none; }
+    .grid-status { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
     .live { display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-md); }
     .pulse { width:9px;height:9px;border-radius:50%;background:var(--success);position:relative;flex:none; }
     .pulse::after { content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--success);opacity:.5;animation:mon-ping 1.8s infinite; }
     .refresh-bar.paused .pulse { background:var(--text-lo); }
     .refresh-bar.paused .pulse::after { display:none; }
     @keyframes mon-ping { 0%{transform:scale(.6);opacity:.6} 100%{transform:scale(1.5);opacity:0} }
-    .ring { width:24px;height:24px;transform:rotate(-90deg);flex:none; }
+    .ring { width:18px;height:18px;transform:rotate(-90deg);flex:none; }
     .ring circle { fill:none;stroke-width:3; }
     .ring .bg { stroke:var(--border); }
     .ring .fg { stroke:var(--accent);stroke-linecap:round;transition:stroke-dashoffset 1s linear; }
     .refresh-bar label { font-size:12.5px;color:var(--text-md);display:flex;align-items:center;gap:6px; }
     .refresh-bar select { width:auto;padding:5px 8px;font-size:12.5px; }
-    .spacer { flex:1; }
     .stamp { font-size:12px;color:var(--text-lo);font-variant-numeric:tabular-nums; }
     #btn-refresh.girando svg { animation:mon-spin .7s linear; }
     @keyframes mon-spin { to { transform:rotate(360deg); } }
 
-    .kpis { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px; }
-    .kpi { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:2px;cursor:pointer;transition:var(--transition);text-align:left;font:inherit;color:var(--text-hi); }
+    .kpis { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px; }
+    .kpi { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 8px;cursor:pointer;transition:var(--transition);text-align:left;font:inherit;color:var(--text-hi); }
     .kpi:hover { border-color:var(--border-hi); }
     .kpi[aria-pressed="true"] { border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow); }
     .kpi-label { font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-md);display:flex;align-items:center;gap:7px; }
-    .kpi-value { font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2; }
-    .kpi-foot { font-size:12px;color:var(--text-lo); }
+    .kpi-value { font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2; }
+    .kpi-foot { grid-column:1 / -1;font-size:11px;color:var(--text-lo); }
     .dot { width:8px;height:8px;border-radius:50%;display:inline-block;flex:none; }
     .d-online { background:var(--success); } .d-ausente { background:var(--warning); } .d-inativo { background:var(--text-lo); }
 
     .filters { display:flex;gap:8px;flex-wrap:wrap;align-items:center; }
     .chip { font:inherit;font-size:12.5px;padding:5px 12px;border-radius:999px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-md);cursor:pointer; }
     .chip[aria-pressed="true"] { background:var(--bg-active);border-color:var(--accent);color:var(--accent);font-weight:600; }
-    .filters .form-control { flex:1;min-width:200px;max-width:320px; }
+    .filters .form-control { flex:1;min-width:180px;max-width:300px; }
+    .chip:focus-visible, .kpi:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
 
     .board { display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start; }
     .board.com-gaveta { grid-template-columns:minmax(0,1fr) 370px; }
@@ -125,7 +133,7 @@
 
     @media (max-width:1150px) { .board.com-gaveta { grid-template-columns:minmax(0,1fr); } }
     @media (max-width:760px) { .gaveta.ampliada .gv-corpo { display:block; } .gaveta.ampliada .gv-col + .gv-col { border-left:none; } }
-    @media (max-width:720px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } .filters .form-control { max-width:none; } }
+    @media (max-width:720px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } .filters .form-control { max-width:none; } .refresh-controls { margin-left:0; } .kpi { grid-template-columns:minmax(0,1fr); } .kpi-foot { grid-column:1; } }
     .btn-derrubar-leve { align-self:flex-start;background:transparent;border:1px solid var(--error);color:var(--error); }
     .btn-derrubar-leve:hover { background:var(--bg-hover); }
     .btn-derrubar { background:var(--error);border:1px solid var(--error);color:#fff; }
@@ -140,7 +148,7 @@
     .sessoes-lista { list-style:none;margin:0;padding:0;display:grid;gap:8px; }
     .sessoes-lista li { padding:8px 10px;border:1px solid var(--border, rgba(127,127,127,.25));border-radius:8px;font-size:12.5px;line-height:1.45; }
     .sessoes-lista li .badge { margin-right:6px; }
-    @media (prefers-reduced-motion:reduce) { .pulse::after, .mon-table tr.flash td, #btn-refresh.girando svg { animation:none; } }
+    @media (prefers-reduced-motion:reduce) { .pulse::after, .mon-table tr.flash td, #btn-refresh.girando svg { animation:none; } #btn-resumo svg { transition:none; } }
   </style>
 </head>
 <body>
@@ -172,12 +180,19 @@
       <div id="error-banner" class="error-banner" role="alert"></div>
 
       <div class="mon-stack">
-        <section class="card refresh-bar" id="refresh-bar" aria-label="Atualização automática">
-          <div class="live"><span class="pulse"></span><span id="live-txt">Atualização automática ligada</span></div>
+        <section class="card refresh-bar" id="refresh-bar" aria-label="Filtros e atualização">
+          <div class="filters" role="group" aria-label="Filtros de origem">
+            <button class="chip" type="button" data-orig="todos" aria-pressed="true">Todas as origens</button>
+            <button class="chip" type="button" data-orig="chat" aria-pressed="false">Chat (Radar J2A)</button>
+            <button class="chip" type="button" data-orig="interno" aria-pressed="false">IA Service interno</button>
+            <input id="busca" class="form-control" type="text" placeholder="Buscar nome, telefone ou chamado..." aria-label="Buscar nome, telefone ou chamado">
+          </div>
+          <div class="refresh-controls" role="group" aria-label="Atualização automática">
+          <div class="live" title="Atualização automática"><span class="pulse"></span><span id="live-txt">Automático</span></div>
           <svg class="ring" viewBox="0 0 24 24" aria-hidden="true"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" id="ring" cx="12" cy="12" r="9" stroke-dasharray="56.55" stroke-dashoffset="0"/></svg>
-          <span class="stamp" id="countdown">-</span>
-          <label for="intervalo">A cada
-            <select id="intervalo" class="form-control">
+          <span class="stamp" id="countdown" title="Tempo até a próxima atualização">-</span>
+          <label for="intervalo" title="Intervalo de atualização">
+            <select id="intervalo" class="form-control" aria-label="Intervalo de atualização">
               <option value="15">15 segundos</option>
               <option value="30">30 segundos</option>
               <option value="60">1 minuto</option>
@@ -185,37 +200,39 @@
               <option value="0">Pausado</option>
             </select>
           </label>
-          <span class="spacer"></span>
-          <span class="stamp" id="stamp">Carregando...</span>
+          </div>
+          <div class="monitor-actions">
+          <button class="btn btn-ghost" id="btn-resumo" type="button" aria-expanded="true" aria-controls="resumo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
+            <span id="resumo-rotulo">Ocultar resumo</span>
+          </button>
           <button class="btn btn-primary" id="btn-refresh" type="button">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
-            Atualizar agora
+            Atualizar
           </button>
           <button class="btn btn-limpar" id="btn-limpar" type="button" title="Zera tempos de tela e atividade e encerra todos os logins do chat J2A desta empresa">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
             Limpar
           </button>
+          </div>
         </section>
 
-        <section class="kpis" aria-label="Resumo">
+        <section class="kpis" id="resumo" aria-label="Resumo">
           <button class="kpi" type="button" data-sit="online" aria-pressed="false"><span class="kpi-label"><span class="dot d-online"></span>On Line agora</span><span class="kpi-value" id="k-online">-</span><span class="kpi-foot">sinal nos últimos 2 min</span></button>
           <button class="kpi" type="button" data-sit="ausente" aria-pressed="false"><span class="kpi-label"><span class="dot d-ausente"></span>Ausentes</span><span class="kpi-value" id="k-ausente">-</span><span class="kpi-foot">sem sinal há 2 a 15 min</span></button>
           <button class="kpi" type="button" data-sit="inativo" aria-pressed="false"><span class="kpi-label"><span class="dot d-inativo"></span>Off Line</span><span class="kpi-value" id="k-inativo">-</span><span class="kpi-foot">fora do J2A há +15 min (login ainda válido)</span></button>
           <button class="kpi" type="button" data-sit="todos" aria-pressed="false" title="Mostrar todos, inclusive Off Line"><span class="kpi-label">Tempo de tela</span><span class="kpi-value" id="k-tempo">-</span><span class="kpi-foot" id="k-tempo-foot">soma do tempo ativo das sessões</span></button>
         </section>
 
-        <section class="filters" aria-label="Filtros">
-          <button class="chip" type="button" data-orig="todos" aria-pressed="true">Todas as origens</button>
-          <button class="chip" type="button" data-orig="chat" aria-pressed="false">Chat (Radar J2A)</button>
-          <button class="chip" type="button" data-orig="interno" aria-pressed="false">IA Service interno</button>
-          <input id="busca" class="form-control" type="text" placeholder="Buscar nome, telefone ou chamado..." aria-label="Buscar">
-        </section>
-
         <div class="board" id="board">
           <section class="card" style="padding:0;overflow:hidden;min-width:0">
             <div class="grid-toolbar">
               <div><div class="grid-title">Usuários conectados</div><div class="grid-meta" id="contagem"></div></div>
-              <div class="hint">Clique numa linha para ver a atividade e o chamado</div>
+              <div class="grid-status">
+                <button class="chip" id="btn-situacao" type="button" hidden title="Remover filtro de situação"></button>
+                <span class="stamp" id="stamp" role="status">Carregando...</span>
+                <span class="hint">Clique numa linha para ver a atividade e o chamado</span>
+              </div>
             </div>
             <div class="tabela-wrap">
               <table class="mon-table">
@@ -238,6 +255,7 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const INTERVALO_KEY = 'iasvc_monitor_intervalo';
+  const RESUMO_KEY = 'iasvc_monitor_resumo_oculto';
   const CIRC = 56.55;
   const CORES = ['#2563eb', '#7c3aed', '#0891b2', '#c2410c', '#15803d', '#be185d', '#4f46e5', '#0f766e'];
   const SIT = {
@@ -265,6 +283,22 @@
   if (![0, 15, 30, 60, 120].includes(st.intervalo)) st.intervalo = 30;
   $('intervalo').value = String(st.intervalo);
   st.restante = st.intervalo;
+
+  function exibirResumo(exibir) {
+    $('resumo').hidden = !exibir;
+    $('btn-resumo').setAttribute('aria-expanded', String(exibir));
+    $('resumo-rotulo').textContent = exibir ? 'Ocultar resumo' : 'Expandir resumo';
+    if (st.dados) render();
+  }
+  try { exibirResumo(localStorage.getItem(RESUMO_KEY) !== '1'); } catch (_) { exibirResumo(true); }
+
+  function atualizarFiltroSituacao() {
+    const btn = $('btn-situacao');
+    btn.hidden = st.filtroSit === 'ativos';
+    const rotulo = st.filtroSit === 'todos' ? 'Todas as situações' : SIT[st.filtroSit]?.rotulo;
+    btn.textContent = rotulo ? `Situação: ${rotulo} ×` : '';
+    btn.setAttribute('aria-label', `Remover filtro de situação: ${rotulo || ''}`);
+  }
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const hm = (iso) => iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-';
@@ -403,7 +437,7 @@
     const vis = visiveis();
     const offOcultos = st.filtroSit === 'ativos' ? d.pessoas.filter((p) => p.situacao === 'inativo').length : 0;
     $('contagem').textContent = `${vis.length} de ${d.pessoas.length} ${d.pessoas.length === 1 ? 'usuário' : 'usuários'}`
-      + (offOcultos ? ` · ${offOcultos} Off Line oculto${offOcultos === 1 ? '' : 's'} (clique no card Off Line para ver)` : '');
+      + (offOcultos ? ` · ${offOcultos} Off Line oculto${offOcultos === 1 ? '' : 's'} (${$('resumo').hidden ? 'expanda o resumo e clique em Off Line para ver' : 'clique no card Off Line para ver'})` : '');
     $('tbody').innerHTML = vis.length
       ? vis.map((s) => linha(s, mudaram.includes(s.id))).join('')
       : `<tr><td colspan="7"><div class="vazio">${!d.pessoas.length ? 'Ninguém conectado nesta empresa agora.' : st.filtroSit === 'ativos' ? 'Ninguém On Line agora. Quem está Off Line aparece ao clicar no card Off Line.' : 'Nenhum usuário com esses filtros.'}</div></td></tr>`;
@@ -553,21 +587,31 @@
     const bar = $('refresh-bar');
     if (!st.intervalo) {
       bar.classList.add('paused');
-      $('live-txt').textContent = 'Atualização automática pausada';
+      $('live-txt').textContent = 'Pausado';
       $('countdown').textContent = '';
       $('ring').style.strokeDashoffset = CIRC;
       return;
     }
     bar.classList.remove('paused');
-    $('live-txt').textContent = 'Atualização automática ligada';
+    $('live-txt').textContent = 'Automático';
     if (document.hidden || st.carregando) return;
     st.restante -= 1;
     if (st.restante <= 0) { carregar(false); st.restante = st.intervalo; }
-    $('countdown').textContent = `próxima em ${st.restante}s`;
+    $('countdown').textContent = `${st.restante}s`;
     $('ring').style.strokeDashoffset = CIRC * (1 - st.restante / st.intervalo);
   }
 
   $('btn-refresh').addEventListener('click', () => carregar(true));
+  $('btn-resumo').addEventListener('click', () => {
+    exibirResumo($('resumo').hidden);
+    try { localStorage.setItem(RESUMO_KEY, $('resumo').hidden ? '1' : '0'); } catch (_) {}
+  });
+  $('btn-situacao').addEventListener('click', () => {
+    st.filtroSit = 'ativos';
+    document.querySelectorAll('.kpi').forEach((k) => k.setAttribute('aria-pressed', 'false'));
+    atualizarFiltroSituacao();
+    render();
+  });
   $('btn-limpar').addEventListener('click', async () => {
     const emp = empresaId();
     if (!emp) return;
@@ -601,11 +645,12 @@
     const jaMarcado = k.getAttribute('aria-pressed') === 'true';
     st.filtroSit = jaMarcado ? 'ativos' : k.dataset.sit;
     document.querySelectorAll('.kpi').forEach((x) => x.setAttribute('aria-pressed', String(!jaMarcado && x === k)));
+    atualizarFiltroSituacao();
     render();
   }));
-  document.querySelectorAll('.chip').forEach((c) => c.addEventListener('click', () => {
+  document.querySelectorAll('.chip[data-orig]').forEach((c) => c.addEventListener('click', () => {
     st.filtroOrig = c.dataset.orig;
-    document.querySelectorAll('.chip').forEach((x) => x.setAttribute('aria-pressed', String(x === c)));
+    document.querySelectorAll('.chip[data-orig]').forEach((x) => x.setAttribute('aria-pressed', String(x === c)));
     render();
   }));
   $('tbody').addEventListener('click', (e) => {

@@ -155,16 +155,19 @@ test('J2A real integra o painel e mantém o chat utilizável no desktop e no mob
         assert.equal(bounds.width, 40, `${selector}: largura fixa`);
         assert.equal(bounds.height, 40, `${selector}: altura fixa mesmo com mensagem alta`);
       }
-      // Retornar Chamado fica no cabeçalho, ao lado de Pesquisar, com o símbolo SoftExpert.
-      assert.equal(await page.locator('#composer #retorno-btn').count(), 0);
-      assert.equal(await page.locator('.case-actions #retorno-btn').count(), 1);
-      assert.equal(await page.locator('#retorno-btn').getAttribute('aria-label'), 'Retornar Chamado');
-      assert.equal(await page.locator('#retorno-btn').getAttribute('title'), 'Retornar Chamado');
+      // Retorno ao SoftExpert fica no rodapé, logo após o Anexar e afastado dele,
+      // longe do Pesquisar Soluções do cabeçalho (evita clique por engano).
+      assert.equal(await page.locator('.case-actions #retorno-btn').count(), 0);
+      assert.equal(await page.locator('#composer > #retorno-btn').count(), 1);
+      assert.equal(await page.locator('#retorno-btn').getAttribute('aria-label'), 'Registrar retorno no SoftExpert');
+      assert.equal(await page.locator('#retorno-btn').getAttribute('title'), 'Registrar retorno no SoftExpert');
       const retornoBox = await page.locator('#retorno-btn').boundingBox();
+      const anexarBox = await page.locator('.attach-button').boundingBox();
       const pesquisarBox = await page.locator('#research-btn').boundingBox();
-      assert.equal(retornoBox.height, pesquisarBox.height, 'mesma altura do Pesquisar');
-      assert.ok(retornoBox.x < pesquisarBox.x, 'Retornar Chamado à esquerda do Pesquisar');
-      await page.screenshot({ path: path.join(__dirname, `../../../tmp/retorno-j2a-header-${width}.png`) });
+      assert.equal(retornoBox.height, anexarBox.height, 'mesma altura do Anexar');
+      assert.ok(retornoBox.x - (anexarBox.x + anexarBox.width) >= 18, 'espaço maior entre Anexar e Retorno');
+      assert.ok(Math.abs(retornoBox.y - pesquisarBox.y) > 100, 'longe do Pesquisar Soluções');
+      await page.screenshot({ path: path.join(__dirname, `../../../tmp/retorno-j2a-rodape-${width}.png`) });
       await page.locator('#retorno-btn').click();
       await page.locator('[name=DESCRICAO]').fill('Descrição preparada pelo analista');
       await page.screenshot({ path: path.join(__dirname, `../../../tmp/retorno-j2a-${width}.png`) });
