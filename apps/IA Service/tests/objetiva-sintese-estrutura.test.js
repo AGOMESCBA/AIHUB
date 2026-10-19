@@ -227,7 +227,9 @@ test('título com conteúdo mantido ou parafraseado é aceito', () => {
 
 // ── Marcadores rígidos × identificadores simples ───────────────────────────
 const { proteger } = require('../backend/services/resposta-humanizada-service');
-const lerFixture = nome => fs.readFileSync(path.join(__dirname, 'fixtures', nome), 'utf8').replace(/\n$/, '');
+// Normaliza o fim de linha: no Windows o checkout pode converter os fixtures
+// para CRLF, e os cortes do teste trabalham com \n.
+const lerFixture = nome => fs.readFileSync(path.join(__dirname, 'fixtures', nome), 'utf8').replace(/\r\n/g, '\n').replace(/\n$/, '');
 const TECNICA_REAL = lerFixture('tecnica-sintetica.md');
 const OBJETIVA_REF = lerFixture('objetiva-sintetica-referencia.md');
 
