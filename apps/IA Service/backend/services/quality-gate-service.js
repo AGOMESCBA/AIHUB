@@ -2,6 +2,8 @@
 
 const investigativeDiscipline = require('./investigative-discipline-service');
 const planoRespostaRastreavel = require('./plano-resposta-rastreavel-service');
+const { avaliarEvidencias } = require('./evidencia-comportamento-fonte-service');
+const { extrairAlteracoes } = require('./alteracao-ancorada-service');
 
 const DECISAO_QG = {
   BLOQUEIO_OBJETIVO: 'bloqueio_objetivo',
@@ -33,6 +35,7 @@ function _classificarFalha(falha) {
     'RETRY_CONTEXT_LEAKED',
   ]);
   const objetivo = new Set([
+    'SOURCE_BEHAVIOR_CONTRADICTION',
     'INTERNAL_IDS_USED_AS_EVIDENCE',
     'UNSUPPORTED_OPERATIONAL_COUNT',
     'REDUNDANT_OPERATIONAL_ESCALATION',
@@ -689,6 +692,7 @@ function _avaliarRastreabilidadeTecnica(textoResposta, { manifesto, referencias 
 // (estilo, qualidade, aviso operacional) geram alerta, nunca substituem a
 // resposta (M4).
 const FALHAS_DE_INTEGRIDADE = new Set([
+  'SOURCE_BEHAVIOR_CONTRADICTION',
   'INTERNAL_IDS_USED_AS_EVIDENCE',
   'RETRY_CONTEXT_LEAKED',
   'UNSUPPORTED_OPERATIONAL_COUNT',
@@ -1095,8 +1099,16 @@ function _avaliarEstadoOperacionalDoQuadro(textoResposta, manifesto) {
   return falhas;
 }
 
-function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRetry = false, historicoMensagens = [], indiceReferencias = null } = {}) {
+function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRetry = false, historicoMensagens = [], indiceReferencias = null, fontesOriginais = [] } = {}) {
   const falhas = [];
+  const { alteracoes } = extrairAlteracoes(textoResposta);
+  for (const fonte of fontesOriginais) {
+    const nome = String(fonte.arquivo).toLowerCase();
+    if (fontesOriginais.filter(f => String(f.arquivo).toLowerCase() === nome).length !== 1) continue;
+    const doArquivo = alteracoes.filter(a => a.arquivo?.toLowerCase() === nome || (!a.arquivo && fontesOriginais.length === 1));
+    const prova = avaliarEvidencias({ arquivo: fonte.arquivo, textoOriginal: fonte.textoOriginal, diagnostico: textoResposta, pedido: pergunta, alteracoes: doArquivo });
+    if (prova?.status === 'contradicao') falhas.push({ codigo: 'SOURCE_BEHAVIOR_CONTRADICTION', severidade: 'alta', evidencia: prova.evidencia, detalhe: prova.demonstracao, acaoCorretiva: 'conferir_fluxo_original_e_retirar_defeito_nao_demonstrado' });
+  }
   const resposta = String(textoResposta || '');
   const perguntaTexto = String(pergunta || '');
   const selecionados = manifesto?.selecionados || [];

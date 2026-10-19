@@ -34,8 +34,6 @@ const MIN_TOKENS_RACIOCINIO = 300;
 const GROQ_TPM_SEGURO_ESTIMADO = 4300;
 const DEFAULT_MAX_PROVIDER_ROUNDS = 3;
 
-const DEFAULT_ORDER = ['groq', 'deepseek', 'openai', 'claude', 'gemini'];
-
 // Buffer explícito (não string) no corpo e no Content-Length — achado real,
 // auditoria 2026-10: req.write(bodyStr) com string deixa o Node escolher o
 // encoding da escrita; em payloads grandes (>400KB, ex. turnos com várias
@@ -220,7 +218,7 @@ async function chamarProvedor(provedor, apiKey, systemPrompt, userPrompt, imagen
 
 function _normalizarOrdem({ provedorPrimario, fallbackOrdem } = {}) {
   const fallback = String(fallbackOrdem || '').split(',').map(s => s.trim()).filter(Boolean);
-  const ordem = [provedorPrimario, ...fallback, ...DEFAULT_ORDER].filter(Boolean);
+  const ordem = [provedorPrimario, ...fallback].filter(Boolean);
   return [...new Set(ordem)].filter(p => PROVIDER_CONFIGS[p]);
 }
 

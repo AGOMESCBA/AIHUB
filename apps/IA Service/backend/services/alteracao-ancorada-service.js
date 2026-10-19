@@ -11,6 +11,7 @@ const INICIO = '[[ORIGINAL]]';
 const SEPARADOR = '[[SUBSTITUTO]]';
 const FIM = '[[FIM]]';
 const MAX_ALTERACOES = 40;
+const { validarEstruturaFonte } = require('./validacao-estrutura-fonte-service');
 // Marcadores de omissão: indicam um trecho que não foi escrito por completo.
 const ELISAO = [
   /\b(?:restante|resto)\b[^\n]{0,40}\b(?:c[oó]digo|fonte|fun[cç](?:[aã]o|[oõ]es)|linhas?|arquivo)\b/i,
@@ -31,7 +32,10 @@ function _linhas(texto) {
 function extrairAlteracoes(texto) {
   const alteracoes = [];
   const erros = [];
+  const abertos = (String(texto || '').match(/```iahub-alteracao[^\S\r\n]*(?:\r?\n|$)/g) || []).length;
+  let fechados = 0;
   for (const m of String(texto || '').matchAll(BLOCO)) {
+    fechados++;
     const corpo = m[1].replace(/\r\n/g, '\n');
     const linhas = _linhas(corpo);
     const iInicio = linhas.findIndex(l => l.trimEnd() === INICIO);
@@ -40,7 +44,7 @@ function extrairAlteracoes(texto) {
     const cabecalho = linhas.slice(0, Math.max(0, iInicio)).join('\n');
     const arquivo = (cabecalho.match(/^\s*arquivo\s*:\s*(.+?)\s*$/mi) || [])[1] || null;
     const justificativa = (cabecalho.match(/^\s*justificativa\s*:\s*(.+?)\s*$/mi) || [])[1] || null;
-    if (iInicio < 0 || iSep.length !== 1 || iFim.length !== 1 || !(iInicio < iSep[0] && iSep[0] < iFim[0])) {
+    if (iInicio < 0 || linhas.filter(l => l.trimEnd() === INICIO).length !== 1 || iSep.length !== 1 || iFim.length !== 1 || !(iInicio < iSep[0] && iSep[0] < iFim[0]) || linhas.slice(iFim[0] + 1).some(l => l.trim())) {
       erros.push({ codigo: 'BLOCO_MALFORMADO', arquivo, detalhe: 'Bloco de alteração sem os marcadores [[ORIGINAL]], [[SUBSTITUTO]] e [[FIM]] na ordem esperada.' });
       continue;
     }
@@ -51,6 +55,7 @@ function extrairAlteracoes(texto) {
       substituto: linhas.slice(iSep[0] + 1, iFim[0]).join('\n'),
     });
   }
+  if (abertos !== fechados) erros.push({ codigo: 'BLOCO_MALFORMADO', arquivo: null, detalhe: 'Há bloco de alteração sem fechamento.' });
   return { alteracoes, erros };
 }
 
@@ -82,7 +87,7 @@ function _validarAlteracao(a) {
  * Aplica as alterações sobre o buffer original. Valida todas antes de aplicar
  * qualquer uma; se uma falhar, nada é gerado.
  */
-function aplicarAlteracoes({ buffer, encoding, alteracoes }) {
+function aplicarAlteracoes({ buffer, encoding, alteracoes, arquivo }) {
   const enc = encoding === 'utf-8' ? 'utf8' : 'latin1';
   const falhas = [];
   const falhar = (codigo, indice, detalhe) => falhas.push({ codigo, alteracao: indice + 1, detalhe });
@@ -97,7 +102,8 @@ function aplicarAlteracoes({ buffer, encoding, alteracoes }) {
   const eol = _quebraDeLinha(texto);
 
   const faixas = [];
-  alteracoes.forEach((a, i) => {
+  alteracoes.forEach((entrada, i) => {
+    const a = { ...entrada, original: entrada.original.replace(/\r\n/g, '\n'), substituto: entrada.substituto.replace(/\r\n/g, '\n') };
     const motivo = _validarAlteracao(a);
     if (motivo) return falhar(motivo, i, 'Alteração vazia, sem efeito, incompleta ou com marcadores internos.');
     const variantes = eol === 'misto' ? [a.original, a.original.replace(/\n/g, '\r\n')]
@@ -129,6 +135,8 @@ function aplicarAlteracoes({ buffer, encoding, alteracoes }) {
     cursor = f.fim;
   }
   resultado += texto.slice(cursor);
+  const validacao = validarEstruturaFonte({ arquivo, original: texto, corrigido: resultado });
+  if (!validacao.ok) return { ok: false, falhas: validacao.falhas };
   const bufferCorrigido = Buffer.from(resultado, enc);
 
   // Conferência final: tudo fora das faixas alteradas continua byte a byte.
@@ -152,6 +160,7 @@ function aplicarAlteracoes({ buffer, encoding, alteracoes }) {
     buffer: bufferCorrigido,
     texto: resultado,
     quebraDeLinha: eol === '\r\n' ? 'CRLF' : eol === '\n' ? 'LF' : 'misto',
+    avisosValidacao: validacao.avisos,
     aplicadas: faixas.map(f => ({ alteracao: f.indice + 1, linha: f.linha, justificativa: f.justificativa })),
   };
 }

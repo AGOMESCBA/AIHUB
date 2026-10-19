@@ -119,18 +119,33 @@ function salvarMensagem(empresaId, atendimentoId, dados) {
   return _rowParaDominio(db.prepare('SELECT * FROM mensagens WHERE id = ?').get(id));
 }
 
-function atualizarAvisosFonteCorrigido(empresaId, mensagemId, avisosFonteCorrigido = []) {
+function atualizarAvisosFonteCorrigido(empresaId, mensagemId, avisosFonteCorrigido = [], validacaoFontes = null) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   if (!mensagemId) throw new Error('mensagemId é obrigatório.');
   const db = getDB();
   const row = db.prepare(`SELECT diagnostico_json FROM mensagens WHERE id = ? AND empresa_id = ?`).get(mensagemId, Number(empresaId));
   if (!row) throw new Error('Mensagem não encontrada nesta empresa.');
   const { diagnostico, respostaCurta, origemAcao } = _parseDiagnostico(row.diagnostico_json);
+  const atualizado = Array.isArray(validacaoFontes) ? { ...(diagnostico || {}), validacaoFontes } : diagnostico;
   db.prepare(`
     UPDATE mensagens
        SET diagnostico_json = ?
      WHERE id = ? AND empresa_id = ?
-  `).run(_serializarDiagnostico(diagnostico, avisosFonteCorrigido, respostaCurta, origemAcao), mensagemId, Number(empresaId));
+  `).run(_serializarDiagnostico(atualizado, avisosFonteCorrigido, respostaCurta, origemAcao), mensagemId, Number(empresaId));
+  return getMensagem(empresaId, mensagemId);
+}
+
+// Finaliza uma mensagem reservada para validar uma proposta de fonte. O
+// conteúdo prescritivo só é persistido depois da decisão das validações.
+function atualizarResposta(empresaId, mensagemId, { conteudo, diagnostico, nivelConfianca }) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!mensagemId) throw new Error('mensagemId é obrigatório.');
+  const db = getDB();
+  const row = db.prepare('SELECT diagnostico_json FROM mensagens WHERE id = ? AND empresa_id = ?').get(mensagemId, Number(empresaId));
+  if (!row) throw new Error('Mensagem não encontrada nesta empresa.');
+  const { avisosFonteCorrigido, respostaCurta, origemAcao } = _parseDiagnostico(row.diagnostico_json);
+  db.prepare('UPDATE mensagens SET conteudo = ?, diagnostico_json = ?, nivel_confianca = ? WHERE id = ? AND empresa_id = ?')
+    .run(conteudo, _serializarDiagnostico(diagnostico, avisosFonteCorrigido, respostaCurta, origemAcao), nivelConfianca ?? null, mensagemId, Number(empresaId));
   return getMensagem(empresaId, mensagemId);
 }
 
@@ -225,4 +240,4 @@ function getUltimaMensagemAssistente(empresaId, atendimentoId) {
   return _rowParaDominio(row);
 }
 
-module.exports = { salvarMensagem, contarMensagensImportadas, listarMensagens, getMensagem, getUltimaMensagemAssistente, removerHistoricoImportado, atualizarAvisosFonteCorrigido, PAPEIS_VALIDOS };
+module.exports = { salvarMensagem, contarMensagensImportadas, listarMensagens, getMensagem, getUltimaMensagemAssistente, removerHistoricoImportado, atualizarAvisosFonteCorrigido, atualizarResposta, PAPEIS_VALIDOS };

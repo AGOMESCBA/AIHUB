@@ -38,8 +38,8 @@ function resolverKeysEOrdem(empresaId) {
   };
 
   const cfg = {
-    provedorPrimario: config?.provedorPrimario || 'groq',
-    fallbackOrdem: config?.fallbackOrdem || 'groq,deepseek,openai,claude,gemini',
+    provedorPrimario: config?.provedorPrimario || null,
+    fallbackOrdem: config?.fallbackOrdem ?? '',
     modelos,
   };
 

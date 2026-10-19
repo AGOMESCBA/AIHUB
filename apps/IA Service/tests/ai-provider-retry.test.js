@@ -276,7 +276,7 @@ async function testarFalhaDeTodosOsProviders() {
   try {
     await assert.rejects(
       () => aiProviderClient.chamarIA(
-        { groq: 'g-key', openai: 'bad-key' },
+        { groq: 'g-key', openai: 'bad-key', deepseek: 'fora-da-ordem', claude: 'fora-da-ordem', gemini: 'fora-da-ordem' },
         { provedorPrimario: 'groq', fallbackOrdem: 'groq,openai', modelos: { groq: 'openai/gpt-oss-20b', openai: 'gpt-4o-mini' } },
         'system', 'user', [],
         { maxProviderRounds: 1, providerRetryDelayMs: 0 }

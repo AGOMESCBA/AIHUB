@@ -106,9 +106,14 @@ async function comIAFake(textoResposta, fn) {
   investigacaoDossieAtualizador.atualizarAposTurno = async () => ({ aplicado: false });
   https.request = (options, cb) => {
     const req = new EventEmitter();
+    let payload = '';
     req.setTimeout = () => req;
-    req.write = () => {};
-    req.end = () => process.nextTick(() => cb(fakeProviderResponse(textoResposta)));
+    req.write = chunk => { payload += String(chunk); };
+    req.end = () => process.nextTick(() => {
+      const system = JSON.parse(payload).messages?.[0]?.content || '';
+      const resposta = system.includes('verificador de consistência') ? JSON.stringify({ status: 'consistente' }) : textoResposta;
+      cb(fakeProviderResponse(resposta));
+    });
     return req;
   };
 
