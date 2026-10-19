@@ -652,26 +652,6 @@ button.loading .loader { display: block; }
 }
 .primary-button.icon-only.loading .loader { display: block; }
 .primary-button.icon-only.loading .icon-label { visibility: hidden; }
-/* Retornar Chamado (SoftExpert): mesmo tamanho dos botoes do cabecalho; fundo branco nos
-   dois temas para manter as cores oficiais do simbolo legiveis. */
-.retorno-se-button {
-  box-sizing: border-box;
-  flex: none;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: #fff;
-  cursor: pointer;
-  transition: border-color .12s ease, box-shadow .12s ease;
-}
-.retorno-se-button:not(:disabled):hover { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(0, 117, 255, .14); }
-.retorno-se-button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-.retorno-se-button[aria-expanded="true"] { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(0, 117, 255, .2); }
-.retorno-se-button:disabled { opacity: .45; cursor: not-allowed; }
 
 .queue-panel { display: grid; grid-template-rows: auto auto 1fr; }
 .queue-tools {
@@ -1119,7 +1099,7 @@ button.loading .loader { display: block; }
 .message-source-warnings p + p { margin-top: 4px; }
 .composer {
   display: grid;
-  grid-template-columns: 40px auto minmax(0, 1fr) 40px;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
   align-items: end;
   gap: 8px;
   padding: 10px 16px;
@@ -1143,11 +1123,16 @@ button.loading .loader { display: block; }
 }
 .pending-files { display: none; padding: 8px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; }
 .pending-files.active { display: block; }
+/* Cresce sozinho enquanto o analista digita (como no WhatsApp) ate o limite;
+   dali em diante rola por dentro. Altura calculada em radar.js. */
 .composer textarea {
+  box-sizing: border-box;
+  display: block;
   width: 100%;
   min-height: 40px;
-  max-height: 150px;
-  resize: vertical;
+  max-height: 200px;
+  resize: none;
+  overflow-y: hidden;
   border: 0;
   outline: 0;
   padding: 10px 12px;
@@ -1163,17 +1148,6 @@ button.loading .loader { display: block; }
   font-size: 16px;
   display: grid;
   place-items: center;
-}
-/* Retorno ao SoftExpert no rodapé: mantém a aparência do botão (fundo branco,
-   cantos levemente arredondados) e fica afastado do Anexar (8px do gap + 12px). */
-.composer > .retorno-se-button {
-  width: 40px;
-  height: 40px;
-  margin-left: 12px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: #fff;
-  color: inherit;
 }
 
 .section-stack { padding: 12px 16px; display: grid; gap: 10px; }

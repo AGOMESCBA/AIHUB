@@ -9,3 +9,10 @@
 .ia-export-options button:hover { background:var(--panel-3,var(--wa-bubble-in,#eef4fa)); }
 .ia-export-options small { display:block; padding:4px 10px 8px; color:var(--muted,var(--wa-text-secondary,#62758c)); font:11px/1.5 sans-serif; }
 .ia-export-status { position:fixed; bottom:70px; left:50%; transform:translateX(-50%); z-index:3000; max-width:calc(100vw - 32px); padding:12px 18px; border-radius:8px; background:var(--panel,var(--wa-header,#fff)); color:var(--text,var(--wa-text,#102033)); border:1px solid var(--line,var(--wa-border,#d5e0ec)); box-shadow:0 6px 24px #0003; font:13px/1.5 sans-serif; }
+/* Itens com ícone (J2A): mesmo quadro branco do símbolo SoftExpert para os três. */
+.ia-export-options.com-icones { width:270px; }
+.ia-export-options .ia-export-item { display:flex; align-items:center; gap:10px; width:100%; border:0; background:transparent; color:var(--text,var(--wa-text,#102033)); padding:7px 10px; text-align:left; font:inherit; font-size:13px; border-radius:5px; cursor:pointer; }
+.ia-export-options .ia-export-item:not(:disabled):hover { background:var(--panel-3,var(--wa-bubble-in,#eef4fa)); }
+.ia-export-options .ia-export-item[hidden] { display:none; }
+.ia-export-options .ia-export-item:disabled { opacity:.45; cursor:not-allowed; }
+.ia-export-icon { box-sizing:border-box; flex:none; display:grid; place-items:center; width:30px; height:30px; border:1px solid var(--line,var(--wa-border,#d5e0ec)); border-radius:7px; background:#fff; }

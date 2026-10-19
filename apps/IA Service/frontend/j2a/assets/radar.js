@@ -1215,6 +1215,17 @@
     }
   }
 
+  // Campo de mensagem cresce com o texto (como no WhatsApp) ate o max-height
+  // do CSS; acima disso passa a rolar por dentro.
+  function ajustarAlturaMensagem() {
+    const t = $('message-input');
+    if (!t) return;
+    const max = parseFloat(getComputedStyle(t).maxHeight) || 200;
+    t.style.height = 'auto';
+    t.style.height = `${Math.min(t.scrollHeight, max)}px`;
+    t.style.overflowY = t.scrollHeight > max ? 'auto' : 'hidden';
+  }
+
   async function sendMessage(event) {
     event.preventDefault();
     if (state.somenteLeitura) return;
@@ -1234,6 +1245,7 @@
         body: JSON.stringify({ texto: texto || 'Analise os anexos enviados.', anexoIds, anexosComoContexto: anexoIds.length > 0, origemAcao: 'texto_livre' }),
       });
       textarea.value = '';
+      ajustarAlturaMensagem();
       state.pendingFiles = [];
       renderPendingFiles();
       state.messages.push(body);
@@ -2027,6 +2039,8 @@
     // usuario deixou salvo.
     $('radar-layout').classList.toggle('queue-collapsed', panel === 'risk' || filaRecolhidaSalva());
     if (panel === 'risk' && $('retorno-btn')?.getAttribute('aria-expanded') === 'true') retornoPanel?.close();
+    // Registrar retorno exige chamado aberto: some do menu ⋯ no Radar.
+    if ($('retorno-btn')) $('retorno-btn').hidden = panel === 'risk';
     // O menu de exportar (⋯) mora no cabecalho; no Radar ele vai para a barra
     // de filtros, para continuar disponivel com o cabecalho escondido.
     const exportMenu = document.querySelector('.ia-export-menu');
@@ -2392,6 +2406,8 @@
     });
     $('research-btn').addEventListener('click', researchSolutions);
     $('composer').addEventListener('submit', sendMessage);
+    $('message-input').addEventListener('input', ajustarAlturaMensagem);
+    window.addEventListener('resize', ajustarAlturaMensagem);
     $('file-input').addEventListener('change', (event) => {
       state.pendingFiles = [...event.target.files];
       renderPendingFiles();
@@ -2470,7 +2486,7 @@
     element: $(`panel-${state.activePanel}`),
     title: ROTULOS_ROTINA[state.activePanel],
     context: state.activePanel === 'risk' ? '' : [ $('case-number').textContent, $('case-title').textContent ].join(' — '),
-  }));
+  }), { itens: [$('retorno-btn')], icones: true });
   bindEvents();
     bootRadar();
   }

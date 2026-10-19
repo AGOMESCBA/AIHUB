@@ -21,7 +21,7 @@ async function setup() {
   if (!browser) {
     server = await new Promise((resolve) => {
       const srv = http.createServer((req, res) => {
-        const files = new Set(['radar.css', 'radar.js', 'tab-export.js', 'retorno-softexpert.css', 'retorno-softexpert.js']);
+        const files = new Set(['radar.css', 'radar.js', 'tab-export.js', 'tab-export.css', 'retorno-softexpert.css', 'retorno-softexpert.js', 'detalhes-tecnicos.js', 'detalhes-tecnicos.css', 'chat-interno.js', 'chat-interno.css']);
         const name = req.url.replace(/^\/iaservice\/j2a\/assets\//, '').replace(/^\//, '');
         if (req.url === '/') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); return res.end(harness); }
         if (req.url === '/j2a') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); return res.end(fs.readFileSync(path.join(assets, '../index.html'))); }
@@ -69,12 +69,12 @@ test('rascunhos, anexos e confirmação explícita no desktop', async () => {
     await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
     assert.equal(await page.locator('[name=DESCRICAO]').inputValue(), '');
     const resize = page.locator('.retorno-resize');
-    const oldWidth = await page.locator('.retorno-panel').evaluate((el) => el.clientWidth);
+    const oldWidth = await page.locator('.retorno-panel:not(.technical-details-panel)').evaluate((el) => el.clientWidth);
     await resize.focus();
     await page.keyboard.press('ArrowLeft');
-    assert.ok(await page.locator('.retorno-panel').evaluate((el) => el.clientWidth) > oldWidth);
+    assert.ok(await page.locator('.retorno-panel:not(.technical-details-panel)').evaluate((el) => el.clientWidth) > oldWidth);
     await page.locator('[data-retorno-expand]').click();
-    assert.equal(await page.locator('.retorno-panel').evaluate((el) => el.classList.contains('retorno-expanded')), true);
+    assert.equal(await page.locator('.retorno-panel:not(.technical-details-panel)').evaluate((el) => el.classList.contains('retorno-expanded')), true);
     await page.screenshot({ path: path.join(__dirname, '../../../tmp/retorno-desktop.png') });
   } finally { await page.close(); }
 });
@@ -99,7 +99,7 @@ test('mobile 390 e 320 px: tela inteira, ações acessíveis e rascunho preserva
       await page.evaluate(() => { window.ready = false; });
       await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
       await page.locator('[name=DESCRICAO]').fill('Retorno no celular');
-      const bounds = await page.locator('.retorno-panel').boundingBox();
+      const bounds = await page.locator('.retorno-panel:not(.technical-details-panel)').boundingBox();
       assert.equal(Math.round(bounds.width), width);
       assert.equal(Math.round(bounds.x), 0);
       const footer = await page.locator('.retorno-form > footer').boundingBox();
@@ -112,7 +112,7 @@ test('mobile 390 e 320 px: tela inteira, ações acessíveis e rascunho preserva
       await page.locator('[data-retorno-close]').click();
       await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
       assert.equal(await page.locator('[name=DESCRICAO]').inputValue(), 'Retorno no celular');
-      assert.equal(await page.locator('.retorno-panel').evaluate((el) => el.scrollWidth <= el.clientWidth), true);
+      assert.equal(await page.locator('.retorno-panel:not(.technical-details-panel)').evaluate((el) => el.scrollWidth <= el.clientWidth), true);
       await page.screenshot({ path: path.join(__dirname, `../../../tmp/retorno-mobile-${width}.png`) });
       await page.evaluate(() => window.editor.clear());
       await page.getByRole('button', { name: 'Retorno ao SoftExpert', exact: true }).click();
@@ -155,25 +155,45 @@ test('J2A real integra o painel e mantém o chat utilizável no desktop e no mob
         assert.equal(bounds.width, 40, `${selector}: largura fixa`);
         assert.equal(bounds.height, 40, `${selector}: altura fixa mesmo com mensagem alta`);
       }
-      // Retorno ao SoftExpert fica no rodapé, logo após o Anexar e afastado dele,
-      // longe do Pesquisar Soluções do cabeçalho (evita clique por engano).
-      assert.equal(await page.locator('.case-actions #retorno-btn').count(), 0);
-      assert.equal(await page.locator('#composer > #retorno-btn').count(), 1);
-      assert.equal(await page.locator('#retorno-btn').getAttribute('aria-label'), 'Registrar retorno no SoftExpert');
+      // Campo de mensagem cresce enquanto digita (como no WhatsApp), para no
+      // limite e passa a rolar; vazio volta ao tamanho inicial.
+      const campo = page.locator('#message-input');
+      const altura = () => campo.evaluate(el => el.getBoundingClientRect().height);
+      await campo.evaluate(el => { el.value = ''; el.dispatchEvent(new Event('input')); });
+      const vazio = await altura();
+      await campo.fill('linha 1');
+      const umaLinha = await altura();
+      await campo.fill('linha 1\nlinha 2\nlinha 3\nlinha 4');
+      const quatro = await altura();
+      assert.ok(quatro > umaLinha + 40, `cresce com as linhas: ${umaLinha} -> ${quatro}`);
+      await campo.fill(Array.from({ length: 40 }, (_, i) => `linha ${i}`).join('\n'));
+      assert.equal(Math.round(await altura()), 200, 'para no limite');
+      assert.equal(await campo.evaluate(el => getComputedStyle(el).overflowY), 'auto', 'acima do limite rola por dentro');
+      await campo.fill('');
+      assert.ok(Math.abs((await altura()) - vazio) <= 1, 'vazio volta ao tamanho inicial');
+      // Registrar retorno no SoftExpert fica no menu ⋯ do cabeçalho, junto de
+      // Copiar e Salvar como imagem, cada um com ícone do mesmo tamanho.
+      assert.equal(await page.locator('#composer #retorno-btn').count(), 0, 'rodapé só com Anexar');
+      assert.equal(await page.locator('.case-actions > #retorno-btn').count(), 0, 'fora da barra do cabeçalho');
+      assert.equal(await page.locator('.ia-export-options #retorno-btn').count(), 1, 'dentro do menu ⋯');
       assert.equal(await page.locator('#retorno-btn').getAttribute('title'), 'Registrar retorno no SoftExpert');
-      const retornoBox = await page.locator('#retorno-btn').boundingBox();
-      const anexarBox = await page.locator('.attach-button').boundingBox();
-      const pesquisarBox = await page.locator('#research-btn').boundingBox();
-      assert.equal(retornoBox.height, anexarBox.height, 'mesma altura do Anexar');
-      assert.ok(retornoBox.x - (anexarBox.x + anexarBox.width) >= 18, 'espaço maior entre Anexar e Retorno');
-      assert.ok(Math.abs(retornoBox.y - pesquisarBox.y) > 100, 'longe do Pesquisar Soluções');
-      await page.screenshot({ path: path.join(__dirname, `../../../tmp/retorno-j2a-rodape-${width}.png`) });
+      await page.locator('.ia-export-trigger').click();
+      const itens = await page.locator('.ia-export-options .ia-export-item').allInnerTexts();
+      assert.deepEqual(itens.map(t => t.trim()), ['Registrar retorno no SoftExpert', 'Copiar conteúdo', 'Salvar conteúdo como imagem']);
+      const icones = await page.locator('.ia-export-options .ia-export-icon').evaluateAll(els => els.map(e => {
+        const r = e.getBoundingClientRect(); const s = e.querySelector('svg').getBoundingClientRect();
+        return [r.width, r.height, s.width, s.height];
+      }));
+      assert.equal(icones.length, 3);
+      for (const i of icones) assert.deepEqual(i, icones[0], 'ícones no mesmo tamanho do SoftExpert');
+      await page.screenshot({ path: path.join(__dirname, `../../../tmp/retorno-j2a-menu-${width}.png`) });
       await page.locator('#retorno-btn').click();
+      assert.ok(await page.locator('.ia-export-options').isHidden(), 'menu fecha ao abrir o retorno');
       await page.locator('[name=DESCRICAO]').fill('Descrição preparada pelo analista');
       await page.screenshot({ path: path.join(__dirname, `../../../tmp/retorno-j2a-${width}.png`) });
       if (width > 1100) {
         const chat = await page.locator('#case-view').boundingBox();
-        const panel = await page.locator('.retorno-panel').boundingBox();
+        const panel = await page.locator('.retorno-panel:not(.technical-details-panel)').boundingBox();
         assert.ok(chat.x + chat.width <= panel.x + 2, 'painel não deve cobrir o chat');
         // Alinhado à grade do J2A: mesmo topo e base do chat e respiro de 12px entre os dois.
         assert.ok(Math.abs(panel.y - chat.y) <= 1, `topo desalinhado: chat ${chat.y} x painel ${panel.y}`);
@@ -216,7 +236,7 @@ test('Radar original integra retorno no desktop e no mobile sem perder o rascunh
       await page.locator('.fila-item').first().click();
       await page.locator('#retorno-btn').click();
       await page.locator('[name=DESCRICAO]').fill('Retorno pelo Radar original');
-      if (width < 1100) assert.equal(Math.round((await page.locator('.retorno-panel').boundingBox()).width), width);
+      if (width < 1100) assert.equal(Math.round((await page.locator('.retorno-panel:not(.technical-details-panel)').boundingBox()).width), width);
       await page.locator('[data-retorno-close]').click();
       await page.locator('#retorno-btn').click();
       assert.equal(await page.locator('[name=DESCRICAO]').inputValue(), 'Retorno pelo Radar original');

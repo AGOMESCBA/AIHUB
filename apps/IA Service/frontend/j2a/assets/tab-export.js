@@ -132,7 +132,13 @@
     report(pages > 1 ? `${pages} imagens geradas. Permita downloads múltiplos se solicitado pelo navegador.` : 'Imagem gerada.');
   }
 
-  function mount(container, getContent) {
+  // Ícones no mesmo tamanho do símbolo SoftExpert (19x17), nas cores da marca.
+  const ICONE_COPIAR = '<span class="ia-export-icon"><svg viewBox="0 0 24 22" width="19" height="17" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="8" y="6" width="13" height="15" rx="2" stroke="#0075FF"/><path d="M5 16H4a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="#002080"/></svg></span>';
+  const ICONE_IMAGEM = '<span class="ia-export-icon"><svg viewBox="0 0 24 22" width="19" height="17" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7" stroke="#002080"/><path d="m3 17 5-5 4 4 2-2 7 6" stroke="#002080"/><path d="M18 2v7m-3-3 3 3 3-3" stroke="#0075FF"/></svg></span>';
+
+  // opcoes.itens: botões da tela movidos para o topo do menu (ex.: Registrar
+  // retorno no SoftExpert no J2A); opcoes.icones: ícones em Copiar/Salvar.
+  function mount(container, getContent, opcoes = {}) {
     if (!container) return;
     if (!document.querySelector('link[data-ia-export-style]')) {
       const style = document.createElement('link');
@@ -144,13 +150,17 @@
     const menu = document.createElement('div');
     menu.className = 'ia-export-menu';
     menu.innerHTML = `<button type="button" class="ia-export-trigger" title="Copiar ou salvar conteúdo da aba" aria-label="Exportar conteúdo da aba" aria-expanded="false">⋯</button>
-      <div class="ia-export-options" hidden>
-        <button type="button" data-export="copy">Copiar conteúdo</button>
-        <button type="button" data-export="image">Salvar como imagem</button>
+      <div class="ia-export-options${opcoes.icones ? ' com-icones' : ''}" hidden>
+        ${opcoes.icones
+          ? `<button type="button" class="ia-export-item" role="menuitem" data-export="copy">${ICONE_COPIAR}<span>Copiar conteúdo</span></button>
+        <button type="button" class="ia-export-item" role="menuitem" data-export="image">${ICONE_IMAGEM}<span>Salvar conteúdo como imagem</span></button>`
+          : `<button type="button" data-export="copy">Copiar conteúdo</button>
+        <button type="button" data-export="image">Salvar como imagem</button>`}
         <small>Inclui o conteúdo além da rolagem. Conteúdos longos podem gerar várias imagens.</small>
       </div>`;
     const trigger = menu.querySelector('.ia-export-trigger');
     const options = menu.querySelector('.ia-export-options');
+    options.prepend(...(opcoes.itens || []).filter(Boolean));
     const status = document.createElement('div');
     status.className = 'ia-export-status';
     status.setAttribute('role', 'status');
@@ -166,11 +176,16 @@
     trigger.addEventListener('click', () => {
       options.hidden = !options.hidden;
       trigger.setAttribute('aria-expanded', String(!options.hidden));
-      if (!options.hidden) options.querySelector('button').focus();
+      // Abre para o lado em que cabe (no celular o ⋯ fica à esquerda da tela).
+      options.style.left = options.style.right = '';
+      if (!options.hidden && options.getBoundingClientRect().left < 8) { options.style.left = '0'; options.style.right = 'auto'; }
+      if (!options.hidden) options.querySelector('button:not(:disabled):not([hidden])')?.focus();
     });
     document.addEventListener('click', event => { if (!menu.contains(event.target)) close(); });
     menu.addEventListener('keydown', event => { if (event.key === 'Escape') { close(); trigger.focus(); } });
     options.addEventListener('click', async event => {
+      // Item da tela: a própria tela trata o clique; o menu só fecha.
+      if (event.target.closest('[data-export-item]')) { close(); return; }
       const action = event.target.closest('[data-export]');
       if (!action || trigger.disabled) return;
       close();
