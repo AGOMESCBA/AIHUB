@@ -221,6 +221,14 @@ function _paginasLidasOuReutilizadas(pesquisa) {
   return (pesquisa?.paginasLidas || []).filter(p => p.status === 'lida' || p.status === 'reutilizada');
 }
 
+// A resposta informa ao analista que a pesquisa externa nao trouxe resultado.
+function _declaraPesquisaSemResultado(texto) {
+  const s = _normalizar(texto);
+  const ausencia = '(nao (retornou|retornaram|trouxe|trouxeram|encontrou|encontrei|encontramos|localizou|localizei|achei|identifiquei|identificou)|nao foi (encontrad|localizad|identificad)|nao foram (encontrad|localizad|identificad)|nenhum (resultado|registro|chamado|artigo|conteudo|material)|sem (resultado|retorno))';
+  const pesquisa = '(pesquis|busca|consulta|fonte|totvs|tdn|forum|internet|documentac)';
+  return new RegExp(`${pesquisa}[^.!?\\n]{0,160}${ausencia}`).test(s) || new RegExp(`${ausencia}[^.!?\\n]{0,160}${pesquisa}`).test(s);
+}
+
 function _corpusInterno(manifesto, pergunta, historicoMensagens) {
   return [
     pergunta,
@@ -1133,7 +1141,13 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
   const evidenciaCriticaOmitida = omitidos.find(e => e.tipo !== 'mensagem' && (e.score || 0) >= 80 && e.status !== 'NAO_SUPORTADA');
   const paginasComConteudo = _paginasLidasOuReutilizadas(pesquisa);
 
-  if (/\b(resposta anterior|quality gate|controle de rastreabilidade|falhou no quality gate|reescrev[ae]r)\b/i.test(resposta)) {
+  // Bastidor de retry so existe no prompt quando HOUVE retry automatico
+  // ("A resposta anterior falhou no Quality Gate", "Resposta anterior a
+  // reescrever"). Na primeira tentativa de um novo turno humano, "resposta
+  // anterior"/"reescrever" referem-se a conversa com o analista. Mencionar o
+  // controle interno e vazamento em qualquer tentativa.
+  if (/\b(quality gate|controle de rastreabilidade)\b/i.test(resposta)
+    || (houveRetry && /\b(resposta anterior|reescrev[ae]r)\b/i.test(resposta))) {
     falhas.push({
       codigo: 'RETRY_CONTEXT_LEAKED',
       severidade: 'media',
@@ -1287,9 +1301,14 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
   // Pesquisa externa dispensada de proposito pelo gate de pendencia externa
   // (aguardando cliente/fornecedor) nao e "pesquisa que deveria ter ocorrido".
   const pesquisaDispensadaPorPendencia = !!pesquisa?.plano?.bloqueioPendenciaExterna && pesquisa?.modo !== 'web';
-  if (!pesquisaDispensadaPorPendencia && /pesquis|tdn|totvs|softexpert|documenta[cç][aã]o|fonte oficial/i.test(perguntaTexto)) {
+  // Intencao incerta: o chat pergunta ao analista antes de pesquisar. So vale
+  // se a resposta de fato pergunta.
+  const pesquisaAguardaConfirmacao = !!pesquisa?.plano?.confirmarPedidoPesquisa && pesquisa?.modo !== 'web' && resposta.includes('?');
+  if (!pesquisaDispensadaPorPendencia && !pesquisaAguardaConfirmacao &&/pesquis|tdn|totvs|softexpert|documenta[cç][aã]o|fonte oficial/i.test(perguntaTexto)) {
     if (!pesquisa?.configurado) falhas.push({ codigo: 'RESEARCH_REQUIRED_NOT_EXECUTED', legado: 'PESQUISA_NAO_CONFIGURADA', severidade: 'media', acaoCorretiva: 'informar_pesquisa_indisponivel' });
-    else if (pesquisa?.modo !== 'web') falhas.push({ codigo: 'RESEARCH_CONFIGURED_WITHOUT_RESULTS', legado: 'PESQUISA_CONFIGURADA_SEM_RESULTADO', severidade: 'media', acaoCorretiva: 'executar_pesquisa_solicitada_ou_declarar_limite' });
+    // Pesquisa realmente executada sem resultado e resposta valida quando o
+    // texto declara isso ao analista; dispensada pelo plano continua falha.
+    else if (pesquisa?.modo !== 'web' && !(pesquisa?.modo === 'links' && pesquisa?.consultasExecutadas?.length && _declaraPesquisaSemResultado(resposta))) falhas.push({ codigo: 'RESEARCH_CONFIGURED_WITHOUT_RESULTS', legado: 'PESQUISA_CONFIGURADA_SEM_RESULTADO', severidade: 'media', acaoCorretiva: 'executar_pesquisa_solicitada_ou_declarar_limite' });
     else if (!paginasComConteudo.length) {
       const declaraLimitePesquisa = /\b(pesquisa|documenta[cÃ§][aÃ£]o|fonte oficial|pagina|p[aÃ¡]gina)\b[\s\S]{0,120}\b(nao foi possivel|nao consegui|nao acessivel|nao acessada|nao lida|nenhuma pagina foi lida|sem conteudo|sem pagina lida|nao retornou conteudo|links sem leitura|limitacao)\b/i.test(resposta)
         || /\b(nao foi possivel|nao consegui|nao acessivel|nao acessada|nao lida|nenhuma pagina foi lida|sem conteudo|sem pagina lida|nao retornou conteudo|links sem leitura|limitacao)\b[\s\S]{0,120}\b(pesquisa|documenta[cÃ§][aÃ£]o|fonte oficial|pagina|p[aÃ¡]gina)\b/i.test(resposta);

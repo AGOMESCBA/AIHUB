@@ -36,6 +36,8 @@ const situacaoOrigemService = require('./situacao-origem-service');
 const planoRespostaRastreavel = require('./plano-resposta-rastreavel-service');
 
 const MAX_TENTATIVAS_TIMEOUT = 2;
+// Substitui, no historico enviado a IA, a resposta bloqueada para revisao.
+const RESPOSTA_NAO_ENTREGUE_NO_HISTORICO = '[Neste ponto a IA nao entregou parecer tecnico ao analista; nao ha conclusao a herdar desta mensagem. Siga com as evidencias do chamado e a solicitacao atual.]';
 
 function _garantirDossieSeguro(empresaId, atendimentoId, mensagemUsuario) {
   try {
@@ -859,6 +861,17 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   // conteúdo persistido/exibido ao analista.
   historico = historico.map(m => m.papel === 'assistant' && typeof m.diagnostico?.humanizacao?.respostaOriginal === 'string'
     ? { ...m, conteudo: m.diagnostico.humanizacao.respostaOriginal } : m);
+  // Estado operacional de turnos anteriores nao e herdado: resposta bloqueada
+  // pelo Quality Gate nao entra na conversa (nem o aviso com codigos internos,
+  // nem a resposta rejeitada). Dossie, anexos, evidencias e pesquisas
+  // anteriores continuam disponiveis pelas fontes proprias.
+  try {
+    const statusPorMensagem = execucaoRepo.listarStatusPorMensagens(empresaId, historico.filter(m => m.papel === 'assistant').map(m => m.id));
+    historico = historico.map(m => statusPorMensagem[m.id] === 'revisao_necessaria_quality_gate'
+      ? { ...m, conteudo: RESPOSTA_NAO_ENTREGUE_NO_HISTORICO, diagnostico: null } : m);
+  } catch (err) {
+    console.error('[IA Service] Status das execucoes anteriores indisponivel; historico mantido:', err.message);
+  }
 
   _garantirDossieSeguro(empresaId, atendimentoId, mensagemUsuario);
 
@@ -1002,6 +1015,10 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       anexos: anexosTextoParaPesquisa,
       texto,
       dossieOperacional: dossieOperacionalTurno,
+      // Mensagem do analista persistida como novo turno (nunca pre-analise
+      // automatica): habilita reconhecer, pela camada semantica, a ordem de
+      // nova investigacao mesmo sem evidencia nova.
+      turnoHumano: !!mensagemUsuario,
       // Pedido EXPLICITO do usuario (botão "Pesquisar Soluções" do Radar) —
       // nunca bloqueado por dedup de consulta nem pela disciplina 4B (ver
       // technical-research-service._deduplicarConsultas e

@@ -106,9 +106,9 @@ async function avaliarPendencia({ chamado, posicionamentos = [], consultarSituac
 
 const SYSTEM_PROMPT_DECISAO =`Você decide, para um chat de suporte técnico, se a ÚLTIMA mensagem do analista pede que a IA faça uma PESQUISA EXTERNA (consultar internet, documentação oficial, bases públicas de conhecimento) para investigar o problema.
 
-O chamado está aguardando retorno de terceiro (cliente, fornecedor ou distribuidor); por isso a pesquisa externa NÃO deve ocorrer sozinha — só quando o analista pedir. Considere o CONTEXTO da conversa: expressões como "verifique isso", "pode aprofundar?", "procure alternativas", "e se for outra causa?" contam como pedido quando, pelo contexto, representam investigar/consultar fontes externas. Não dependa de palavras exatas.
+O chamado está aguardando retorno de terceiro (cliente, fornecedor ou distribuidor); por isso a pesquisa externa NÃO deve ocorrer sozinha — só quando o analista pedir. Considere o CONTEXTO da conversa: expressões como "verifique isso", "pode aprofundar?", "procure alternativas", "e se for outra causa?" contam como pedido quando, pelo contexto, representam investigar/consultar fontes externas. Cortesia seguida de uma ordem ("ok, procura nos fóruns", "beleza, investigue outra causa") é pedido. Não dependa de palavras exatas.
 
-NÃO é pedido de pesquisa externa: perguntas sobre o histórico, o andamento, o que alguém respondeu, o estado do chamado, pedir resumo/explicação do que já existe, discutir hipóteses com base no que já está no chamado, ou conversa administrativa.
+NÃO é pedido de pesquisa externa: perguntas sobre o histórico, o andamento, o que alguém respondeu, o estado do chamado, pedir resumo/explicação do que já existe, discutir hipóteses com base no que já está no chamado, agradecimentos, confirmações ou conversa administrativa.
 
 Responda APENAS um JSON: {"pesquisa_externa": "sim" | "nao" | "incerto", "motivo": "<frase curta>"}.
 Use "incerto" se de fato não der para saber.`;
@@ -159,9 +159,9 @@ async function decidirPesquisaExterna({ pendencia, origemAcao, texto, historico,
     if (parsed.pesquisa_externa === 'nao') {
       return { ...base, chamadaIA: true, liberada: false, motivo: `sem pedido de pesquisa externa: ${motivoIA || 'conversa sobre o historico'}` };
     }
-    return { ...base, chamadaIA: true, liberada: false, motivo: `intencao incerta, sem pesquisa externa automatica: ${motivoIA || 'sem clareza'}` };
+    return { ...base, chamadaIA: true, liberada: false, duvida: true, motivo: `intencao incerta, sem pesquisa externa automatica: ${motivoIA || 'sem clareza'}` };
   } catch (err) {
-    return { ...base, chamadaIA: true, liberada: false, motivo: `falha_classificador, sem pesquisa externa automatica: ${err.message}` };
+    return { ...base, chamadaIA: true, liberada: false, duvida: true, motivo: `falha_classificador, sem pesquisa externa automatica: ${err.message}` };
   }
 }
 
@@ -179,6 +179,9 @@ function instrucaoParaPrompt(decisao) {
   ];
   if (decisao?.origemAcao === ORIGEM.BOTAO) {
     linhas.push('O analista acionou o botão Pesquisar, que não autoriza pesquisa externa nesta situação: apresente de forma objetiva a situação atual do chamado (o que já foi feito, quem deve responder e o que falta), diga que nenhuma pesquisa externa foi executada e que, se quiser investigar fontes externas, basta pedir na conversa.');
+  } else if (decisao?.duvida) {
+    // Na duvida, o chat pergunta ao analista (decisao do usuario, 2026-10).
+    linhas.push('Não ficou claro se o analista quer pesquisa externa: responda o que for possível com o histórico e pergunte, em uma frase objetiva, se ele quer que a pesquisa externa seja feita.');
   } else if (decisao?.origemAcao === ORIGEM.AUTOMATICO) {
     linhas.push('Esta é uma análise automática: resuma a situação e a pendência com base no histórico, sem pesquisa externa.');
   }
