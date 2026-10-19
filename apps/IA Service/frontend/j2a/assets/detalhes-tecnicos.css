@@ -8,3 +8,5 @@
 .technical-markdown table { border-collapse: collapse; width: 100%; }
 .technical-markdown th, .technical-markdown td { border: 1px solid var(--rt-line); padding: 8px; text-align: left; }
 .message-card [data-detalhes-tecnicos], .bubble [data-detalhes-tecnicos] { margin-top: 10px; font-size: 12px; }
+.technical-actions { display: flex; gap: 8px; align-items: center; }
+.technical-copy { font-size: 12px; padding: 4px 10px; cursor: pointer; }

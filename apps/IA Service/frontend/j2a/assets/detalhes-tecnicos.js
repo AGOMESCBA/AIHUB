@@ -58,10 +58,11 @@
     painel.hidden = true;
     painel.setAttribute('role', 'dialog');
     painel.setAttribute('aria-label', 'Detalhes Técnicos');
-    painel.innerHTML = '<header class="retorno-head"><div><h2>Detalhes Técnicos</h2><p data-technical-status hidden>Aprovada pelo Quality Gate</p></div><button type="button" aria-label="Fechar Detalhes Técnicos">×</button></header><div class="retorno-scroll technical-markdown"></div>';
+    painel.innerHTML = '<header class="retorno-head"><div><h2>Detalhes Técnicos</h2><p data-technical-status hidden>Aprovada pelo Quality Gate</p></div><div class="technical-actions"><button type="button" class="technical-copy" data-technical-copy>Copiar</button><button type="button" class="technical-close" aria-label="Fechar Detalhes Técnicos">×</button></div></header><div class="retorno-scroll technical-markdown"></div>';
     document.body.append(painel);
     let origem = null, contexto = null;
-    const conteudo = painel.querySelector('.retorno-scroll'), fechar = painel.querySelector('button');
+    const conteudo = painel.querySelector('.retorno-scroll'), fechar = painel.querySelector('.technical-close'), copiar = painel.querySelector('[data-technical-copy]');
+    let textoAtual = '', timerCopia = null;
     function close(foco = true) {
       if (painel.hidden) return;
       painel.hidden = true;
@@ -69,7 +70,23 @@
       document.body.classList.remove('retorno-open');
       origem?.setAttribute('aria-expanded', 'false');
       if (foco && origem?.isConnected) origem.focus();
-      origem = contexto = null;
+      origem = contexto = null; textoAtual = '';
+      resetCopia();
+    }
+    function resetCopia() { clearTimeout(timerCopia); copiar.textContent = 'Copiar'; }
+    // Em HTTP (sem contexto seguro) navigator.clipboard não existe: usa-se um
+    // textarea temporário com execCommand, acionado pelo clique do usuário.
+    async function copiarTexto(texto) {
+      try {
+        if (window.isSecureContext && navigator.clipboard?.writeText) { await navigator.clipboard.writeText(texto); return true; }
+      } catch (_) { /* tenta alternativa */ }
+      const ta = document.createElement('textarea');
+      ta.value = texto; ta.setAttribute('readonly', ''); ta.setAttribute('aria-hidden', 'true');
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+      painel.append(ta);
+      try { ta.select(); ta.setSelectionRange(0, texto.length); return document.execCommand('copy'); }
+      catch (_) { return false; }
+      finally { ta.remove(); }
     }
     function align() {
       const el = alignTo?.();
@@ -86,7 +103,8 @@
       if (onOpen?.() === false) return;
       close(false);
       origem = botao; contexto = atual;
-      conteudo.innerHTML = markdown(m.diagnostico.humanizacao.respostaOriginal);
+      textoAtual = m.diagnostico.humanizacao.respostaOriginal; resetCopia();
+      conteudo.innerHTML = markdown(textoAtual);
       painel.querySelector('[data-technical-status]').hidden = m.respostaCurta !== null || m.diagnostico.humanizacao.aprovacaoTecnica?.aprovado !== true;
       painel.hidden = false;
       document.body.classList.add('retorno-open');
@@ -94,6 +112,12 @@
       align(); fechar.focus();
     });
     fechar.addEventListener('click', () => close());
+    copiar.addEventListener('click', async () => {
+      if (!textoAtual) return;
+      const ok = await copiarTexto(textoAtual);
+      copiar.textContent = ok ? 'Copiado' : 'Não foi possível copiar';
+      clearTimeout(timerCopia); timerCopia = setTimeout(resetCopia, 2000);
+    });
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && !painel.hidden) { e.preventDefault(); close(); } });
     window.addEventListener('resize', align);
     return { close, contextChanged() { if (contexto !== getContext()) close(false); } };

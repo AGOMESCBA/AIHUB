@@ -5,6 +5,18 @@ const normalizar = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f
 const semNumeracao = texto => texto.replace(/^\s*(?:[-*]\s*)?\d+[.)]\s+/gm, '');
 const CODIGO = /```[^]*?```|`[^`\r\n]+`|^\s*(?:SELECT|UPDATE|DELETE|INSERT|ALTER|DROP|EXEC|curl|sudo|npm|node|git|powershell|Remove-Item)\b[^\r\n]*/gim;
 
+// Identificador técnico simples entre crases (rotina, ponto de entrada, tabela,
+// campo, palavra-chave): pode mudar de posição e de formatação, mas o validador
+// exige que continue presente, idêntico e sem substituto ou acréscimo. Código
+// real (blocos, comandos, expressões com espaço, operador ou parênteses) segue
+// protegido de forma rígida.
+const ehIdentificadorSimples = t => /^[A-Za-z_][A-Za-z0-9_]*(?:[./:-][A-Za-z0-9_]+)*$/.test(String(t || '')) && String(t).length <= 40;
+const ehSpanIdentificador = c => c.length > 2 && c.startsWith('\x60') && !c.startsWith('\x60\x60\x60') && c.endsWith('\x60') && ehIdentificadorSimples(c.slice(1, -1));
+const codigosRigidos = texto => (String(texto).match(CODIGO) || []).filter(c => !ehSpanIdentificador(c));
+const identificadoresSimples = texto => new Set((String(texto).match(CODIGO) || []).filter(ehSpanIdentificador).map(c => c.slice(1, -1)));
+const escapar = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const contemIdentificador = (texto, id) => new RegExp('(?<![A-Za-z0-9_])' + escapar(id) + '(?![A-Za-z0-9_])').test(texto);
+
 function referencias(texto) {
   const s = semNumeracao(texto);
   return new Set([
@@ -26,7 +38,7 @@ function conceitos(texto) {
   const s = normalizar(texto);
   const incerta = /\b(hipotes\w*|possivel|possivelmente|pode|podem|poderia\w*|talvez|provavel|provavelmente|sugere|parece|suspeit\w*|indicio\w*|a confirmar|quem sabe)\b/.test(s);
   const negativa = /\b(nao|sem|falt\w*|ausen\w*|indispon\w*)\b/.test(s);
-  const solicitada = /\b(solicit\w*|peca|pedir|envie|forneca|fornecer|fornecesse|fornecam|colet\w*|obtenha|obter|precis\w*|necessari\w*|verifi\w*|confira|conferir|confirmar|confirme|revis\w*|desabilite|reinicie|aplique|ajuste|altere|corrija|configure|atualize|substitua|remova|instale|habilite|acesse|veja|consulte|filtre|cheque|checar|valide|validar|teste|testar|execute|documente|registre)\b/.test(s);
+  const solicitada = forcaOrientacao(texto, { semModais: true }) > 0 || /\b(solicit\w*|peca|pedir|envie|forneca|fornecer|fornecesse|fornecam|colet\w*|obtenha|obter|precis\w*|necessari\w*|verifi\w*|confira|conferir|confirmar|confirme|revis\w*|desabilite|reinicie|aplique|ajuste|altere|corrija|configure|atualize|substitua|remova|instale|habilite|acesse|veja|consulte|filtre|cheque|checar|valide|validar|teste|testar|execute|documente|registre)\b/.test(s);
   // "Já fizemos os ajustes, mas o erro não foi resolvido" contém uma ação
   // concluída e uma resolução negada; a segunda não apaga a primeira.
   const clausula = s.split(/\b(?:mas|porem|no entanto)\b/)[0];
@@ -53,6 +65,64 @@ function forcaAfirmacao(texto) {
   if (/\b(causad\w*|causa|causam|causar|causando|provoc\w*|originad\w*|tem origem|decorre\w*|resulta(?:m|do|da)? de|devido (?:a|ao|aos|as)|por causa d\w*|em razao d\w*|ocorre porque|se deve a|vem d[eoa]s?|leva a|levam a|levar a|levou a|levando a|acarret\w*|ocasion\w*|faz com que|fazem com que)\b/.test(s)) return 2;
   if (/\b(relacionad\w*|ligad\w*|associad\w*|envolv\w*|tem relacao|relacao com|conexao com|correlac\w*)\b/.test(s)) return 1;
   return 0;
+}
+
+// Força da orientação ao leitor: 1 tentativa/sugestão, 2 recomendação,
+// 3 instrução, 4 obrigatoriedade/proibição. Decidida pela construção da frase
+// (verbo no início da oração, moldura "sugerir que", modal "deve"), não por uma
+// lista de verbos. "pode estar/ser" é hipótese e não entra aqui.
+const DECLARATIVOS = new Set('esse essa esses essas este esta estes estas isso isto mesmo mesma como onde porque antes depois mais muito quase sempre apenas somente falta faltam fica ficam resta restam existe existem consta constam depende dependem parece parecem ocorre ocorrem segue seguem vale trata tem temos ha foi fez gera gerou aparece funciona persiste'.split(' '));
+const DET_APOS_VERBO = /^(?:o|a|os|as|um|uma|uns|umas|se|que|de|do|da|dos|das|no|na|nos|nas|em|para|com|ao|aos|ate|todos|todas|isso|isto|esse|essa|este|esta|tambem|antes|depois|primeiro|novamente|ainda)$/;
+const FORMA_VERBAL = /^[a-z]{3,}(?:ar|er|ir|or|e|a|ue|que|gue|ca|ce|ja|nha)$/;
+const NAO_VERBAL = /(?:ia|ada|ida|ncia|agem|ade|ente|ante|oria)$/;
+const PROIBICAO_IMPERATIVA = /^nao\s+(?:execute|faca|use|altere|apague|delete|rode|aplique|remova|reinicie|prossiga|continue|ignore|publique|migre)\b/;
+function forcaOrientacao(texto, { semModais = false } = {}) {
+  const bruto = String(texto).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  let s = normalizar(texto).replace(/\*\*/g, '').replace(/^[\s\-*•\d.)]+/, '');
+  // Objeto que é identificador técnico: tem dígito ou sublinhado, ou aparece em maiúsculas no texto.
+  const ehIdentificador = w => /[0-9_]/.test(w) || (w.length >= 2 && new RegExp('(?<![A-Za-z0-9_])' + w.toUpperCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![A-Za-z0-9_])').test(bruto));
+  // Rótulo de item ("Testar o procedimento: ...") não é a orientação em si.
+  s = s.replace(/^[^:.!?]{1,80}:\s+(?=\S)/, '');
+  let nivel = 0;
+  for (const seg of s.split(/[,;:.!?]\s*|\s+(?:e|ou|mas|entao|porem)\s+/).map(x => x.trim()).filter(Boolean)) {
+    const t = seg.split(/\s+/);
+    let n = 0;
+    if (!semModais && (/\b(?:deve|devem|devemos|devera|deverao|tem que|tenho que|temos que|obrigatori\w*|imprescindiv\w*|indispensav\w*|nunca|jamais|proibid\w*|vedad\w*)\b/.test(seg)
+      || /\b(?:e|sao|sera)\s+(?:\w+\s+)?(?:necessari\w*|preciso|essencial|obrigatori\w*)\b/.test(seg)
+      || /\bprecisa(?:m|mos)?\s+(?:\w+\s+){0,2}\w+(?:ar|er|ir)\b/.test(seg)
+      || PROIBICAO_IMPERATIVA.test(seg) || /^nao\s+[a-z]{3,}(?:ar|er|ir|or)\b/.test(seg))) n = 4;
+    else if (/\b(?:recomend\w*|aconselh\w*|convem|deveria\w*|seria (?:bom|ideal|melhor|interessante|recomendavel|prudente)|vale a pena|prefer\w*)\b/.test(seg)) n = 2;
+    else if (/\b(?:tente\w*|tentar|tentem|considere\w*|considerar|avalie\w*|avaliar|sugiro|sugerimos|sugerir|sugira\w*|se possivel|caso queira)\b/.test(seg)
+      || (!semModais && /^(?:(?:voce|analista|usuario|cliente|equipe)\s+)?(?:pode|podem|podera|poderia\w*|poderao)\b/.test(seg))) n = 1;
+    else if (t.length >= 2 && FORMA_VERBAL.test(t[0]) && !DECLARATIVOS.has(t[0]) && !NAO_VERBAL.test(t[0]) && ((t.length >= 3 && DET_APOS_VERBO.test(t[1])) || ehIdentificador(t[1]))) n = 3;
+    nivel = Math.max(nivel, n);
+  }
+  return nivel;
+}
+
+// Separa a frase em orações factuais e orações de orientação, para que um pedido
+// ou uma proibição ("verifique Y", "não altere Y") não neutralize nem satisfaça a
+// hipótese ou a negação da oração factual ("possivelmente ocorre X", "não há
+// evidência de X"). Modais epistêmicos ("pode estar", "deve ser") não são orientação.
+const HEDGE_EXPLICITO = /\b(possivelmente|talvez|provavelmente|hipotes\w*|suspeit\w*|parece\w*|poderia\w*|sugere|indicio\w*)\b/;
+const VERBO_EPISTEMICO = '(?!estar|ser|haver|ter|existir|ocorrer|causar|gerar|indicar|ficar|vir|decorrer)';
+function ehOracaoDiretiva(trecho) {
+  const n = normalizar(trecho).replace(/\*\*/g, '').replace(/^[\s\-*•\d.)]+/, '').replace(/^[^:.!?]{1,80}:\s+(?=\S)/, '');
+  return forcaOrientacao(trecho, { semModais: true }) > 0 || PROIBICAO_IMPERATIVA.test(n) || /^nao\s+[a-z]{3,}(?:ar|er|ir|or)\b/.test(n)
+    || new RegExp('^(?:nao\\s+)?(?:deve|devem|pode|podem)\\s+' + VERBO_EPISTEMICO + '[a-z]+(?:ar|er|ir|or)\\b').test(n);
+}
+function particaoFatoOrientacao(texto) {
+  const grupos = [];
+  for (const parte of String(texto).split(/\s*[;:()]\s*|\s+[—–-]\s+/).map(x => x.trim()).filter(Boolean)) {
+    let atual = null;
+    for (const pedaco of parte.split(/,\s+/)) {
+      const dir = ehOracaoDiretiva(pedaco);
+      if (!atual || dir) { atual = { texto: pedaco, dir }; grupos.push(atual); }
+      else atual.texto += ', ' + pedaco;
+    }
+  }
+  const fatos = grupos.filter(g => !g.dir);
+  return { fato: fatos.length ? fatos.map(g => g.texto).join('; ') : null, hibrido: fatos.length > 0 && grupos.some(g => g.dir) };
 }
 
 // Conclusão de cortesia ou previsão genérica de resultado ("Essas ações devem
@@ -93,16 +163,16 @@ function limparConclusaoGenerica(texto) {
 }
 
 function unidades(texto) {
-  return semNumeracao(texto.replace(CODIGO, '')).replace(/\*\*/g, '').split(/\n\s*\n/).flatMap(paragrafo =>
+  return semNumeracao(texto.replace(CODIGO, c => ehSpanIdentificador(c) ? c.slice(1, -1) : '')).replace(/\*\*/g, '').split(/\n\s*\n/).flatMap(paragrafo =>
     paragrafo.split(/\n+|(?<=[.!?;])\s+(?=[A-ZÀ-Ú0-9])/).map(s => s.trim()).filter(Boolean)
-      .filter(s => !(/^[^.!?\n]{1,55}:$/.test(s) && !conceitos(s).solicitada))
+      .filter(s => !tituloNeutro(s, texto))
       .map(texto => {
         const estado = conceitos(texto), contexto = conceitos(paragrafo);
         // Em listas de informações solicitadas, "funções que foram modificadas"
         // descreve o objeto do pedido, sem afirmar que os dados foram entregues.
         // Uma ação independente ("Os ajustes já foram feitos") segue protegida.
         if (contexto.solicitada && !estado.solicitada && /^[^.!?;]{1,100}\bque\s+(?:foi|foram)\b/.test(normalizar(texto))) estado.concluida = false;
-        return { texto, paragrafo, palavras: palavras(texto), refs: referencias(texto), conceitos: estado, contexto };
+        return { texto, paragrafo, palavras: palavras(texto), refs: referencias(texto), conceitos: estado, contexto, titulo: /:$/.test(texto.trim()) };
       }))
     .filter(u => !(/^(?:com (?:essas|estas) informa[cç][oõ]es|essas informa[cç][oõ]es|dessa forma|assim que tivermos)/i.test(u.texto)
       && /\b(para|poderemos|vamos|permit|conseguir|vis[aã]o|importantes|cruciais)\b/i.test(u.texto)
@@ -132,18 +202,71 @@ function correspondente(unidade, alternativas) {
   return melhor;
 }
 
-function analisarPreservacao(original, candidata) {
+// Omissões autorizadas na síntese da Objetiva: introdução burocrática,
+// meta-comentário e registro narrativo de auditoria. Só vale para frase sem
+// referência técnica, código, ação, estado, ressalva, pendência ou hipótese;
+// pesquisa sem resultado nunca é omissível.
+const OMISSIVEL = [
+  /^(?:vou ser direto|vou direto ao ponto|vamos la|ola|bom dia|boa tarde|boa noite|prezad[oa]s?|segue (?:a )?(?:analise|resposta|avaliacao)|a seguir|abaixo (?:segue|estao)|conforme solicitado|apos (?:analisar|analise|revisar|revisao) (?:o|a|os|as) )/,
+  /^(?:esta (?:resposta|analise) (?:foi|e|se baseia|considera)|(?:essa|esta) (?:analise|resposta) (?:foi gerada|foi elaborada|considera|se baseia)|(?:a )?(?:investigacao|analise) (?:foi|esta) (?:realizada|concluida|baseada)|foram (?:consultad[oa]s|analisad[oa]s|revisad[oa]s) (?:os |as |o |a )?(?:anexos?|fontes?|historico|registros?|mensagens?))/,
+];
+const NAO_OMISSIVEL = /\b(pesquisa\w*|busca\w*|encontr\w*|resultado\w*|retorn\w*)\b/;
+// Título/apresentação terminado em ":" só é descartável (nos dois lados da
+// comparação) quando não carrega conteúdo próprio: vocabulário neutro, sem
+// referência, data, número, hipótese, negação, pendência, risco, estado ou
+// orientação, e com conteúdo posterior no documento. Não existe mais exceção
+// por tamanho: título curto com conteúdo ("Risco identificado:") é exigido.
+const VOCABULO_APRESENTACAO = /^(?:historic\w*|evidenc\w*|acao|acoes|tentad\w*|realizad\w*|feit\w*|executad\w*|analis\w*|pontos?|principais|algum\w*|seguintes?|segue\w*|abaixo|itens?|resumo|contexto|situacao|informac\w*|registrad\w*|observad\w*|identificad\w*|apresentad\w*|encontrad\w*|partir|passos?|etapas?|detalhes?|ate|agora|aqui|hoje|fazer|atual|atuais|proxim\w*|concret\w*)$/;
+function conteudoPosterior(frase, documento) {
+  const alvo = normalizar(frase);
+  const texto = normalizar(semNumeracao(documento).replace(/\*\*/g, ''));
+  const i = texto.indexOf(alvo);
+  return i >= 0 && texto.slice(i + alvo.length).trim().length > 0;
+}
+function tituloNeutro(frase, documento) {
+  const t = String(frase || '').trim();
+  if (!t.endsWith(':') || t.length > 120 || /[.!?;]\s*\S/.test(t) || /\d|\x60/.test(t) || referencias(t).size) return false;
+  const c = conceitos(t);
+  if (c.incerta || c.negativa || c.pendente || c.solicitada || c.resolvida || c.confirmada || c.ausenciaProblema) return false;
+  const s = normalizar(t);
+  if (NAO_OMISSIVEL.test(s) || TERMO_RELEVANTE.test(s)) return false;
+  const palavrasT = s.match(/[a-z]{2,}/g) || [];
+  if (!palavrasT.length || !palavrasT.every(w => GRAMATICA.has(w) || VOCABULO_APRESENTACAO.test(w))) return false;
+  return conteudoPosterior(t, documento);
+}
+function omissivel(u) {
+  if (u.refs.size || u.texto.length > 200) return false;
+  if (Object.values(u.conceitos).some(Boolean)) return false;
+  const s = normalizar(u.texto);
+  return !NAO_OMISSIVEL.test(s) && OMISSIVEL.some(re => re.test(s));
+}
+
+// Itens de lista numerados ou com marcador; usado para detectar perda de estrutura.
+const ITEM_LISTA = /^\s*(?:\d+[.)]|[-*•])\s+\S/gm;
+function perdeuEstrutura(original, candidata) {
+  const itensOriginal = (original.match(ITEM_LISTA) || []).length;
+  const itensCandidata = (candidata.match(ITEM_LISTA) || []).length;
+  const linhas = t => t.split(/\n/).filter(l => l.trim()).length;
+  if (itensOriginal >= 2 && itensCandidata < Math.min(itensOriginal, 2)) return true;
+  // Texto com várias linhas/parágrafos que chega emendado em uma só.
+  return linhas(original) >= 4 && linhas(candidata) <= 1;
+}
+
+function analisarPreservacao(original, candidata, { permitirSintese = false, exigirEstrutura = false } = {}) {
   const falhas = [];
   const falhar = (codigo, detalhe, informacoes = []) => falhas.push({ codigo, detalhe, informacoes: informacoes.map(redigirTexto) });
   if (typeof candidata !== 'string' || !candidata.trim() || candidata.length > original.length * 2 + 500) {
     falhar('CONTEUDO_INVALIDO', 'Resposta candidata vazia ou com tamanho incompatível.');
     return { aprovado: false, falhas };
   }
+  if (exigirEstrutura && perdeuEstrutura(original, candidata)) falhar('ESTRUTURA_PERDIDA', 'Procedimento ou lista da resposta original perdeu a organização (passos ou quebras de linha).');
   const antes = referencias(original), depois = referencias(candidata);
   const removidas = [...antes].filter(r => !depois.has(r)), novas = [...depois].filter(r => !antes.has(r));
+  for (const id of identificadoresSimples(original)) if (!contemIdentificador(candidata, id) && !removidas.includes(id)) removidas.push(id);
+  for (const id of identificadoresSimples(candidata)) if (!contemIdentificador(original, id) && !novas.includes(id)) novas.push(id);
   if (removidas.length) falhar('REFERENCIA_TECNICA_REMOVIDA', 'Identificadores ou valores técnicos removidos.', removidas);
   if (novas.length) falhar('REFERENCIA_TECNICA_NOVA', 'Identificadores ou valores técnicos acrescentados.', novas);
-  if (JSON.stringify((original.match(CODIGO) || []).sort()) !== JSON.stringify((candidata.match(CODIGO) || []).sort())) {
+  if (JSON.stringify(codigosRigidos(original).sort()) !== JSON.stringify(codigosRigidos(candidata).sort())) {
     falhar('CODIGO_OU_COMANDO_ALTERADO', 'Código ou comando foi removido, acrescentado ou alterado.');
   }
   for (const ambiente of ['homologacao', 'producao']) {
@@ -165,9 +288,22 @@ function analisarPreservacao(original, candidata) {
     }
   }
   for (const [indice, u] of origem.entries()) {
+    if (u.titulo) {
+      // Título com conteúdo próprio: todas as suas palavras e marcas (hipótese,
+      // negação, pendência, pedido) precisam existir na candidata.
+      const todas = new Set(destino.flatMap(d => [...d.palavras]));
+      const marcadas = ['incerta', 'negativa', 'pendente', 'solicitada'].filter(m => u.conceitos[m]);
+      const marcas = marcadas.every(m => destino.some(d => d.conceitos[m]));
+      const presentes = [...u.palavras].filter(w => todas.has(w)).length;
+      // Com marca (pedido, hipótese...), a paráfrase do verbo é aceita: exige a marca e metade das palavras. Sem marca, todas.
+      const palavrasOk = marcadas.length ? presentes * 2 >= u.palavras.size : presentes === u.palavras.size;
+      if (!palavrasOk || !marcas) falhar('CONTEUDO_ESSENCIAL_OMITIDO', 'Título com conteúdo próprio deixou de estar representado.', [u.texto]);
+      continue;
+    }
     if (u.palavras.size < 3 && !u.refs.size && !Object.values(u.conceitos).some(Boolean)) continue;
     const par = correspondente(u, destino);
     if (!par || par.score < 0.2) {
+      if (permitirSintese && omissivel(u)) continue;
       falhar('CONTEUDO_ESSENCIAL_OMITIDO', 'Informação da resposta original sem correspondência na reescrita.', [u.texto]);
       continue;
     }
@@ -194,10 +330,22 @@ function analisarPreservacao(original, candidata) {
     const forcaOriginal = forcaAfirmacao(u.texto), forcaCandidata = forcaAfirmacao(par.unidade.texto);
     if (forcaCandidata >= 2 && forcaCandidata > forcaOriginal) falhar('FORCA_AFIRMACAO_ALTERADA', 'Associação ou hipótese promovida a causalidade ou certeza.', [u.texto, par.unidade.texto]);
     else if (forcaOriginal === 3 && !a.incerta && f.incerta) falhar('FORCA_AFIRMACAO_ALTERADA', 'Certeza rebaixada a hipótese.', [u.texto, par.unidade.texto]);
+    const orientOriginal = forcaOrientacao(u.texto), orientCandidata = forcaOrientacao(par.unidade.texto);
+    if (orientOriginal > 0 && orientCandidata > 0 && orientOriginal !== orientCandidata) falhar('FORCA_ORIENTACAO_ALTERADA', orientCandidata > orientOriginal ? 'Orientação reforçada (tentativa, recomendação, instrução ou obrigatoriedade).' : 'Orientação enfraquecida (tentativa, recomendação, instrução ou obrigatoriedade).', [u.texto, par.unidade.texto]);
+    // Frase híbrida (fato + orientação): hipótese e negação da oração factual são
+    // avaliadas sem o efeito do pedido ou da proibição da mesma frase.
+    const pO = particaoFatoOrientacao(u.texto), pC = particaoFatoOrientacao(par.unidade.texto);
+    if (pO.hibrido && pC.hibrido && pO.fato && pC.fato) {
+      const co = conceitos(pO.fato), cc = conceitos(pC.fato);
+      if (co.incerta && !cc.incerta) falhar('INCERTEZA_REMOVIDA', 'Hipótese da oração factual passou a ser apresentada como fato.', [u.texto, par.unidade.texto]);
+      else if (!co.incerta && HEDGE_EXPLICITO.test(normalizar(pC.fato)) && !HEDGE_EXPLICITO.test(normalizar(pO.fato))) falhar('FORCA_AFIRMACAO_ALTERADA', 'Fato da oração factual foi rebaixado a hipótese.', [u.texto, par.unidade.texto]);
+      if (co.negativa && !cc.negativa && !cc.pendente && !(co.ausenciaProblema && cc.ausenciaProblema)) falhar('RESSALVA_REMOVIDA', 'Negação da oração factual deixou de estar representada.', [u.texto, par.unidade.texto]);
+      else if (!co.negativa && cc.negativa) falhar('NEGACAO_FACTUAL_ADICIONADA', 'Negação acrescentada à oração factual.', [u.texto, par.unidade.texto]);
+    }
     if (a.solicitada && !b.solicitada && !b.pendente && b.concluida) falhar('ACAO_SOLICITADA_VIROU_CONCLUIDA', 'Ação solicitada passou a ser descrita como realizada.', [u.texto, par.unidade.texto]);
     else if (a.solicitada && !b.solicitada && !b.pendente) falhar('ACAO_ESSENCIAL_OMITIDA', 'Próxima ação necessária deixou de estar representada.', [u.texto, par.unidade.texto]);
   }
   return { aprovado: falhas.length === 0, falhas };
 }
 
-module.exports = { analisarPreservacao, referencias, limparConclusaoGenerica, ehConclusaoGenerica, forcaAfirmacao };
+module.exports = { analisarPreservacao, referencias, limparConclusaoGenerica, ehConclusaoGenerica, forcaAfirmacao, forcaOrientacao, ehIdentificadorSimples };
