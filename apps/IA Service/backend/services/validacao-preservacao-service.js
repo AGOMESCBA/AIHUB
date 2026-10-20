@@ -2,7 +2,8 @@
 
 const { redigirTexto } = require('./redaction-service');
 const normalizar = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-const semNumeracao = texto => texto.replace(/^\s*(?:[-*]\s*)?\d+[.)]\s+/gm, '');
+// Numeração de lista é editorial, inclusive de subitens ("2.1.").
+const semNumeracao = texto => texto.replace(/^\s*(?:[-*]\s*)?\d+(?:\.\d+)*[.)]\s+/gm, '');
 const CODIGO = /```[^]*?```|`[^`\r\n]+`|^\s*(?:SELECT|UPDATE|DELETE|INSERT|ALTER|DROP|EXEC|curl|sudo|npm|node|git|powershell|Remove-Item)\b[^\r\n]*/gim;
 
 // Identificador técnico simples entre crases (rotina, ponto de entrada, tabela,
@@ -130,7 +131,9 @@ function particaoFatoOrientacao(texto) {
 // técnica nem termo de ressalva, risco, pendência ou validação.
 const CONCLUSAO_GENERICA = [
   /^(?:e\s+)?(?:com\s+)?(?:todas\s+)?(?:essas|estas|tais)\s+(?:acoes|medidas|verificacoes|etapas|orientacoes|recomendacoes|passos|sugestoes|analises|informacoes)\b[^.!?]{0,40}?\b(?:devem|deve|podem|pode|vao|irao)\s+(?:nos\s+|te\s+)?(?:ajudar|contribuir|auxiliar|facilitar)\b/,
-  /^(?:espero (?:ter ajudado|que (?:isso|essas informacoes) (?:ajude|ajudem))|fico a disposicao|estou a disposicao|qualquer (?:duvida|coisa)|se precisar de (?:mais )?(?:algo|ajuda|alguma coisa|algum detalhe))/,
+  /^(?:espero (?:ter ajudado|que (?:isso|essas informacoes) (?:ajude|ajudem))|fico a disposicao|estou a disposicao|qualquer (?:duvida|coisa)|se precisar de (?:mais )?(?:algo|ajuda|alguma coisa|algum detalhe|detalhes|informac\w*|esclareciment\w*))/,
+  // Fecho de cortesia no fim da frase ("..., estou à disposição.").
+  /\b(?:estou|fico|ficamos|estamos|seguimos) a disposicao\b[^.!?]{0,40}[.!?]?$/,
 ];
 const TERMO_RELEVANTE = /\b(nao|nunca|sem|risco\w*|atencao|cuidado|antes de|producao|homologacao|backup|aguard\w*|pend\w*|depend\w*|exceto|desde que|caso|enquanto|confirm\w*|valid\w*|test\w*|evite|somente|apenas|obrigat\w*|importante|crucial|urgente|impacto|perda|bloque\w*)\b/;
 function ehConclusaoGenerica(frase) {
@@ -252,14 +255,41 @@ function perdeuEstrutura(original, candidata) {
   return linhas(original) >= 4 && linhas(candidata) <= 1;
 }
 
+// Gate mínimo (decisão de produto, 2026-10-19). Fluxo: a Técnica já passou pelo
+// Quality Gate; a IA a reescreve de forma objetiva; aqui só se trava o mínimo
+// do mínimo, o que é erro técnico objetivo. Redação, estilo e força de
+// linguagem não bloqueiam ("o gate não é professor de português"), e o botão
+// Detalhes Técnicos mostra a Técnica integral em toda resposta.
+//  - Bloqueia (falhas) só o verificável mecanicamente: referência técnica
+//    (rotina, campo, tabela, número, data, link) removida, trocada ou inventada;
+//    código ou comando alterado; ambiente trocado; resposta vazia; e perda
+//    grande de conteúdo técnico (3+ trechos). "Vamos confiar na IA."
+//    E dois casos de fato errado (opção A, 2026-10-20), só com pareamento forte:
+//    pendência/pedido virou feito, resolvido ou diagnóstico; hipótese de causa
+//    virou fato ou certeza.
+//  - Avisa (avisos, só auditoria): todo o resto (força da orientação,
+//    suavização sem afirmar causa, ressalva reescrita, estrutura, títulos,
+//    frases novas sem dado técnico, omissões isoladas).
+const PAREAMENTO_FORTE = 0.5;
+const CERTEZA_EXPLICITA = /\b(?:confirmad\w*|confirma|confirmou|comprovad\w*|comprova|comprovou|garantid\w*|a causa e|e a causa|(?:esta|estao) (?:incorret|errad|invalid|mal configurad)\w*)\b/;
+const LIMITE_PERDA_CONTEUDO = 3;
+// Frase omitida que é conteúdo técnico: tem referência, fala de pesquisa ou
+// resultado, carrega hipótese ou limitação, ou é longa. Título, introdução e
+// fecho de cortesia não contam.
+function conteudoTecnicoSubstantivo(u) {
+  if (u.titulo || ehConclusaoGenerica(u.texto)) return false;
+  return u.refs.size > 0 || u.palavras.size >= 8 || NAO_OMISSIVEL.test(normalizar(u.texto)) || u.conceitos.incerta || u.conceitos.negativa;
+}
+
 function analisarPreservacao(original, candidata, { permitirSintese = false, exigirEstrutura = false } = {}) {
-  const falhas = [];
-  const falhar = (codigo, detalhe, informacoes = []) => falhas.push({ codigo, detalhe, informacoes: informacoes.map(redigirTexto) });
+  const falhas = [], avisos = [];
+  const falhar = (codigo, detalhe, informacoes = [], bloqueia = true) => (bloqueia ? falhas : avisos).push({ codigo, detalhe, informacoes: informacoes.map(redigirTexto) });
+  const avisar = (codigo, detalhe, informacoes = []) => falhar(codigo, detalhe, informacoes, false);
   if (typeof candidata !== 'string' || !candidata.trim() || candidata.length > original.length * 2 + 500) {
     falhar('CONTEUDO_INVALIDO', 'Resposta candidata vazia ou com tamanho incompatível.');
-    return { aprovado: false, falhas };
+    return { aprovado: false, falhas, avisos };
   }
-  if (exigirEstrutura && perdeuEstrutura(original, candidata)) falhar('ESTRUTURA_PERDIDA', 'Procedimento ou lista da resposta original perdeu a organização (passos ou quebras de linha).');
+  if (exigirEstrutura && perdeuEstrutura(original, candidata)) avisar('ESTRUTURA_PERDIDA', 'Procedimento ou lista da resposta original perdeu a organização (passos ou quebras de linha).');
   const antes = referencias(original), depois = referencias(candidata);
   const removidas = [...antes].filter(r => !depois.has(r)), novas = [...depois].filter(r => !antes.has(r));
   for (const id of identificadoresSimples(original)) if (!contemIdentificador(candidata, id) && !removidas.includes(id)) removidas.push(id);
@@ -279,14 +309,34 @@ function analisarPreservacao(original, candidata, { permitirSintese = false, exi
     if (u.palavras.size < 3 && !u.refs.size && !Object.values(u.conceitos).some(Boolean)) continue;
     const par = correspondente(u, origem);
     if (!par || par.score < 0.2) {
-      falhar('AFIRMACAO_SEM_LASTRO', 'Trecho candidato sem correspondência de conteúdo na resposta original.', [u.texto]);
+      // Frase nova é aviso. Dado técnico novo já é barrado por
+      // REFERENCIA_TECNICA_NOVA; só bloqueia afirmar algo como feito/resolvido.
+      const c = u.conceitos;
+      falhar('AFIRMACAO_SEM_LASTRO', 'Trecho candidato sem correspondência de conteúdo na resposta original.', [u.texto], false);
       continue;
     }
     const a = par.unidade.conceitos, b = u.conceitos;
+    // Só bloqueia quando a frase correspondente da Técnica não fala de nada
+    // realizado ou resolvido: se ela já diz "foram realizadas", a candidata
+    // dizer o mesmo com outra ordem não é fato novo.
+    const tecnicaFalaDisso = {
+      concluida: /\b(?:feit|realizad|aplicad|executad|ajustad|atualizad|enviad|alterad|corrigid|testad|configurad)\w*/.test(normalizar(par.unidade.texto)),
+      resolvida: /\b(?:resolvid|solucionad|corrigid|normalizad|restabelecid)\w*/.test(normalizar(par.unidade.texto)),
+    };
     for (const estado of ['concluida', 'resolvida', 'confirmada']) {
-      if (b[estado] && !a[estado]) falhar('ESTADO_OU_CERTEZA_ALTERADO', 'Pedido, hipótese ou pendência promovido a fato concluído ou confirmado.', [par.unidade.texto, u.texto]);
+      // Fato errado (opção A, 2026-10-20), só com pareamento forte: pendência ou
+      // pedido virou feito/resolvido ("aguardando" -> "já respondeu", "não foi
+      // resolvido" -> "foi resolvido"); pedido ou hipótese virou diagnóstico
+      // ("verifique se" -> "está incorreto"). O resto é aviso.
+      if (!b[estado] || a[estado]) continue;
+      // Diagnóstico exige certeza explícita: "relacionado a" sozinho é descritivo.
+      const bloqueia = par.score >= PAREAMENTO_FORTE && (estado === 'confirmada'
+        ? (a.solicitada || a.incerta) && CERTEZA_EXPLICITA.test(normalizar(u.texto))
+        : !(tecnicaFalaDisso[estado] && !a.negativa));
+      falhar('ESTADO_OU_CERTEZA_ALTERADO', 'Pedido, hipótese ou pendência promovido a fato concluído ou confirmado.', [par.unidade.texto, u.texto], bloqueia);
     }
   }
+  const omitidosTecnicos = [];
   for (const [indice, u] of origem.entries()) {
     if (u.titulo) {
       // Título com conteúdo próprio: todas as suas palavras e marcas (hipótese,
@@ -297,20 +347,25 @@ function analisarPreservacao(original, candidata, { permitirSintese = false, exi
       const presentes = [...u.palavras].filter(w => todas.has(w)).length;
       // Com marca (pedido, hipótese...), a paráfrase do verbo é aceita: exige a marca e metade das palavras. Sem marca, todas.
       const palavrasOk = marcadas.length ? presentes * 2 >= u.palavras.size : presentes === u.palavras.size;
-      if (!palavrasOk || !marcas) falhar('CONTEUDO_ESSENCIAL_OMITIDO', 'Título com conteúdo próprio deixou de estar representado.', [u.texto]);
+      // Título com referência técnica já é coberto por REFERENCIA_TECNICA_REMOVIDA.
+      if (!palavrasOk || !marcas) avisar('CONTEUDO_ESSENCIAL_OMITIDO', 'Título com conteúdo próprio deixou de estar representado.', [u.texto]);
       continue;
     }
     if (u.palavras.size < 3 && !u.refs.size && !Object.values(u.conceitos).some(Boolean)) continue;
     const par = correspondente(u, destino);
     if (!par || par.score < 0.2) {
       if (permitirSintese && omissivel(u)) continue;
-      falhar('CONTEUDO_ESSENCIAL_OMITIDO', 'Informação da resposta original sem correspondência na reescrita.', [u.texto]);
+      // Cada omissão é aviso; perda grande (3+ trechos técnicos) bloqueia abaixo.
+      avisar('CONTEUDO_ESSENCIAL_OMITIDO', 'Informação da resposta original sem correspondência na reescrita.', [u.texto]);
+      if (conteudoTecnicoSubstantivo(u)) omitidosTecnicos.push(u.texto);
       continue;
     }
+    const forte = par.score >= PAREAMENTO_FORTE;
     // Duas frases do mesmo parágrafo podem dividir a ressalva e sua ação
     // ("Se conseguir, obtenha..."). Isso não exige repetir a palavra exata.
     const a = u.conceitos, b = par.unidade.contexto, f = par.unidade.conceitos;
-    if (a.concluida && !par.unidade.conceitos.concluida && !b.concluida) falhar('ACAO_REALIZADA_PERDIDA', 'Ação já realizada passou a ser omitida ou apresentada como pendente.', [u.texto, par.unidade.texto]);
+    // Ação já feita apresentada como pendente faz o analista repetir trabalho.
+    if (a.concluida && !par.unidade.conceitos.concluida && !b.concluida) avisar('ACAO_REALIZADA_PERDIDA', 'Ação já realizada passou a ser omitida ou apresentada como pendente.', [u.texto, par.unidade.texto]);
     // Incerteza e pendência são avaliadas na frase correspondente. Um pedido
     // ou um "não" em outra frase do parágrafo não preserva a hipótese; o
     // parágrafo só conta se a própria frase não afirmar certeza ou conclusão.
@@ -321,31 +376,44 @@ function analisarPreservacao(original, candidata, { permitirSintese = false, exi
     const anaforica = anterior?.paragrafo === u.paragrafo && /^(essa|esse|essas|esses|isso|isto)\b/i.test(u.texto) && !a.confirmada && !a.concluida && !a.resolvida;
     const parAnterior = anaforica ? correspondente(anterior, destino) : null;
     const contextoAnaforico = parAnterior?.score >= 0.2 ? parAnterior.unidade.conceitos : null;
-    if (a.incerta && !f.incerta && !f.negativa && !f.solicitada && !(b.incerta && !fraseAfirma) && !contextoAnaforico?.incerta) falhar('INCERTEZA_REMOVIDA', 'Hipótese perdeu o caráter de incerteza.', [u.texto, par.unidade.texto]);
-    if (a.negativa && !b.negativa && !b.pendente && !(a.ausenciaProblema && b.ausenciaProblema)) falhar('RESSALVA_REMOVIDA', 'Negação ou ausência relevante deixou de estar representada.', [u.texto, par.unidade.texto]);
-    if (a.pendente && !f.pendente && !f.solicitada && !(b.pendente && !fraseAfirma) && !contextoAnaforico?.pendente) falhar('PENDENCIA_REMOVIDA', 'Espera ou dependência deixou de estar representada.', [u.texto, par.unidade.texto]);
+    if (a.incerta && !f.incerta && !f.negativa && !f.solicitada && !(b.incerta && !fraseAfirma) && !contextoAnaforico?.incerta) {
+      // Hipótese de causa/relação virou fato ("possivelmente vem do X" -> "vem do X",
+      // "pode estar relacionada" -> "está relacionada"): bloqueia com pareamento
+      // forte. Suavização sem afirmar causa ("pode confirmar" -> "confirmará") é aviso.
+      falhar('INCERTEZA_REMOVIDA', 'Hipótese perdeu o caráter de incerteza.', [u.texto, par.unidade.texto],
+        forte && (forcaAfirmacao(par.unidade.texto) >= 1 || f.confirmada));
+    }
+    // Negação perdida só bloqueia quando a frase correspondente afirma o
+    // contrário (não é um pedido nem pendência) e o pareamento é forte.
+    if (a.negativa && !b.negativa && !b.pendente && !(a.ausenciaProblema && b.ausenciaProblema)) falhar('RESSALVA_REMOVIDA', 'Negação ou ausência relevante deixou de estar representada.', [u.texto, par.unidade.texto], false);
+    if (a.pendente && !f.pendente && !f.solicitada && !(b.pendente && !fraseAfirma) && !contextoAnaforico?.pendente) avisar('PENDENCIA_REMOVIDA', 'Espera ou dependência deixou de estar representada.', [u.texto, par.unidade.texto]);
     // Força da afirmação: associação ou hipótese não pode virar causalidade
     // ou certeza, e uma certeza não pode virar hipótese. Mesmo nível é
     // paráfrase aceita ("relacionada a" -> "ligada a").
     const forcaOriginal = forcaAfirmacao(u.texto), forcaCandidata = forcaAfirmacao(par.unidade.texto);
-    if (forcaCandidata >= 2 && forcaCandidata > forcaOriginal) falhar('FORCA_AFIRMACAO_ALTERADA', 'Associação ou hipótese promovida a causalidade ou certeza.', [u.texto, par.unidade.texto]);
-    else if (forcaOriginal === 3 && !a.incerta && f.incerta) falhar('FORCA_AFIRMACAO_ALTERADA', 'Certeza rebaixada a hipótese.', [u.texto, par.unidade.texto]);
+    // Só "virou certeza/causa confirmada" muda o fato; os demais níveis são linguagem.
+    if (forcaCandidata >= 2 && forcaCandidata > forcaOriginal) falhar('FORCA_AFIRMACAO_ALTERADA', 'Associação ou hipótese promovida a causalidade ou certeza.', [u.texto, par.unidade.texto], forcaCandidata === 3 && forte);
+    else if (forcaOriginal === 3 && !a.incerta && f.incerta) avisar('FORCA_AFIRMACAO_ALTERADA', 'Certeza rebaixada a hipótese.', [u.texto, par.unidade.texto]);
     const orientOriginal = forcaOrientacao(u.texto), orientCandidata = forcaOrientacao(par.unidade.texto);
-    if (orientOriginal > 0 && orientCandidata > 0 && orientOriginal !== orientCandidata) falhar('FORCA_ORIENTACAO_ALTERADA', orientCandidata > orientOriginal ? 'Orientação reforçada (tentativa, recomendação, instrução ou obrigatoriedade).' : 'Orientação enfraquecida (tentativa, recomendação, instrução ou obrigatoriedade).', [u.texto, par.unidade.texto]);
+    if (orientOriginal > 0 && orientCandidata > 0 && orientOriginal !== orientCandidata) avisar('FORCA_ORIENTACAO_ALTERADA', orientCandidata > orientOriginal ? 'Orientação reforçada (tentativa, recomendação, instrução ou obrigatoriedade).' : 'Orientação enfraquecida (tentativa, recomendação, instrução ou obrigatoriedade).', [u.texto, par.unidade.texto]);
     // Frase híbrida (fato + orientação): hipótese e negação da oração factual são
     // avaliadas sem o efeito do pedido ou da proibição da mesma frase.
     const pO = particaoFatoOrientacao(u.texto), pC = particaoFatoOrientacao(par.unidade.texto);
     if (pO.hibrido && pC.hibrido && pO.fato && pC.fato) {
       const co = conceitos(pO.fato), cc = conceitos(pC.fato);
-      if (co.incerta && !cc.incerta) falhar('INCERTEZA_REMOVIDA', 'Hipótese da oração factual passou a ser apresentada como fato.', [u.texto, par.unidade.texto]);
-      else if (!co.incerta && HEDGE_EXPLICITO.test(normalizar(pC.fato)) && !HEDGE_EXPLICITO.test(normalizar(pO.fato))) falhar('FORCA_AFIRMACAO_ALTERADA', 'Fato da oração factual foi rebaixado a hipótese.', [u.texto, par.unidade.texto]);
-      if (co.negativa && !cc.negativa && !cc.pendente && !(co.ausenciaProblema && cc.ausenciaProblema)) falhar('RESSALVA_REMOVIDA', 'Negação da oração factual deixou de estar representada.', [u.texto, par.unidade.texto]);
-      else if (!co.negativa && cc.negativa) falhar('NEGACAO_FACTUAL_ADICIONADA', 'Negação acrescentada à oração factual.', [u.texto, par.unidade.texto]);
+      if (co.incerta && !cc.incerta) avisar('INCERTEZA_REMOVIDA', 'Hipótese da oração factual passou a ser apresentada como fato.', [u.texto, par.unidade.texto]);
+      else if (!co.incerta && HEDGE_EXPLICITO.test(normalizar(pC.fato)) && !HEDGE_EXPLICITO.test(normalizar(pO.fato))) avisar('FORCA_AFIRMACAO_ALTERADA', 'Fato da oração factual foi rebaixado a hipótese.', [u.texto, par.unidade.texto]);
+      // Fato invertido (negação removida ou acrescentada na oração factual) muda o conteúdo.
+      if (co.negativa && !cc.negativa && !cc.pendente && !(co.ausenciaProblema && cc.ausenciaProblema)) falhar('RESSALVA_REMOVIDA', 'Negação da oração factual deixou de estar representada.', [u.texto, par.unidade.texto], false);
+      else if (!co.negativa && cc.negativa) falhar('NEGACAO_FACTUAL_ADICIONADA', 'Negação acrescentada à oração factual.', [u.texto, par.unidade.texto], false);
     }
-    if (a.solicitada && !b.solicitada && !b.pendente && b.concluida) falhar('ACAO_SOLICITADA_VIROU_CONCLUIDA', 'Ação solicitada passou a ser descrita como realizada.', [u.texto, par.unidade.texto]);
-    else if (a.solicitada && !b.solicitada && !b.pendente) falhar('ACAO_ESSENCIAL_OMITIDA', 'Próxima ação necessária deixou de estar representada.', [u.texto, par.unidade.texto]);
+    if (a.solicitada && !b.solicitada && !b.pendente && b.concluida) falhar('ACAO_SOLICITADA_VIROU_CONCLUIDA', 'Ação solicitada passou a ser descrita como realizada.', [u.texto, par.unidade.texto], forte);
+    else if (a.solicitada && !b.solicitada && !b.pendente) avisar('ACAO_ESSENCIAL_OMITIDA', 'Próxima ação necessária deixou de estar representada.', [u.texto, par.unidade.texto]);
   }
-  return { aprovado: falhas.length === 0, falhas };
+  if (omitidosTecnicos.length >= LIMITE_PERDA_CONTEUDO) {
+    falhar('PERDA_DE_CONTEUDO_TECNICO', `A reescrita deixou de fora ${omitidosTecnicos.length} trechos técnicos da resposta original.`, omitidosTecnicos);
+  }
+  return { aprovado: falhas.length === 0, falhas, avisos };
 }
 
 module.exports = { analisarPreservacao, referencias, limparConclusaoGenerica, ehConclusaoGenerica, forcaAfirmacao, forcaOrientacao, ehIdentificadorSimples };

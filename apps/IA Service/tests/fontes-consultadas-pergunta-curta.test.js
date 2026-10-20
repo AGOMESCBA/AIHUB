@@ -103,3 +103,23 @@ test('pergunta curta: última resposta da IA vai inteira (com o link); as demais
   assert.ok(!ctx.includes('A'.repeat(601)), 'mensagens anteriores continuam cortadas em 600 caracteres');
   assert.match(ctx, /\[Analista\]: Por que não mandou o link\?/);
 });
+
+// ── Registro real da última pesquisa (pergunta curta) ──────────────────────
+const execucaoRepo = require('../backend/repositories/investigacao-execucao-repository');
+function comExecucoes(lista, fn) {
+  const original = execucaoRepo.listarPorAtendimento;
+  execucaoRepo.listarPorAtendimento = () => lista;
+  try { return fn(); } finally { execucaoRepo.listarPorAtendimento = original; }
+}
+test('registro da pesquisa: pesquisa executada lista as fontes abertas, mesmo com a análise bloqueada', () => {
+  const r = comExecucoes([{ status: 'revisao_necessaria_quality_gate', pesquisa: PESQUISA }], () => investigacao._resumoUltimaPesquisa(1, 'at'));
+  assert.match(r, /^Pesquisa externa na última análise: executada\. Fontes abertas:/);
+  assert.ok(r.includes(ARTIGO));
+  assert.match(r, /conteúdo não recuperado \(HTTP 403\)/);
+});
+test('registro da pesquisa: bloqueada por pendência externa, executada sem páginas, não executada e sem análise', () => {
+  assert.match(comExecucoes([{ pesquisa: { modo: 'nao_pesquisado', paginasLidas: [], decisaoPendenciaExterna: { liberada: false } } }], () => investigacao._resumoUltimaPesquisa(1, 'at')), /não executada, porque o chamado aguarda retorno externo/);
+  assert.match(comExecucoes([{ pesquisa: { modo: 'web', paginasLidas: [] } }], () => investigacao._resumoUltimaPesquisa(1, 'at')), /executada, mas nenhuma página foi aberta/);
+  assert.match(comExecucoes([{ pesquisa: null }], () => investigacao._resumoUltimaPesquisa(1, 'at')), /não executada\. Nenhuma fonte externa/);
+  assert.match(comExecucoes([], () => investigacao._resumoUltimaPesquisa(1, 'at')), /Nenhuma análise anterior registrada/);
+});

@@ -483,7 +483,29 @@ function _adicionarLimitePesquisaSemPaginaLida(texto, pesquisa) {
 // exige que os links continuem lá.
 function _anexarFontesConsultadas(texto, pesquisa) {
   const s = String(texto || '').trim();
-  const paginas = Array.isArray(pesquisa?.paginasLidas) ? pesquisa.paginasLidas : [];
+  const itens = _linhasFontesConsultadas(pesquisa?.paginasLidas);
+  if (!itens.length) return s;
+  return `${s}\n\nFontes consultadas na pesquisa:\n${itens.join('\n')}`;
+}
+
+// Registro real da última pesquisa externa do atendimento, montado pelo código
+// para a pergunta curta. Sem ele a IA negou uma pesquisa que aconteceu (achado
+// real, #036727: a pesquisa leu 2 páginas, a análise foi bloqueada pelo Quality
+// Gate e a pergunta curta respondeu "não consultei fontes externas").
+function _resumoUltimaPesquisa(empresaId, atendimentoId) {
+  let execucao;
+  try { execucao = execucaoRepo.listarPorAtendimento(empresaId, atendimentoId, { limite: 5 })[0]; } catch (_) { return ''; }
+  if (!execucao) return 'Nenhuma análise anterior registrada neste atendimento, portanto nenhuma pesquisa externa foi feita.';
+  const p = execucao.pesquisa || {};
+  const itens = _linhasFontesConsultadas(p.paginasLidas);
+  if (p.modo === 'web' && itens.length) return `Pesquisa externa na última análise: executada. Fontes abertas:\n${itens.join('\n')}`;
+  if (p.modo === 'web') return 'Pesquisa externa na última análise: executada, mas nenhuma página foi aberta.';
+  if (p.decisaoPendenciaExterna?.liberada === false) return 'Pesquisa externa na última análise: não executada, porque o chamado aguarda retorno externo (cliente, fornecedor ou distribuidor). Nenhuma fonte externa foi aberta.';
+  return 'Pesquisa externa na última análise: não executada. Nenhuma fonte externa foi aberta.';
+}
+
+function _linhasFontesConsultadas(paginasLidas) {
+  const paginas = Array.isArray(paginasLidas) ? paginasLidas : [];
   const vistos = new Set();
   const itens = [];
   for (const p of paginas) {
@@ -497,8 +519,7 @@ function _anexarFontesConsultadas(texto, pesquisa) {
     itens.push(`- ${titulo} — ${url} — ${situacao}`);
     if (itens.length >= 8) break;
   }
-  if (!itens.length) return s;
-  return `${s}\n\nFontes consultadas na pesquisa:\n${itens.join('\n')}`;
+  return itens;
 }
 
 function _prepararTextoResposta(texto, pesquisa) {
@@ -957,8 +978,9 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       // resposta-operacional-service.execucaoAvaliavel).
       const instrucaoFinal = tipoTurno === 'fora_de_escopo'
         ? 'Esta pergunta não tem relação com o chamado. Responda em no máximo 2 frases: se souber responder com segurança (sem inventar dados em tempo real, que você não tem), responda; caso contrário, diga que não tem como consultar isso aqui. Não reabra, não resuma e não repita nada do chamado; apenas convide o analista a seguir com o chamado quando quiser.'
-        : 'Responda SOMENTE essa pergunta, de forma direta e breve (poucas frases). Não reabra nem repita o diagnóstico técnico já dado nas mensagens anteriores. Use apenas o contexto acima: se a resposta estiver nele (por exemplo, um link ou fonte já enviado), aponte-a; se não estiver, diga claramente que não tem essa informação. Nunca invente justificativa sobre o seu próprio comportamento ou sobre o que estava disponível em mensagens anteriores.';
-      const promptCurto = `## Contexto recente da conversa\n${historicoRecente}\n\n## Pergunta atual do analista\n${redigirValor(texto)}\n\n${instrucaoFinal}`;
+        : 'Responda SOMENTE essa pergunta, de forma direta e breve (poucas frases). Não reabra nem repita o diagnóstico técnico já dado nas mensagens anteriores. Use apenas o contexto acima: se a resposta estiver nele (por exemplo, um link ou fonte já enviado), aponte-a; se não estiver, diga claramente que não tem essa informação. Nunca invente justificativa sobre o seu próprio comportamento ou sobre o que estava disponível em mensagens anteriores. Sobre pesquisa externa e fontes, use somente o "Registro da pesquisa externa": não diga que pesquisou se ele não mostrar pesquisa e não negue fontes que aparecem nele. Link ou documento citado no histórico pelo analista não é pesquisa feita por você.';
+      const registroPesquisa = tipoTurno === 'pergunta_processo' ? _resumoUltimaPesquisa(empresaId, atendimentoId) : '';
+      const promptCurto = `## Contexto recente da conversa\n${historicoRecente}\n\n${registroPesquisa ? `## Registro da pesquisa externa (fato do sistema)\n${registroPesquisa}\n\n` : ''}## Pergunta atual do analista\n${redigirValor(texto)}\n\n${instrucaoFinal}`;
       try {
         const resultadoCurto = await aiProviderClient.chamarIA(
           keysClassificacao, cfgClassificacao, promptBuilder.SYSTEM_PROMPT, promptCurto, [],
@@ -1561,9 +1583,10 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     ? `${resultado.texto}\n\n⚠️ *Resposta cortada pelo limite de tamanho da IA — peça para "continuar" ou reformule de forma mais objetiva.*`
     : resultado.texto;
 
-  // Depois do Quality Gate (não altera o que ele avaliou) e fora da resposta
-  // bloqueada por ele.
-  if (!revisaoNecessariaQualityGate) textoFinal = _anexarFontesConsultadas(textoFinal, pesquisaTecnica);
+  // Depois do Quality Gate (não altera o que ele avaliou). Entra também no aviso
+  // de análise bloqueada: as fontes abertas são fato, não a recomendação
+  // reprovada, e o analista precisa ver o que foi pesquisado.
+  textoFinal = _anexarFontesConsultadas(textoFinal, pesquisaTecnica);
 
   let secoes = _extrairSecoes(textoFinal);
   let nivelConfianca = _extrairNivelConfianca(textoFinal);
@@ -1723,6 +1746,7 @@ async function processarPreAnalise(empresaId, atendimentoId, { anexoIds = [] } =
 
 module.exports = {
   _anexarFontesConsultadas,
+  _resumoUltimaPesquisa,
   _historicoParaPerguntaCurta,
   processarTurno,
   processarPreAnalise,

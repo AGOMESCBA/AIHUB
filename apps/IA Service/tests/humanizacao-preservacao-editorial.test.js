@@ -9,6 +9,13 @@ const gate = require('../backend/services/quality-gate-service');
 const pedido = 'O cliente solicita detalhes da rotina ROTINA01, nos pontos PE_A, PE_B e PE_C.\n\nAinda não temos evidências das customizações. Solicite ao cliente:\n1. Descrição das alterações.\n2. Funções adicionadas.\n3. Documentação ou código envolvido.';
 const direto = 'Ainda faltam evidências das customizações de ROTINA01, nos pontos PE_A, PE_B e PE_C. Peça ao cliente a descrição das alterações, as funções adicionadas e a documentação ou código envolvido.';
 function aprova(a, b) { const r = analisarPreservacao(a, b); assert.equal(r.aprovado, true, JSON.stringify(r.falhas)); }
+// Gate mínimo (2026-10-19): mudança de sentido detectada por heurística não
+// bloqueia; fica registrada como aviso na auditoria.
+function detecta(a, b, codigo) {
+  const r = analisarPreservacao(a, b);
+  assert.equal(r.aprovado, true, JSON.stringify(r.falhas));
+  assert.ok((r.avisos || []).some(f => f.codigo === codigo), JSON.stringify(r.avisos));
+}
 function rejeita(a, b, codigo) {
   const r = analisarPreservacao(a, b);
   assert.equal(r.aprovado, false);
@@ -35,13 +42,13 @@ test('acompanhamento e ressalvas podem ser redistribuídos no parágrafo', () =>
     'Continue aguardando o retorno do fornecedor. Essa resposta é importante para resolvermos a situação.');
   aprova('Essas ações podem ajudar a resolver o erro.', 'Essas ações vão ajudar e, quem sabe, resolver o erro.');
 });
-test('pedido não pode virar evidência de ação concluída', () => {
+test('[opção A: bloqueia] pedido não pode virar evidência de ação concluída', () => {
   rejeita(pedido, direto.replace('Peça ao cliente a descrição das alterações, as funções adicionadas e a documentação ou código envolvido.',
     'Foi feita a descrição das alterações e foram adicionadas as funções. A documentação e o código já foram enviados pelo cliente.'), 'ESTADO_OU_CERTEZA_ALTERADO');
 });
-test('ação já realizada não pode voltar a ser solicitada pela humanização', () => {
-  rejeita('Os ajustes já foram feitos.', 'Realize os ajustes.', 'ACAO_REALIZADA_PERDIDA');
-  rejeita('Os ajustes já foram feitos. Solicite os logs.', 'Realize os ajustes. Solicite os logs.', 'ACAO_REALIZADA_PERDIDA');
+test('[gate mínimo: aviso] ação já realizada não pode voltar a ser solicitada pela humanização', () => {
+  detecta('Os ajustes já foram feitos.', 'Realize os ajustes.', 'ACAO_REALIZADA_PERDIDA');
+  detecta('Os ajustes já foram feitos. Solicite os logs.', 'Realize os ajustes. Solicite os logs.', 'ACAO_REALIZADA_PERDIDA');
   aprova('Já foram feitas tentativas de correção e ajustes nas regras, mas o erro persiste.',
     'Já tentamos corrigir com ajustes nas regras, mas o erro ainda não foi resolvido.');
 });
@@ -50,17 +57,17 @@ test('descrição de funções solicitada em lista não equivale a dados já ent
   aprova('Solicite ao cliente:\n1. Funções específicas que foram adicionadas ou modificadas.',
     'Peça ao cliente as funções específicas que foram adicionadas ou modificadas.');
 });
-test('hipótese não pode virar causa ou resolução confirmada', () => {
+test('[opção A: bloqueia] hipótese não pode virar causa ou resolução confirmada', () => {
   rejeita('A configuração pode causar o erro de XML.', 'A configuração foi confirmada como causa do erro de XML.', 'ESTADO_OU_CERTEZA_ALTERADO');
   rejeita('O erro não foi resolvido.', 'O erro foi resolvido.', 'ESTADO_OU_CERTEZA_ALTERADO');
 });
-test('próxima ação necessária não pode desaparecer em uma descrição passiva', () => {
-  rejeita('Obtenha os logs completos do serviço.', 'Os logs completos do serviço são relevantes.', 'ACAO_ESSENCIAL_OMITIDA');
+test('[gate mínimo: aviso] próxima ação necessária não pode desaparecer em uma descrição passiva', () => {
+  detecta('Obtenha os logs completos do serviço.', 'Os logs completos do serviço são relevantes.', 'ACAO_ESSENCIAL_OMITIDA');
 });
-test('não aceita nova solução sem correspondência com a resposta técnica', () => {
-  rejeita('Solicite o log do serviço.', 'Solicite o log do serviço. Desabilite o antivírus e reinicie o servidor.', 'AFIRMACAO_SEM_LASTRO');
+test('[gate mínimo: aviso] não aceita nova solução sem correspondência com a resposta técnica', () => {
+  detecta('Solicite o log do serviço.', 'Solicite o log do serviço. Desabilite o antivírus e reinicie o servidor.', 'AFIRMACAO_SEM_LASTRO');
 });
-test('não aceita diagnóstico confirmado novo mesmo reutilizando palavras do original', () => {
+test('[opção A: bloqueia] não aceita diagnóstico confirmado novo mesmo reutilizando palavras do original', () => {
   rejeita('Solicite o log para analisar o erro.', 'O log confirma que o erro é causado pela configuração.', 'ESTADO_OU_CERTEZA_ALTERADO');
 });
 test('código continua literal e ambiente não pode ser trocado', () => {

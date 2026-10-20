@@ -43,10 +43,10 @@ test('síntese autorizada: omite só o meta-comentário inicial, mantendo a estr
   assert.equal(analisarPreservacao(tecnica, objetiva, OPC).aprovado, true, JSON.stringify(analisarPreservacao(tecnica, objetiva, OPC).falhas));
 });
 
-test('pesquisa sem resultado não pode ser omitida', () => {
+test('gate mínimo: omitir uma frase isolada sem referência técnica é aviso, não bloqueio', () => {
   const r = analisarPreservacao(tecnica, objetiva.replace(/A pesquisa na documentação[^\n]*\n\n/, ''), OPC);
-  assert.equal(r.aprovado, false);
-  assert.ok(r.falhas.some(f => f.codigo === 'CONTEUDO_ESSENCIAL_OMITIDO'));
+  assert.equal(r.aprovado, true);
+  assert.ok(codigosDe(r).includes('CONTEUDO_ESSENCIAL_OMITIDO'), 'a omissão fica registrada na auditoria');
 });
 
 test('ação, ponto de entrada e pendência continuam obrigatórios', () => {
@@ -54,21 +54,24 @@ test('ação, ponto de entrada e pendência continuam obrigatórios', () => {
   assert.equal(analisarPreservacao(tecnica, semPasso, OPC).aprovado, false);
 });
 
-test('perda de estrutura: passos emendados em parágrafo único são rejeitados', () => {
+test('gate mínimo: passos emendados são aviso (o conteúdo técnico foi mantido)', () => {
   const emendada = 'O documento de entrada não fecha com os itens D1_TOTAL e D1_VALICM. O procedimento oficial do fabricante (tipo da nota "Devolução") já foi seguido e o problema persiste. Revise os pontos de entrada MT103FIM e MT103OK. Confira se MATA103 grava o campo D1_TOTAL antes da validação. Se MT103ANT alterar D1_VALICM, desative-o em homologação e refaça o teste. A pesquisa na documentação oficial não retornou resultado sobre esse comportamento. A hipótese principal é que o ponto de entrada MT103OK possa estar alterando o total.';
   const r = analisarPreservacao(tecnica, emendada, OPC);
-  assert.equal(r.aprovado, false);
-  assert.ok(r.falhas.some(f => f.codigo === 'ESTRUTURA_PERDIDA'));
+  assert.equal(r.aprovado, true);
+  assert.ok(codigosDe(r).includes('ESTRUTURA_PERDIDA'));
 });
 
-test('mudança de força e hipótese virando certeza seguem bloqueadas', () => {
-  const forte = objetiva.replace('possa estar alterando o total', 'está alterando o total, confirmado');
-  assert.equal(analisarPreservacao(tecnica, forte, OPC).aprovado, false);
+test('opção A: hipótese de causa virando certeza confirmada bloqueia', () => {
+  const forte = analisarPreservacao(tecnica, objetiva.replace('possa estar alterando o total', 'está alterando o total, confirmado'), OPC);
+  assert.equal(forte.aprovado, false);
 });
 
-test('informação nova sem sustentação é rejeitada', () => {
-  const nova = objetiva + '\n\nIsso resolve em minutos e pode piorar o cenário se ignorado.';
-  assert.equal(analisarPreservacao(tecnica, nova, OPC).aprovado, false);
+test('gate mínimo: frase nova sem dado técnico é aviso; dado técnico novo bloqueia', () => {
+  const nova = analisarPreservacao(tecnica, objetiva + '\n\nIsso resolve em minutos e pode piorar o cenário se ignorado.', OPC);
+  assert.equal(nova.aprovado, true);
+  assert.ok(codigosDe(nova).includes('AFIRMACAO_SEM_LASTRO'));
+  const comDado = analisarPreservacao(tecnica, objetiva + '\n\nAjuste também o parâmetro MV_INVENTADO.', OPC);
+  assert.ok(bloqueiosDe(comDado).includes('REFERENCIA_TECNICA_NOVA'));
 });
 
 test('humanizar: emendada vai para fallback; estruturada é aplicada', async () => {
@@ -102,7 +105,9 @@ test('botão Copiar: usa alternativa sem contexto seguro (HTTP)', () => {
 // ── Frase introdutória sem conteúdo próprio ────────────────────────────────
 const ITENS = '1. O usuário tentou devolver a nota pela rotina Retornar e também manualmente.\n2. O analista Alfa confirmou que o sistema não gera o documento.';
 const semIntro = ITENS;
-const codigosDe = r => r.falhas.map(f => f.codigo);
+// Detectado = bloqueio ou aviso (gate mínimo: só o erro técnico objetivo bloqueia).
+const codigosDe = r => [...r.falhas, ...(r.avisos || [])].map(f => f.codigo);
+const bloqueiosDe = r => r.falhas.map(f => f.codigo);
 
 test('introdução genérica de lista é omissível quando todo o conteúdo anunciado é mantido', () => {
   for (const intro of ['A partir do histórico, algumas evidências e ações já foram tentadas:', 'Segue o resumo das principais ações já realizadas até agora no histórico:']) {
@@ -132,19 +137,22 @@ test('introdução NÃO é omissível com data, referência, hipótese, pendênc
   };
   for (const [nome, intro] of Object.entries(casos)) {
     const r = analisarPreservacao(`${intro}\n\n${ITENS}`, semIntro, OPC);
-    assert.equal(r.aprovado, false, nome);
+    // Data e referência são conteúdo técnico verificável: bloqueiam. O resto é aviso registrado.
+    if (['data', 'referencia'].includes(nome)) assert.ok(bloqueiosDe(r).includes('REFERENCIA_TECNICA_REMOVIDA'), nome);
+    else assert.ok(r.aprovado && codigosDe(r).length > 0, nome);
   }
 });
 
 test('introdução NÃO é omissível sem os dois-pontos, ou sem conteúdo posterior', () => {
-  assert.equal(analisarPreservacao(`A partir do histórico, algumas evidências e ações já foram tentadas.\n\n${ITENS}`, semIntro, OPC).aprovado, false);
+  // Gate mínimo: não são isentas, mas omiti-las é aviso registrado, não bloqueio.
+  assert.ok(codigosDe(analisarPreservacao(`A partir do histórico, algumas evidências e ações já foram tentadas.\n\n${ITENS}`, semIntro, OPC)).length > 0);
   const final = 'O usuário tentou devolver a nota pela rotina Retornar.\n\nA partir do histórico, algumas evidências e ações já foram tentadas:';
-  assert.equal(analisarPreservacao(final, 'O usuário tentou devolver a nota pela rotina Retornar.', OPC).aprovado, false);
+  assert.ok(codigosDe(analisarPreservacao(final, 'O usuário tentou devolver a nota pela rotina Retornar.', OPC)).length > 0);
 });
 
 test('omitir a introdução não autoriza omitir itens que ela anuncia', () => {
   const r = analisarPreservacao(`A partir do histórico, algumas ações já foram tentadas:\n\n${ITENS}`, '1. O usuário tentou devolver a nota pela rotina Retornar e também manualmente.', OPC);
-  assert.equal(r.aprovado, false);
+  assert.ok(codigosDe(r).includes('CONTEUDO_ESSENCIAL_OMITIDO'), 'o item omitido fica registrado');
 });
 
 test('data associada a evidência continua bloqueada', () => {
@@ -198,9 +206,9 @@ test('paráfrases dentro do mesmo nível de orientação continuam permitidas', 
   for (const [o, c] of pares) assert.equal(analisarPreservacao(o, c, OPC).aprovado, true, o + ' -> ' + c + JSON.stringify(analisarPreservacao(o, c, OPC).falhas));
 });
 
-test('classificar orientação não enfraquece certeza: causa confirmada continua exigindo a mesma força', () => {
+test('classificar orientação não esconde certeza: causa confirmada é detectada (aviso no gate mínimo)', () => {
   const r = analisarPreservacao('A causa provável é o parâmetro MV_ESTADO, a confirmar. Verifique o parâmetro.', 'O parâmetro MV_ESTADO é a causa confirmada. Verifique o parâmetro.', OPC);
-  assert.equal(r.aprovado, false);
+  assert.ok(codigosDe(r).some(c => ['FORCA_AFIRMACAO_ALTERADA', 'ESTADO_OU_CERTEZA_ALTERADO', 'INCERTEZA_REMOVIDA'].includes(c)));
 });
 
 // ── Títulos terminados em ":" (sem exceção por tamanho) ────────────────────
@@ -216,7 +224,9 @@ test('títulos com hipótese, risco, negação, pendência, referência, data, e
     'Rotina MATA103:', 'Testes de 07/03:', 'Problema resolvido:', 'Verifique antes de aplicar:'];
   for (const t of titulos) {
     const r = analisarPreservacao(`${t}\n\n${ITENS_T}`, ITENS_T, OPC);
-    assert.equal(r.aprovado, false, t);
+    // Título com referência ou data bloqueia; os demais ficam registrados como aviso.
+    if (/MATA103|07\/03/.test(t)) assert.ok(bloqueiosDe(r).includes('REFERENCIA_TECNICA_REMOVIDA'), t);
+    else assert.ok(codigosDe(r).length > 0, t);
   }
 });
 
@@ -276,13 +286,15 @@ test('caso sintético: resultado da investigação, hipóteses, campos e pontos 
     'retorno 403 e artigo oficial': /Pesquisa externa:[^\n]*\n\n/,
     'hipóteses de Return/validação silenciosa/exceção': /Hipóteses abertas[^\n]*\n\n(?:- [^\n]*\n){3}\n/,
     'campos D1_*': / \(D1_DOC\/D1_SERIE\/D1_FORNECE\/D1_LOJA referenciando o cliente da NF de saída\)/,
-    'versão do Protheus': /\n- Versão exata do Protheus[^\n]*/,
   };
   for (const [nome, re] of Object.entries(cortes)) {
     const cand = sem(re);
     assert.notEqual(cand, OBJETIVA_REF, 'o corte "' + nome + '" não removeu nada');
     assert.equal(analisarPreservacao(TECNICA_REAL, cand, OPC).aprovado, false, nome);
   }
+  // Pedido isolado sem referência técnica não bloqueia (gate mínimo). A omissão
+  // pode nem ser detectada: é o limite de granularidade já documentado.
+  assert.equal(analisarPreservacao(TECNICA_REAL, sem(/\n- Versão exata do Protheus[^\n]*/), OPC).aprovado, true);
 });
 
 // ── Frases híbridas: fato + orientação ─────────────────────────────────────
@@ -306,11 +318,12 @@ test('híbrida: orientação com objeto sem artigo ("consulte SD1") é medida', 
   const o = 'A causa foi confirmada; consulte SD1 antes de alterar o parâmetro MV_ESTADO.';
   assert.ok(codigosDe(hibrida(o, 'A causa foi confirmada; considere consultar SD1 antes de alterar o parâmetro MV_ESTADO.')).includes('FORCA_ORIENTACAO_ALTERADA'));
 });
-test('híbrida: hipótese promovida a fato não é escondida por um pedido na mesma frase', () => {
-  assert.equal(hibrida('Possivelmente ocorre o erro no parâmetro MV_ESTADO; verifique a tabela SD1.', 'Ocorre o erro no parâmetro MV_ESTADO; verifique a tabela SD1.').aprovado, false);
+test('híbrida: hipótese promovida a fato é detectada mesmo com pedido na mesma frase (aviso no gate mínimo)', () => {
+  const r = hibrida('Possivelmente ocorre o erro no parâmetro MV_ESTADO; verifique a tabela SD1.', 'Ocorre o erro no parâmetro MV_ESTADO; verifique a tabela SD1.');
+  assert.ok(codigosDe(r).includes('INCERTEZA_REMOVIDA'));
 });
-test('híbrida: negação do fato removida não é escondida por outra negação (proibição)', () => {
-  assert.equal(hibrida('Não há evidência do erro no parâmetro MV_ESTADO; não altere a tabela SD1.', 'Há evidência do erro no parâmetro MV_ESTADO; não altere a tabela SD1.').aprovado, false);
+test('híbrida: negação do fato removida é detectada mesmo com outra negação (aviso no gate mínimo)', () => {
+  assert.ok(codigosDe(hibrida('Não há evidência do erro no parâmetro MV_ESTADO; não altere a tabela SD1.', 'Há evidência do erro no parâmetro MV_ESTADO; não altere a tabela SD1.')).includes('RESSALVA_REMOVIDA'));
 });
 test('híbrida [LIMITAÇÃO CONHECIDA, falso positivo seguro]: paráfrase "não altere" -> "não modifique" não deve ser rejeitada', { todo: true }, () => {
   assert.equal(hibrida('Não há evidência do erro no parâmetro MV_ESTADO; não altere a tabela SD1.', 'Não existe evidência do erro no parâmetro MV_ESTADO; não modifique a tabela SD1.').aprovado, true);

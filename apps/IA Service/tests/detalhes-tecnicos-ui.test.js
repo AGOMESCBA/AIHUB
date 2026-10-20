@@ -71,11 +71,11 @@ for (const tela of ['j2a', 'radar-externo']) for (const width of [1440, 390]) {
       }
       const botoes = page.locator('[data-detalhes-tecnicos]');
       await botoes.first().waitFor();
-      // Toda resposta da IA tem o botão (Objetiva, Técnica, Objetiva rejeitada),
-      // menos a bloqueada pelo Quality Gate e a Objetiva antiga sem Técnica guardada.
-      assert.equal(await botoes.count(), 7);
-      for (const id of ['m3', 'fallback', 'tecnica-pura']) assert.equal(await page.locator(`[data-detalhes-tecnicos="${id}"]`).count(), 1, `${id} tem botão`);
-      for (const id of ['sem-original', 'bloqueada']) assert.equal(await page.locator(`[data-detalhes-tecnicos="${id}"]`).count(), 0, `${id} sem botão`);
+      // O botão só aparece quando o analista vê a Objetiva. Se ele já vê a
+      // Técnica (estilo Técnica, Objetiva bloqueada pelo gate, sem humanização)
+      // ou a análise foi bloqueada pelo Quality Gate, não há botão.
+      assert.equal(await botoes.count(), 4);
+      for (const id of ['m3', 'fallback', 'tecnica-pura', 'sem-original', 'bloqueada']) assert.equal(await page.locator(`[data-detalhes-tecnicos="${id}"]`).count(), 0, `${id} sem botão`);
       assert.equal(await page.getByText(AVISO).count(), 1, 'aviso de correção sem arquivo aparece uma vez');
       assert.ok(await page.getByText(AVISO).isVisible());
       assert.equal(await page.locator('.injetado').count(), 0, 'HTML do aviso não é interpretado');
@@ -96,11 +96,6 @@ for (const tela of ['j2a', 'radar-externo']) for (const width of [1440, 390]) {
         await painel.getByRole('button', { name: 'Fechar Detalhes Técnicos' }).click();
         assert.equal(await painel.isVisible(), false);
       }
-      // Resposta já entregue como Técnica: o painel mostra o próprio texto.
-      await page.locator('[data-detalhes-tecnicos="tecnica-pura"]').click();
-      await painel.waitFor({ state: 'visible' });
-      assert.ok((await painel.innerText()).includes('Resposta técnica pura, sem humanização.'));
-      await painel.getByRole('button', { name: 'Fechar Detalhes Técnicos' }).click();
       assert.equal(requests.some(r => /investigar|\/retorno|pesquisar/.test(r.p)), false, 'abrir detalhes não processa nem busca retorno externo');
       if (tela === 'j2a') {
         const download = page.waitForEvent('download');

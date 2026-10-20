@@ -1,18 +1,17 @@
 (function () {
   'use strict';
   const escape = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  // Texto técnico completo de uma resposta da IA. Com a Objetiva aplicada, é a
-  // Técnica guardada; quando o analista já vê a Técnica (estilo Técnica ou
-  // Objetiva rejeitada), é o próprio conteúdo. Fica sem botão só a análise
-  // bloqueada pelo Quality Gate e o registro antigo de Objetiva que não guardou
-  // a Técnica (não há o que mostrar sem apresentar o texto humanizado como técnico).
+  // Técnica guardada de uma resposta entregue como Objetiva. O botão só existe
+  // quando o analista está vendo a Objetiva: se ele já vê a Técnica (estilo
+  // Técnica ou Objetiva bloqueada pelo gate, que volta para a Técnica), não há
+  // o que detalhar (decisão de produto, 2026-10-19). Fica sem botão também a
+  // análise bloqueada pelo Quality Gate.
   function textoTecnico(m) {
     if (m?.papel !== 'assistant' || !m.id || m.respostaOperacional?.qualityGateBloqueado) return null;
     if (typeof m.conteudo !== 'string' || !m.conteudo.trim()) return null;
     const h = m.diagnostico?.humanizacao;
-    if (typeof h?.respostaOriginal === 'string' && h.respostaOriginal.trim()) return h.respostaOriginal;
-    if (h?.status === 'aplicada' && h.estilo !== 'ORIGINAL') return null;
-    return m.conteudo;
+    if (h?.status !== 'aplicada' || h.estilo === 'ORIGINAL') return null;
+    return typeof h.respostaOriginal === 'string' && h.respostaOriginal.trim() ? h.respostaOriginal : null;
   }
   function disponivel(m) {
     return !!textoTecnico(m);

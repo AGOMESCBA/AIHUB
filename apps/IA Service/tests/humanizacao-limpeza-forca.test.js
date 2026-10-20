@@ -69,17 +69,20 @@ test('força: associação, hipótese, causalidade e certeza', () => {
   assert.equal(forcaAfirmacao('pode ser causada pelo cClassTrib'), 2);
   assert.equal(forcaAfirmacao('pode levar a resultados inesperados'), 2);
   assert.equal(forcaAfirmacao('a causa foi confirmada no log'), 3);
-  const rejeitar = [
+  // Gate mínimo (2026-10-19): mudança de força é detectada e registrada como aviso, sem bloquear.
+  const detectar = [
     ['A rejeição 1031 pode estar relacionada ao cClassTrib 510002.', 'A rejeição 1031 pode ser causada pelo cClassTrib 510002.'],
     ['A rejeição 1031 está relacionada ao cClassTrib 510002.', 'A rejeição 1031 é causada pelo cClassTrib 510002.'],
-    ['A rejeição 1031 pode ser causada pelo cClassTrib 510002.', 'Foi confirmado que o cClassTrib 510002 provoca a rejeição 1031.'],
     ['O log 4369 confirmou o cClassTrib 510002 como origem da rejeição 1031.', 'O log 4369 sugere que o cClassTrib 510002 talvez provoque a rejeição 1031.'],
   ];
-  for (const [original, candidata] of rejeitar) {
+  for (const [original, candidata] of detectar) {
     const r = analisarPreservacao(original, candidata);
-    assert.equal(r.aprovado, false, candidata);
-    assert.ok(r.falhas.some(f => f.codigo === 'FORCA_AFIRMACAO_ALTERADA' || f.codigo === 'ESTADO_OU_CERTEZA_ALTERADO' || f.codigo === 'INCERTEZA_REMOVIDA'), candidata);
+    assert.equal(r.aprovado, true, candidata);
+    assert.ok(r.avisos.some(f => f.codigo === 'FORCA_AFIRMACAO_ALTERADA' || f.codigo === 'ESTADO_OU_CERTEZA_ALTERADO' || f.codigo === 'INCERTEZA_REMOVIDA'), candidata);
   }
+  // Opção A: hipótese de causa apresentada como confirmada bloqueia.
+  const confirmada = analisarPreservacao('A rejeição 1031 pode ser causada pelo cClassTrib 510002.', 'Foi confirmado que o cClassTrib 510002 provoca a rejeição 1031.');
+  assert.equal(confirmada.aprovado, false);
   const aceitar = [
     ['A rejeição 1031 pode estar relacionada ao cClassTrib 510002.', 'A rejeição 1031 pode estar ligada ao cClassTrib 510002.'],
     ['A rejeição 1031 pode estar relacionada ao cClassTrib 510002.', 'É possível que a rejeição 1031 tenha relação com o cClassTrib 510002.'],
@@ -113,13 +116,19 @@ test('humanização: limpa a conclusão, revalida e só então entrega; senão v
     assert.ok(mantida.respostaFinal.endsWith(ressalva), 'ressalva final não é removida');
     assert.equal(mantida.conclusaoGenericaRemovida, undefined);
 
-    // Associação promovida a causalidade após a limpeza: entrega a Técnica.
+    // Associação promovida a causalidade: aviso registrado, Objetiva entregue (gate mínimo).
     saida = `${objetiva.replace('pode estar ligada ao', 'pode ser causada pelo')}\n\n${GENERICA}`;
     const forte = await humanizar({ empresaId: 1, respostaOriginal: tecnica, estilo: 'NATURAL' });
-    assert.equal(forte.status, 'fallback');
-    assert.equal(forte.motivo, 'preservacao_tecnica');
-    assert.equal(forte.respostaFinal, tecnica);
-    assert.ok(forte.validacaoPreservacao.falhas.some(f => f.codigo === 'FORCA_AFIRMACAO_ALTERADA'));
+    assert.equal(forte.status, 'aplicada');
+    assert.ok(forte.validacaoPreservacao.avisos.some(f => f.codigo === 'FORCA_AFIRMACAO_ALTERADA'));
+
+    // Referência técnica trocada: entrega a Técnica.
+    saida = `${objetiva.replace('510002', '510003')}\n\n${GENERICA}`;
+    const trocada = await humanizar({ empresaId: 1, respostaOriginal: tecnica, estilo: 'NATURAL' });
+    assert.equal(trocada.status, 'fallback');
+    assert.equal(trocada.motivo, 'preservacao_tecnica');
+    assert.equal(trocada.respostaFinal, tecnica);
+    assert.ok(trocada.validacaoPreservacao.falhas.some(f => f.codigo === 'REFERENCIA_TECNICA_NOVA' || f.codigo === 'REFERENCIA_TECNICA_REMOVIDA'));
   } finally {
     aiProvider.chamarIA = anteriores.chamarIA;
     aiConfig.resolverKeysEOrdem = anteriores.resolver;

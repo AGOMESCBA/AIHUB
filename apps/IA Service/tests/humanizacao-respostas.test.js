@@ -169,8 +169,9 @@ test('segredos ficam locais e comandos ou identificadores novos são rejeitados'
   assert.ok(r.respostaFinal.includes('senha=segredo-teste-local'));
   assert.equal(humanizador.validar('Use aItens.', 'Use bItens.'), false);
   assert.equal(humanizador.validar('Verificar o retorno.', 'Verificar o retorno.\ncurl exemplo'), false);
+  // Pendência dada como resolvida bloqueia (opção A); dado técnico novo também.
   assert.equal(humanizador.validar('O erro não foi resolvido.', 'O erro não foi resolvido. Foi resolvido.'), false);
-  assert.equal(humanizador.validar('O erro ocorre.', 'O erro ocorre. Talvez seja outra hipótese.'), false);
+  assert.equal(humanizador.validar('O erro ocorre.', 'O erro ocorre na rotina ROTINA99.'), false);
 });
 
 test('turno manual com automática desligada persiste uma resposta final e original auditável', async () => {
