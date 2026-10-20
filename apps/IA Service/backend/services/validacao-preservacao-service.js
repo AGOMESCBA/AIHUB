@@ -255,22 +255,29 @@ function perdeuEstrutura(original, candidata) {
   return linhas(original) >= 4 && linhas(candidata) <= 1;
 }
 
-// Gate mínimo (decisão de produto, 2026-10-19). Fluxo: a Técnica já passou pelo
-// Quality Gate; a IA a reescreve de forma objetiva; aqui só se trava o mínimo
-// do mínimo, o que é erro técnico objetivo. Redação, estilo e força de
-// linguagem não bloqueiam ("o gate não é professor de português"), e o botão
-// Detalhes Técnicos mostra a Técnica integral em toda resposta.
-//  - Bloqueia (falhas) só o verificável mecanicamente: referência técnica
-//    (rotina, campo, tabela, número, data, link) removida, trocada ou inventada;
-//    código ou comando alterado; ambiente trocado; resposta vazia; e perda
-//    grande de conteúdo técnico (3+ trechos). "Vamos confiar na IA."
-//    E dois casos de fato errado (opção A, 2026-10-20), só com pareamento forte:
-//    pendência/pedido virou feito, resolvido ou diagnóstico; hipótese de causa
-//    virou fato ou certeza.
-//  - Avisa (avisos, só auditoria): todo o resto (força da orientação,
-//    suavização sem afirmar causa, ressalva reescrita, estrutura, títulos,
-//    frases novas sem dado técnico, omissões isoladas).
+// Gate da Objetiva (decisão de produto, 2026-10-20): a IA tem prioridade; o gate não é
+// mais inteligente que ela e não interpreta texto. Fluxo: a Técnica já passou pelo Quality
+// Gate; a IA a reescreve de forma objetiva; aqui só se trava o que é precário, absurdo ou
+// ausência do que é técnico e importante (lista BLOQUEANTES):
+//  - resposta vazia/inválida; Objetiva desproporcional (< 15% da Técnica);
+//  - código ou comando alterado; identificador técnico removido (rotina, campo, tabela,
+//    parâmetro, link, código, número de documento — datas e horas não contam);
+//  - parte relevante do conteúdo técnico omitida
+//    (3+ trechos e pelo menos 20% deles).
+// Toda a análise de sentido (fato, hipótese, força, ressalva, estrutura, frases e dados
+// acrescentados) continua sendo feita, mas só como aviso na auditoria. O botão Detalhes
+// Técnicos mostra a Técnica integral quando a Objetiva é entregue.
 const PAREAMENTO_FORTE = 0.5;
+// Lista fechada do que bloqueia a Objetiva (o resto é aviso na auditoria).
+// Situação precária (vazia, inválida, código ou ambiente alterado), absurda (desproporcional)
+// ou ausência do que é técnico e importante (identificador sumiu, parte relevante omitida).
+const BLOQUEANTES = new Set(['CONTEUDO_INVALIDO', 'OBJETIVA_DESPROPORCIONAL', 'CODIGO_OU_COMANDO_ALTERADO', 'REFERENCIA_TECNICA_REMOVIDA', 'PERDA_DE_CONTEUDO_TECNICO']);
+// Objeto técnico do sistema, cuja perda pode gerar problema: SD1, MATA103, D1_DOC,
+// MV_PAR, cClassTrib, appserver.ini, links.
+const EH_OBJETO_TECNICO = r => (/\d/.test(r) && /[A-Za-z]/.test(r)) || r.includes('_') || /^https?:\/\//i.test(r)
+  || /^[a-z]+[A-Z]/.test(r) || /\.[A-Za-z][A-Za-z0-9]{0,9}$/.test(r) || /(?:\/[\w.-]+){2,}/.test(r);
+// Datas e horas não são identificador técnico para o gate ("02/10", "13/10/2026", "15h16", "19:00").
+const EH_DATA_OU_HORA = /^(?:\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|\d{1,2}h\d{0,2}|\d{1,2}:\d{2})$/;
 const CERTEZA_EXPLICITA = /\b(?:confirmad\w*|confirma|confirmou|comprovad\w*|comprova|comprovou|garantid\w*|a causa e|e a causa|(?:esta|estao) (?:incorret|errad|invalid|mal configurad)\w*)\b/;
 const LIMITE_PERDA_CONTEUDO = 3;
 // Frase omitida que é conteúdo técnico: tem referência, fala de pesquisa ou
@@ -289,20 +296,34 @@ function analisarPreservacao(original, candidata, { permitirSintese = false, exi
     falhar('CONTEUDO_INVALIDO', 'Resposta candidata vazia ou com tamanho incompatível.');
     return { aprovado: false, falhas, avisos };
   }
+  // Absurdo: Objetiva que jogou fora quase tudo da Técnica.
+  const palavrasOriginal = (original.match(/\S+/g) || []).length, palavrasCandidata = (candidata.match(/\S+/g) || []).length;
+  if (palavrasOriginal >= 80 && palavrasCandidata < palavrasOriginal * 0.15) falhar('OBJETIVA_DESPROPORCIONAL', 'Objetiva com menos de 15% do tamanho da resposta técnica.');
   if (exigirEstrutura && perdeuEstrutura(original, candidata)) avisar('ESTRUTURA_PERDIDA', 'Procedimento ou lista da resposta original perdeu a organização (passos ou quebras de linha).');
   const antes = referencias(original), depois = referencias(candidata);
-  const removidas = [...antes].filter(r => !depois.has(r)), novas = [...depois].filter(r => !antes.has(r));
+  // Só trava a perda de objeto técnico do sistema (tabela/rotina com letras e números,
+  // campo/parâmetro com sublinhado, camelCase, arquivo com extensão, link). Nomes e
+  // palavras em maiúsculas (IAGRO, TOTVS, RETORNO) e números soltos (403, NF, porta)
+  // não prejudicam tecnicamente e ficam só como aviso (decisão de produto, 2026-10-20).
+  const identificador = r => !EH_DATA_OU_HORA.test(r) && EH_OBJETO_TECNICO(r);
+  const removidas = [...antes].filter(r => !depois.has(r) && identificador(r)), novas = [...depois].filter(r => !antes.has(r));
   for (const id of identificadoresSimples(original)) if (!contemIdentificador(candidata, id) && !removidas.includes(id)) removidas.push(id);
   for (const id of identificadoresSimples(candidata)) if (!contemIdentificador(original, id) && !novas.includes(id)) novas.push(id);
   if (removidas.length) falhar('REFERENCIA_TECNICA_REMOVIDA', 'Identificadores ou valores técnicos removidos.', removidas);
+  // Nomes, números soltos e datas removidos: só registro na auditoria.
+  const removidasOutras = [...antes].filter(r => !depois.has(r) && !identificador(r));
+  if (removidasOutras.length) avisar('REFERENCIA_REMOVIDA', 'Nomes, números ou datas removidos (não travam).', removidasOutras);
   if (novas.length) falhar('REFERENCIA_TECNICA_NOVA', 'Identificadores ou valores técnicos acrescentados.', novas);
   if (JSON.stringify(codigosRigidos(original).sort()) !== JSON.stringify(codigosRigidos(candidata).sort())) {
     falhar('CODIGO_OU_COMANDO_ALTERADO', 'Código ou comando foi removido, acrescentado ou alterado.');
   }
-  for (const ambiente of ['homologacao', 'producao']) {
-    if (normalizar(original).includes(ambiente) !== normalizar(candidata).includes(ambiente)) {
-      falhar('AMBIENTE_ALTERADO', 'Ambiente técnico removido ou acrescentado.', [ambiente]);
-    }
+  // Ambiente (homologação/produção, inclusive HMG/PRD) só é registrado como aviso:
+  // a IA costuma abreviar ou deixar implícito, e isso não justifica travar.
+  const AMBIENTES = { homologacao: /\b(homologacao|hmg)\b/, producao: /\b(producao|prd)\b/ };
+  for (const [ambiente, re] of Object.entries(AMBIENTES)) {
+    const naOriginal = re.test(normalizar(original)), naCandidata = re.test(normalizar(candidata));
+    if (naOriginal && !naCandidata) falhar('AMBIENTE_ALTERADO', 'Ambiente técnico removido da resposta.', [ambiente]);
+    else if (!naOriginal && naCandidata) falhar('AMBIENTE_ACRESCENTADO', 'Ambiente técnico acrescentado.', [ambiente]);
   }
   const origem = unidades(original), destino = unidades(candidata);
   for (const u of destino) {
@@ -413,10 +434,17 @@ function analisarPreservacao(original, candidata, { permitirSintese = false, exi
       forte && f.concluida && !f.solicitada);
     else if (a.solicitada && !b.solicitada && !b.pendente) avisar('ACAO_ESSENCIAL_OMITIDA', 'Próxima ação necessária deixou de estar representada.', [u.texto, par.unidade.texto]);
   }
-  if (omitidosTecnicos.length >= LIMITE_PERDA_CONTEUDO) {
+  // Parte relevante omitida: 3+ trechos técnicos e pelo menos 20% deles.
+  const tecnicosOrigem = origem.filter(u => !u.titulo && conteudoTecnicoSubstantivo(u)).length;
+  if (omitidosTecnicos.length >= LIMITE_PERDA_CONTEUDO && omitidosTecnicos.length >= tecnicosOrigem * 0.2) {
     falhar('PERDA_DE_CONTEUDO_TECNICO', `A reescrita deixou de fora ${omitidosTecnicos.length} trechos técnicos da resposta original.`, omitidosTecnicos);
   }
-  return { aprovado: falhas.length === 0, falhas, avisos };
+  // Decisão de produto (2026-10-20): "a exceção deve ser pouca". Só bloqueia o
+  // verificável mecanicamente, sem interpretar texto; toda análise de sentido
+  // (fato, hipótese, força, ressalva, omissão por similaridade) fica como aviso.
+  const bloqueios = falhas.filter(f => BLOQUEANTES.has(f.codigo));
+  avisos.push(...falhas.filter(f => !BLOQUEANTES.has(f.codigo)));
+  return { aprovado: bloqueios.length === 0, falhas: bloqueios, avisos };
 }
 
 module.exports = { analisarPreservacao, referencias, limparConclusaoGenerica, ehConclusaoGenerica, forcaAfirmacao, forcaOrientacao, ehIdentificadorSimples };

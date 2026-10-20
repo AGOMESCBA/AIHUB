@@ -130,7 +130,7 @@ for (const estilo of ['NATURAL', 'DIRETO', 'DESCONTRAIDO']) {
 
 test('falha, timeout, vazio, truncamento e referências alteradas voltam ao original', async () => {
   for (const resposta of [new Error('timeout'), { texto: '' }, { texto: original, truncado: true },
-    { texto: original.replace('1031', '1032') }, { texto: 'Foi resolvido.' }]) {
+    { texto: original.replace('C7_FILIAL', 'C7_FILIA2') }, { texto: 'Foi resolvido.' }]) {
     respostaMock = resposta;
     const r = await humanizador.humanizar({ empresaId: 1, respostaOriginal: original, estilo: 'NATURAL' });
     assert.equal(r.status, 'fallback');
@@ -170,9 +170,9 @@ test('segredos ficam locais e comandos ou identificadores novos são rejeitados'
   assert.ok(r.respostaFinal.includes('senha=segredo-teste-local'));
   assert.equal(humanizador.validar('Use aItens.', 'Use bItens.'), false);
   assert.equal(humanizador.validar('Verificar o retorno.', 'Verificar o retorno.\ncurl exemplo'), false);
-  // Pendência dada como resolvida bloqueia (opção A); dado técnico novo também.
-  assert.equal(humanizador.validar('O erro não foi resolvido.', 'O erro não foi resolvido. Foi resolvido.'), false);
-  assert.equal(humanizador.validar('O erro ocorre.', 'O erro ocorre na rotina ROTINA99.'), false);
+  // Gate final: frase nova e dado acrescentado são aviso; identificador removido bloqueia.
+  assert.equal(humanizador.validar('O erro não foi resolvido.', 'O erro não foi resolvido. Foi resolvido.'), true);
+  assert.equal(humanizador.validar('O erro ocorre na rotina ROTINA99.', 'O erro ocorre.'), false);
 });
 
 test('turno manual com automática desligada persiste uma resposta final e original auditável', async () => {
@@ -330,12 +330,12 @@ test('fluxo investigativo humaniza somente após o gate e mantém dossiê e cons
   assert.equal(retorno.diagnostico.humanizacao.usage.total_tokens, 42);
   etapas.length = 0;
   const fallbackAt = atendimentoRepo.criarAtendimento(1, { origem: 'manual', conteudoBruto: 'Erro técnico', consultorId: consultor.id });
-  respostaMock = { texto: original.replace('1031', '9999'), provider: 'openai', model: 'mock' };
+  respostaMock = { texto: original.replace('C7_FILIAL', 'C7_FILIA2'), provider: 'openai', model: 'mock' };
   const fallback = await investigacao.processarPreAnalise(1, fallbackAt.id);
   assert.deepEqual(etapas, ['resposta_tecnica', 'quality_gate', 'humanizacao'], 'falha editorial não repete gate nem investigação');
   assert.equal(fallback.conteudo, original);
   assert.equal(fallback.diagnostico.humanizacao.aprovacaoTecnica.aprovado, true);
-  assert.ok(fallback.diagnostico.humanizacao.respostaCandidata.includes('9999'));
+  assert.ok(fallback.diagnostico.humanizacao.respostaCandidata.includes('C7_FILIA2'));
   assert.ok(fallback.diagnostico.humanizacao.validacaoPreservacao.falhas.some(f => f.codigo === 'REFERENCIA_TECNICA_REMOVIDA'));
 });
 

@@ -26,7 +26,9 @@ test('numeração editorial pode desaparecer e itens podem virar prosa concisa',
 test('referências, valores e pontos de entrada continuam obrigatórios', () => {
   rejeita('O arquivo corrigido calculo.py precisa de validação.', 'O arquivo corrigido calculo.ts precisa de validação.', 'REFERENCIA_TECNICA_REMOVIDA');
   rejeita(pedido, direto.replace('PE_B', 'PE_D'), 'REFERENCIA_TECNICA_REMOVIDA');
-  rejeita('O erro 400 ocorre na rotina ROTINA01.', 'A rotina ROTINA01 apresenta o erro 401.', 'REFERENCIA_TECNICA_NOVA');
+  // Número solto (código de erro) não trava: fica como aviso; objeto técnico trocado trava.
+  detecta('O erro 400 ocorre na rotina ROTINA01.', 'A rotina ROTINA01 apresenta o erro 401.', 'REFERENCIA_TECNICA_NOVA');
+  rejeita('O erro 400 ocorre na rotina ROTINA01.', 'O erro 400 ocorre na rotina ROTINA02.', 'REFERENCIA_TECNICA_REMOVIDA');
 });
 test('ressalvas e hipóteses podem mudar de redação mantendo significado', () => {
   aprova('É possível que a configuração de XML esteja diferente. Verifique os parâmetros da filial 02.',
@@ -42,8 +44,8 @@ test('acompanhamento e ressalvas podem ser redistribuídos no parágrafo', () =>
     'Continue aguardando o retorno do fornecedor. Essa resposta é importante para resolvermos a situação.');
   aprova('Essas ações podem ajudar a resolver o erro.', 'Essas ações vão ajudar e, quem sabe, resolver o erro.');
 });
-test('[opção A: bloqueia] pedido não pode virar evidência de ação concluída', () => {
-  rejeita(pedido, direto.replace('Peça ao cliente a descrição das alterações, as funções adicionadas e a documentação ou código envolvido.',
+test('[gate final: aviso] pedido virando ação concluída é registrado', () => {
+  detecta(pedido, direto.replace('Peça ao cliente a descrição das alterações, as funções adicionadas e a documentação ou código envolvido.',
     'Foi feita a descrição das alterações e foram adicionadas as funções. A documentação e o código já foram enviados pelo cliente.'), 'ESTADO_OU_CERTEZA_ALTERADO');
 });
 test('[gate mínimo: aviso] ação já realizada não pode voltar a ser solicitada pela humanização', () => {
@@ -57,9 +59,9 @@ test('descrição de funções solicitada em lista não equivale a dados já ent
   aprova('Solicite ao cliente:\n1. Funções específicas que foram adicionadas ou modificadas.',
     'Peça ao cliente as funções específicas que foram adicionadas ou modificadas.');
 });
-test('[opção A: bloqueia] hipótese não pode virar causa ou resolução confirmada', () => {
-  rejeita('A configuração pode causar o erro de XML.', 'A configuração foi confirmada como causa do erro de XML.', 'ESTADO_OU_CERTEZA_ALTERADO');
-  rejeita('O erro não foi resolvido.', 'O erro foi resolvido.', 'ESTADO_OU_CERTEZA_ALTERADO');
+test('[gate final: aviso] hipótese virando causa ou resolução confirmada é registrada', () => {
+  detecta('A configuração pode causar o erro de XML.', 'A configuração foi confirmada como causa do erro de XML.', 'ESTADO_OU_CERTEZA_ALTERADO');
+  detecta('O erro não foi resolvido.', 'O erro foi resolvido.', 'ESTADO_OU_CERTEZA_ALTERADO');
 });
 test('[gate mínimo: aviso] próxima ação necessária não pode desaparecer em uma descrição passiva', () => {
   detecta('Obtenha os logs completos do serviço.', 'Os logs completos do serviço são relevantes.', 'ACAO_ESSENCIAL_OMITIDA');
@@ -67,8 +69,8 @@ test('[gate mínimo: aviso] próxima ação necessária não pode desaparecer em
 test('[gate mínimo: aviso] não aceita nova solução sem correspondência com a resposta técnica', () => {
   detecta('Solicite o log do serviço.', 'Solicite o log do serviço. Desabilite o antivírus e reinicie o servidor.', 'AFIRMACAO_SEM_LASTRO');
 });
-test('[opção A: bloqueia] não aceita diagnóstico confirmado novo mesmo reutilizando palavras do original', () => {
-  rejeita('Solicite o log para analisar o erro.', 'O log confirma que o erro é causado pela configuração.', 'ESTADO_OU_CERTEZA_ALTERADO');
+test('[gate final: aviso] diagnóstico confirmado novo é registrado', () => {
+  detecta('Solicite o log para analisar o erro.', 'O log confirma que o erro é causado pela configuração.', 'ESTADO_OU_CERTEZA_ALTERADO');
 });
 test('código continua literal e ambiente não pode ser trocado', () => {
   rejeita('Execute em homologação.\n```sql\nSELECT CAMPO FROM TABELA;\n```',

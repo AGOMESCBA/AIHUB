@@ -255,12 +255,12 @@ function fonteGrande(linhas = 1800) {
   return Buffer.from(partes.join('\r\n'), 'latin1');
 }
 
-test('validador recusa hipótese promovida a certeza e pendência dada como concluída', () => {
+test('validador registra hipótese promovida a certeza e pendência dada como concluída (aviso no gate final, 2026-10-20)', () => {
   const real = 'A última comunicação do fornecedor sugere que a rejeição 1031 pode estar relacionada a configurações inadequadas no `cClassTrib` e nas regras de alíquota. É necessário verificar se o percentual de diferimento está corretamente configurado no campo correspondente.';
   for (const candidata of [
     'A rejeição 1031 está ligada a configurações inadequadas no `cClassTrib` e nas regras de alíquota, segundo o fornecedor. É necessário verificar se o percentual de diferimento está corretamente configurado no campo correspondente.',
     'O fornecedor identificou que a rejeição 1031 vem de configurações inadequadas no `cClassTrib` e nas regras de alíquota. Vale verificar se o percentual de diferimento está certo no campo correspondente.',
-  ]) assert.equal(analisarPreservacao(real, candidata).aprovado, false, candidata);
+  ]) assert.ok(analisarPreservacao(real, candidata).avisos.length > 0, candidata);
   const casos = [
     ['A rejeição 1031 pode estar relacionada ao cClassTrib 510002. Verifique o percentual de diferimento.', 'A rejeição 1031 está relacionada ao cClassTrib 510002. Verifique o percentual de diferimento.'],
     ['A rejeição 1031 possivelmente vem do cClassTrib 510002. O fornecedor não respondeu.', 'A rejeição 1031 vem do cClassTrib 510002. O fornecedor não respondeu.'],
@@ -268,7 +268,7 @@ test('validador recusa hipótese promovida a certeza e pendência dada como conc
     ['Estamos aguardando o retorno da TOTVS no chamado 30422148.', 'A TOTVS retornou no chamado 30422148.'],
     ['Verifique se o percentual de diferimento está preenchido no cClassTrib 510002.', 'O percentual de diferimento do cClassTrib 510002 está incorreto.'],
   ];
-  for (const [original, candidata] of casos) assert.equal(analisarPreservacao(original, candidata).aprovado, false, candidata);
+  for (const [original, candidata] of casos) assert.ok(analisarPreservacao(original, candidata).avisos.length > 0, candidata);
   // Paráfrases legítimas continuam permitidas.
   assert.equal(analisarPreservacao(casos[0][0], 'É possível que a rejeição 1031 tenha relação com o cClassTrib 510002. Vale verificar o percentual de diferimento.').aprovado, true);
   assert.equal(analisarPreservacao(casos[3][0], 'Seguimos aguardando a TOTVS responder o chamado 30422148.').aprovado, true);

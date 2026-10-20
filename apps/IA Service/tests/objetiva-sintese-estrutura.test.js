@@ -61,24 +61,29 @@ test('gate mínimo: passos emendados são aviso (o conteúdo técnico foi mantid
   assert.ok(codigosDe(r).includes('ESTRUTURA_PERDIDA'));
 });
 
-test('opção A: hipótese de causa virando certeza confirmada bloqueia', () => {
+test('gate final: hipótese virando certeza é registrada como aviso (a IA tem prioridade)', () => {
   const forte = analisarPreservacao(tecnica, objetiva.replace('possa estar alterando o total', 'está alterando o total, confirmado'), OPC);
-  assert.equal(forte.aprovado, false);
+  assert.equal(forte.aprovado, true);
+  assert.ok(forte.avisos.length > 0);
 });
 
-test('gate mínimo: frase nova sem dado técnico é aviso; dado técnico novo bloqueia', () => {
+test('gate final: frase nova e dado técnico acrescentado são aviso (a IA tem prioridade)', () => {
   const nova = analisarPreservacao(tecnica, objetiva + '\n\nIsso resolve em minutos e pode piorar o cenário se ignorado.', OPC);
   assert.equal(nova.aprovado, true);
   assert.ok(codigosDe(nova).includes('AFIRMACAO_SEM_LASTRO'));
   const comDado = analisarPreservacao(tecnica, objetiva + '\n\nAjuste também o parâmetro MV_INVENTADO.', OPC);
-  assert.ok(bloqueiosDe(comDado).includes('REFERENCIA_TECNICA_NOVA'));
+  assert.equal(comDado.aprovado, true);
+  assert.ok(codigosDe(comDado).includes('REFERENCIA_TECNICA_NOVA'));
 });
 
-test('humanizar: emendada vai para fallback; estruturada é aplicada', async () => {
+test('humanizar: emendada e estruturada são entregues; perda de identificador volta à Técnica', async () => {
   const orig = { resolverKeysEOrdem: aiConfig.resolverKeysEOrdem, chamarIA: aiProvider.chamarIA };
   aiConfig.resolverKeysEOrdem = () => ({ keys: {}, cfg: {} });
   try {
     aiProvider.chamarIA = async () => ({ texto: objetiva.replace(/\n/g, ' '), provider: 'x', model: 'y' });
+    const emendada = await humanizar({ empresaId: 1, respostaOriginal: tecnica, estilo: 'NATURAL' });
+    assert.equal(emendada.status, 'aplicada');
+    aiProvider.chamarIA = async () => ({ texto: objetiva.split('MT103FIM').join('outro ponto de entrada'), provider: 'x', model: 'y' });
     const ruim = await humanizar({ empresaId: 1, respostaOriginal: tecnica, estilo: 'NATURAL' });
     assert.equal(ruim.status, 'fallback');
     assert.equal(ruim.respostaFinal, tecnica);
@@ -138,7 +143,7 @@ test('introdução NÃO é omissível com data, referência, hipótese, pendênc
   for (const [nome, intro] of Object.entries(casos)) {
     const r = analisarPreservacao(`${intro}\n\n${ITENS}`, semIntro, OPC);
     // Data e referência são conteúdo técnico verificável: bloqueiam. O resto é aviso registrado.
-    if (['data', 'referencia'].includes(nome)) assert.ok(bloqueiosDe(r).includes('REFERENCIA_TECNICA_REMOVIDA'), nome);
+    if (nome === 'referencia') assert.ok(bloqueiosDe(r).includes('REFERENCIA_TECNICA_REMOVIDA'), nome);
     else assert.ok(r.aprovado && codigosDe(r).length > 0, nome);
   }
 });
@@ -155,12 +160,11 @@ test('omitir a introdução não autoriza omitir itens que ela anuncia', () => {
   assert.ok(codigosDe(r).includes('CONTEUDO_ESSENCIAL_OMITIDO'), 'o item omitido fica registrado');
 });
 
-test('data associada a evidência continua bloqueada', () => {
+test('gate final: data omitida não bloqueia (o gate não olha datas)', () => {
   const orig = 'O analista Alfa confirmou em 26/02 que o sistema não gera o documento de entrada.\n\n1. Consulte o SD1.\n2. Anexe o log.';
   const cand = 'O analista Alfa confirmou que o sistema não gera o documento de entrada.\n\n1. Consulte o SD1.\n2. Anexe o log.';
   const r = analisarPreservacao(orig, cand, OPC);
-  assert.equal(r.aprovado, false);
-  assert.ok(codigosDe(r).includes('REFERENCIA_TECNICA_REMOVIDA'));
+  assert.equal(r.aprovado, true);
 });
 
 test('"tente seguir" -> "siga" com rótulo removido deixa de cair em certeza', () => {
@@ -225,7 +229,7 @@ test('títulos com hipótese, risco, negação, pendência, referência, data, e
   for (const t of titulos) {
     const r = analisarPreservacao(`${t}\n\n${ITENS_T}`, ITENS_T, OPC);
     // Título com referência ou data bloqueia; os demais ficam registrados como aviso.
-    if (/MATA103|07\/03/.test(t)) assert.ok(bloqueiosDe(r).includes('REFERENCIA_TECNICA_REMOVIDA'), t);
+    if (/MATA103/.test(t)) assert.ok(bloqueiosDe(r).includes('REFERENCIA_TECNICA_REMOVIDA'), t);
     else assert.ok(codigosDe(r).length > 0, t);
   }
 });
@@ -281,9 +285,10 @@ test('caso sintético: a própria Técnica, e uma Objetiva fiel e reorganizada, 
 
 test('caso sintético: resultado da investigação, hipóteses, campos e pontos de entrada não podem sumir', () => {
   const sem = (re) => OBJETIVA_REF.replace(re, '');
+  // Parágrafo de pesquisa externa (nomes, código 403, datas) não tem objeto técnico do
+  // sistema: omiti-lo fica registrado como aviso e não trava (decisão de produto, 2026-10-20).
+  assert.ok(codigosDe(analisarPreservacao(TECNICA_REAL, sem(/Pesquisa externa:[^\n]*\n\n/), OPC)).length > 0, 'omissão da pesquisa registrada');
   const cortes = {
-    'pesquisa externa inteira': /Pesquisa externa:[^\n]*\n\n/,
-    'retorno 403 e artigo oficial': /Pesquisa externa:[^\n]*\n\n/,
     'hipóteses de Return/validação silenciosa/exceção': /Hipóteses abertas[^\n]*\n\n(?:- [^\n]*\n){3}\n/,
     'campos D1_*': / \(D1_DOC\/D1_SERIE\/D1_FORNECE\/D1_LOJA referenciando o cliente da NF de saída\)/,
   };
