@@ -68,7 +68,8 @@ function reescritaValida(_keys, _cfg, _system, user, imagens, opts) {
   assert.equal(opts.maxProviderRounds, 1);
   assert.equal(opts.totalTimeoutMs, 15000);
   const dados = JSON.parse(user);
-  assert.deepEqual(Object.keys(dados), ['estilo', 'resposta']);
+  assert.deepEqual(Object.keys(dados), ['estilo', 'limitePalavras', 'resposta']);
+  assert.ok(Number.isInteger(dados.limitePalavras) && dados.limitePalavras >= 40, 'meta de tamanho calculada pelo código');
   return { texto: dados.resposta.replace('A rejeição 1031 ocorre', 'A rejeição 1031 aparece'), provider: 'openai', model: 'modelo-mock', usage: { total_tokens: 42 } };
 }
 after(() => { database.fecharDB(); platformDB.close(); });

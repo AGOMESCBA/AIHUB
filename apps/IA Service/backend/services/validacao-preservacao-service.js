@@ -407,7 +407,10 @@ function analisarPreservacao(original, candidata, { permitirSintese = false, exi
       if (co.negativa && !cc.negativa && !cc.pendente && !(co.ausenciaProblema && cc.ausenciaProblema)) falhar('RESSALVA_REMOVIDA', 'Negação da oração factual deixou de estar representada.', [u.texto, par.unidade.texto], false);
       else if (!co.negativa && cc.negativa) falhar('NEGACAO_FACTUAL_ADICIONADA', 'Negação acrescentada à oração factual.', [u.texto, par.unidade.texto], false);
     }
-    if (a.solicitada && !b.solicitada && !b.pendente && b.concluida) falhar('ACAO_SOLICITADA_VIROU_CONCLUIDA', 'Ação solicitada passou a ser descrita como realizada.', [u.texto, par.unidade.texto], forte);
+    if (a.solicitada && !b.solicitada && !b.pendente && b.concluida) falhar('ACAO_SOLICITADA_VIROU_CONCLUIDA', 'Ação solicitada passou a ser descrita como realizada.', [u.texto, par.unidade.texto],
+      // Bloqueia só quando a PRÓPRIA frase afirma que foi feito; numa lista "Já feito"
+      // o parágrafo inteiro parece concluído, e isso não prova a troca.
+      forte && f.concluida && !f.solicitada);
     else if (a.solicitada && !b.solicitada && !b.pendente) avisar('ACAO_ESSENCIAL_OMITIDA', 'Próxima ação necessária deixou de estar representada.', [u.texto, par.unidade.texto]);
   }
   if (omitidosTecnicos.length >= LIMITE_PERDA_CONTEUDO) {
