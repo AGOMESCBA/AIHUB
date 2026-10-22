@@ -10,6 +10,13 @@ function addColumnIfMissing(db, table, column, definition) {
 
 function ensurePlatformSchema(db) {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS platform_access_config (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      url_publica TEXT,
+      versao INTEGER NOT NULL,
+      atualizado_em TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS platform_ai_configs (
       id TEXT PRIMARY KEY,
       empresa_id INTEGER NOT NULL UNIQUE,

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mockup — Monitor de Acessos</title>
+  <style>
+    :root { color-scheme:light;--bg-base:#f8fafc;--bg-card:#fff;--bg-hover:#f1f5f9;--bg-active:#eff6ff;--text-hi:#0f172a;--text-md:#64748b;--text-lo:#94a3b8;--border:#e2e8f0;--accent:#1d4ed8;--success:#16a34a;--warning:#d97706;--error:#dc2626; }
+    * { box-sizing:border-box; }
+    body { margin:0;background:var(--bg-base);color:var(--text-hi);font:14px/1.6 'Segoe UI',system-ui,sans-serif; }
+    button,input,select { font:inherit; }
+    button { cursor:pointer; }
+    button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible { outline:2px solid var(--accent);outline-offset:3px; }
+    [hidden] { display:none !important; }
+    .sidebar { position:fixed;inset:0 auto 0 0;width:64px;background:var(--bg-card);border-right:1px solid var(--border);display:flex;align-items:center;flex-direction:column;gap:22px;padding-top:14px; }
+    .logo { width:32px;height:32px;display:grid;place-items:center;border-radius:10px;background:var(--accent);color:#fff;font-size:20px; }
+    .nav-icon { width:36px;height:36px;display:grid;place-items:center;border-radius:8px;color:var(--accent);background:var(--bg-active);font-size:20px; }
+    .main { margin-left:64px; }
+    .topbar { height:56px;padding:0 24px;display:flex;align-items:center;gap:10px;background:var(--bg-card);border-bottom:1px solid var(--border);font-size:13px; }
+    .muted { color:var(--text-md); }
+    .preview-tag { margin-left:auto;font-size:11px;color:var(--accent);background:var(--bg-active);border:1px solid var(--border);padding:2px 10px;border-radius:999px;white-space:nowrap; }
+    main { padding:22px 24px; }
+    .page-head { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;gap:24px;margin-bottom:16px; }
+    .page-kicker { font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-lo); }
+    h1 { font-size:22px;line-height:1.25;margin:3px 0 6px; }
+    .description { margin:0;max-width:62ch;font-size:13px;color:var(--text-md); }
+    .head-controls { min-width:0;display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:10px; }
+    .control-row { display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;max-width:100%; }
+    .chip,.btn { display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-md);white-space:nowrap;font-size:12.5px;line-height:1.4; }
+    .chip { padding:6px 12px;border-radius:999px; }
+    .chip[aria-pressed="true"] { background:var(--bg-active);border-color:var(--accent);color:var(--accent);font-weight:600; }
+    .btn { min-height:33px;padding:6px 10px;border-radius:7px; }
+    .btn:hover,.chip:hover { background:var(--bg-hover); }
+    .btn-primary { background:var(--accent);color:#fff;border-color:var(--accent); }
+    .btn-primary:hover { background:#1e40af; }
+    .btn-danger { color:var(--error);border-color:#fca5a5; }
+    .btn-danger:hover { background:#fef2f2; }
+    .btn svg { width:14px;height:14px;flex:none; }
+    #btn-resumo svg { transition:transform .2s; }
+    #btn-resumo[aria-expanded="false"] svg { transform:rotate(180deg); }
+    .auto { display:flex;align-items:center;gap:6px;color:var(--text-md);font-size:12px;white-space:nowrap; }
+    .dot { display:inline-block;width:8px;height:8px;flex:none;border-radius:50%;background:var(--success); }
+    .auto.paused .dot { background:var(--text-lo); }
+    select,input { border:1px solid var(--border);background:var(--bg-card);color:var(--text-hi);border-radius:8px;min-height:33px;font-size:12.5px;padding:6px 9px; }
+    .countdown { min-width:25px;font-size:11px;font-variant-numeric:tabular-nums;color:var(--text-lo); }
+    .summary-panel { margin-bottom:12px;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--bg-card); }
+    .summary-filters { display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;padding-top:8px;margin-top:8px;border-top:1px solid var(--border); }
+    .filter-label { font-size:11px;color:var(--text-md);margin-right:2px; }
+    .kpis { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px; }
+    .kpi { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:center;text-align:left;background:var(--bg-base);color:var(--text-hi);border:1px solid var(--border);border-radius:8px;padding:6px 10px; }
+    .kpi:hover { border-color:#cbd5e1; }
+    .kpi[aria-pressed="true"] { border-color:var(--accent);box-shadow:0 0 0 2px #1d4ed81a; }
+    .kpi-label { display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--text-md); }
+    .kpi-value { font-size:22px;line-height:1.2;font-weight:700;font-variant-numeric:tabular-nums; }
+    .kpi-foot { grid-column:1 / -1;font-size:11px;line-height:1.35;color:var(--text-md); }
+    .away { background:var(--warning); }.offline { background:var(--text-lo); }
+    .board { border:1px solid var(--border);border-radius:10px;background:var(--bg-card);overflow:hidden;box-shadow:0 1px 3px #0000000f; }
+    .grid-toolbar { padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap; }
+    .grid-title { font-size:13.5px;font-weight:600; }
+    .grid-meta { font-size:12px;color:var(--text-lo); }
+    .grid-actions { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    #busca { width:300px;max-width:100%; }
+    input::placeholder { color:var(--text-lo); }
+    .table-wrap { overflow-x:auto; }
+    table { width:100%;min-width:1000px;border-collapse:collapse; }
+    th { background:var(--bg-base);border-block:1px solid var(--border);padding:9px 12px;text-align:left;text-transform:uppercase;letter-spacing:.04em;font-size:11px;color:var(--text-md);font-weight:600;white-space:nowrap; }
+    td { padding:10px 12px;border-bottom:1px solid var(--border);font-size:12.5px; }
+    tbody tr:last-child td { border-bottom:0; }
+    tbody tr:hover { background:var(--bg-hover); }
+    .user { display:flex;gap:9px;align-items:center; }
+    .avatar { display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--bg-active);color:var(--accent);font-size:11px;font-weight:700; }
+    .name { font-weight:600; }.sub { font-size:11px;color:var(--text-lo); }
+    .badge { display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;white-space:nowrap; }
+    .online { background:#dcfce7;color:#15803d; }.ausente { background:#fef3c7;color:#b45309; }.inativo { background:var(--bg-hover);color:var(--text-md); }
+    .chat { background:#dbeafe;color:#1d4ed8; }.interno { background:#ede9fe;color:#6d28d9; }
+    .time { font-variant-numeric:tabular-nums;white-space:nowrap; }
+    .task { font-weight:600; }.ticket { color:var(--accent);font-size:11px; }
+    .empty { text-align:center;padding:32px;color:var(--text-md); }
+    .preview-note { display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:10px 0 0;color:var(--text-lo);font-size:11px; }
+    .preview-note a { color:var(--accent);text-decoration:none; }
+    #aviso { position:fixed;bottom:24px;left:50%;transform:translateX(-50%);max-width:calc(100vw - 32px);width:max-content;background:var(--text-hi);color:var(--bg-card);padding:10px 16px;border-radius:8px;box-shadow:0 4px 16px #0002;font-size:13px;z-index:2; }
+    @media (max-width:1200px) { .page-head { grid-template-columns:minmax(0,1fr);gap:14px; }.description { max-width:none; }.head-controls { padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-card); } }
+    @media (max-width:720px) { .sidebar { display:none; }.main { margin-left:0; }main { padding:16px; }.topbar { padding:0 16px; }.topbar .muted { display:none; }.kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }.kpi { grid-template-columns:1fr; }.kpi-foot { grid-column:1; }.grid-actions { width:100%; }#busca { width:100%; }.grid-meta { max-width:100%; }.control-row { gap:8px 6px; } }
+    @media (prefers-reduced-motion:reduce) { #btn-resumo svg { transition:none; } }
+  </style>
+</head>
+<body>
+  <aside class="sidebar" aria-label="IA Service"><div class="logo" aria-hidden="true">ϟ</div><div class="nav-icon" title="Monitor de Acessos" aria-hidden="true">◉</div></aside>
+  <div class="main">
+    <div class="topbar"><span class="muted">IA Service ›</span><strong>Monitor de Acessos</strong><span class="preview-tag">Mockup interativo</span></div>
+    <main>
+      <header class="page-head">
+        <div class="page-intro">
+          <div class="page-kicker">Operação</div>
+          <h1>Monitor de Acessos</h1>
+          <p class="description">Acompanhe quem está usando o Radar (J2A) e as rotinas do IA Service nesta empresa, há quanto tempo e em qual tela.</p>
+        </div>
+        <div class="head-controls" aria-label="Controles do monitor">
+          <div class="control-row" role="group" aria-label="Atualização e ações">
+            <span class="auto" id="auto"><span class="dot"></span><span id="auto-texto">Automático</span><span class="countdown" id="countdown" title="Próxima atualização">30s</span></span>
+            <select id="intervalo" aria-label="Intervalo de atualização"><option value="15">15 segundos</option><option value="30" selected>30 segundos</option><option value="60">1 minuto</option><option value="0">Pausado</option></select>
+            <button type="button" class="btn" id="btn-resumo" aria-expanded="true" aria-controls="resumo" title="Recolher ou expandir os cartões e os filtros de origem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg><span id="resumo-texto">Recolher painel</span></button>
+            <button type="button" class="btn btn-primary" id="btn-atualizar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>Atualizar</button>
+            <button type="button" class="btn btn-danger" id="btn-limpar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg>Limpar</button>
+          </div>
+        </div>
+      </header>
+
+      <section class="summary-panel" id="resumo" aria-label="Resumo de acessos e filtros de origem">
+        <div class="kpis">
+        <button type="button" class="kpi" data-sit="online" aria-pressed="false"><span class="kpi-label"><span class="dot"></span>On Line agora</span><span class="kpi-value" id="k-online">6</span><span class="kpi-foot">sinal nos últimos 2 min</span></button>
+        <button type="button" class="kpi" data-sit="ausente" aria-pressed="false"><span class="kpi-label"><span class="dot away"></span>Ausentes</span><span class="kpi-value" id="k-ausente">2</span><span class="kpi-foot">sem sinal há 2 a 15 min</span></button>
+        <button type="button" class="kpi" data-sit="inativo" aria-pressed="false"><span class="kpi-label"><span class="dot offline"></span>Off Line</span><span class="kpi-value" id="k-inativo">1</span><span class="kpi-foot">fora do J2A há +15 min (login ainda válido)</span></button>
+        <button type="button" class="kpi" data-sit="todos" aria-pressed="false"><span class="kpi-label">Tempo de tela</span><span class="kpi-value" id="k-tempo">6h42</span><span class="kpi-foot">9 usuários · 11 sessões válidas</span></button>
+        </div>
+        <div class="summary-filters" role="group" aria-label="Filtrar por origem">
+          <span class="filter-label">Origem</span>
+          <button type="button" class="chip" data-orig="todos" aria-pressed="true">Todas as origens</button>
+          <button type="button" class="chip" data-orig="chat" aria-pressed="false">Chat (Radar J2A)</button>
+          <button type="button" class="chip" data-orig="interno" aria-pressed="false">IA Service interno</button>
+        </div>
+      </section>
+
+      <section class="board" aria-label="Usuários conectados">
+        <div class="grid-toolbar">
+          <div><div class="grid-title">Usuários conectados</div><div class="grid-meta" id="contagem"></div></div>
+          <div class="grid-actions"><button type="button" class="chip" id="btn-origem" hidden></button><button type="button" class="chip" id="btn-situacao" hidden></button><input id="busca" type="search" placeholder="Buscar nome, telefone ou chamado..." aria-label="Buscar nome, telefone ou chamado"></div>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Usuário</th><th>Situação</th><th>Origem</th><th>Entrou</th><th>Último sinal</th><th>Tempo de tela</th><th>O que está fazendo</th></tr></thead><tbody id="tbody"></tbody></table></div>
+      </section>
+      <div class="preview-note"><span>Prévia com dados fictícios para avaliar a disposição da tela.</span><span id="stamp" role="status"></span></div>
+    </main>
+  </div>
+  <div id="aviso" role="status" hidden></div>
+  <script>
+    (() => {
+      const $ = id => document.getElementById(id);
+      const pessoas = [
+        ['Ana Martins','AM','online','chat','08:12','agora','1h24','Radar · Chamados','036821'],
+        ['Bruno Lima','BL','online','chat','08:35','há 12s','1h08','Radar · Retorno ao cliente','036807'],
+        ['Carla Souza','CS','online','interno','09:02','há 8s','52 min','Base histórica',''],
+        ['Diego Alves','DA','online','chat','09:18','há 24s','45 min','Radar · Detalhes do chamado','036819'],
+        ['Elisa Costa','EC','online','interno','09:30','há 16s','37 min','Monitor de Acessos',''],
+        ['Felipe Rocha','FR','online','chat','09:42','há 5s','29 min','Radar · Análise técnica','036812'],
+        ['Gabriela Dias','GD','ausente','chat','08:50','há 6 min','48 min','Radar · Chamados','036815'],
+        ['Henrique Melo','HM','ausente','interno','09:26','há 9 min','23 min','Base histórica',''],
+        ['Isabela Nunes','IN','inativo','chat','08:10','há 24 min','16 min','Fora da tela',''],
+      ].map(([nome,iniciais,situacao,origem,entrou,sinal,tempo,tela,chamado],i) => ({nome,iniciais,situacao,origem,entrou,sinal,tempo,tela,chamado,telefone:`(92) 90000-${String(i+1).padStart(4,'0')}`}));
+      const labels = { online:'On Line',ausente:'Ausente',inativo:'Off Line',todos:'Todas as situações' };
+      const st = { origem:'todos',situacao:'ativos',busca:'',intervalo:30,restante:30 };
+      const esc = s => String(s).replace(/[&<>"']/g,c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      function render() {
+        const origemLabel = st.origem === 'chat' ? 'Chat (Radar J2A)' : 'IA Service interno';
+        $('btn-origem').hidden = !$('resumo').hidden || st.origem === 'todos';
+        $('btn-origem').textContent = `Origem: ${origemLabel} ×`;
+        $('btn-origem').setAttribute('aria-label', `Remover filtro de origem: ${origemLabel}`);
+        document.querySelectorAll('[data-orig]').forEach(b => b.setAttribute('aria-pressed',String(b.dataset.orig === st.origem)));
+        const visiveis = pessoas.filter(p => (st.origem === 'todos' || st.origem === p.origem)
+          && (st.situacao === 'todos' || (st.situacao === 'ativos' ? p.situacao !== 'inativo' : p.situacao === st.situacao))
+          && `${p.nome} ${p.telefone} ${p.chamado} ${p.tela}`.toLocaleLowerCase('pt-BR').includes(st.busca));
+        $('contagem').textContent = `${visiveis.length} de 9 usuários${st.situacao === 'ativos' ? ' · Off Line ocultos' : ''}`;
+        $('tbody').innerHTML = visiveis.map(p => `<tr><td><div class="user"><span class="avatar">${p.iniciais}</span><div><div class="name">${esc(p.nome)}</div><div class="sub">${esc(p.telefone)}</div></div></div></td><td><span class="badge ${p.situacao}">${labels[p.situacao]}</span></td><td><span class="badge ${p.origem}">${p.origem === 'chat' ? 'Chat J2A':'IA Service'}</span></td><td class="time">${p.entrou}</td><td class="time">${p.sinal}</td><td class="time"><strong>${p.tempo}</strong></td><td><div class="task">${esc(p.tela)}</div><div class="ticket">${p.chamado ? 'Chamado #'+p.chamado : 'Rotina interna'}</div></td></tr>`).join('') || '<tr><td colspan="7" class="empty">Nenhum usuário encontrado com esses filtros.</td></tr>';
+        $('btn-situacao').hidden = st.situacao === 'ativos';
+        $('btn-situacao').textContent = `Situação: ${labels[st.situacao] || ''} ×`;
+        $('btn-situacao').setAttribute('aria-label', `Remover filtro de situação: ${labels[st.situacao] || ''}`);
+        document.querySelectorAll('[data-sit]').forEach(b => b.setAttribute('aria-pressed',String(b.dataset.sit === st.situacao)));
+      }
+      document.querySelectorAll('[data-orig]').forEach(b => b.addEventListener('click', () => {
+        st.origem = b.dataset.orig;
+        document.querySelectorAll('[data-orig]').forEach(x => x.setAttribute('aria-pressed',String(x === b)));
+        render();
+      }));
+      document.querySelectorAll('[data-sit]').forEach(b => b.addEventListener('click', () => { st.situacao = st.situacao === b.dataset.sit ? 'ativos' : b.dataset.sit;render(); }));
+      $('btn-situacao').addEventListener('click', () => { st.situacao = 'ativos';render(); });
+      $('btn-origem').addEventListener('click', () => { st.origem = 'todos';render(); });
+      $('busca').addEventListener('input', e => { st.busca = e.target.value.trim().toLocaleLowerCase('pt-BR');render(); });
+      $('btn-resumo').addEventListener('click', () => {
+        $('resumo').hidden = !$('resumo').hidden;
+        $('btn-resumo').setAttribute('aria-expanded',String(!$('resumo').hidden));
+        $('resumo-texto').textContent = $('resumo').hidden ? 'Expandir painel' : 'Recolher painel';
+        render();
+      });
+      let avisoTimer;
+      function avisar(texto) { clearTimeout(avisoTimer);$('aviso').textContent = texto;$('aviso').hidden = false;avisoTimer = setTimeout(() => $('aviso').hidden = true,4500); }
+      function atualizar() { st.restante = st.intervalo;$('stamp').textContent = 'Atualizado às '+new Date().toLocaleTimeString('pt-BR',{timeZone:'America/Manaus'}); }
+      $('btn-atualizar').addEventListener('click', () => { atualizar();avisar('Prévia atualizada com os mesmos dados fictícios.'); });
+      $('btn-limpar').addEventListener('click', () => avisar('Ação apenas demonstrativa. Nenhum acesso real é encerrado neste mockup.'));
+      $('intervalo').addEventListener('change', e => {
+        st.intervalo = Number(e.target.value);st.restante = st.intervalo;
+        $('auto').classList.toggle('paused',!st.intervalo);$('auto-texto').textContent = st.intervalo ? 'Automático':'Pausado';
+        $('countdown').textContent = st.intervalo ? `${st.restante}s`:'';
+      });
+      setInterval(() => { if (!st.intervalo || document.hidden) return;if (--st.restante <= 0) atualizar();$('countdown').textContent = `${st.restante}s`; },1000);
+      render();atualizar();
+    })();
+  </script>
+</body>
+</html>

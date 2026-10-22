@@ -129,10 +129,13 @@ function _outroParticipante(db, conversaId, eu) {
 function _mensagemParaDominio(row, eu) {
   return {
     id: row.id,
+    sequencia: row.sequencia,
     conversaId: row.conversa_id,
     remetenteId: row.remetente_id,
     minha: row.remetente_id === String(eu),
-    texto: _decifrar(row.texto),
+    texto: row.apagado_em ? 'Mensagem apagada' : _decifrar(row.texto),
+    editadoEm: row.editado_em || null,
+    apagadoEm: row.apagado_em || null,
     transmissao: !!row.transmissao,
     criadoEm: row.criado_em,
     entregueEm: row.entregue_em || null,
@@ -205,18 +208,21 @@ function listarContatos(empresaId, eu) {
   const conversas = db.prepare(`
     SELECT c.id AS conversa_id, c.atualizado_em, p2.consultor_id AS outro,
            (SELECT COUNT(*) FROM svc_chat_mensagens m JOIN svc_chat_recibos r ON r.mensagem_id = m.id
-             WHERE m.conversa_id = c.id AND r.destinatario_id = ? AND r.visto_em IS NULL) AS nao_lidas
+             WHERE m.conversa_id = c.id AND r.destinatario_id = ? AND r.visto_em IS NULL AND m.apagado_em IS NULL
+               AND NOT EXISTS (SELECT 1 FROM svc_chat_mensagens_ocultas o WHERE o.mensagem_id = m.id AND o.consultor_id = r.destinatario_id)) AS nao_lidas
       FROM svc_chat_conversas c
       JOIN svc_chat_participantes p1 ON p1.conversa_id = c.id AND p1.consultor_id = ?
       JOIN svc_chat_participantes p2 ON p2.conversa_id = c.id AND p2.consultor_id != ?
      WHERE c.empresa_id = ?
   `).all(String(eu), String(eu), String(eu), Number(empresaId));
   const conversaPorOutro = new Map(conversas.map(c => [c.outro, c]));
-  const ultimaMsg = db.prepare('SELECT * FROM svc_chat_mensagens WHERE conversa_id = ? ORDER BY criado_em DESC, rowid DESC LIMIT 1');
+  const ultimaMsg = db.prepare(`SELECT m.* FROM svc_chat_mensagens m WHERE m.conversa_id = ?
+    AND NOT EXISTS (SELECT 1 FROM svc_chat_mensagens_ocultas o WHERE o.mensagem_id = m.id AND o.consultor_id = ?)
+    ORDER BY m.criado_em DESC, m.rowid DESC LIMIT 1`);
 
   const contatos = consultores.map((c) => {
     const conv = conversaPorOutro.get(c.id);
-    const ultima = conv ? ultimaMsg.get(conv.conversa_id) : null;
+    const ultima = conv ? ultimaMsg.get(conv.conversa_id, String(eu)) : null;
     return {
       consultorId: c.id,
       nome: consultorService.getNomeExibicao(Number(empresaId), c.id) || 'Analista sem nome',
@@ -225,7 +231,7 @@ function listarContatos(empresaId, eu) {
       chamadosEmAndamento: chamados.get(c.id) || 0,
       conversaId: conv?.conversa_id || null,
       naoLidas: conv?.nao_lidas || 0,
-      ultimaMensagem: ultima ? { texto: _decifrar(ultima.texto).slice(0, 140), em: ultima.criado_em, minha: ultima.remetente_id === String(eu) } : null,
+      ultimaMensagem: ultima ? { texto: ultima.apagado_em ? 'Mensagem apagada' : _decifrar(ultima.texto).slice(0, 140), em: ultima.criado_em, minha: ultima.remetente_id === String(eu) } : null,
     };
   });
 
@@ -290,14 +296,15 @@ function abrirConversaDireta(empresaId, eu, outroId) {
 function listarMensagens(empresaId, eu, conversaId, { antesDe = null } = {}) {
   const db = getDB();
   if (!_participa(db, conversaId, empresaId, eu)) throw _erro('Conversa não encontrada.', 404);
-  const params = [String(conversaId)];
+  const params = [String(conversaId), String(eu)];
   let filtro = '';
   if (antesDe) { filtro = 'AND m.criado_em < ?'; params.push(String(antesDe)); }
   const rows = db.prepare(`
-    SELECT m.*, r.entregue_em, r.visto_em
+    SELECT m.*, m.rowid AS sequencia, r.entregue_em, r.visto_em
       FROM svc_chat_mensagens m
       LEFT JOIN svc_chat_recibos r ON r.mensagem_id = m.id AND r.destinatario_id != m.remetente_id
-     WHERE m.conversa_id = ? ${filtro}
+     WHERE m.conversa_id = ?
+       AND NOT EXISTS (SELECT 1 FROM svc_chat_mensagens_ocultas o WHERE o.mensagem_id = m.id AND o.consultor_id = ?) ${filtro}
      ORDER BY m.criado_em DESC, m.rowid DESC
      LIMIT ${PAGINA_MENSAGENS}
   `).all(...params);
@@ -314,7 +321,7 @@ function _inserirMensagem(db, empresaId, conversaId, eu, texto, transmissao) {
   const destinatario = _outroParticipante(db, conversaId, eu);
   const id = crypto.randomUUID();
   const agora = new Date().toISOString();
-  db.prepare('INSERT INTO svc_chat_mensagens (id, conversa_id, empresa_id, remetente_id, texto, transmissao, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)')
+  const inserida = db.prepare('INSERT INTO svc_chat_mensagens (id, conversa_id, empresa_id, remetente_id, texto, transmissao, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .run(id, String(conversaId), Number(empresaId), String(eu), _cifrar(texto), transmissao ? 1 : 0, agora);
   if (destinatario) {
     db.prepare('INSERT INTO svc_chat_recibos (mensagem_id, destinatario_id) VALUES (?, ?)').run(id, destinatario);
@@ -322,7 +329,7 @@ function _inserirMensagem(db, empresaId, conversaId, eu, texto, transmissao) {
   db.prepare('UPDATE svc_chat_conversas SET atualizado_em = ? WHERE id = ?').run(agora, String(conversaId));
   return {
     destinatario,
-    mensagem: { id, conversaId: String(conversaId), remetenteId: String(eu), texto, transmissao: !!transmissao, criadoEm: agora, entregueEm: null, vistoEm: null },
+    mensagem: { id, sequencia: Number(inserida.lastInsertRowid), conversaId: String(conversaId), remetenteId: String(eu), texto, transmissao: !!transmissao, criadoEm: agora, entregueEm: null, vistoEm: null },
   };
 }
 
@@ -335,6 +342,92 @@ function enviarMensagem(empresaId, eu, conversaId, texto) {
   const destinatario = _outroParticipante(db, conversaId, eu);
   if (destinatario && !_consultorAtivo(db, empresaId, destinatario)) throw _erro('Este analista não está mais ativo.', 409);
   return db.transaction(() => _inserirMensagem(db, empresaId, conversaId, eu, limpo, false))();
+}
+
+// Toda alteração valida autor, participação e empresa no servidor. A transação
+// impede que uma edição concorrente restaure o conteúdo de uma mensagem apagada.
+function _alterarMensagem(empresaId, eu, conversaId, mensagemId, texto, apagar) {
+  const db = getDB();
+  return db.transaction(() => {
+    if (!_participa(db, conversaId, empresaId, eu)) throw _erro('Conversa não encontrada.', 404);
+    if (!_consultorAtivo(db, empresaId, eu)) throw _erro('Sessão sem consultor ativo.', 403);
+    const row = db.prepare(`
+      SELECT m.*, m.rowid AS sequencia, r.entregue_em, r.visto_em FROM svc_chat_mensagens m
+      LEFT JOIN svc_chat_recibos r ON r.mensagem_id = m.id AND r.destinatario_id != m.remetente_id
+      WHERE m.id = ? AND m.conversa_id = ? AND m.empresa_id = ?
+        AND NOT EXISTS (SELECT 1 FROM svc_chat_mensagens_ocultas o WHERE o.mensagem_id = m.id AND o.consultor_id = ?)
+    `).get(String(mensagemId), String(conversaId), Number(empresaId), String(eu));
+    if (!row) throw _erro('Mensagem não encontrada.', 404);
+    if (row.remetente_id !== String(eu)) throw _erro('Você só pode alterar mensagens que enviou.', 403);
+    if (row.apagado_em && !apagar) throw _erro('Esta mensagem já foi apagada.', 409);
+    if (!row.apagado_em) {
+      if (apagar) {
+        row.texto = '';
+        row.apagado_em = new Date().toISOString();
+        db.prepare('UPDATE svc_chat_mensagens SET texto = ?, apagado_em = ? WHERE id = ?')
+          .run(row.texto, row.apagado_em, row.id);
+      } else {
+        row.texto = _cifrar(_textoValido(texto));
+        row.editado_em = new Date().toISOString();
+        db.prepare('UPDATE svc_chat_mensagens SET texto = ?, editado_em = ? WHERE id = ?')
+          .run(row.texto, row.editado_em, row.id);
+      }
+    }
+    return { mensagem: _mensagemParaDominio(row, eu), destinatario: _outroParticipante(db, conversaId, eu) };
+  })();
+}
+
+function editarMensagem(empresaId, eu, conversaId, mensagemId, texto) {
+  return _alterarMensagem(empresaId, eu, conversaId, mensagemId, texto, false);
+}
+
+function apagarMensagem(empresaId, eu, conversaId, mensagemId) {
+  return _alterarMensagem(empresaId, eu, conversaId, mensagemId, null, true);
+}
+
+function mensagemVisivel(empresaId, eu, mensagemId) {
+  return !!getDB().prepare(`SELECT 1 FROM svc_chat_mensagens m
+    JOIN svc_chat_participantes p ON p.conversa_id = m.conversa_id AND p.empresa_id = m.empresa_id AND p.consultor_id = ?
+    WHERE m.id = ? AND m.empresa_id = ?
+      AND NOT EXISTS (SELECT 1 FROM svc_chat_mensagens_ocultas o WHERE o.mensagem_id = m.id AND o.consultor_id = p.consultor_id)
+  `).get(String(eu), String(mensagemId), Number(empresaId));
+}
+
+// Seleções são atômicas: um ID inválido ou de outro autor cancela todo o lote.
+// Limpar conversa sempre é pessoal e inclui mensagens além da página atual.
+function excluirMensagens(empresaId, eu, conversaId, opcoes = {}) {
+  const db = getDB();
+  if (!opcoes || typeof opcoes !== 'object' || Array.isArray(opcoes)) throw _erro('Opção de exclusão inválida.', 400);
+  const { modo, mensagemIds, todas = false } = opcoes;
+  if (!['mim', 'todos'].includes(modo) || typeof todas !== 'boolean') throw _erro('Opção de exclusão inválida.', 400);
+  if (todas && modo !== 'mim') throw _erro('Limpar conversa está disponível apenas para mim.', 400);
+  if (!todas && (!Array.isArray(mensagemIds) || !mensagemIds.length || mensagemIds.length > 500
+    || mensagemIds.some((id) => typeof id !== 'string' || !id))) throw _erro('Selecione de 1 a 500 mensagens.', 400);
+  const ids = todas ? [] : [...new Set(mensagemIds)];
+  return db.transaction(() => {
+    if (!_participa(db, conversaId, empresaId, eu)) throw _erro('Conversa não encontrada.', 404);
+    if (!_consultorAtivo(db, empresaId, eu)) throw _erro('Sessão sem consultor ativo.', 403);
+    if (modo === 'todos') {
+      return { conversaId: String(conversaId), alteradas: ids.map((id) => apagarMensagem(empresaId, eu, conversaId, id)) };
+    }
+    const agora = new Date().toISOString();
+    if (todas) {
+      const ateSequencia = db.prepare('SELECT COALESCE(MAX(rowid), 0) AS sequencia FROM svc_chat_mensagens WHERE conversa_id = ? AND empresa_id = ?')
+        .get(String(conversaId), Number(empresaId)).sequencia;
+      const resultado = db.prepare(`INSERT OR IGNORE INTO svc_chat_mensagens_ocultas (mensagem_id, consultor_id, empresa_id, apagado_em)
+        SELECT id, ?, empresa_id, ? FROM svc_chat_mensagens WHERE conversa_id = ? AND empresa_id = ? AND rowid <= ?`)
+        .run(String(eu), agora, String(conversaId), Number(empresaId), ateSequencia);
+      return { conversaId: String(conversaId), ateSequencia, total: resultado.changes };
+    }
+    const buscar = db.prepare('SELECT id FROM svc_chat_mensagens WHERE id = ? AND conversa_id = ? AND empresa_id = ?');
+    for (const id of ids) {
+      if (!buscar.get(id, String(conversaId), Number(empresaId))) throw _erro('Mensagem não encontrada.', 404);
+    }
+    const inserir = db.prepare('INSERT OR IGNORE INTO svc_chat_mensagens_ocultas (mensagem_id, consultor_id, empresa_id, apagado_em) VALUES (?, ?, ?, ?)');
+    let total = 0;
+    for (const id of ids) total += inserir.run(id, String(eu), Number(empresaId), agora).changes;
+    return { conversaId: String(conversaId), mensagemIds: ids, total };
+  })();
 }
 
 /**
@@ -378,7 +471,8 @@ function marcarEntregues(empresaId, eu, mensagemIds = null) {
   const pendentes = db.prepare(`
     SELECT m.id, m.conversa_id, m.remetente_id FROM svc_chat_mensagens m
       JOIN svc_chat_recibos r ON r.mensagem_id = m.id
-     WHERE m.empresa_id = ? AND r.destinatario_id = ? AND r.entregue_em IS NULL ${filtro}
+     WHERE m.empresa_id = ? AND r.destinatario_id = ? AND r.entregue_em IS NULL AND m.apagado_em IS NULL
+       AND NOT EXISTS (SELECT 1 FROM svc_chat_mensagens_ocultas o WHERE o.mensagem_id = m.id AND o.consultor_id = r.destinatario_id) ${filtro}
   `).all(...params);
   if (!pendentes.length) return [];
   const upd = db.prepare('UPDATE svc_chat_recibos SET entregue_em = ? WHERE mensagem_id = ? AND destinatario_id = ?');
@@ -393,7 +487,8 @@ function marcarVistas(empresaId, eu, conversaId) {
   const pendentes = db.prepare(`
     SELECT m.id, m.conversa_id, m.remetente_id FROM svc_chat_mensagens m
       JOIN svc_chat_recibos r ON r.mensagem_id = m.id
-     WHERE m.conversa_id = ? AND r.destinatario_id = ? AND r.visto_em IS NULL
+     WHERE m.conversa_id = ? AND r.destinatario_id = ? AND r.visto_em IS NULL AND m.apagado_em IS NULL
+       AND NOT EXISTS (SELECT 1 FROM svc_chat_mensagens_ocultas o WHERE o.mensagem_id = m.id AND o.consultor_id = r.destinatario_id)
   `).all(String(conversaId), String(eu));
   if (!pendentes.length) return [];
   const upd = db.prepare('UPDATE svc_chat_recibos SET visto_em = ?, entregue_em = COALESCE(entregue_em, ?) WHERE mensagem_id = ? AND destinatario_id = ?');
@@ -416,6 +511,10 @@ module.exports = {
   abrirConversaDireta,
   listarMensagens,
   enviarMensagem,
+  editarMensagem,
+  apagarMensagem,
+  excluirMensagens,
+  mensagemVisivel,
   enviarParaTodos,
   marcarEntregues,
   marcarVistas,

@@ -2479,7 +2479,34 @@
     }
   }
 
+  async function carregarIdentidadeDoLink() {
+    const partes = location.pathname.split('/').filter(Boolean);
+    const apelido = partes[0] === 'iaservice' ? partes[1] : null;
+    if (!apelido) return;
+    try {
+      const response = await fetch(`/api/ia-service-publico/empresa-por-apelido/${encodeURIComponent(apelido)}`, { cache: 'no-store' });
+      if (!response.ok) return;
+      const info = await response.json();
+      if (info.nome) $('access-company-name').textContent = info.nome;
+      if (info.logoUrl) {
+        const url = new URL(info.logoUrl, location.origin);
+        // Em HTTPS, usa o proxy para logos locais salvos com o endereço HTTP antigo.
+        if (location.protocol === 'https:' && url.protocol === 'http:' && url.pathname.startsWith('/uploads/')) {
+          url.protocol = location.protocol;
+          url.host = location.host;
+          url.port = location.port;
+        }
+        if (!['http:', 'https:'].includes(url.protocol) || (location.protocol === 'https:' && url.protocol === 'http:')) return;
+        const img = document.createElement('img');
+        img.src = url.href;
+        img.alt = info.nome || 'Logomarca da empresa';
+        img.onload = () => $('access-brand-mark').replaceChildren(img);
+      }
+    } catch (_) { /* Identidade visual opcional; nunca interfere no login. */ }
+  }
+
   function init() {
+    carregarIdentidadeDoLink();
     // Chat interno da equipe (2026-10): botão "Mensagens" no topo, ao lado da Ajuda.
     if (window.IaChatInterno) {
       chatInterno = window.IaChatInterno.mount({

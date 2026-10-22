@@ -26,7 +26,7 @@
     .gp-wrap { margin-top:10px; }
     .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
     .gp-label { font-size:11px;color:var(--text-lo);white-space:nowrap; }
-    .grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .grid-toolbar { display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
     .grid-title { font-size:13px;font-weight:600;color:var(--text-hi); }
     .grid-meta { font-size:12px;color:var(--text-lo);margin-top:1px; }
     .badge-filial { display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(124,58,237,.12);color:#7c3aed; }
@@ -160,7 +160,10 @@
             <div>
               <div class="grid-title">Filiais cadastradas</div>
               <div id="count" class="grid-meta"></div>
+              <div class="grid-meta">Marque as linhas ou use a caixa do cabeçalho para selecionar todos os registros filtrados.</div>
+              <div id="selection-status" class="grid-meta" role="status" aria-live="polite"></div>
             </div>
+            <button id="btn-excluir-selecionados" class="btn btn-danger" disabled>Excluir selecionados (0)</button>
           </div>
           <div id="tabela"></div>
         </div>
@@ -339,6 +342,7 @@
 <script src="/js/auth.js"></script>
 <script src="/js/grid-group-panel.js?v=20260617-grid-guard-v2"></script>
 <script src="/app/ia-command/js/sidebar.js"></script>
+<script src="/app/ia-command/js/company-grid-selection.js?v=20261022"></script>
 <script>
 'use strict';
 let table, gp;
@@ -380,7 +384,7 @@ async function carregar() {
   conexoes = conns;
   dados = rows;
   popularSelectConexoes();
-  if (table) { table.replaceData(dados); } else { criarTabela(dados); }
+  if (table) { await table.replaceData(dados); } else { criarTabela(dados); }
 }
 
 function popularSelectConexoes() {
@@ -406,13 +410,16 @@ function nomeConexao(id) {
 // ── Grid ─────────────────────────────────────────────────────────────────────
 
 function criarTabela(data) {
+  const selecao = companyGridSelection({ getTable: () => table, endpoint: '/api/ia-command/protheus/sys-company/excluir-lote', dicionario: 'SYS_COMPANY', reload: carregar });
   gp = createGroupPanel({ chipsRowId:'gp-chips-row', dropZoneId:'dz', storageKey:'iac_admin_sys_company_group', getTable:()=>table });
   table = new Tabulator('#tabela', {
     data, index:'id', layout:'fitColumns', movableColumns:true,
+    selectableRows: true, selectableRowsPersistence: false,
     height:'calc(100vh - 380px)', groupBy:gp.getActiveFields(), groupStartOpen:true,
     tableBuilt: function() { gp.refresh(); gp.applyToTable(); },
     placeholder:'<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhuma filial cadastrada.<br><small>Use "Importar" ou "+ Nova Filial" para começar.</small></div>',
     columns:[
+      selecao.column,
       { title:'Conexão', field:'connection_id', minWidth:140, headerFilter:'select',
         headerFilterParams:{ values: Object.fromEntries([['','Todas'],...conexoes.filter(c=>(c.erp||'').toLowerCase()==='protheus').map(c=>[String(c.id), c.nome||String(c.id)])]) },
         formatter: c => esc(nomeConexao(c.getValue())) },
@@ -428,12 +435,13 @@ function criarTabela(data) {
                   <button class="btn-icon" onclick="event.stopPropagation();excluir('${id}')" title="Excluir" style="color:#dc2626">🗑</button>`;
         }},
     ],
-    rowClick:(e,row)=>{ if(!e.target.closest('button')) abrirFormulario(row.getData().id); },
+    rowClick:(e,row)=>{ if(!e.target.closest('button, input, .tabulator-cell:first-child')) abrirFormulario(row.getData().id); },
     dataFiltered:(_f, rows)=>{
       const total = dados.length, qtd = rows?.length ?? total;
       document.getElementById('count').textContent = qtd === total ? label(qtd) : `${qtd} de ${total} filiais`;
     },
   });
+  selecao.bind();
   document.getElementById('count').textContent = label(data.length);
 }
 

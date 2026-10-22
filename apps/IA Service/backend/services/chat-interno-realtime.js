@@ -61,10 +61,15 @@ function emitirRecibos(empresaId, grupos) {
   }
 }
 
-function emitirMensagem(empresaId, { mensagem, destinatario }) {
-  if (destinatario) emitirParaConsultor(empresaId, destinatario, 'chat:mensagem', { ...mensagem, minha: false });
+function emitirMensagem(empresaId, { mensagem, destinatario }, evento = 'chat:mensagem') {
+  if (!_ns) return;
+  if (destinatario && chatService.mensagemVisivel(empresaId, destinatario, mensagem.id)) emitirParaConsultor(empresaId, destinatario, evento, { ...mensagem, minha: false });
   // Outras abas/aparelhos de quem enviou também recebem (modelo WhatsApp).
-  emitirParaConsultor(empresaId, mensagem.remetenteId, 'chat:mensagem', { ...mensagem, minha: true });
+  if (chatService.mensagemVisivel(empresaId, mensagem.remetenteId, mensagem.id)) emitirParaConsultor(empresaId, mensagem.remetenteId, evento, { ...mensagem, minha: true });
+}
+
+function emitirExclusaoPessoal(empresaId, consultorId, exclusao) {
+  emitirParaConsultor(empresaId, consultorId, 'chat:mensagens-ocultas', exclusao);
 }
 
 function iniciar(io) {
@@ -118,4 +123,4 @@ function iniciar(io) {
   }, 60 * 1000).unref();
 }
 
-module.exports = { iniciar, emitirMensagem, emitirRecibos, encerrarSessoes, NAMESPACE };
+module.exports = { iniciar, emitirMensagem, emitirRecibos, emitirExclusaoPessoal, encerrarSessoes, NAMESPACE };

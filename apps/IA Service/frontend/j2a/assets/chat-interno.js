@@ -46,6 +46,8 @@
       ativo: false, aberto: false, view: 'lista', busca: '',
       contatos: [], naoLidasTotal: 0, destinatariosTransmissao: 0,
       conversa: null, socket: null, timer: null, enviando: false,
+      edicao: null, alterando: false,
+      selecao: null, ocultas: new Map(), pedidoContatos: 0,
       tituloBase: document.title.replace(/^\(\d+\)\s*/, ''),
     };
     const api = (p) => ext(`/chat-interno${p}`);
@@ -71,6 +73,10 @@
     // ── Estado derivado ────────────────────────────────────────────────
     const contato = (id) => st.contatos.find((c) => c.consultorId === id);
     const contatoDaConversa = (id) => st.contatos.find((c) => c.conversaId === id);
+    const foiOcultada = (m) => {
+      const o = st.ocultas.get(m.conversaId);
+      return !!o && (o.ids.has(m.id) || (m.sequencia != null && m.sequencia <= o.ateSequencia));
+    };
 
     function atualizarContador() {
       const n = st.contatos.reduce((s, c) => s + (c.naoLidas || 0), 0);
@@ -82,7 +88,9 @@
     }
 
     async function carregarContatos() {
+      const pedido = ++st.pedidoContatos;
       const r = await request(api('/contatos'));
+      if (pedido !== st.pedidoContatos) return r;
       st.contatos = r.contatos || [];
       st.destinatariosTransmissao = r.destinatariosTransmissao || 0;
       atualizarContador();
@@ -144,10 +152,29 @@
         const sep = d !== ultimoDia ? `<div class="ci-dia"><span>${esc(d)}</span></div>` : '';
         ultimoDia = d;
         return `${sep}<div class="ci-msg ${m.minha ? 'ci-minha' : 'ci-dele'}" data-msg="${esc(m.id)}">
+          ${st.selecao ? `<label class="ci-marcar"><input type="checkbox" data-ci-selecionar="${esc(m.id)}" aria-label="Selecionar mensagem: ${esc(m.texto.slice(0, 70))}" ${st.selecao.has(m.id) ? 'checked' : ''}> Selecionar</label>` : ''}
           ${m.transmissao ? '<span class="ci-transm">Mensagem para todos</span>' : ''}
-          <span class="ci-texto">${esc(m.texto)}</span>
-          <span class="ci-meta">${hora(m.criadoEm)}${ticks(m)}</span></div>`;
+          <span class="ci-texto${m.apagadoEm ? ' ci-apagada' : ''}">${esc(m.apagadoEm ? 'Mensagem apagada' : m.texto)}</span>
+          <span class="ci-meta">${m.editadoEm && !m.apagadoEm ? '<span>editada</span>' : ''}${hora(m.criadoEm)}${m.apagadoEm ? '' : ticks(m)}</span>
+          ${!st.selecao ? `<details class="ci-acoes-msg"><summary aria-label="Opções da mensagem">Opções</summary><div>
+            ${m.minha && !m.apagadoEm ? `<button type="button" data-ci="editar" data-ci-msg="${esc(m.id)}">Editar</button>
+            <button type="button" data-ci="apagar" data-ci-msg="${esc(m.id)}">Apagar para todos</button>` : ''}
+            <button type="button" data-ci="apagar-mim" data-ci-msg="${esc(m.id)}">Apagar para mim</button>
+            <button type="button" data-ci="selecionar" data-ci-msg="${esc(m.id)}">Selecionar</button>
+          </div></details>` : ''}</div>`;
       }).join('') || '<p class="ci-vazio">Nenhuma mensagem ainda. Diga olá 👋</p>';
+    }
+
+    function renderSelecao() {
+      if (!st.selecao) return '';
+      const selecionadas = st.conversa.mensagens.filter((m) => st.selecao.has(m.id));
+      const podeTodos = selecionadas.length > 0 && selecionadas.every((m) => m.minha && !m.apagadoEm);
+      return `<div class="ci-selecao">
+        <div><strong role="status">${selecionadas.length} selecionada(s)</strong><button type="button" class="ci-link" data-ci="cancelar-selecao">Cancelar seleção</button></div>
+        <button type="button" class="ci-link" data-ci="selecionar-exibidas">${st.conversa.mensagens.length && selecionadas.length === st.conversa.mensagens.length ? 'Desmarcar todas' : 'Marcar todas exibidas'}</button>
+        <div><button type="button" data-ci="excluir-selecao-mim" ${!selecionadas.length || st.alterando ? 'disabled' : ''}>Apagar para mim</button>
+        <button type="button" data-ci="excluir-selecao-todos" title="Disponível quando todas as selecionadas foram enviadas por você e ainda não foram apagadas" ${!podeTodos || st.alterando ? 'disabled' : ''}>Apagar para todos</button></div>
+      </div>`;
     }
 
     function renderConversa() {
@@ -158,8 +185,19 @@
           <button type="button" class="ci-icone" data-ci="voltar" title="Voltar" aria-label="Voltar">${ICONES.voltar}</button>
           ${avatar(c, true)}
           <span class="ci-head-nome"><strong>${esc(c.nome)}</strong><small>${esc(status)}</small></span>
+          <details class="ci-menu-conversa"><summary aria-label="Opções da conversa" title="Opções da conversa">⋮</summary><div>
+            <button type="button" data-ci="selecionar">Selecionar mensagens</button>
+            <button type="button" data-ci="limpar-conversa">Limpar conversa (apagar tudo para mim)</button>
+          </div></details>
           <button type="button" class="ci-icone" data-ci="fechar" title="Fechar" aria-label="Fechar">${ICONES.fechar}</button></header>
+        <div id="ci-selecao">${renderSelecao()}</div>
         <div class="ci-msgs" id="ci-msgs">${renderMensagens()}</div>
+        ${st.edicao ? `<form id="ci-form-editar" class="ci-edicao">
+          <label for="ci-editar-texto">Editar mensagem${st.edicao.transmissao ? ' nesta conversa' : ''}</label>
+          <textarea id="ci-editar-texto" rows="3" maxlength="1000" required>${esc(st.edicao.texto)}</textarea>
+          <div><button type="button" class="ci-link" data-ci="cancelar-edicao">Cancelar</button>
+          <button type="submit" class="ci-btn-primario" ${st.alterando ? 'disabled' : ''}>Salvar alteração</button></div>
+        </form>` : ''}
         <form class="ci-compor" id="ci-form">
           <textarea id="ci-texto" rows="1" maxlength="1000" placeholder="Digite uma mensagem" aria-label="Mensagem"></textarea>
           <button type="submit" class="ci-enviar" title="Enviar" aria-label="Enviar">${ICONES.enviar}</button>
@@ -200,6 +238,7 @@
       if (!box) return;
       const noFim = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
       box.innerHTML = renderMensagens();
+      atualizarSelecao();
       if (noFim) box.scrollTop = box.scrollHeight;
     }
 
@@ -225,6 +264,8 @@
     function fecharPainel() {
       st.aberto = false;
       st.conversa = null;
+      st.edicao = null;
+      st.selecao = null;
       st.rascunho = '';
       painel.hidden = true;
       botao.setAttribute('aria-expanded', 'false');
@@ -236,7 +277,9 @@
         let conversaId = c?.conversaId;
         if (!conversaId) conversaId = (await request(api('/conversas'), { method: 'POST', body: JSON.stringify({ consultorId }) })).conversaId;
         const r = await request(api(`/conversas/${encodeURIComponent(conversaId)}/mensagens`));
-        st.conversa = { id: conversaId, consultorId, nome: r.contato?.nome || c?.nome || 'Analista', mensagens: r.mensagens || [] };
+        st.conversa = { id: conversaId, consultorId, nome: r.contato?.nome || c?.nome || 'Analista', mensagens: (r.mensagens || []).filter((m) => !foiOcultada(m)) };
+        st.edicao = null;
+        st.selecao = null;
         if (c) { c.conversaId = conversaId; c.naoLidas = 0; }
         st.rascunho = '';
         limparBaloes();
@@ -292,7 +335,133 @@
       }
     }
 
+    function iniciarEdicao(id) {
+      if (st.alterando) return;
+      const m = st.conversa?.mensagens.find((x) => x.id === id);
+      if (!m?.minha || m.apagadoEm) return;
+      st.edicao = { id: m.id, texto: m.texto, transmissao: m.transmissao };
+      render();
+      painel.querySelector('#ci-editar-texto')?.focus();
+    }
+
+    function atualizarSelecao() {
+      if (st.selecao && st.conversa) {
+        const visiveis = new Set(st.conversa.mensagens.map((m) => m.id));
+        for (const id of st.selecao) if (!visiveis.has(id)) st.selecao.delete(id);
+      }
+      const barra = painel.querySelector('#ci-selecao');
+      if (barra) barra.innerHTML = renderSelecao();
+    }
+
+    function selecionar(id) {
+      if (!st.conversa || st.alterando) return;
+      st.edicao = null;
+      st.selecao = new Set(id ? [id] : []);
+      render();
+      painel.querySelector('[data-ci-selecionar]')?.focus();
+    }
+
+    async function excluirMensagens(modo, mensagemIds = [...(st.selecao || [])], todas = false) {
+      const conversa = st.conversa;
+      if (!conversa || st.alterando || (!todas && !mensagemIds.length)) return;
+      const pergunta = todas
+        ? 'Apagar todo o histórico desta conversa somente para você, incluindo mensagens antigas? O outro participante continuará com o histórico dele.'
+        : modo === 'mim' ? `Apagar ${mensagemIds.length} mensagem(ns) somente para você? O outro participante continuará vendo essas mensagens.`
+          : `Apagar ${mensagemIds.length} mensagem(ns) para todos nesta conversa? O conteúdo será substituído por "Mensagem apagada".`;
+      if (!window.confirm(pergunta)) return;
+      st.alterando = true;
+      atualizarSelecao();
+      try {
+        const resultado = await request(api(`/conversas/${encodeURIComponent(conversa.id)}/excluir-mensagens`), {
+          method: 'POST', body: JSON.stringify({ modo, ...(todas ? { todas: true } : { mensagemIds }) }),
+        });
+        if (modo === 'mim') receberExclusaoPessoal(resultado);
+        else (resultado.mensagens || []).forEach(receberAlteracao);
+        if (st.conversa === conversa) { st.selecao = null; render(); }
+      } catch (err) {
+        aviso(`Não foi possível apagar: ${err.message}`);
+      } finally {
+        st.alterando = false;
+        atualizarSelecao();
+      }
+    }
+
+    function receberExclusaoPessoal(r) {
+      if (!st.ativo) return;
+      const o = st.ocultas.get(r.conversaId) || { ids: new Set(), ateSequencia: 0 };
+      (r.mensagemIds || []).forEach((id) => o.ids.add(id));
+      o.ateSequencia = Math.max(o.ateSequencia, r.ateSequencia || 0);
+      st.ocultas.set(r.conversaId, o);
+      if (st.conversa?.id === r.conversaId) {
+        st.conversa.mensagens = st.conversa.mensagens.filter((m) => !foiOcultada(m));
+        if (st.edicao && !st.conversa.mensagens.some((m) => m.id === st.edicao.id)) {
+          st.edicao = null;
+          render();
+        }
+        atualizarMensagensSemPerderTexto();
+      }
+      pilha.querySelectorAll('.ci-toast-msg').forEach((el) => {
+        if (el.classList.contains('ci-toast-resumo') || foiOcultada({ id: el.dataset.mensagemId, conversaId: el.dataset.conversaId, sequencia: el.dataset.sequencia ? Number(el.dataset.sequencia) : undefined })) el.remove();
+      });
+      carregarContatos().catch(() => null);
+    }
+
+    async function alterarMensagem(apagar = false, id = st.edicao?.id) {
+      const conversa = st.conversa;
+      const m = conversa?.mensagens.find((x) => x.id === id);
+      if (!m?.minha || m.apagadoEm || st.alterando) return;
+      const texto = st.edicao?.texto.trim();
+      if (!apagar && !texto) return aviso('A mensagem está vazia.');
+      if (apagar && !window.confirm('Apagar esta mensagem para todos nesta conversa? Esta ação não pode ser desfeita.')) return;
+      st.alterando = true;
+      const btn = painel.querySelector('#ci-form-editar button[type="submit"]');
+      if (btn) btn.disabled = true;
+      try {
+        const alterada = await request(api(`/conversas/${encodeURIComponent(conversa.id)}/mensagens/${encodeURIComponent(id)}`), {
+          method: apagar ? 'DELETE' : 'PATCH',
+          ...(!apagar ? { body: JSON.stringify({ texto }) } : {}),
+        });
+        if (st.conversa === conversa && st.edicao?.id === id) {
+          st.edicao = null;
+          render();
+        }
+        receberAlteracao(alterada);
+      } catch (err) {
+        aviso(`Não foi possível ${apagar ? 'apagar' : 'editar'}: ${err.message}`);
+      } finally {
+        st.alterando = false;
+        const salvar = painel.querySelector('#ci-form-editar button[type="submit"]');
+        if (salvar) salvar.disabled = false;
+      }
+    }
+
+    function receberAlteracao(m) {
+      if (foiOcultada(m)) return;
+      if (st.conversa?.id === m.conversaId) {
+        const atual = st.conversa.mensagens.find((x) => x.id === m.id);
+        // Uma resposta HTTP atrasada não pode reexibir texto já apagado nem
+        // substituir uma edição mais recente recebida pelo socket.
+        if (atual && !(atual.apagadoEm && !m.apagadoEm)
+          && !(!m.apagadoEm && atual.editadoEm && (!m.editadoEm || atual.editadoEm > m.editadoEm))) {
+          Object.assign(atual, m);
+        }
+        if (m.apagadoEm && st.edicao?.id === m.id) {
+          st.edicao = null;
+          render();
+        }
+        atualizarMensagensSemPerderTexto();
+      }
+      // Uma alteração não é mensagem nova: sem balão ou incremento de não lidas.
+      pilha.querySelectorAll('.ci-toast-msg').forEach((el) => {
+        if (el.dataset.mensagemId !== m.id) return;
+        if (m.apagadoEm) el.remove();
+        else el.querySelector('.ci-toast-texto').textContent = m.texto;
+      });
+      carregarContatos().catch(() => null);
+    }
+
     function adicionarNaConversa(m) {
+      if (foiOcultada(m)) return false;
       if (!st.conversa || st.conversa.id !== m.conversaId) return false;
       if (st.conversa.mensagens.some((x) => x.id === m.id)) return true;
       st.conversa.mensagens.push(m);
@@ -313,6 +482,9 @@
       while (pilha.querySelectorAll('.ci-toast-msg').length >= 3) pilha.querySelector('.ci-toast-msg').remove();
       const el = document.createElement('div');
       el.className = 'ci-toast ci-toast-msg';
+      el.dataset.mensagemId = m.id || '';
+      el.dataset.conversaId = m.conversaId;
+      el.dataset.sequencia = m.sequencia || '';
       el.setAttribute('role', 'button');
       el.tabIndex = 0;
       el.innerHTML = `${avatar(c)}
@@ -367,6 +539,7 @@
 
     // ── Chegada de mensagem (socket ou sincronização) ──────────────────
     async function receber(m) {
+      if (foiOcultada(m)) return;
       if (m.minha) {
         adicionarNaConversa(m);
         return;
@@ -407,8 +580,8 @@
     }
 
     // Sem socket: a cada 30s compara as não lidas e avisa o que chegou.
-    async function sincronizar() {
-      if (st.socket?.connected) return;
+    async function sincronizar(forcar = false) {
+      if (st.socket?.connected && !forcar) return;
       const antes = new Map(st.contatos.map((c) => [c.consultorId, c.naoLidas || 0]));
       await carregarContatos().catch(() => null);
       for (const c of st.contatos) {
@@ -420,8 +593,16 @@
       }
       request(api('/entregues'), { method: 'POST', body: JSON.stringify({}) }).catch(() => null);
       if (st.aberto && st.view === 'conversa' && st.conversa) {
-        const r = await request(api(`/conversas/${encodeURIComponent(st.conversa.id)}/mensagens`)).catch(() => null);
-        if (r) { st.conversa.mensagens = r.mensagens || []; atualizarMensagensSemPerderTexto(); }
+        const conversa = st.conversa;
+        const r = await request(api(`/conversas/${encodeURIComponent(conversa.id)}/mensagens`)).catch(() => null);
+        if (r && st.conversa === conversa) {
+          conversa.mensagens = (r.mensagens || []).filter((m) => !foiOcultada(m));
+          if (st.edicao && !conversa.mensagens.some((m) => m.id === st.edicao.id && !m.apagadoEm)) {
+            st.edicao = null;
+            render();
+          }
+          atualizarMensagensSemPerderTexto();
+        }
       }
     }
 
@@ -430,10 +611,12 @@
       const socket = window.io('/ia-service-chat', { auth: { token: getToken() }, transports: ['websocket', 'polling'] });
       st.socket = socket;
       socket.on('connect', () => {
-        carregarContatos().catch(() => null);
+        sincronizar(true).catch(() => null);
         request(api('/entregues'), { method: 'POST', body: JSON.stringify({}) }).catch(() => null);
       });
       socket.on('chat:mensagem', (m) => { receber(m).catch(() => null); });
+      socket.on('chat:mensagem-alterada', receberAlteracao);
+      socket.on('chat:mensagens-ocultas', receberExclusaoPessoal);
       socket.on('chat:recibo', receberRecibo);
       // Derrubado pelo Monitor de Acessos: volta para o login na hora.
       socket.on('sessao:encerrada', (p) => onSessaoEncerrada(p?.mensagem || 'Sua sessão foi encerrada pelo administrador.'));
@@ -445,7 +628,20 @@
     painel.addEventListener('click', (e) => {
       const acao = e.target.closest('[data-ci]')?.dataset.ci;
       if (acao === 'fechar') return fecharPainel();
-      if (acao === 'voltar') { st.view = 'lista'; st.conversa = null; st.rascunho = ''; render(); return carregarContatos().catch(() => null); }
+      if (acao === 'voltar') { st.view = 'lista'; st.conversa = null; st.edicao = null; st.selecao = null; st.rascunho = ''; render(); return carregarContatos().catch(() => null); }
+      if (acao === 'editar') return iniciarEdicao(e.target.closest('[data-ci-msg]').dataset.ciMsg);
+      if (acao === 'apagar') return alterarMensagem(true, e.target.closest('[data-ci-msg]').dataset.ciMsg);
+      if (acao === 'apagar-mim') return excluirMensagens('mim', [e.target.closest('[data-ci-msg]').dataset.ciMsg]);
+      if (acao === 'limpar-conversa') return excluirMensagens('mim', [], true);
+      if (acao === 'selecionar') return selecionar(e.target.closest('[data-ci-msg]')?.dataset.ciMsg);
+      if (acao === 'cancelar-selecao') { st.selecao = null; render(); return; }
+      if (acao === 'selecionar-exibidas') {
+        st.selecao = new Set(st.selecao?.size === st.conversa.mensagens.length ? [] : st.conversa.mensagens.map((m) => m.id));
+        render(); return;
+      }
+      if (acao === 'excluir-selecao-mim') return excluirMensagens('mim');
+      if (acao === 'excluir-selecao-todos') return excluirMensagens('todos');
+      if (acao === 'cancelar-edicao') { st.edicao = null; render(); return; }
       if (acao === 'todos') { st.view = 'todos'; render(); return painel.querySelector('#ci-texto-todos')?.focus(); }
       if (acao === 'notificacoes') return pedirNotificacoes();
       const alvo = e.target.closest('[data-ci-contato]');
@@ -461,6 +657,13 @@
         campo.setSelectionRange(pos, pos);
       }
       if (e.target.id === 'ci-texto') { st.rascunho = e.target.value; ajustarAltura(e.target); }
+      if (e.target.id === 'ci-editar-texto' && st.edicao) st.edicao.texto = e.target.value;
+    });
+    painel.addEventListener('change', (e) => {
+      const id = e.target.dataset.ciSelecionar;
+      if (!id || !st.selecao) return;
+      if (e.target.checked) st.selecao.add(id); else st.selecao.delete(id);
+      atualizarSelecao();
     });
     painel.addEventListener('keydown', (e) => {
       if (e.target.id === 'ci-texto' && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); }
@@ -469,6 +672,7 @@
     painel.addEventListener('submit', (e) => {
       e.preventDefault();
       if (e.target.id === 'ci-form') enviar();
+      if (e.target.id === 'ci-form-editar') alterarMensagem();
       if (e.target.id === 'ci-form-todos') enviarTodos();
     });
     document.addEventListener('visibilitychange', () => {
@@ -497,11 +701,13 @@
 
     function stop() {
       st.ativo = false;
+      st.pedidoContatos++;
       st.socket?.disconnect();
       st.socket = null;
       clearInterval(st.timer);
       fecharPainel();
       st.contatos = [];
+      st.ocultas.clear();
       pilha.innerHTML = '';
       botao.hidden = true;
       atualizarContador();

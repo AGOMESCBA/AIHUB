@@ -67,6 +67,31 @@
 .ci-tick { letter-spacing:-3px; font-size:12px; color:var(--muted); padding-right:3px; }
 .ci-tick.ci-visto { color:var(--brand); }
 .ci-transm { font-size:11px; font-weight:600; color:var(--brand-2); margin-bottom:2px; }
+.ci-apagada { color:var(--muted); font-style:italic; }
+.ci-acoes-msg { align-self:flex-end; margin-top:3px; font-size:11px; color:var(--muted); }
+.ci-acoes-msg summary { cursor:pointer; padding:4px; border-radius:4px; }
+.ci-acoes-msg summary:focus-visible, .ci-acoes-msg button:focus-visible { outline:2px solid var(--brand); outline-offset:2px; }
+.ci-acoes-msg > div { display:flex; flex-wrap:wrap; gap:4px; padding-top:4px; }
+.ci-acoes-msg button { font:inherit; font-size:12px; border:1px solid var(--line); border-radius:var(--radius); padding:6px 8px; background:var(--panel); color:var(--text); cursor:pointer; }
+.ci-acoes-msg button:hover { color:var(--brand); }
+.ci-edicao { padding:10px 12px; display:flex; flex-direction:column; gap:8px; border-top:1px solid var(--line); background:var(--panel-2); }
+.ci-edicao label { color:var(--brand-2); font-size:12px; font-weight:600; }
+.ci-edicao textarea { width:100%; min-height:65px; max-height:120px; resize:vertical; padding:8px 10px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); color:var(--text); font:inherit; font-size:13px; }
+.ci-edicao > div { display:flex; justify-content:flex-end; align-items:center; gap:16px; }
+.ci-head-nome { flex:1; }
+.ci-menu-conversa { position:relative; flex:none; }
+.ci-menu-conversa summary { display:grid; place-items:center; width:28px; height:32px; border-radius:var(--radius); list-style:none; cursor:pointer; font-size:22px; }
+.ci-menu-conversa summary::-webkit-details-marker { display:none; }
+.ci-menu-conversa > div { position:absolute; right:0; top:100%; width:230px; padding:6px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); z-index:2; }
+.ci-menu-conversa button, .ci-selecao button:not(.ci-link) { border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); color:var(--text); padding:8px; cursor:pointer; font:inherit; font-size:12px; }
+.ci-menu-conversa button { display:block; width:100%; text-align:left; border:0; }
+.ci-menu-conversa button:hover { background:var(--panel-3); }
+.ci-menu-conversa summary:focus-visible, .ci-menu-conversa button:focus-visible, .ci-selecao button:focus-visible { outline:2px solid var(--brand); outline-offset:2px; }
+.ci-selecao { display:flex; flex-direction:column; align-items:flex-start; gap:8px; padding:10px 12px; background:var(--panel-2); border-bottom:1px solid var(--line); font-size:12px; }
+.ci-selecao > div { display:flex; flex-wrap:wrap; align-items:center; gap:10px; width:100%; justify-content:space-between; }
+.ci-selecao button:disabled { opacity:.5; cursor:default; }
+.ci-marcar { display:flex; gap:6px; align-items:center; color:var(--muted); font-size:11px; padding:4px 0; cursor:pointer; }
+.ci-marcar input { width:16px; height:16px; accent-color:var(--brand-2); }
 
 .ci-compor { display:flex; align-items:flex-end; gap:8px; padding:10px 12px; border-top:1px solid var(--line); background:var(--panel-2); }
 .ci-compor textarea { flex:1; resize:none; min-height:40px; max-height:120px; border-radius:20px; border:1px solid var(--line); background:var(--panel); color:var(--text); padding:10px 14px; font:inherit; font-size:13.5px; line-height:1.4; }

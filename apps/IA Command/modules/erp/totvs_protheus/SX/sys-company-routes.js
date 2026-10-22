@@ -167,6 +167,19 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
     }
   );
 
+  app.post('/api/ia-command/protheus/sys-company/excluir-lote',
+    requireAuth, requireIaCommand, canCompany,
+    (req, res) => {
+      try {
+        const excluidos = require('./company-delete-batch')(getDB(), eid(req), req.body?.ids);
+        _invalidarMetaSX2(eid(req));
+        res.json({ ok: true, excluidos });
+      } catch (e) {
+        res.status(e.status || 500).json({ error: e.message });
+      }
+    }
+  );
+
   // ── DELETE (um registro) ───────────────────────────────────────────────────
   app.delete('/api/ia-command/protheus/sys-company/:id',
     requireAuth, requireIaCommand, canCompany,

@@ -42,6 +42,34 @@ module.exports = function registrarChatInterno(app) {
     } catch (err) { _handleErro(res, err); }
   });
 
+  app.patch(`${BASE}/conversas/:conversaId/mensagens/:mensagemId`, (req, res) => {
+    try {
+      const alterada = chatService.editarMensagem(req.svcEmpresaId, eu(req), req.params.conversaId, req.params.mensagemId, req.body?.texto);
+      realtime.emitirMensagem(req.svcEmpresaId, alterada, 'chat:mensagem-alterada');
+      res.json(alterada.mensagem);
+    } catch (err) { _handleErro(res, err); }
+  });
+
+  app.delete(`${BASE}/conversas/:conversaId/mensagens/:mensagemId`, (req, res) => {
+    try {
+      const alterada = chatService.apagarMensagem(req.svcEmpresaId, eu(req), req.params.conversaId, req.params.mensagemId);
+      realtime.emitirMensagem(req.svcEmpresaId, alterada, 'chat:mensagem-alterada');
+      res.json(alterada.mensagem);
+    } catch (err) { _handleErro(res, err); }
+  });
+
+  app.post(`${BASE}/conversas/:conversaId/excluir-mensagens`, (req, res) => {
+    try {
+      const resultado = chatService.excluirMensagens(req.svcEmpresaId, eu(req), req.params.conversaId, req.body);
+      if (resultado.alteradas) {
+        resultado.alteradas.forEach((alterada) => realtime.emitirMensagem(req.svcEmpresaId, alterada, 'chat:mensagem-alterada'));
+        return res.json({ conversaId: resultado.conversaId, mensagens: resultado.alteradas.map((a) => a.mensagem) });
+      }
+      realtime.emitirExclusaoPessoal(req.svcEmpresaId, eu(req), resultado);
+      res.json(resultado);
+    } catch (err) { _handleErro(res, err); }
+  });
+
   app.post(`${BASE}/conversas/:conversaId/vistas`, (req, res) => {
     try {
       const grupos = chatService.marcarVistas(req.svcEmpresaId, eu(req), req.params.conversaId);

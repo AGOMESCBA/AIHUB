@@ -290,6 +290,11 @@ app.get('/app/ia-command', requireIaCommand, (req, res) => {
   res.redirect('/app/ia-command/shell.html');
 });
 
+// Atalho adicional: preserva o mesmo login e as permissões do sistema.
+app.get('/iacommand', requireIaCommand, (_req, res) => {
+  res.redirect('/app/ia-command/shell.html');
+});
+
 app.get('/app/master-crypto', requireMasterCrypto, (req, res) => {
   res.redirect('/app/master-crypto/shell.html');
 });

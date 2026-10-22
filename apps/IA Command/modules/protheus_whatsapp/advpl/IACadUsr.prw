@@ -2,22 +2,22 @@
 #Include "PROTHEUS.ch"
 #Include "FWMVCDef.ch"
 
-#Define IAC_HUB_URL_PADRAO  "http://137.131.212.29:3000"
+#Define IAC_HUB_URL_PADRAO  "http://200.106.188.87:3000"
 
 /*/{Protheus.doc} IACadUsr
     Cadastro de celular por usuario Protheus - IA Command.
     Tabela: ZCH
     A estrutura fisica e o dicionario ja devem existir no ambiente.
 
-    IMPORTANTE â€” cache do login web: o login web (acesso direto pelo
+    IMPORTANTE — cache do login web: o login web (acesso direto pelo
     telefone, sem passar pelo Protheus) le empresas/filiais permitidas de um
     CACHE gravado no IAHub (tabela protheus_web_user_permissions), nao
-    consulta o Protheus em tempo real. Esse cache nao expira sozinho â€” so e
+    consulta o Protheus em tempo real. Esse cache nao expira sozinho — so e
     atualizado quando o usuario abre o chat pelo Protheus (POST /token) OU
     quando alguem roda a opcao de menu "Sincronizar cadastro e acessos" aqui
     (varre toda a ZCH e atualiza todos de uma vez via IACEnvSync/IACUrlSync).
     SEMPRE que o acesso (empresa/filial/grupo) de algum usuario mudar no
-    Protheus, rode "Sincronizar cadastro e acessos" novamente â€” senao quem
+    Protheus, rode "Sincronizar cadastro e acessos" novamente — senao quem
     usa login web direto continua vendo o escopo antigo ate a proxima
     sincronizacao.
 /*/
@@ -157,10 +157,10 @@ User Function IACUSRSYNC()
 Return
 
 /*/{Protheus.doc} IACUSRVER
-    "Ver Acessos Sincronizados" â€” consulta no IA Command o que foi gravado
+    "Ver Acessos Sincronizados" — consulta no IA Command o que foi gravado
     para o usuario da linha selecionada no browse ZCH, e mostra empresas e
     filiais liberadas de forma legivel (nome, nao so codigo). Le o mesmo
-    cache que o login web usa (protheus_web_user_permissions) â€” reflete
+    cache que o login web usa (protheus_web_user_permissions) — reflete
     exatamente o que a proxima sessao web veria, nao consulta o ERP de novo.
 /*/
 User Function IACUSRVER()
@@ -200,7 +200,7 @@ Return
 
 /*/{Protheus.doc} IACGridAcessos
     Janela com grid (TWBrowse) somente-leitura mostrando uma linha por
-    filial liberada â€” Empresa Protheus | Codigo | Filial | Chave â€” mais
+    filial liberada — Empresa Protheus | Codigo | Filial | Chave — mais
     legivel que texto corrido quando o usuario tem muitas empresas/filiais.
 /*/
 Static Function IACGridAcessos(aDados, cCabecalho, cTitulo)
@@ -210,12 +210,12 @@ Static Function IACGridAcessos(aDados, cCabecalho, cTitulo)
     Local aHeader   := { "Empresa Protheus", "Codigo", "Filial", "Chave" }
     Local aColSizes := { 180, 70, 340, 120 }
     // Dialog 700x900 PIXEL: TWBrowse:New() recebe (nRow, nCol, nWidth,
-    // nHeight, ...) â€” largura/altura, NAO um segundo ponto de coordenada
+    // nHeight, ...) — largura/altura, NAO um segundo ponto de coordenada
     // (bottom/right). [CORRIGIDO apos grid aparecer cortada/fora do dialog:
     // versao anterior passava 355,730 como se fossem bottom/right, mas
     // TWBrowse interpreta como largura=355/altura=730, estourando um dialog
     // de 400px de altura.] [AUMENTADO apos usuario reportar coluna Filial
-    // cortada â€” dialog e larguras de coluna maiores.]
+    // cortada — dialog e larguras de coluna maiores.]
     Local nDlgAltura  := 700
     Local nDlgLargura := 900
     Local nGridTop    := 040
@@ -242,7 +242,7 @@ Static Function IACGridAcessos(aDados, cCabecalho, cTitulo)
 
 Return
 
-// Monta aDados no formato { {empresa, codigo, filial, chave}, ... } â€” uma
+// Monta aDados no formato { {empresa, codigo, filial, chave}, ... } — uma
 // linha por filial liberada; empresa com "todas as filiais" gera uma unica
 // linha com Filial="(Todas as filiais)"/Chave="-". cCabecalho traz
 // usuario/celular/ultimo sync como texto simples acima da grid.
@@ -302,7 +302,7 @@ Static Function IACConsultaVer(cUser, cCelular, aDados, cCabecalho, cErro)
 
     oEmpresas := oJsonRes:GetJsonObject("empresas")
     If ValType(oEmpresas) != "A" .Or. Len(oEmpresas) == 0
-        Return .T. // aDados fica vazio â€” grid mostra "sem registros"
+        Return .T. // aDados fica vazio — grid mostra "sem registros"
     EndIf
 
     For nI := 1 To Len(oEmpresas)
@@ -367,7 +367,7 @@ Static Function IACZCHUsr(aUsuarios)
 Return nTotal
 
 // lDebugTela (opcional): quando .T., mostra uma grid ANTES de enviar cada
-// usuario, com empresa/filial que serao gravadas â€” usado por IACUSRSYNC
+// usuario, com empresa/filial que serao gravadas — usado por IACUSRSYNC
 // para conferencia manual, um usuario por vez. So faz sentido no fluxo
 // manual de sincronizacao (aqui); o chat (IACCHAT.prw) nao pode bloquear
 // esperando clique, entao la o mesmo diagnostico fica so no ConOut.
@@ -420,7 +420,7 @@ Static Function IACEnvSync(aUsuarios, cErro, lDebugTela)
 
         // [DEBUG EM TELA] monta uma grid com o que SERA enviado para este
         // usuario (empresa | codigo | filial) a partir do JSON ja montado
-        // acima (cEmpPermit/cFilPermit â€” exatamente o payload real do POST,
+        // acima (cEmpPermit/cFilPermit — exatamente o payload real do POST,
         // nao uma reconstrucao paralela) e mostra ANTES de seguir para o
         // proximo usuario.
         If lDebugTela
@@ -532,10 +532,10 @@ Static Function IACEmpUsr(cUsuario)
         cCodFil := Alltrim(cValToChar(aSM0[nI, 2]))
         cEmpSM0 := Alltrim(cValToChar(aSM0[nI, 3]))
 
-        // [DIAGNOSTICO TEMPORARIO â€” so leitura, nao muda nenhuma logica]
+        // [DIAGNOSTICO TEMPORARIO — so leitura, nao muda nenhuma logica]
         // confirma se SM0_EMPOK (pos 10) / SM0_USEROK (pos 11) ja vem util
         // (variando .T./.F. por filial) mesmo com FWLoadSM0() chamado sem
-        // parametro (como ja usamos hoje) â€” se sim, pode virar fonte real
+        // parametro (como ja usamos hoje) — se sim, pode virar fonte real
         // de granularidade por usuario no lugar do fallback atual. Remover
         // apos confirmar.
         // If Len(aSM0[nI]) >= 11
@@ -603,7 +603,7 @@ Return cJson
 // [CORRIGIDO apos investigacao confirmar que PswRet() nao expoe a lista de
 // acessos empresa+filial nesta instalacao] FWUsrEmp(cUsuario) ja e a fonte
 // usada por IACEmpUsr() para resolver quais empresas o usuario acessa, e ja
-// detecta corretamente o coringa de grupo inteiro ("@@@@"/"@@" â€” usuario
+// detecta corretamente o coringa de grupo inteiro ("@@@@"/"@@" — usuario
 // admin/master, cadastrado so com "Grupo de empresas"). Reaproveita a MESMA
 // consulta aqui (uma vez, nao por empresa) para decidir se o usuario tem
 // acesso total: nesse caso, mostra TODAS as filiais reais de cada empresa
@@ -659,7 +659,7 @@ Return cJson
 // expoe, nesta instalacao, a lista de acessos empresa+filial do usuario em
 // NENHUMA posicao do array de retorno (confirmado varrendo TODAS as 26
 // posicoes de PswRet(1)[1] para 3 usuarios diferentes, incluindo um com
-// acesso de grupo inteiro cadastrado â€” nenhuma posicao contem um array de
+// acesso de grupo inteiro cadastrado — nenhuma posicao contem um array de
 // pares {empresa,filial} nem o coringa "@@@@"). Abandonada a leitura via
 // PswRet para granularidade de filial. Em vez disso, reaproveita lTodas
 // (ja calculado uma vez em IACFilJs via FWUsrEmp(), a MESMA fonte que ja
@@ -696,7 +696,7 @@ Static Function IACFilUsr(cCodigo, aCodigos, lTodas)
 Return aFiliais
 
 // Lista TODAS as filiais reais (SM0_CODFIL) cadastradas no ambiente para uma
-// empresa â€” usada quando o usuario tem acesso de grupo/empresa inteira.
+// empresa — usada quando o usuario tem acesso de grupo/empresa inteira.
 Static Function IACAllFilEmp(cCodigo)
     Local aSM0    := FWLoadSM0()
     Local aRet    := {}
@@ -732,7 +732,7 @@ Static Function IACAllFilEmp(cCodigo)
 
 Return aRet
 
-// Formata um array simples como texto "[item1,item2,...]" â€” usado so para
+// Formata um array simples como texto "[item1,item2,...]" — usado so para
 // mensagens de debug (ConOut), nao gera JSON valido (sem aspas).
 Static Function IACArrTxt(aValores)
     Local cRet := "["
@@ -758,15 +758,27 @@ Static Function IACSX6Lst(cParam, aCodigos)
     Local nI        := 0
     Local cFil      := ""
     Local cValor    := ""
+    Local cSemFil   := ""
     Local cVar      := Alltrim(cParam)
     Local cDel      := ""
 
     DbSelectArea("SX6")
+    SX6->(DbSetOrder(1))
+
+    // Prioriza o parametro sem filial. Preserva a largura de X6_FIL na chave.
+    If SX6->(MsSeek(Space(Len(SX6->X6_FIL)) + cVar))
+        cDel := IACCampo("D_E_L_E_T_")
+        If Empty(cDel) .And. Empty(IACCampo("X6_FIL")) .And. ;
+           IACCampo("X6_VAR") == cVar
+            cSemFil := IACCampo("X6_CONTEUD")
+        EndIf
+    EndIf
 
     For nI := 1 To Len(aCodigos)
         cFil   := Left(Alltrim(cValToChar(aCodigos[nI, 1])), 2)
-        cValor := ""
-        If !Empty(cFil)
+        cValor := cSemFil
+        // Sem valor geral, procura o parametro da filial mapeada.
+        If Empty(cValor) .And. !Empty(cFil)
             SX6->(DbSetOrder(1))
             If SX6->(MsSeek(cFil + cVar))
                 cDel := IACCampo("D_E_L_E_T_")
@@ -934,8 +946,48 @@ Return cSaida
 Static Function IACRmAcent(cTexto)
 Return cValToChar(cTexto)
 
+// Parametros do contexto atual: sem filial, cFilAnt e valor padrao.
+Static Function IACGetMV(cParam, xPadrao)
+    Local aArea     := FWGetArea()
+    Local aAreaSX6  := {}
+    Local cVar      := Alltrim(cParam)
+    Local cFilAtual := Alltrim(cValToChar(cFilAnt))
+    Local cValor    := ""
+    Local nTamFil   := 0
+    Local xRet      := xPadrao
+
+    DbSelectArea("SX6")
+    aAreaSX6 := FWGetArea()
+    nTamFil := Len(SX6->X6_FIL)
+    SX6->(DbSetOrder(1))
+
+    If SX6->(MsSeek(Space(nTamFil) + cVar))
+        If Empty(IACCampo("D_E_L_E_T_")) .And. Empty(IACCampo("X6_FIL")) .And. ;
+           IACCampo("X6_VAR") == cVar
+            cValor := IACCampo("X6_CONTEUD")
+        EndIf
+    EndIf
+
+    // Nunca trunca a filial logada para buscar outra filial por prefixo.
+    If Empty(cValor) .And. !Empty(cFilAtual) .And. Len(cFilAtual) <= nTamFil
+        If SX6->(MsSeek(PadR(cFilAtual, nTamFil) + cVar))
+            If Empty(IACCampo("D_E_L_E_T_")) .And. ;
+               IACCampo("X6_FIL") == cFilAtual .And. IACCampo("X6_VAR") == cVar
+                cValor := IACCampo("X6_CONTEUD")
+            EndIf
+        EndIf
+    EndIf
+
+    FWRestArea(aAreaSX6)
+    FWRestArea(aArea)
+
+    If !Empty(cValor)
+        xRet := cValor
+    EndIf
+Return xRet
+
 Static Function IACUrlBase()
-    Local cBase := Alltrim(GetMV("MV_IACURL", , ""))
+    Local cBase := Alltrim(IACGetMV("MV_IACURL", ""))
     If Empty(cBase)
         cBase := IAC_HUB_URL_PADRAO
     EndIf
@@ -949,10 +1001,10 @@ Static Function IACUrlSync()
 Return cBase + "/api/ia-command/protheus/user-permissions/sync"
 
 Static Function IACSecret()
-Return Alltrim(GetMV("MV_IACSECR", , ""))
+Return Alltrim(IACGetMV("MV_IACSECR", ""))
 
 Static Function IACTimeout()
-    Local nRet := Val(cValToChar(GetMV("MV_IACTOUT", , "8000")))
+    Local nRet := Val(cValToChar(IACGetMV("MV_IACTOUT", "8000")))
     If nRet <= 0
         nRet := 8000
     EndIf

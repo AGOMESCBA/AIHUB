@@ -1281,6 +1281,30 @@ const MIGRATIONS = [
       CREATE INDEX idx_svc_monitor_auditoria ON svc_monitor_auditoria (empresa_id, criado_em);
     `,
   },
+  {
+    version: 51,
+    descricao: 'Chat interno: edição e exclusão para todos pelo autor da mensagem.',
+    sql: `
+      BEGIN TRANSACTION;
+      ALTER TABLE svc_chat_mensagens ADD COLUMN editado_em TEXT;
+      ALTER TABLE svc_chat_mensagens ADD COLUMN apagado_em TEXT;
+      COMMIT;
+    `,
+  },
+  {
+    version: 52,
+    descricao: 'Chat interno: exclusão pessoal de mensagens e limpeza do histórico por participante.',
+    sql: `
+      CREATE TABLE svc_chat_mensagens_ocultas (
+        mensagem_id TEXT NOT NULL REFERENCES svc_chat_mensagens(id) ON DELETE CASCADE,
+        consultor_id TEXT NOT NULL,
+        empresa_id INTEGER NOT NULL,
+        apagado_em TEXT NOT NULL,
+        PRIMARY KEY (mensagem_id, consultor_id)
+      );
+      CREATE INDEX idx_svc_chat_ocultas_consultor ON svc_chat_mensagens_ocultas (empresa_id, consultor_id);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

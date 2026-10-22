@@ -168,6 +168,7 @@ function mapSearch(row, reveal = false) {
 }
 
 module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdmin }) {
+  require('./platform-access-routes').registrarRotas(app, { requireAuth, requireAdmin, getDB });
   app.get('/api/iahub/platform/ai-config', requireAuth, requireEmpresa, (req, res) => {
     res.json(mapAi(getAiRow(empresaId(req))));
   });
@@ -196,6 +197,9 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
     let apelido = atual?.login_externo_apelido ?? null;
     if (body.loginExternoApelido !== undefined) {
       apelido = normalizarApelido(body.loginExternoApelido);
+      if (['assets', 'guia'].includes(apelido) && apelido !== atual?.login_externo_apelido) {
+        return res.status(400).json({ error: 'Esse apelido é reservado. Escolha outro apelido para o link de acesso.' });
+      }
       if (apelido) {
         const emUso = getDB().prepare(`
           SELECT empresa_id FROM platform_ai_configs WHERE login_externo_apelido = ? AND empresa_id != ?
