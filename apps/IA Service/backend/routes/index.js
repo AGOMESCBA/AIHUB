@@ -32,6 +32,7 @@ const investigacaoExecucaoRepo = require('../repositories/investigacao-execucao-
 const investigacaoDossieService = require('../services/investigacao-dossie-service');
 const trilhaInvestigacaoService = require('../services/trilha-investigacao-service');
 const turnoLockService = require('../services/turno-lock-service');
+const progressoTurno = require('../services/progresso-turno-service');
 const validacaoSolucaoService = require('../services/validacao-solucao-service');
 const validacaoSolucaoRepo = require('../repositories/validacao-solucao-repository');
 const avaliacaoInvestigacaoService = require('../services/avaliacao-investigacao-service');
@@ -354,6 +355,11 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   // Recebe texto + IDs de anexos já enviados (via /anexos abaixo), persiste o
   // turno do usuário, monta contexto (histórico + anexos), chama a IA,
   // persiste e devolve a resposta estruturada.
+  // Andamento do turno em processamento (etapas da pesquisa/análise) para o chat.
+  app.get('/api/ia-service/atendimentos/:id/progresso', (req, res) => {
+    res.json(progressoTurno.obter(req.svcEmpresaId, req.params.id));
+  });
+
   app.post('/api/ia-service/atendimentos/:id/investigar', async (req, res) => {
     const empresaId = req.svcEmpresaId;
     const atendimentoId = req.params.id;
@@ -372,6 +378,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
         return res.status(400).json({ error: 'texto é obrigatório.' });
       }
       const analistaAtualNome = consultorService.getNomeExibicaoPorUsuarioIahub(req.session?.user_id || null);
+      progressoTurno.iniciar(empresaId, atendimentoId);
       const mensagemAssistente = await investigacaoService.processarTurno(empresaId, atendimentoId, {
         texto: String(texto).trim(),
         usuarioId: req.session?.user_id || null,
@@ -388,6 +395,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       _handleErro(res, err);
     } finally {
       turnoLockService.liberar(empresaId, atendimentoId);
+      progressoTurno.finalizar(empresaId, atendimentoId);
     }
   });
 

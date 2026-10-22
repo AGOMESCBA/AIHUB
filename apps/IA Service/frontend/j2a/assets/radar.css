@@ -1070,6 +1070,11 @@ button.loading .loader { display: block; }
    processando com base em todo o historico, nao travada. */
 .chat-status-card { display: flex; align-items: center; gap: 8px; }
 .chat-status-text { color: var(--muted); font-size: 12px; font-style: italic; }
+/* Etapas do turno (andamento da pesquisa/análise) abaixo do texto de status. */
+.chat-status-card:has(.chat-status-etapas) { flex-wrap: wrap; }
+.chat-status-etapas { flex-basis: 100%; display: grid; gap: 3px; margin-top: 4px; }
+.chat-status-etapa { color: var(--text); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.chat-status-etapa.ok { color: var(--muted); }
 .chat-status-dot {
   width: 6px;
   height: 6px;

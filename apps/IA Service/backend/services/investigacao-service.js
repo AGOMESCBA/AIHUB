@@ -32,6 +32,8 @@ const investigacaoDossieAtualizador = require('./investigacao-dossie-atualizador
 const dossieContextService = require('./dossie-context-service');
 const { redigirValor } = require('./redaction-service');
 const pendenciaExternaGate = require('./pendencia-externa-gate');
+const progressoTurno = require('./progresso-turno-service');
+const limpezaTecnicaService = require('./limpeza-tecnica-service');
 const situacaoOrigemService = require('./situacao-origem-service');
 const planoRespostaRastreavel = require('./plano-resposta-rastreavel-service');
 
@@ -340,6 +342,9 @@ function _adicionarInstrucaoObservacaoVisual(userPrompt, contexto) {
     'Formato obrigatorio:',
     '{"observacoesVisuais":[{"anexoId":"...","nome":"...","textosVisiveis":["..."],"campos":["..."],"valores":["..."],"observacao":"observacao curta sem conclusao causal","confiancaVisual":"alta|media|baixa"}]}',
     'Se nao conseguir ler um print, informe textosVisiveis vazio e confiancaVisual baixa.',
+    // Repetida junto das imagens: no prompt de sistema o modelo a ignorava
+    // quando havia prints (validacao real 2026-10-21, #036566 com gpt-4o).
+    'Na resposta ao analista: o print mostra o que esta na tela, nao a causa. Nao organize a resposta descrevendo imagem por imagem. Tela vazia ou "sem registros" costuma vir de processo gerador nao executado ou executado para outro periodo/ano-base/filial/parametro: considere isso antes de concluir que um filtro oculta os dados. Cada proximo passo precisa apontar rotina, parametro, tabela, campo ou condicao concreta; nao use passos genericos como "colete logs" ou "verifique os dados".',
     'Imagens disponiveis:',
     mapa,
   ].join('\n');
@@ -580,6 +585,7 @@ function _marcarRespostaTruncadaNoGate(qualityGate) {
   }
   gate.falhas = falhas;
   gate.aprovado = false;
+  gate.aprovadoSemRessalvas = false;
   gate.decisoes = {
     ...(gate.decisoes || {}),
     bloqueiosObjetivos: Math.max(1, gate.decisoes?.bloqueiosObjetivos || 0),
@@ -880,6 +886,54 @@ function _garantirChamadoNaoEncerrado(empresaId, atendimento) {
   }
 }
 
+// Texto visível dos prints, lido ANTES da pesquisa para entrar nos termos de
+// busca (antes a imagem só era vista na chamada que escreve a resposta, depois
+// da pesquisa — achado real #036566: "Sem registros para o filtro selecionado"
+// estava no print e não na busca). Só transcreve, não interpreta. Até 3 prints
+// mais recentes; resultado guardado em memória por conjunto de anexos.
+const _cacheTextoPrints = new Map();
+async function _transcreverPrintsParaBusca(empresaId, anexos) {
+  const fs = require('fs');
+  const path = require('path');
+  const armazenamento = require('./armazenamento-anexos');
+  const prints = (anexos || [])
+    .filter(a => /^image\/(png|jpeg|gif|webp)$/.test(String(a.mimeType || '')) && a.caminhoRelativo)
+    .sort((a, b) => String(b.criadoEm || '').localeCompare(String(a.criadoEm || '')))
+    .slice(0, 3);
+  if (!prints.length) return '';
+  const chave = `${empresaId}:${prints.map(p => p.id).join(',')}`;
+  if (_cacheTextoPrints.has(chave)) return _cacheTextoPrints.get(chave);
+  const imagens = [];
+  for (const p of prints) {
+    try {
+      const buffer = fs.readFileSync(path.join(armazenamento.ANEXOS_DIR, p.caminhoRelativo));
+      if (buffer.length) imagens.push({ mimeType: p.mimeType, base64: buffer.toString('base64') });
+    } catch (_) { /* print ilegível: a análise principal trata e avisa */ }
+  }
+  if (!imagens.length) return '';
+  try {
+    const { keys, cfg } = aiConfigService.resolverKeysEOrdem(empresaId);
+    const r = await aiProviderClient.chamarIA(keys, cfg,
+      'Voce transcreve texto visivel em prints de sistemas (ERP). Liste, em linhas curtas, so o que esta escrito: titulo da tela ou rotina, mensagens de erro/aviso/help, nomes de campos e filtros relevantes, codigos. Nao interprete, nao conclua causa, nao invente. Se nao houver texto legivel, responda vazio.',
+      'Transcreva o texto visivel destes prints.', imagens, { maxTokens: 400, timeoutMs: 20000, temperature: 0 });
+    const texto = String(r?.texto || '').trim().slice(0, 1500);
+    if (_cacheTextoPrints.size > 500) _cacheTextoPrints.clear();
+    _cacheTextoPrints.set(chave, texto);
+    return texto;
+  } catch (err) {
+    console.error('[IA Service] Leitura do texto dos prints para a busca falhou (segue sem):', err.message);
+    return '';
+  }
+}
+
+// Orientações para a resposta vão na seção marcada do texto da pesquisa, que o
+// motor de contexto sempre preserva (ver context-engine._selecionarPesquisaExterna).
+const MARCADOR_ORIENTACOES = '## Orientacoes para a resposta';
+function _comOrientacao(texto, bloco) {
+  const t = String(texto || '');
+  return t.includes(MARCADOR_ORIENTACOES) ? `${t}\n\n${bloco}` : `${t}\n\n${MARCADOR_ORIENTACOES}\n${bloco}`;
+}
+
 async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, consultorId = null, anexoIds = [], automatico = false, anexosComoContexto = false, forcarPesquisa = false, analistaAtualNome = null, origemAcao: origemAcaoInformada = null }) {
   const atendimento = mensagemService.getAtendimento(empresaId, atendimentoId);
   if (!atendimento) throw new Error('Atendimento não encontrado nesta empresa.');
@@ -930,6 +984,15 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       ? { ...m, conteudo: RESPOSTA_NAO_ENTREGUE_NO_HISTORICO, diagnostico: null } : m);
   } catch (err) {
     console.error('[IA Service] Status das execucoes anteriores indisponivel; historico mantido:', err.message);
+  }
+  // Botão Pesquisar = "revise tudo e pesquise de novo": respostas anteriores da
+  // IA não são evidência e, no histórico, eram copiadas quase palavra por
+  // palavra, inclusive referências sem lastro, mesmo com instrução contrária
+  // (validação real 2026-10-21, #036580 com gpt-4o-mini). Mensagens do
+  // chamado e do analista continuam inteiras.
+  if (forcarPesquisa) {
+    historico = historico.map(m => m.papel === 'assistant'
+      ? { ...m, conteudo: '[Resposta anterior da IA omitida: o analista pediu uma nova investigação completa.]', diagnostico: null } : m);
   }
 
   _garantirDossieSeguro(empresaId, atendimentoId, mensagemUsuario);
@@ -1003,6 +1066,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     }
   }
 
+  progressoTurno.registrar(empresaId, atendimentoId, 'Lendo o histórico, os anexos e o dossiê do chamado');
   let pesquisaTecnicaTexto = '';
   let pesquisaTecnica = null;
   let relacionados = [];
@@ -1049,16 +1113,33 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
           consultarSituacaoOrigem: () => situacaoOrigemService.consultarSituacaoAtual(empresaId, chamado),
         });
         if (pendencia.externa) {
-          const { keys: keysGate, cfg: cfgGate } = aiConfigService.resolverKeysEOrdem(empresaId);
-          decisaoPesquisaExterna = await pendenciaExternaGate.decidirPesquisaExterna({
-            pendencia, origemAcao, texto, historico,
-            chamarIA: (sys, prompt, opts) => aiProviderClient.chamarIA(keysGate, cfgGate, sys, prompt, [], opts),
-          });
+          decisaoPesquisaExterna = await pendenciaExternaGate.decidirPesquisaExterna({ pendencia, origemAcao });
         }
       } catch (gateErr) {
         console.error('[IA Service] Gate de pendencia externa falhou, mantendo comportamento atual:', gateErr.message);
         decisaoPesquisaExterna = null;
+        // Botão e pré-análise nunca pesquisam sob pendência externa (decisão do
+        // usuário, 2026-10): se a confirmação na origem falhar, vale a situação
+        // local. Só o pedido no chat continua com o comportamento atual.
+        const local = pendenciaExternaGate.classificarPendencia(chamado);
+        if (local.externa && origemAcao !== pendenciaExternaGate.ORIGEM.TEXTO_LIVRE) {
+          decisaoPesquisaExterna = { liberada: false, pendencia: local, origemAcao, chamadaIA: false, motivo: `${origemAcao}_sem_pesquisa_sob_pendencia_externa (situacao local; confirmacao na origem falhou): aguardando ${local.responsavel}` };
+        }
       }
+    }
+    // Botão Pesquisar sob pendência de cliente/fornecedor: não pesquisa nem
+    // resume o chamado — só avisa que estamos aguardando o retorno (decisão do
+    // usuário, 2026-10). Mensagem fixa, sem chamada à IA. Pedido no chat segue
+    // o fluxo normal.
+    if (decisaoPesquisaExterna && !decisaoPesquisaExterna.liberada && origemAcao === pendenciaExternaGate.ORIGEM.BOTAO) {
+      const quem = decisaoPesquisaExterna.pendencia?.responsavel || 'cliente';
+      const aviso = quem === 'cliente'
+        ? 'Este chamado já teve retorno enviado ao cliente e estamos aguardando a resposta dele, por isso não fiz uma nova pesquisa agora. Se quiser que eu pesquise mesmo assim, é só pedir aqui no chat.'
+        : `Este chamado está aguardando o retorno do ${quem}, por isso não fiz uma nova pesquisa agora. Se quiser que eu pesquise mesmo assim, é só pedir aqui no chat.`;
+      return mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
+        papel: 'assistant', conteudo: aviso, usuarioId: null,
+        diagnostico: { pendenciaExterna: { responsavel: quem, origemAcao, motivo: decisaoPesquisaExterna.motivo } },
+      });
     }
     const pesquisaExternaBloqueada = decisaoPesquisaExterna && !decisaoPesquisaExterna.liberada
       ? { responsavel: decisaoPesquisaExterna.pendencia.responsavel, origemAcao, motivo: decisaoPesquisaExterna.motivo }
@@ -1071,6 +1152,8 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       atendimento,
       mensagens: historico,
       anexos: anexosTextoParaPesquisa,
+      // Só é chamado pela pesquisa quando ela de fato vai buscar (ver pesquisar).
+      obterTextoPrints: () => _transcreverPrintsParaBusca(empresaId, todosAnexosDoAtendimento),
       texto,
       dossieOperacional: dossieOperacionalTurno,
       // Mensagem do analista persistida como novo turno (nunca pre-analise
@@ -1101,6 +1184,13 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       // configurada na Platform (Serper com credencial própria, Gemini/
       // OpenAI reaproveitando a chave de IA já cadastrada da empresa).
       searchConfig: aiConfigService.resolverConfigPesquisa(empresaId),
+      // A IA escreve as consultas de busca (provider/modelo da Platform);
+      // IA_SERVICE_CONSULTAS_IA=0 desliga sem novo deploy.
+      consultasPorIA: process.env.IA_SERVICE_CONSULTAS_IA !== '0',
+      // Busca direta na Central TOTVS (API pública, sem custo);
+      // IA_SERVICE_CENTRAL_TOTVS=0 desliga sem novo deploy.
+      centralTotvs: process.env.IA_SERVICE_CENTRAL_TOTVS !== '0',
+      progresso: progressoTurno.reporter(empresaId, atendimentoId),
     });
     if (decisaoPesquisaExterna) {
       // Trilha: motivo de pesquisar OU dispensar a pesquisa externa.
@@ -1119,7 +1209,20 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     pesquisaTecnica = pesquisa;
     pesquisaTecnicaTexto =technicalResearchService.formatarContextoParaPrompt(pesquisa, relacionados);
     if (pesquisaExternaBloqueada) {
-      pesquisaTecnicaTexto += `\n\n${pendenciaExternaGate.instrucaoParaPrompt(decisaoPesquisaExterna)}`;
+      pesquisaTecnicaTexto = _comOrientacao(pesquisaTecnicaTexto, pendenciaExternaGate.instrucaoParaPrompt(decisaoPesquisaExterna));
+    }
+    // Cabeçalho do chamado indica customização (ex.: serviço "Ajuste/Correção
+    // de Customização", #036727): a documentação TOTVS só descreve o padrão;
+    // a causa provável está no fonte do cliente (pedido do usuário, 2026-10-21).
+    const camposCabecalho = [chamado?.servico, chamado?.tipoChamado, chamado?.tipoChamadoFinal, chamado?.natureza].filter(Boolean).join(' | ');
+    if (/customiza/i.test(camposCabecalho)) {
+      pesquisaTecnicaTexto = _comOrientacao(pesquisaTecnicaTexto, `## Chamado de customização (cabeçalho: ${camposCabecalho})\nO cadastro indica customização. Use a documentação oficial só como referência do comportamento PADRÃO, para comparar com o que o cliente relata. A causa provável está no fonte customizado (rotina, ponto de entrada ou função do cliente): se o fonte estiver no chamado, analise-o; se não estiver, peça o fonte completo do processo envolvido e diga o que comparar com o padrão. Não apresente configuração padrão como solução sem considerar que o processo é customizado.`);
+    }
+    // Nova pesquisa pedida pelo analista: a IA repetia, palavra por palavra, a
+    // resposta anterior (inclusive referências sem lastro) em vez de refazer a
+    // análise com as fontes novas (validação real 2026-10-21, #036580).
+    if (forcarPesquisa && historico.some(m => m.papel === 'assistant')) {
+      pesquisaTecnicaTexto = _comOrientacao(pesquisaTecnicaTexto, '## Nova investigação pedida pelo analista\nNão repita nem parafraseie respostas anteriores da IA neste chamado. Refaça a análise a partir do histórico do chamado e das fontes lidas nesta pesquisa. Da resposta anterior, mantenha só o que continua sustentado pelo chamado ou pelas fontes; o que era hipótese sem lastro (rotina, ponto de entrada, tabela ou parâmetro que não aparece no chamado nem nas fontes) deve ser descartado ou reapresentado como hipótese a confirmar.');
     }
   } catch (err) {
     pesquisaTecnicaTexto = [
@@ -1298,6 +1401,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       paramsContexto,
       decorar: (ctx, prompt) => _adicionarInstrucaoObservacaoVisual(prompt, ctx),
     });
+    progressoTurno.registrar(empresaId, atendimentoId, 'Analisando as evidências e escrevendo a resposta');
     resultado = await aiProviderClient.chamarIA(keys, cfg, promptBuilder.SYSTEM_PROMPT, promptUsado, imagens, {
       maxTokens: 6000,
       timeoutMs,
@@ -1377,6 +1481,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
         evidenciaForcadaIds: idsForcados,
         decorar: (ctx, prompt) => `${_adicionarInstrucaoObservacaoVisual(prompt, ctx)}\n\n## Reprocessamento por Quality Gate\n${qualityGateService.montarInstrucaoRetry(qualityGateAntesRetry, { manifesto: ctx.manifesto })}`,
       });
+      progressoTurno.registrar(empresaId, atendimentoId, 'Revisando a qualidade da resposta');
       resultado = await aiProviderClient.chamarIA(keys, cfg, promptBuilder.SYSTEM_PROMPT, promptUsado, imagens, {
         maxTokens: 6000,
         timeoutMs,
@@ -1583,10 +1688,24 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     ? `${resultado.texto}\n\n⚠️ *Resposta cortada pelo limite de tamanho da IA — peça para "continuar" ou reformule de forma mais objetiva.*`
     : resultado.texto;
 
+  // Limpeza conservadora da Técnica, sem IA (decisão do usuário, 2026-10-22):
+  // só a lista final que repete o corpo e o fecho genérico. O que sair vai
+  // para a auditoria da mensagem. Ver limpeza-tecnica-service.js.
+  let limpezaTecnica = null;
+  if (!revisaoNecessariaQualityGate && !resultado.truncado) {
+    const limpa = limpezaTecnicaService.limparTecnica(textoFinal);
+    if (limpa.removidos.length) { textoFinal = limpa.texto; limpezaTecnica = limpa.removidos; }
+  }
+
   // Depois do Quality Gate (não altera o que ele avaliou). Entra também no aviso
   // de análise bloqueada: as fontes abertas são fato, não a recomendação
   // reprovada, e o analista precisa ver o que foi pesquisado.
+  const corpoAntesDasFontes = String(textoFinal || '').trim();
   textoFinal = _anexarFontesConsultadas(textoFinal, pesquisaTecnica);
+  const textoComFontesSeparado = {
+    corpo: corpoAntesDasFontes,
+    blocoFontes: textoFinal.startsWith(corpoAntesDasFontes) ? textoFinal.slice(corpoAntesDasFontes.length) : '',
+  };
 
   let secoes = _extrairSecoes(textoFinal);
   let nivelConfianca = _extrairNivelConfianca(textoFinal);
@@ -1606,7 +1725,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     pedido: texto, textoResposta: textoFinal, fonteCorrigidoTexto,
     manifesto: contexto.manifesto, respostaTruncada: !!resultado.truncado,
     explicacaoGeral: secoes?.['Alterações realizadas'] || null,
-    aprovadaQualityGate: qualityGate?.aprovado === true && !revisaoNecessariaQualityGate && !resultado.truncado,
+    aprovadaQualityGate: qualityGate?.aprovadoSemRessalvas === true && !revisaoNecessariaQualityGate && !resultado.truncado,
   });
   const respostaBloqueada = construirRespostaBloqueada(geracaoFontes);
   if (respostaBloqueada) {
@@ -1623,17 +1742,31 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
 
   // Bloqueios são redigidos deterministicamente, sem chamada editorial.
   // Propostas aprovadas e respostas sem proposta mantêm a humanização atual.
+  if (!respostaBloqueada) progressoTurno.registrar(empresaId, atendimentoId, 'Preparando a versão objetiva da resposta');
+  // A Objetiva resume só o corpo: o bloco "Fontes consultadas" é montado pelo
+  // sistema e volta intacto depois. Antes ia junto, a Objetiva encurtava os
+  // links e o gate travava por "referência técnica removida" (validação real
+  // 2026-10-22: #036596, #036731 e #036704 caíram na Técnica só por isso).
+  const corpoTecnica = textoComFontesSeparado.corpo;
+  const blocoFontes = textoComFontesSeparado.blocoFontes;
   const comunicacao = respostaBloqueada ? { respostaFinal: textoFinal, estilo: 'ORIGINAL' } : await respostaHumanizada.prepararResposta({
-    empresaId, consultorId: consultorDoTurno, respostaOriginal: textoFinal,
+    empresaId, consultorId: consultorDoTurno, respostaOriginal: corpoTecnica,
     aprovado: qualityGate?.aprovado === true && !revisaoNecessariaQualityGate && !resultado.truncado,
     avaliacaoTecnica: qualityGate,
   });
+  if (!respostaBloqueada && blocoFontes) {
+    comunicacao.respostaFinal = `${String(comunicacao.respostaFinal || '').trim()}${blocoFontes}`;
+    if (typeof comunicacao.respostaOriginal === 'string') comunicacao.respostaOriginal = `${comunicacao.respostaOriginal.trim()}${blocoFontes}`;
+  }
   const { respostaFinal, ...auditoriaHumanizacao } = comunicacao;
 
   const dadosResposta = {
     papel: 'assistant',
     conteudo: respostaFinal,
-    diagnostico: comunicacao.estilo !== 'ORIGINAL' || comunicacao.status === 'fallback' ? { ...secoes, humanizacao: auditoriaHumanizacao } : secoes,
+    diagnostico: (() => {
+      const base = comunicacao.estilo !== 'ORIGINAL' || comunicacao.status === 'fallback' ? { ...secoes, humanizacao: auditoriaHumanizacao } : secoes;
+      return limpezaTecnica ? { ...(base || {}), limpezaTecnica } : base;
+    })(),
     nivelConfianca,
     provider: resultado.provider,
     model: resultado.model,

@@ -24,6 +24,9 @@ const MIME_PERMITIDOS = new Set([
   'application/json',
   'application/xml', 'text/xml',
   'application/octet-stream', // .log e .prw/.tlpp costumam chegar como octet-stream
+  // Word e Excel modernos (2026-10-21): texto extraído em extracao-conteudo.js.
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ]);
 
 // Executáveis e binários continuam proibidos. Scripts textuais (.js, .sh,

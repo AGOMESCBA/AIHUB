@@ -1309,7 +1309,9 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
     // Pesquisa realmente executada sem resultado e resposta valida quando o
     // texto declara isso ao analista; dispensada pelo plano continua falha.
     else if (pesquisa?.modo !== 'web' && !(pesquisa?.modo === 'links' && pesquisa?.consultasExecutadas?.length && _declaraPesquisaSemResultado(resposta))) falhas.push({ codigo: 'RESEARCH_CONFIGURED_WITHOUT_RESULTS', legado: 'PESQUISA_CONFIGURADA_SEM_RESULTADO', severidade: 'media', acaoCorretiva: 'executar_pesquisa_solicitada_ou_declarar_limite' });
-    else if (!paginasComConteudo.length) {
+    // Nenhuma página aberta porque a IA avaliou os resultados e nenhum trata do
+    // problema: descarte intencional, não falha de leitura.
+    else if (!paginasComConteudo.length && !(pesquisa?.selecaoArtigos?.executada && !pesquisa.selecaoArtigos.indices?.length)) {
       const declaraLimitePesquisa = /\b(pesquisa|documenta[cÃ§][aÃ£]o|fonte oficial|pagina|p[aÃ¡]gina)\b[\s\S]{0,120}\b(nao foi possivel|nao consegui|nao acessivel|nao acessada|nao lida|nenhuma pagina foi lida|sem conteudo|sem pagina lida|nao retornou conteudo|links sem leitura|limitacao)\b/i.test(resposta)
         || /\b(nao foi possivel|nao consegui|nao acessivel|nao acessada|nao lida|nenhuma pagina foi lida|sem conteudo|sem pagina lida|nao retornou conteudo|links sem leitura|limitacao)\b[\s\S]{0,120}\b(pesquisa|documenta[cÃ§][aÃ£]o|fonte oficial|pagina|p[aÃ¡]gina)\b/i.test(resposta);
       if (!declaraLimitePesquisa) falhas.push({ codigo: 'RESEARCH_FOUND_BUT_NOT_READ', legado: 'PESQUISA_SEM_PAGINA_LIDA', severidade: 'media', acaoCorretiva: 'tentar_fetch_seguro' });
@@ -1317,7 +1319,16 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
   }
 
   const falhasClassificadas = falhas.map(_classificarFalha);
-  const deveRetry = !houveRetry && falhasClassificadas.some(f => ['alta', 'media'].includes(f.severidade) && f.decisionKind !== DECISAO_QG.SUSPEITA_SEMANTICA);
+  // Correção de estilo é só aviso na auditoria (decisão do usuário, 2026-10-21:
+  // "o gate bloqueia o mínimo possível, a IA é predominante"). Validação real:
+  // CORRECTION_WITHOUT_VALIDATION disparava reescrita "sem reinvestigar" que
+  // deixava a resposta genérica (#036566, #036727) e tirava a aprovação, o que
+  // também impedia a versão Objetiva. Bloqueio objetivo continua valendo.
+  // Exceções que continuam valendo: resposta genérica com evidência específica
+  // disponível (conteúdo, não forma) e vazamento de bastidor interno (integridade).
+  const ESTILO_QUE_CONTINUA_VALENDO = new Set(['GENERIC_RESPONSE_WITH_SPECIFIC_EVIDENCE', 'RETRY_CONTEXT_LEAKED']);
+  const naoEstilo = falhasClassificadas.filter(f => f.decisionKind !== DECISAO_QG.CORRECAO_ESTILO || ESTILO_QUE_CONTINUA_VALENDO.has(f.codigo));
+  const deveRetry = !houveRetry && naoEstilo.some(f => ['alta', 'media'].includes(f.severidade) && f.decisionKind !== DECISAO_QG.SUSPEITA_SEMANTICA);
   const decisoes = {
     bloqueiosObjetivos: falhasClassificadas.filter(f => f.decisionKind === DECISAO_QG.BLOQUEIO_OBJETIVO).length,
     suspeitasSemanticas: falhasClassificadas.filter(f => f.decisionKind === DECISAO_QG.SUSPEITA_SEMANTICA).length,
@@ -1325,7 +1336,10 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
     correcoesEstilo: falhasClassificadas.filter(f => f.decisionKind === DECISAO_QG.CORRECAO_ESTILO).length,
   };
   return {
-    aprovado: falhasClassificadas.length === 0,
+    aprovado: naoEstilo.length === 0,
+    // Sem nenhuma falha, nem de estilo: exigido para gerar arquivo de fonte
+    // corrigido (correção sem orientar validação não vira arquivo).
+    aprovadoSemRessalvas: falhasClassificadas.length === 0,
     deveRetry,
     falhas: falhasClassificadas,
     decisoes,

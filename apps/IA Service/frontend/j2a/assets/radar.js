@@ -1022,6 +1022,11 @@
         <span class="chat-status-text">${escapeHtml(texto || 'Processando...')}</span>
       </div>
     `;
+    // Etapas do turno (andamento da pesquisa/análise), quando o backend já informou.
+    const etapas = state.chatStatusAtendimentoId === state.atendimentoId ? (state.chatStatusEtapas || []) : [];
+    if (etapas.length) {
+      row.querySelector('.message-card').insertAdjacentHTML('beforeend', `<div class="chat-status-etapas">${etapas.map((e) => `<div class="chat-status-etapa${e.concluida ? ' ok' : ''}">${e.concluida ? '✓' : '⏳'} ${escapeHtml(e.texto)}</div>`).join('')}</div>`);
+    }
     container.appendChild(row);
     if (pertoDoFim) container.scrollTop = container.scrollHeight;
   }
@@ -1035,16 +1040,38 @@
   // chamados, nao so no que estava sendo pesquisado). Corrigido associando
   // o texto ao atendimentoId que o gerou -- so e exibido quando esse
   // atendimento ainda e o visivel na tela.
-  function showChatStatus(texto, atendimentoId = state.atendimentoId) {
+  function showChatStatus(texto, atendimentoId = state.atendimentoId, etapas = null) {
     state.chatStatusText = texto || 'Processando...';
     state.chatStatusAtendimentoId = atendimentoId;
-    if (atendimentoId === state.atendimentoId) appendChatStatusRow(state.chatStatusText);
+    state.chatStatusEtapas = etapas;
+    // Atualização de etapas só rola o chat se o analista já estava no fim dele.
+    if (atendimentoId === state.atendimentoId) appendChatStatusRow(state.chatStatusText, etapas ? _estaPertoDoFim($('messages')) : true);
+  }
+
+  // Consulta o andamento do turno a cada 1,5 s e mostra as etapas na mensagem
+  // de status. Sem progresso (backend antigo/reiniciado), fica o texto genérico.
+  function acompanharProgresso(atendimentoId, texto) {
+    let ativo = true;
+    let ultimo = '';
+    const timer = setInterval(async () => {
+      try {
+        const p = await request(ext(`/atendimentos/${encodeURIComponent(atendimentoId)}/progresso`));
+        const etapas = Array.isArray(p?.etapas) ? p.etapas : [];
+        const assinatura = JSON.stringify(etapas);
+        if (ativo && etapas.length && assinatura !== ultimo && state.chatStatusAtendimentoId === atendimentoId) {
+          ultimo = assinatura;
+          showChatStatus(texto, atendimentoId, etapas);
+        }
+      } catch (_) { /* sem progresso: mantém o texto genérico */ }
+    }, 1500);
+    return () => { ativo = false; clearInterval(timer); };
   }
 
   function hideChatStatus(atendimentoId = state.atendimentoId) {
     if (atendimentoId !== state.chatStatusAtendimentoId) return; // nao esconde status de OUTRO atendimento
     state.chatStatusText = null;
     state.chatStatusAtendimentoId = null;
+    state.chatStatusEtapas = null;
     const row = $('chat-status-row');
     if (row) row.remove();
   }
@@ -1237,6 +1264,7 @@
     state.processing.add(atendimentoId);
     renderQueue();
     showChatStatus('Pesquisando e analisando o chamado com a IA...', atendimentoId);
+    const pararProgresso = acompanharProgresso(atendimentoId, 'Pesquisando e analisando o chamado com a IA...');
     let concluiu = false;
     try {
       const anexoIds = await uploadPendingFiles(atendimentoId);
@@ -1256,6 +1284,7 @@
     } catch (err) {
       toast(`Nao foi possivel enviar: ${err.message}`);
     } finally {
+      pararProgresso();
       state.processing.delete(atendimentoId);
       if (concluiu) marcarConcluidoSeNaoVisivel(atendimentoId);
       renderQueue();
@@ -1287,6 +1316,7 @@
     state.processing.add(atendimentoId);
     renderQueue();
     showChatStatus('Pesquisando no histórico completo do chamado...', atendimentoId);
+    const pararProgresso = acompanharProgresso(atendimentoId, 'Pesquisando no histórico completo do chamado...');
     let concluiu = false;
     try {
       await request(ext(`/radar/chamados/${encodeURIComponent(state.selected.id)}/anexos-softexpert/sincronizar`), {
@@ -1312,6 +1342,7 @@
     } catch (err) {
       toast(`Nao foi possivel pesquisar solucoes: ${err.message}`);
     } finally {
+      pararProgresso();
       state.processing.delete(atendimentoId);
       if (concluiu) marcarConcluidoSeNaoVisivel(atendimentoId);
       renderQueue();

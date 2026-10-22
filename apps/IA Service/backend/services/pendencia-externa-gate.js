@@ -5,10 +5,8 @@
  *
  * Princípio (ver memória ia-service-principio-chat-conversacional): o IA
  * Service é um chat conversacional. A situação do chamado (aguardando
- * Cliente/Fornecedor) controla SOMENTE o acionamento de pesquisa externa —
- * nunca a conversa nem o raciocínio da IA. Quem decide se uma mensagem do
- * analista pede investigação externa é a própria IA (classificação semântica
- * com o contexto da conversa), não regex nem palavra-chave.
+ * Cliente/Fornecedor) controla SOMENTE o botão Pesquisar e a pré-análise
+ * automática — nunca a conversa nem o raciocínio da IA.
  *
  * Regras:
  *  - Pendência não reconhecida com segurança como externa (vazia, atendente,
@@ -16,8 +14,9 @@
  *    (fail-safe), nenhuma chamada extra ao provider.
  *  - Pré-análise automática e botão "Pesquisar" nunca liberam pesquisa externa
  *    sob pendência externa.
- *  - Texto livre: uma chamada curta classifica pesquisar|nao_pesquisar|incerto.
- *    Só "pesquisar" libera. Incerto ou falha do classificador → não pesquisa.
+ *  - Mensagem no chat (texto livre): liberada 100% (decisão do usuário,
+ *    2026-10-21) — o planejamento normal da pesquisa decide, como em qualquer
+ *    chamado. Antes, uma IA classificava o pedido; foi removido.
  *
  * Responsáveis externos: cliente, fornecedor e distribuidor. Valores reais
  * confirmados de ITC.AGUARDANDO: RETORNO - CLIENTE / FORNECEDOR / ATENDENTE;
@@ -27,7 +26,6 @@
  * "RETORNO - X" e "AGUARDANDO X" são equivalentes.
  */
 
-const { redigirValor } = require('./redaction-service');
 
 const ORIGEM = Object.freeze({
   AUTOMATICO: 'automatico',
@@ -35,8 +33,6 @@ const ORIGEM = Object.freeze({
   TEXTO_LIVRE: 'texto_livre',
 });
 
-const MAX_MENSAGENS_CONTEXTO = 8;
-const MAX_CHARS_MENSAGEM = 500;
 
 /**
  * Origem EFETIVA da ação. Preferência pela origem explícita enviada pelo
@@ -104,30 +100,6 @@ async function avaliarPendencia({ chamado, posicionamentos = [], consultarSituac
   return { ...atual, fonteSituacao: 'origem_divergiu_do_local', situacaoLocal: local.valor, situacaoOrigem: o.aguardando };
 }
 
-const SYSTEM_PROMPT_DECISAO =`Você decide, para um chat de suporte técnico, se a ÚLTIMA mensagem do analista pede que a IA faça uma PESQUISA EXTERNA (consultar internet, documentação oficial, bases públicas de conhecimento) para investigar o problema.
-
-O chamado está aguardando retorno de terceiro (cliente, fornecedor ou distribuidor); por isso a pesquisa externa NÃO deve ocorrer sozinha — só quando o analista pedir. Considere o CONTEXTO da conversa: expressões como "verifique isso", "pode aprofundar?", "procure alternativas", "e se for outra causa?" contam como pedido quando, pelo contexto, representam investigar/consultar fontes externas. Cortesia seguida de uma ordem ("ok, procura nos fóruns", "beleza, investigue outra causa") é pedido. Não dependa de palavras exatas.
-
-NÃO é pedido de pesquisa externa: perguntas sobre o histórico, o andamento, o que alguém respondeu, o estado do chamado, pedir resumo/explicação do que já existe, discutir hipóteses com base no que já está no chamado, agradecimentos, confirmações ou conversa administrativa.
-
-Responda APENAS um JSON: {"pesquisa_externa": "sim" | "nao" | "incerto", "motivo": "<frase curta>"}.
-Use "incerto" se de fato não der para saber.`;
-
-function _montarContexto(historico = [], texto = '') {
-  const msgs = (Array.isArray(historico) ? historico : [])
-    .filter(m => m && (m.papel === 'user' || m.papel === 'assistant'))
-    .slice(-MAX_MENSAGENS_CONTEXTO)
-    .map(m => {
-      if (m.papel === 'assistant') return `[IA]: ${redigirValor(String(m.conteudo || '').slice(0, MAX_CHARS_MENSAGEM))}`;
-      // Origem EXPLÍCITA gravada com a mensagem (mensagem-repository.origemAcao):
-      // clique no botão não é pedido digitado, então o texto padrão do botão
-      // nem entra no contexto do classificador.
-      if (m.origemAcao === ORIGEM.BOTAO) return '[Ação do analista: clicou no botão Pesquisar (não é um pedido digitado)]';
-      return `[Analista]: ${redigirValor(String(m.conteudo || '').slice(0, MAX_CHARS_MENSAGEM))}`;
-    });
-  return `## Conversa recente\n${msgs.join('\n') || '(sem mensagens anteriores)'}\n\n## Última mensagem do analista\n${redigirValor(String(texto || '').slice(0, 1200))}`;
-}
-
 /**
  * Decide se a pesquisa externa está liberada neste turno.
  * `chamarIA(systemPrompt, userPrompt, opts)` é injetado (testável, sem
@@ -144,25 +116,10 @@ async function decidirPesquisaExterna({ pendencia, origemAcao, texto, historico,
   if (origemAcao === ORIGEM.BOTAO) {
     return { ...base, liberada: false, motivo: `botao_pesquisar_nao_autoriza_sob_pendencia_externa: aguardando ${pendencia.responsavel}` };
   }
-  if (typeof chamarIA !== 'function') {
-    return { ...base, liberada: false, motivo: 'classificador_indisponivel' };
-  }
-  try {
-    const resultado = await chamarIA(SYSTEM_PROMPT_DECISAO, _montarContexto(historico, texto), {
-      maxTokens: 80, timeoutMs: 12000, json: true, maxProviderRounds: 1,
-    });
-    const parsed = JSON.parse(String(resultado?.texto || '').match(/\{[\s\S]*\}/)?.[0] || '{}');
-    const motivoIA = String(parsed.motivo || '').slice(0, 200);
-    if (parsed.pesquisa_externa === 'sim') {
-      return { ...base, chamadaIA: true, liberada: true, motivo: `analista pediu investigacao externa: ${motivoIA || 'pedido contextual'}` };
-    }
-    if (parsed.pesquisa_externa === 'nao') {
-      return { ...base, chamadaIA: true, liberada: false, motivo: `sem pedido de pesquisa externa: ${motivoIA || 'conversa sobre o historico'}` };
-    }
-    return { ...base, chamadaIA: true, liberada: false, duvida: true, motivo: `intencao incerta, sem pesquisa externa automatica: ${motivoIA || 'sem clareza'}` };
-  } catch (err) {
-    return { ...base, chamadaIA: true, liberada: false, duvida: true, motivo: `falha_classificador, sem pesquisa externa automatica: ${err.message}` };
-  }
+  // Mensagem no chat: liberada 100% (decisão do usuário, 2026-10-21). A
+  // situação do chamado não restringe a conversa; o planejamento normal da
+  // pesquisa decide, como em qualquer chamado.
+  return { ...base, liberada: true, motivo: `chat_liberado_sob_pendencia_externa: aguardando ${pendencia.responsavel}` };
 }
 
 /**
@@ -195,5 +152,4 @@ module.exports = {
   avaliarPendencia,
   decidirPesquisaExterna,
   instrucaoParaPrompt,
-  _montarContexto,
 };

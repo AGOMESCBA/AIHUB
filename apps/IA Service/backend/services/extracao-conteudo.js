@@ -173,9 +173,78 @@ async function _extrairPdf(buffer) {
   return texto ? `${cabecalho}\n\n${texto}` : cabecalho;
 }
 
+// Word (.docx) e Excel (.xlsx) — pedido do usuário, 2026-10-21 (antes ficavam
+// só para download). Sem dependência nova: .docx é um zip com XML (jszip, que
+// já vem com o exceljs) e .xlsx é lido pelo exceljs (dependência declarada).
+// Formatos antigos (.doc/.xls) e .zip continuam fora.
+const MIME_DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const MAX_LINHAS_PLANILHA = 3000;
+
+function _ehZip(buffer) {
+  return buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04;
+}
+
+function _decodificarXml(texto) {
+  return texto.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n))).replace(/&amp;/g, '&');
+}
+
+async function _extrairDocx(buffer) {
+  try {
+    const zip = await require('jszip').loadAsync(buffer);
+    const partes = Object.keys(zip.files).filter(n => /^word\/(document|header\d*|footer\d*)\.xml$/.test(n)).sort((a, b) => (a === 'word/document.xml' ? -1 : b === 'word/document.xml' ? 1 : a.localeCompare(b)));
+    const textos = [];
+    for (const nome of partes) {
+      const xml = await zip.file(nome).async('string');
+      const texto = _decodificarXml(xml
+        .replace(/<w:tab\/>/g, '\t')
+        .replace(/<w:br\/>|<\/w:p>/g, '\n')
+        .replace(/<\/w:tc>/g, ' | ')
+        .replace(/<[^>]+>/g, ''))
+        .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+      if (texto) textos.push(texto);
+    }
+    const texto = _limitarExtracaoPersistida(textos.join('\n\n'));
+    return texto ? `[Word extraido textualmente]\nObservacao: imagens internas do documento nao foram extraidas; o arquivo original permanece preservado.\n\n${texto}` : '';
+  } catch (_) {
+    return '';
+  }
+}
+
+async function _extrairXlsx(buffer) {
+  try {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const linhas = [];
+    let total = 0;
+    wb.eachSheet((ws) => {
+      if (total >= MAX_LINHAS_PLANILHA) return;
+      linhas.push(`## Planilha: ${ws.name}`);
+      ws.eachRow({ includeEmpty: false }, (row, n) => {
+        if (total >= MAX_LINHAS_PLANILHA) return;
+        const valores = (row.values || []).slice(1).map(v => (v && typeof v === 'object' ? (v.text ?? v.result ?? v.richText?.map(r => r.text).join('') ?? (v instanceof Date ? v.toISOString().slice(0, 10) : '')) : v ?? '')).map(v => String(v).trim());
+        if (valores.some(Boolean)) { linhas.push(`${n}: ${valores.join(' | ')}`); total += 1; }
+      });
+    });
+    if (total >= MAX_LINHAS_PLANILHA) linhas.push(`[...planilha truncada em ${MAX_LINHAS_PLANILHA} linhas; arquivo original preservado...]`);
+    const texto = _limitarExtracaoPersistida(linhas.join('\n'));
+    return total ? `[Excel extraido textualmente]\n\n${texto}` : '';
+  } catch (_) {
+    return '';
+  }
+}
+
 async function extrairConteudo({ buffer, nomeOriginal, mimeDeclarado }) {
-  const mimeReal = _detectarMimeReal(buffer, mimeDeclarado, nomeOriginal);
   const ext = path.extname(nomeOriginal || '').toLowerCase();
+  // Office só pela extensão + assinatura zip (nunca pelo MIME declarado sozinho).
+  if (_ehZip(buffer) && (ext === '.docx' || ext === '.xlsx')) {
+    const ehDocx = ext === '.docx';
+    const conteudoExtraido = ehDocx ? await _extrairDocx(buffer) : await _extrairXlsx(buffer);
+    return { mimeReal: ehDocx ? MIME_DOCX : MIME_XLSX, ehTexto: !!conteudoExtraido, ehImagem: false, conteudoExtraido: conteudoExtraido || null, linguagemDetectada: ehDocx ? 'docx' : 'xlsx', encodingDetectado: null, eCodigo: false };
+  }
+  const mimeReal = _detectarMimeReal(buffer, mimeDeclarado, nomeOriginal);
 
   if (MIME_IMAGEM.has(mimeReal)) {
     return { mimeReal, ehTexto: false, ehImagem: true, conteudoExtraido: null, linguagemDetectada: null, encodingDetectado: null, eCodigo: false };

@@ -23,6 +23,7 @@ const investigacaoService = require('../services/investigacao-service');
 const extracaoConteudo = require('../services/extracao-conteudo');
 const anexoRepo = require('../repositories/anexo-repository');
 const turnoLockService = require('../services/turno-lock-service');
+const progressoTurno = require('../services/progresso-turno-service');
 const armazenamento = require('../services/armazenamento-anexos');
 const radarService = require('../services/radar-service');
 const anexosSoftExpertService = require('../services/anexos-softexpert-service');
@@ -481,6 +482,11 @@ module.exports = function registrarRotasExterno(app) {
     }
   });
 
+  // Andamento do turno em processamento (etapas da pesquisa/análise) para o chat.
+  app.get('/api/ia-service-externo/atendimentos/:id/progresso', (req, res) => {
+    res.json(progressoTurno.obter(req.svcEmpresaId, req.params.id));
+  });
+
   app.post('/api/ia-service-externo/atendimentos/:id/investigar', async (req, res) => {
     const empresaId = req.svcEmpresaId;
     const atendimentoId = req.params.id;
@@ -493,6 +499,7 @@ module.exports = function registrarRotasExterno(app) {
         return res.status(400).json({ error: 'texto é obrigatório.' });
       }
       const analistaAtualNome = consultorService.getNomeExibicao(empresaId, req.svcConsultorExterno);
+      progressoTurno.iniciar(empresaId, atendimentoId);
       const mensagemAssistente = await investigacaoService.processarTurno(empresaId, atendimentoId, {
         texto: String(texto).trim(),
         usuarioId: null,
@@ -510,6 +517,7 @@ module.exports = function registrarRotasExterno(app) {
       _handleErro(res, err);
     } finally {
       turnoLockService.liberar(empresaId, atendimentoId);
+      progressoTurno.finalizar(empresaId, atendimentoId);
     }
   });
 

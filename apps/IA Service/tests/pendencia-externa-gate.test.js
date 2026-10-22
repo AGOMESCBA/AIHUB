@@ -64,7 +64,7 @@ teste('classificarPendencia: distribuidor e nomenclatura "AGUARDANDO X" equivale
   assert.strictEqual(gate.classificarPendencia({ aguardandoConsolidado: 'AGUARDANDO ATENDENTE' }, []).externa, false);
 });
 
-teste('botao e automatico nao pesquisam sob pendencia de distribuidor; texto livre segue o classificador', async () => {
+teste('botao e automatico nao pesquisam sob pendencia de distribuidor; chat liberado', async () => {
   const pend = gate.classificarPendencia({ aguardandoConsolidado: 'RETORNO - DISTRIBUIDOR' }, []);
   const calls = [];
   for (const origem of [gate.ORIGEM.BOTAO, gate.ORIGEM.AUTOMATICO]) {
@@ -124,54 +124,12 @@ teste('botao Pesquisar e pre-analise automatica nunca liberam sob pendencia exte
   assert.strictEqual(calls.length, 0, 'nenhuma chamada ao provider para botao/automatico');
 });
 
-teste('texto livre: pedido contextual ("pode aprofundar?") libera; contexto vai ao classificador', async () => {
-  const calls = [];
-  const d = await gate.decidirPesquisaExterna({
-    pendencia: PEND_CLIENTE, origemAcao: gate.ORIGEM.TEXTO_LIVRE, texto: 'pode aprofundar?',
-    historico: [
-      { papel: 'user', conteudo: 'Mesmo aguardando o cliente, procure alternativas para o evento 4010 pendente.' },
-      { papel: 'assistant', conteudo: 'Encontrei duas hipoteses sobre recibo nao processado.' },
-    ],
-    chamarIA: chamarIAFixa({ pesquisa_externa: 'sim', motivo: 'continua a investigacao pedida antes' }, calls),
-  });
-  assert.strictEqual(d.liberada, true);
-  assert.strictEqual(calls.length, 1);
-  assert.match(calls[0].prompt, /procure alternativas para o evento 4010/, 'historico recente deve ir ao classificador');
-  assert.match(calls[0].prompt, /pode aprofundar\?/);
-});
-
-teste('texto livre: pergunta sobre historico ("o que o cliente respondeu?") nao libera', async () => {
-  const d = await gate.decidirPesquisaExterna({
-    pendencia: PEND_CLIENTE, origemAcao: gate.ORIGEM.TEXTO_LIVRE, texto: 'O que o cliente respondeu?',
-    historico: [], chamarIA: chamarIAFixa({ pesquisa_externa: 'nao', motivo: 'pergunta sobre historico' }),
-  });
-  assert.strictEqual(d.liberada, false);
-  assert.strictEqual(d.chamadaIA, true);
-});
-
-teste('texto livre: incerto, JSON invalido ou falha do provider => nao pesquisa', async () => {
-  for (const chamarIA of [
-    chamarIAFixa({ pesquisa_externa: 'incerto' }),
-    chamarIAFixa('isso nao e json'),
-    async () => { throw new Error('provider fora do ar'); },
-  ]) {
-    const d = await gate.decidirPesquisaExterna({
-      pendencia: PEND_CLIENTE, origemAcao: gate.ORIGEM.TEXTO_LIVRE, texto: 'verifique isso', historico: [], chamarIA,
-    });
-    assert.strictEqual(d.liberada, false);
+teste('texto livre (chat): liberado 100% sob pendencia externa, sem chamada de classificacao', async () => {
+  for (const texto of ['pode aprofundar?', 'O que o cliente respondeu?', 'verifique isso', 'Mesmo aguardando, procure alternativas.']) {
+    const d = await gate.decidirPesquisaExterna({ pendencia: PEND_CLIENTE, origemAcao: gate.ORIGEM.TEXTO_LIVRE, texto });
+    assert.strictEqual(d.liberada, true, texto);
+    assert.strictEqual(d.chamadaIA, false, texto);
   }
-});
-
-teste('origem explicita: mensagem do botao entra como ACAO (nao como pedido digitado), sem depender do texto', () => {
-  const ctx = gate._montarContexto([
-    { papel: 'user', origemAcao: 'botao_pesquisar', conteudo: 'texto qualquer que o front resolva mudar no futuro' },
-    { papel: 'user', origemAcao: 'texto_livre', conteudo: 'O cliente confirmou o envio?' },
-    { papel: 'user', conteudo: 'mensagem legada, sem origem gravada' },
-  ], 'e agora?');
-  assert.ok(!/texto qualquer que o front/.test(ctx), 'conteudo da mensagem de botao nao deve ir ao classificador');
-  assert.match(ctx, /clicou no botão Pesquisar/);
-  assert.match(ctx, /\[Analista\]: O cliente confirmou o envio\?/);
-  assert.match(ctx, /mensagem legada, sem origem gravada/);
 });
 
 teste('resolverOrigemAcao: cliente nao consegue rebaixar botao/automatico para texto livre', () => {
@@ -318,42 +276,35 @@ async function comProvidersFake({ decisaoGate, situacaoOrigem = { ok: false, mot
   }
 }
 
-teste('#036752 botao Pesquisar com RETORNO - CLIENTE: sem pesquisa externa, resposta conversacional gerada', async () => {
-  const { atendimento } = criarChamadoComAtendimento({
-    numero: '036752', aguardando: 'RETORNO - CLIENTE',
-    posicionamentos: [{ aguardandoRetorno: false, situacaoRetorno: 'RETORNO - CLIENTE', assunto: 'retorno', descricao: 'problema ja resolvido, transmitido e com retorno da RFB' }],
-  });
-  await comProvidersFake({ decisaoGate: { pesquisa_externa: 'sim' } }, async (reg) => {
-    const msg = await investigacaoService.processarTurno(EMPRESA, atendimento.id, {
-      texto: 'Revise todo o historico e pesquise uma solucao para este chamado.', usuarioId: 1, forcarPesquisa: true,
+teste('#036752 botao Pesquisar com RETORNO - CLIENTE/FORNECEDOR: só avisa que aguarda retorno, sem IA e sem pesquisa', async () => {
+  for (const [numero, aguardando, quem] of [['036752', 'RETORNO - CLIENTE', /retorno enviado ao cliente/], ['036799', 'RETORNO - FORNECEDOR', /aguardando o retorno do fornecedor/]]) {
+    const { atendimento } = criarChamadoComAtendimento({
+      numero, aguardando,
+      posicionamentos: [{ aguardandoRetorno: false, situacaoRetorno: aguardando, assunto: 'retorno', descricao: 'problema ja resolvido, transmitido e com retorno da RFB' }],
     });
-    assert.ok(msg && msg.conteudo, 'a IA deve responder (conversa nao e interrompida)');
-    assert.strictEqual(reg.gateCalls, 0, 'botao nao deve gastar chamada de classificacao');
-    assert.strictEqual(reg.pesquisarCtx.length, 1);
-    assert.ok(reg.pesquisarCtx[0].pesquisaExternaBloqueada, 'pesquisar() deve receber o bloqueio');
-    assert.strictEqual(reg.pesquisarCtx[0].pesquisaExternaBloqueada.origemAcao, 'botao_pesquisar');
-    assert.match(reg.promptsPrincipais.join('\n'), /Pesquisa externa NÃO executada neste turno/);
-  });
+    await comProvidersFake({ decisaoGate: { pesquisa_externa: 'sim' } }, async (reg) => {
+      const msg = await investigacaoService.processarTurno(EMPRESA, atendimento.id, {
+        texto: 'Revise todo o historico e pesquise uma solucao para este chamado.', usuarioId: 1, forcarPesquisa: true,
+      });
+      assert.match(msg.conteudo, quem);
+      assert.match(msg.conteudo, /pedir aqui no chat/);
+      assert.strictEqual(reg.gateCalls, 0, 'botao nao deve gastar chamada de classificacao');
+      assert.strictEqual(reg.pesquisarCtx.length, 0, 'botao sob pendencia nao chama pesquisar()');
+      assert.strictEqual(reg.promptsPrincipais.length, 0, 'botao sob pendencia nao chama a IA');
+    });
+  }
 });
 
-teste('#036752 texto livre sobre historico: sem pesquisa externa', async () => {
-  const { atendimento } = criarChamadoComAtendimento({ numero: '036753', aguardando: 'RETORNO - CLIENTE' });
-  await comProvidersFake({ decisaoGate: { pesquisa_externa: 'nao', motivo: 'pergunta sobre historico' } }, async (reg) => {
-    await investigacaoService.processarTurno(EMPRESA, atendimento.id, { texto: 'O que o cliente respondeu?', usuarioId: 1 });
-    assert.strictEqual(reg.gateCalls, 1);
-    assert.ok(reg.pesquisarCtx[0].pesquisaExternaBloqueada);
-    assert.strictEqual(reg.pesquisarCtx[0].forcarPesquisa, false);
-  });
-});
-
-teste('texto livre com pedido contextual: pesquisa externa liberada e tratada como pedido explicito', async () => {
-  const { atendimento } = criarChamadoComAtendimento({ numero: '036754', aguardando: 'RETORNO - FORNECEDOR' });
-  await comProvidersFake({ decisaoGate: { pesquisa_externa: 'sim', motivo: 'pede alternativas' } }, async (reg) => {
-    await investigacaoService.processarTurno(EMPRESA, atendimento.id, { texto: 'Mesmo aguardando o fornecedor, procure alternativas.', usuarioId: 1 });
-    assert.strictEqual(reg.gateCalls, 1);
-    assert.strictEqual(reg.pesquisarCtx[0].pesquisaExternaBloqueada, undefined);
-    assert.strictEqual(reg.pesquisarCtx[0].forcarPesquisa, true);
-  });
+teste('chat sob pendencia de cliente/fornecedor: pesquisa liberada, sem classificador, planejamento normal decide', async () => {
+  for (const [numero, aguardando, texto] of [['036753', 'RETORNO - CLIENTE', 'O que o cliente respondeu?'], ['036754', 'RETORNO - FORNECEDOR', 'Mesmo aguardando o fornecedor, procure alternativas.']]) {
+    const { atendimento } = criarChamadoComAtendimento({ numero, aguardando });
+    await comProvidersFake({ decisaoGate: { pesquisa_externa: 'nao' } }, async (reg) => {
+      await investigacaoService.processarTurno(EMPRESA, atendimento.id, { texto, usuarioId: 1 });
+      assert.strictEqual(reg.gateCalls, 0);
+      assert.strictEqual(reg.pesquisarCtx[0].pesquisaExternaBloqueada, undefined, texto);
+      assert.strictEqual(reg.pesquisarCtx[0].forcarPesquisa, false, 'liberar nao e forcar: o plano normal decide');
+    });
+  }
 });
 
 teste('processarTurno: origem confirma ao vivo que voltou ao atendente => pesquisa normal', async () => {
@@ -366,7 +317,7 @@ teste('processarTurno: origem confirma ao vivo que voltou ao atendente => pesqui
   });
 });
 
-teste('mensagem do analista grava origem explicita; classificador recebe ACAO de botao, nao o texto', async () => {
+teste('mensagem do analista grava origem explicita (botao x chat); nenhum classificador e chamado', async () => {
   const { atendimento } = criarChamadoComAtendimento({ numero: '036761', aguardando: 'RETORNO - CLIENTE' });
   await comProvidersFake({ decisaoGate: { pesquisa_externa: 'nao', motivo: 'sem pedido' } }, async (reg) => {
     await investigacaoService.processarTurno(EMPRESA, atendimento.id, {
@@ -377,9 +328,7 @@ teste('mensagem do analista grava origem explicita; classificador recebe ACAO de
     });
     const msgs = mensagemRepo.listarMensagens(EMPRESA, atendimento.id).filter(m => m.papel === 'user');
     assert.deepStrictEqual(msgs.map(m => m.origemAcao), ['botao_pesquisar', 'texto_livre']);
-    assert.strictEqual(reg.gateCalls, 1, 'so o texto livre usa classificador');
-    assert.match(reg.classificadorPrompts[0], /clicou no botão Pesquisar/);
-    assert.ok(!/TEXTO DO BOTAO QUE O FRONT PODE MUDAR/.test(reg.classificadorPrompts[0]));
+    assert.strictEqual(reg.gateCalls, 0);
   });
 });
 

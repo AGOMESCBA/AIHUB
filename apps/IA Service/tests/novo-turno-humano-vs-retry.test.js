@@ -393,19 +393,15 @@ teste('gate: aguardando confirmacao so dispensa a falha de pesquisa quando a res
   assert.ok(falha(semPergunta, 'RESEARCH_CONFIGURED_WITHOUT_RESULTS'));
 });
 
-teste('pendencia externa: classificador incerto ou indisponivel orienta o chat a perguntar', async () => {
+teste('pendencia externa: mensagem no chat e liberada 100% (sem classificador)', async () => {
   const gatePendencia = require('../backend/services/pendencia-externa-gate');
   const pendencia = { externa: true, responsavel: 'cliente' };
-  const incerto = await gatePendencia.decidirPesquisaExterna({ pendencia, origemAcao: 'texto_livre', texto: 'e agora?', historico: [], chamarIA: async () => ({ texto: '{"pesquisa_externa":"incerto"}' }) });
-  const falhou = await gatePendencia.decidirPesquisaExterna({ pendencia, origemAcao: 'texto_livre', texto: 'e agora?', historico: [], chamarIA: async () => { throw new Error('fora'); } });
-  const nao = await gatePendencia.decidirPesquisaExterna({ pendencia, origemAcao: 'texto_livre', texto: 'obrigado', historico: [], chamarIA: async () => ({ texto: '{"pesquisa_externa":"nao"}' }) });
-  for (const d of [incerto, falhou]) {
-    assert.strictEqual(d.liberada, false);
-    assert.match(gatePendencia.instrucaoParaPrompt(d), /pergunte, em uma frase objetiva/);
+  for (const texto of ['e agora?', 'obrigado', 'pesquise outra causa']) {
+    const d = await gatePendencia.decidirPesquisaExterna({ pendencia, origemAcao: 'texto_livre', texto });
+    assert.strictEqual(d.liberada, true, texto);
+    assert.strictEqual(d.chamadaIA, false, texto);
   }
-  assert.doesNotMatch(gatePendencia.instrucaoParaPrompt(nao), /pergunte, em uma frase objetiva/);
 });
-
 teste('multiempresa: status de execucao bloqueada so e lido na propria empresa', () => {
   const at = criarAtendimento();
   const m = mensagemRepo.salvarMensagem(EMPRESA, at.id, { papel: 'assistant', conteudo: 'x' });
