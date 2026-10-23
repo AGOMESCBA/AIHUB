@@ -695,10 +695,10 @@ function _avaliarRastreabilidadeTecnica(textoResposta, { manifesto, referencias 
   return falhas;
 }
 
-// Falhas que podem VETAR a entrega apos o retry: integridade do que e afirmado
-// sobre o caso, grau de certeza e vazamento de dados internos. Demais falhas
-// (estilo, qualidade, aviso operacional) geram alerta, nunca substituem a
-// resposta (M4).
+// Falhas de integridade do que e afirmado sobre o caso, grau de certeza e
+// vazamento de dados internos. Desde 2026-10-23 nenhuma delas veta a entrega
+// (a resposta da IA sempre e entregue, com observacao ao analista); a lista
+// segue acionando a resposta segura deterministica no retry.
 const FALHAS_DE_INTEGRIDADE = new Set([
   'SOURCE_BEHAVIOR_CONTRADICTION',
   'INTERNAL_IDS_USED_AS_EVIDENCE',
@@ -727,6 +727,54 @@ function ehFalhaDeIntegridade(falha) {
 
 function temFalhaDeIntegridade(gate) {
   return (gate?.falhas || []).some(ehFalhaDeIntegridade);
+}
+
+// Observacao anexada a resposta entregue quando o gate reprova: explica ao
+// analista, sem codigos internos, o que pode estar errado (decisao do usuario,
+// 2026-10-23: "o gate nao pode travar a mensagem"). Nao citar "Quality Gate"
+// nem "controle de rastreabilidade": o texto entra no historico do proximo
+// turno e cairia em RETRY_CONTEXT_LEAKED.
+const _CAUSA_COM_CERTEZA_DEMAIS = 'A causa foi apresentada com mais certeza do que as evidências do chamado permitem; trate como hipótese até validar no ambiente do cliente.';
+const OBSERVACAO_POR_FALHA = {
+  PRR_EXTERNAL_REFERENCE_USED_AS_CAUSE: t => `A causa ou a ação principal se apoia em referência externa (artigo/pesquisa)${t}, não em evidência deste chamado. Confirme na base do cliente antes de aplicar.`,
+  PRR_VISUAL_REFERENCE_USED_AS_CAUSE: t => `A causa se apoia em algo visto em print${t}; confirme no sistema antes de tratar como causa.`,
+  EXTERNAL_REFERENCE_PRESENTED_AS_CASE_EVIDENCE: t => `Uma referência${t} veio da pesquisa externa, mas o texto a trata como se estivesse no histórico ou nos anexos do chamado.`,
+  MODEL_KNOWLEDGE_PRESENTED_AS_CASE_EVIDENCE: t => `Uma referência${t} vem do conhecimento geral da IA, não do histórico ou dos anexos do chamado; confira se ela existe no ambiente.`,
+  UNTRACEABLE_TECHNICAL_REFERENCE: t => `Uma referência técnica${t} não foi localizada nas evidências do chamado; confira se ela existe no ambiente do cliente.`,
+  CERTAINTY_WITHOUT_EVIDENCE: () => _CAUSA_COM_CERTEZA_DEMAIS,
+  HYPOTHESIS_PROMOTED_TO_CONFIRMED_CAUSE: () => _CAUSA_COM_CERTEZA_DEMAIS,
+  OVERCONFIDENT_CAUSE_WITH_PARTIAL_SOURCE: () => _CAUSA_COM_CERTEZA_DEMAIS,
+  PRR_CONFIRMED_CAUSE_WITH_BLOCKING_GAP: () => _CAUSA_COM_CERTEZA_DEMAIS,
+  INCIDENTAL_EVIDENCE_PROMOTED_WITHOUT_CAUSAL_BRIDGE: t => `Um detalhe secundário do chamado${t} foi usado como causa sem ligação demonstrada com o problema relatado.`,
+  SOURCE_BEHAVIOR_CONTRADICTION: () => 'Parte da explicação contradiz o comportamento do fonte analisado; confira o trecho do fonte antes de seguir.',
+  UNSUPPORTED_OPERATIONAL_COUNT: () => 'O texto cita uma quantidade de ocorrências/tentativas que não aparece no histórico do chamado.',
+  FACTUAL_CONTRADICTION_WITH_MISSING_EVIDENCE: () => 'O texto afirma algo que não consta (ou contradiz) as evidências do chamado.',
+  ARITHMETIC_CLAIM_DOES_NOT_RECONCILE: () => 'Um cálculo citado no texto não fecha; refaça a conta antes de usar.',
+  CUSTOMIZATION_DISCARDED_WITHOUT_CODE_OR_LOG: () => 'A análise descarta customização sem ter visto fonte ou log que comprove.',
+  OPERATIONAL_ESCALATION_TREATED_AS_RESOLUTION: () => 'Um encaminhamento (ticket, outra equipe) foi tratado como se fosse a solução do problema.',
+  CORRECTION_WITHOUT_VALIDATION: () => 'A correção proposta não diz como validar o resultado; teste em homologação antes de aplicar em produção.',
+  GENERIC_RESPONSE_WITH_SPECIFIC_EVIDENCE: () => 'A análise ficou genérica apesar de o chamado ter evidência específica; confira se ela trata do problema relatado.',
+  INTERNAL_IDS_USED_AS_EVIDENCE: () => 'Identificadores internos do sistema foram retirados do texto.',
+};
+const _SEM_OBSERVACAO = new Set(['TRUNCATED_RESPONSE_INCOMPLETE', 'RETRY_CONTEXT_LEAKED']);
+
+function montarObservacaoAnalista(gate) {
+  const itens = [];
+  for (const f of gate?.falhas || []) {
+    if (!f?.codigo || _SEM_OBSERVACAO.has(f.codigo)) continue;
+    const termos = (Array.isArray(f.termos) ? f.termos : []).filter(Boolean).slice(0, 3);
+    const t = termos.length ? ` (${termos.join(', ')})` : '';
+    // So falhas com explicacao util ao analista; as demais ficam na auditoria
+    // (frase generica em resposta boa era ruido — teste #036765 sintetico).
+    const frase = OBSERVACAO_POR_FALHA[f.codigo] ? OBSERVACAO_POR_FALHA[f.codigo](t) : null;
+    if (frase && !itens.includes(frase)) itens.push(frase);
+  }
+  if (!itens.length) return null;
+  return [
+    '⚠️ **Pontos de atenção (verificação automática)**',
+    'A análise acima foi entregue na íntegra. Antes de usar, confira:',
+    ...itens.slice(0, 5).map(i => `- ${i}`),
+  ].join('\n');
 }
 
 function _avaliarContagemOperacionalFalsa(textoResposta, historicoMensagens, manifesto) {
@@ -1467,4 +1515,4 @@ function montarInstrucaoRetry(gate, contexto = {}) {
   ].filter(Boolean).join('\n');
 }
 
-module.exports = { avaliarResposta, montarInstrucaoRetry, classificarProvenienciaReferencias, temFalhaDeIntegridade, ehFalhaDeIntegridade, FALHAS_DE_INTEGRIDADE, _avaliarRegressaoInvestigativa, _similaridadeShingles, _extrairAncorasTecnicas, _propostaDeCorrecao };
+module.exports = { avaliarResposta, montarInstrucaoRetry, classificarProvenienciaReferencias, temFalhaDeIntegridade, ehFalhaDeIntegridade, montarObservacaoAnalista, FALHAS_DE_INTEGRIDADE, _avaliarRegressaoInvestigativa, _similaridadeShingles, _extrairAncorasTecnicas, _propostaDeCorrecao };

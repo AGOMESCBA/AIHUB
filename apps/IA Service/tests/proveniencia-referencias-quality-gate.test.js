@@ -118,12 +118,24 @@ function testarRetryPreservaConteudoTecnico() {
 function testarPoliticaGraduada() {
   const estilo = { aprovado: false, falhas: [{ codigo: 'GENERIC_RESPONSE_WITH_SPECIFIC_EVIDENCE', decisionKind: 'correcao_estilo' }] };
   assert.strictEqual(investigacao._statusFinalQualityGate(estilo, true), 'concluido_com_alerta_quality_gate');
-  const integridade = { aprovado: false, falhas: [{ codigo: 'MODEL_KNOWLEDGE_PRESENTED_AS_CASE_EVIDENCE', decisionKind: 'bloqueio_objetivo' }] };
-  assert.strictEqual(investigacao._statusFinalQualityGate(integridade, true), 'revisao_necessaria_quality_gate');
+  // 2026-10-23: integridade tambem nao veta a entrega — alerta + observacao
+  // ao analista sem codigos internos (caso #036537).
+  const integridade = { aprovado: false, falhas: [{ codigo: 'MODEL_KNOWLEDGE_PRESENTED_AS_CASE_EVIDENCE', decisionKind: 'bloqueio_objetivo', termos: ['XPTO_CALCULA_TOTAL'] }] };
+  assert.strictEqual(investigacao._statusFinalQualityGate(integridade, true), 'concluido_com_alerta_quality_gate');
   const certeza = { aprovado: false, falhas: [{ codigo: 'HYPOTHESIS_PROMOTED_TO_CONFIRMED_CAUSE', decisionKind: 'bloqueio_objetivo' }] };
-  assert.strictEqual(investigacao._statusFinalQualityGate(certeza, true), 'revisao_necessaria_quality_gate');
+  assert.strictEqual(investigacao._statusFinalQualityGate(certeza, true), 'concluido_com_alerta_quality_gate');
   const ids = { aprovado: false, falhas: [{ codigo: 'INTERNAL_IDS_USED_AS_EVIDENCE', decisionKind: 'bloqueio_objetivo' }] };
-  assert.strictEqual(investigacao._statusFinalQualityGate(ids, true), 'revisao_necessaria_quality_gate');
+  assert.strictEqual(investigacao._statusFinalQualityGate(ids, true), 'concluido_com_alerta_quality_gate');
+  const obs = qg.montarObservacaoAnalista(integridade);
+  assert.ok(/Pontos de atenção/.test(obs) && /XPTO_CALCULA_TOTAL/.test(obs), obs);
+  assert.ok(!/MODEL_KNOWLEDGE|quality gate|controle de rastreabilidade/i.test(obs), 'sem codigo interno nem bastidor');
+  const prr036537 = { aprovado: false, falhas: [
+    { codigo: 'PRR_EXTERNAL_REFERENCE_USED_AS_CAUSE', decisionKind: 'bloqueio_objetivo', termos: ['GPEM030'] },
+    { codigo: 'CORRECTION_WITHOUT_VALIDATION', decisionKind: 'correcao_estilo' },
+  ] };
+  const obsPrr = qg.montarObservacaoAnalista(prr036537);
+  assert.ok(/referência externa/.test(obsPrr) && /homologação/.test(obsPrr), obsPrr);
+  assert.strictEqual(qg.montarObservacaoAnalista({ aprovado: false, falhas: [{ codigo: 'TRUNCATED_RESPONSE_INCOMPLETE' }] }), null);
 
   const manifesto = { ...MANIFESTO(), pendenciaConsolidada: { responsavel: 'fornecedor', bloqueante: true } };
   const g = avaliar('Verifique a configuracao do registro e teste em homologacao antes de aplicar.', { manifesto });

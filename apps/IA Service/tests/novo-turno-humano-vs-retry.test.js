@@ -116,8 +116,9 @@ teste('gate: no retry automatico "resposta anterior" continua sendo vazamento e 
   });
   assert.ok(falha(gate, 'RETRY_CONTEXT_LEAKED'));
   assert.strictEqual(gate.deveRetry, false, 'segundo retry nunca e permitido');
-  assert.ok(qualityGateService.temFalhaDeIntegridade(gate), 'vazamento continua vetando a entrega apos o retry');
-  assert.strictEqual(investigacaoService._statusFinalExecucao({ qualityGate: gate, retryDeQualityGate: true }), 'revisao_necessaria_quality_gate');
+  assert.ok(qualityGateService.temFalhaDeIntegridade(gate), 'vazamento continua classificado como integridade');
+  // 2026-10-23: o gate nunca trava a entrega; vira alerta.
+  assert.strictEqual(investigacaoService._statusFinalExecucao({ qualityGate: gate, retryDeQualityGate: true }), 'concluido_com_alerta_quality_gate');
 });
 
 teste('gate: mencionar o Quality Gate e vazamento em qualquer tentativa', () => {
@@ -141,17 +142,19 @@ teste('gate: na primeira tentativa de um novo turno humano, "resposta anterior" 
   assert.ok(!falha(gate, 'RETRY_CONTEXT_LEAKED'), JSON.stringify(gate.falhas.map(f => f.codigo)));
 });
 
-teste('fluxo: resposta reprovada -> 1 retry permitido -> nova reprovacao -> bloqueio sem loop', async () => {
+// 2026-10-23 (caso #036537): o gate nunca trava a mensagem. Apos o retry, a
+// resposta da IA e entregue com alerta; os codigos ficam so na auditoria.
+teste('fluxo: resposta reprovada -> 1 retry permitido -> nova reprovacao -> entrega com alerta, sem loop', async () => {
   const at = criarAtendimento();
   await comFluxoSimulado({ respostas: [REJEITADA] }, async (reg) => {
     const msg = await investigacaoService.processarTurno(EMPRESA, at.id, { texto: PEDIDO_TURNO_1, usuarioId: 1 });
     assert.strictEqual(reg.principais.length, 2, `uma chamada + um retry, nunca mais (foram ${reg.principais.length})`);
     assert.match(reg.principais[1], /Reprocessamento por Quality Gate/);
     const exec = ultimaExecucao(EMPRESA, at.id);
-    assert.strictEqual(exec.status, 'revisao_necessaria_quality_gate');
+    assert.strictEqual(exec.status, 'concluido_com_alerta_quality_gate');
     assert.ok(exec.qualityGate.falhas.some(f => f.codigo === 'RETRY_CONTEXT_LEAKED'), 'codigo interno preservado na auditoria');
-    assert.match(msg.conteudo, /bloqueada para revisao/);
-    assert.ok(!msg.conteudo.includes('MARCADOR_REJEITADO_XYZ'), 'resposta rejeitada nao e entregue');
+    assert.ok(msg.conteudo.includes('MARCADOR_REJEITADO_XYZ'), 'a analise da IA e entregue');
+    assert.ok(!/bloqueada para revisao|RETRY_CONTEXT_LEAKED/.test(msg.conteudo), 'sem aviso de bloqueio nem codigo interno');
   });
 });
 
@@ -184,14 +187,14 @@ teste('#036765 sintetico: turno 2 humano pedindo nova pesquisa executa a investi
   });
 });
 
-teste('novo turno humano apos resposta bloqueada: investiga normalmente, sem herdar o bloqueio nem a resposta rejeitada', async () => {
+teste('novo turno humano apos resposta entregue com alerta: investiga normalmente, sem codigos internos no prompt', async () => {
   const at = criarAtendimento();
   await comFluxoSimulado({
     respostas: (prompt, n) => (n <= 2 ? REJEITADA : RESPOSTA_BOA_2),
     semantica: c => interpretacao({ pedido: c.texto === 'Pesquise novamente.' }),
   }, async (reg) => {
     await investigacaoService.processarTurno(EMPRESA, at.id, { texto: PEDIDO_TURNO_1, usuarioId: 1 });
-    assert.strictEqual(ultimaExecucao(EMPRESA, at.id).status, 'revisao_necessaria_quality_gate');
+    assert.strictEqual(ultimaExecucao(EMPRESA, at.id).status, 'concluido_com_alerta_quality_gate');
 
     const msg = await investigacaoService.processarTurno(EMPRESA, at.id, { texto: 'Pesquise novamente.', usuarioId: 1 });
     const exec = ultimaExecucao(EMPRESA, at.id);
@@ -199,14 +202,9 @@ teste('novo turno humano apos resposta bloqueada: investiga normalmente, sem her
     assert.strictEqual(reg.principais.length, 3, 'nova investigacao executada em uma unica tentativa');
     assert.ok(reg.semanticaCtx.some(c => c.texto === 'Pesquise novamente.'), 'mensagem curta do analista vai para a camada semantica');
     assert.strictEqual(exec.pesquisa.plano.devePesquisar, true, `motivo: ${exec.pesquisa.plano.motivo}`);
-    assert.ok(!/bloqueada para revisao|RETRY_CONTEXT_LEAKED|Quality Gate/.test(prompt), 'aviso de bloqueio e codigos nao entram no prompt');
-    assert.ok(!prompt.includes('MARCADOR_REJEITADO_XYZ'), 'resposta rejeitada nao e reaproveitada');
-    assert.ok(!reg.pesquisaCtx.at(-1).mensagens.some(m => /bloqueada para revisao/.test(m.conteudo)));
+    assert.ok(!/bloqueada para revisao|RETRY_CONTEXT_LEAKED/.test(prompt), 'aviso de bloqueio e codigos nao entram no prompt');
     assert.notStrictEqual(exec.status, 'revisao_necessaria_quality_gate');
     assert.strictEqual(msg.conteudo, RESPOSTA_BOA_2);
-    // A mensagem persistida do bloqueio nao e alterada (auditoria intacta).
-    const persistidas = mensagemRepo.listarMensagens(EMPRESA, at.id);
-    assert.ok(persistidas.some(m => /bloqueada para revisao/.test(m.conteudo)));
   });
 });
 
@@ -255,13 +253,13 @@ teste('nova evidencia apos bloqueio: novo turno investiga com o contexto tecnico
   }, async (reg) => {
     await investigacaoService.processarTurno(EMPRESA, at.id, { texto: PEDIDO_TURNO_1, usuarioId: 1 });
     await investigacaoService.processarTurno(EMPRESA, at.id, { texto: 'Continua dando o mesmo erro, investigue outra possibilidade.', usuarioId: 1 });
-    assert.strictEqual(ultimaExecucao(EMPRESA, at.id).status, 'revisao_necessaria_quality_gate');
+    assert.strictEqual(ultimaExecucao(EMPRESA, at.id).status, 'concluido_com_alerta_quality_gate');
 
     const msg = await investigacaoService.processarTurno(EMPRESA, at.id, { texto: novoLog, usuarioId: 1 });
     const prompt = reg.principais.at(-1);
     assert.ok(prompt.includes('PrazoValidator'), 'nova evidencia entra no turno');
     assert.ok(prompt.includes('prazo configurado de 20 dias'), 'resposta tecnica aprovada anterior continua no contexto');
-    assert.ok(!prompt.includes('Reprocessamento por Quality Gate') && !prompt.includes('MARCADOR_REJEITADO_XYZ'));
+    assert.ok(!prompt.includes('Reprocessamento por Quality Gate'), 'instrucao de retry nao vaza para o turno seguinte');
     assert.ok(reg.pesquisaCtx.at(-1).dossieOperacional, 'dossie continua sendo montado');
     assert.strictEqual(msg.conteudo, RESPOSTA_BOA_2);
   });

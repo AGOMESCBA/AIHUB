@@ -286,7 +286,9 @@ function _eventoQualityGate(execucao) {
     titulo: 'Quality Gate',
     status: revisao ? 'bloqueado' : qg.aprovado ? 'aprovado' : 'alerta',
     resumo: revisao
-      ? 'Resposta bloqueada para revisão humana após retry corretivo.'
+      ? (revisao.motivo === 'resposta_truncada_pelo_provider'
+        ? 'Resposta cortada pelo limite de tamanho da IA; entregue parcial com aviso.'
+        : 'Resposta bloqueada para revisão humana após retry corretivo.')
       : qg.aprovado
         ? `Resposta aprovada sem ressalvas${recuperacao?.aplicada ? ' (após recuperação determinística)' : ''}.`
         : `${falhas.length} ponto(s) de atenção identificado(s)${retry?.executado ? ', com retry corretivo aplicado' : ''}.`,

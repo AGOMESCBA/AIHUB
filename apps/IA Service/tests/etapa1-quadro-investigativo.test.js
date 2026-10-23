@@ -584,10 +584,12 @@ function testarEtapa15_FailClosedPorBloqueioObjetivo() {
       decisionKind: 'bloqueio_objetivo',
     }],
   };
+  // 2026-10-23: o gate nunca trava a entrega; bloqueio objetivo vira alerta
+  // com observacao ao analista (caso #036537).
   assert.strictEqual(
     investigacaoService._statusFinalQualityGate(gateBloqueado, true),
-    'revisao_necessaria_quality_gate',
-    'qualquer bloqueio objetivo apos retry deve virar revisao necessaria',
+    'concluido_com_alerta_quality_gate',
+    'bloqueio objetivo apos retry entrega a resposta com alerta',
   );
 
   const gateEstilo = {
@@ -1111,7 +1113,7 @@ function testarInvestigacao_FailClosedAposRetryComQualquerFalha() {
       }],
     },
   });
-  assert.strictEqual(status, 'revisao_necessaria_quality_gate', 'qualquer falha remanescente apos retry permitido deve exigir revisao');
+  assert.strictEqual(status, 'concluido_com_alerta_quality_gate', 'falha remanescente apos retry entrega a resposta com alerta (2026-10-23)');
 }
 
 function testarInvestigativo_ModuloNaoContaminaPorRotuloTitulo() {

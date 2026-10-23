@@ -549,20 +549,13 @@ function _temBloqueioObjetivoQualityGate(qualityGate) {
   return (qualityGate?.falhas || []).some(f => (f.decisionKind || f.categoriaDecisao) === 'bloqueio_objetivo');
 }
 
-// M4 (2026-10): apos o retry, so falhas de INTEGRIDADE (atribuicao falsa de
-// origem, certeza indevida, dados internos expostos, resposta truncada...)
-// podem vetar a entrega. Estilo, qualidade e avisos operacionais geram alerta e
-// a resposta do modelo e entregue — o Quality Gate nao substitui a analise.
-function _calcularRevisaoNecessariaQualityGate({ qualityGate, retryDeQualityGate }) {
-  if (!retryDeQualityGate || !qualityGate || qualityGate.aprovado) return false;
-  return qualityGateService.temFalhaDeIntegridade(qualityGate);
-}
-
-function _statusFinalQualityGate(qualityGate, retryDeQualityGate) {
-  if (qualityGate?.aprovado) return 'concluido';
-  return _calcularRevisaoNecessariaQualityGate({ qualityGate, retryDeQualityGate })
-    ? 'revisao_necessaria_quality_gate'
-    : 'concluido_com_alerta_quality_gate';
+// O Quality Gate nunca substitui a analise da IA (decisao do usuario,
+// 2026-10-23, caso #036537: artigo da Central TOTVS lido pela propria pesquisa
+// vetou a resposta inteira — "o gate nao pode travar a mensagem"). Falha
+// remanescente apos o retry vira observacao ao analista no fim da resposta e
+// status de alerta. Revisao necessaria fica so para resposta cortada.
+function _statusFinalQualityGate(qualityGate) {
+  return qualityGate?.aprovado ? 'concluido' : 'concluido_com_alerta_quality_gate';
 }
 
 function _statusFinalExecucao({ qualityGate, retryDeQualityGate, respostaTruncada = false } = {}) {
@@ -1658,14 +1651,14 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   if (resultado.truncado) {
     qualityGate = _marcarRespostaTruncadaNoGate(qualityGate);
   }
-  const revisaoNecessariaQualityGate = !!resultado.truncado || _calcularRevisaoNecessariaQualityGate({ qualityGate, retryDeQualityGate });
-  const textoRejeitadoQualityGate = revisaoNecessariaQualityGate ? String(resultado.texto || '') : null;
+  // A análise da IA é sempre entregue (o gate nunca substitui a resposta).
+  // Só a resposta cortada pelo provider fica marcada como revisão necessária.
+  const revisaoNecessariaQualityGate = !!resultado.truncado;
   if (revisaoNecessariaQualityGate) {
     qualityGate.revisaoNecessaria = {
-      motivo: resultado.truncado ? 'resposta_truncada_pelo_provider' : 'resposta_continuou_reprovada_apos_retry_permitido',
+      motivo: 'resposta_truncada_pelo_provider',
       falhas: (qualityGate.falhas || []).map(f => f.codigo),
-      respostaRejeitada: textoRejeitadoQualityGate,
-      politica: 'nao_apresentar_como_orientacao_tecnica_aprovada',
+      politica: 'entregue_parcial_com_aviso',
     };
   }
 
@@ -1676,25 +1669,33 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   // frase cortada no meio sem explicação (bug real reportado pelo usuário,
   // 2026-10). Aviso anexado ao próprio texto salvo, não só logado, para
   // aparecer na bolha do chat.
-  let textoFinal = revisaoNecessariaQualityGate
-    ? [
-      'A analise da IA foi bloqueada para revisao porque continuou reprovada pelo Quality Gate apos a tentativa corretiva permitida.',
-      '',
-      `Falhas detectadas: ${(qualityGate.falhas || []).map(f => f.codigo).join(', ') || 'nao especificadas'}.`,
-      '',
-      'Para evitar orientar o atendimento com uma recomendacao rejeitada pelo proprio controle de qualidade, esta resposta nao deve ser usada como parecer tecnico. Consulte a auditoria da execucao para revisar a resposta rejeitada e as evidencias consideradas.',
-    ].join('\n')
-    : resultado.truncado
+  let textoFinal = resultado.truncado
     ? `${resultado.texto}\n\n⚠️ *Resposta cortada pelo limite de tamanho da IA — peça para "continuar" ou reformule de forma mais objetiva.*`
     : resultado.texto;
+  // ID interno exposto: limpa o texto em vez de travar a entrega.
+  if ((qualityGate?.falhas || []).some(f => f.codigo === 'INTERNAL_IDS_USED_AS_EVIDENCE')) {
+    textoFinal = _removerIdsInternosTexto(textoFinal);
+  }
 
   // Limpeza conservadora da Técnica, sem IA (decisão do usuário, 2026-10-22):
   // só a lista final que repete o corpo e o fecho genérico. O que sair vai
   // para a auditoria da mensagem. Ver limpeza-tecnica-service.js.
   let limpezaTecnica = null;
-  if (!revisaoNecessariaQualityGate && !resultado.truncado) {
+  if (!resultado.truncado) {
     const limpa = limpezaTecnicaService.limparTecnica(textoFinal);
     if (limpa.removidos.length) { textoFinal = limpa.texto; limpezaTecnica = limpa.removidos; }
+  }
+
+  // Gate reprovado: a resposta segue, com os pontos de atenção em linguagem
+  // do analista (sem códigos internos). A Objetiva não roda nesse caso, então
+  // o analista recebe a Técnica + observação.
+  const observacaoAnalista = qualityGate?.aprovado ? null : qualityGateService.montarObservacaoAnalista(qualityGate);
+  if (observacaoAnalista) {
+    textoFinal = `${String(textoFinal || '').trim()}\n\n${observacaoAnalista}`;
+    qualityGate.observacaoAnalista = {
+      falhas: (qualityGate.falhas || []).map(f => f.codigo),
+      texto: observacaoAnalista,
+    };
   }
 
   // Depois do Quality Gate (não altera o que ele avaliou). Entra também no aviso
@@ -1890,7 +1891,6 @@ module.exports = {
   _extrairNivelConfianca,
   _extrairFonteCorrigido,
   _gerarFontesCorrigidos,
-  _calcularRevisaoNecessariaQualityGate,
   _statusFinalQualityGate,
   _statusFinalExecucao,
 };
