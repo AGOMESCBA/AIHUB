@@ -607,6 +607,7 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto, empresas
     const whatsService = new IACWhatsAppService();
     const respostaTexto = await whatsService._pipelineAll(texto, empresasMulti, celular, {
       _recebidoEm: new Date().toISOString(),
+      _origemExecucao: 'chat',
       escopoFilialPorEmpresa,
     });
     const intentMulti = {
@@ -720,6 +721,8 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto, empresas
     };
   }
 
+  // Origem definida no servidor após o merge, nunca pela IA ou histórico.
+  intent._origemExecucao = 'chat';
   const resultado = await intentRouter.rotear(intent, empresaId);
   const rowsBrutas = Array.isArray(resultado?.rows) ? resultado.rows : null;
   const rows = rowsBrutas ? traduzirNomesCruesViaSx3(rowsBrutas, empresaId) : null;

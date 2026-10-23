@@ -275,7 +275,7 @@ function _amarrarJoinPorEmpresa(sql, aliases, sx2, sx2Empresa, opts = {}) {
 // `motivo` e null quando aplicado=true, ou uma string curta explicando por
 // que nao aplicou (usado so para log/diagnostico, nao e para exibir ao
 // usuario final).
-function aplicarEscopoLoboGuara(sql, { db, ctx, sx2, sx2Empresa, filialState, logPrefix, preferirEmpresaCodigoFallback = false } = {}) {
+function aplicarEscopoLoboGuara(sql, { db, ctx, sx2, sx2Empresa, filialState, logPrefix, preferirEmpresaCodigoFallback = false, origemExecucao = null } = {}) {
   if (!ctx || !db) return { sql, aplicado: false, motivo: 'sem_contexto_lobo_guara' };
 
   const aliases = aliasTabelaSql(sql);
@@ -291,6 +291,19 @@ function aplicarEscopoLoboGuara(sql, { db, ctx, sx2, sx2Empresa, filialState, lo
   const chaves = _resolverChavesEscopo(filialState, db, ctx.connectionId);
   if (!chaves || !chaves.length) {
     return { sql: out, aplicado: false, motivo: filialState ? 'nenhuma_chave_resolvida' : 'sem_escopo_solicitado' };
+  }
+
+  // Somente o chat TRADICIONAL traduz literais já presentes (SQL novo ou
+  // reutilizado). WhatsApp e LOBO_GUARA mantêm o caminho anterior integralmente.
+  let filtroChatValidado = false;
+  if (origemExecucao === 'chat' && preferirEmpresaCodigoFallback) {
+    const { normalizarLiteraisFilial } = require('./chat-tradicional-filial-sql');
+    const normalizado = normalizarLiteraisFilial(out, {
+      db, connectionId: ctx.connectionId, chaves, sx2, sx2Empresa,
+      tabelasMovimento: TABELAS_MOVIMENTO_COM_FILIAL,
+    });
+    out = normalizado.sql;
+    filtroChatValidado = normalizado.validado;
   }
 
   // Só precisa resolver a empresa dona se alguma tabela do SQL de fato
@@ -312,7 +325,8 @@ function aplicarEscopoLoboGuara(sql, { db, ctx, sx2, sx2Empresa, filialState, lo
     : null;
 
   const { sql: sqlFinal, aplicado } = _injetarFiltroFilial(out, aliases, sx2, sx2Empresa, chaves, codigosEmpresa, { logPrefix, preferirEmpresaCodigoFallback, codigosFilialTradicional });
-  return { sql: sqlFinal, aplicado, motivo: aplicado ? null : 'nenhuma_tabela_aceitou_filtro' };
+  const escopoAplicado = aplicado || filtroChatValidado;
+  return { sql: sqlFinal, aplicado: escopoAplicado, motivo: escopoAplicado ? null : 'nenhuma_tabela_aceitou_filtro' };
 }
 
 // ── Guards (docs/lobo-guara-consenso-arquitetura.md, secao "Guards") ────────

@@ -5113,6 +5113,7 @@ class IACWhatsAppService extends EventEmitter {
         intent._contextoEmpresaOrigem = scopedContexto.empresaIdOrigem || null;
       }
     }
+    intent._origemExecucao = 'whatsapp';
     intent = this._aplicarGroupByHerdadoContinuidade(intent, contextoAnterior, textoExecucao);
     // Verifica se filtros cadastrais (empresa, cliente, fornecedor) são na verdade tenants do canal.
     // Varre TODOS os campos — não para no primeiro — para capturar multi-tenant ("J2A e C3I").
@@ -6134,6 +6135,7 @@ class IACWhatsAppService extends EventEmitter {
             _mensagemOriginal: texto,
             _remetente: sender,
             _escopoExecucao: 'whatsapp_all',
+            _origemExecucao: opts._origemExecucao === 'chat' ? 'chat' : 'whatsapp',
             _historicoResumido: _historicoEmp,
             // Escopo de filial Lobo Guara por empresa (IA Command, chat embutido —
             // arvore de selecao). opts.escopoFilialPorEmpresa so e populado pelo
