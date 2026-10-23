@@ -1107,15 +1107,11 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    opacity: 0;
-    transform: translateY(-2px);
-    transition: opacity 0.12s ease, transform 0.12s ease, background 0.12s ease, color 0.12s ease;
+    opacity: 1;
+    transition: background 0.12s ease, color 0.12s ease;
     z-index: 2;
   }
   .row.out .message-menu-trigger { background: color-mix(in srgb, var(--wa-bubble-out) 82%, transparent); }
-  .bubble:hover .message-menu-trigger,
-  .message-menu-trigger:focus-visible,
-  .message-menu-trigger.open { opacity: 1; transform: translateY(0); }
   .message-menu-trigger:hover,
   .message-menu-trigger.open { background: var(--wa-accent-soft-bg); color: var(--wa-accent); }
   .message-menu-trigger svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }

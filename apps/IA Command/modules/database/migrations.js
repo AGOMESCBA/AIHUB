@@ -1792,4 +1792,15 @@ MIGRATIONS.push({
   run(db) { return require('./interpretation-owner').migrar(db); },
 });
 
+MIGRATIONS.push({
+  version: 96,
+  descricao: 'Vincula sessoes do link Chat Web a empresa de origem',
+  sql: '-- Coluna de escopo adicionada de forma idempotente em run.',
+  run(db) {
+    const existe = db.prepare('PRAGMA table_info(protheus_chat_tokens)').all()
+      .some(coluna => coluna.name === 'empresa_escopo_id');
+    if (!existe) db.exec('ALTER TABLE protheus_chat_tokens ADD COLUMN empresa_escopo_id INTEGER DEFAULT NULL;');
+  },
+});
+
 module.exports = MIGRATIONS;

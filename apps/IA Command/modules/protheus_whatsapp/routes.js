@@ -17,6 +17,7 @@ const crypto = require('crypto');
 const tokenService = require('./token-service');
 const sessionStore = require('./session-store');
 const userPermissionsStore = require('./user-permissions-store');
+const webLoginScope = require('./web-login-scope');
 const { getDB } = require('../database');
 const whatsappChannels = require('../whatsapp/channel-store');
 const whatsappResponseConfig = require('../whatsapp/whatsapp-response-config');
@@ -346,12 +347,15 @@ function carregarPermissoesWebPorCelular(celular, empresaId = null) {
   const empresasVistas = new Set();
   const filiaisPorEmpresa = new Map();
 
-  for (const row of rows) {
+  // O cadastro Números Autorizados mostra/edita rows[0]. Não somar registros
+  // antigos ocultos na tela ao autenticar pelo link de uma empresa específica.
+  const fontes = empresaId ? rows.slice(0, 1) : rows;
+  for (const row of fontes) {
     for (const emp of row.empresasPermitidas || []) {
       const id = Number(emp.empresaId || emp.empresa_id || emp.id || 0);
       const codigo = String(emp.codigoProtheus || emp.codigo_protheus || '').trim();
       const chave = `${id}:${codigo}`;
-      if (!id || empresasVistas.has(chave)) continue;
+      if (!id || (empresaId && id !== Number(empresaId)) || empresasVistas.has(chave)) continue;
       empresasVistas.add(chave);
       empresasPermitidas.push(emp);
     }
@@ -447,8 +451,13 @@ function validarLoginChallenge(challengeId, celular, codigo, maxTentativas = WEB
 function requireTokenSessao(req, res, next) {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
-  const sessao = tokenService.validar(token);
+  let sessao = tokenService.validar(token);
   if (!sessao) return res.status(401).json({ error: 'Sessao invalida ou expirada.' });
+  if (sessao.empresaEscopoId) {
+    const atuais = carregarPermissoesWebPorCelular(sessao.celular, sessao.empresaEscopoId);
+    sessao = webLoginScope.revalidar(sessao, atuais);
+    if (!sessao) return res.status(401).json({ error: 'Permissões de acesso alteradas. Entre novamente pelo link da empresa.' });
+  }
   req.protheusChat = sessao;
   next();
 }
@@ -1338,11 +1347,8 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
         texto: [
           '🔐 IA Command - acesso ao Chat Web',
           '',
-          'Recebemos uma tentativa de entrada usando este WhatsApp.',
-          `O codigo expira em ${empresaConfig.ttlMin} minuto(s).`,
-          '',
-          '⚠️ Se voce nao solicitou este acesso, ignore a proxima mensagem e avise o administrador.',
-          'Nunca compartilhe seu codigo com terceiros.',
+          `⚠️ Segue o código de acesso. Validade: ${empresaConfig.ttlMin} min.`,
+          'Se não solicitou o acesso, ignore a próxima mensagem e avise o administrador.',
         ].join('\n'),
       });
       await enviarTextoWhatsApp({
@@ -1402,6 +1408,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       const { token, expiraEm } = tokenService.emitir({
         empresaId: permissoes.empresaId,
         celular: permissoes.celular,
+        empresaEscopoId: pathConfig.empresaId || 0,
         filial: permissoes.filial,
         empresasPermitidas: permissoes.empresasPermitidas,
         filiaisPermitidas: permissoes.filiaisPermitidas,

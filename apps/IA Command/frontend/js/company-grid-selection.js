@@ -49,6 +49,8 @@ window.companyGridSelection = function ({ getTable, endpoint, dicionario, reload
     bind() {
       const table = getTable();
       table.on('rowSelectionChanged', atualizar);
+      // O primeiro filtro pode ser emitido antes de as linhas ativas estarem prontas.
+      table.on('dataProcessed', atualizar);
       table.on('dataFiltered', () => {
         const ativos = new Set(table.getRows('active').map(row => row.getData().id));
         for (const row of table.getSelectedRows()) {

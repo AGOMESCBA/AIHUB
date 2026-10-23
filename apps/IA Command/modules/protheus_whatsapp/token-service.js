@@ -83,7 +83,7 @@ function normalizarFiliaisPermitidas(filiaisPermitidas) {
   return [...porCodigo.entries()].map(([codigoProtheus, filiais]) => ({ codigoProtheus, filiais }));
 }
 
-function emitir({ empresaId, celular, filial = null, empresasPermitidas = undefined, filiaisPermitidas = [] }) {
+function emitir({ empresaId, celular, filial = null, empresasPermitidas = undefined, filiaisPermitidas = [], empresaEscopoId = 0 }) {
   if (!empresaId) throw new Error('empresaId obrigatorio.');
   const celularNormalizado = normalizarCelular(celular);
   if (!celularNormalizado) throw new Error('celular obrigatorio.');
@@ -91,7 +91,11 @@ function emitir({ empresaId, celular, filial = null, empresasPermitidas = undefi
   const token = crypto.randomBytes(32).toString('hex');
   const agora = new Date();
   const expiraEm = new Date(agora.getTime() + TTL_MS);
-  const empresas = normalizarEmpresasPermitidas(empresasPermitidas, empresaId);
+  const escopo = Number(empresaEscopoId || 0);
+  if (!Number.isSafeInteger(escopo) || escopo < 0) throw new Error('Escopo da sessão inválido.');
+  if (escopo && escopo !== Number(empresaId)) throw new Error('Escopo da sessão diferente da empresa de origem.');
+  const empresas = normalizarEmpresasPermitidas(empresasPermitidas, empresaId)
+    .filter(item => !escopo || item.empresaId === escopo);
   const filiais = normalizarFiliaisPermitidas(filiaisPermitidas);
   if (!empresas.length) {
     const err = new Error('Usuario sem empresas permitidas.');
@@ -100,9 +104,9 @@ function emitir({ empresaId, celular, filial = null, empresasPermitidas = undefi
   }
 
   getDB().prepare(`
-    INSERT INTO protheus_chat_tokens (token, empresa_id, celular, filial, expira_em, criado_em, empresas_permitidas_json, filiais_permitidas_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(hashToken(token), empresaId, celularNormalizado, filial, expiraEm.toISOString(), agora.toISOString(), JSON.stringify(empresas), JSON.stringify(filiais));
+    INSERT INTO protheus_chat_tokens (token, empresa_id, celular, filial, expira_em, criado_em, empresas_permitidas_json, filiais_permitidas_json, empresa_escopo_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(hashToken(token), empresaId, celularNormalizado, filial, expiraEm.toISOString(), agora.toISOString(), JSON.stringify(empresas), JSON.stringify(filiais), escopo);
 
   return { token, expiraEm: expiraEm.toISOString() };
 }
@@ -112,7 +116,7 @@ function validar(token) {
 
   const tokenHash = hashToken(token);
   let row = getDB().prepare(`
-    SELECT token, empresa_id, celular, filial, expira_em, criado_em, empresas_permitidas_json, filiais_permitidas_json
+    SELECT token, empresa_id, celular, filial, expira_em, criado_em, empresas_permitidas_json, filiais_permitidas_json, empresa_escopo_id
     FROM protheus_chat_tokens
     WHERE token = ?
   `).get(tokenHash);
@@ -121,13 +125,19 @@ function validar(token) {
   // a tabela ainda guardava o token em claro.
   if (!row) {
     row = getDB().prepare(`
-      SELECT token, empresa_id, celular, filial, expira_em, criado_em, empresas_permitidas_json, filiais_permitidas_json
+      SELECT token, empresa_id, celular, filial, expira_em, criado_em, empresas_permitidas_json, filiais_permitidas_json, empresa_escopo_id
       FROM protheus_chat_tokens
       WHERE token = ?
     `).get(token);
   }
 
   if (!row) return null;
+  // Legados não distinguem acesso pelo link de acesso pelo Protheus. Exige uma
+  // nova autenticação, sem apagar histórico nem alterar permissões cadastradas.
+  if (row.empresa_escopo_id == null) return null;
+  const empresaEscopoId = Number(row.empresa_escopo_id);
+  if (!Number.isSafeInteger(empresaEscopoId) || empresaEscopoId < 0) return null;
+  if (empresaEscopoId && empresaEscopoId !== Number(row.empresa_id)) return null;
   if (new Date(row.expira_em).getTime() < Date.now()) return null;
   const criadoEmMs = new Date(row.criado_em || row.expira_em).getTime();
   if (MAX_TTL_MS > 0 && criadoEmMs && criadoEmMs + MAX_TTL_MS < Date.now()) return null;
@@ -150,6 +160,8 @@ function validar(token) {
     empresasPermitidas = [];
   }
   empresasPermitidas = normalizarEmpresasPermitidas(empresasPermitidas, row.empresa_id);
+  empresasPermitidas = empresasPermitidas.filter(item => !empresaEscopoId || item.empresaId === empresaEscopoId);
+  if (!empresasPermitidas.length) return null;
 
   let filiaisPermitidas = [];
   try {
@@ -161,6 +173,7 @@ function validar(token) {
 
   return {
     empresaId: row.empresa_id,
+    empresaEscopoId,
     celular: row.celular,
     filial: row.filial,
     empresasPermitidas,
