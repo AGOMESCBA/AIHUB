@@ -348,14 +348,6 @@
     return `<span class="sla-status waiting-status ${tone}">${escapeHtml(label)}</span>`;
   }
 
-  function diasEntre(dataIso) {
-    if (!dataIso) return null;
-    const inicio = new Date(dataIso);
-    if (Number.isNaN(inicio.getTime())) return null;
-    const ms = Date.now() - inicio.getTime();
-    return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
-  }
-
   function slaBadge(value) {
     const label = text(value, '');
     if (!label) return '';
@@ -503,7 +495,7 @@
     // (reportado em producao, 2026-10).
     $('case-view').hidden = true;
     $('empty-state').hidden = false;
-    for (const id of ['messages', 'evidence-content', 'details-content', 'summary-content', 'trail-content', 'knowledge-content']) {
+    for (const id of ['messages', 'evidence-content', 'details-content', 'trail-content', 'knowledge-content']) {
       const el = $(id);
       if (el) el.innerHTML = '';
     }
@@ -714,8 +706,6 @@
   function atualizarRotuloFila(ticket) {
     const el = $('queue-rail-label');
     if (el) el.textContent = ticket?.numero ? `#${ticket.numero} · Fila` : 'Fila de chamados';
-    const resumo = $('summary-rail-label');
-    if (resumo) resumo.textContent = ticket?.numero ? `#${ticket.numero} · Resumo` : 'Resumo da investigação';
   }
 
   function syncBotoesAcao() {
@@ -875,7 +865,6 @@
     $('messages').innerHTML = '<div class="empty-block">Carregando conversa...</div>';
     renderDescription();
     renderDetails();
-    renderSummary();
   }
 
   function renderDescription() {
@@ -896,7 +885,6 @@
     renderKnowledge();
     renderTrail();
     renderDetails();
-    renderSummary();
   }
 
   async function loadMessages() {
@@ -1760,50 +1748,6 @@
       .join('');
   }
 
-  function dossieText() {
-    const d = state.dossie || {};
-    return d.resumoEstado || d.resumo || d.texto || d.dossie?.resumoEstado || '';
-  }
-
-  function renderSummary() {
-    if (!state.selected) {
-      $('summary-content').innerHTML = '<div class="empty-block">Selecione um chamado para carregar dossiê, pesquisa e risco.</div>';
-      return;
-    }
-    const c = state.selected;
-    const elapsed = Number(c.hrDur || 0);
-    const goal = Number(c.slaHoras || 0);
-    const pct = goal > 0 ? Math.min(100, Math.round((elapsed / goal) * 100)) : 0;
-    const dias = diasEntre(c.ultimoPosicionamentoEm || c.dataAbertura);
-    const waitHighlight = waitingLabel(c.aguardandoConsolidado || c.situacaoRetorno) && dias !== null
-      ? `<div class="waiting-highlight waiting-highlight-compact">
-          <div class="waiting-highlight-label">${escapeHtml(waitingLabel(c.aguardandoConsolidado || c.situacaoRetorno))}</div>
-          <div class="waiting-highlight-days">${escapeHtml(dias === 0 ? 'Hoje' : dias === 1 ? '1 dia' : `${dias} dias`)}</div>
-          <div class="waiting-highlight-sub">desde o último posicionamento em ${escapeHtml(formatDate(c.ultimoPosicionamentoEm || c.dataAbertura))}</div>
-        </div>`
-      : '';
-    const slaPrazosHtml = slaPrazosFields(c)
-      .filter(([, v]) => v !== null && v !== undefined && v !== '')
-      .map(([k, v]) => `<div class="summary-item"><span>${escapeHtml(k)}</span><strong>${escapeHtml(v)}</strong></div>`)
-      .join('');
-    const waitingItem = waitHighlight
-      ? ''
-      : `<div class="summary-item"><span>Aguardando retorno</span><strong>${escapeHtml(waitingLabel(c.aguardandoConsolidado || c.situacaoRetorno) || 'Não informado')}</strong></div>`;
-    $('summary-content').innerHTML = `
-      <div class="summary-card"><h3>Chamado</h3><div class="summary-list">
-        <div class="summary-item"><span>Problema identificado</span><strong>${escapeHtml(currentTicketTitle(c))}</strong></div>
-        <div class="summary-item"><span>SLA</span><strong>${escapeHtml(c.slaPrazo || c.slaStatus || '-')}</strong></div>
-        <div class="summary-item"><span>Previsão</span><strong>${escapeHtml(c.slaDataPrevFim ? formatDateTime(c.slaDataPrevFim) : '-')}</strong></div>
-        ${waitingItem}
-        ${waitHighlight}
-        <div class="summary-item"><span>Dossiê</span><div>${escapeHtml(dossieText() || 'Sem resumo estruturado disponível.')}</div></div>
-      </div></div>
-      <div class="summary-card"><h3>Pesquisa Técnica</h3><div class="summary-item"><strong>${escapeHtml(String((state.research?.relacionados || []).length))} similar(es)</strong><div>${escapeHtml(String((state.research?.pesquisa?.resultados || state.research?.pesquisa?.links || []).length))} fonte(s)/trilha(s)</div></div></div>
-      <div class="summary-card"><h3>Risco SLA</h3><div class="summary-item"><span>Status</span><strong>${escapeHtml(c.slaPrazo || '-')}</strong></div><div class="progress" title="${pct}%"><span style="--value:${pct}%"></span></div><div class="summary-item"><span>Previsão</span><strong>${escapeHtml(c.slaDataPrevFim ? formatDateTime(c.slaDataPrevFim) : '-')}</strong></div></div>
-      <div class="summary-card"><h3>SLA e Prazos</h3><div class="summary-list">${slaPrazosHtml}</div></div>
-    `;
-  }
-
   async function loadRisk({ forceSync = false } = {}) {
     const params = new URLSearchParams({ filtro: state.riskFilter });
     if (forceSync) params.set('force_sync', 'true');
@@ -2135,7 +2079,6 @@
       const el = $(`panel-${name}`);
       if (el) el.classList.toggle('active', name === panel);
     });
-    $('radar-layout').classList.toggle('summary-auto-collapsed', panel !== 'conversation');
     // Radar de Chamados lista todos os chamados: cabecalho e descricao do
     // chamado selecionado nao se aplicam e so tomam espaco da grade.
     $('case-view').classList.toggle('modo-radar', panel === 'risk');
@@ -2175,11 +2118,10 @@
   function setMobileTarget(target) {
     state.mobileTarget = target;
     const layout = $('radar-layout');
-    layout.classList.remove('mobile-queue', 'mobile-conversation', 'mobile-summary', 'mobile-more');
+    layout.classList.remove('mobile-queue', 'mobile-conversation', 'mobile-more');
     layout.classList.add(`mobile-${target}`);
     document.querySelectorAll('.mobile-nav button').forEach((b) => b.classList.toggle('active', b.dataset.mobileTarget === target));
     if (target === 'conversation') setPanel('conversation');
-    if (target === 'summary') renderSummary();
     if (target === 'more' && state.activePanel === 'conversation') setPanel('details');
   }
 
@@ -2462,7 +2404,7 @@
     document.querySelectorAll('[data-panel-tab]').forEach((btn) => btn.addEventListener('click', () => {
       setPanel(btn.dataset.panelTab);
       closeTopbarMenus();
-      if (state.selected && (state.mobileTarget === 'queue' || state.mobileTarget === 'summary')) setMobileTarget('conversation');
+      if (state.selected && state.mobileTarget === 'queue') setMobileTarget('conversation');
     }));
     document.querySelectorAll('[data-knowledge-tab]').forEach((btn) => btn.addEventListener('click', () => {
       state.knowledgeTab = btn.dataset.knowledgeTab;
@@ -2497,23 +2439,12 @@
     if (filaRecolhidaSalva()) $('radar-layout').classList.add('queue-collapsed');
     $('toggle-queue-btn').addEventListener('click', () => aplicarFilaRecolhida(true));
     $('queue-reopen-rail').addEventListener('click', () => aplicarFilaRecolhida(false));
-    $('collapse-summary-btn')?.addEventListener('click', () => {
-      const layout = $('radar-layout');
-      layout.classList.remove('summary-auto-collapsed');
-      layout.classList.add('summary-collapsed');
-    });
-    $('summary-reopen-rail').addEventListener('click', () => {
-      $('radar-layout').classList.remove('summary-collapsed', 'summary-auto-collapsed');
-    });
     $('description-toggle').addEventListener('click', () => $('case-description').classList.toggle('collapsed'));
     $('toggle-header-btn').addEventListener('click', () => {
       const collapsed = $('case-header').classList.toggle('collapsed');
       $('case-view').classList.toggle('header-collapsed', collapsed);
       $('toggle-header-btn').classList.toggle('collapsed', collapsed);
       $('toggle-header-btn').title = collapsed ? 'Mostrar detalhes do chamado' : 'Ocultar detalhes do chamado';
-      const layout = $('radar-layout');
-      layout.classList.remove('summary-auto-collapsed');
-      layout.classList.toggle('summary-collapsed', collapsed);
     });
     $('research-btn').addEventListener('click', researchSolutions);
     $('composer').addEventListener('submit', sendMessage);

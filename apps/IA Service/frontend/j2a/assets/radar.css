@@ -571,29 +571,14 @@ button.loading .loader { display: block; }
 .radar-layout {
   min-height: 0;
   display: grid;
-  grid-template-columns: 392px minmax(420px, 1fr) 360px;
+  /* Fila + chamado. O painel "Resumo da Investigação" (3ª coluna) foi
+     removido a pedido do usuário (2026-10-23): ninguém usava e poluía a tela;
+     os mesmos dados de SLA/prazos estão na aba Detalhes. */
+  grid-template-columns: 392px minmax(420px, 1fr);
   gap: 12px;
   padding: 12px;
   background: var(--shell);
 }
-.radar-layout.summary-collapsed,
-.radar-layout.summary-auto-collapsed { grid-template-columns: 392px minmax(420px, 1fr) 0; }
-.radar-layout.summary-collapsed .summary-panel,
-.radar-layout.summary-auto-collapsed .summary-panel { display: none; }
-.summary-reopen-rail { display: none; }
-.radar-layout.summary-collapsed .summary-reopen-rail,
-.radar-layout.summary-auto-collapsed .summary-reopen-rail {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--panel);
-  color: var(--muted);
-  box-shadow: var(--shadow);
-}
-.summary-reopen-rail:hover { color: var(--brand); background: var(--panel-2); }
 .panel {
   min-width: 0;
   min-height: 0;
@@ -930,8 +915,6 @@ button.loading .loader { display: block; }
 .waiting-highlight-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #d6a419; }
 .waiting-highlight-days { font-size: 18px; font-weight: 900; color: var(--text); line-height: 1.2; }
 .waiting-highlight-sub { font-size: 10.5px; color: var(--muted); }
-.waiting-highlight-compact { width: 100%; padding: 7px 10px; margin-top: 2px; }
-.waiting-highlight-compact .waiting-highlight-days { font-size: 15px; }
 
 .case-description { border-bottom: 1px solid var(--line); background: var(--panel-2); }
 .description-toggle {
@@ -1276,9 +1259,6 @@ button.loading .loader { display: block; }
 .trail-step-details .knowledge-card { padding: 9px 10px; }
 .trail-step-details .knowledge-card h3 { text-transform: none; font-size: 12px; }
 
-.summary-panel { display: grid; grid-template-rows: auto 1fr; }
-.summary-panel .panel-head p { font-size: 11px; }
-.summary-content { overflow: auto; padding: 10px; display: grid; gap: 8px; align-content: start; }
 .empty-block { padding: 12px; border: 1px dashed var(--line); border-radius: 7px; color: var(--muted); font-size: 12px; line-height: 1.4; }
 .summary-card { padding: 10px; }
 .summary-card h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); font-weight: 800; }
@@ -1549,7 +1529,7 @@ body.col-resizing { cursor: col-resize; user-select: none; }
 .mobile-nav { display: none; }
 
 @media (max-width: 1366px) {
-  .radar-layout { grid-template-columns: 300px minmax(420px, 1fr) 330px; }
+  .radar-layout { grid-template-columns: 300px minmax(420px, 1fr); }
   .case-meta { grid-template-columns: repeat(3, minmax(100px, 1fr)); }
 }
 
@@ -1578,10 +1558,9 @@ body.col-resizing { cursor: col-resize; user-select: none; }
     padding: 0;
   }
   .panel { border-radius: 0; border-left: 0; border-right: 0; box-shadow: none; }
-  .queue-panel, .workspace, .summary-panel { display: none; min-height: calc(100vh - 102px); }
+  .queue-panel, .workspace { display: none; min-height: calc(100vh - 102px); }
   .radar-layout.mobile-queue .queue-panel,
   .radar-layout.mobile-conversation .workspace,
-  .radar-layout.mobile-summary .summary-panel,
   .radar-layout.mobile-more .workspace { display: grid; }
   .radar-layout.mobile-more #panel-conversation { display: none; }
   .radar-layout.mobile-more .case-view { grid-template-rows: auto auto 1fr; }
@@ -1592,7 +1571,6 @@ body.col-resizing { cursor: col-resize; user-select: none; }
   .messages { padding: 12px; }
   .message { max-width: 90%; }
   .composer { padding: 10px 12px; }
-  .summary-panel { grid-template-rows: auto 1fr; }
   .risk-toolbar { grid-template-columns: 1fr; }
   .risk-layout, .risk-layout.consultants-collapsed { grid-template-columns: 1fr; min-height: 360px; }
   .risk-layout.consultants-collapsed .risk-consultants-head { flex-direction: row; justify-content: space-between; padding: 9px 12px; }
@@ -1603,7 +1581,7 @@ body.col-resizing { cursor: col-resize; user-select: none; }
     bottom: 0;
     height: 48px;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     border-top: 1px solid var(--line);
     background: var(--panel);
     z-index: 10;
@@ -1661,17 +1639,10 @@ body.col-resizing { cursor: col-resize; user-select: none; }
 #toggle-queue-btn { display: none; }
 @media (min-width: 901px) {
   #toggle-queue-btn { display: inline-flex; }
-  .radar-layout.queue-collapsed { grid-template-columns: 46px minmax(420px, 1fr) 360px; }
-  .radar-layout.queue-collapsed.summary-collapsed,
-  .radar-layout.queue-collapsed.summary-auto-collapsed { grid-template-columns: 46px minmax(420px, 1fr) 46px; }
-  .radar-layout.summary-collapsed,
-  .radar-layout.summary-auto-collapsed { grid-template-columns: 392px minmax(420px, 1fr) 46px; }
+  .radar-layout.queue-collapsed { grid-template-columns: 46px minmax(420px, 1fr); }
   .radar-layout.queue-collapsed .queue-panel { display: none; }
   .radar-layout.queue-collapsed .workspace { grid-column: 2; }
-  .radar-layout.queue-collapsed .summary-panel { grid-column: 3; }
-  .radar-layout.queue-collapsed .queue-reopen-rail,
-  .radar-layout.summary-collapsed .summary-reopen-rail,
-  .radar-layout.summary-auto-collapsed .summary-reopen-rail {
+  .radar-layout.queue-collapsed .queue-reopen-rail {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1711,8 +1682,5 @@ body.col-resizing { cursor: col-resize; user-select: none; }
     text-overflow: ellipsis;
     max-height: calc(100vh - 220px);
   }
-  .radar-layout.summary-collapsed .summary-reopen-rail,
-  .radar-layout.summary-auto-collapsed .summary-reopen-rail { grid-column: 3; }
-  .queue-reopen-rail:hover, .queue-reopen-rail:focus-visible,
-  .summary-reopen-rail:hover, .summary-reopen-rail:focus-visible { border-color: var(--brand); background: var(--panel-2); color: var(--text); outline: none; }
+  .queue-reopen-rail:hover, .queue-reopen-rail:focus-visible { border-color: var(--brand); background: var(--panel-2); color: var(--text); outline: none; }
 }

@@ -7,7 +7,7 @@ const { chromium } = require('playwright');
 let browser;
 let server;
 const assets = path.join(__dirname, '../frontend/j2a/assets');
-const harness = `<!doctype html><html lang="pt-BR"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/radar.css"><link rel="stylesheet" href="/retorno-softexpert.css"></head><body><main id="radar-layout" class="radar-layout" style="height:100vh"><aside class="queue-panel">Fila</aside><article><h1>Chat</h1><textarea aria-label="Mensagem do chat"></textarea><button id="retorno" type="button">Retorno</button></article><aside class="summary-panel">Resumo</aside></main><script src="/retorno-softexpert.js"></script><script>
+const harness = `<!doctype html><html lang="pt-BR"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/radar.css"><link rel="stylesheet" href="/retorno-softexpert.css"></head><body><main id="radar-layout" class="radar-layout" style="height:100vh"><aside class="queue-panel">Fila</aside><article><h1>Chat</h1><textarea aria-label="Mensagem do chat"></textarea><button id="retorno" type="button">Retorno</button></article></main><script src="/retorno-softexpert.js"></script><script>
 window.currentContext = {scopeKey:'sessao-a',chamadoId:'a',numero:'00012345'};
 window.posts = 0; window.ready = true; window.keys = []; window.replies = [];
 window.editor = IaRetornoSoftExpert.mount({ button: document.getElementById('retorno'), getContext:()=>window.currentContext,

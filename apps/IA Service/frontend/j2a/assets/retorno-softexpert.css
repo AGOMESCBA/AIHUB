@@ -42,7 +42,7 @@
   body.retorno-wide:has(#radar-layout) #radar-layout { margin-right: calc(100vw - 440px + 12px); }
   body.retorno-open #radar-layout { margin-right: calc(min(var(--retorno-width, 460px), calc(100vw - 440px)) + 12px); grid-template-columns: minmax(0, 1fr); }
   body.retorno-open:has(#radar-layout) .retorno-panel { right: 12px; border-color: var(--line); border-radius: var(--radius, 8px); box-shadow: var(--shadow, 0 8px 28px #0003); font-family: inherit; }
-  body.retorno-open #radar-layout > .summary-panel, body.retorno-open #radar-layout > .queue-panel, body.retorno-open #summary-reopen-rail { display: none; }
+  body.retorno-open #radar-layout > .queue-panel { display: none; }
   body.retorno-open .radar-shell { width: calc(100% - min(var(--retorno-width, 460px), calc(100vw - 440px))); grid-template-columns: minmax(0, 1fr); }
   body.retorno-open .radar-shell > .fila-col { display: none; }
   body.retorno-wide #radar-layout { margin-right: calc(min(900px, calc(100vw - 440px)) + 12px); }
