@@ -1,6 +1,9 @@
 (function () {
   'use strict';
   const escape = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const ICONE_COPIAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>';
+  const ICONE_OK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  const ICONE_FALHA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v6M12 17h.01"/></svg>';
   // Técnica guardada de uma resposta entregue como Objetiva. O botão só existe
   // quando o analista está vendo a Objetiva: se ele já vê a Técnica (estilo
   // Técnica ou Objetiva bloqueada pelo gate, que volta para a Técnica), não há
@@ -67,7 +70,7 @@
     painel.hidden = true;
     painel.setAttribute('role', 'dialog');
     painel.setAttribute('aria-label', 'Detalhes Técnicos');
-    painel.innerHTML = '<header class="retorno-head"><div><h2>Detalhes Técnicos</h2><p data-technical-status hidden>Aprovada pelo Quality Gate</p></div><div class="technical-actions"><button type="button" class="technical-copy" data-technical-copy>Copiar</button><button type="button" class="technical-close" aria-label="Fechar Detalhes Técnicos">×</button></div></header><div class="retorno-scroll technical-markdown"></div>';
+    painel.innerHTML = '<header class="retorno-head"><div><h2>Detalhes Técnicos</h2><p data-technical-status hidden>Aprovada pelo Quality Gate</p></div><div class="technical-actions"><button type="button" class="technical-copy" data-technical-copy title="Copiar" aria-label="Copiar Detalhes Técnicos">' + ICONE_COPIAR + '</button><button type="button" class="technical-close" title="Fechar" aria-label="Fechar Detalhes Técnicos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></header><div class="retorno-scroll technical-markdown"></div>';
     document.body.append(painel);
     let origem = null, contexto = null;
     const conteudo = painel.querySelector('.retorno-scroll'), fechar = painel.querySelector('.technical-close'), copiar = painel.querySelector('[data-technical-copy]');
@@ -82,7 +85,13 @@
       origem = contexto = null; textoAtual = '';
       resetCopia();
     }
-    function resetCopia() { clearTimeout(timerCopia); copiar.textContent = 'Copiar'; }
+    // Botões só-ícone (pedido do usuário, 2026-10-23); o resultado da cópia
+    // troca o ícone e o título por 2 s.
+    function estadoCopia(icone, rotulo, classe = '') {
+      copiar.innerHTML = icone; copiar.title = rotulo; copiar.setAttribute('aria-label', rotulo);
+      copiar.classList.toggle('copiado', classe === 'copiado'); copiar.classList.toggle('falhou', classe === 'falhou');
+    }
+    function resetCopia() { clearTimeout(timerCopia); estadoCopia(ICONE_COPIAR, 'Copiar'); }
     // Em HTTP (sem contexto seguro) navigator.clipboard não existe: usa-se um
     // textarea temporário com execCommand, acionado pelo clique do usuário.
     async function copiarTexto(texto) {
@@ -124,7 +133,7 @@
     copiar.addEventListener('click', async () => {
       if (!textoAtual) return;
       const ok = await copiarTexto(textoAtual);
-      copiar.textContent = ok ? 'Copiado' : 'Não foi possível copiar';
+      if (ok) estadoCopia(ICONE_OK, 'Copiado', 'copiado'); else estadoCopia(ICONE_FALHA, 'Não foi possível copiar', 'falhou');
       clearTimeout(timerCopia); timerCopia = setTimeout(resetCopia, 2000);
     });
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && !painel.hidden) { e.preventDefault(); close(); } });

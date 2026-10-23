@@ -1108,10 +1108,16 @@
       // Avaliação à esquerda e Detalhes Técnicos à direita, na mesma faixa.
       const detalhesHtml = window.IaDetalhesTecnicos.botao(m, 'detalhes-tecnicos-link');
       const acoesHtml = avaliacaoHtml || detalhesHtml ? `<div class="message-acoes">${avaliacaoHtml}${detalhesHtml}</div>` : '';
+      // Setinha de opções sempre visível (padrão do chat do IA Command).
+      const menuAberto = m.id && state.menuMensagemId === String(m.id);
+      const menuHtml = m.id
+        ? `<button type="button" class="message-menu-trigger${menuAberto ? ' open' : ''}" data-menu-msg="${escapeHtml(m.id)}" title="Opções da mensagem" aria-label="Opções da mensagem" aria-haspopup="menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`
+        : '';
       return `
         <article class="message message-${side} ${assistant ? 'assistant' : ''}">
           <div class="message-avatar">${escapeHtml(messageAvatar(m))}</div>
-          <div class="message-card">
+          <div class="message-card${menuHtml ? ' com-menu' : ''}">
+            ${menuHtml}
             <div class="message-head"><strong>${escapeHtml(messageRole(m))}</strong><span>${escapeHtml(formatDateTime(messageTimestamp(m)))}</span></div>
             <div class="message-text">${escapeHtml(messageText(m))}</div>
             ${attachmentsHtml}
@@ -1123,6 +1129,80 @@
     }).join('');
     if (statusPertenceAoAtual) appendChatStatusRow(state.chatStatusText, pertoDoFim);
     if (pertoDoFim) container.scrollTop = container.scrollHeight;
+    // Re-render (polling) com o menu aberto: mensagem sumiu => fecha o menu.
+    if (state.menuMensagemId && !container.querySelector(`[data-menu-msg="${CSS.escape(state.menuMensagemId)}"]`)) fecharMenuMensagem();
+  }
+
+  // Menu de opções da mensagem (setinha estilo WhatsApp). Um único menu
+  // flutuante, criado sob demanda; por enquanto só "Copiar mensagem".
+  function menuMensagemEl() {
+    let menu = $('message-context-menu');
+    if (menu) return menu;
+    menu = document.createElement('div');
+    menu.id = 'message-context-menu';
+    menu.className = 'message-context-menu';
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-hidden', 'true');
+    menu.innerHTML = `
+      <button type="button" class="message-context-item" role="menuitem" data-menu-action="copiar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>
+        <span>Copiar mensagem</span>
+      </button>`;
+    menu.addEventListener('click', async (event) => {
+      const item = event.target.closest('[data-menu-action]');
+      if (!item) return;
+      const mensagem = state.messages.find((m) => String(m.id) === state.menuMensagemId);
+      fecharMenuMensagem();
+      if (item.dataset.menuAction === 'copiar' && mensagem) {
+        toast(await copiarTextoMensagem(messageText(mensagem)) ? 'Mensagem copiada.' : 'Não foi possível copiar a mensagem.');
+      }
+    });
+    document.body.appendChild(menu);
+    return menu;
+  }
+
+  function abrirMenuMensagem(trigger) {
+    const id = trigger?.dataset.menuMsg;
+    if (!id) return;
+    if (state.menuMensagemId === id) { fecharMenuMensagem(); return; }
+    fecharMenuMensagem();
+    const menu = menuMensagemEl();
+    state.menuMensagemId = id;
+    trigger.classList.add('open');
+    menu.classList.add('open');
+    menu.setAttribute('aria-hidden', 'false');
+    const rect = trigger.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const margem = 8;
+    menu.style.left = `${Math.min(window.innerWidth - menuRect.width - margem, Math.max(margem, rect.right - menuRect.width))}px`;
+    menu.style.top = `${Math.min(window.innerHeight - menuRect.height - margem, Math.max(margem, rect.bottom + 4))}px`;
+    menu.querySelector('.message-context-item')?.focus();
+  }
+
+  function fecharMenuMensagem() {
+    if (!state.menuMensagemId) return;
+    state.menuMensagemId = null;
+    const menu = $('message-context-menu');
+    if (menu) { menu.classList.remove('open'); menu.setAttribute('aria-hidden', 'true'); }
+    document.querySelectorAll('.message-menu-trigger.open').forEach((b) => b.classList.remove('open'));
+  }
+
+  // Em HTTP (sem contexto seguro) navigator.clipboard não existe: cai para
+  // textarea + execCommand, mesmo recurso dos Detalhes Técnicos.
+  async function copiarTextoMensagem(texto) {
+    try {
+      if (window.isSecureContext && navigator.clipboard?.writeText) { await navigator.clipboard.writeText(texto); return true; }
+    } catch (_) { /* tenta o fallback */ }
+    const area = document.createElement('textarea');
+    area.value = texto;
+    area.setAttribute('readonly', '');
+    area.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0';
+    document.body.appendChild(area);
+    area.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
+    area.remove();
+    return ok;
   }
 
   // Avaliacao humana de utilidade tecnica real (consultor), independente do
@@ -2451,9 +2531,18 @@
     $('messages').addEventListener('click', (event) => {
       const download = event.target.closest('.message-attachment');
       if (download) { event.preventDefault(); openAttachment(download.href, download.dataset.downloadName); return; }
+      const menuTrigger = event.target.closest('[data-menu-msg]');
+      if (menuTrigger) { event.stopPropagation(); abrirMenuMensagem(menuTrigger); return; }
       const btn = event.target.closest('[data-avaliacao-abrir]');
       if (btn) abrirModalAvaliacao(btn.dataset.avaliacaoAbrir);
     });
+    // Menu da mensagem fecha ao clicar fora, Esc, rolar o chat ou redimensionar.
+    document.addEventListener('click', (event) => {
+      if (state.menuMensagemId && !event.target.closest('#message-context-menu, [data-menu-msg]')) fecharMenuMensagem();
+    });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') fecharMenuMensagem(); });
+    $('messages').addEventListener('scroll', fecharMenuMensagem, { passive: true });
+    window.addEventListener('resize', fecharMenuMensagem);
     $('avaliacao-modal-backdrop').addEventListener('click', (event) => {
       if (event.target === event.currentTarget) fecharModalAvaliacao();
     });

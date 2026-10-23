@@ -8,5 +8,23 @@
 .technical-markdown table { border-collapse: collapse; width: 100%; }
 .technical-markdown th, .technical-markdown td { border: 1px solid var(--rt-line); padding: 8px; text-align: left; }
 .message-card [data-detalhes-tecnicos], .bubble [data-detalhes-tecnicos] { margin-top: 10px; font-size: 12px; }
-.technical-actions { display: flex; gap: 8px; align-items: center; }
-.technical-copy { font-size: 12px; padding: 4px 10px; cursor: pointer; }
+/* Ações à direita do cabeçalho (o `.retorno-head > div { flex: 1 }` esticava
+   esta caixa e deixava os botões no meio). Só ícones (pedido do usuário,
+   2026-10-23): Copiar no estilo do botão Pesquisar, Fechar discreto. */
+.retorno-head > .technical-actions { flex: none; margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.retorno-panel .technical-actions button {
+  width: 36px; height: 36px; min-height: 36px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center; border-radius: 8px;
+}
+.retorno-panel .technical-actions svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.retorno-panel .technical-copy {
+  border: 0; color: #fff;
+  background: linear-gradient(90deg, var(--brand, #006bd6), #0052bf);
+  box-shadow: 0 8px 20px rgba(0, 107, 214, .25);
+}
+.retorno-panel .technical-copy:hover { filter: brightness(1.1); }
+.retorno-panel .technical-copy.copiado { background: var(--ok, #15803d); box-shadow: none; }
+.retorno-panel .technical-copy.falhou { background: var(--danger, #e5484d); box-shadow: none; }
+.retorno-panel .technical-close { background: transparent; color: var(--muted, inherit); }
+.retorno-panel .technical-close:hover { color: var(--rt-text); background: color-mix(in srgb, var(--rt-text) 10%, transparent); }
+.retorno-panel .technical-actions button:focus-visible { outline: 2px solid var(--brand, #006bd6); outline-offset: 2px; }

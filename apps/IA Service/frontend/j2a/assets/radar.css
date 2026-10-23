@@ -1014,6 +1014,38 @@ button.loading .loader { display: block; }
 .message-left .message-card { background: var(--panel-2); border-top-left-radius: 3px; }
 .message-right .message-card { background: rgba(0, 107, 214, .1); border-top-right-radius: 3px; }
 .message-head { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+/* Setinha de opções da mensagem (estilo WhatsApp, padrão do chat do IA Command) */
+.message-card.com-menu { position: relative; }
+.message-card.com-menu .message-head { padding-right: 26px; }
+.message-menu-trigger {
+  position: absolute; top: 4px; right: 4px;
+  width: 24px; height: 24px; padding: 0;
+  border: none; border-radius: 50%;
+  background: transparent; color: var(--muted);
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 2;
+  transition: background .12s ease, color .12s ease;
+}
+.message-menu-trigger:hover,
+.message-menu-trigger.open { background: color-mix(in srgb, var(--brand) 16%, transparent); color: var(--brand); }
+.message-menu-trigger:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.message-menu-trigger svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.message-context-menu {
+  position: fixed; min-width: 200px; padding: 6px 0;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel); color: var(--text);
+  box-shadow: var(--shadow); z-index: 1200; display: none;
+}
+.message-context-menu.open { display: block; }
+.message-context-item {
+  width: 100%; min-height: 38px; padding: 8px 14px;
+  border: none; background: transparent; color: inherit;
+  display: flex; align-items: center; gap: 12px;
+  font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+}
+.message-context-item:hover,
+.message-context-item:focus-visible { background: var(--panel-2); outline: none; }
+.message-context-item svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .message-text { white-space: pre-wrap; line-height: 1.45; overflow-wrap: anywhere; font-size: 13px; }
 
 /* Avaliacao Humana (2026-10) -- utilidade tecnica real da resposta da IA,
@@ -1508,7 +1540,9 @@ body.col-resizing { cursor: col-resize; user-select: none; }
   background: #111827;
   color: #fff;
   box-shadow: 0 12px 32px rgba(0,0,0,.24);
-  z-index: 20;
+  /* Acima do painel de Detalhes Técnicos (200) e dos menus (até 1250): o
+     aviso "Mensagem copiada." ficava escondido atrás do painel. */
+  z-index: 1300;
 }
 .toast.active { display: block; }
 
