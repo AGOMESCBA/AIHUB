@@ -126,6 +126,21 @@ app.use(helmet({
   contentSecurityPolicy: false, // desativado para não bloquear scripts inline das páginas atuais
 }));
 
+// ── Incorporação dos chats públicos em sites autorizados (ex.: SoftExpert) ────
+// Só nas páginas públicas de chat do IA Service/IA Command e só se a lista em
+// IAHub Platform da EMPRESA dona do link tiver sites: troca SAMEORIGIN por
+// CSP frame-ancestors. Sem empresa identificável ou sem lista = original.
+const embedResolvers = require('./apps/IAHUB/backend/embed-resolvers').criarResolvers({
+  getPlatformDB:  require('./apps/IAHUB/backend/platform-routes').getDB,
+  getIaCommandDB: () => require('./apps/IA Command/modules/database').getDB(),
+  buscarEmpresa:  id => require('./apps/IAHUB/backend/crud').buscarPorId('empresas', id),
+});
+app.use(require('./apps/IAHUB/backend/platform-access-routes').middlewareIncorporacaoChat({
+  getDB: require('./apps/IAHUB/backend/platform-routes').getDB,
+  empresaPorApelido:   embedResolvers.empresaPorApelido,
+  empresaPorLoginPath: embedResolvers.empresaPorLoginPath,
+}));
+
 // ── Segurança: rate limit global (500 req/min por IP) ────────────────────────
 app.use(rateLimit({
   windowMs: 60 * 1000,
@@ -580,7 +595,7 @@ require('./modules/sistemas/routes')(app, { requireAuth, requireAdmin });
 require('./modules/seguranca/routes')(app, { requireAuth });
 
 // IAHub Platform - configuracao central inspirada no IA Command
-require('./apps/IAHUB/backend/platform-routes')(app, { requireAuth, requireAdmin });
+require('./apps/IAHUB/backend/platform-routes')(app, { requireAuth, requireAdmin, contextoEmpresa: embedResolvers.contextoEmpresa });
 
 // ── IA Command ────────────────────────────────────────────────────────────────
 require('./apps/IA Command/modules/database').inicializarDB();

@@ -2358,6 +2358,17 @@
     } catch (_err) {}
   }
 
+  // URL sem token/ticket. Mantém o loginPath (rota mascarada da empresa) para o
+  // servidor saber de qual empresa é a página ao recarregar dentro de um site
+  // autorizado (iframe, ex.: SoftExpert) — sem ele, o F5 voltaria a SAMEORIGIN.
+  function urlSemCredenciais() {
+    const qs = new URLSearchParams();
+    if (usuarioLabelParam) qs.set('usuario', usuarioLabelParam);
+    if (loginPathRetorno && loginPathRetorno !== '/api/ia-command/protheus/web-login') qs.set('loginPath', loginPathRetorno);
+    const s = qs.toString();
+    return window.location.pathname + (s ? '?' + s : '');
+  }
+
   function limparSessaoNavegador() {
     try {
       sessionStorage.removeItem(sessionTokenKey);
@@ -2377,8 +2388,7 @@
   // 401. O servidor tambem nao grava a querystring em log (ver routes.js).
   if (token && window.history && window.history.replaceState) {
     salvarSessaoNavegador(token, usuarioLabelParam, loginPathRetorno);
-    const urlLimpa = window.location.pathname + (usuarioLabelParam ? '?usuario=' + encodeURIComponent(usuarioLabelParam) : '');
-    window.history.replaceState({}, document.title, urlLimpa);
+    window.history.replaceState({}, document.title, urlSemCredenciais());
   }
 
   const appFrame = document.querySelector('.app-frame');
@@ -7581,8 +7591,7 @@
         token = tk;
         salvarSessaoNavegador(token, usuarioLabelParam, loginPathRetorno);
         if (window.history && window.history.replaceState) {
-          const urlLimpa = window.location.pathname + (usuarioLabelParam ? '?usuario=' + encodeURIComponent(usuarioLabelParam) : '');
-          window.history.replaceState({}, document.title, urlLimpa);
+          window.history.replaceState({}, document.title, urlSemCredenciais());
         }
         iniciarChatComToken();
       })

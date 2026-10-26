@@ -21,7 +21,7 @@ const DEFAULT_SYSTEMS = [
   },
   {
     code: 'ia-admin',
-    name: 'IA Administracao',
+    name: 'IA Gestão',
     description: 'Administracao global de empresas, usuarios, sistemas e regras.',
     url: '/app/ia-administracao',
     image_url: '',

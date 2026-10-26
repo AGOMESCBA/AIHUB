@@ -167,8 +167,8 @@ function mapSearch(row, reveal = false) {
   };
 }
 
-module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdmin }) {
-  require('./platform-access-routes').registrarRotas(app, { requireAuth, requireAdmin, getDB });
+module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdmin, contextoEmpresa }) {
+  require('./platform-access-routes').registrarRotas(app, { requireAuth, requireAdmin, getDB, empresaIdDaReq: empresaId, contextoEmpresa });
   app.get('/api/iahub/platform/ai-config', requireAuth, requireEmpresa, (req, res) => {
     res.json(mapAi(getAiRow(empresaId(req))));
   });
@@ -624,3 +624,6 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
     }
   });
 };
+
+// Exposto para o middleware de incorporação (index.js), que roda antes das rotas.
+module.exports.getDB = getDB;

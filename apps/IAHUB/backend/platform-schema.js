@@ -17,6 +17,16 @@ function ensurePlatformSchema(db) {
       atualizado_em TEXT NOT NULL
     );
 
+    -- Sites (origens HTTPS) autorizados a exibir os chats públicos da empresa
+    -- em iframe (ex.: SoftExpert). origens = JSON array. Uma linha por empresa.
+    CREATE TABLE IF NOT EXISTS platform_embed_origins (
+      empresa_id INTEGER PRIMARY KEY,
+      origens TEXT NOT NULL DEFAULT '[]',
+      versao INTEGER NOT NULL DEFAULT 0,
+      atualizado_em TEXT,
+      atualizado_por TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS platform_ai_configs (
       id TEXT PRIMARY KEY,
       empresa_id INTEGER NOT NULL UNIQUE,

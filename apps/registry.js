@@ -77,7 +77,7 @@ const APPS = {
   },
   iaAdministracao: {
     code: 'ia-admin',
-    name: 'IA Administracao',
+    name: 'IA Gestão',
     rootDir: fromRoot('apps', 'IA Administracao'),
     frontendDir: iaAdministracaoFrontend,
     backendDir: fromRoot('apps', 'IA Administracao', 'backend'),
