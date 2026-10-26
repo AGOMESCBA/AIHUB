@@ -1096,13 +1096,15 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
           keysClassificacao, cfgClassificacao, promptBuilder.SYSTEM_PROMPT, promptCurto, [],
           { maxTokens: tipoTurno === 'fora_de_escopo' ? 200 : 500, timeoutMs: 20000 },
         );
-        const comunicacao = await respostaHumanizada.prepararResposta({
-          empresaId, consultorId: consultorDoTurno, respostaOriginal: resultadoCurto.texto, aprovado: !resultadoCurto.truncado,
-        });
-        const { respostaFinal, ...auditoriaHumanizacao } = comunicacao;
+        // Sem reescrita de estilo (2026-10-26, achado real): a resposta curta já
+        // é conversa direta; a Objetiva força o formato "Falta:/Próximos
+        // passos:" (feito para análise técnica) e transformava "Sim, consigo
+        // avaliar se você enviar o error.log e o fonte" em "Falta: error.log e
+        // o código fonte." — seco e robótico.
+        const conteudoCurto = String(resultadoCurto.texto || '').trim();
+        if (!conteudoCurto) throw new Error('resposta curta vazia');
         return mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
-          papel: 'assistant', conteudo: respostaFinal, usuarioId: null,
-          diagnostico: comunicacao.estilo !== 'ORIGINAL' || comunicacao.status === 'fallback' ? { humanizacao: auditoriaHumanizacao } : null,
+          papel: 'assistant', conteudo: conteudoCurto, usuarioId: null, diagnostico: null,
           provider: resultadoCurto.provider, model: resultadoCurto.model,
           respostaCurta: tipoTurno,
         });

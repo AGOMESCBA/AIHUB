@@ -175,7 +175,10 @@ test('segredos ficam locais e comandos ou identificadores novos são rejeitados'
   assert.equal(humanizador.validar('O erro ocorre na rotina ROTINA99.', 'O erro ocorre.'), false);
 });
 
-test('turno manual com automática desligada persiste uma resposta final e original auditável', async () => {
+// 2026-10-26 (achado real): a resposta curta de conversa ("você consegue...?")
+// NÃO passa mais pela reescrita de estilo — a Objetiva forçava "Falta:/Próximos
+// passos:" e deixava a resposta seca ("Falta: error.log e o código fonte.").
+test('resposta curta (pergunta de processo) é gravada como a IA escreveu, sem reescrita de estilo', async () => {
   store.definirEstiloResposta(1, consultor.telefone, 'NATURAL');
   const at = atendimentoRepo.criarAtendimento(1, { origem: 'manual', conteudoBruto: 'Erro', consultorId: consultor.id });
   const curtoProvider = {};
@@ -189,12 +192,13 @@ test('turno manual com automática desligada persiste uma resposta final e origi
     './technical-research-service': new Proxy({}, { get: () => () => { throw Error('Pesquisa externa indevida'); } }),
   });
   const retorno = await investigacao.processarTurno(1, at.id, { texto: 'Você consegue ajudar?', consultorId: consultor.id });
-  assert.equal(retorno.diagnostico.humanizacao.status, 'aplicada');
-  assert.equal(retorno.diagnostico.humanizacao.respostaOriginal, original);
+  assert.equal(retorno.conteudo, original.trim(), 'texto da IA, sem reescrita');
+  assert.equal(retorno.diagnostico, null, 'sem auditoria de humanização');
+  assert.equal(retorno.respostaCurta, 'pergunta_processo');
+  assert.equal(n, 2, 'só classificação + resposta curta; nenhuma chamada de reescrita');
   const mensagens = mensagemRepo.listarMensagens(1, at.id);
   assert.equal(mensagens.filter(m => m.papel === 'assistant').length, 1);
   assert.equal(mensagens.at(-1).conteudo, retorno.conteudo);
-  assert.equal(mensagens.at(-1).diagnostico.humanizacao.usage.total_tokens, 42);
   const outro = atendimentoRepo.criarAtendimento(1, { origem: 'manual', conteudoBruto: 'Outro' });
   assert.equal(consultores.obterEstiloResposta(1, consultor.id), 'NATURAL');
   assert.notEqual(outro.id, at.id);
