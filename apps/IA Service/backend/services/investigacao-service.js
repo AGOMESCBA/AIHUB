@@ -795,7 +795,11 @@ function _criarPreparadorPorCandidato({ contexto, userPromptAtual, imagensAtuais
   return { preparar, usadoPor };
 }
 
-const SYSTEM_PROMPT_CLASSIFICACAO_TURNO = `Você classifica uma única mensagem de um analista de suporte técnico dentro de um chat de investigação. Responda APENAS com um JSON: {"tipo": "pergunta_processo" | "fora_de_escopo" | "investigacao"}.
+const SYSTEM_PROMPT_CLASSIFICACAO_TURNO = `Você classifica uma única mensagem de um analista de suporte técnico dentro de um chat de investigação. Responda APENAS com um JSON: {"tipo": "reformulacao" | "pergunta_processo" | "fora_de_escopo" | "investigacao"}.
+
+Contexto fixo: a mensagem é SEMPRE enviada dentro do chat de um chamado, depois de respostas da IA sobre esse chamado. "O texto acima", "isso", "sua resposta", "o retorno", "o que você disse" referem-se à ÚLTIMA RESPOSTA DA IA neste chamado.
+
+"reformulacao": o analista pede para TRANSFORMAR o que já foi respondido, sem pedir análise nova — resumir, simplificar, encurtar, reescrever, reorganizar, explicar melhor, transformar em passos/tópicos, deixar mais formal ou pronto para enviar ao cliente/registrar no SoftExpert, traduzir. Exemplos: "favor resumir o texto acima", "resume", "só resuma o seu retorno técnico para eu fazer o retorno no SoftExpert", "explica de forma mais simples", "coloca em tópicos", "escreve um texto para eu mandar ao cliente com isso". Pedido sobre o texto da conversa NUNCA é "fora_de_escopo".
 
 "pergunta_processo": a mensagem é sobre VOCÊ (a IA) ou sobre O PROCESSO administrativo de atendimento — sua capacidade, limites, próximos passos administrativos, prazos, ou se um passo administrativo é necessário. NÃO envolve nenhum conceito técnico do domínio do chamado (regra de negócio, campo, rotina, cálculo, comportamento esperado do sistema). Exemplos: "se eu te enviar o fonte, você consegue corrigir?", "você consegue ver vídeo?", "precisa abrir chamado na TOTVS também?", "em quanto tempo você responde?", "o que você precisa de mim agora?".
 
@@ -834,6 +838,26 @@ function _historicoParaPerguntaCurta(historico) {
     .join('\n');
 }
 
+const INSTRUCAO_REFORMULACAO = 'O analista pediu algo sobre a SUA ÚLTIMA RESPOSTA neste chamado (o "texto acima" é ela). Faça exatamente o que ele pediu (resumir, simplificar, reescrever, reorganizar, explicar melhor, colocar em passos, preparar o texto para o cliente ou para o retorno no SoftExpert). Use somente o conteúdo da sua última resposta: não acrescente fatos, hipóteses, links nem passos novos e não faça nova análise. Ao resumir, mantenha TODAS as orientações e verificações, só que de forma mais curta. Preserve exatamente nomes de rotinas, campos, parâmetros, tabelas, empresas e códigos. O texto está disponível acima: nunca diga que não consegue fazer o pedido.';
+
+function _ultimaRespostaDaIA(historico) {
+  const lista = Array.isArray(historico) ? historico : [];
+  for (let i = lista.length - 1; i >= 0; i--) {
+    const m = lista[i];
+    if (m?.papel === 'assistant' && String(m.conteudo || '').trim()) return m;
+  }
+  return null;
+}
+
+// Prompt do pedido de reformulação: a última resposta da IA vai inteira (até
+// 12 mil caracteres) — cortar perderia justamente orientações a resumir.
+// Sem resposta anterior devolve null (o turno segue o fluxo normal).
+function _montarPromptReformulacao(historico, texto) {
+  const ultima = _ultimaRespostaDaIA(historico);
+  if (!ultima) return null;
+  return `## Sua última resposta neste chamado (o "texto acima")\n${redigirValor(String(ultima.conteudo).slice(0, 12000))}\n\n## Pedido atual do analista\n${redigirValor(texto)}\n\n${INSTRUCAO_REFORMULACAO}`;
+}
+
 async function _classificarTurno(texto, { keys, cfg }) {
   if (!texto || texto.length > 400) return 'investigacao';
   try {
@@ -842,7 +866,7 @@ async function _classificarTurno(texto, { keys, cfg }) {
       { maxTokens: 30, timeoutMs: 12000, json: true, maxProviderRounds: 1 },
     );
     const parsed = JSON.parse(resultado.texto.match(/\{[\s\S]*\}/)?.[0] || '{}');
-    if (parsed.tipo === 'pergunta_processo' || parsed.tipo === 'fora_de_escopo') return parsed.tipo;
+    if (['reformulacao', 'pergunta_processo', 'fora_de_escopo'].includes(parsed.tipo)) return parsed.tipo;
     return 'investigacao';
   } catch (err) {
     console.error('[IA Service] Classificação de turno falhou, seguindo como investigação:', err.message);
@@ -1021,6 +1045,36 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   if (!automatico && !forcarPesquisa && anexoIds.length === 0 && mensagemUsuario) {
     const { keys: keysClassificacao, cfg: cfgClassificacao } = aiConfigService.resolverKeysEOrdem(empresaId);
     const tipoTurno = await _classificarTurno(texto, { keys: keysClassificacao, cfg: cfgClassificacao });
+    // reformulacao (2026-10-26, achado real): "favor resumir o texto acima" caía
+    // em fora_de_escopo e a IA, seguindo a instrução, recusava; "só resuma o seu
+    // retorno técnico" ia para a investigação completa e o "resumo" perdia
+    // orientações. Agora o pedido é aplicado sobre a última resposta da IA,
+    // sem nova análise e sem a reescrita de estilo (o formato é o pedido).
+    // Sem resposta anterior da IA, segue o fluxo normal.
+    // "O texto acima" é o que o analista VÊ (mensagem persistida), não a versão
+    // técnica que o `historico` acima usa no lugar da humanizada.
+    const promptReformulacao = tipoTurno === 'reformulacao'
+      ? _montarPromptReformulacao(mensagemRepo.listarMensagens(empresaId, atendimentoId).filter(m => m.id !== mensagemUsuario.id), texto)
+      : null;
+    if (promptReformulacao) {
+      try {
+        const resultado = await aiProviderClient.chamarIA(
+          keysClassificacao, cfgClassificacao, promptBuilder.SYSTEM_PROMPT, promptReformulacao, [],
+          { maxTokens: 1500, timeoutMs: 30000 },
+        );
+        const conteudo = String(resultado.texto || '').trim();
+        if (conteudo && !resultado.truncado) {
+          return mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
+            papel: 'assistant', conteudo, usuarioId: null, diagnostico: null,
+            provider: resultado.provider, model: resultado.model,
+            respostaCurta: 'reformulacao',
+          });
+        }
+        console.warn('[IA Service] Reformulação vazia ou truncada, seguindo fluxo completo.');
+      } catch (err) {
+        console.error('[IA Service] Falha ao reformular a última resposta, seguindo fluxo completo:', err.message);
+      }
+    }
     if (tipoTurno === 'pergunta_processo' || tipoTurno === 'fora_de_escopo') {
       // redigirValor: este atalho curto NUNCA passa pelo Context Engine (que
       // aplica a redacao no fluxo principal) — sem isso, CPF/senha/token do
@@ -1882,6 +1936,10 @@ module.exports = {
   _anexarFontesConsultadas,
   _resumoUltimaPesquisa,
   _historicoParaPerguntaCurta,
+  _classificarTurno,
+  _montarPromptReformulacao,
+  _ultimaRespostaDaIA,
+  SYSTEM_PROMPT_CLASSIFICACAO_TURNO,
   processarTurno,
   processarPreAnalise,
   _criarPreparadorPorCandidato,
