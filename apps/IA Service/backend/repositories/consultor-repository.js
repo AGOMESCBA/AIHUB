@@ -143,8 +143,15 @@ function upsertConsultorPlatform(empresaId, dados) {
     ? db.prepare('SELECT * FROM consultores WHERE empresa_id = ? AND telefone = ?').get(Number(empresaId), String(dados.telefone))
     : null;
   const existentePorId = db.prepare('SELECT * FROM consultores WHERE id = ? AND empresa_id = ?').get(idPreferencial, Number(empresaId));
-  const existentePorSoftExpert = dados.idSoftexpert
+  // ID SoftExpert pode se repetir entre analistas (migration v53): o registro
+  // achado por ele so e reaproveitado se nao pertencer a OUTRO telefone — senao
+  // o login de um analista sobrescreveria o telefone do colega com o mesmo ID.
+  const candidatoPorSoftExpert = dados.idSoftexpert
     ? db.prepare('SELECT * FROM consultores WHERE empresa_id = ? AND id_softexpert = ?').get(Number(empresaId), String(dados.idSoftexpert))
+    : null;
+  const existentePorSoftExpert = candidatoPorSoftExpert
+    && (!dados.telefone || !candidatoPorSoftExpert.telefone || String(candidatoPorSoftExpert.telefone) === String(dados.telefone))
+    ? candidatoPorSoftExpert
     : null;
   const existente = existentePorTelefone || existentePorId || existentePorSoftExpert;
 

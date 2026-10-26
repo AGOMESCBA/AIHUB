@@ -1305,6 +1305,16 @@ const MIGRATIONS = [
       CREATE INDEX idx_svc_chat_ocultas_consultor ON svc_chat_mensagens_ocultas (empresa_id, consultor_id);
     `,
   },
+  {
+    version: 53,
+    descricao: 'ID SoftExpert deixa de ser unico por empresa (regra explicita do usuario, 2026-10-26: o login acha o analista PELO TELEFONE e usa o ID SoftExpert do cadastro dele, mesmo que outro analista use o mesmo ID). Bug real em producao: dois telefones da J2A com ID 957 na Platform; o login do segundo tentava gravar 957 no proprio consultor, o indice unico recusava e o usuario via "Numero nao encontrado". O telefone continua unico por empresa (idx_svc_consultores_empresa_telefone). Troca o indice unico por um comum (mesma busca), sem alterar dados.',
+    sql: `
+      DROP INDEX IF EXISTS idx_svc_consultores_softexpert;
+      CREATE INDEX IF NOT EXISTS idx_svc_consultores_empresa_softexpert
+        ON consultores (empresa_id, id_softexpert)
+        WHERE id_softexpert IS NOT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;
