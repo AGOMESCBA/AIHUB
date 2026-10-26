@@ -952,6 +952,7 @@ function _postJson({ hostname, path, headers, body, timeoutMs = 8000 }) {
     const raw = JSON.stringify(body);
     const req = https.request({ hostname, path, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(raw), ...headers } }, (res) => {
       let data = '';
+      res.setEncoding?.('utf8'); // acento partido entre pedaços da rede não vira "��"
       res.on('data', c => { data += c; });
       res.on('end', () => {
         let parsed;
@@ -971,6 +972,7 @@ function _getJson({ hostname, path, headers, timeoutMs = 8000 }) {
   return new Promise((resolve, reject) => {
     const req = https.request({ hostname, path, method: 'GET', headers }, (res) => {
       let data = '';
+      res.setEncoding?.('utf8'); // acento partido entre pedaços da rede não vira "��"
       res.on('data', c => { data += c; });
       res.on('end', () => {
         let parsed;

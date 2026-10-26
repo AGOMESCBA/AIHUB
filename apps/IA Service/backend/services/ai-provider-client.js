@@ -70,6 +70,10 @@ function _httpPost(hostname, path, headers, body, timeoutMs = 45000) {
       signal: controller.signal,
     }, (res) => {
       let raw = '';
+      // setEncoding: junta os bytes de um caractere UTF-8 partido entre dois
+      // pedaços da rede. Sem isso, `raw += c` convertia cada pedaço sozinho e
+      // acentos no corte viravam "��" (produção 2026-10-26: "restri��ões").
+      res.setEncoding?.('utf8');
       res.on('data', c => { raw += c; });
       res.on('end', () => {
         clearTimeout(prazo);

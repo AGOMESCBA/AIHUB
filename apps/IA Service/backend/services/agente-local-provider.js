@@ -48,6 +48,7 @@ function _request(url, method, body, token) {
       agent: isHttps ? _httpsAgent : _httpAgent,
     }, (res) => {
       let data = '';
+      res.setEncoding?.('utf8'); // acento partido entre pedaços da rede não vira "��"
       res.on('data', c => { data += c; });
       res.on('end', () => {
         if (res.statusCode === 401) return _reject(new Error('Token do agente inválido ou não autorizado (HTTP 401).'));
