@@ -1,8 +1,9 @@
-// Fila de chamados aguardando ação do analista ("radar") — consulta só o
-// SQLite local (nunca bate no Agente Local em tempo de tela), reaproveitando
-// os dados já normalizados por chamados/posicionamentos. A regra de negócio
-// (aguardando_retorno = true no ÚLTIMO posicionamento, chamado não encerrado)
-// foi validada com dados reais e o usuário em 2026-09 — ver comentários em
+// Fila de chamados do analista ("radar") — consulta só o SQLite local (nunca
+// bate no Agente Local em tempo de tela), reaproveitando os dados já
+// normalizados por chamados/posicionamentos. Regra atual (2026-10-26): todos os
+// chamados não encerrados, igual ao Radar/Risco SLA; a regra anterior
+// (aguardando_retorno = true no ÚLTIMO posicionamento) foi aposentada — ver
+// listarFila. Contexto histórico dos campos em
 // historical-import-service.js (_mapearPosicionamento) e
 // softexpert-sqlserver-adapter.js (SQL_STATUS_CHAMADO/SQL_SLA_PRAZO).
 
@@ -93,7 +94,13 @@ function listarFila(empresaId, { tecnicoId, filtroSla = 'todos', limite = 200 } 
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
 
-  const condicoes = ['c.empresa_id = ?', "(c.status_encerramento IS NULL OR c.status_encerramento != 'Encerrado')", 'ultimo.aguardando_retorno = 1'];
+  // Mesmo universo do Radar/Risco SLA (decisão do usuário, 2026-10-26): todos
+  // os chamados abertos do técnico, com quem quer que esteja a bola. Antes
+  // exigia ultimo.aguardando_retorno = 1 (último posicionamento importado),
+  // dado diferente do "Aguardando" exibido na tela (aguardando_consolidado,
+  // vindo do SoftExpert) — a fila do técnico 957 mostrava 5 e o Radar 7. O
+  // analista restringe pelo filtro "Aguardando" da própria tela.
+  const condicoes = ['c.empresa_id = ?', "(c.status_encerramento IS NULL OR c.status_encerramento != 'Encerrado')"];
   const params = [Number(empresaId)];
 
   if (tecnicoId) {
