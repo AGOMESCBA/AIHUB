@@ -38,7 +38,7 @@ function _mimeTypePorExtensao(extensao) {
  * baixarAnexo e sincronizarAnexosParaAtendimento reaproveitam esta função em
  * vez de duplicar a resolução de fonte/adapter cada uma.
  */
-async function _buscarAnexosBrutos(empresaId, chamadoId) {
+async function _buscarAnexosBrutos(empresaId, chamadoId, { comConteudo = true } = {}) {
   const chamado = chamadoRepo.getChamado(empresaId, chamadoId);
   if (!chamado) throw new Error('Chamado não encontrado.');
 
@@ -50,7 +50,7 @@ async function _buscarAnexosBrutos(empresaId, chamadoId) {
     return { chamado, anexosBrutos: [] }; // adapter não suporta anexos — lista vazia, não é erro
   }
 
-  const anexosBrutos = await adapter.listarAnexosDoChamado(empresaId, fonte, chamado.numero);
+  const anexosBrutos = await adapter.listarAnexosDoChamado(empresaId, fonte, chamado.numero, { comConteudo });
   return { chamado, anexosBrutos };
 }
 
@@ -120,7 +120,7 @@ async function listarAnexosDoChamado(empresaId, chamadoId) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   if (!chamadoId) throw new Error('chamadoId é obrigatório.');
 
-  const { anexosBrutos } = await _buscarAnexosBrutos(empresaId, chamadoId);
+  const { anexosBrutos } = await _buscarAnexosBrutos(empresaId, chamadoId, { comConteudo: false });
 
   return anexosBrutos.map(a => ({
     oid: a.OID,

@@ -349,19 +349,22 @@ async function listarPosicionamentosDoLote(empresaId, fonte, idProcessList) {
  * ao tentar devolver uma coluna `image` do SQL Server). Cada linha aqui já
  * inclui `origem` para o chamador saber de qual das três fontes veio.
  */
-async function listarAnexosDoChamado(empresaId, fonte, idProcess) {
+// comConteudo=false: só metadados (FLDATA vira NULL) — a listagem da tela não usa o
+// binário; antes cada clique no chamado trazia todos os arquivos pelo Agente Local.
+async function listarAnexosDoChamado(empresaId, fonte, idProcess, { comConteudo = true } = {}) {
+  const colunaConteudo = comConteudo ? "B.FLDATA" : "NULL AS FLDATA";
   const incluirAnexosPosicionamento = require('../retorno-softexpert-config').leituraAnexosHabilitada(empresaId, fonte.id);
   const sqlAnexosPosicionamento = incluirAnexosPosicionamento ? `
     UNION ALL
     SELECT 'posicionamento_anexo' AS origem, P.OID AS OID_REFERENCIA, P.DATAATUAL AS DATA_REFERENCIA, P.ANALISTAJ2A AS AUTOR_REFERENCIA,
-           B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, B.FLDATA
+           B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, ${colunaConteudo}
     FROM DYNITSMGRIDREGISTR P
     INNER JOIN DYNITSMGRIDANEXOAP A ON A.OIDABCCMV6IBMOTU70 = P.OID
     INNER JOIN SEBLOB B ON B.OID = A.OIDARQUIVO1
     WHERE P.CHAMADO = @idProcess` : '';
   const sql = `
     SELECT 'chamado' AS origem, D.OID AS OID_REFERENCIA, D.DT AS DATA_REFERENCIA, D.NMSOLICITANTE AS AUTOR_REFERENCIA,
-           B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, B.FLDATA
+           B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, ${colunaConteudo}
     FROM DYNITSM D
     INNER JOIN SEBLOB B ON B.OID = D.OIDARQUIVO2
     WHERE D.IDPROCESS = @idProcess
@@ -369,7 +372,7 @@ async function listarAnexosDoChamado(empresaId, fonte, idProcess) {
     UNION ALL
 
     SELECT 'posicionamento' AS origem, P.OID AS OID_REFERENCIA, P.DATAATUAL AS DATA_REFERENCIA, P.ANALISTAJ2A AS AUTOR_REFERENCIA,
-           B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, B.FLDATA
+           B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, ${colunaConteudo}
     FROM DYNITSMGRIDREGISTR P
     INNER JOIN SEBLOB B ON B.OID = P.OIDARQUIVO2
     WHERE P.CHAMADO = @idProcess
@@ -379,7 +382,7 @@ async function listarAnexosDoChamado(empresaId, fonte, idProcess) {
     UNION ALL
 
     SELECT 'anexo' AS origem, D.OID AS OID_REFERENCIA, D.DT AS DATA_REFERENCIA, D.NMSOLICITANTE AS AUTOR_REFERENCIA,
-           B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, B.FLDATA
+           B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, ${colunaConteudo}
     FROM DYNITSM D
     INNER JOIN DYNITSMGRIDANEXO A ON A.OIDABC58815SXW3N8D = D.OID
     INNER JOIN SEBLOB B ON B.OID = A.OIDARQUIVO1

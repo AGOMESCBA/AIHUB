@@ -711,7 +711,15 @@
   function syncBotoesAcao() {
     const ocupado = !!state.atendimentoId && state.processing.has(state.atendimentoId);
     setBusy($('research-btn'), ocupado);
-    setBusy($('send-btn'), ocupado, 'Enviando');
+    // Envio: animação da seta "voando" no lugar do texto "Enviando" (que não
+    // cabia no botão de 40px).
+    const enviar = $('send-btn');
+    if (enviar) {
+      enviar.classList.toggle('sending', ocupado);
+      enviar.disabled = ocupado || !!state.somenteLeitura;
+      enviar.setAttribute('aria-label', ocupado ? 'Enviando mensagem' : 'Enviar mensagem');
+      enviar.title = ocupado ? 'Enviando e aguardando a IA...' : 'Enviar mensagem';
+    }
     if (state.somenteLeitura) aplicarModoSomenteLeitura();
   }
 
@@ -810,7 +818,10 @@
     setPanel('conversation');
     setMobileTarget('conversation');
     try {
-      await loadSoftAttachments(ticket.id);
+      // Anexos do SoftExpert vêm ao vivo pelo Agente Local: carregam em
+      // paralelo e não seguram mais a abertura da conversa (antes eram
+      // aguardados primeiro, a cada clique no chamado).
+      const anexosSoftExpert = loadSoftAttachments(ticket.id);
       const open = await request(ext(`/radar/chamados/${encodeURIComponent(ticket.id)}/abrir-atendimento`), { method: 'POST' });
       state.atendimentoId = open.atendimentoId;
       if (open.chamado) {
@@ -824,6 +835,7 @@
       state.concluidosNaoVistos.delete(open.atendimentoId);
       syncBotoesAcao();
       await Promise.allSettled([
+        anexosSoftExpert,
         loadMessages(),
         loadLocalAttachments(),
         loadResearch(ticket.id),
@@ -901,8 +913,11 @@
   async function loadSoftAttachments(ticketId) {
     try {
       const body = await request(ext(`/radar/chamados/${encodeURIComponent(ticketId)}/anexos-softexpert`));
+      // Resposta atrasada de outro chamado (o analista já trocou) não sobrescreve a lista atual.
+      if (state.selected && String(state.selected.id) !== String(ticketId)) return;
       state.softAttachments = body.anexos || [];
     } catch (err) {
+      if (state.selected && String(state.selected.id) !== String(ticketId)) return;
       state.softAttachments = [];
       toast(`Anexos SoftExpert indisponiveis: ${err.message}`);
     }
@@ -1072,12 +1087,13 @@
     // showChatStatus/hideChatStatus (bug real: status "vazando" para
     // qualquer chamado aberto depois, nao so o que estava em processamento).
     const statusPertenceAoAtual = state.chatStatusText && state.chatStatusAtendimentoId === state.atendimentoId;
-    if (!state.messages.length) {
+    const pendentes = pendentesVisiveis();
+    if (!state.messages.length && !pendentes.length) {
       container.innerHTML = statusPertenceAoAtual ? '' : '<div class="empty-block">Sem mensagens neste atendimento.</div>';
       if (statusPertenceAoAtual) appendChatStatusRow(state.chatStatusText, pertoDoFim);
       return;
     }
-    const sorted = [...state.messages].sort((a, b) => new Date(messageTimestamp(a)) - new Date(messageTimestamp(b)));
+    const sorted = [...state.messages, ...pendentes].sort((a, b) => new Date(messageTimestamp(a)) - new Date(messageTimestamp(b)));
     container.innerHTML = sorted.map((m) => {
       const assistant = m.papel === 'assistant';
       const side = messageSide(m);
@@ -1101,8 +1117,12 @@
       const menuHtml = m.id
         ? `<button type="button" class="message-menu-trigger${menuAberto ? ' open' : ''}" data-menu-msg="${escapeHtml(m.id)}" title="Opções da mensagem" aria-label="Opções da mensagem" aria-haspopup="menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`
         : '';
+      const estadoEnvio = m._falhou
+        ? `<div class="message-envio falhou" role="alert">Não foi enviada${m._erro ? ` (${escapeHtml(m._erro)})` : ''}. <button type="button" class="message-reenviar" data-reenviar="${escapeHtml(m._chave)}">Tentar de novo</button></div>`
+        : m._pendente ? '<div class="message-envio" role="status"><span class="envio-dots" aria-hidden="true"><i></i><i></i><i></i></span>Enviada · a IA está analisando</div>' : '';
+      const classeEnvio = m._falhou ? ' message-falhou' : m._pendente ? ' message-pendente' : '';
       return `
-        <article class="message message-${side} ${assistant ? 'assistant' : ''}">
+        <article class="message message-${side} ${assistant ? 'assistant' : ''}${classeEnvio}">
           <div class="message-avatar">${escapeHtml(messageAvatar(m))}</div>
           <div class="message-card${menuHtml ? ' com-menu' : ''}">
             ${menuHtml}
@@ -1111,10 +1131,12 @@
             ${attachmentsHtml}
             ${avisosFonteHtml}
             ${acoesHtml}
+            ${estadoEnvio}
           </div>
         </article>
       `;
     }).join('');
+    container.querySelectorAll('[data-reenviar]').forEach((b) => b.addEventListener('click', () => reenviarPendente(b.dataset.reenviar)));
     if (statusPertenceAoAtual) appendChatStatusRow(state.chatStatusText, pertoDoFim);
     if (pertoDoFim) container.scrollTop = container.scrollHeight;
     // Re-render (polling) com o menu aberto: mensagem sumiu => fecha o menu.
@@ -1321,6 +1343,32 @@
     t.style.overflowY = t.scrollHeight > max ? 'auto' : 'hidden';
   }
 
+  // Pergunta enviada aparece NA HORA (2026-10-26, achado real: a pergunta só
+  // surgia quando a IA terminava, 30-90 s depois, e parecia ter sumido — o
+  // analista reenviava). Fica como "pendente" até o servidor confirmar; em
+  // falha, fica marcada com "Tentar de novo". Pendências são por atendimento:
+  // trocar de chamado no meio do envio não mistura conversas.
+  function pendentesDoAtendimento(atendimentoId) {
+    if (!state.pendentesPorAtendimento) state.pendentesPorAtendimento = new Map();
+    if (!state.pendentesPorAtendimento.has(atendimentoId)) state.pendentesPorAtendimento.set(atendimentoId, []);
+    return state.pendentesPorAtendimento.get(atendimentoId);
+  }
+
+  function removerPendente(atendimentoId, chave) {
+    const lista = pendentesDoAtendimento(atendimentoId);
+    const i = lista.findIndex((p) => p._chave === chave);
+    if (i >= 0) lista.splice(i, 1);
+  }
+
+  // Pendente some quando a mesma pergunta já veio do servidor (ex.: Refresh
+  // durante o processamento traz a mensagem já gravada) — nunca aparece duas vezes.
+  function pendentesVisiveis() {
+    const lista = state.atendimentoId ? pendentesDoAtendimento(state.atendimentoId) : [];
+    return lista.filter((p) => p._falhou || !state.messages.some((m) => m.papel === 'user'
+      && messageText(m).trim() === p.conteudo.trim()
+      && new Date(messageTimestamp(m)).getTime() >= new Date(p.criadoEm).getTime() - 120000));
+  }
+
   async function sendMessage(event) {
     event.preventDefault();
     if (state.somenteLeitura) return;
@@ -1329,35 +1377,70 @@
     const texto = textarea.value.trim();
     if (!texto && !state.pendingFiles.length) return;
     const atendimentoId = state.atendimentoId;
+    const textoEnviado = texto || 'Analise os anexos enviados.';
+    const pendente = {
+      _chave: `pend-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      _pendente: true, papel: 'user', conteudo: textoEnviado,
+      origemAutor: state.whoami?.consultorNome || '', criadoEm: new Date().toISOString(),
+    };
+    pendentesDoAtendimento(atendimentoId).push(pendente);
+    textarea.value = '';
+    ajustarAlturaMensagem();
     state.processing.add(atendimentoId);
+    syncBotoesAcao();
     renderQueue();
+    renderMessages();
+    rolarConversaParaFim();
     showChatStatus('Pesquisando e analisando o chamado com a IA...', atendimentoId);
     const pararProgresso = acompanharProgresso(atendimentoId, 'Pesquisando e analisando o chamado com a IA...');
     let concluiu = false;
     try {
       const anexoIds = await uploadPendingFiles(atendimentoId);
-      const body = await request(ext(`/atendimentos/${encodeURIComponent(atendimentoId)}/investigar`), {
+      await request(ext(`/atendimentos/${encodeURIComponent(atendimentoId)}/investigar`), {
         method: 'POST',
-        body: JSON.stringify({ texto: texto || 'Analise os anexos enviados.', anexoIds, anexosComoContexto: anexoIds.length > 0, origemAcao: 'texto_livre' }),
+        body: JSON.stringify({ texto: textoEnviado, anexoIds, anexosComoContexto: anexoIds.length > 0, origemAcao: 'texto_livre' }),
       });
-      textarea.value = '';
-      ajustarAlturaMensagem();
-      state.pendingFiles = [];
-      renderPendingFiles();
-      state.messages.push(body);
-      state.trilhaExpandida = new Set();
-      await Promise.allSettled([loadMessages(), loadLocalAttachments(), loadDossier(), loadInvestigations(), loadTrilha()]);
-      renderAllCaseData();
+      removerPendente(atendimentoId, pendente._chave);
+      if (atendimentoId === state.atendimentoId) {
+        state.pendingFiles = [];
+        renderPendingFiles();
+        state.trilhaExpandida = new Set();
+        await Promise.allSettled([loadMessages(), loadLocalAttachments(), loadDossier(), loadInvestigations(), loadTrilha()]);
+        renderAllCaseData();
+      }
       concluiu = true;
     } catch (err) {
+      pendente._pendente = false;
+      pendente._falhou = true;
+      pendente._erro = err.message;
+      if (atendimentoId === state.atendimentoId) renderMessages();
       toast(`Nao foi possivel enviar: ${err.message}`);
     } finally {
       pararProgresso();
       state.processing.delete(atendimentoId);
       if (concluiu) marcarConcluidoSeNaoVisivel(atendimentoId);
+      syncBotoesAcao();
       renderQueue();
       hideChatStatus(atendimentoId);
     }
+  }
+
+  function rolarConversaParaFim() {
+    const c = $('messages');
+    if (c) c.scrollTop = c.scrollHeight;
+  }
+
+  // "Tentar de novo" numa pergunta que falhou: devolve o texto para a caixa.
+  function reenviarPendente(chave) {
+    if (!state.atendimentoId) return;
+    const p = pendentesDoAtendimento(state.atendimentoId).find((x) => x._chave === chave);
+    if (!p) return;
+    removerPendente(state.atendimentoId, chave);
+    const textarea = $('message-input');
+    textarea.value = p.conteudo;
+    ajustarAlturaMensagem();
+    renderMessages();
+    textarea.focus();
   }
 
   async function uploadPendingFiles(atendimentoId) {
