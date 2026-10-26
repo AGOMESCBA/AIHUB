@@ -15,6 +15,25 @@
     .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
     .page-head { margin-bottom:12px; }
     .error-banner { display:none;background:var(--bg-card);color:var(--error);border:1px solid var(--error);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px; }
+    /* Situação da conexão com o servidor (queda, reconexão, sessão expirada) */
+    .conn-banner { display:none;align-items:flex-start;gap:12px;background:var(--bg-card);border:1px solid var(--error);border-left-width:4px;border-radius:10px;padding:12px 14px;margin-bottom:14px; }
+    .conn-banner.mostrar { display:flex; }
+    .conn-banner.ok { border-color:var(--success); }
+    .conn-ic { flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--error);background:rgba(239,68,68,.12); }
+    .conn-banner.ok .conn-ic { color:var(--success);background:rgba(34,197,94,.12); }
+    .conn-corpo { flex:1;min-width:0; }
+    .conn-titulo { font-size:14px;font-weight:700;color:var(--text-hi); }
+    .conn-texto { font-size:13px;color:var(--text-md);margin-top:2px;line-height:1.5; }
+    .conn-tec { font-size:11.5px;color:var(--text-lo);margin-top:4px; }
+    .conn-acoes { display:flex;gap:8px;flex:none;align-self:center; }
+    .conn-acoes .btn { white-space:nowrap; }
+    .conn-acoes [hidden] { display:none !important; }
+    @media (max-width:600px) { .conn-banner { flex-wrap:wrap; } .conn-acoes { width:100%; } .conn-acoes .btn { flex:1;justify-content:center; } }
+    .desatualizado { opacity:.55;filter:grayscale(.35);transition:opacity .2s; }
+    .stamp.stamp-velho { color:var(--error);font-weight:600; }
+    .refresh-bar.sem-conexao .pulse { background:var(--error); }
+    .refresh-bar.sem-conexao .pulse::after { display:block;border-color:var(--error); }
+    .refresh-bar.sem-conexao #live-txt { color:var(--error);font-weight:600; }
 
     .mon-stack { display:flex;flex-direction:column;gap:10px; }
     .refresh-bar { display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:8px 12px; }
@@ -177,6 +196,18 @@
         <div class="page-subtitle">Quem está usando o Radar (J2A) e as rotinas do IA Service nesta empresa, há quanto tempo e em qual tela.</div>
       </div>
 
+      <div id="conn-banner" class="conn-banner" role="alert" aria-live="assertive">
+        <span class="conn-ic" id="conn-ic" aria-hidden="true"></span>
+        <div class="conn-corpo">
+          <div class="conn-titulo" id="conn-titulo"></div>
+          <div class="conn-texto" id="conn-texto"></div>
+          <div class="conn-tec" id="conn-tec"></div>
+        </div>
+        <div class="conn-acoes">
+          <a class="btn btn-primary" id="conn-entrar" href="/login.html" hidden>Entrar novamente</a>
+          <button class="btn btn-ghost" id="conn-retry" type="button">Tentar agora</button>
+        </div>
+      </div>
       <div id="error-banner" class="error-banner" role="alert"></div>
 
       <div class="mon-stack">
@@ -267,7 +298,7 @@
   const st = {
     dados: null, filtroSit: 'ativos', filtroOrig: 'todos', busca: '', selId: null,
     chamado: null, chamadoErro: null, intervalo: 30, restante: 30, carregando: false, ultimoSinalPorId: new Map(),
-    ampliada: false,
+    ampliada: false, falha: null, ultimaOk: null,
   };
   const telaEstreita = window.matchMedia('(max-width:1150px)');
 
@@ -325,12 +356,120 @@
 
   function erro(msg) { const el = $('error-banner'); el.textContent = msg || ''; el.style.display = msg ? 'block' : 'none'; }
 
+  // Erro com `tipo` para a faixa de conexão saber o que dizer:
+  // rede (servidor inalcançável), gateway (proxy sem o serviço: 502/503/504),
+  // timeout, servidor (5xx), sessao (401), permissao (403), outro.
+  function erroApi(msg, tipo, tecnico) { const e = new Error(msg); e.tipo = tipo; e.tecnico = tecnico || msg; return e; }
+
   async function api(path, opts = {}) {
-    const r = await fetch(path, { cache: 'no-store', ...opts });
+    const ctrl = new AbortController();
+    const prazo = setTimeout(() => ctrl.abort(), 15000);
+    let r;
+    try {
+      r = await fetch(path, { cache: 'no-store', signal: ctrl.signal, ...opts });
+    } catch (e) {
+      if (e.name === 'AbortError') throw erroApi('O servidor não respondeu em 15 s.', 'timeout', 'Tempo limite de 15 s');
+      throw erroApi(e.message, 'rede', e.message);
+    } finally { clearTimeout(prazo); }
     const body = await r.json().catch(() => ({}));
-    if (r.status === 403) throw new Error(body.error || 'Você não tem permissão para o Monitor de Acessos.');
-    if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
+    if (r.status === 401) throw erroApi(body.error || 'Sessão expirada.', 'sessao', `HTTP 401`);
+    if (r.status === 403) throw erroApi(body.error || 'Você não tem permissão para o Monitor de Acessos.', 'permissao', 'HTTP 403');
+    if ([502, 503, 504].includes(r.status)) throw erroApi(body.error || `Erro ${r.status}`, 'gateway', `HTTP ${r.status}`);
+    if (r.status >= 500) throw erroApi(body.error || `Erro ${r.status}`, 'servidor', `HTTP ${r.status}${body.error ? ' — ' + body.error : ''}`);
+    if (!r.ok) throw erroApi(body.error || `Erro ${r.status}`, 'outro', `HTTP ${r.status}`);
     return body;
+  }
+
+  // ── Faixa de conexão ────────────────────────────────────────────────────────
+  // Queda do servidor: avisa a causa provável, marca os dados como
+  // desatualizados e tenta reconectar sozinho (mesmo com o monitor pausado),
+  // com intervalos crescentes. Ao voltar, confirma e some.
+  const ESPERAS_RECONEXAO = [5, 10, 20, 30, 60];
+  const ICONE_ERRO = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 8v5M12 16.5v.5"/><circle cx="12" cy="12" r="9"/></svg>';
+  const ICONE_OK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+  let ocultarOk = null;
+
+  function duracao(ms) {
+    const s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return `${s} s`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m} min${s % 60 ? ` ${s % 60} s` : ''}`;
+    return `${Math.floor(m / 60)} h ${m % 60} min`;
+  }
+
+  function marcarDesatualizado(sim) {
+    for (const id of ['board', 'resumo']) $(id)?.classList.toggle('desatualizado', sim);
+    $('refresh-bar').classList.toggle('sem-conexao', sim);
+    $('stamp').classList.toggle('stamp-velho', sim);
+    if (sim) $('stamp').textContent = st.ultimaOk ? `Desatualizado desde ${st.ultimaOk.toLocaleTimeString('pt-BR')}` : 'Sem dados';
+  }
+
+  function textosFalha(f) {
+    const desde = st.ultimaOk ? st.ultimaOk.toLocaleTimeString('pt-BR') : null;
+    const dados = desde
+      ? `Os dados abaixo são da última atualização (${desde}) e podem não refletir quem está conectado agora.`
+      : 'Ainda não foi possível carregar os dados.';
+    const tempo = `Sem resposta há ${duracao(Date.now() - f.desde)} · nova tentativa em ${Math.max(0, f.restante)} s.`;
+    if (f.tipo === 'sessao') return { titulo: 'Sua sessão expirou', texto: 'Entre novamente para continuar acompanhando os acessos.' };
+    if (f.tipo === 'permissao') return { titulo: 'Acesso não permitido', texto: f.mensagem };
+    if (navigator.onLine === false) return { titulo: 'Este computador está sem internet', texto: `Verifique a rede (Wi-Fi ou cabo). ${dados} O monitor volta a atualizar sozinho quando a conexão voltar.` };
+    if (f.tipo === 'timeout') return { titulo: 'O servidor do IAHub não respondeu a tempo', texto: `Ele pode estar sobrecarregado ou reiniciando. ${dados} ${tempo}` };
+    if (f.tipo === 'servidor') return { titulo: 'O servidor do IAHub respondeu com erro', texto: `A consulta falhou no servidor. ${dados} ${tempo}` };
+    return { titulo: 'Sem comunicação com o servidor do IAHub', texto: `O serviço pode estar parado ou reiniciando. ${dados} ${tempo}` };
+  }
+
+  function renderConexao() {
+    const banner = $('conn-banner');
+    const f = st.falha;
+    if (!f) return;
+    const { titulo, texto } = textosFalha(f);
+    banner.classList.remove('ok');
+    banner.classList.add('mostrar');
+    $('conn-ic').innerHTML = ICONE_ERRO;
+    $('conn-titulo').textContent = titulo;
+    $('conn-texto').textContent = texto;
+    $('conn-tec').textContent = `Detalhe técnico: ${f.tecnico}`;
+    const sessao = f.tipo === 'sessao';
+    $('conn-entrar').hidden = !sessao;
+    if (sessao) $('conn-entrar').href = `/login.html?next=${encodeURIComponent(location.pathname + location.search)}`;
+    $('conn-retry').hidden = sessao || f.tipo === 'permissao';
+  }
+
+  function registrarFalha(e) {
+    if (ocultarOk) { clearTimeout(ocultarOk); ocultarOk = null; }
+    const anterior = st.falha;
+    const tentativas = (anterior?.tentativas || 0) + 1;
+    const reconecta = !['sessao', 'permissao'].includes(e.tipo);
+    st.falha = {
+      tipo: e.tipo || 'outro',
+      mensagem: e.message,
+      tecnico: e.tecnico || e.message,
+      desde: anterior?.desde || Date.now(),
+      tentativas,
+      restante: reconecta ? ESPERAS_RECONEXAO[Math.min(tentativas - 1, ESPERAS_RECONEXAO.length - 1)] : Infinity,
+    };
+    marcarDesatualizado(true);
+    renderConexao();
+    $('live-txt').textContent = reconecta ? 'Sem conexão' : 'Interrompido';
+    $('countdown').textContent = reconecta ? `${st.falha.restante}s` : '';
+  }
+
+  function registrarSucesso() {
+    const f = st.falha;
+    st.falha = null;
+    st.ultimaOk = new Date();
+    marcarDesatualizado(false);
+    $('live-txt').textContent = st.intervalo ? 'Automático' : 'Pausado';
+    const banner = $('conn-banner');
+    if (!f) { banner.classList.remove('mostrar'); return; }
+    banner.classList.add('mostrar', 'ok');
+    $('conn-ic').innerHTML = ICONE_OK;
+    $('conn-titulo').textContent = `Conexão restabelecida às ${st.ultimaOk.toLocaleTimeString('pt-BR')}`;
+    $('conn-texto').textContent = `O monitor ficou ${duracao(Date.now() - f.desde)} sem resposta do servidor e já foi atualizado.`;
+    $('conn-tec').textContent = '';
+    $('conn-entrar').hidden = true;
+    $('conn-retry').hidden = true;
+    ocultarOk = setTimeout(() => { banner.classList.remove('mostrar', 'ok'); ocultarOk = null; }, 8000);
   }
   const empresaId = () => window._iahubEmpresa?.id || null;
 
@@ -349,12 +488,15 @@
         st.ultimoSinalPorId.set(p.id, p.ultimoSinalEm);
       }
       st.dados = dados;
-      erro('');
-      $('stamp').textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR');
+      registrarSucesso();
+      $('stamp').textContent = 'Atualizado às ' + st.ultimaOk.toLocaleTimeString('pt-BR');
       render(mudaram);
       if (st.selId && st.chamado) carregarChamado(st.chamado.id, true);
     } catch (e) {
-      erro('Não foi possível atualizar o monitor: ' + e.message);
+      // Só falha de comunicação (erro com `tipo`, vindo de api()) vira aviso de
+      // conexão; erro ao montar a tela não é "servidor fora do ar".
+      if (e.tipo) registrarFalha(e);
+      else erro('Não foi possível exibir os dados do monitor: ' + e.message);
     } finally {
       st.carregando = false;
       st.restante = st.intervalo;
@@ -585,6 +727,17 @@
 
   function tick() {
     const bar = $('refresh-bar');
+    // Servidor fora: a reconexão tem ritmo próprio (vale mesmo com "Pausado").
+    if (st.falha) {
+      if (Number.isFinite(st.falha.restante) && !st.carregando) {
+        st.falha.restante -= 1;
+        if (st.falha.restante <= 0) carregar(false);
+      }
+      renderConexao();
+      $('live-txt').textContent = Number.isFinite(st.falha.restante) ? 'Sem conexão' : 'Interrompido';
+      $('countdown').textContent = Number.isFinite(st.falha.restante) ? `${Math.max(0, st.falha.restante)}s` : '';
+      return;
+    }
     if (!st.intervalo) {
       bar.classList.add('paused');
       $('live-txt').textContent = 'Pausado';
@@ -602,6 +755,9 @@
   }
 
   $('btn-refresh').addEventListener('click', () => carregar(true));
+  $('conn-retry').addEventListener('click', () => carregar(true));
+  window.addEventListener('online', () => { if (st.falha) carregar(false); });
+  window.addEventListener('offline', () => { if (st.falha) renderConexao(); });
   $('btn-resumo').addEventListener('click', () => {
     exibirResumo($('resumo').hidden);
     try { localStorage.setItem(RESUMO_KEY, $('resumo').hidden ? '1' : '0'); } catch (_) {}
