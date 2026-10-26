@@ -9,7 +9,7 @@ function getJson(url, { timeoutMs = DEFAULT_TIMEOUT_MS, headers = {} } = {}) {
     const req = https.get(url, { headers: { 'User-Agent': 'IACommand/1.0', ...headers } }, (res) => {
       let body = '';
       res.setEncoding('utf8');
-      res.on('data', chunk => { body += chunk; });
+      res.setEncoding?.('utf8'); res.on('data', chunk => { body += chunk; });
       res.on('end', () => {
         if (res.statusCode < 200 || res.statusCode >= 300) {
           reject(new Error(`HTTP ${res.statusCode}`));

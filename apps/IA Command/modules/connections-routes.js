@@ -43,7 +43,7 @@ function _requestAgente(baseUrl, path, body, token) {
       rejectUnauthorized: false,
     }, (res) => {
       let raw = '';
-      res.on('data', c => { raw += c; });
+      res.setEncoding?.('utf8'); res.on('data', c => { raw += c; });
       res.on('end', () => {
         let data = null;
         try { data = JSON.parse(raw); } catch (_) { data = raw; }

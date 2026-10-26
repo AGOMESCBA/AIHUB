@@ -94,7 +94,7 @@ function postWorker(workerPort, payload, timeoutMs = 30000) {
       timeout: timeoutMs,
     }, (res) => {
       let raw = '';
-      res.on('data', d => { raw += d; });
+      res.setEncoding?.('utf8'); res.on('data', d => { raw += d; });
       res.on('end', () => {
         try {
           const parsed = JSON.parse(raw || '{}');

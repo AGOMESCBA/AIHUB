@@ -2102,7 +2102,7 @@ Responda SOMENTE com JSON válido, sem markdown:
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
       const r = https.request(opts, (resp) => {
         let raw = '';
-        resp.on('data', c => { raw += c; });
+        resp.setEncoding?.('utf8'); resp.on('data', c => { raw += c; });
         resp.on('end', () => {
           try {
             const p = JSON.parse(raw);
@@ -2129,7 +2129,7 @@ Responda SOMENTE com JSON válido, sem markdown:
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
       const r = https.request(opts, (resp) => {
         let raw = '';
-        resp.on('data', c => { raw += c; });
+        resp.setEncoding?.('utf8'); resp.on('data', c => { raw += c; });
         resp.on('end', () => {
           try {
             const p = JSON.parse(raw);
@@ -2154,7 +2154,7 @@ Responda SOMENTE com JSON válido, sem markdown:
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
       const r = https.request(opts, (resp) => {
         let raw = '';
-        resp.on('data', c => { raw += c; });
+        resp.setEncoding?.('utf8'); resp.on('data', c => { raw += c; });
         resp.on('end', () => {
           try {
             const p = JSON.parse(raw);
@@ -2181,7 +2181,7 @@ Responda SOMENTE com JSON válido, sem markdown:
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
       const r = https.request(opts, (resp) => {
         let raw = '';
-        resp.on('data', c => { raw += c; });
+        resp.setEncoding?.('utf8'); resp.on('data', c => { raw += c; });
         resp.on('end', () => {
           try {
             const p = JSON.parse(raw);
@@ -2203,7 +2203,7 @@ Responda SOMENTE com JSON válido, sem markdown:
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
       const r = https.request(opts, (resp) => {
         let raw = '';
-        resp.on('data', c => { raw += c; });
+        resp.setEncoding?.('utf8'); resp.on('data', c => { raw += c; });
         resp.on('end', () => {
           try {
             const p = JSON.parse(raw);
@@ -3874,7 +3874,7 @@ Responda SOMENTE com JSON válido, sem markdown:
       const opts = { hostname: url.hostname, path: url.pathname, method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
       const r = https.request(opts, (resp) => {
-        let raw = ''; resp.on('data', c => { raw += c; });
+        let raw = ''; resp.setEncoding?.('utf8'); resp.on('data', c => { raw += c; });
         resp.on('end', () => { try { const p = JSON.parse(raw); if (p.error) return reject(new Error(p.error.message)); resolve(JSON.parse(p.choices?.[0]?.message?.content)); } catch (e) { reject(e); } });
       });
       r.setTimeout(30000, () => r.destroy(new Error('Tempo limite excedido.'))); r.on('error', reject); r.write(body); r.end();
@@ -3891,7 +3891,7 @@ Responda SOMENTE com JSON válido, sem markdown:
       const opts = { hostname: 'api.openai.com', path: '/v1/chat/completions', method: 'POST', rejectUnauthorized: false,
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
       const r = https.request(opts, (resp) => {
-        let raw = ''; resp.on('data', c => { raw += c; });
+        let raw = ''; resp.setEncoding?.('utf8'); resp.on('data', c => { raw += c; });
         resp.on('end', () => { try { const p = JSON.parse(raw); if (p.error) return reject(new Error(p.error.message || 'OpenAI error')); resolve(JSON.parse(p.choices?.[0]?.message?.content)); } catch (e) { reject(e); } });
       });
       r.setTimeout(30000, () => r.destroy(new Error('Tempo limite excedido.'))); r.on('error', reject); r.write(body); r.end();
@@ -3906,7 +3906,7 @@ Responda SOMENTE com JSON válido, sem markdown:
       const opts = { hostname: 'generativelanguage.googleapis.com', path, method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
       const r = https.request(opts, (resp) => {
-        let raw = ''; resp.on('data', c => { raw += c; });
+        let raw = ''; resp.setEncoding?.('utf8'); resp.on('data', c => { raw += c; });
         resp.on('end', () => { try { const p = JSON.parse(raw); if (p.error) return reject(new Error(p.error.message)); resolve(JSON.parse(p.candidates?.[0]?.content?.parts?.[0]?.text)); } catch (e) { reject(e); } });
       });
       r.setTimeout(30000, () => r.destroy(new Error('Tempo limite excedido.'))); r.on('error', reject); r.write(body); r.end();
@@ -3922,7 +3922,7 @@ Responda SOMENTE com JSON válido, sem markdown:
       const opts = { hostname: 'api.deepseek.com', path: '/chat/completions', method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
       const r = https.request(opts, (resp) => {
-        let raw = ''; resp.on('data', c => { raw += c; });
+        let raw = ''; resp.setEncoding?.('utf8'); resp.on('data', c => { raw += c; });
         resp.on('end', () => { try { const p = JSON.parse(raw); if (p.error) return reject(new Error(p.error.message)); resolve(JSON.parse(p.choices?.[0]?.message?.content)); } catch (e) { reject(e); } });
       });
       r.setTimeout(30000, () => r.destroy(new Error('Tempo limite excedido.'))); r.on('error', reject); r.write(body); r.end();
@@ -3936,7 +3936,7 @@ Responda SOMENTE com JSON válido, sem markdown:
       const opts = { hostname: 'api.anthropic.com', path: '/v1/messages', method: 'POST',
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
       const r = https.request(opts, (resp) => {
-        let raw = ''; resp.on('data', c => { raw += c; });
+        let raw = ''; resp.setEncoding?.('utf8'); resp.on('data', c => { raw += c; });
         resp.on('end', () => { try { const p = JSON.parse(raw); if (p.error) return reject(new Error(p.error.message)); const text = p.content?.[0]?.text || ''; const match = text.match(/\{[\s\S]*\}/); resolve(JSON.parse(match?.[0] || text)); } catch (e) { reject(e); } });
       });
       r.setTimeout(30000, () => r.destroy(new Error('Tempo limite excedido.'))); r.on('error', reject); r.write(body); r.end();

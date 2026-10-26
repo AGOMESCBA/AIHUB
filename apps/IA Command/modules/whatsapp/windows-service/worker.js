@@ -168,7 +168,7 @@ const server = http.createServer((req, res) => {
 
   if (req.method === 'POST' && req.url === '/command') {
     let body = '';
-    req.on('data', d => { body += d; });
+    req.setEncoding?.('utf8'); req.on('data', d => { body += d; });
     req.on('end', async () => {
       try {
         const { cmd } = JSON.parse(body || '{}');
@@ -243,7 +243,7 @@ const server = http.createServer((req, res) => {
 
   if (req.method === 'POST' && req.url === '/scheduled-question') {
     let body = '';
-    req.on('data', d => { body += d; });
+    req.setEncoding?.('utf8'); req.on('data', d => { body += d; });
     req.on('end', async () => {
       try {
         const { empresaId, numero, pergunta, jobNome, modulo } = JSON.parse(body || '{}');
@@ -272,7 +272,7 @@ const server = http.createServer((req, res) => {
 
   if (req.method === 'POST' && req.url === '/send-message') {
     let body = '';
-    req.on('data', d => { body += d; });
+    req.setEncoding?.('utf8'); req.on('data', d => { body += d; });
     req.on('end', async () => {
       try {
         const { empresaId, numero, resposta, ok, jobNome, preservarLayout } = JSON.parse(body || '{}');
@@ -296,7 +296,7 @@ const server = http.createServer((req, res) => {
 
   if (req.method === 'POST' && req.url === '/send-direct-message') {
     let body = '';
-    req.on('data', d => { body += d; });
+    req.setEncoding?.('utf8'); req.on('data', d => { body += d; });
     req.on('end', async () => {
       try {
         const { empresaId, numero, texto, finalidadeEnvio } = JSON.parse(body || '{}');
@@ -327,7 +327,7 @@ const server = http.createServer((req, res) => {
 
   if (req.method === 'POST' && req.url === '/send-media-message') {
     let body = '';
-    req.on('data', d => { body += d; });
+    req.setEncoding?.('utf8'); req.on('data', d => { body += d; });
     req.on('end', async () => {
       try {
         const payload = JSON.parse(body || '{}');

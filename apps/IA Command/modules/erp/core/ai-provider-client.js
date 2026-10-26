@@ -51,7 +51,7 @@ function _httpPost(hostname, path, headers, body, timeoutMs = 30000) {
       },
     }, (res) => {
       let raw = '';
-      res.on('data', c => { raw += c; });
+      res.setEncoding?.('utf8'); res.on('data', c => { raw += c; });
       res.on('end', () => {
         let parsed;
         try {

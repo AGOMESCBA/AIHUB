@@ -37,7 +37,7 @@ module.exports = function registrarRotasWindowsService(app, { requireAuth, requi
         { hostname: '127.0.0.1', port: workerPort, path: '/health', method: 'GET', timeout: 2000 },
         (res) => {
           let body = '';
-          res.on('data', d => { body += d; });
+          res.setEncoding?.('utf8'); res.on('data', d => { body += d; });
           res.on('end', () => {
             try { resolve(JSON.parse(body)); } catch (_) { resolve(null); }
           });
@@ -55,7 +55,7 @@ module.exports = function registrarRotasWindowsService(app, { requireAuth, requi
         { hostname: '127.0.0.1', port: workerPort, path: '/buffer', method: 'GET', timeout: 3000 },
         (res) => {
           let body = '';
-          res.on('data', d => { body += d; });
+          res.setEncoding?.('utf8'); res.on('data', d => { body += d; });
           res.on('end', () => {
             try { resolve(JSON.parse(body)); } catch (_) { resolve({ buffer: [] }); }
           });
@@ -81,7 +81,7 @@ module.exports = function registrarRotasWindowsService(app, { requireAuth, requi
         },
         (res) => {
           let b = '';
-          res.on('data', d => { b += d; });
+          res.setEncoding?.('utf8'); res.on('data', d => { b += d; });
           res.on('end', () => {
             try { resolve(JSON.parse(b)); } catch (_) { resolve({}); }
           });

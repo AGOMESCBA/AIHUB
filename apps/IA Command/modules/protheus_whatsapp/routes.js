@@ -879,7 +879,7 @@ function workerJson(workerPort, rota, payload = null, timeoutMs = 30000) {
       },
       (res) => {
         let resposta = '';
-        res.on('data', d => { resposta += d; });
+        res.setEncoding?.('utf8'); res.on('data', d => { resposta += d; });
         res.on('end', () => {
           let json = {};
           try { json = JSON.parse(resposta || '{}'); } catch (_) {}

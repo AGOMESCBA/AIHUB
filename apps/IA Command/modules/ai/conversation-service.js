@@ -92,7 +92,7 @@ function _requestOpenAICompat(cfg, apiKey, prompt) {
 
     const req = https.request(opts, res => {
       let raw = '';
-      res.on('data', c => { raw += c; });
+      res.setEncoding?.('utf8'); res.on('data', c => { raw += c; });
       res.on('end', () => {
         try {
           const parsed = JSON.parse(raw);
@@ -130,7 +130,7 @@ function _requestGemini(cfg, apiKey, prompt) {
 
     const req = https.request(opts, res => {
       let raw = '';
-      res.on('data', c => { raw += c; });
+      res.setEncoding?.('utf8'); res.on('data', c => { raw += c; });
       res.on('end', () => {
         try {
           const parsed = JSON.parse(raw);
@@ -172,7 +172,7 @@ function _requestClaude(cfg, apiKey, prompt) {
 
     const req = https.request(opts, res => {
       let raw = '';
-      res.on('data', c => { raw += c; });
+      res.setEncoding?.('utf8'); res.on('data', c => { raw += c; });
       res.on('end', () => {
         try {
           const parsed = JSON.parse(raw);
@@ -292,7 +292,7 @@ async function _requestOpenAICompatChat(cfg, apiKey, systemPrompt, messages) {
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
     }, res => {
       let raw = '';
-      res.on('data', c => { raw += c; });
+      res.setEncoding?.('utf8'); res.on('data', c => { raw += c; });
       res.on('end', () => {
         try {
           const p = JSON.parse(raw);
@@ -326,7 +326,7 @@ async function _requestAnthropicChat(cfg, apiKey, systemPrompt, messages) {
       headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
     }, res => {
       let raw = '';
-      res.on('data', c => { raw += c; });
+      res.setEncoding?.('utf8'); res.on('data', c => { raw += c; });
       res.on('end', () => {
         try {
           const p = JSON.parse(raw);
@@ -363,7 +363,7 @@ async function _requestGeminiChat(cfg, apiKey, systemPrompt, messages) {
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
     }, res => {
       let raw = '';
-      res.on('data', c => { raw += c; });
+      res.setEncoding?.('utf8'); res.on('data', c => { raw += c; });
       res.on('end', () => {
         try {
           const p = JSON.parse(raw);

@@ -598,7 +598,7 @@ function _postWorker(workerPort, path, payload, timeoutMs = 330000) {
       timeout: timeoutMs,
     }, (res) => {
       let b = '';
-      res.on('data', d => { b += d; });
+      res.setEncoding?.('utf8'); res.on('data', d => { b += d; });
       res.on('end', () => {
         try {
           const json = JSON.parse(b);

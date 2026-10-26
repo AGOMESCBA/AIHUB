@@ -96,7 +96,7 @@ function _transcreverViaWhisperCompat(hostname, endpointPath, apiKey, audioPath,
 
     const req = https.request(opts, (res) => {
       let raw = '';
-      res.on('data', (c) => { raw += c; });
+      res.setEncoding?.('utf8'); res.on('data', (c) => { raw += c; });
       res.on('end', () => {
         try {
           const parsed = JSON.parse(raw);
@@ -160,7 +160,7 @@ function _transcreverGemini(audioPath, cfg) {
       },
     }, (res) => {
       let raw = '';
-      res.on('data', (c) => { raw += c; });
+      res.setEncoding?.('utf8'); res.on('data', (c) => { raw += c; });
       res.on('end', () => {
         try {
           const parsed = JSON.parse(raw);

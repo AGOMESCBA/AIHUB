@@ -43,7 +43,7 @@ function _requestAgente(baseUrl, path, method, body, token, timeoutMs = 10000) {
       rejectUnauthorized: false,
     }, (res) => {
       let raw = '';
-      res.on('data', c => { raw += c; });
+      res.setEncoding?.('utf8'); res.on('data', c => { raw += c; });
       res.on('end', () => {
         let data = null;
         try { data = JSON.parse(raw); } catch (_) { data = raw; }
@@ -84,7 +84,7 @@ function _healthCheck(endpointUrl, token, timeoutMs = 8000) {
       rejectUnauthorized: false,
     }, (res) => {
       let raw = '';
-      res.on('data', chunk => { raw += chunk; });
+      res.setEncoding?.('utf8'); res.on('data', chunk => { raw += chunk; });
       res.on('end', () => {
         let body = null;
         try { body = JSON.parse(raw); } catch (_) { body = raw; }

@@ -47,7 +47,7 @@ function _getJson({ hostname, path, headers = {} }) {
   return new Promise((resolve, reject) => {
     const req = https.request({ hostname, path, method: 'GET', rejectUnauthorized: false, headers }, (res) => {
       let raw = '';
-      res.on('data', (chunk) => { raw += chunk; });
+      res.setEncoding?.('utf8'); res.on('data', (chunk) => { raw += chunk; });
       res.on('end', () => {
         let parsed = null;
         try { parsed = raw ? JSON.parse(raw) : null; } catch (_) {}

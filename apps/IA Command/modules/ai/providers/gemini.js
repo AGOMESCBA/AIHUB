@@ -35,7 +35,7 @@ function _requestOnce(prompt, apiKey, modelo) {
 
     const req = https.request(opts, (res) => {
       let raw = '';
-      res.on('data', (c) => { raw += c; });
+      res.setEncoding?.('utf8'); res.on('data', (c) => { raw += c; });
       res.on('end', () => {
         if (!raw) return reject(new Error('Gemini: resposta vazia (conexão interrompida antes de completar).'));
 

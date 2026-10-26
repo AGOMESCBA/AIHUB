@@ -89,7 +89,7 @@ function _request(url, method, body, apiKey) {
     const lib = isHttps ? https : http;
     const req = lib.request(options, (res) => {
       let data = '';
-      res.on('data', chunk => { data += chunk; });
+      res.setEncoding?.('utf8'); res.on('data', chunk => { data += chunk; });
       res.on('end', () => {
         _logProxy(res.statusCode < 300 ? 'INFO' : 'WARN', 'requisicao_resposta', { url, http_status: res.statusCode });
         if (res.statusCode === 401) {
