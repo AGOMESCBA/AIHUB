@@ -30,6 +30,10 @@
     .conn-acoes [hidden] { display:none !important; }
     @media (max-width:600px) { .conn-banner { flex-wrap:wrap; } .conn-acoes { width:100%; } .conn-acoes .btn { flex:1;justify-content:center; } }
     .desatualizado { opacity:.55;filter:grayscale(.35);transition:opacity .2s; }
+    /* Detecta o preenchimento automático do navegador no campo de busca (ver JS) */
+    @keyframes busca-autofill { from { opacity:1; } to { opacity:1; } }
+    #busca:-webkit-autofill { animation-name:busca-autofill;animation-duration:.01s; }
+    #busca::-webkit-search-cancel-button { cursor:pointer; }
     .stamp.stamp-velho { color:var(--error);font-weight:600; }
     .refresh-bar.sem-conexao .pulse { background:var(--error); }
     .refresh-bar.sem-conexao .pulse::after { display:block;border-color:var(--error); }
@@ -216,7 +220,7 @@
             <button class="chip" type="button" data-orig="todos" aria-pressed="true">Todas as origens</button>
             <button class="chip" type="button" data-orig="chat" aria-pressed="false">Chat (Radar J2A)</button>
             <button class="chip" type="button" data-orig="interno" aria-pressed="false">IA Service interno</button>
-            <input id="busca" class="form-control" type="text" placeholder="Buscar nome, telefone ou chamado..." aria-label="Buscar nome, telefone ou chamado">
+            <input id="busca" name="filtro-monitor-acessos" class="form-control" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="Buscar nome, telefone ou chamado..." aria-label="Buscar nome, telefone ou chamado">
           </div>
           <div class="refresh-controls" role="group" aria-label="Atualização automática">
           <div class="live" title="Atualização automática"><span class="pulse"></span><span id="live-txt">Automático</span></div>
@@ -797,6 +801,15 @@
     tick();
   });
   $('busca').addEventListener('input', (e) => { st.busca = e.target.value.trim(); render(); });
+  // O Chrome às vezes preenche este campo com o usuário salvo do login do
+  // IAHub (ex.: "admin") e filtra a tabela sozinho. Preenchimento automático
+  // dispara a animação "busca-autofill" (CSS :-webkit-autofill): desfaz na hora.
+  $('busca').addEventListener('animationstart', (e) => {
+    if (e.animationName !== 'busca-autofill') return;
+    e.target.value = '';
+    st.busca = '';
+    render();
+  });
   document.querySelectorAll('.kpi').forEach((k) => k.addEventListener('click', () => {
     const jaMarcado = k.getAttribute('aria-pressed') === 'true';
     st.filtroSit = jaMarcado ? 'ativos' : k.dataset.sit;
