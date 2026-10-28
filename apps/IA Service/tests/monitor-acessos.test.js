@@ -284,6 +284,34 @@ try {
   }
   assert.throws(() => presencaService.desconectarInternos(EMPRESA, { escopo: 'outro' }), /Escopo inválido/);
 
+  // Mensagem do Monitor (2026-10-28): sai pelo Chat interno em nome do
+  // analista de quem envia; sem analista cadastrado = 409; outra empresa = 404.
+  const rotas = {};
+  const appFalso = { post: (p, ...fns) => { rotas['POST ' + p] = fns; }, get: () => {}, delete: () => {}, patch: () => {}, use: () => {} };
+  require('../backend/routes/monitor-acessos-routes').registrarInterno(appFalso);
+  const enviarMsg = (corpo, { userId = 40, empresa = EMPRESA } = {}) => {
+    let status = 200, resposta = null;
+    const req = { body: corpo, session: { role: 'admin', user_id: userId }, svcEmpresaId: empresa };
+    const res = { status(c) { status = c; return this; }, json(b) { resposta = b; return this; } };
+    const [guarda, handler] = rotas['POST /api/ia-service/monitor-acessos/mensagem'];
+    guarda(req, res, () => handler(req, res));
+    return { status, resposta };
+  };
+  const destinoMsg = consultorRepo.criarConsultor(EMPRESA, { telefone: '5565999990077' });
+  let m = enviarMsg({ consultorId: destinoMsg.id, texto: 'Oi' });
+  assert.strictEqual(m.status, 409, 'admin sem número no chat não envia');
+  const adminChat = consultorRepo.criarConsultor(EMPRESA, { telefone: '5565999990078', usuarioIdIahub: 40 });
+  assert.strictEqual(enviarMsg({ consultorId: destinoMsg.id, texto: '   ' }).status, 400, 'mensagem vazia');
+  m = enviarMsg({ consultorId: destinoMsg.id, texto: 'Pode me ligar?' });
+  assert.strictEqual(m.status, 201);
+  const chatInterno = require('../backend/services/chat-interno-service');
+  const conversa = chatInterno.listarMensagens(EMPRESA, destinoMsg.id, m.resposta.conversaId);
+  assert.strictEqual(conversa.contato.consultorId, adminChat.id, 'chega como conversa com o analista de quem enviou');
+  assert.strictEqual(conversa.mensagens.at(-1).texto, 'Pode me ligar?');
+  assert.strictEqual(enviarMsg({ consultorId: consultorOutra.id, texto: 'x' }).status, 404, 'analista de outra empresa');
+  const audMsg = database.getDB().prepare("SELECT * FROM svc_monitor_auditoria WHERE acao = 'mensagem'").get();
+  assert.ok(!String(audMsg.detalhe).includes('ligar'), 'texto não vai para a auditoria');
+
   // Chat de todos da empresa (botão Desconectar > Chat).
   const sc1 = criarSessaoExterna(EMPRESA, consultor.id);
   const scOutra = criarSessaoExterna(OUTRA_EMPRESA, consultorOutra.id);
