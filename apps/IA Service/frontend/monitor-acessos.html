@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Monitor de Acessos - IA Service</title>
   <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="/iaservice/assets/chat-interno.css">
   <style>
     /* Só tokens do iahub.css (tema claro/escuro do sistema via data-theme) —
        mesma sobrescrita de accent das demais páginas do IA Service. */
@@ -175,10 +176,18 @@
     .desc-menu b { font-size:13px;color:var(--text-hi);font-weight:600; }
     .desc-menu span { font-size:11.5px;color:var(--text-md); }
     .desc-opcoes { display:flex;gap:8px;flex-wrap:wrap; }
-    .msg-box { display:flex;flex-direction:column;gap:8px; }
-    .msg-box textarea { min-height:72px;resize:vertical;font:inherit;font-size:13px; }
-    .msg-rodape { display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--text-md); }
-    .msg-ok { font-size:12px;color:var(--success); }
+    /* Mensagens (2026-10-28): o MESMO Chat interno do J2A (chat-interno.js/.css),
+       com os tokens de cor do J2A (radar.css) — igual ao chat, claro e escuro. */
+    .ci-botao, .ci-painel, .ci-toasts {
+      --bg:#eef3f8; --panel:#ffffff; --panel-2:#f6f9fc; --panel-3:#eef4fa; --text:#102033; --muted:#62758c;
+      --line:#d5e0ec; --brand:#006bd6; --brand-2:#00a884; --ok:#15803d; --shadow:0 16px 36px rgba(18,36,58,.12); --radius:8px;
+    }
+    [data-theme="dark"] .ci-botao, [data-theme="dark"] .ci-painel, [data-theme="dark"] .ci-toasts {
+      --bg:#08151e; --panel:#112631; --panel-2:#0c1c26; --panel-3:#17313f; --text:#edf7ff; --muted:#9bb0c6;
+      --line:#294350; --brand:#2d8cff; --brand-2:#00d7a7; --ok:#35c779; --shadow:0 16px 36px rgba(0,0,0,.28);
+    }
+    .monitor-actions .ci-botao { height:auto;min-height:36px;font-size:13px; }
+    .msg-aviso { font-size:12px;color:var(--text-md); }
     .qtd-sessoes { display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700;background:rgba(37,99,235,.12);color:#2563eb;vertical-align:middle; }
     .sessoes-lista { list-style:none;margin:0;padding:0;display:grid;gap:8px; }
     .sessoes-lista li { padding:8px 10px;border:1px solid var(--border, rgba(127,127,127,.25));border-radius:8px;font-size:12.5px;line-height:1.45; }
@@ -309,6 +318,8 @@
 </div>
 
 <script src="/js/auth.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script src="/iaservice/assets/chat-interno.js"></script>
 <script src="/app/ia-service/js/sidebar.js"></script>
 <script>
 (function () {
@@ -625,9 +636,6 @@
     $('gv-fundo').hidden = !sobreposta;
     document.body.style.overflow = sobreposta ? 'hidden' : '';
     if (!s) return;
-    // O painel é redesenhado a cada atualização automática: quem está
-    // digitando a mensagem não pode perder o foco nem o cursor.
-    const digitando = document.activeElement?.id === 'gv-msg' ? [$('gv-msg').selectionStart, $('gv-msg').selectionEnd] : null;
     // Ampliado = "informações completas": já traz o chamado sem outro clique.
     if (st.ampliada && s.chamadoId && !st.chamado && !st.chamadoErro && !st.carregandoChamado) carregarChamado(s.chamadoId);
     const lista = visiveis();
@@ -683,43 +691,44 @@
       </div></div>`;
     const motivo = $('gv-motivo');
     if (motivo) { motivo.value = st.motivo || ''; if (st.focoMotivo) motivo.focus(); }
-    const msg = $('gv-msg');
-    if (msg) {
-      msg.value = st.msgPara === s.id ? (st.msgTexto || '') : '';
-      if (digitando) { msg.focus(); msg.setSelectionRange(digitando[0], digitando[1]); }
-    }
   }
 
-  // Mensagem para quem está no chat J2A (2026-10-28): vai pelo Chat interno
-  // em nome de quem envia; a resposta chega no chat J2A dele.
+  // Mensagens (2026-10-28): o mesmo Chat interno do J2A, como o analista do
+  // usuário logado nesta empresa (servidor: monitor-acessos-routes.js). A
+  // conversa é a mesma do J2A dele; mensagem para si mesmo é permitida.
+  const chat = { api: null, ok: false, erro: null };
+  function urlChat(p) {
+    return `/api/ia-service/monitor-acessos${p}${p.includes('?') ? '&' : '?'}empresa_id=${encodeURIComponent(empresaId())}`;
+  }
+  const pedirChat = (url, opts = {}) => api(url, { ...opts, headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) } });
+  async function iniciarChat() {
+    if (!window.IaChatInterno || chat.api || !empresaId()) return;
+    try {
+      await pedirChat(urlChat('/chat-interno/contatos'));
+    } catch (e) {
+      chat.erro = e.message;
+      renderGaveta();
+      return;
+    }
+    chat.api = window.IaChatInterno.mount({
+      anchor: document.querySelector('.monitor-actions'),
+      getToken: () => null,
+      request: pedirChat,
+      ext: urlChat,
+      socketAuth: () => ({ iahub: true, empresaId: empresaId() }),
+    });
+    chat.api.start();
+    chat.ok = true;
+    renderGaveta();
+  }
+
   function blocoMensagem(s) {
     if (s.origem !== 'chat') return '';
-    const ok = st.msgOk && st.msgOk.para === s.id ? `<span class="msg-ok">Enviada em ${dataHora(st.msgOk.em)}.</span>` : '';
-    return `<div class="gv-sec"><div class="gv-titulo">Mensagem</div><div class="msg-box">
-      <textarea id="gv-msg" class="form-control" maxlength="1000" placeholder="Escreva uma mensagem para ${esc(s.nome)}…"></textarea>
-      <div class="msg-rodape"><span>Vai pelo Chat interno em seu nome. A resposta chega no seu chat J2A.</span>
-        <button type="button" class="btn btn-primary" data-gv="msg-enviar" ${st.enviandoMsg ? 'disabled' : ''}>${st.enviandoMsg ? 'Enviando…' : 'Enviar'}</button></div>
-      ${ok}</div></div>`;
-  }
-
-  async function enviarMensagem(s) {
-    const texto = (st.msgPara === s.id ? st.msgTexto || '' : '').trim();
-    if (!texto) { $('gv-msg')?.focus(); return; }
-    st.enviandoMsg = true;
-    renderGaveta();
-    try {
-      const r = await api(`/api/ia-service/monitor-acessos/mensagem?empresa_id=${encodeURIComponent(empresaId())}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ empresa_id: empresaId(), consultorId: s.id.replace(/^chat:/, ''), texto }),
-      });
-      st.msgTexto = ''; st.msgOk = { para: s.id, em: r.enviadaEm };
-    } catch (e) {
-      erro('Não foi possível enviar a mensagem: ' + e.message);
-    } finally {
-      st.enviandoMsg = false;
-      renderGaveta();
-    }
+    const corpo = chat.ok
+      ? `<button type="button" class="btn btn-primary" data-gv="msg-abrir">Abrir conversa</button>
+         <span class="msg-aviso">Mesma conversa do seu chat J2A.</span>`
+      : `<span class="msg-aviso">${esc(chat.erro || 'Carregando mensagens…')}</span>`;
+    return `<div class="gv-sec"><div class="gv-titulo">Mensagem</div><div class="desc-opcoes" style="align-items:center">${corpo}</div></div>`;
   }
 
   // Derrubar o acesso ao chat J2A (todas as sessões da pessoa). Pessoa das
@@ -983,22 +992,12 @@
       }
       return;
     }
-    if (acao === 'msg-enviar') { const p = st.dados?.pessoas.find((x) => x.id === st.selId); if (p && !st.enviandoMsg) enviarMensagem(p); return; }
+    if (acao === 'msg-abrir') { const p = st.dados?.pessoas.find((x) => x.id === st.selId); if (p && chat.api) chat.api.abrirConversa(p.id.replace(/^chat:/, '')); return; }
     if (acao === 'derrubar-ok') { const p = st.dados?.pessoas.find((x) => x.id === st.selId); if (p && !st.derrubando) derrubar(p); return; }
     const btn = e.target.closest('[data-chamado]');
     if (btn) carregarChamado(btn.dataset.chamado);
   });
-  $('gaveta').addEventListener('input', (e) => {
-    if (e.target.id === 'gv-motivo') st.motivo = e.target.value;
-    if (e.target.id === 'gv-msg') { st.msgPara = st.selId; st.msgTexto = e.target.value; }
-  });
-  // Ctrl+Enter envia a mensagem.
-  $('gaveta').addEventListener('keydown', (e) => {
-    if (e.target.id !== 'gv-msg' || e.key !== 'Enter' || !(e.ctrlKey || e.metaKey)) return;
-    e.preventDefault();
-    const p = st.dados?.pessoas.find((x) => x.id === st.selId);
-    if (p && !st.enviandoMsg) enviarMensagem(p);
-  });
+  $('gaveta').addEventListener('input', (e) => { if (e.target.id === 'gv-motivo') st.motivo = e.target.value; });
   // Fundo escurecido / Esc: ampliado volta ao painel lateral; em tela
   // estreita (painel sempre sobreposto) fecha.
   function recuar() {
@@ -1018,6 +1017,7 @@
     carregar(false);
     setInterval(tick, 1000);
     tick();
+    iniciarChat();
   });
 })();
 </script>

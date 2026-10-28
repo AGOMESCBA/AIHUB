@@ -38,10 +38,13 @@
     fechar: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
     voltar: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>',
     enviar: '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M3.4 20.4 21 12 3.4 3.6 3.3 10l12.4 2-12.4 2z"/></svg>',
+    relogio: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
     todos: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>',
   };
 
-  function mount({ anchor, getToken, request, ext, onSessaoEncerrada = () => {} }) {
+  // socketAuth: autenticação alternativa do tempo real (Monitor de Acessos usa
+  // a sessão do IAHub: { iahub: true, empresaId }). Sem ela, o token do J2A.
+  function mount({ anchor, getToken, request, ext, socketAuth = null, onSessaoEncerrada = () => {} }) {
     const st = {
       ativo: false, aberto: false, view: 'lista', busca: '',
       contatos: [], naoLidasTotal: 0, destinatariosTransmissao: 0,
@@ -125,10 +128,10 @@
             <button type="button" class="ci-contato" role="listitem" data-ci-contato="${esc(c.consultorId)}">
               ${avatar(c)}
               <span class="ci-contato-meio">
-                <span class="ci-contato-nome">${esc(c.nome)} <small class="ci-st ${c.online ? 'ci-st-on' : ''}">${c.online ? 'On Line' : 'Off Line'}</small></span>
+                <span class="ci-contato-nome">${esc(c.nome)}${c.eu ? '' : ` <small class="ci-st ${c.online ? 'ci-st-on' : ''}">${c.online ? 'On Line' : 'Off Line'}</small>`}</span>
                 <span class="ci-contato-sub">${c.ultimaMensagem
                   ? `${c.ultimaMensagem.minha ? 'Você: ' : ''}${esc(c.ultimaMensagem.texto)}`
-                  : (c.chamadosEmAndamento ? `${c.chamadosEmAndamento} chamado(s) em andamento` : (c.online ? 'On Line agora' : 'Sem conversa ainda'))}</span>
+                  : c.eu ? 'Anotações e lembretes só seus' : (c.chamadosEmAndamento ? `${c.chamadosEmAndamento} chamado(s) em andamento` : (c.online ? 'On Line agora' : 'Sem conversa ainda'))}</span>
               </span>
               <span class="ci-contato-fim">
                 <span class="ci-contato-hora${c.naoLidas ? ' ci-novo' : ''}">${c.ultimaMensagem ? quando(c.ultimaMensagem.em) : ''}</span>
@@ -140,6 +143,7 @@
 
     function ticks(m) {
       if (!m.minha) return '';
+      if (m.pendente) return `<span class="ci-tick ci-pendente" title="Enviando…" aria-label="Enviando">${ICONES.relogio}</span>`;
       if (m.vistoEm) return '<span class="ci-tick ci-visto" title="Visto">✓✓</span>';
       if (m.entregueEm) return '<span class="ci-tick" title="Entregue">✓✓</span>';
       return '<span class="ci-tick" title="Enviado">✓</span>';
@@ -151,12 +155,12 @@
         const d = dia(m.criadoEm);
         const sep = d !== ultimoDia ? `<div class="ci-dia"><span>${esc(d)}</span></div>` : '';
         ultimoDia = d;
-        return `${sep}<div class="ci-msg ${m.minha ? 'ci-minha' : 'ci-dele'}" data-msg="${esc(m.id)}">
+        return `${sep}<div class="ci-msg ${m.minha ? 'ci-minha' : 'ci-dele'}${m.pendente ? ' ci-enviando' : ''}" data-msg="${esc(m.id)}">
           ${st.selecao ? `<label class="ci-marcar"><input type="checkbox" data-ci-selecionar="${esc(m.id)}" aria-label="Selecionar mensagem: ${esc(m.texto.slice(0, 70))}" ${st.selecao.has(m.id) ? 'checked' : ''}> Selecionar</label>` : ''}
           ${m.transmissao ? '<span class="ci-transm">Mensagem para todos</span>' : ''}
           <span class="ci-texto${m.apagadoEm ? ' ci-apagada' : ''}">${esc(m.apagadoEm ? 'Mensagem apagada' : m.texto)}</span>
           <span class="ci-meta">${m.editadoEm && !m.apagadoEm ? '<span>editada</span>' : ''}${hora(m.criadoEm)}${m.apagadoEm ? '' : ticks(m)}</span>
-          ${!st.selecao ? `<details class="ci-acoes-msg"><summary aria-label="Opções da mensagem">Opções</summary><div>
+          ${!st.selecao && !m.pendente ? `<details class="ci-acoes-msg"><summary aria-label="Opções da mensagem">Opções</summary><div>
             ${m.minha && !m.apagadoEm ? `<button type="button" data-ci="editar" data-ci-msg="${esc(m.id)}">Editar</button>
             <button type="button" data-ci="apagar" data-ci-msg="${esc(m.id)}">Apagar para todos</button>` : ''}
             <button type="button" data-ci="apagar-mim" data-ci-msg="${esc(m.id)}">Apagar para mim</button>
@@ -179,7 +183,8 @@
 
     function renderConversa() {
       const c = contato(st.conversa.consultorId) || { consultorId: st.conversa.consultorId, nome: st.conversa.nome };
-      const status = c.online ? 'On Line' : 'Off Line · recebe quando entrar no J2A';
+      // Conversa consigo mesmo (2026-10-28): sem status de presença.
+      const status = c.eu ? 'Só você vê estas mensagens' : c.online ? 'On Line' : 'Off Line · recebe quando entrar no J2A';
       return `
         <header class="ci-head">
           <button type="button" class="ci-icone" data-ci="voltar" title="Voltar" aria-label="Voltar">${ICONES.voltar}</button>
@@ -294,20 +299,37 @@
       }
     }
 
+    // Envio como no WhatsApp (2026-10-28): o balão aparece na hora com o
+    // relógio ("Enviando…") e o campo é limpo; com a resposta do servidor o
+    // relógio vira ✓. Falhou: o balão sai, o texto volta para o campo.
     async function enviar() {
       const ta = painel.querySelector('#ci-texto');
       const texto = ta.value.trim();
       if (!texto || st.enviando || !st.conversa) return;
       st.enviando = true;
+      const conversa = st.conversa;
+      const temp = { id: `tmp-${Date.now()}`, conversaId: conversa.id, minha: true, pendente: true, texto, criadoEm: new Date().toISOString() };
+      ta.value = '';
+      st.rascunho = '';
+      ajustarAltura(ta);
+      conversa.mensagens.push(temp);
+      atualizarMensagensSemPerderTexto();
+      const box = painel.querySelector('#ci-msgs');
+      if (box) box.scrollTop = box.scrollHeight;
+      const tirarTemp = () => { conversa.mensagens = conversa.mensagens.filter((x) => x.id !== temp.id); };
       try {
-        const m = await request(api(`/conversas/${encodeURIComponent(st.conversa.id)}/mensagens`), { method: 'POST', body: JSON.stringify({ texto }) });
-        ta.value = '';
-        st.rascunho = '';
-        ajustarAltura(ta);
-        adicionarNaConversa(m);
-        const c = contato(st.conversa.consultorId);
+        const m = await request(api(`/conversas/${encodeURIComponent(conversa.id)}/mensagens`), { method: 'POST', body: JSON.stringify({ texto }) });
+        // O tempo real pode ter entregue a mesma mensagem antes desta resposta.
+        if (conversa.mensagens.some((x) => x.id === m.id)) tirarTemp();
+        else conversa.mensagens[conversa.mensagens.findIndex((x) => x.id === temp.id)] = m;
+        atualizarMensagensSemPerderTexto();
+        const c = contato(conversa.consultorId);
         if (c) c.ultimaMensagem = { texto: m.texto.slice(0, 140), em: m.criadoEm, minha: true };
       } catch (err) {
+        tirarTemp();
+        atualizarMensagensSemPerderTexto();
+        const campo = painel.querySelector('#ci-texto');
+        if (campo && !campo.value) { campo.value = texto; st.rascunho = texto; ajustarAltura(campo); }
         aviso(`Mensagem não enviada: ${err.message}`);
       } finally {
         st.enviando = false;
@@ -608,7 +630,7 @@
 
     function conectarSocket() {
       if (typeof window.io !== 'function') return;
-      const socket = window.io('/ia-service-chat', { auth: { token: getToken() }, transports: ['websocket', 'polling'] });
+      const socket = window.io('/ia-service-chat', { auth: socketAuth ? socketAuth() : { token: getToken() }, transports: ['websocket', 'polling'] });
       st.socket = socket;
       socket.on('connect', () => {
         sincronizar(true).catch(() => null);

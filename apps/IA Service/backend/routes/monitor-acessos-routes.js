@@ -10,8 +10,8 @@ const presencaService = require('../services/presenca-service');
 const historicoAcessos = require('../services/acesso-historico-service');
 const { requireRotinaSvc } = require('../services/rotina-permissao');
 const realtime = require('../services/chat-interno-realtime');
-const chatService = require('../services/chat-interno-service');
-const consultorRepo = require('../repositories/consultor-repository');
+const chatIahub = require('../services/chat-interno-iahub');
+const registrarChatInterno = require('./chat-interno-routes');
 
 const ROTINA = 'svc-monitor-acessos';
 
@@ -94,32 +94,18 @@ function registrarInterno(app) {
     }
   });
 
-  // Mensagem do Monitor para uma pessoa do chat J2A (2026-10-28). Sai pelo
-  // Chat interno EM NOME de quem envia — o cadastro de analista dele nesta
-  // empresa (consultores.usuario_id_iahub) —, sem remetente "sistema" nem
-  // tabela nova: é a mesma conversa 1a1 e a resposta chega no chat J2A de
-  // quem enviou. O texto não vai para a auditoria (só o tamanho).
-  app.post('/api/ia-service/monitor-acessos/mensagem', podeMonitorar, (req, res) => {
+  // Mensagens (2026-10-28): o mesmo Chat interno do J2A dentro do Monitor,
+  // como o analista do usuário do IAHub nesta empresa. Mesma rotina da tela.
+  const BASE_CHAT = '/api/ia-service/monitor-acessos/chat-interno';
+  app.use(BASE_CHAT, podeMonitorar, (req, res, next) => {
     try {
-      const destino = String(req.body?.consultorId || '');
-      if (!destino) return res.status(400).json({ error: 'Analista obrigatório.' });
-      const usuarioId = Number(req.session?.user_id) || null;
-      const remetente = usuarioId ? consultorRepo.getConsultorPorUsuario(req.svcEmpresaId, usuarioId) : null;
-      if (!remetente?.ativo) {
-        return res.status(409).json({ error: 'Seu usuário não tem número ativo no chat desta empresa. Cadastre seu telefone em Números Autorizados para enviar mensagens.' });
-      }
-      const conversaId = chatService.abrirConversaDireta(req.svcEmpresaId, remetente.id, destino);
-      const enviado = chatService.enviarMensagem(req.svcEmpresaId, remetente.id, conversaId, req.body?.texto);
-      realtime.emitirMensagem(req.svcEmpresaId, enviado);
-      presencaService.registrarAuditoria({
-        empresaId: req.svcEmpresaId, acao: 'mensagem', alvo: `chat:${destino}`,
-        usuarioId, detalhe: { caracteres: String(req.body?.texto || '').length },
-      });
-      res.status(201).json({ ok: true, conversaId, enviadaEm: enviado.mensagem.criadoEm });
+      req.svcConsultorMonitor = chatIahub.consultorDoUsuario(req.svcEmpresaId, Number(req.session?.user_id) || null);
+      next();
     } catch (err) {
       _handleErro(res, err);
     }
   });
+  registrarChatInterno(app, { base: BASE_CHAT, eu: (req) => req.svcConsultorMonitor });
 
   // Desconectar em massa (botão "Desconectar" do painel, 2026-10-28):
   // alvo 'ia-service' = sessões internas só do IA Service; 'chat' = logins

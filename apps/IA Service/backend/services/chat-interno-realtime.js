@@ -11,10 +11,16 @@
 // validado por login-externo-service. A cada 60s os sockets cuja sessão
 // expirou/foi encerrada (Sair, Limpar do Monitor) são desconectados — sem
 // renovar a sessão (sessaoExternaAtiva).
+//
+// Ou, no Monitor de Acessos (2026-10-28): a sessão do IAHub (cookie), com
+// handshake.auth = { iahub: true, empresaId } — ver chat-interno-iahub.js.
+// Esses sockets têm sessaoId "iahub:<hash>" (não são login do chat: não
+// entram na presença do chat) e são revalidados no mesmo ciclo de 60s.
 
 const loginExternoService = require('./login-externo-service');
 const chatService = require('./chat-interno-service');
 const presencaService = require('./presenca-service');
+const chatIahub = require('./chat-interno-iahub');
 
 const NAMESPACE = '/ia-service-chat';
 // Tolerância antes de marcar "saiu": recarregar a página (F5) derruba e
@@ -72,12 +78,40 @@ function emitirExclusaoPessoal(empresaId, consultorId, exclusao) {
   emitirParaConsultor(empresaId, consultorId, 'chat:mensagens-ocultas', exclusao);
 }
 
-function iniciar(io) {
+const _ehIahub = (socket) => String(socket.data.sessaoId || '').startsWith('iahub:');
+
+// Sessão do IAHub ainda vale? Recarrega do store (Sair/expirada/derrubada
+// some do disco) e refaz a validação completa.
+function _iahubValido(socket, cb) {
+  const req = socket.request;
+  if (!req.session?.reload) return cb(false);
+  req.session.reload((err) => {
+    if (err) return cb(false);
+    try { chatIahub.identidadeDoSocket(req, socket.data.empresaId); cb(true); } catch (_) { cb(false); }
+  });
+}
+
+function iniciar(io, { sessionMiddleware = null } = {}) {
   if (_ns || !io) return;
   _ns = io.of(NAMESPACE);
 
   _ns.use((socket, next) => {
-    const token = socket.handshake.auth?.token;
+    const auth = socket.handshake.auth || {};
+    if (!auth.token && auth.iahub && sessionMiddleware) {
+      const req = socket.request;
+      return sessionMiddleware(req, req.res || {}, () => {
+        try {
+          const ident = chatIahub.identidadeDoSocket(req, auth.empresaId);
+          socket.data.empresaId = ident.empresaId;
+          socket.data.consultorId = ident.consultorId;
+          socket.data.sessaoId = `iahub:${presencaService.hashSessaoInterna(req.sessionID)}`;
+          next();
+        } catch (_) {
+          next(new Error('nao_autorizado'));
+        }
+      });
+    }
+    const token = auth.token;
     const sessao = token ? loginExternoService.validarSessaoExterna(String(token)) : null;
     if (!sessao) return next(new Error('nao_autorizado'));
     socket.data.empresaId = sessao.empresaId;
@@ -98,7 +132,7 @@ function iniciar(io) {
     // código antigo). Sem outro socket da mesma sessão após a tolerância,
     // o Monitor de Acessos passa a mostrar "Fora da tela" na hora.
     socket.on('disconnect', () => {
-      if (_socketsDaSessao(sessaoId).length) return;
+      if (_ehIahub(socket) || _socketsDaSessao(sessaoId).length) return;
       clearTimeout(_saidasPendentes.get(sessaoId));
       _saidasPendentes.set(sessaoId, setTimeout(() => {
         _saidasPendentes.delete(sessaoId);
@@ -109,7 +143,7 @@ function iniciar(io) {
 
     socket.on('chat:entregue', (payload) => {
       try {
-        if (!loginExternoService.sessaoExternaAtiva(socket.data.sessaoId)) return socket.disconnect(true);
+        if (!_ehIahub(socket) && !loginExternoService.sessaoExternaAtiva(socket.data.sessaoId)) return socket.disconnect(true);
         const ids = Array.isArray(payload?.mensagemIds) ? payload.mensagemIds : null;
         emitirRecibos(empresaId, chatService.marcarEntregues(empresaId, consultorId, ids));
       } catch (_) { /* recibo é melhor esforço; a API sincroniza depois */ }
@@ -118,7 +152,8 @@ function iniciar(io) {
 
   setInterval(() => {
     for (const socket of _ns.sockets.values()) {
-      if (!loginExternoService.sessaoExternaAtiva(socket.data.sessaoId)) socket.disconnect(true);
+      if (_ehIahub(socket)) _iahubValido(socket, (ok) => { if (!ok) socket.disconnect(true); });
+      else if (!loginExternoService.sessaoExternaAtiva(socket.data.sessaoId)) socket.disconnect(true);
     }
   }, 60 * 1000).unref();
 }

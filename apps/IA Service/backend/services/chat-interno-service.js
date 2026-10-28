@@ -126,6 +126,13 @@ function _outroParticipante(db, conversaId, eu) {
     .get(String(conversaId), String(eu))?.consultor_id || null;
 }
 
+const NOME_VOCE = 'Você (mensagens para mim)';
+
+function _ehConversaComigo(db, empresaId, conversaId, eu) {
+  return !!db.prepare('SELECT 1 FROM svc_chat_conversas WHERE id = ? AND empresa_id = ? AND chave_direta = ?')
+    .get(String(conversaId), Number(empresaId), _chave(eu, eu));
+}
+
 function _mensagemParaDominio(row, eu) {
   return {
     id: row.id,
@@ -266,14 +273,30 @@ function listarContatos(empresaId, eu) {
     return a.nome.localeCompare(b.nome, 'pt-BR');
   });
 
+  // "Você" sempre no topo, como no WhatsApp.
+  const minhaConversa = db.prepare('SELECT id FROM svc_chat_conversas WHERE empresa_id = ? AND chave_direta = ?').get(Number(empresaId), _chave(eu, eu));
+  const minhaUltima = minhaConversa ? ultimaMsg.get(minhaConversa.id, String(eu)) : null;
+  contatos.unshift({
+    consultorId: String(eu),
+    eu: true,
+    nome: NOME_VOCE,
+    online: false,
+    ultimoSinalEm: null,
+    chamadosEmAndamento: 0,
+    conversaId: minhaConversa?.id || null,
+    naoLidas: 0,
+    ultimaMensagem: minhaUltima ? { texto: minhaUltima.apagado_em ? 'Mensagem apagada' : _decifrar(minhaUltima.texto).slice(0, 140), em: minhaUltima.criado_em, minha: true } : null,
+  });
+
   const naoLidasTotal = contatos.reduce((s, c) => s + c.naoLidas, 0);
   const comChamados = contatos.filter(c => c.chamadosEmAndamento > 0 && !c.semAcesso).length;
   return { contatos, naoLidasTotal, destinatariosTransmissao: comChamados };
 }
 
+// Conversa consigo mesmo é permitida (decisão do usuário, 2026-10-28 — como
+// o "Você" do WhatsApp): um único participante, sem destinatário nem recibos.
 function abrirConversaDireta(empresaId, eu, outroId) {
   const db = getDB();
-  if (String(eu) === String(outroId)) throw _erro('Não é possível conversar consigo mesmo.', 400);
   if (!_consultorAtivo(db, empresaId, eu)) throw _erro('Sessão sem consultor ativo.', 403);
   if (!_consultorAtivo(db, empresaId, outroId)) throw _erro('Analista não encontrado nesta empresa.', 404);
 
@@ -288,7 +311,7 @@ function abrirConversaDireta(empresaId, eu, outroId) {
       .run(id, Number(empresaId), chave, agora, agora);
     const ins = db.prepare('INSERT INTO svc_chat_participantes (conversa_id, empresa_id, consultor_id) VALUES (?, ?, ?)');
     ins.run(id, Number(empresaId), String(eu));
-    ins.run(id, Number(empresaId), String(outroId));
+    if (String(outroId) !== String(eu)) ins.run(id, Number(empresaId), String(outroId));
   })();
   return id;
 }
@@ -309,9 +332,11 @@ function listarMensagens(empresaId, eu, conversaId, { antesDe = null } = {}) {
      LIMIT ${PAGINA_MENSAGENS}
   `).all(...params);
   const outro = _outroParticipante(db, conversaId, eu);
+  const comigo = !outro && _ehConversaComigo(db, empresaId, conversaId, eu);
   return {
     conversaId: String(conversaId),
-    contato: outro ? { consultorId: outro, nome: consultorService.getNomeExibicao(Number(empresaId), outro) || 'Analista sem nome' } : null,
+    contato: outro ? { consultorId: outro, nome: consultorService.getNomeExibicao(Number(empresaId), outro) || 'Analista sem nome' }
+      : comigo ? { consultorId: String(eu), nome: NOME_VOCE } : null,
     mensagens: rows.reverse().map(r => _mensagemParaDominio(r, eu)),
     temMais: rows.length === PAGINA_MENSAGENS,
   };

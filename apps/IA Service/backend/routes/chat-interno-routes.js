@@ -1,19 +1,22 @@
 // Chat interno (2026-10) — API do J2A (sessão externa por telefone).
 // ORDEM DE REGISTRO IMPORTA: chamar depois de
 // app.use('/api/ia-service-externo', requireSessaoExterna) — ver externo-routes.js.
+//
+// A mesma API é montada no Monitor de Acessos (2026-10-28) com outra base e
+// outro "eu" (o analista do usuário do IAHub) — ver monitor-acessos-routes.js.
 
 const chatService = require('../services/chat-interno-service');
 const realtime = require('../services/chat-interno-realtime');
 
-const BASE = '/api/ia-service-externo/chat-interno';
+const BASE_EXTERNO = '/api/ia-service-externo/chat-interno';
 
 function _handleErro(res, err) {
   const status = err.status || (/obrigatóri|inválid|vazia|limite/i.test(err.message) ? 400 : 500);
   res.status(status).json({ error: err.message });
 }
 
-module.exports = function registrarChatInterno(app) {
-  const eu = (req) => req.svcConsultorExterno;
+module.exports = function registrarChatInterno(app, { base = BASE_EXTERNO, eu = (req) => req.svcConsultorExterno } = {}) {
+  const BASE = base;
 
   app.get(`${BASE}/contatos`, (req, res) => {
     try {

@@ -56,23 +56,34 @@ async function esperaErro(fn, status, trecho) {
     chamadoRepo.upsertChamado(EMPRESA, { fonteId: fonte.id, sistemaOrigem: 'softexpert', oidOrigem: 'C2', numero: '2', tecnicoResponsavelId: tBeto.id });
     chamadoRepo.upsertChamado(EMPRESA, { fonteId: fonte.id, sistemaOrigem: 'softexpert', oidOrigem: 'C3', numero: '3', tecnicoResponsavelId: tCaio.id, statusEncerramento: 'Encerrado' });
 
-    // 1. Contatos: só da empresa, sem a própria pessoa e sem inativos; chamados pelo critério da grade.
+    // 1. Contatos: "Você" no topo (2026-10-28) + só da empresa, sem inativos; chamados pelo critério da grade.
     let r = chat.listarContatos(EMPRESA, ana.id);
-    const ids = r.contatos.map(c => c.consultorId);
-    assert.deepStrictEqual(ids.sort(), [beto.id, caio.id].sort(), 'contatos = consultores ativos da empresa, menos eu');
+    assert.strictEqual(r.contatos[0].consultorId, ana.id, '"Você" no topo');
+    assert.strictEqual(r.contatos[0].eu, true);
+    const ids = r.contatos.slice(1).map(c => c.consultorId);
+    assert.deepStrictEqual(ids.sort(), [beto.id, caio.id].sort(), 'demais contatos = consultores ativos da empresa');
     assert.strictEqual(r.contatos.find(c => c.consultorId === beto.id).chamadosEmAndamento, 2);
     assert.strictEqual(r.contatos.find(c => c.consultorId === caio.id).chamadosEmAndamento, 0, 'encerrado não conta');
     assert.strictEqual(r.destinatariosTransmissao, 1);
-    assert.strictEqual(r.contatos[0].consultorId, beto.id, 'quem tem chamados vem antes');
+    assert.strictEqual(r.contatos[1].consultorId, beto.id, 'quem tem chamados vem antes (depois do "Você")');
 
     // 2. Conversa direta: única por par, nos dois sentidos.
     const conv = chat.abrirConversaDireta(EMPRESA, ana.id, beto.id);
     assert.strictEqual(chat.abrirConversaDireta(EMPRESA, beto.id, ana.id), conv, 'mesma conversa nos dois sentidos');
 
-    // 3. Isolamento: não conversa com outra empresa, inativo, consigo mesmo.
+    // 3. Isolamento: não conversa com outra empresa nem inativo. Consigo mesmo
+    //    pode (decisão do usuário, 2026-10-28): 1 participante, sem recibo.
     await esperaErro(() => chat.abrirConversaDireta(EMPRESA, ana.id, deOutra.id), 404);
     await esperaErro(() => chat.abrirConversaDireta(EMPRESA, ana.id, inativo.id), 404);
-    await esperaErro(() => chat.abrirConversaDireta(EMPRESA, ana.id, ana.id), 400);
+    const comigo = chat.abrirConversaDireta(EMPRESA, ana.id, ana.id);
+    assert.strictEqual(chat.abrirConversaDireta(EMPRESA, ana.id, ana.id), comigo, 'mesma conversa consigo mesmo');
+    const nota = chat.enviarMensagem(EMPRESA, ana.id, comigo, 'lembrete');
+    assert.strictEqual(nota.destinatario, null, 'sem destinatário');
+    const minhas = chat.listarMensagens(EMPRESA, ana.id, comigo);
+    assert.strictEqual(minhas.contato.consultorId, ana.id);
+    assert.strictEqual(minhas.mensagens[0].texto, 'lembrete');
+    assert.strictEqual(chat.listarContatos(EMPRESA, ana.id).contatos[0].ultimaMensagem.texto, 'lembrete');
+    await esperaErro(() => chat.listarMensagens(EMPRESA, beto.id, comigo), 404, 'não encontrada');
     await esperaErro(() => chat.listarMensagens(EMPRESA, caio.id, conv), 404, 'não encontrada');
     await esperaErro(() => chat.enviarMensagem(EMPRESA, caio.id, conv, 'intrometido'), 404);
     await esperaErro(() => chat.listarMensagens(OUTRA, ana.id, conv), 404);

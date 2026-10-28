@@ -14,6 +14,12 @@ const path = require('path');
 const dbTmpPath = path.join(os.tmpdir(), `ia-service-monitor-acessos-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
 process.env.SVC_DATA_CRYPTO_KEY = process.env.SVC_DATA_CRYPTO_KEY || crypto.randomBytes(32).toString('base64');
 
+// Empresa/sistema liberados para a validação do socket do chat pelo IAHub
+// (o assunto aqui é a regra do Monitor, não o cadastro de sistemas).
+require.cache[require.resolve('../../../modules/sistemas/database')] = {
+  id: 'sistemas-mock', filename: 'sistemas-mock', loaded: true,
+  exports: { hasCompanySystem: () => true, hasUserSystem: () => true },
+};
 const database = require('../backend/database');
 database.inicializarDB(dbTmpPath);
 
@@ -284,33 +290,83 @@ try {
   }
   assert.throws(() => presencaService.desconectarInternos(EMPRESA, { escopo: 'outro' }), /Escopo inválido/);
 
-  // Mensagem do Monitor (2026-10-28): sai pelo Chat interno em nome do
-  // analista de quem envia; sem analista cadastrado = 409; outra empresa = 404.
+  // Mensagens no Monitor (2026-10-28): a API do Chat interno montada em
+  // /api/ia-service/monitor-acessos/chat-interno, como o analista do usuário
+  // do IAHub; sem analista = 409; mensagem para si mesmo permitida.
   const rotas = {};
-  const appFalso = { post: (p, ...fns) => { rotas['POST ' + p] = fns; }, get: () => {}, delete: () => {}, patch: () => {}, use: () => {} };
+  const usos = [];
+  const appFalso = {
+    post: (p, ...fns) => { rotas['POST ' + p] = fns; }, get: (p, ...fns) => { rotas['GET ' + p] = fns; },
+    delete: () => {}, patch: () => {}, use: (p, ...fns) => { usos.push([p, fns]); },
+  };
   require('../backend/routes/monitor-acessos-routes').registrarInterno(appFalso);
-  const enviarMsg = (corpo, { userId = 40, empresa = EMPRESA } = {}) => {
+  const BASE_CHAT = '/api/ia-service/monitor-acessos/chat-interno';
+  const [, guardasChat] = usos.find(([p]) => p === BASE_CHAT);
+  const chamarChat = (metodo, sufixo, corpo, { userId = 40 } = {}) => {
     let status = 200, resposta = null;
-    const req = { body: corpo, session: { role: 'admin', user_id: userId }, svcEmpresaId: empresa };
+    const params = {};
+    const chave = Object.keys(rotas).find((k) => {
+      const [m, p] = k.split(' ');
+      if (m !== metodo || !p.startsWith(BASE_CHAT)) return false;
+      const re = new RegExp('^' + p.replace(/:[a-zA-Z]+/g, '([^/]+)') + '$');
+      const achou = (BASE_CHAT + sufixo).match(re);
+      if (achou) (p.match(/:[a-zA-Z]+/g) || []).forEach((n, i) => { params[n.slice(1)] = achou[i + 1]; });
+      return !!achou;
+    });
+    const req = { body: corpo, query: {}, params, session: { role: 'admin', user_id: userId }, svcEmpresaId: EMPRESA };
     const res = { status(c) { status = c; return this; }, json(b) { resposta = b; return this; } };
-    const [guarda, handler] = rotas['POST /api/ia-service/monitor-acessos/mensagem'];
-    guarda(req, res, () => handler(req, res));
+    const cadeia = [...guardasChat, ...rotas[chave]];
+    const proximo = (i) => { if (i < cadeia.length) cadeia[i](req, res, () => proximo(i + 1)); };
+    proximo(0);
     return { status, resposta };
   };
   const destinoMsg = consultorRepo.criarConsultor(EMPRESA, { telefone: '5565999990077' });
-  let m = enviarMsg({ consultorId: destinoMsg.id, texto: 'Oi' });
-  assert.strictEqual(m.status, 409, 'admin sem número no chat não envia');
+  assert.strictEqual(chamarChat('GET', '/contatos').status, 409, 'usuário sem número no chat');
   const adminChat = consultorRepo.criarConsultor(EMPRESA, { telefone: '5565999990078', usuarioIdIahub: 40 });
-  assert.strictEqual(enviarMsg({ consultorId: destinoMsg.id, texto: '   ' }).status, 400, 'mensagem vazia');
-  m = enviarMsg({ consultorId: destinoMsg.id, texto: 'Pode me ligar?' });
-  assert.strictEqual(m.status, 201);
+  const contatos = chamarChat('GET', '/contatos').resposta.contatos;
+  assert.strictEqual(contatos[0].consultorId, adminChat.id, '"Você" no topo');
+  const conv = chamarChat('POST', '/conversas', { consultorId: destinoMsg.id }).resposta.conversaId;
+  assert.strictEqual(chamarChat('POST', `/conversas/${conv}/mensagens`, { texto: 'Pode me ligar?' }).status, 201);
   const chatInterno = require('../backend/services/chat-interno-service');
-  const conversa = chatInterno.listarMensagens(EMPRESA, destinoMsg.id, m.resposta.conversaId);
-  assert.strictEqual(conversa.contato.consultorId, adminChat.id, 'chega como conversa com o analista de quem enviou');
-  assert.strictEqual(conversa.mensagens.at(-1).texto, 'Pode me ligar?');
-  assert.strictEqual(enviarMsg({ consultorId: consultorOutra.id, texto: 'x' }).status, 404, 'analista de outra empresa');
-  const audMsg = database.getDB().prepare("SELECT * FROM svc_monitor_auditoria WHERE acao = 'mensagem'").get();
-  assert.ok(!String(audMsg.detalhe).includes('ligar'), 'texto não vai para a auditoria');
+  const lidas = chatInterno.listarMensagens(EMPRESA, destinoMsg.id, conv);
+  assert.strictEqual(lidas.contato.consultorId, adminChat.id, 'chega como conversa com o analista de quem enviou');
+  assert.strictEqual(lidas.mensagens.at(-1).texto, 'Pode me ligar?');
+  const comigo = chamarChat('POST', '/conversas', { consultorId: adminChat.id }).resposta.conversaId;
+  assert.strictEqual(chamarChat('POST', `/conversas/${comigo}/mensagens`, { texto: 'lembrete' }).status, 201, 'para si mesmo');
+  assert.strictEqual(chamarChat('POST', '/conversas', { consultorId: consultorOutra.id }).status, 404, 'analista de outra empresa');
+
+  // Tempo real pelo login do IAHub: mesma exigência das rotas.
+  const chatIahub = require('../backend/services/chat-interno-iahub');
+  const reqSock = (session, sessionID = sid('sock')) => ({ session, sessionID });
+  assert.throws(() => chatIahub.identidadeDoSocket(reqSock({}), EMPRESA), (e) => e.status === 401);
+  assert.deepStrictEqual(chatIahub.identidadeDoSocket(reqSock({ authenticated: true, role: 'admin', user_id: 40 }), EMPRESA),
+    { empresaId: EMPRESA, consultorId: String(adminChat.id) });
+  assert.throws(() => chatIahub.identidadeDoSocket(reqSock({ authenticated: true, role: 'admin', user_id: 41 }), EMPRESA), (e) => e.status === 409);
+  const sidDesc = sid('desc');
+  presencaService.registrarSinal({ empresaId: EMPRESA, origem: 'interno', sessaoRef: presencaService.hashSessaoInterna(sidDesc), usuarioIdIahub: 40, tela: 'x', acao: 'x' });
+  presencaService.desconectarInternos(EMPRESA, { escopo: 'ia-service', excetoSessionId: sidAdmin });
+  assert.throws(() => chatIahub.identidadeDoSocket(reqSock({ authenticated: true, role: 'admin', user_id: 40 }, sidDesc), EMPRESA), (e) => e.status === 403, 'desconectado não entra');
+
+  // Socket: { iahub: true } entra pela sessão do IAHub e cai na sala do analista.
+  const realtimeChat = require('../backend/services/chat-interno-realtime');
+  let mwSocket = null;
+  realtimeChat.iniciar({ of: () => ({ use: (fn) => { mwSocket = fn; }, on: () => {}, sockets: new Map() }) }, {
+    sessionMiddleware: (req, _res, next) => { req.session = req._sessaoTeste; req.sessionID = sid('mw'); next(); },
+  });
+  const conectar = (sessao, auth) => {
+    const socket = { handshake: { auth }, request: { _sessaoTeste: sessao }, data: {} };
+    let erroSocket = null;
+    mwSocket(socket, (e) => { erroSocket = e || null; });
+    return { socket, erroSocket };
+  };
+  let c = conectar({ authenticated: true, role: 'admin', user_id: 40 }, { iahub: true, empresaId: EMPRESA });
+  assert.strictEqual(c.erroSocket, null);
+  assert.strictEqual(c.socket.data.consultorId, String(adminChat.id));
+  assert.ok(c.socket.data.sessaoId.startsWith('iahub:'), 'não vira login do chat');
+  c = conectar({ authenticated: true, role: 'admin', user_id: 41 }, { iahub: true, empresaId: EMPRESA });
+  assert.strictEqual(c.erroSocket?.message, 'nao_autorizado', 'sem analista não conecta');
+  c = conectar({}, {});
+  assert.strictEqual(c.erroSocket?.message, 'nao_autorizado', 'sem token nem sessão não conecta');
 
   // Chat de todos da empresa (botão Desconectar > Chat).
   const sc1 = criarSessaoExterna(EMPRESA, consultor.id);
