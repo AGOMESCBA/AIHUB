@@ -45,6 +45,7 @@
     {
       id: 'configuracao', label: 'Configuração', icon: '⚙', defaultOpen: false,
       items: [
+        { id: 'svc-numeros-autorizados', label: 'Números Autorizados', href: '/app/ia-service/numeros-autorizados.html', icon: '📱' },
         { id: 'svc-config-ia',   label: 'Configuração de IA', href: '/app/ia-service/config-ia.html', icon: '🤖' },
       ],
     },

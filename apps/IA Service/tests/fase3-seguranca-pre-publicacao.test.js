@@ -4,6 +4,7 @@
 // a investigacao de colisao de idempotencia entre chamados.
 // Executar: node "apps/IA Service/tests/fase3-seguranca-pre-publicacao.test.js"
 
+require('./helpers/rotinas-svc-liberadas'); // rotas exigem rotina svc-* (2026-10-28)
 const assert = require('assert');
 const fs = require('fs');
 const os = require('os');

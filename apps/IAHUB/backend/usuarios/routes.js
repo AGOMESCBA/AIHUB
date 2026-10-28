@@ -1,21 +1,27 @@
 const db = require('./database');
+const { requireAdmin } = require('../auth');
+
+// 2026-10-28: gravação e leitura de cadastro só para admin. Antes bastava
+// estar logado — um usuário comum conseguia, chamando a API direto, criar um
+// admin, se promover ou dar rotinas a si mesmo (achado na auditoria de
+// segurança do IA Service). As telas que usam estas rotas já são de admin.
 
 module.exports = function registerRoutes(app, { requireAuth }) {
 
   // ── Listar ─────────────────────────────────────────────────────────────────
-  app.get('/api/usuarios', requireAuth, (req, res) => {
+  app.get('/api/usuarios', requireAuth, requireAdmin, (req, res) => {
     res.json(db.listar());
   });
 
   // ── Buscar por ID ──────────────────────────────────────────────────────────
-  app.get('/api/usuarios/:id', requireAuth, (req, res) => {
+  app.get('/api/usuarios/:id', requireAuth, requireAdmin, (req, res) => {
     const u = db.buscarPorId(req.params.id);
     if (!u) return res.status(404).json({ error: 'Usuário não encontrado' });
     res.json(u);
   });
 
   // ── Criar ──────────────────────────────────────────────────────────────────
-  app.post('/api/usuarios', requireAuth, async (req, res) => {
+  app.post('/api/usuarios', requireAuth, requireAdmin, async (req, res) => {
     const { nome, usuario, senha, celular, email, role, empresas, erp_telefone, erp_cpf_cnpj, erp_id, erp_tipo } = req.body || {};
 
     if (!nome?.trim())    return res.status(400).json({ error: 'Nome é obrigatório' });
@@ -51,7 +57,7 @@ module.exports = function registerRoutes(app, { requireAuth }) {
   });
 
   // ── Atualizar ──────────────────────────────────────────────────────────────
-  app.put('/api/usuarios/:id', requireAuth, async (req, res) => {
+  app.put('/api/usuarios/:id', requireAuth, requireAdmin, async (req, res) => {
     const { nome, usuario, senha, celular, email, role, empresas, ativo, erp_telefone, erp_cpf_cnpj, erp_id, erp_tipo } = req.body || {};
 
     if (!nome?.trim())    return res.status(400).json({ error: 'Nome é obrigatório' });
@@ -88,7 +94,7 @@ module.exports = function registerRoutes(app, { requireAuth }) {
   });
 
   // ── Alterar senha (rota dedicada) ─────────────────────────────────────────
-  app.put('/api/usuarios/:id/senha', requireAuth, async (req, res) => {
+  app.put('/api/usuarios/:id/senha', requireAuth, requireAdmin, async (req, res) => {
     const { senha, confirmar } = req.body || {};
 
     if (!senha)           return res.status(400).json({ error: 'Nova senha é obrigatória' });
@@ -134,7 +140,7 @@ module.exports = function registerRoutes(app, { requireAuth }) {
   });
 
   // ── Excluir ────────────────────────────────────────────────────────────────
-  app.delete('/api/usuarios/:id', requireAuth, (req, res) => {
+  app.delete('/api/usuarios/:id', requireAuth, requireAdmin, (req, res) => {
     // Protege o usuário da sessão atual
     if (Number(req.params.id) === req.session.user_id) {
       return res.status(400).json({ error: 'Não é possível excluir o usuário logado' });

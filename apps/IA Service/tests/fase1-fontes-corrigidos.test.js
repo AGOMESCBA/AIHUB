@@ -3,6 +3,7 @@ process.env.SVC_ALLOW_FONTE_CORRIGIDO = '1';
 // Fase 1 - entrega operacional de fontes corrigidos.
 // Executar: node "apps/IA Service/tests/fase1-fontes-corrigidos.test.js"
 
+require('./helpers/rotinas-svc-liberadas'); // rotas exigem rotina svc-* (2026-10-28)
 const assert = require('assert');
 const fs = require('fs');
 const os = require('os');

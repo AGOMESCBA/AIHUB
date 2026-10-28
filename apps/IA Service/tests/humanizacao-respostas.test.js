@@ -1,5 +1,6 @@
 'use strict';
 
+require('./helpers/rotinas-svc-liberadas'); // rotas exigem rotina svc-* (2026-10-28)
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');

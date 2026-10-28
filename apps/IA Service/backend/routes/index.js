@@ -78,8 +78,10 @@ function _resolverCaminhoAnexoSeguro(caminhoRelativo) {
 
 module.exports = function registrarRotas(app, { requireAuth, requireIaService }) {
   app.use('/api/ia-service', requireAuth, requireIaService, requireEmpresaContext);
+  require('../services/rotina-permissao').aplicarRotinasPorPrefixo(app);
   require('./retorno-softexpert-routes')(app, '/api/ia-service');
   require('./monitor-acessos-routes').registrarInterno(app);
+  require('./numeros-autorizados-routes').registrar(app);
 
   // ── Atendimentos ────────────────────────────────────────────────────────
   app.post('/api/ia-service/atendimentos', (req, res) => {

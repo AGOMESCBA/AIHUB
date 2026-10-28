@@ -4,6 +4,7 @@
 // que usuarioId nunca e aceito de fonte que nao seja a sessao autenticada.
 // Executar: node "apps/IA Service/tests/avaliacao-investigacao-seguranca.test.js"
 
+require('./helpers/rotinas-svc-liberadas'); // rotas exigem rotina svc-* (2026-10-28)
 const assert = require('assert');
 const fs = require('fs');
 const os = require('os');

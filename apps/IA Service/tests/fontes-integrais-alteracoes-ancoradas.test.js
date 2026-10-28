@@ -5,6 +5,7 @@ process.env.SVC_ALLOW_FONTE_CORRIGIDO = '1';
 // rotas/upload/SQLite/extração/contexto/gate/humanização/versionamento/download
 // reais; autenticação e provider substituídos por fixtures. Nenhum fonte é
 // executado ou compilado.
+require('./helpers/rotinas-svc-liberadas'); // rotas exigem rotina svc-* (2026-10-28)
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');

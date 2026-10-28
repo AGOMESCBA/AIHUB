@@ -265,4 +265,4 @@ function iaServicePlatformDisponivel() {
   return !!safeGet("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = 'platform_identity_roles'");
 }
 
-module.exports = { getAiConfig, getSearchConfig, getAgentConfig, listarIaServicePorTelefone, listarIaServicePorEmpresa, iaServicePlatformDisponivel, getConfigPorApelido, obterEstiloResposta, definirEstiloResposta };
+module.exports = { getDB, getAiConfig, getSearchConfig, getAgentConfig, listarIaServicePorTelefone, listarIaServicePorEmpresa, iaServicePlatformDisponivel, getConfigPorApelido, obterEstiloResposta, definirEstiloResposta };

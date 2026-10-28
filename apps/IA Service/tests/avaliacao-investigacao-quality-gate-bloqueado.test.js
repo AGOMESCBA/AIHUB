@@ -10,6 +10,7 @@
 // (3) resposta normal (nao bloqueada) continua podendo ser avaliada.
 // Executar: node "apps/IA Service/tests/avaliacao-investigacao-quality-gate-bloqueado.test.js"
 
+require('./helpers/rotinas-svc-liberadas'); // rotas exigem rotina svc-* (2026-10-28)
 const assert = require('assert');
 const fs = require('fs');
 const os = require('os');

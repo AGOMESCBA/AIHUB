@@ -660,6 +660,21 @@ ROTINAS_MENU.push(
       { id: 'iac-admin-instalador-agente', label: 'Instalador do Agente Local', icon: 'P' },
     ],
   },
+  {
+    // Espelho dos ids de apps/IA Service/frontend/js/sidebar.js.
+    id: 'svc',
+    label: 'IA Service',
+    icon: 'S',
+    itens: [
+      { id: 'svc-radar', label: 'Radar de Chamados', icon: 'R' },
+      { id: 'svc-atendimentos', label: 'Atendimentos', icon: 'A' },
+      { id: 'svc-homologacao', label: 'Homologação da IA', icon: 'H' },
+      { id: 'svc-monitor-acessos', label: 'Monitor e Histórico de Acessos', icon: 'M' },
+      { id: 'svc-numeros-autorizados', label: 'Números Autorizados', icon: 'N' },
+      { id: 'svc-base-historica', label: 'Base Histórica', icon: 'B' },
+      { id: 'svc-config-ia', label: 'Configuração de IA', icon: 'C' },
+    ],
+  },
 );
 
 const TOTAL_ROTINAS = ROTINAS_MENU.reduce((n, g) => n + g.itens.length, 0);

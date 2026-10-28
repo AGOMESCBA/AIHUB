@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Números Autorizados - IA Service</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    /* Só tokens do iahub.css (tema claro/escuro via data-theme) — mesma
+       sobrescrita de accent das demais páginas do IA Service. */
+    :root { --accent:#1d4ed8; --accent-light:#3b82f6; --accent-glow:rgba(29,78,216,.1); }
+    .sidebar-logo .logo-icon { background:var(--accent) !important; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px;max-width:820px;line-height:1.5; }
+    .page-head { margin-bottom:14px; }
+    .error-banner { display:none;background:var(--bg-card);color:var(--error);border:1px solid var(--error);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px; }
+
+    .barra { display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 14px;margin-bottom:12px; }
+    .barra #busca { flex:1 1 240px;min-width:0; }
+    .barra select { width:auto;flex:0 0 auto; }
+    .barra .acoes { display:flex;gap:8px;margin-left:auto; }
+
+    .tabela-wrap { overflow-x:auto; }
+    table.nums { width:100%;border-collapse:collapse;font-size:13px; }
+    .nums th { text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-lo);font-weight:700;padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap; }
+    .nums td { padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text-hi); }
+    .nums tr:last-child td { border-bottom:none; }
+    .nums tr.inativo td { color:var(--text-lo); }
+    .nome { font-weight:600; }
+    .fone { font-size:12px;color:var(--text-md);margin-top:2px;font-variant-numeric:tabular-nums; }
+    .outros { font-size:11.5px;color:var(--text-lo);margin-top:3px; }
+    .badge { white-space:nowrap; }
+    .td-acoes { white-space:nowrap;text-align:right; }
+    .td-acoes .btn { padding:5px 10px;font-size:12px; }
+    .vazio { padding:28px 16px;text-align:center;color:var(--text-lo);font-size:13px; }
+    .grid-head { display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border); }
+    .grid-title { font-weight:700;color:var(--text-hi); }
+    .grid-meta { font-size:12px;color:var(--text-lo); }
+
+    /* Formulário */
+    .f-corpo .form-control:disabled { background:var(--bg-hover);color:var(--text-md);cursor:not-allowed;opacity:.85; }
+    dialog.form { margin:auto;border:1px solid var(--border);border-radius:12px;padding:0;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 32px);background:var(--bg-card);color:var(--text-hi);box-shadow:var(--shadow-md); }
+    dialog.form::backdrop { background:rgba(15,23,42,.45); }
+    .f-head { padding:16px 18px 10px;border-bottom:1px solid var(--border); }
+    .f-titulo { font-size:16px;font-weight:700; }
+    .f-sub { font-size:12.5px;color:var(--text-md);margin-top:3px; }
+    .f-corpo { padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px 14px; }
+    .f-corpo .full { grid-column:1 / -1; }
+    .f-corpo .form-group { margin:0; }
+    .f-corpo small { display:block;font-size:11.5px;color:var(--text-lo);margin-top:4px;line-height:1.4; }
+    .aviso { grid-column:1 / -1;font-size:12.5px;line-height:1.5;padding:9px 11px;border-radius:8px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-md); }
+    .f-erro { grid-column:1 / -1;display:none;color:var(--error);font-size:12.5px; }
+    .f-pe { display:flex;justify-content:flex-end;gap:8px;padding:12px 18px 16px;border-top:1px solid var(--border); }
+    .toast { position:fixed;right:16px;bottom:16px;z-index:50;background:var(--text-hi);color:var(--bg-card);padding:10px 14px;border-radius:8px;font-size:13px;box-shadow:var(--shadow-md);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;pointer-events:none; }
+    .toast.on { opacity:1;transform:none; }
+
+    @media (max-width:720px) {
+      .barra .acoes { margin-left:0;width:100%; }
+      .barra .acoes .btn { flex:1;justify-content:center; }
+      .nums thead { display:none; }
+      .nums, .nums tbody, .nums tr, .nums td { display:block;width:100%; }
+      .nums tr { padding:10px 14px;border-bottom:1px solid var(--border); }
+      .nums td { border:none;padding:3px 0; }
+      .nums td[data-rot]::before { content:attr(data-rot) ': ';color:var(--text-lo);font-size:12px; }
+      .td-acoes { text-align:left;padding-top:8px !important; }
+      .f-corpo { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Service</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Service ›</span> Números Autorizados</span>
+    </div>
+
+    <div class="page-content">
+      <div class="page-head">
+        <div class="page-kicker">Configuração</div>
+        <div class="page-title">Números Autorizados</div>
+        <div class="page-subtitle">Quem pode entrar no Radar (J2A) pelo código do WhatsApp nesta empresa. Inativar tira só o acesso ao IA Service — o acesso a outros sistemas do mesmo número não muda.</div>
+      </div>
+
+      <div id="error-banner" class="error-banner" role="alert"></div>
+
+      <section class="card barra" aria-label="Filtros">
+        <input id="busca" name="filtro-numeros-autorizados" class="form-control" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="Buscar nome, telefone ou ID SoftExpert..." aria-label="Buscar nome, telefone ou ID SoftExpert">
+        <select id="f-situacao" class="form-control" aria-label="Situação">
+          <option value="">Todas as situações</option>
+          <option value="ativo">Ativos</option>
+          <option value="inativo">Inativos</option>
+        </select>
+        <div class="acoes">
+          <button class="btn btn-ghost" id="btn-atualizar" type="button">↻ Atualizar</button>
+          <button class="btn btn-primary" id="btn-novo" type="button">+ Novo número</button>
+        </div>
+      </section>
+
+      <section class="card" style="padding:0;overflow:hidden">
+        <div class="grid-head">
+          <div class="grid-title">Números</div>
+          <div class="grid-meta" id="contagem">Carregando...</div>
+        </div>
+        <div class="tabela-wrap">
+          <table class="nums">
+            <thead><tr><th>Nome / telefone</th><th>ID SoftExpert</th><th>Perfil</th><th>Pré-análise</th><th>Resposta</th><th>Situação</th><th></th></tr></thead>
+            <tbody id="tbody"><tr><td colspan="7"><div class="vazio">Carregando...</div></td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<dialog class="form" id="dlg" aria-labelledby="f-titulo">
+  <form id="form" method="dialog" novalidate>
+    <div class="f-head">
+      <div class="f-titulo" id="f-titulo">Novo número</div>
+      <div class="f-sub" id="f-sub">Se o telefone já existir em outro sistema, ele só ganha o acesso ao IA Service.</div>
+    </div>
+    <div class="f-corpo">
+      <div class="aviso" id="f-aviso" hidden></div>
+      <div class="form-group full">
+        <label class="form-label" for="f-nome">Nome</label>
+        <input id="f-nome" class="form-control" maxlength="120" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="f-numero">Telefone (WhatsApp)</label>
+        <input id="f-numero" class="form-control" inputmode="tel" autocomplete="off" placeholder="55 65 99999-9999">
+        <small>Com DDI e DDD.</small>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="f-idse">ID SoftExpert</label>
+        <input id="f-idse" class="form-control" maxlength="40" autocomplete="off" placeholder="ex.: 784">
+        <small>Código do analista no SoftExpert desta empresa.</small>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="f-papel">Perfil</label>
+        <select id="f-papel" class="form-control"><option value="analista">Analista</option><option value="gestor">Gestor</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="f-pre">Pré-análise</label>
+        <select id="f-pre" class="form-control"><option value="true">Automática</option><option value="false">Manual</option></select>
+      </div>
+      <div class="form-group full">
+        <label class="form-label" for="f-estilo">Estilo da resposta</label>
+        <select id="f-estilo" class="form-control"><option value="NATURAL">Objetiva</option><option value="ORIGINAL">Técnica</option></select>
+      </div>
+      <div class="form-group full">
+        <label class="form-label" for="f-obs">Observações</label>
+        <input id="f-obs" class="form-control" maxlength="500" autocomplete="off">
+      </div>
+      <div class="f-erro" id="f-erro" role="alert"></div>
+    </div>
+    <div class="f-pe">
+      <button class="btn btn-ghost" type="button" id="f-cancelar">Cancelar</button>
+      <button class="btn btn-primary" type="submit" id="f-salvar">Salvar</button>
+    </div>
+  </form>
+</dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-service/js/sidebar.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const BASE = '/api/ia-service/numeros-autorizados';
+  const st = { itens: [], editando: null, salvando: false };
+  const empresaId = () => window._iahubEmpresa?.id || null;
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const digitos = (s) => String(s || '').replace(/\D/g, '');
+
+  function fone(t) {
+    const d = digitos(t);
+    if (d.length === 13) return `+${d.slice(0, 2)} ${d.slice(2, 4)} ${d.slice(4, 9)}-${d.slice(9)}`;
+    if (d.length === 12) return `+${d.slice(0, 2)} ${d.slice(2, 4)} ${d.slice(4, 8)}-${d.slice(8)}`;
+    return t || '';
+  }
+  function erro(msg) { const el = $('error-banner'); el.textContent = msg || ''; el.style.display = msg ? 'block' : 'none'; }
+  let toastT;
+  function toast(msg) { const el = $('toast'); el.textContent = msg; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 3200); }
+
+  function url(sufixo = '') {
+    const emp = empresaId();
+    return `${BASE}${sufixo}${emp ? `?empresa_id=${encodeURIComponent(emp)}` : ''}`;
+  }
+  async function api(caminho, opts = {}) {
+    const r = await fetch(caminho, { cache: 'no-store', headers: { 'Content-Type': 'application/json' }, ...opts });
+    const body = await r.json().catch(() => ({}));
+    if (r.status === 401) throw new Error('Sessão expirada. Entre novamente.');
+    if (r.status === 403) throw new Error(body.error || 'Você não tem permissão para Números Autorizados.');
+    if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
+    return body;
+  }
+
+  const SIT = {
+    ativo: ['badge-green', 'Ativo', 'Pode entrar no Radar (J2A)'],
+    inativo: ['badge-yellow', 'Inativo', 'Sem acesso ao IA Service'],
+    inativo_cadastro: ['badge-red', 'Inativo no cadastro geral', 'Número inativado no painel de Administração — só um administrador reativa'],
+  };
+
+  function filtrados() {
+    const q = $('busca').value.trim().toLowerCase();
+    const qd = digitos(q);
+    const sit = $('f-situacao').value;
+    return st.itens.filter((i) => {
+      if (sit === 'ativo' && i.situacao !== 'ativo') return false;
+      if (sit === 'inativo' && i.situacao === 'ativo') return false;
+      if (!q) return true;
+      return (i.nome || '').toLowerCase().includes(q)
+        || String(i.idSoftexpert || '').toLowerCase().includes(q)
+        || (qd && digitos(i.numero).includes(qd));
+    });
+  }
+
+  function render() {
+    const rows = filtrados();
+    const ativos = st.itens.filter((i) => i.situacao === 'ativo').length;
+    $('contagem').textContent = `${rows.length === st.itens.length ? st.itens.length : `${rows.length} de ${st.itens.length}`} número(s) · ${ativos} ativo(s)`;
+    if (!rows.length) {
+      $('tbody').innerHTML = `<tr><td colspan="7"><div class="vazio">${st.itens.length ? 'Nenhum número com esses filtros.' : 'Nenhum número cadastrado no IA Service. Use “+ Novo número”.'}</div></td></tr>`;
+      return;
+    }
+    $('tbody').innerHTML = rows.map((i) => {
+      const [cls, rot, dica] = SIT[i.situacao] || SIT.inativo;
+      const podeAlternar = i.situacao !== 'inativo_cadastro';
+      return `<tr class="${i.situacao === 'ativo' ? '' : 'inativo'}">
+        <td><div class="nome">${esc(i.nome)}</div><div class="fone">${esc(fone(i.numero))}</div>${i.compartilhado ? `<div class="outros">Também usado em: ${esc(i.outrosSistemas.join(', '))}</div>` : ''}</td>
+        <td data-rot="ID SoftExpert">${esc(i.idSoftexpert || '—')}</td>
+        <td data-rot="Perfil">${i.papel === 'gestor' ? 'Gestor' : 'Analista'}</td>
+        <td data-rot="Pré-análise">${i.preAnaliseAutomatica ? 'Automática' : 'Manual'}</td>
+        <td data-rot="Resposta">${i.estiloResposta === 'ORIGINAL' ? 'Técnica' : 'Objetiva'}</td>
+        <td data-rot="Situação"><span class="badge ${cls}" title="${esc(dica)}">${rot}</span></td>
+        <td class="td-acoes">
+          <button class="btn btn-ghost" type="button" data-editar="${esc(i.id)}">Editar</button>
+          ${podeAlternar ? `<button class="btn ${i.liberado ? 'btn-danger' : 'btn-ghost'}" type="button" data-alternar="${esc(i.id)}">${i.liberado ? 'Inativar' : 'Ativar'}</button>` : ''}
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function carregar() {
+    try {
+      st.itens = await api(url());
+      erro('');
+      render();
+    } catch (e) {
+      erro(e.message);
+      $('contagem').textContent = '';
+      $('tbody').innerHTML = '<tr><td colspan="7"><div class="vazio">Não foi possível carregar.</div></td></tr>';
+    }
+  }
+
+  function abrir(item) {
+    st.editando = item || null;
+    $('f-titulo').textContent = item ? 'Editar número' : 'Novo número';
+    $('f-sub').textContent = item ? fone(item.numero) : 'Se o telefone já existir em outro sistema, ele só ganha o acesso ao IA Service.';
+    $('f-nome').value = item?.nome || '';
+    $('f-numero').value = item ? fone(item.numero) : '';
+    $('f-idse').value = item?.idSoftexpert || '';
+    $('f-papel').value = item?.papel || 'analista';
+    $('f-pre').value = String(item ? item.preAnaliseAutomatica : true);
+    $('f-estilo').value = item?.estiloResposta || 'NATURAL';
+    $('f-obs').value = item?.observacoes || '';
+    const travado = !!item?.compartilhado;
+    ['f-nome', 'f-numero', 'f-obs'].forEach((id) => { $(id).disabled = travado; });
+    $('f-aviso').hidden = !travado;
+    $('f-aviso').textContent = travado ? `Este número também é usado em: ${item.outrosSistemas.join(', ')}. Nome, telefone e observações só podem ser alterados no painel de Administração.` : '';
+    $('f-erro').style.display = 'none';
+    $('dlg').showModal();
+    (travado ? $('f-idse') : $('f-nome')).focus();
+  }
+
+  async function salvar(e) {
+    e.preventDefault();
+    if (st.salvando) return;
+    const corpo = {
+      id: st.editando?.id,
+      nome: $('f-nome').value.trim(),
+      numero: digitos($('f-numero').value),
+      idSoftexpert: $('f-idse').value.trim(),
+      papel: $('f-papel').value,
+      preAnaliseAutomatica: $('f-pre').value === 'true',
+      estiloResposta: $('f-estilo').value,
+      observacoes: $('f-obs').value.trim(),
+    };
+    const falha = !st.editando?.compartilhado && !corpo.nome ? 'Informe o nome.'
+      : (corpo.numero.length < 10 || corpo.numero.length > 15) ? 'Telefone inválido. Informe DDI + DDD + número.'
+      : !corpo.idSoftexpert ? 'Informe o ID SoftExpert.' : '';
+    if (falha) { $('f-erro').textContent = falha; $('f-erro').style.display = 'block'; return; }
+    st.salvando = true;
+    $('f-salvar').disabled = true;
+    try {
+      const r = await api(url(), { method: 'POST', body: JSON.stringify(corpo) });
+      $('dlg').close();
+      toast(r.vinculadoAExistente ? 'Número já existia em outro sistema: acesso ao IA Service incluído.' : 'Número salvo.');
+      await carregar();
+    } catch (err) {
+      $('f-erro').textContent = err.message;
+      $('f-erro').style.display = 'block';
+    } finally {
+      st.salvando = false;
+      $('f-salvar').disabled = false;
+    }
+  }
+
+  async function alternar(item) {
+    const liberar = !item.liberado;
+    const msg = liberar
+      ? `Ativar o acesso de ${item.nome} ao IA Service?`
+      : `Inativar o acesso de ${item.nome} ao IA Service?\n\nEle deixa de entrar no Radar (J2A) e, se estiver logado, é desconectado em até 1 minuto. O acesso a outros sistemas do mesmo número não muda.`;
+    if (!confirm(msg)) return;
+    try {
+      await api(url(`/${encodeURIComponent(item.id)}/liberado`), { method: 'PUT', body: JSON.stringify({ liberado: liberar }) });
+      toast(liberar ? 'Acesso ativado.' : 'Acesso inativado.');
+      await carregar();
+    } catch (err) {
+      erro(err.message);
+    }
+  }
+
+  $('tbody').addEventListener('click', (e) => {
+    const ed = e.target.closest('[data-editar]');
+    const alt = e.target.closest('[data-alternar]');
+    const item = st.itens.find((i) => i.id === (ed || alt)?.dataset[ed ? 'editar' : 'alternar']);
+    if (!item) return;
+    if (ed) abrir(item); else alternar(item);
+  });
+  $('busca').addEventListener('input', render);
+  $('f-situacao').addEventListener('change', render);
+  $('btn-novo').addEventListener('click', () => abrir(null));
+  $('btn-atualizar').addEventListener('click', carregar);
+  $('f-cancelar').addEventListener('click', () => $('dlg').close());
+  $('form').addEventListener('submit', salvar);
+
+  (window._iahubAuthReady || Promise.resolve()).then(carregar);
+})();
+</script>
+</body>
+</html>

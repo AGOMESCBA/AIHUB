@@ -7,6 +7,7 @@
 // (5) execucaoAvaliavel: erro_provider/QG bloqueado = false, sem execucao = true.
 // Executar: node "apps/IA Service/tests/avaliacao-investigacao-resposta-curta.test.js"
 
+require('./helpers/rotinas-svc-liberadas'); // rotas exigem rotina svc-* (2026-10-28)
 const assert = require('assert');
 const fs = require('fs');
 const os = require('os');

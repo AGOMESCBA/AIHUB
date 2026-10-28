@@ -199,6 +199,11 @@ const _PAGINA_ROTINA = {
   '/app/ia-service/consultores.html':       'svc-consultores',
   '/app/ia-service/base-historica.html':    'svc-base-historica',
   '/app/ia-service/radar.html':             'svc-radar',
+  '/app/ia-service/homologacao.html':       'svc-homologacao',
+  '/app/ia-service/monitor-acessos.html':   'svc-monitor-acessos',
+  '/app/ia-service/historico-acessos.html': 'svc-monitor-acessos',
+  '/app/ia-service/numeros-autorizados.html': 'svc-numeros-autorizados',
+  '/app/ia-service/config-ia.html':         'svc-config-ia',
   // ── IAHub / IA Recruit
   '/dashboard.html':        'dashboard',
   '/monitores.html':        'monitores',
@@ -279,6 +284,10 @@ const _ROTINA_LABELS = {
   'svc-consultores':  'IA Service - Consultores',
   'svc-base-historica': 'IA Service - Base Histórica',
   'svc-radar': 'IA Service - Radar de Chamados',
+  'svc-homologacao': 'IA Service - Homologação da IA',
+  'svc-monitor-acessos': 'IA Service - Monitor e Histórico de Acessos',
+  'svc-numeros-autorizados': 'IA Service - Números Autorizados',
+  'svc-config-ia': 'IA Service - Configuração de IA',
   // ── IAHub / IA Recruit
   'dashboard': 'Dashboard',
   'monitores': 'Monitores',

@@ -1,6 +1,12 @@
 const db = require('./database');
 const sistemasDb = require('../sistemas/database');
 const { systemActiveFromRotinas } = require('./system-routines');
+const { requireAdmin } = require('../auth');
+
+// 2026-10-28: gravação e leitura de cadastro só para admin. Antes bastava
+// estar logado — um usuário comum conseguia, chamando a API direto, criar um
+// admin, se promover ou dar rotinas a si mesmo (achado na auditoria de
+// segurança do IA Service). As telas que usam estas rotas já são de admin.
 
 module.exports = function registerRoutes(app, { requireAuth }) {
 
@@ -27,11 +33,15 @@ module.exports = function registerRoutes(app, { requireAuth }) {
 
   // ── Permissões de um usuário (para a tela de edição) ─────────────────────────
   app.get('/api/permissoes/:usuarioId', requireAuth, (req, res) => {
+    // O próprio usuário pode ler as suas; as dos outros, só admin.
+    if (req.session.role !== 'admin' && Number(req.params.usuarioId) !== Number(req.session.user_id)) {
+      return res.status(403).json({ error: 'Acesso restrito a administradores' });
+    }
     res.json(db.getByUsuario(req.params.usuarioId));
   });
 
   // ── Salvar permissões de um usuário ──────────────────────────────────────────
-  app.put('/api/permissoes/:usuarioId', requireAuth, (req, res) => {
+  app.put('/api/permissoes/:usuarioId', requireAuth, requireAdmin, (req, res) => {
     const { permissoes } = req.body || {};
     if (!Array.isArray(permissoes)) {
       return res.status(400).json({ error: 'permissoes deve ser um array' });

@@ -118,7 +118,7 @@ module.exports = function registerRoutes(app, { requireAuth }) {
   });
 
   // ── Criar ──────────────────────────────────────────────────────────────────
-  app.post('/api/empresas', requireAuth, (req, res) => {
+  app.post('/api/empresas', requireAuth, requireAdmin, (req, res) => {
     const { razao_social, documento, site, telefone, email, endereco, login_slogan } = req.body || {};
 
     if (!razao_social?.trim()) {
@@ -144,7 +144,7 @@ module.exports = function registerRoutes(app, { requireAuth }) {
   });
 
   // ── Atualizar ──────────────────────────────────────────────────────────────
-  app.put('/api/empresas/:id', requireAuth, (req, res) => {
+  app.put('/api/empresas/:id', requireAuth, requireAdmin, (req, res) => {
     const { razao_social, documento, site, telefone, email, endereco, login_slogan } = req.body || {};
 
     if (!razao_social?.trim()) {
@@ -210,7 +210,7 @@ module.exports = function registerRoutes(app, { requireAuth }) {
   });
 
   // ── Excluir ────────────────────────────────────────────────────────────────
-  app.delete('/api/empresas/:id', requireAuth, (req, res) => {
+  app.delete('/api/empresas/:id', requireAuth, requireAdmin, (req, res) => {
     const ok = db.excluir(req.params.id);
     if (!ok) return res.status(404).json({ error: 'Empresa não encontrada' });
     res.json({ ok: true });

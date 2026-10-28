@@ -1,6 +1,7 @@
 // Regressao pos-auditoria da Fase 3.
 // Executar: node "apps/IA Service/tests/fase3-pos-auditoria.test.js"
 
+require('./helpers/rotinas-svc-liberadas'); // rotas exigem rotina svc-* (2026-10-28)
 const assert = require('assert');
 // Consultores deste teste sao criados direto no IA Service (sem cadastro na
 // Platform): modo legado, senao a revogacao de acesso por Platform os derruba.
