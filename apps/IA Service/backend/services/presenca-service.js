@@ -185,6 +185,101 @@ function derrubarPessoaChat(empresaId, consultorId, usuarioId = null) {
   return { sessaoIds: sessoes };
 }
 
+// ── Desconectar (2026-10-28) ────────────────────────────────────────────────
+// Sessão interna desconectada "só do IA Service": o IAHub não tem como tirar
+// UM sistema de uma sessão (no MDI as telas mandam empresa_id e o
+// requireSystemAccess ignora system_code), então a marca fica aqui, pelo hash
+// do sessionID. Toda chamada a /api/ia-service dessa sessão recebe 403 até o
+// sinal de presença do shell ler a marca — o shell então volta para a tela
+// inicial do IAHub e a marca é consumida (pode entrar de novo, igual ao chat:
+// derrubar não é bloquear). Em memória: produção roda 1 processo; um restart
+// antes do próximo sinal perde a marca (a pessoa segue no IA Service).
+// "Do IAHub inteiro" apaga o arquivo da sessão (login some em todo o IAHub).
+const DESCONECTADO_VALIDO_MS = 8 * 60 * 60 * 1000; // vida máxima da sessão do IAHub
+const _desconectados = new Map(); // hash do sessionID -> { escopo, ate }
+
+function desconexaoPendente(sessionId) {
+  if (!sessionId) return null;
+  const hash = hashSessaoInterna(sessionId);
+  const marca = _desconectados.get(hash);
+  if (!marca) return null;
+  if (marca.ate < Date.now()) { _desconectados.delete(hash); return null; }
+  return marca.escopo;
+}
+
+function consumirDesconexao(sessionId) {
+  if (sessionId) _desconectados.delete(hashSessaoInterna(sessionId));
+}
+
+// Apaga do disco a(s) sessão(ões) do IAHub cujo hash está em `hashes`. O
+// arquivo tem o nome do sessionID (FileSessionStore). Devolve quantas apagou.
+function _apagarSessoesIahub(hashes) {
+  if (!hashes.size) return 0;
+  const fs = require('fs');
+  const path = require('path');
+  const dir = require('../../../IAHUB/backend/data-paths').appDataDir('sessions');
+  let n = 0;
+  let arquivos = [];
+  try { arquivos = fs.readdirSync(dir).filter(f => f.endsWith('.json')); } catch (_) { return 0; }
+  for (const f of arquivos) {
+    if (!hashes.has(hashSessaoInterna(f.slice(0, -5)))) continue;
+    try { fs.unlinkSync(path.join(dir, f)); n += 1; } catch (_) {}
+  }
+  return n;
+}
+
+/**
+ * Desconecta sessões INTERNAS da empresa. `presencaIds` limita a uma pessoa
+ * (ids de svc_presenca); sem ele, todas as internas visíveis no painel.
+ * `excetoSessionId` = sessão de quem está desconectando (nunca derruba a si
+ * mesmo). escopo: 'ia-service' | 'iahub'.
+ */
+function desconectarInternos(empresaId, { presencaIds = null, escopo = 'ia-service', excetoSessionId = null, usuarioId = null, agoraMs = Date.now() } = {}) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (escopo !== 'ia-service' && escopo !== 'iahub') throw Object.assign(new Error('Escopo inválido.'), { status: 400 });
+  const db = getDB();
+  const exceto = excetoSessionId ? hashSessaoInterna(excetoSessionId) : null;
+  let linhas = db.prepare(`
+    SELECT id, sessao_ref FROM svc_presenca WHERE empresa_id = ? AND origem = 'interno' AND ultimo_sinal_em > ?
+  `).all(Number(empresaId), new Date(agoraMs - INTERNO_VISIVEL_ATE_MS).toISOString());
+  if (Array.isArray(presencaIds)) {
+    const ids = new Set(presencaIds.map(Number));
+    linhas = linhas.filter(l => ids.has(Number(l.id)));
+  }
+  const alvo = linhas.filter(l => l.sessao_ref !== exceto);
+  const ignorouPropria = alvo.length < linhas.length;
+  if (!alvo.length) return { sessoesDesconectadas: 0, ignorouPropria };
+
+  const hashes = new Set(alvo.map(l => l.sessao_ref));
+  for (const h of hashes) _desconectados.set(h, { escopo, ate: agoraMs + DESCONECTADO_VALIDO_MS });
+  if (escopo === 'iahub') _apagarSessoesIahub(hashes);
+
+  db.transaction(() => {
+    for (const l of alvo) {
+      db.prepare('DELETE FROM svc_presenca_eventos WHERE presenca_id = ?').run(l.id);
+      db.prepare('DELETE FROM svc_presenca WHERE id = ?').run(l.id);
+    }
+  })();
+  historico.registrarEncerramento({
+    empresaId, origem: 'interno', sessaoRefs: [...hashes],
+    motivo: escopo === 'iahub' ? 'desconectado_iahub' : 'desconectado', usuarioId,
+  });
+  return { sessoesDesconectadas: hashes.size, ignorouPropria };
+}
+
+// Todos os logins válidos do chat J2A da empresa (mesmo efeito do derrubar
+// por pessoa, para todo mundo). Devolve os ids para o tempo real.
+function desconectarChatTodos(empresaId, usuarioId = null) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const db = getDB();
+  const sessoes = db.prepare('SELECT id FROM svc_sessoes_externas WHERE empresa_id = ? AND expira_em > ?')
+    .all(Number(empresaId), new Date().toISOString()).map(r => r.id);
+  if (sessoes.length) {
+    db.transaction(() => sessoes.forEach((id) => encerrarSessaoChat(empresaId, id, { motivo: 'derrubado', usuarioId })))();
+  }
+  return { sessaoIds: sessoes };
+}
+
 function registrarAuditoria({ empresaId, acao, alvo = null, usuarioId = null, motivo = null, detalhe = null }) {
   getDB().prepare(`
     INSERT INTO svc_monitor_auditoria (id, empresa_id, acao, alvo, usuario_id, motivo, detalhe, criado_em)
@@ -351,6 +446,10 @@ module.exports = {
   registrarSaida,
   encerrarSessaoChat,
   derrubarPessoaChat,
+  desconectarInternos,
+  desconectarChatTodos,
+  desconexaoPendente,
+  consumirDesconexao,
   registrarAuditoria,
   listarMonitor,
   limparMonitor,

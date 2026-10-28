@@ -178,6 +178,16 @@ const sessionMiddleware = session({
 });
 app.use(sessionMiddleware);
 
+// Respostas de API nunca vão para cache (2026-10-28). Em produção há um IIS
+// com ARR na frente; sem Cache-Control, a tela inicial chegou a receber
+// /api/session/empresa e /api/sistemas/disponiveis antigos ("Nenhum sistema
+// disponível" com empresa escolhida) e só o Ctrl+F5 resolvia. Rota que
+// precisa de cache define o próprio Cache-Control depois (sobrescreve este).
+app.use('/api', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, private');
+  next();
+});
+
 // Compartilha a sessão Express com Socket.IO para saber qual empresa cada socket pertence
 io.use((socket, next) => sessionMiddleware(socket.request, socket.request.res || {}, next));
 

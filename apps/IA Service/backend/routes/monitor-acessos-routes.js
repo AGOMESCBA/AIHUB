@@ -92,6 +92,59 @@ function registrarInterno(app) {
     }
   });
 
+  // Desconectar em massa (botão "Desconectar" do painel, 2026-10-28):
+  // alvo 'ia-service' = sessões internas só do IA Service; 'chat' = logins
+  // do chat J2A; 'todos' = os dois. Nunca desconecta quem está pedindo.
+  app.post('/api/ia-service/monitor-acessos/desconectar', podeMonitorar, (req, res) => {
+    try {
+      const alvo = String(req.body?.alvo || '');
+      if (!['ia-service', 'chat', 'todos'].includes(alvo)) return res.status(400).json({ error: 'Escolha IA Service, Chat ou Todos.' });
+      const usuarioId = Number(req.session?.user_id) || null;
+      let internas = 0;
+      let chat = [];
+      if (alvo !== 'chat') {
+        internas = presencaService.desconectarInternos(req.svcEmpresaId, { escopo: 'ia-service', excetoSessionId: req.sessionID, usuarioId }).sessoesDesconectadas;
+      }
+      if (alvo !== 'ia-service') {
+        chat = presencaService.desconectarChatTodos(req.svcEmpresaId, usuarioId).sessaoIds;
+        realtime.encerrarSessoes(chat);
+      }
+      presencaService.registrarAuditoria({
+        empresaId: req.svcEmpresaId, acao: 'desconectar', alvo, usuarioId,
+        motivo: req.body?.motivo, detalhe: { internas, chat: chat.length },
+      });
+      res.json({ internasDesconectadas: internas, chatEncerradas: chat.length });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // Desconectar UMA pessoa interna (todas as sessões dela que estão no
+  // painel, menos a de quem pede). escopo 'iahub' (sai do IAHub inteiro,
+  // inclusive dos outros sistemas) só para admin.
+  app.post('/api/ia-service/monitor-acessos/desconectar-interno', podeMonitorar, (req, res) => {
+    try {
+      const escopo = String(req.body?.escopo || '');
+      if (escopo === 'iahub' && req.session?.role !== 'admin') {
+        return res.status(403).json({ error: 'Só administradores podem desconectar do IAHub inteiro.' });
+      }
+      const presencaIds = Array.isArray(req.body?.presencaIds) ? req.body.presencaIds.map(Number).filter(Number.isFinite) : [];
+      if (!presencaIds.length) return res.status(400).json({ error: 'Sessão obrigatória.' });
+      const usuarioId = Number(req.session?.user_id) || null;
+      const r = presencaService.desconectarInternos(req.svcEmpresaId, { presencaIds, escopo, excetoSessionId: req.sessionID, usuarioId });
+      if (!r.sessoesDesconectadas && r.ignorouPropria) {
+        return res.status(400).json({ error: 'Esta é a sua própria sessão — para sair, use o botão Sair.' });
+      }
+      presencaService.registrarAuditoria({
+        empresaId: req.svcEmpresaId, acao: escopo === 'iahub' ? 'desconectar_iahub' : 'desconectar', alvo: `interno:${presencaIds.join(',')}`,
+        usuarioId, motivo: req.body?.motivo, detalhe: r,
+      });
+      res.json(r);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   // Histórico de Acessos: logins e falhas de login da empresa da sessão num
   // período (de/ate = instantes ISO calculados no fuso do navegador).
   app.get('/api/ia-service/monitor-acessos/historico', podeMonitorar, (req, res) => {
@@ -164,4 +217,19 @@ function registrarExterno(app) {
   });
 }
 
-module.exports = { registrarInterno, registrarExterno, ROTINA };
+// Sessão interna desconectada pelo Monitor (ver presencaService.desconectarInternos).
+// Registrar logo depois de requireEmpresaContext, antes das rotas. O sinal de
+// presença do shell consome a marca e recebe o aviso para sair da tela.
+function bloquearDesconectados(req, res, next) {
+  const escopo = presencaService.desconexaoPendente(req.sessionID);
+  if (!escopo) return next();
+  const caminho = req.baseUrl + req.path;
+  if (escopo === 'iahub') {
+    presencaService.consumirDesconexao(req.sessionID);
+    return req.session.destroy(() => res.status(401).json({ error: 'Sua sessão foi encerrada pelo administrador.', desconectado: 'iahub' }));
+  }
+  if (caminho === '/api/ia-service/presenca') presencaService.consumirDesconexao(req.sessionID);
+  return res.status(403).json({ error: 'Você foi desconectado do IA Service pelo administrador.', desconectado: 'ia-service' });
+}
+
+module.exports = { registrarInterno, registrarExterno, bloquearDesconectados, ROTINA };

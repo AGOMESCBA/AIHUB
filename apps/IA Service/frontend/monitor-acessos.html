@@ -167,6 +167,14 @@
     .btn-limpar { background:transparent;border:1px solid rgba(220,38,38,.45);color:#dc2626; }
     .btn-limpar:hover { background:rgba(220,38,38,.08); }
     .btn-limpar:disabled { opacity:.55;cursor:wait; }
+    .desc-wrap { position:relative; }
+    .desc-menu { position:fixed;z-index:60;width:min(280px, calc(100vw - 32px));background:var(--bg-card);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:6px;display:flex;flex-direction:column;gap:2px; }
+    .desc-menu[hidden] { display:none; }
+    .desc-menu button { all:unset;cursor:pointer;padding:9px 10px;border-radius:7px;display:flex;flex-direction:column;gap:2px; }
+    .desc-menu button:hover, .desc-menu button:focus-visible { background:var(--bg-hover); }
+    .desc-menu b { font-size:13px;color:var(--text-hi);font-weight:600; }
+    .desc-menu span { font-size:11.5px;color:var(--text-md); }
+    .desc-opcoes { display:flex;gap:8px;flex-wrap:wrap; }
     .qtd-sessoes { display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700;background:rgba(37,99,235,.12);color:#2563eb;vertical-align:middle; }
     .sessoes-lista { list-style:none;margin:0;padding:0;display:grid;gap:8px; }
     .sessoes-lista li { padding:8px 10px;border:1px solid var(--border, rgba(127,127,127,.25));border-radius:8px;font-size:12.5px;line-height:1.45; }
@@ -245,14 +253,22 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
             Atualizar
           </button>
-          <a class="btn btn-ghost" id="btn-historico" href="/app/ia-service/historico-acessos.html" title="Todos os logins por dia e hora, tempo logado, IP e falhas de login (o Limpar não apaga o histórico)">
+          <a class="btn btn-ghost" id="btn-historico" href="/app/ia-service/historico-acessos.html" title="Todos os logins por dia e hora, tempo logado, IP e falhas de login (o Desconectar não apaga o histórico)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/><polyline points="12 7 12 12 15 14"/></svg>
             Histórico
           </a>
-          <button class="btn btn-limpar" id="btn-limpar" type="button" title="Zera tempos de tela e atividade e encerra todos os logins do chat J2A desta empresa">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-            Limpar
-          </button>
+          <div class="desc-wrap">
+            <button class="btn btn-limpar" id="btn-limpar" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="desc-menu" title="Desconectar quem está conectado nesta empresa (você nunca é desconectado)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+              Desconectar
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="desc-menu" id="desc-menu" role="menu" hidden>
+              <button type="button" role="menuitem" data-desc="ia-service"><b>IA Service</b><span>Quem está nas rotinas internas volta para a tela inicial do IAHub</span></button>
+              <button type="button" role="menuitem" data-desc="chat"><b>Chat (Radar J2A)</b><span>Encerra todos os logins do chat; entram de novo com o código</span></button>
+              <button type="button" role="menuitem" data-desc="todos"><b>Todos</b><span>IA Service e Chat</span></button>
+            </div>
+          </div>
           </div>
         </section>
 
@@ -661,9 +677,50 @@
     if (motivo) { motivo.value = st.motivo || ''; if (st.focoMotivo) motivo.focus(); }
   }
 
-  // Derrubar o acesso ao chat J2A (todas as sessões da pessoa). Só para o
-  // chat: rotinas internas usam o login do IAHub, administrado lá.
+  // Derrubar o acesso ao chat J2A (todas as sessões da pessoa). Pessoa das
+  // rotinas internas (login do IAHub): desconectar só do IA Service ou do
+  // IAHub inteiro — esta segunda só para admin (o servidor confere).
+  function blocoInterno(s) {
+    const admin = window._iahubUser?.role === 'admin';
+    if (st.confirmarDerrubar === s.id) {
+      return `<div class="gv-sec"><div class="gv-titulo">Acesso</div><div class="derrubar-box">
+        <b>Desconectar ${esc(s.nome)}?</b>
+        <span><b>Só do IA Service:</b> em até 30 segundos volta para a tela inicial do IAHub e continua logado nos outros sistemas.${admin ? ' <b>Do IAHub inteiro:</b> encerra o login — sai também do IA Command e dos demais sistemas.' : ''} Sua própria sessão nunca é desconectada.</span>
+        <input type="text" id="gv-motivo" class="form-control" maxlength="120" placeholder="Motivo (opcional, fica registrado)">
+        <div class="derrubar-acoes">
+          <button type="button" class="btn btn-derrubar" data-gv="desc-svc" ${st.derrubando ? 'disabled' : ''}>${st.derrubando ? 'Desconectando…' : 'Só do IA Service'}</button>
+          ${admin ? `<button type="button" class="btn btn-derrubar" data-gv="desc-iahub" ${st.derrubando ? 'disabled' : ''}>Do IAHub inteiro</button>` : ''}
+          <button type="button" class="btn btn-ghost" data-gv="derrubar-cancelar">Cancelar</button>
+        </div></div></div>`;
+    }
+    return `<div class="gv-sec"><div class="gv-titulo">Acesso</div>
+      <button type="button" class="btn btn-derrubar-leve" data-gv="derrubar">Desconectar…</button></div>`;
+  }
+
+  async function desconectarInterno(s, escopo) {
+    st.derrubando = true;
+    renderGaveta();
+    try {
+      const presencaIds = (s.sessoes || [s]).map((x) => Number(String(x.id).replace(/^interno:/, ''))).filter(Number.isFinite);
+      const r = await api(`/api/ia-service/monitor-acessos/desconectar-interno?empresa_id=${encodeURIComponent(empresaId())}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ empresa_id: empresaId(), presencaIds, escopo, motivo: st.motivo || null }),
+      });
+      st.confirmarDerrubar = null; st.motivo = '';
+      fecharGaveta();
+      await carregar(true);
+      $('stamp').textContent = `${s.nome}: ${r.sessoesDesconectadas} sessão(ões) desconectada(s) ${escopo === 'iahub' ? 'do IAHub' : 'do IA Service'}${r.ignorouPropria ? ' (a sua foi mantida)' : ''}.`;
+    } catch (e) {
+      erro('Não foi possível desconectar: ' + e.message);
+    } finally {
+      st.derrubando = false;
+      renderGaveta();
+    }
+  }
+
   function blocoAcesso(s) {
+    if (s.origem === 'interno') return blocoInterno(s);
     if (s.origem !== 'chat') return '';
     if (st.confirmarDerrubar === s.id) {
       return `<div class="gv-sec"><div class="gv-titulo">Acesso</div><div class="derrubar-box">
@@ -776,24 +833,56 @@
     atualizarFiltroSituacao();
     render();
   });
-  $('btn-limpar').addEventListener('click', async () => {
+  const DESC_TEXTO = {
+    'ia-service': 'Desconectar do IA Service todos os que estão nas rotinas internas',
+    chat: 'Encerrar todos os logins do chat (Radar J2A)',
+    todos: 'Desconectar TODOS (rotinas internas do IA Service e chat)',
+  };
+  // position:fixed — a barra de ferramentas corta o que passa da borda.
+  function menuDesconectar(abrir) {
+    const menu = $('desc-menu');
+    menu.hidden = !abrir;
+    if (abrir) {
+      const r = $('btn-limpar').getBoundingClientRect();
+      const larg = menu.offsetWidth;
+      menu.style.top = `${r.bottom + 6}px`;
+      menu.style.left = `${Math.max(16, Math.min(r.left, window.innerWidth - larg - 16))}px`;
+    }
+    $('btn-limpar').setAttribute('aria-expanded', abrir ? 'true' : 'false');
+  }
+  $('btn-limpar').addEventListener('click', (e) => { e.stopPropagation(); menuDesconectar($('desc-menu').hidden); });
+  document.addEventListener('click', (e) => { if (!e.target.closest('.desc-wrap')) menuDesconectar(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') menuDesconectar(false); });
+  window.addEventListener('resize', () => menuDesconectar(false));
+  window.addEventListener('scroll', () => menuDesconectar(false), true);
+  $('desc-menu').addEventListener('click', async (e) => {
+    const alvo = e.target.closest('[data-desc]')?.dataset.desc;
+    if (!alvo) return;
+    menuDesconectar(false);
     const emp = empresaId();
     if (!emp) return;
     const nomeEmpresa = window._iahubEmpresa?.nome || 'esta empresa';
-    if (!confirm(`Limpar o Monitor de Acessos de ${nomeEmpresa}?\n\n`
-      + '• Apaga os tempos de tela e a atividade registrada.\n'
-      + '• ENCERRA todos os logins do chat (Radar J2A) desta empresa, inclusive de quem está usando agora: todos precisarão entrar de novo com o código. '
-      + 'Rascunhos de retorno ao SoftExpert que estiverem abertos serão perdidos.\n\n'
-      + 'As rotinas internas do IA Service não são desconectadas. O Histórico de Acessos é mantido. Esta ação não pode ser desfeita.')) return;
+    const avisos = [];
+    if (alvo !== 'chat') avisos.push('• Rotinas internas: em até 30 segundos a pessoa volta para a tela inicial do IAHub. Continua logada no IAHub e pode abrir o IA Service de novo.');
+    if (alvo !== 'ia-service') avisos.push('• Chat: a tela volta para o login na hora; todos precisam entrar de novo com o código. Rascunhos de retorno ao SoftExpert abertos serão perdidos.');
+    if (!confirm(`${DESC_TEXTO[alvo]} em ${nomeEmpresa}?\n\n${avisos.join('\n')}\n\nVocê não é desconectado. O Histórico de Acessos é mantido.`)) return;
     const btn = $('btn-limpar');
     btn.disabled = true;
     try {
-      const r = await api(`/api/ia-service/monitor-acessos?empresa_id=${encodeURIComponent(emp)}`, { method: 'DELETE' });
-      st.selId = null; st.chamado = null; st.chamadoErro = null; st.ampliada = false; st.ultimoSinalPorId.clear(); st.dados = null;
+      const r = await api(`/api/ia-service/monitor-acessos/desconectar?empresa_id=${encodeURIComponent(emp)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ empresa_id: emp, alvo }),
+      });
+      st.selId = null; st.chamado = null; st.chamadoErro = null; st.ampliada = false;
+      fecharGaveta();
       await carregar(true);
-      $('stamp').textContent = `Limpo: ${r.sessoesEncerradas} login(s) encerrado(s), ${r.presencasRemovidas} registro(s) de presença apagado(s).`;
-    } catch (e) {
-      erro('Não foi possível limpar o monitor: ' + e.message);
+      const partes = [];
+      if (alvo !== 'chat') partes.push(`${r.internasDesconectadas} sessão(ões) interna(s)`);
+      if (alvo !== 'ia-service') partes.push(`${r.chatEncerradas} login(s) do chat`);
+      $('stamp').textContent = `Desconectado: ${partes.join(' e ')}.`;
+    } catch (e2) {
+      erro('Não foi possível desconectar: ' + e2.message);
     } finally {
       btn.disabled = false;
     }
@@ -841,6 +930,14 @@
     if (acao === 'proximo') return navegar(1);
     if (acao === 'derrubar') { st.confirmarDerrubar = st.selId; st.motivo = ''; st.focoMotivo = true; renderGaveta(); st.focoMotivo = false; return; }
     if (acao === 'derrubar-cancelar') { st.confirmarDerrubar = null; st.motivo = ''; return renderGaveta(); }
+    if (acao === 'desc-svc' || acao === 'desc-iahub') {
+      const p = st.dados?.pessoas.find((x) => x.id === st.selId);
+      if (p && !st.derrubando) {
+        if (acao === 'desc-iahub' && !confirm(`Encerrar o login de ${p.nome} no IAHub inteiro?\n\nA pessoa sai também do IA Command e dos demais sistemas.`)) return;
+        desconectarInterno(p, acao === 'desc-iahub' ? 'iahub' : 'ia-service');
+      }
+      return;
+    }
     if (acao === 'derrubar-ok') { const p = st.dados?.pessoas.find((x) => x.id === st.selId); if (p && !st.derrubando) derrubar(p); return; }
     const btn = e.target.closest('[data-chamado]');
     if (btn) carregarChamado(btn.dataset.chamado);

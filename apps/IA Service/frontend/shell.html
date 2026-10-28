@@ -195,6 +195,15 @@
         cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ empresa_id: empresaId, tela: telaAtiva(), acao: 'Rotina interna do IA Service', visivel: true }),
+      }).then(async (r) => {
+        // Desconectado pelo Monitor de Acessos (2026-10-28): sai do IA Service.
+        if (r.ok || (r.status !== 401 && r.status !== 403)) return;
+        // 401 = sessão do IAHub não existe mais (desconectado do IAHub inteiro
+        // apaga o arquivo da sessão antes do próximo sinal chegar aqui).
+        const d = await r.json().catch(() => ({}));
+        if (r.status === 403 && !d.desconectado) return;
+        alert(r.status === 401 ? 'Sua sessão foi encerrada. Entre de novo.' : (d.error || 'Você foi desconectado pelo administrador.'));
+        window.top.location.href = r.status === 401 ? '/login.html' : '/iahub.html';
       }).catch(() => null);
     }
     (window._iahubAuthReady || Promise.resolve()).then(() => {

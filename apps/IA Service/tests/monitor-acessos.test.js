@@ -229,6 +229,68 @@ try {
   assert.strictEqual(aud.usuario_id, 7);
   assert.ok(aud.motivo.length <= 120, 'motivo é limitado');
 
+  // Desconectar internos (2026-10-28): só do IA Service, nunca a si mesmo,
+  // só a empresa pedida; a marca bloqueia as APIs até o sinal do shell.
+  const { bloquearDesconectados } = require('../backend/routes/monitor-acessos-routes');
+  const sid = (n) => `sid-teste-${n}-${crypto.randomBytes(6).toString('hex')}`;
+  const sidAdmin = sid('admin'), sidA1 = sid('a1'), sidA2 = sid('a2'), sidOutra = sid('outra');
+  for (const [s, emp, u] of [[sidAdmin, EMPRESA, 1], [sidA1, EMPRESA, 5], [sidA2, EMPRESA, 5], [sidOutra, OUTRA_EMPRESA, 5]]) {
+    presencaService.registrarSinal({ empresaId: emp, origem: 'interno', sessaoRef: presencaService.hashSessaoInterna(s), usuarioIdIahub: u, tela: 'Radar', acao: 'x' });
+  }
+  const r1 = presencaService.desconectarInternos(EMPRESA, { escopo: 'ia-service', excetoSessionId: sidAdmin });
+  assert.strictEqual(r1.sessoesDesconectadas, 2, 'as duas sessões do usuário 5 caem');
+  assert.strictEqual(r1.ignorouPropria, true);
+  assert.ok(presenca(presencaService.hashSessaoInterna(sidAdmin)), 'a sessão de quem desconecta fica');
+  assert.strictEqual(presenca(presencaService.hashSessaoInterna(sidA1)), undefined);
+  assert.ok(presenca(presencaService.hashSessaoInterna(sidOutra)), 'outra empresa intacta');
+  assert.strictEqual(presencaService.desconexaoPendente(sidAdmin), null);
+  assert.strictEqual(presencaService.desconexaoPendente(sidOutra), null);
+
+  const chamar = (s, p, extra = {}) => {
+    let status = 200, corpo = null, passou = false;
+    const res = { status(c) { status = c; return this; }, json(b) { corpo = b; return this; } };
+    bloquearDesconectados({ sessionID: s, baseUrl: '/api/ia-service', path: p, ...extra }, res, () => { passou = true; });
+    return { status, corpo, passou };
+  };
+  assert.strictEqual(chamar(sidAdmin, '/radar').passou, true);
+  let b = chamar(sidA1, '/radar/fila');
+  assert.strictEqual(b.status, 403);
+  assert.strictEqual(b.corpo.desconectado, 'ia-service');
+  assert.strictEqual(chamar(sidA1, '/radar/fila').status, 403, 'outra chamada não consome a marca');
+  assert.strictEqual(chamar(sidA1, '/presenca').corpo.desconectado, 'ia-service', 'o sinal do shell recebe o aviso');
+  assert.strictEqual(chamar(sidA1, '/radar/fila').passou, true, 'depois do aviso pode entrar de novo');
+
+  // Sozinho na lista: pedir para desconectar a própria sessão não faz nada.
+  const soAdmin = presencaService.desconectarInternos(EMPRESA, { presencaIds: [presenca(presencaService.hashSessaoInterna(sidAdmin)).id], excetoSessionId: sidAdmin });
+  assert.deepStrictEqual(soAdmin, { sessoesDesconectadas: 0, ignorouPropria: true });
+
+  // Do IAHub inteiro: apaga o arquivo da sessão e a próxima chamada encerra a sessão.
+  const sidIahub = sid('iahub');
+  presencaService.registrarSinal({ empresaId: EMPRESA, origem: 'interno', sessaoRef: presencaService.hashSessaoInterna(sidIahub), usuarioIdIahub: 6, tela: 'Radar', acao: 'x' });
+  const dirSessoes = require('../../IAHUB/backend/data-paths').appDataDir('sessions');
+  fs.mkdirSync(dirSessoes, { recursive: true });
+  const arqSessao = path.join(dirSessoes, sidIahub + '.json');
+  fs.writeFileSync(arqSessao, '{}');
+  try {
+    const pid = presenca(presencaService.hashSessaoInterna(sidIahub)).id;
+    assert.strictEqual(presencaService.desconectarInternos(EMPRESA, { presencaIds: [pid], escopo: 'iahub', excetoSessionId: sidAdmin }).sessoesDesconectadas, 1);
+    assert.strictEqual(fs.existsSync(arqSessao), false, 'arquivo da sessão do IAHub apagado');
+    let destruiu = false;
+    b = chamar(sidIahub, '/radar', { session: { destroy(cb) { destruiu = true; cb(); } } });
+    assert.strictEqual(destruiu, true);
+    assert.strictEqual(b.status, 401);
+  } finally {
+    try { fs.unlinkSync(arqSessao); } catch (_) {}
+  }
+  assert.throws(() => presencaService.desconectarInternos(EMPRESA, { escopo: 'outro' }), /Escopo inválido/);
+
+  // Chat de todos da empresa (botão Desconectar > Chat).
+  const sc1 = criarSessaoExterna(EMPRESA, consultor.id);
+  const scOutra = criarSessaoExterna(OUTRA_EMPRESA, consultorOutra.id);
+  const chatTodos = presencaService.desconectarChatTodos(EMPRESA).sessaoIds;
+  assert.ok(chatTodos.includes(sc1));
+  assert.ok(!chatTodos.includes(scOutra), 'chat de outra empresa intacto');
+
   console.log('monitor-acessos.test.js: OK');
 } finally {
   limparEDesligar();
