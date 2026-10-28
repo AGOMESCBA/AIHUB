@@ -32,6 +32,8 @@
         { id: 'svc-atendimentos', label: 'Atendimentos',      href: '/app/ia-service/atendimentos.html', icon: '💬' },
         { id: 'svc-homologacao',  label: 'Homologação da IA', href: '/app/ia-service/homologacao.html',  icon: '📊' },
         { id: 'svc-monitor-acessos', label: 'Monitor de Acessos', href: '/app/ia-service/monitor-acessos.html', icon: '🛰' },
+        // Mesma permissão do Monitor (a API do histórico exige svc-monitor-acessos).
+        { id: 'svc-historico-acessos', rotina: 'svc-monitor-acessos', label: 'Histórico de Acessos', href: '/app/ia-service/historico-acessos.html', icon: '🕘' },
       ],
     },
     {
@@ -66,7 +68,7 @@
     if (rotinas === null) return MENU;
     return MENU.map(section => ({
       ...section,
-      items: section.items.filter(item => rotinas.includes(item.id)),
+      items: section.items.filter(item => rotinas.includes(item.rotina || item.id)),
     })).filter(section => section.items.length > 0);
   }
 
