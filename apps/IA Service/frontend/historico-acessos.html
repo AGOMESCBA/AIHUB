@@ -12,34 +12,32 @@
        do IA Service. */
     :root { --accent:#1d4ed8; --accent-light:#3b82f6; --accent-glow:rgba(29,78,216,.1); }
     .sidebar-logo .logo-icon { background:var(--accent) !important; }
-    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:3px; }
-    .head-row { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px;flex-wrap:wrap; }
-    .head-title { font-size:20px;font-weight:800;color:var(--text-hi);display:flex;align-items:baseline;gap:8px;line-height:1.2;flex-wrap:wrap; }
-    .head-count { font-size:12px;color:var(--text-lo);font-weight:500; }
-    .head-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
-    .head-actions .btn { white-space:nowrap; }
-    .error-banner { display:none;background:var(--bg-card);color:var(--error);border:1px solid var(--error);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px; }
-
-    .panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:10px 14px;margin-bottom:10px; }
-    .panel-row { display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap; }
+    .error-banner { display:none;background:var(--bg-card);color:var(--error);border:1px solid var(--error);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:10px; }
     .panel-status { font-size:12px;color:var(--text-lo); }
-    .panel-body { display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border); }
-    .panel.open .panel-body { display:block; }
-    .toggle-btn { font-weight:700; }
 
-    .chip { font:inherit;font-size:12.5px;padding:5px 12px;border-radius:999px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-md);cursor:pointer; }
-    .chip[aria-pressed="true"] { background:var(--bg-active);border-color:var(--accent);color:var(--accent);font-weight:600; }
-    .chip:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
-    .filtros { display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap; }
-    .grupo { display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
-    .grupo-rot { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);margin-right:2px; }
-    .datas { display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-md);flex-wrap:wrap; }
-    .datas input { width:auto;padding:5px 8px;font-size:12.5px; }
-    .kpis { display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:10px; }
-    .kpi { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 10px; }
+    /* Barra única: título, filtros, botões Resumo/Agrupar e ações numa linha.
+       Resumo (cartões) e Agrupamento abrem embaixo e vêm recolhidos, para a
+       grade ficar com a tela. */
+    .barra { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:8px 12px;margin-bottom:10px; }
+    .barra-linha { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .barra-titulo { font-size:16px;font-weight:800;color:var(--text-hi);margin-right:6px;white-space:nowrap; }
+    .barra .sel { width:auto;height:32px;padding:4px 8px;font-size:12.5px; }
+    .datas { display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-md); }
+    .datas[hidden] { display:none; }
+    .datas input { width:auto;height:32px;padding:4px 8px;font-size:12.5px; }
+    .espaco { flex:1; }
+    .barra .btn { white-space:nowrap;height:32px;padding:0 12px;font-size:12.5px; }
+    .btn-toggle[aria-expanded="true"] { border-color:var(--accent);color:var(--accent);background:var(--accent-glow); }
+    .barra-corpo { margin-top:8px;padding-top:8px;border-top:1px dashed var(--border); }
+    .barra-corpo[hidden] { display:none; }
+    .kpis { display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px; }
+    .kpi { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px; }
     .kpi-label { font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-md); }
-    .kpi-value { font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text-hi);line-height:1.25; }
+    .kpi-value { font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text-hi);line-height:1.25; }
     .kpi-foot { font-size:11px;color:var(--text-lo); }
+    .head-count { font-size:12px;color:var(--text-lo); }
+    .usuario-fone { display:block;font-size:11.5px;color:var(--text-lo);font-variant-numeric:tabular-nums; }
+    .disp-nav { display:block;font-size:11.5px;color:var(--text-lo);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
 
     .group-chip { height:30px;border:1px solid var(--border);border-radius:6px;background:var(--bg-base);color:var(--text-md);font-size:12px;font-weight:700;padding:0 10px;cursor:pointer; }
     .group-chip:hover, .group-chip.active { border-color:var(--accent);color:var(--accent);background:var(--accent-glow); }
@@ -64,6 +62,11 @@
     .grid thead th.sortable:hover { color:var(--accent);background:var(--bg-hover); }
     .grid thead th .seta { color:var(--accent);margin-left:4px; }
     .grid thead .filter-cell th { top:34px;padding:6px 10px;background:var(--bg-card); }
+    @keyframes filtro-autofill { from { opacity:1; } to { opacity:1; } }
+    .grid thead input:-webkit-autofill { animation-name:filtro-autofill;animation-duration:.01s; }
+    .grid thead input::-webkit-search-cancel-button { cursor:pointer; }
+    .link-limpar { font:inherit;font-size:12px;font-weight:700;color:var(--accent);background:none;border:none;cursor:pointer;padding:0 0 0 8px; }
+    .link-limpar[hidden] { display:none; }
     .grid thead input, .grid thead select { width:100%;height:26px;border:1px solid var(--border);border-radius:5px;background:var(--bg-base);color:var(--text-hi);font-size:11px;padding:3px 6px;box-sizing:border-box; }
     .grid tbody td { border-bottom:1px solid var(--border);color:var(--text-md);padding:8px 10px;vertical-align:middle;background:var(--bg-card);overflow:hidden;text-overflow:ellipsis; }
     .grid tbody tr.data-row:hover td { background:var(--bg-hover); }
@@ -85,8 +88,8 @@
     .badge-neutro { background:var(--bg-hover);color:var(--text-md); }
     .badge-falha { background:rgba(220,38,38,.12);color:#dc2626; }
     .uso { display:flex;align-items:center;gap:6px; }
-    .uso .barra { flex:1;height:6px;border-radius:3px;background:var(--border);overflow:hidden;min-width:30px; }
-    .uso .barra i { display:block;height:100%;background:var(--accent); }
+    .uso .medidor { flex:1;height:6px;border-radius:3px;background:var(--border);overflow:hidden;min-width:30px; }
+    .uso .medidor i { display:block;height:100%;background:var(--accent); }
 
     .btn-excluir { background:transparent;border:1px solid rgba(220,38,38,.45);color:#dc2626; }
     .btn-excluir:hover { background:rgba(220,38,38,.08); }
@@ -106,6 +109,8 @@
       .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
       .group-target-row { align-items:stretch;flex-direction:column; }
       .modos .dica { display:none; }
+      .espaco { display:none; }
+      .datas { flex-wrap:wrap; }
       .datas input { flex:1 1 120px;min-width:0; }
     }
   </style>
@@ -130,47 +135,35 @@
     </div>
 
     <div class="page-content">
-      <div class="head-row">
-        <div>
-          <div class="page-kicker">Operação</div>
-          <div class="head-title">Histórico de Acessos <span class="head-count" id="count">carregando...</span></div>
-        </div>
-        <div class="head-actions">
-          <a class="btn btn-ghost" href="/app/ia-service/monitor-acessos.html" title="Quem está conectado agora">‹ Monitor ao vivo</a>
+      <div class="barra">
+        <div class="barra-linha">
+          <span class="barra-titulo">Histórico de Acessos</span>
+          <select id="origem" class="form-control sel" aria-label="Origem">
+            <option value="chat">Chat (Radar J2A)</option>
+            <option value="interno">IA Service interno</option>
+            <option value="todos">Todas as origens</option>
+          </select>
+          <select id="periodo" class="form-control sel" aria-label="Período">
+            <option value="hoje">Hoje</option>
+            <option value="7">Últimos 7 dias</option>
+            <option value="30">Últimos 30 dias</option>
+            <option value="mes">Este mês</option>
+            <option value="custom">Escolher datas...</option>
+          </select>
+          <span class="datas" id="datas" hidden>
+            <input id="de" type="date" class="form-control" aria-label="Data inicial">
+            até
+            <input id="ate" type="date" class="form-control" aria-label="Data final">
+          </span>
+          <button class="btn btn-ghost btn-toggle" id="toggle-resumo" type="button" aria-expanded="false" aria-controls="painel-resumo" title="Mostrar/recolher os cartões de resumo">Resumo</button>
+          <button class="btn btn-ghost btn-toggle" id="toggle-grupo" type="button" aria-expanded="false" aria-controls="painel-grupo" title="Mostrar/recolher o agrupamento">Agrupar</button>
+          <span class="espaco"></span>
+          <a class="btn btn-ghost" href="/app/ia-service/monitor-acessos.html" title="Quem está conectado agora">Monitor ao vivo</a>
           <button class="btn btn-ghost" id="btn-csv" type="button" title="Baixa as linhas filtradas em CSV (abre no Excel)">Exportar</button>
           <button class="btn btn-excluir" id="btn-excluir" type="button" title="Apaga do histórico os acessos e falhas de um período">Excluir período</button>
-          <button class="btn btn-primary" id="btn-atualizar" type="button">↻ Atualizar</button>
+          <button class="btn btn-primary" id="btn-atualizar" type="button" title="Atualizar">↻</button>
         </div>
-      </div>
-      <div id="error-banner" class="error-banner" role="alert"></div>
-
-      <!-- Período, origem e resumo (recolhível para a grade ganhar espaço) -->
-      <div class="panel" id="painel-filtros">
-        <div class="panel-row">
-          <button class="btn btn-ghost toggle-btn" id="toggle-filtros" type="button" aria-controls="corpo-filtros"></button>
-          <span class="panel-status" id="resumo-filtros"></span>
-        </div>
-        <div class="panel-body" id="corpo-filtros">
-          <div class="filtros">
-            <div class="grupo" role="group" aria-label="Origem">
-              <span class="grupo-rot">Origem</span>
-              <button class="chip" type="button" data-orig="chat">Chat (Radar J2A)</button>
-              <button class="chip" type="button" data-orig="interno">IA Service interno</button>
-              <button class="chip" type="button" data-orig="todos">Todas</button>
-            </div>
-            <div class="grupo" role="group" aria-label="Período">
-              <span class="grupo-rot">Período</span>
-              <button class="chip" type="button" data-per="hoje">Hoje</button>
-              <button class="chip" type="button" data-per="7">7 dias</button>
-              <button class="chip" type="button" data-per="30">30 dias</button>
-              <button class="chip" type="button" data-per="mes">Este mês</button>
-              <span class="datas">
-                <input id="de" type="date" class="form-control" aria-label="Data inicial">
-                até
-                <input id="ate" type="date" class="form-control" aria-label="Data final">
-              </span>
-            </div>
-          </div>
+        <div class="barra-corpo" id="painel-resumo" hidden>
           <div class="kpis" aria-label="Resumo das linhas filtradas">
             <div class="kpi"><div class="kpi-label">Acessos</div><div class="kpi-value" id="k-acessos">-</div><div class="kpi-foot">logins nas linhas filtradas</div></div>
             <div class="kpi"><div class="kpi-label">Usuários</div><div class="kpi-value" id="k-usuarios">-</div><div class="kpi-foot">pessoas diferentes</div></div>
@@ -179,25 +172,18 @@
             <div class="kpi"><div class="kpi-label">Chamados</div><div class="kpi-value" id="k-chamados">-</div><div class="kpi-foot">diferentes abertos no chat</div></div>
           </div>
         </div>
-      </div>
-
-      <!-- Agrupamento: mesmo comportamento do Histórico de Interpretações -->
-      <div class="panel" id="painel-grupo">
-        <div class="panel-row">
-          <button class="btn btn-ghost toggle-btn" id="toggle-grupo" type="button"></button>
-          <span class="panel-status" id="group-status">Sem agrupamento ativo</span>
-          <span class="panel-status" id="filter-status"></span>
-        </div>
-        <div class="panel-body">
+        <!-- Agrupamento: mesmo comportamento do Histórico de Interpretações -->
+        <div class="barra-corpo" id="painel-grupo" hidden>
           <div class="group-options" id="group-options"></div>
         </div>
       </div>
+      <div id="error-banner" class="error-banner" role="alert"></div>
 
       <div class="table-card">
         <div class="modos" role="tablist" aria-label="O que mostrar">
-          <button class="modo" role="tab" type="button" data-modo="acessos">Acessos<span class="qtd" id="q-acessos">0</span></button>
-          <button class="modo" role="tab" type="button" data-modo="falhas">Falhas de login<span class="qtd" id="q-falhas">0</span></button>
-          <span class="dica" id="dica"></span>
+          <button class="modo" role="tab" type="button" data-modo="acessos" title="Tempo logado = da entrada até a saída/último sinal · Tempo de tela = só com a tela visível">Acessos<span class="qtd" id="q-acessos">0</span></button>
+          <button class="modo" role="tab" type="button" data-modo="falhas" title="Login por telefone do Radar J2A que não terminou em acesso">Falhas de login<span class="qtd" id="q-falhas">0</span></button>
+          <span class="dica"><span id="count">carregando...</span><span id="dica"></span><button class="link-limpar" id="limpar-filtros" type="button" hidden>Limpar filtros</button></span>
         </div>
         <div class="table-wrap" id="table-wrap">
           <table class="grid">
@@ -284,26 +270,26 @@
   // filtro: 'texto' | { opcoes } (select por valor exato de chave)
   const COLUNAS = {
     acessos: [
-      { k: 'entrou', rot: 'Entrou', w: 150, grp: 'data', val: (a) => fmtDataHora(a.entrouEm), ord: (a) => a.entrouEm, filtro: 'texto',
+      { k: 'entrou', rot: 'Entrou', w: 135, grp: 'data', val: (a) => fmtDataHora(a.entrouEm), ord: (a) => a.entrouEm, filtro: 'texto',
         html: (a) => `<span class="num forte">${fmtData(a.entrouEm)}</span> <span class="num">${fmtHora(a.entrouEm)}</span>` },
-      { k: 'nome', rot: 'Usuário', w: 230, grp: 'usuario', val: (a) => a.nome, filtro: 'texto', html: (a) => `<span class="forte nome" title="${esc(a.nome)}">${esc(a.nome)}</span>` },
-      { k: 'telefone', rot: 'Celular', w: 140, grp: 'telefone', val: (a) => fone(a.telefone), filtro: 'texto', html: (a) => `<span class="num">${esc(fone(a.telefone))}</span>` },
+      // Celular fica embaixo do nome (uma coluna a menos); o filtro acha pelos dois.
+      { k: 'nome', rot: 'Usuário', w: 210, grp: 'usuario', val: (a) => `${a.nome} · ${fone(a.telefone)}`, ord: (a) => a.nome, filtro: 'texto',
+        html: (a) => `<span class="forte nome" title="${esc(a.nome)}">${esc(a.nome)}</span><span class="usuario-fone">${esc(fone(a.telefone))}</span>` },
       { k: 'origem', rot: 'Origem', w: 100, grp: 'origem', val: (a) => ORIGEM[a.origem], chave: (a) => a.origem, filtro: { opcoes: ORIGEM },
         html: (a) => `<span class="badge ${a.origem === 'chat' ? 'badge-blue' : 'badge-purple'}">${ORIGEM[a.origem]}</span>` },
-      { k: 'saiu', rot: 'Saiu / último sinal', w: 175, val: (a) => fmtDataHora(a.encerradoEm || a.ultimoSinalEm), ord: (a) => a.encerradoEm || a.ultimoSinalEm || '', filtro: 'texto',
+      { k: 'saiu', rot: 'Saiu / último sinal', w: 150, val: (a) => fmtDataHora(a.encerradoEm || a.ultimoSinalEm), ord: (a) => a.encerradoEm || a.ultimoSinalEm || '', filtro: 'texto',
         html: (a) => { const fim = a.encerradoEm || a.ultimoSinalEm; return `<span class="num">${mesmoDia(a.entrouEm, fim) ? fmtHora(fim) : fmtDataHora(fim)}</span>`; } },
-      { k: 'duracao', rot: 'Tempo logado', w: 135, val: (a) => dur(a.duracaoSegundos), ord: (a) => a.duracaoSegundos, html: (a) => `<span class="num">${dur(a.duracaoSegundos)}</span>` },
-      { k: 'tela', rot: 'Tempo de tela', w: 135, val: (a) => dur(a.segundosAtivos), ord: (a) => a.segundosAtivos, html: (a) => `<span class="num forte">${dur(a.segundosAtivos)}</span>` },
-      { k: 'uso', rot: 'Uso ativo', w: 120, val: (a) => { const u = usoPct(a); return u === null ? '-' : `${u}%`; }, ord: (a) => usoPct(a) ?? -1,
-        html: (a) => { const u = usoPct(a); return u === null ? '<span>-</span>' : `<div class="uso" title="Tempo de tela ÷ tempo logado"><span class="num">${u}%</span><span class="barra"><i style="width:${u}%"></i></span></div>`; } },
-      { k: 'telas', rot: 'Telas', w: 70, val: (a) => String(a.telasVisitadas), ord: (a) => a.telasVisitadas, html: (a) => `<span class="num">${a.telasVisitadas}</span>` },
-      { k: 'chamados', rot: 'Chamados', w: 190, val: (a) => a.chamados.join(', '), ord: (a) => a.chamados.length, filtro: 'texto',
+      { k: 'duracao', rot: 'Tempo logado', w: 122, val: (a) => dur(a.duracaoSegundos), ord: (a) => a.duracaoSegundos, html: (a) => `<span class="num">${dur(a.duracaoSegundos)}</span>` },
+      { k: 'tela', rot: 'Tempo de tela', w: 115, val: (a) => dur(a.segundosAtivos), ord: (a) => a.segundosAtivos, html: (a) => `<span class="num forte">${dur(a.segundosAtivos)}</span>` },
+      { k: 'uso', rot: 'Uso ativo', w: 110, val: (a) => { const u = usoPct(a); return u === null ? '-' : `${u}%`; }, ord: (a) => usoPct(a) ?? -1,
+        html: (a) => { const u = usoPct(a); return u === null ? '<span>-</span>' : `<div class="uso" title="Tempo de tela ÷ tempo logado"><span class="num">${u}%</span><span class="medidor"><i style="width:${u}%"></i></span></div>`; } },
+      { k: 'chamados', rot: 'Chamados', w: 150, val: (a) => a.chamados.join(', '), ord: (a) => a.chamados.length, filtro: 'texto',
         html: (a) => a.chamados.length ? `<span class="num" title="${esc(a.chamados.join(', '))}"><b>${a.chamados.length}</b> · ${esc(a.chamados.join(', '))}</span>` : '<span>-</span>' },
-      { k: 'situacao', rot: 'Situação', w: 210, grp: 'situacao', val: (a) => a.situacaoRotulo, chave: (a) => a.situacao, filtro: { opcoes: Object.fromEntries(Object.entries(SITUACAO).map(([k, v]) => [k, v.rot])) },
+      { k: 'situacao', rot: 'Situação', w: 178, grp: 'situacao', val: (a) => a.situacaoRotulo, chave: (a) => a.situacao, filtro: { opcoes: Object.fromEntries(Object.entries(SITUACAO).map(([k, v]) => [k, v.rot])) },
         html: (a) => `<span class="badge ${SITUACAO[a.situacao]?.cls || 'badge-neutro'}" title="${esc(a.situacaoRotulo)}">${esc(a.situacaoRotulo)}</span>` },
-      { k: 'ip', rot: 'IP', w: 130, grp: 'ip', val: (a) => a.ip || '-', filtro: 'texto',
-        html: (a) => `<span class="mono" title="${esc(a.ipServidor && a.ipServidor !== a.ip ? 'Visto pelo servidor: ' + a.ipServidor : '')}">${esc(a.ip || '-')}</span>` },
-      { k: 'navegador', rot: 'Navegador', w: 150, grp: 'navegador', val: (a) => navegador(a.navegador), filtro: 'texto', html: (a) => `<span title="${esc(a.navegador || '')}">${esc(navegador(a.navegador))}</span>` },
+      { k: 'dispositivo', rot: 'IP / navegador', w: 155, grp: 'ip', val: (a) => `${a.ip || '-'} · ${navegador(a.navegador)}`, ord: (a) => a.ip || '', filtro: 'texto',
+        html: (a) => `<span class="mono" title="${esc(a.ipServidor && a.ipServidor !== a.ip ? 'Visto pelo servidor: ' + a.ipServidor : '')}">${esc(a.ip || '-')}</span>`
+          + `<span class="disp-nav" title="${esc(a.navegador || '')}">${esc(navegador(a.navegador))}</span>` },
     ],
     falhas: [
       { k: 'em', rot: 'Quando', w: 150, grp: 'data', val: (f) => fmtDataHora(f.em), ord: (f) => f.em, filtro: 'texto',
@@ -338,10 +324,6 @@
       navegador: { rot: 'Navegador', val: (f) => navegador(f.navegador) },
     },
   };
-  const DICA = {
-    acessos: 'Tempo logado = da entrada até a saída/último sinal · Tempo de tela = só com a tela visível',
-    falhas: 'Login por telefone do Radar J2A que não terminou em acesso',
-  };
 
   // ── Estado (agrupamento, painéis, origem e grupos recolhidos ficam salvos) ──
   const st = {
@@ -349,20 +331,18 @@
     filtros: { acessos: {}, falhas: {} },
     ordem: { acessos: { k: 'entrou', dir: 'desc' }, falhas: { k: 'em', dir: 'desc' } },
     grupos: { acessos: ['usuario'], falhas: [] },
-    recolhidos: new Set(), painelFiltros: true, painelGrupo: false,
+    recolhidos: new Set(), painelResumo: false, painelGrupo: false,
   };
   function lerEstado() {
     try {
       const s = JSON.parse(localStorage.getItem(ESTADO_KEY) || 'null');
-      // Celular sem preferência salva: painéis recolhidos para a grade aparecer primeiro.
-      if (!s && window.innerWidth < 900) st.painelFiltros = false;
-      if (!s || s.versao !== 1) return;
+      if (!s || s.versao !== 2) return;
       for (const m of ['acessos', 'falhas']) {
         if (Array.isArray(s.grupos?.[m])) st.grupos[m] = s.grupos[m].filter((g) => GRUPOS[m][g]);
       }
       if (['chat', 'interno', 'todos'].includes(s.origem)) st.origem = s.origem;
       if (['hoje', '7', '30', 'mes'].includes(s.per)) st.per = s.per;
-      st.painelFiltros = s.painelFiltros !== false;
+      st.painelResumo = !!s.painelResumo;
       st.painelGrupo = !!s.painelGrupo;
       st.recolhidos = new Set(Array.isArray(s.recolhidos) ? s.recolhidos : []);
     } catch (_) {}
@@ -370,8 +350,8 @@
   function salvarEstado() {
     try {
       localStorage.setItem(ESTADO_KEY, JSON.stringify({
-        versao: 1, grupos: st.grupos, origem: st.origem, per: st.per,
-        painelFiltros: st.painelFiltros, painelGrupo: st.painelGrupo, recolhidos: [...st.recolhidos],
+        versao: 2, grupos: st.grupos, origem: st.origem, per: st.per || '7',
+        painelResumo: st.painelResumo, painelGrupo: st.painelGrupo, recolhidos: [...st.recolhidos],
       }));
     } catch (_) {}
   }
@@ -432,7 +412,7 @@
   }
 
   // ── Filtro, ordenação e agrupamento ─────────────────────────────────────────
-  const cols = () => COLUNAS[st.modo];
+  const cols = () => COLUNAS[st.modo].filter((c) => !(c.k === 'origem' && st.origem !== 'todos'));
   function linhasFiltradas(modo = st.modo) {
     const base = (modo === 'acessos' ? st.dados?.acessos : st.dados?.falhas) || [];
     const ativos = Object.entries(st.filtros[modo]).filter(([, v]) => v);
@@ -512,7 +492,7 @@
     const filtros = c.map((col) => {
       const v = st.filtros[st.modo][col.k] || '';
       if (!col.filtro) return '<th></th>';
-      if (col.filtro === 'texto') return `<th><input data-filter="${col.k}" value="${esc(v)}" autocomplete="off" spellcheck="false" aria-label="Filtrar ${esc(col.rot)}"></th>`;
+      if (col.filtro === 'texto') return `<th><input type="search" name="filtro-historico-${st.modo}-${col.k}" data-filter="${col.k}" value="${esc(v)}" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore aria-label="Filtrar ${esc(col.rot)}"></th>`;
       return `<th><select data-filter="${col.k}" aria-label="Filtrar ${esc(col.rot)}"><option value="">Todos</option>${Object.entries(col.filtro.opcoes)
         .map(([ov, ot]) => `<option value="${esc(ov)}"${ov === v ? ' selected' : ''}>${esc(ot)}</option>`).join('')}</select></th>`;
     }).join('');
@@ -522,9 +502,9 @@
   function renderPainelGrupo() {
     const defs = GRUPOS[st.modo];
     const ativos = st.grupos[st.modo];
-    $('painel-grupo').classList.toggle('open', st.painelGrupo);
-    $('toggle-grupo').textContent = st.painelGrupo ? '− Ocultar agrupamento' : '+ Mostrar agrupamento';
-    $('group-status').textContent = ativos.length ? `Agrupamento ativo: ${ativos.map((g) => defs[g].rot).join(' › ')}` : 'Sem agrupamento ativo';
+    $('painel-grupo').hidden = !st.painelGrupo;
+    $('toggle-grupo').setAttribute('aria-expanded', String(st.painelGrupo));
+    $('toggle-grupo').textContent = ativos.length ? `Agrupar: ${ativos.map((g) => defs[g].rot).join(' › ')}` : 'Agrupar';
     $('group-options').innerHTML = '<span class="panel-status">Arraste para agrupar:</span>'
       + Object.entries(defs).map(([g, d]) => `<button class="group-chip${ativos.includes(g) ? ' active' : ''}" type="button" draggable="true" data-group-field="${g}">${esc(d.rot)}</button>`).join('')
       + `<div class="group-target-row"><button class="btn btn-ghost" id="group-clear" type="button">Limpar agrupamento</button>`
@@ -536,12 +516,11 @@
   }
 
   function renderPainelFiltros() {
-    $('painel-filtros').classList.toggle('open', st.painelFiltros);
-    $('toggle-filtros').textContent = st.painelFiltros ? '− Recolher filtros e resumo' : '+ Filtros e resumo';
-    document.querySelectorAll('.chip[data-orig]').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.orig === st.origem)));
-    document.querySelectorAll('.chip[data-per]').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.per === st.per)));
-    const orig = { chat: 'Chat (Radar J2A)', interno: 'IA Service interno', todos: 'Todas as origens' }[st.origem];
-    $('resumo-filtros').textContent = `${orig} · ${$('de').value ? periodoTexto() : ''}`;
+    $('origem').value = st.origem;
+    $('periodo').value = st.per || 'custom';
+    $('datas').hidden = !!st.per;
+    $('painel-resumo').hidden = !st.painelResumo;
+    $('toggle-resumo').setAttribute('aria-expanded', String(st.painelResumo));
   }
 
   function renderKpis(acessos, falhas) {
@@ -554,6 +533,9 @@
     $('k-chamados').textContent = new Set(acessos.flatMap((a) => a.chamados)).size;
     $('q-acessos').textContent = acessos.length;
     $('q-falhas').textContent = falhas.length;
+    $('dica').textContent = st.modo === 'acessos' && acessos.length
+      ? ` · ${new Set(acessos.map((a) => a.pessoaRef)).size} usuário(s) · ${dur(tela)} de tela${logado > 0 ? ` · ${Math.min(100, Math.round((tela / logado) * 100))}% ativo` : ''}`
+      : '';
   }
 
   function renderTabela() {
@@ -566,8 +548,8 @@
     const rows = ordenar(st.modo === 'acessos' ? acessos : falhas);
     const total = (st.modo === 'acessos' ? st.dados.acessos : st.dados.falhas).length;
     const filtrosAtivos = Object.values(st.filtros[st.modo]).some(Boolean);
-    $('count').textContent = `${rows.length} de ${total} ${st.modo === 'acessos' ? 'acesso(s)' : 'falha(s)'} · ${periodoTexto()}${st.dados.truncado ? ' · limitado aos 5.000 mais recentes, reduza o período' : ''}`;
-    $('filter-status').textContent = filtrosAtivos ? '· Filtros de coluna ativos' : '';
+    $('count').textContent = `${periodoTexto()} · ${filtrosAtivos ? `${rows.length} de ${total}` : rows.length} ${st.modo === 'acessos' ? 'acesso(s)' : 'falha(s)'}${st.dados.truncado ? ' · limitado aos 5.000 mais recentes' : ''}`;
+    $('limpar-filtros').hidden = !filtrosAtivos;
     $('empty-state').style.display = rows.length ? 'none' : 'flex';
     $('empty-state').textContent = total ? 'Nenhuma linha com esses filtros.' : (st.modo === 'acessos' ? 'Nenhum acesso no período.' : 'Nenhuma falha de login no período.');
     const partes = [];
@@ -587,7 +569,6 @@
   function trocarModo(modo) {
     st.modo = modo;
     document.querySelectorAll('.modo').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.modo === modo)));
-    $('dica').textContent = DICA[modo];
     renderCabecalho();
     renderTabela();
   }
@@ -682,11 +663,23 @@
   }
 
   // ── Eventos ─────────────────────────────────────────────────────────────────
-  $('toggle-filtros').addEventListener('click', () => { st.painelFiltros = !st.painelFiltros; salvarEstado(); renderPainelFiltros(); ajustarAltura(); });
+  $('toggle-resumo').addEventListener('click', () => { st.painelResumo = !st.painelResumo; salvarEstado(); renderPainelFiltros(); ajustarAltura(); });
   $('toggle-grupo').addEventListener('click', () => { st.painelGrupo = !st.painelGrupo; salvarEstado(); renderPainelGrupo(); ajustarAltura(); });
-  document.querySelectorAll('.chip[data-orig]').forEach((c) => c.addEventListener('click', () => { st.origem = c.dataset.orig; salvarEstado(); renderPainelFiltros(); carregar(); }));
-  document.querySelectorAll('.chip[data-per]').forEach((c) => c.addEventListener('click', () => { aplicarPreset(c.dataset.per); salvarEstado(); renderPainelFiltros(); carregar(); }));
-  ['de', 'ate'].forEach((id) => $(id).addEventListener('change', () => { st.per = null; renderPainelFiltros(); carregar(); }));
+  $('origem').addEventListener('change', (e) => {
+    st.origem = e.target.value;
+    if (st.origem !== 'todos') delete st.filtros.acessos.origem;
+    salvarEstado();
+    renderCabecalho();
+    carregar();
+  });
+  $('periodo').addEventListener('change', (e) => {
+    if (e.target.value === 'custom') { st.per = null; renderPainelFiltros(); ajustarAltura(); $('de').focus(); return; }
+    aplicarPreset(e.target.value);
+    salvarEstado();
+    renderPainelFiltros();
+    carregar();
+  });
+  ['de', 'ate'].forEach((id) => $(id).addEventListener('change', () => { st.per = null; carregar(); }));
   document.querySelectorAll('.modo').forEach((b) => b.addEventListener('click', () => trocarModo(b.dataset.modo)));
   $('btn-atualizar').addEventListener('click', carregar);
   $('btn-csv').addEventListener('click', exportarCsv);
@@ -707,12 +700,26 @@
     renderCabecalho();
     renderTabela();
   });
+  const autopreenchido = (el) => { try { return el.matches(':-webkit-autofill'); } catch (_) { return false; } };
   const aoFiltrar = (e) => {
     const el = e.target.closest('[data-filter]');
     if (!el) return;
+    // Texto que chega num campo onde a pessoa não está digitando é preenchimento
+    // do navegador (aplicado no 1º clique em qualquer lugar da página): descarta.
+    const semFoco = el.tagName === 'INPUT' && document.activeElement !== el;
+    if (autopreenchido(el) || semFoco) { el.value = ''; delete st.filtros[st.modo][el.dataset.filter]; renderTabela(); return; }
     st.filtros[st.modo][el.dataset.filter] = el.value;
     renderTabela();
   };
+  $('thead').addEventListener('animationstart', (e) => {
+    if (e.animationName !== 'filtro-autofill') return;
+    const el = e.target.closest('[data-filter]');
+    if (!el) return;
+    el.value = '';
+    delete st.filtros[st.modo][el.dataset.filter];
+    renderTabela();
+  });
+  $('limpar-filtros').addEventListener('click', () => { st.filtros[st.modo] = {}; renderCabecalho(); renderTabela(); });
   $('thead').addEventListener('input', aoFiltrar);
   $('thead').addEventListener('change', aoFiltrar);
   document.addEventListener('dragstart', (e) => {
