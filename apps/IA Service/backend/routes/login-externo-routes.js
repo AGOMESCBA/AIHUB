@@ -16,6 +16,30 @@ const rateLimit = require('express-rate-limit');
 const loginExternoService = require('../services/login-externo-service');
 const crud = require('../../../IAHUB/backend/crud');
 const platformStore = require('../../../IAHUB/backend/platform-store');
+const historicoAcessos = require('../services/acesso-historico-service');
+
+// Histórico de Acessos (2026-10-28): tentativa que não terminou em sessão.
+// A falha vai para cada empresa em que o telefone tem acesso; número que não
+// existe em lugar nenhum só fica visível se a tela foi aberta pelo link de
+// uma empresa (apelido enviado pelo entrar.html). Nunca lança.
+function _registrarFalhaLogin(req, etapa, motivo) {
+  try {
+    const telefone = loginExternoService.normalizarTelefone(req.body?.telefone) || null;
+    let empresas = [];
+    if (telefone && telefone.length >= 10 && telefone.length <= 15) {
+      try { empresas = loginExternoService.listarEmpresasDoTelefone(telefone).map(e => e.id); } catch (_) { empresas = []; }
+    }
+    if (!empresas.length) {
+      const apelido = typeof req.body?.apelido === 'string' ? req.body.apelido.trim().slice(0, 80) : '';
+      const config = apelido ? platformStore.getConfigPorApelido(apelido) : null;
+      empresas = [config?.empresaId || null];
+    }
+    const cliente = historicoAcessos.clienteDaRequisicao(req);
+    for (const empresaId of empresas) historicoAcessos.registrarFalha({ empresaId, telefone, etapa, motivo, cliente });
+  } catch (err) {
+    console.error('[IA Service][login-externo] registrar falha no histórico:', err.message);
+  }
+}
 
 // Mesmo padrão de rate-limit reforçado já usado em /api/login (index.js) —
 // 15 minutos / 20 tentativas por IP. Rota pública sem sessão, alvo natural
@@ -155,6 +179,7 @@ module.exports = function registrarRotasLoginExterno(app) {
         resultado = loginExternoService.iniciarLogin(req.body?.telefone);
       } catch (err) {
         console.error('[IA Service][login-externo] telefone não localizado:', err.message);
+        _registrarFalhaLogin(req, 'Pedir código', /Informe o WhatsApp/.test(err.message) ? 'Número em formato inválido' : 'Número não encontrado ou sem permissão');
         return res.status(404).json({ error: 'Número não encontrado ou sem permissão sincronizada.' });
       }
 
@@ -166,6 +191,7 @@ module.exports = function registrarRotasLoginExterno(app) {
         await _enviarCodigoViaWhatsApp({ empresaId: empresas[0].id, numero: resultado.telefone, codigo: resultado.codigo });
       } catch (err) {
         console.error('[IA Service][login-externo] envio do código falhou:', err.message);
+        _registrarFalhaLogin(req, 'Pedir código', 'Código não enviado: WhatsApp de atendimento indisponível');
         return res.status(503).json({ error: 'Não foi possível enviar o código agora — o WhatsApp de atendimento está indisponível. Tente novamente em instantes ou contate o administrador.' });
       }
 
@@ -183,12 +209,13 @@ module.exports = function registrarRotasLoginExterno(app) {
 
   app.post('/api/ia-service-publico/login/verificar', rateLimitLoginExterno, (req, res) => {
     try {
-      const resultado = loginExternoService.verificarLogin(req.body?.challengeId, req.body?.telefone, req.body?.codigo);
+      const resultado = loginExternoService.verificarLogin(req.body?.challengeId, req.body?.telefone, req.body?.codigo, historicoAcessos.clienteDaRequisicao(req));
       if (resultado.escolhaEmpresa) {
         return res.json({ ok: true, escolhaEmpresa: true, tokenEscolha: resultado.tokenEscolha, empresas: resultado.empresas });
       }
       res.json({ ok: true, escolhaEmpresa: false, token: resultado.token, expiraEm: resultado.expiraEm });
     } catch (err) {
+      _registrarFalhaLogin(req, 'Validar código', err.message);
       res.status(400).json({ error: err.message });
     }
   });
@@ -198,9 +225,10 @@ module.exports = function registrarRotasLoginExterno(app) {
   // empresas o consultor quer acessar agora (sem pedir novo código).
   app.post('/api/ia-service-publico/login/escolher-empresa', rateLimitLoginExterno, (req, res) => {
     try {
-      const resultado = loginExternoService.escolherEmpresa(req.body?.telefone, req.body?.empresaId, req.body?.tokenEscolha);
+      const resultado = loginExternoService.escolherEmpresa(req.body?.telefone, req.body?.empresaId, req.body?.tokenEscolha, historicoAcessos.clienteDaRequisicao(req));
       res.json({ ok: true, token: resultado.token, expiraEm: resultado.expiraEm });
     } catch (err) {
+      _registrarFalhaLogin(req, 'Escolher empresa', err.message);
       res.status(400).json({ error: err.message });
     }
   });

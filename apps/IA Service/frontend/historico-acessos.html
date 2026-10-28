@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Histórico de Acessos - IA Service</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    /* Mesmos tokens e linguagem visual do Monitor de Acessos (monitor-acessos.html). */
+    :root { --accent:#1d4ed8; --accent-light:#3b82f6; --accent-glow:rgba(29,78,216,.1); }
+    .sidebar-logo .logo-icon { background:var(--accent) !important; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+    .page-head { margin-bottom:12px;display:flex;gap:12px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap; }
+    .error-banner { display:none;background:var(--bg-card);color:var(--error);border:1px solid var(--error);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px; }
+    .hist-stack { display:flex;flex-direction:column;gap:10px; }
+    .barra-filtros { display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:8px 12px; }
+    .barra-filtros .btn { white-space:nowrap; }
+    .grupo { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .grupo.acoes { margin-left:auto; }
+    .chip { font:inherit;font-size:12.5px;padding:5px 12px;border-radius:999px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-md);cursor:pointer; }
+    .chip[aria-pressed="true"] { background:var(--bg-active);border-color:var(--accent);color:var(--accent);font-weight:600; }
+    .chip:focus-visible, .aba:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
+    .datas { display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-md); }
+    .datas input { width:auto;padding:5px 8px;font-size:12.5px; }
+    #busca { min-width:200px;max-width:280px;flex:1; }
+    #busca::-webkit-search-cancel-button { cursor:pointer; }
+    @keyframes busca-autofill { from { opacity:1; } to { opacity:1; } }
+    #busca:-webkit-autofill { animation-name:busca-autofill;animation-duration:.01s; }
+
+    .kpis { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px; }
+    .kpi { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;display:flex;flex-direction:column;gap:2px; }
+    .kpi-label { font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-md); }
+    .kpi-value { font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2;color:var(--text-hi); }
+    .kpi-foot { font-size:11px;color:var(--text-lo); }
+
+    .abas { display:flex;gap:2px;padding:0 12px;border-bottom:1px solid var(--border);flex-wrap:wrap; }
+    .aba { font:inherit;font-size:13px;font-weight:600;color:var(--text-md);background:none;border:none;border-bottom:2px solid transparent;padding:11px 12px;cursor:pointer;margin-bottom:-1px; }
+    .aba[aria-selected="true"] { color:var(--accent);border-bottom-color:var(--accent); }
+    .aba .qtd { margin-left:6px;font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--bg-hover);color:var(--text-md); }
+    .grid-toolbar { display:flex;justify-content:space-between;align-items:center;padding:10px 16px;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--border); }
+    .grid-meta, .hint, .stamp { font-size:12px;color:var(--text-lo); }
+    .tabela-wrap { overflow-x:auto; }
+    .mon-table { width:100%;border-collapse:collapse;min-width:980px; }
+    .mon-table th { font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-md);text-align:left;padding:9px 12px;background:var(--bg-base);border-bottom:1px solid var(--border);white-space:nowrap; }
+    .mon-table td { padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle;color:var(--text-hi); }
+    .mon-table tbody tr:hover { background:var(--bg-hover); }
+    .mon-table tbody tr.clicavel { cursor:pointer; }
+    .user { display:flex;align-items:center;gap:10px;min-width:0; }
+    .avatar { width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;flex:none; }
+    .nome { font-weight:600;white-space:nowrap; }
+    .fone, .mono { font-family:'Cascadia Code','Fira Code','Courier New',monospace;font-size:11.5px;color:var(--text-md);white-space:nowrap; }
+    .num { font-variant-numeric:tabular-nums;white-space:nowrap; }
+    .sub { color:var(--text-lo);font-size:12px; }
+    .mon-table .badge { white-space:nowrap; }
+    .badge-neutro { background:var(--bg-hover);color:var(--text-md); }
+    .badge-falha { background:rgba(220,38,38,.12);color:#dc2626; }
+    .chamados { font-size:12px;color:var(--text-md);max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .vazio { padding:40px 16px;text-align:center;color:var(--text-md);font-size:13px; }
+    .filtro-pessoa[hidden] { display:none; }
+
+    .btn-excluir { background:transparent;border:1px solid rgba(220,38,38,.45);color:#dc2626; }
+    .btn-excluir:hover { background:rgba(220,38,38,.08); }
+    .excluir-box { border:1px solid var(--error);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;font-size:13px;color:var(--text-md);background:var(--bg-card); }
+    .excluir-box[hidden] { display:none; }
+    .excluir-box b { color:var(--text-hi); }
+    .excluir-box .linha { display:flex;gap:8px;flex-wrap:wrap;align-items:center; }
+    .excluir-box input[type=text] { flex:1;min-width:220px; }
+    .btn-perigo { background:var(--error);border:1px solid var(--error);color:#fff; }
+    .btn-perigo:disabled { opacity:.6;cursor:wait; }
+
+    @media (max-width:720px) {
+      .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .grupo { width:100%; }
+      .grupo.acoes { margin-left:0; }
+      .datas { width:100%;flex-wrap:wrap; }
+      .datas input { flex:1 1 120px;min-width:0; }
+      #busca { max-width:none;min-width:0; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Service</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Service › Monitor de Acessos ›</span> Histórico</span>
+    </div>
+
+    <div class="page-content">
+      <div class="page-head">
+        <div>
+          <div class="page-kicker">Operação</div>
+          <div class="page-title">Histórico de Acessos</div>
+          <div class="page-subtitle">Cada login no Radar (J2A) e nas rotinas do IA Service desta empresa: quando entrou, quanto tempo ficou, o que acessou e de onde. Inclui as tentativas de login que falharam.</div>
+        </div>
+        <a class="btn btn-ghost" href="/app/ia-service/monitor-acessos.html">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Monitor ao vivo
+        </a>
+      </div>
+      <div id="error-banner" class="error-banner" role="alert"></div>
+
+      <div class="hist-stack">
+        <section class="card barra-filtros" aria-label="Filtros">
+          <div class="grupo" role="group" aria-label="Período">
+            <button class="chip" type="button" data-per="hoje" aria-pressed="false">Hoje</button>
+            <button class="chip" type="button" data-per="7" aria-pressed="true">7 dias</button>
+            <button class="chip" type="button" data-per="30" aria-pressed="false">30 dias</button>
+            <button class="chip" type="button" data-per="mes" aria-pressed="false">Este mês</button>
+            <span class="datas">
+              <input id="de" type="date" class="form-control" aria-label="Data inicial">
+              até
+              <input id="ate" type="date" class="form-control" aria-label="Data final">
+            </span>
+          </div>
+          <div class="grupo" role="group" aria-label="Origem">
+            <button class="chip" type="button" data-orig="todos" aria-pressed="true">Todas</button>
+            <button class="chip" type="button" data-orig="chat" aria-pressed="false">Chat (Radar J2A)</button>
+            <button class="chip" type="button" data-orig="interno" aria-pressed="false">IA Service interno</button>
+          </div>
+          <input id="busca" name="filtro-historico-acessos" class="form-control" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="Nome, telefone, chamado ou IP..." aria-label="Buscar nome, telefone, chamado ou IP">
+          <div class="grupo acoes">
+            <button class="btn btn-primary" id="btn-atualizar" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+              Atualizar
+            </button>
+            <button class="btn btn-ghost" id="btn-csv" type="button" title="Baixa a aba aberta em CSV (abre no Excel)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Exportar
+            </button>
+            <button class="btn btn-excluir" id="btn-excluir" type="button" title="Apaga do histórico os acessos e falhas do período selecionado">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              Excluir período
+            </button>
+          </div>
+        </section>
+
+        <section class="excluir-box" id="excluir-box" hidden aria-label="Excluir período do histórico">
+          <div id="excluir-texto"></div>
+          <div class="linha">
+            <input type="text" id="excluir-motivo" class="form-control" maxlength="120" placeholder="Motivo (opcional, fica registrado na auditoria)">
+            <button class="btn btn-perigo" id="excluir-ok" type="button">Excluir definitivamente</button>
+            <button class="btn btn-ghost" id="excluir-cancelar" type="button">Cancelar</button>
+          </div>
+        </section>
+
+        <section class="kpis" aria-label="Resumo do período">
+          <div class="kpi"><span class="kpi-label">Acessos</span><span class="kpi-value" id="k-acessos">-</span><span class="kpi-foot">logins no período</span></div>
+          <div class="kpi"><span class="kpi-label">Usuários</span><span class="kpi-value" id="k-usuarios">-</span><span class="kpi-foot">pessoas diferentes</span></div>
+          <div class="kpi"><span class="kpi-label">Tempo de tela</span><span class="kpi-value" id="k-tempo">-</span><span class="kpi-foot">soma do tempo com a tela aberta e visível</span></div>
+          <div class="kpi"><span class="kpi-label">Falhas de login</span><span class="kpi-value" id="k-falhas">-</span><span class="kpi-foot">tentativas no Radar J2A que não entraram</span></div>
+        </section>
+
+        <section class="card" style="padding:0;overflow:hidden;min-width:0">
+          <div class="abas" role="tablist" aria-label="Visões do histórico">
+            <button class="aba" role="tab" type="button" data-aba="usuarios" aria-selected="true">Por usuário<span class="qtd" id="q-usuarios">0</span></button>
+            <button class="aba" role="tab" type="button" data-aba="acessos" aria-selected="false">Acessos<span class="qtd" id="q-acessos">0</span></button>
+            <button class="aba" role="tab" type="button" data-aba="falhas" aria-selected="false">Falhas de login<span class="qtd" id="q-falhas">0</span></button>
+          </div>
+          <div class="grid-toolbar">
+            <div class="grid-meta" id="meta">Carregando...</div>
+            <div class="grupo">
+              <button class="chip filtro-pessoa" id="filtro-pessoa" type="button" hidden title="Remover filtro de usuário"></button>
+              <span class="hint" id="dica"></span>
+            </div>
+          </div>
+          <div class="tabela-wrap">
+            <table class="mon-table">
+              <thead id="thead"></thead>
+              <tbody id="tbody"><tr><td><div class="vazio">Carregando histórico...</div></td></tr></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-service/js/sidebar.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const CORES = ['#2563eb', '#7c3aed', '#0891b2', '#c2410c', '#15803d', '#be185d', '#4f46e5', '#0f766e'];
+  const SITUACAO = {
+    em_andamento: 'badge-green',
+    fora_da_tela: 'badge-yellow',
+    expirou: 'badge-neutro',
+    encerrado: 'badge-neutro',
+  };
+  const st = { dados: null, aba: 'usuarios', origem: 'todos', busca: '', pessoa: null, carregando: false };
+
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const dataHora = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';
+  const hora = (iso) => iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-';
+  const mesmoDia = (a, b) => a && b && new Date(a).toDateString() === new Date(b).toDateString();
+  function dur(seg) {
+    const m = Math.round((seg || 0) / 60);
+    if (!seg) return '0 min';
+    if (m < 1) return '< 1 min';
+    return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m} min`;
+  }
+  const iniciais = (n) => String(n || '?').split(/\s+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+  function cor(id) { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return CORES[h % CORES.length]; }
+  function fone(t) {
+    const d = String(t || '').replace(/\D/g, '');
+    if (d.length === 13) return `+${d.slice(0, 2)} ${d.slice(2, 4)} ${d.slice(4, 9)}-${d.slice(9)}`;
+    if (d.length === 12) return `+${d.slice(0, 2)} ${d.slice(2, 4)} ${d.slice(4, 8)}-${d.slice(8)}`;
+    return t || 'sem telefone';
+  }
+  // Nome curto do navegador/aparelho a partir do User-Agent (o completo fica no title).
+  function navegador(ua) {
+    if (!ua) return '-';
+    const nav = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /SamsungBrowser/.test(ua) ? 'Samsung' : /Firefox\//.test(ua) ? 'Firefox'
+      : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Outro';
+    const so = /iPhone|iPad/.test(ua) ? 'iPhone/iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows'
+      : /Mac OS X/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '';
+    return so ? `${nav} · ${so}` : nav;
+  }
+  const origemBadge = (o) => `<span class="badge ${o === 'chat' ? 'badge-blue' : 'badge-purple'}">${o === 'chat' ? 'Chat J2A' : 'Interno'}</span>`;
+  function erro(msg) { const el = $('error-banner'); el.textContent = msg || ''; el.style.display = msg ? 'block' : 'none'; }
+  const empresaId = () => window._iahubEmpresa?.id || null;
+
+  // ── Período (datas do navegador → instantes ISO, o servidor não conhece o fuso) ──
+  const isoDia = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  function aplicarPreset(per) {
+    const hoje = new Date();
+    let ini = new Date(hoje);
+    if (per === '7') ini.setDate(hoje.getDate() - 6);
+    else if (per === '30') ini.setDate(hoje.getDate() - 29);
+    else if (per === 'mes') ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    $('de').value = isoDia(ini);
+    $('ate').value = isoDia(hoje);
+    document.querySelectorAll('.chip[data-per]').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.per === per)));
+  }
+  function periodo() {
+    const [y1, m1, d1] = ($('de').value || '').split('-').map(Number);
+    const [y2, m2, d2] = ($('ate').value || '').split('-').map(Number);
+    if (!y1 || !y2) return null;
+    return { de: new Date(y1, m1 - 1, d1, 0, 0, 0, 0).toISOString(), ate: new Date(y2, m2 - 1, d2, 23, 59, 59, 999).toISOString() };
+  }
+  const periodoTexto = () => `${$('de').value.split('-').reverse().join('/')} a ${$('ate').value.split('-').reverse().join('/')}`;
+
+  async function api(path, opts = {}) {
+    const r = await fetch(path, { cache: 'no-store', ...opts });
+    const body = await r.json().catch(() => ({}));
+    if (r.status === 401) throw new Error('Sessão expirada. Entre novamente no IAHub.');
+    if (r.status === 403) throw new Error(body.error || 'Você não tem permissão para o Monitor de Acessos.');
+    if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
+    return body;
+  }
+
+  async function carregar() {
+    const emp = empresaId();
+    const p = periodo();
+    if (!emp || st.carregando) return;
+    if (!p) { erro('Informe a data inicial e a final.'); return; }
+    if (p.de > p.ate) { erro('A data inicial é maior que a final.'); return; }
+    st.carregando = true;
+    $('meta').textContent = 'Carregando...';
+    try {
+      const qs = new URLSearchParams({ empresa_id: emp, de: p.de, ate: p.ate });
+      if (st.origem !== 'todos') qs.set('origem', st.origem);
+      st.dados = await api(`/api/ia-service/monitor-acessos/historico?${qs}`);
+      erro('');
+      render();
+    } catch (e) {
+      erro('Não foi possível carregar o histórico: ' + e.message);
+      $('meta').textContent = '';
+    } finally {
+      st.carregando = false;
+    }
+  }
+
+  // Busca é feita no navegador sobre o período carregado (resposta imediata).
+  function casa(...campos) {
+    const t = st.busca.toLowerCase();
+    if (!t) return true;
+    const dig = t.replace(/\D/g, '');
+    return campos.some((c) => {
+      const s = String(c || '').toLowerCase();
+      return s.includes(t) || (dig.length >= 3 && s.replace(/\D/g, '').includes(dig));
+    });
+  }
+  function acessosVisiveis() {
+    return (st.dados?.acessos || []).filter((a) => (!st.pessoa || a.pessoaRef === st.pessoa) && casa(a.nome, a.telefone, a.chamados.join(','), a.ip));
+  }
+  function usuariosVisiveis() {
+    return (st.dados?.resumoPorUsuario || []).filter((u) => casa(u.nome, u.telefone));
+  }
+  function falhasVisiveis() {
+    return (st.dados?.falhas || []).filter((f) => casa(f.telefone, f.ip, f.motivo));
+  }
+
+  function userCell(ref, nome, tel) {
+    return `<div class="user"><div class="avatar" style="background:${cor(ref)}">${esc(iniciais(nome))}</div>
+      <div style="min-width:0"><div class="nome">${esc(nome)}</div><div class="fone">${esc(fone(tel))}</div></div></div>`;
+  }
+
+  const VISOES = {
+    usuarios: {
+      cab: ['Usuário', 'Origem', 'Acessos', 'Dias com acesso', 'Tempo de tela', 'Primeiro acesso', 'Último acesso'],
+      linhas: usuariosVisiveis,
+      dica: 'Clique num usuário para ver os acessos dele',
+      vazio: 'Nenhum acesso no período.',
+      html: (u) => `<tr class="clicavel" data-pessoa="${esc(u.pessoaRef)}">
+        <td>${userCell(u.pessoaRef, u.nome, u.telefone)}</td>
+        <td>${u.origens.map(origemBadge).join(' ')}</td>
+        <td class="num">${u.acessos}</td>
+        <td class="num">${u.dias}</td>
+        <td class="num"><b>${dur(u.segundosAtivos)}</b></td>
+        <td class="num">${dataHora(u.primeiroAcessoEm)}</td>
+        <td class="num">${dataHora(u.ultimoAcessoEm)}</td></tr>`,
+      csv: (u) => [u.nome, u.telefone, u.origens.join('/'), u.acessos, u.dias, Math.round(u.segundosAtivos / 60), dataHora(u.primeiroAcessoEm), dataHora(u.ultimoAcessoEm)],
+      csvCab: ['Usuário', 'Telefone', 'Origem', 'Acessos', 'Dias com acesso', 'Tempo de tela (min)', 'Primeiro acesso', 'Último acesso'],
+    },
+    acessos: {
+      cab: ['Usuário', 'Origem', 'Entrou', 'Saiu / último sinal', 'Duração', 'Tempo de tela', 'Telas', 'Chamados', 'Situação', 'IP / navegador'],
+      linhas: acessosVisiveis,
+      dica: 'Duração = da entrada até a saída (ou último sinal); tempo de tela = só com a tela visível',
+      vazio: 'Nenhum acesso no período.',
+      html: (a) => {
+        const fim = a.encerradoEm || a.ultimoSinalEm;
+        return `<tr>
+        <td>${userCell(a.pessoaRef, a.nome, a.telefone)}</td>
+        <td>${origemBadge(a.origem)}</td>
+        <td class="num">${dataHora(a.entrouEm)}</td>
+        <td class="num">${mesmoDia(a.entrouEm, fim) ? hora(fim) : dataHora(fim)}</td>
+        <td class="num">${dur(a.duracaoSegundos)}</td>
+        <td class="num"><b>${dur(a.segundosAtivos)}</b></td>
+        <td class="num">${a.telasVisitadas}</td>
+        <td><div class="chamados" title="${esc(a.chamados.join(', '))}">${a.chamados.length ? esc(a.chamados.join(', ')) : '<span class="sub">-</span>'}</div></td>
+        <td><span class="badge ${SITUACAO[a.situacao] || 'badge-neutro'}">${esc(a.situacaoRotulo)}</span></td>
+        <td><div class="mono" title="${esc(a.ipServidor && a.ipServidor !== a.ip ? 'Visto pelo servidor: ' + a.ipServidor : '')}">${esc(a.ip || '-')}</div>
+          <div class="sub" style="white-space:nowrap" title="${esc(a.navegador || '')}">${esc(navegador(a.navegador))}</div></td></tr>`;
+      },
+      csv: (a) => [a.nome, a.telefone, a.origem === 'chat' ? 'Chat J2A' : 'Interno', dataHora(a.entrouEm), dataHora(a.encerradoEm || a.ultimoSinalEm),
+        Math.round(a.duracaoSegundos / 60), Math.round(a.segundosAtivos / 60), a.telasVisitadas, a.chamados.join(' '), a.situacaoRotulo, a.ip, a.navegador],
+      csvCab: ['Usuário', 'Telefone', 'Origem', 'Entrou', 'Saiu / último sinal', 'Duração (min)', 'Tempo de tela (min)', 'Telas', 'Chamados', 'Situação', 'IP', 'Navegador'],
+    },
+    falhas: {
+      cab: ['Quando', 'Telefone', 'Etapa', 'Motivo', 'IP', 'Navegador'],
+      linhas: falhasVisiveis,
+      dica: 'Só o login por telefone do Radar J2A; o login do IAHub não passa por aqui',
+      vazio: 'Nenhuma falha de login no período.',
+      html: (f) => `<tr>
+        <td class="num">${dataHora(f.em)}</td>
+        <td class="fone">${esc(f.telefone ? fone(f.telefone) : '-')}</td>
+        <td>${esc(f.etapa)}</td>
+        <td><span class="badge badge-falha">${esc(f.motivo)}</span></td>
+        <td class="mono">${esc(f.ip || '-')}</td>
+        <td class="sub" title="${esc(f.navegador || '')}">${esc(navegador(f.navegador))}</td></tr>`,
+      csv: (f) => [dataHora(f.em), f.telefone, f.etapa, f.motivo, f.ip, f.navegador],
+      csvCab: ['Quando', 'Telefone', 'Etapa', 'Motivo', 'IP', 'Navegador'],
+    },
+  };
+
+  function render() {
+    const d = st.dados;
+    if (!d) return;
+    const acessos = acessosVisiveis();
+    const usuarios = usuariosVisiveis();
+    const falhas = falhasVisiveis();
+    $('k-acessos').textContent = acessos.length;
+    $('k-usuarios').textContent = new Set(acessos.map((a) => a.pessoaRef)).size;
+    $('k-tempo').textContent = dur(acessos.reduce((s, a) => s + a.segundosAtivos, 0));
+    $('k-falhas').textContent = falhas.length;
+    $('q-usuarios').textContent = usuarios.length;
+    $('q-acessos').textContent = acessos.length;
+    $('q-falhas').textContent = falhas.length;
+
+    const pessoa = st.pessoa ? d.resumoPorUsuario.find((u) => u.pessoaRef === st.pessoa) : null;
+    $('filtro-pessoa').hidden = !(pessoa && st.aba === 'acessos');
+    if (pessoa) $('filtro-pessoa').textContent = `${pessoa.nome} ✕`;
+
+    const v = VISOES[st.aba];
+    const linhas = v.linhas();
+    $('thead').innerHTML = `<tr>${v.cab.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>`;
+    $('tbody').innerHTML = linhas.length
+      ? linhas.map(v.html).join('')
+      : `<tr><td colspan="${v.cab.length}"><div class="vazio">${esc(v.vazio)}</div></td></tr>`;
+    $('dica').textContent = v.dica;
+    $('meta').textContent = `${periodoTexto()} · atualizado às ${hora(d.geradoEm)}${d.truncado ? ' · mostrando os 5.000 acessos mais recentes; reduza o período' : ''}`;
+  }
+
+  function trocarAba(aba) {
+    st.aba = aba;
+    if (aba === 'usuarios') st.pessoa = null;
+    document.querySelectorAll('.aba').forEach((a) => a.setAttribute('aria-selected', String(a.dataset.aba === aba)));
+    render();
+  }
+
+  function exportarCsv() {
+    if (!st.dados) return;
+    const v = VISOES[st.aba];
+    const cel = (x) => { const s = String(x ?? ''); return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const texto = [v.csvCab, ...v.linhas().map(v.csv)].map((l) => l.map(cel).join(';')).join('\r\n');
+    const blob = new Blob(['﻿' + texto], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `historico-acessos-${st.aba}-${$('de').value}_a_${$('ate').value}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+  }
+
+  // ── Exclusão de período (única forma de apagar o histórico) ─────────────────
+  $('btn-excluir').addEventListener('click', () => {
+    const p = periodo();
+    if (!p) { erro('Informe a data inicial e a final do período a excluir.'); return; }
+    const nomeEmpresa = window._iahubEmpresa?.nome || 'esta empresa';
+    $('excluir-texto').innerHTML = `Excluir <b>definitivamente</b> do histórico de <b>${esc(nomeEmpresa)}</b> todos os acessos que <b>entraram</b> e todas as falhas de login de <b>${esc(periodoTexto())}</b>?<br>`
+      + 'Vale para todas as origens e usuários, independente dos filtros na tela. Não pode ser desfeito. A exclusão fica registrada na auditoria com seu usuário.';
+    $('excluir-motivo').value = '';
+    $('excluir-box').hidden = false;
+    $('excluir-motivo').focus();
+  });
+  $('excluir-cancelar').addEventListener('click', () => { $('excluir-box').hidden = true; });
+  $('excluir-ok').addEventListener('click', async () => {
+    const p = periodo();
+    const emp = empresaId();
+    if (!p || !emp) return;
+    const btn = $('excluir-ok');
+    btn.disabled = true;
+    try {
+      const r = await api(`/api/ia-service/monitor-acessos/historico?empresa_id=${encodeURIComponent(emp)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ empresa_id: emp, de: p.de, ate: p.ate, motivo: $('excluir-motivo').value.trim() || null }),
+      });
+      $('excluir-box').hidden = true;
+      await carregar();
+      $('meta').textContent = `Excluídos: ${r.acessosRemovidos} acesso(s) e ${r.falhasRemovidas} falha(s) de login de ${periodoTexto()}.`;
+    } catch (e) {
+      erro('Não foi possível excluir o período: ' + e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // ── Eventos ─────────────────────────────────────────────────────────────────
+  document.querySelectorAll('.chip[data-per]').forEach((c) => c.addEventListener('click', () => { aplicarPreset(c.dataset.per); carregar(); }));
+  ['de', 'ate'].forEach((id) => $(id).addEventListener('change', () => {
+    document.querySelectorAll('.chip[data-per]').forEach((c) => c.setAttribute('aria-pressed', 'false'));
+    carregar();
+  }));
+  document.querySelectorAll('.chip[data-orig]').forEach((c) => c.addEventListener('click', () => {
+    st.origem = c.dataset.orig;
+    document.querySelectorAll('.chip[data-orig]').forEach((x) => x.setAttribute('aria-pressed', String(x === c)));
+    carregar();
+  }));
+  $('busca').addEventListener('input', (e) => { st.busca = e.target.value.trim(); render(); });
+  // Mesmo cuidado do Monitor: o Chrome às vezes preenche a busca com o usuário salvo do login.
+  $('busca').addEventListener('animationstart', (e) => {
+    if (e.animationName !== 'busca-autofill') return;
+    e.target.value = '';
+    st.busca = '';
+    render();
+  });
+  document.querySelectorAll('.aba').forEach((a) => a.addEventListener('click', () => trocarAba(a.dataset.aba)));
+  $('tbody').addEventListener('click', (e) => {
+    const tr = e.target.closest('tr[data-pessoa]');
+    if (!tr) return;
+    st.pessoa = tr.dataset.pessoa;
+    trocarAba('acessos');
+  });
+  $('filtro-pessoa').addEventListener('click', () => { st.pessoa = null; render(); });
+  $('btn-atualizar').addEventListener('click', carregar);
+  $('btn-csv').addEventListener('click', exportarCsv);
+
+  aplicarPreset('7');
+  (window._iahubAuthReady || Promise.resolve()).then(carregar);
+})();
+</script>
+</body>
+</html>

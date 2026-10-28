@@ -7,6 +7,7 @@
 // requireSessaoExterna) — registrar antes deixaria a rota sem autenticação.
 
 const presencaService = require('../services/presenca-service');
+const historicoAcessos = require('../services/acesso-historico-service');
 const { requireRotinaSvc } = require('../services/rotina-permissao');
 const realtime = require('../services/chat-interno-realtime');
 
@@ -19,7 +20,7 @@ function _handleErro(res, err) {
 
 function _corpoSinal(req) {
   const b = req.body || {};
-  return { tela: b.tela, acao: b.acao, chamadoId: b.chamadoId || null, visivel: b.visivel !== false };
+  return { tela: b.tela, acao: b.acao, chamadoId: b.chamadoId || null, visivel: b.visivel !== false, cliente: historicoAcessos.clienteDaRequisicao(req) };
 }
 
 function registrarInterno(app) {
@@ -66,7 +67,7 @@ function registrarInterno(app) {
   // da sessão (ver presencaService.limparMonitor). Mesma permissão da tela.
   app.delete('/api/ia-service/monitor-acessos', podeMonitorar, (req, res) => {
     try {
-      const resultado = presencaService.limparMonitor(req.svcEmpresaId);
+      const resultado = presencaService.limparMonitor(req.svcEmpresaId, Date.now(), Number(req.session?.user_id) || null);
       presencaService.registrarAuditoria({ empresaId: req.svcEmpresaId, acao: 'limpar', usuarioId: Number(req.session?.user_id) || null, detalhe: resultado });
       res.json(resultado);
     } catch (err) {
@@ -79,13 +80,40 @@ function registrarInterno(app) {
   app.post('/api/ia-service/monitor-acessos/derrubar', podeMonitorar, (req, res) => {
     try {
       const consultorId = String(req.body?.consultorId || '');
-      const { sessaoIds } = presencaService.derrubarPessoaChat(req.svcEmpresaId, consultorId);
+      const { sessaoIds } = presencaService.derrubarPessoaChat(req.svcEmpresaId, consultorId, Number(req.session?.user_id) || null);
       realtime.encerrarSessoes(sessaoIds);
       presencaService.registrarAuditoria({
         empresaId: req.svcEmpresaId, acao: 'derrubar', alvo: `chat:${consultorId}`,
         usuarioId: Number(req.session?.user_id) || null, motivo: req.body?.motivo, detalhe: { sessoes: sessaoIds.length },
       });
       res.json({ sessoesEncerradas: sessaoIds.length });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // Histórico de Acessos: logins e falhas de login da empresa da sessão num
+  // período (de/ate = instantes ISO calculados no fuso do navegador).
+  app.get('/api/ia-service/monitor-acessos/historico', podeMonitorar, (req, res) => {
+    try {
+      const q = req.query || {};
+      res.json(historicoAcessos.listarHistorico(req.svcEmpresaId, { de: q.de, ate: q.ate, origem: q.origem, busca: q.busca }));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // Única forma de apagar o histórico (decisão do usuário, 2026-10-28):
+  // exclusão de um período, só da empresa da sessão, sempre auditada.
+  app.delete('/api/ia-service/monitor-acessos/historico', podeMonitorar, (req, res) => {
+    try {
+      const { de, ate, motivo } = req.body || {};
+      const resultado = historicoAcessos.excluirPeriodo(req.svcEmpresaId, { de, ate });
+      presencaService.registrarAuditoria({
+        empresaId: req.svcEmpresaId, acao: 'excluir_historico', usuarioId: Number(req.session?.user_id) || null,
+        motivo, detalhe: { de, ate, ...resultado },
+      });
+      res.json(resultado);
     } catch (err) {
       _handleErro(res, err);
     }

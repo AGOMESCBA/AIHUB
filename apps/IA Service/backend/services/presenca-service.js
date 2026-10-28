@@ -24,6 +24,7 @@ const chamadoRepo = require('../repositories/chamado-repository');
 const consultorRepo = require('../repositories/consultor-repository');
 const consultorService = require('./consultor-service');
 const usuariosDb = require('../../../IAHUB/backend/usuarios/database');
+const historico = require('./acesso-historico-service');
 
 const INTERVALO_SINAL_SEGUNDOS = 30;
 const JANELA_SINAL_MS = 90 * 1000;          // > 2 sinais perdidos = não conta como tempo ativo
@@ -52,7 +53,7 @@ function situacaoPorSinal(ultimoSinalIso, agoraMs = Date.now()) {
   return 'inativo';
 }
 
-function registrarSinal({ empresaId, origem, sessaoRef, consultorId = null, usuarioIdIahub = null, tela, acao, chamadoId, visivel = true }) {
+function registrarSinal({ empresaId, origem, sessaoRef, consultorId = null, usuarioIdIahub = null, tela, acao, chamadoId, visivel = true, cliente = null }) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   if (origem !== 'chat' && origem !== 'interno') throw new Error('Origem inválida.');
   if (!sessaoRef) throw new Error('Sessão obrigatória.');
@@ -81,9 +82,12 @@ function registrarSinal({ empresaId, origem, sessaoRef, consultorId = null, usua
   // troca a tela registrada — evita que um sinal de fundo apague o contexto.
   if (!visivel) {
     if (atual) db.prepare('UPDATE svc_presenca SET ultimo_sinal_em = ? WHERE id = ?').run(agoraIso, atual.id);
+    historico.registrarSinal({ empresaId, origem, sessaoRef, consultorId, usuarioIdIahub, agoraIso, visivel: false, cliente });
     return { intervaloSegundos: INTERVALO_SINAL_SEGUNDOS };
   }
 
+  let somarHistorico = 0;
+  let mudouTela = false;
   const gravar = db.transaction(() => {
     let presencaId;
     let mudouContexto;
@@ -96,11 +100,14 @@ function registrarSinal({ empresaId, origem, sessaoRef, consultorId = null, usua
       `).run(presencaId, Number(empresaId), origem, String(sessaoRef), consultorId, usuarioIdIahub,
         agoraIso, agoraIso, telaLimpa, acaoLimpa, chamadoIdValido, chamadoNumero);
       mudouContexto = true;
+      mudouTela = true;
     } else {
       presencaId = atual.id;
       const delta = agora.getTime() - new Date(atual.ultimo_sinal_em).getTime();
       const somar = delta > 0 && delta <= JANELA_SINAL_MS ? Math.round(delta / 1000) : 0;
       mudouContexto = atual.tela !== telaLimpa || atual.acao !== acaoLimpa || (atual.chamado_numero || null) !== chamadoNumero;
+      mudouTela = atual.tela !== telaLimpa;
+      somarHistorico = somar;
       db.prepare(`
         UPDATE svc_presenca
            SET ultimo_sinal_em = ?, segundos_ativos = segundos_ativos + ?, tela = ?, acao = ?,
@@ -121,6 +128,8 @@ function registrarSinal({ empresaId, origem, sessaoRef, consultorId = null, usua
     }
   });
   gravar();
+  // Fora da transação da presença: falha no histórico nunca desfaz o sinal.
+  historico.registrarSinal({ empresaId, origem, sessaoRef, consultorId, usuarioIdIahub, agoraIso, segundos: somarHistorico, mudouTela, chamadoNumero, cliente });
 
   return { intervaloSegundos: INTERVALO_SINAL_SEGUNDOS };
 }
@@ -147,7 +156,7 @@ function registrarSaida({ empresaId, origem, sessaoRef }) {
 // apagava o token do navegador e a sessão seguia válida por até 8h no
 // servidor — achado na homologação do Monitor, 2026-10). Expira em vez de
 // apagar, mesmo critério de limparMonitor: a linha fica para auditoria.
-function encerrarSessaoChat(empresaId, sessaoId) {
+function encerrarSessaoChat(empresaId, sessaoId, { motivo = 'sair', usuarioId = null } = {}) {
   if (!empresaId || !sessaoId) return { ok: false };
   const db = getDB();
   db.transaction(() => {
@@ -156,6 +165,7 @@ function encerrarSessaoChat(empresaId, sessaoId) {
     db.prepare("DELETE FROM svc_presenca WHERE empresa_id = ? AND origem = 'chat' AND sessao_ref = ?")
       .run(Number(empresaId), String(sessaoId));
   })();
+  historico.registrarEncerramento({ empresaId, origem: 'chat', sessaoRefs: [sessaoId], motivo, usuarioId });
   return { ok: true };
 }
 
@@ -164,14 +174,14 @@ function encerrarSessaoChat(empresaId, sessaoId) {
 // das sessões encerradas para o tempo real derrubar os sockets na hora.
 // A pessoa pode entrar de novo com um novo código (decisão do usuário: só
 // derrubar, sem bloquear — para bloquear, desativar na Platform).
-function derrubarPessoaChat(empresaId, consultorId) {
+function derrubarPessoaChat(empresaId, consultorId, usuarioId = null) {
   if (!empresaId || !consultorId) throw Object.assign(new Error('Analista obrigatório.'), { status: 400 });
   const db = getDB();
   const agora = Date.now();
   const sessoes = db.prepare('SELECT id FROM svc_sessoes_externas WHERE empresa_id = ? AND consultor_id = ? AND expira_em > ?')
     .all(Number(empresaId), String(consultorId), new Date(agora).toISOString()).map(r => r.id);
   if (!sessoes.length) return { sessaoIds: [] };
-  db.transaction(() => sessoes.forEach((id) => encerrarSessaoChat(empresaId, id)))();
+  db.transaction(() => sessoes.forEach((id) => encerrarSessaoChat(empresaId, id, { motivo: 'derrubado', usuarioId })))();
   return { sessaoIds: sessoes };
 }
 
@@ -288,11 +298,13 @@ function listarMonitor(empresaId, agoraMs = Date.now()) {
  * auditoria continua no banco. Rotinas internas (cookie do IAHub) não são
  * deslogadas; voltam a aparecer no próximo sinal.
  */
-function limparMonitor(empresaId, agoraMs = Date.now()) {
+function limparMonitor(empresaId, agoraMs = Date.now(), usuarioId = null) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
   const expirarEm = new Date(agoraMs - 1000).toISOString();
-  return db.transaction(() => {
+  const ativas = db.prepare('SELECT id FROM svc_sessoes_externas WHERE empresa_id = ? AND expira_em > ?')
+    .all(Number(empresaId), new Date(agoraMs).toISOString()).map(r => r.id);
+  const resultado = db.transaction(() => {
     const eventos = db.prepare('DELETE FROM svc_presenca_eventos WHERE presenca_id IN (SELECT id FROM svc_presenca WHERE empresa_id = ?)')
       .run(Number(empresaId)).changes;
     const presencas = db.prepare('DELETE FROM svc_presenca WHERE empresa_id = ?').run(Number(empresaId)).changes;
@@ -300,6 +312,8 @@ function limparMonitor(empresaId, agoraMs = Date.now()) {
       .run(expirarEm, Number(empresaId), new Date(agoraMs).toISOString()).changes;
     return { presencasRemovidas: presencas, eventosRemovidos: eventos, sessoesEncerradas };
   })();
+  historico.registrarEncerramento({ empresaId, origem: 'chat', sessaoRefs: ativas, motivo: 'limpar', usuarioId });
+  return resultado;
 }
 
 /**

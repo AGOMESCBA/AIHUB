@@ -21,6 +21,7 @@ const { getDB } = require('../database');
 const consultorRepo = require('../repositories/consultor-repository');
 const crud = require('../../../IAHUB/backend/crud');
 const platformStore = require('../../../IAHUB/backend/platform-store');
+const historicoAcessos = require('./acesso-historico-service');
 
 const TTL_CODIGO_MS = 5 * 60 * 1000; // 5 minutos — mesmo default do IA Command
 const MAX_TENTATIVAS = 5; // mesmo default do IA Command
@@ -236,7 +237,9 @@ function _validarChallenge(challengeId, telefoneBruto, codigoBruto) {
   return { ok: true, telefone };
 }
 
-function _emitirSessao(empresaId, consultorId, otpVerificadoEm = null) {
+// cliente = { ip, ipEncaminhado, navegador } da requisição de login, só para
+// o Histórico de Acessos (acesso-historico-service.clienteDaRequisicao).
+function _emitirSessao(empresaId, consultorId, otpVerificadoEm = null, cliente = null) {
   const db = getDB();
   const token = crypto.randomBytes(32).toString('hex');
   const agora = new Date();
@@ -247,6 +250,7 @@ function _emitirSessao(empresaId, consultorId, otpVerificadoEm = null) {
     INSERT INTO svc_sessoes_externas (id, empresa_id, consultor_id, token_hash, expira_em, criado_em, ultimo_acesso_em, otp_verificado_em)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, Number(empresaId), consultorId, _hashToken(token), expiraEm.toISOString(), agora.toISOString(), agora.toISOString(), otpVerificadoEm);
+  historicoAcessos.registrarLoginChat({ empresaId, sessaoId: id, consultorId, entrouEm: agora.toISOString(), cliente: cliente || {} });
 
   return { token, expiraEm: expiraEm.toISOString() };
 }
@@ -258,7 +262,7 @@ function _emitirSessao(empresaId, consultorId, otpVerificadoEm = null) {
  * escolha (ver escolherEmpresa). 0 empresas nunca chega aqui — já barrado em
  * iniciarLogin.
  */
-function verificarLogin(challengeId, telefoneBruto, codigoBruto) {
+function verificarLogin(challengeId, telefoneBruto, codigoBruto, cliente = null) {
   const validacao = _validarChallenge(challengeId, telefoneBruto, codigoBruto);
   if (!validacao.ok) throw new Error(validacao.error);
 
@@ -274,7 +278,7 @@ function verificarLogin(challengeId, telefoneBruto, codigoBruto) {
   }
 
   const unica = empresas[0];
-  const sessao = _emitirSessao(unica.id, unica.consultorId, new Date().toISOString());
+  const sessao = _emitirSessao(unica.id, unica.consultorId, new Date().toISOString(), cliente);
   return { escolhaEmpresa: false, token: sessao.token, expiraEm: sessao.expiraEm, empresaId: unica.id, consultorId: unica.consultorId };
 }
 
@@ -284,7 +288,7 @@ function verificarLogin(challengeId, telefoneBruto, codigoBruto) {
  * Reconfirma que o telefone de fato tem consultor ativo naquela empresa —
  * nunca confia cegamente no empresaId vindo do cliente.
  */
-function escolherEmpresa(telefoneBruto, empresaId, tokenEscolha) {
+function escolherEmpresa(telefoneBruto, empresaId, tokenEscolha, cliente = null) {
   const telefone = normalizarTelefone(telefoneBruto);
   if (typeof tokenEscolha !== 'string' || tokenEscolha.length !== 64) throw new Error('Confirmação de identidade ausente. Solicite um novo código.');
   return getDB().transaction(() => {
@@ -294,7 +298,7 @@ function escolherEmpresa(telefoneBruto, empresaId, tokenEscolha) {
     const escolhida = empresas.find(e => Number(e.id) === Number(empresaId));
     if (!escolhida) throw new Error('Empresa não disponível para este telefone.');
 
-    const sessao = _emitirSessao(escolhida.id, escolhida.consultorId, prova.otp_verificado_em);
+    const sessao = _emitirSessao(escolhida.id, escolhida.consultorId, prova.otp_verificado_em, cliente);
     getDB().prepare('UPDATE svc_login_escolhas SET usado_em = ? WHERE token_hash = ?').run(new Date().toISOString(), _hashToken(tokenEscolha));
     return { token: sessao.token, expiraEm: sessao.expiraEm, empresaId: escolhida.id, consultorId: escolhida.consultorId };
   })();
@@ -308,7 +312,7 @@ function escolherEmpresa(telefoneBruto, empresaId, tokenEscolha) {
  * consultor ativo na empresa de destino antes de emitir o novo token —
  * nunca aceita um empresaId arbitrário só porque o token atual é válido.
  */
-function trocarEmpresa(tokenAtual, novoEmpresaId) {
+function trocarEmpresa(tokenAtual, novoEmpresaId, cliente = null) {
   const sessaoAtual = validarSessaoExterna(tokenAtual);
   if (!sessaoAtual) throw new Error('Sessão externa inválida ou expirada.');
 
@@ -319,7 +323,7 @@ function trocarEmpresa(tokenAtual, novoEmpresaId) {
   const destino = empresas.find(e => Number(e.id) === Number(novoEmpresaId));
   if (!destino) throw new Error('Empresa não disponível para este telefone.');
 
-  const sessao = _emitirSessao(destino.id, destino.consultorId, sessaoAtual.otpVerificadoEm);
+  const sessao = _emitirSessao(destino.id, destino.consultorId, sessaoAtual.otpVerificadoEm, cliente);
   return { token: sessao.token, expiraEm: sessao.expiraEm, empresaId: destino.id, consultorId: destino.consultorId };
 }
 
@@ -369,6 +373,7 @@ function _consultorSegueLiberado(db, sessaoRow) {
   if (consultor?.ativo) return true;
   db.prepare('UPDATE svc_sessoes_externas SET expira_em = ? WHERE id = ?')
     .run(new Date(Date.now() - 1000).toISOString(), sessaoRow.id);
+  historicoAcessos.registrarEncerramento({ empresaId: sessaoRow.empresa_id, origem: 'chat', sessaoRefs: [sessaoRow.id], motivo: 'desativado' });
   return false;
 }
 

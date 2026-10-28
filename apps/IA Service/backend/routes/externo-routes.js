@@ -29,6 +29,7 @@ const radarService = require('../services/radar-service');
 const anexosSoftExpertService = require('../services/anexos-softexpert-service');
 const consultorService = require('../services/consultor-service');
 const loginExternoService = require('../services/login-externo-service');
+const historicoAcessos = require('../services/acesso-historico-service');
 const technicalResearchService = require('../services/technical-research-service');
 const radarRefreshService = require('../services/radar-refresh-service');
 const investigacaoExecucaoRepo = require('../repositories/investigacao-execucao-repository');
@@ -103,7 +104,7 @@ module.exports = function registrarRotasExterno(app) {
   app.post('/api/ia-service-externo/trocar-empresa', (req, res) => {
     try {
       const tokenAtual = req.headers['x-sessao-externa'];
-      const resultado = loginExternoService.trocarEmpresa(String(tokenAtual), req.body?.empresaId);
+      const resultado = loginExternoService.trocarEmpresa(String(tokenAtual), req.body?.empresaId, historicoAcessos.clienteDaRequisicao(req));
       res.json({ ok: true, token: resultado.token, expiraEm: resultado.expiraEm });
     } catch (err) {
       res.status(400).json({ error: err.message });

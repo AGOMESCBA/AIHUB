@@ -1315,6 +1315,47 @@ const MIGRATIONS = [
         WHERE id_softexpert IS NOT NULL;
     `,
   },
+  {
+    version: 54,
+    descricao: 'Histórico de Acessos (pedido do usuário, 2026-10-28): uma linha por login (chat J2A = sessão externa; interno = sessão do IAHub), com quando entrou, último sinal, tempo de tela, telas, chamados, IP, navegador e como terminou — e as tentativas de login com falha do J2A. Separado de svc_presenca (estado ao vivo, apagado por Limpar/Sair/retenção de 3 dias): o histórico é guardado para sempre e só sai pela exclusão por período feita no próprio painel (auditada em svc_monitor_auditoria). Nome/telefone gravados no momento do acesso para continuar legível se o cadastro mudar.',
+    sql: `
+      CREATE TABLE svc_acessos_historico (
+        id                    TEXT PRIMARY KEY,
+        empresa_id            INTEGER NOT NULL,
+        origem                TEXT NOT NULL CHECK (origem IN ('chat', 'interno')),
+        sessao_ref            TEXT NOT NULL,
+        consultor_id          TEXT,
+        usuario_id_iahub      INTEGER,
+        nome                  TEXT,
+        telefone              TEXT,
+        ip                    TEXT,
+        ip_encaminhado        TEXT,
+        navegador             TEXT,
+        entrou_em             TEXT NOT NULL,
+        ultimo_sinal_em       TEXT,
+        segundos_ativos       INTEGER NOT NULL DEFAULT 0,
+        telas_visitadas       INTEGER NOT NULL DEFAULT 0,
+        chamados              TEXT,
+        encerrado_em          TEXT,
+        motivo_encerramento   TEXT,
+        encerrado_por         INTEGER
+      );
+      CREATE UNIQUE INDEX idx_svc_acessos_historico_sessao ON svc_acessos_historico (empresa_id, origem, sessao_ref);
+      CREATE INDEX idx_svc_acessos_historico_entrada ON svc_acessos_historico (empresa_id, entrou_em);
+      CREATE TABLE svc_acessos_falhas (
+        id              TEXT PRIMARY KEY,
+        empresa_id      INTEGER,
+        telefone        TEXT,
+        etapa           TEXT NOT NULL,
+        motivo          TEXT NOT NULL,
+        ip              TEXT,
+        ip_encaminhado  TEXT,
+        navegador       TEXT,
+        criado_em       TEXT NOT NULL
+      );
+      CREATE INDEX idx_svc_acessos_falhas ON svc_acessos_falhas (empresa_id, criado_em);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;
