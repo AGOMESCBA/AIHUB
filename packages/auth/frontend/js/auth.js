@@ -930,6 +930,57 @@ window.addEventListener('storage', (e) => {
   document.addEventListener('DOMContentLoaded', _injetarModalSenha);
 })();
 
+// ── Campos de pesquisa e filtros de coluna sem preenchimento automático ───────
+// Pedido do usuário (2026-10-28): todo campo de pesquisa e filtro de coluna das
+// grades com autocomplete="off". Feito aqui (carregado por todas as telas) e
+// não campo a campo: os filtros de coluna do Tabulator são criados depois que a
+// tela abre, e o Chrome IGNORA autocomplete="off" quando oferece o usuário
+// salvo do login (caso real: busca do Monitor de Acessos e de Números
+// Autorizados filtrando a grade com "admin"). Por isso, além do atributo, o
+// preenchimento automático que o navegador marca (:-webkit-autofill) é desfeito
+// na hora. Valor restaurado pela própria tela não é tocado.
+(function () {
+  const SELETOR = [
+    'input[type="search"]',
+    '.tabulator-header-filter input',
+    'input[id*="busca" i]', 'input[id*="search" i]', 'input[id*="filtro" i]', 'input[id*="filter" i]',
+    'input[name*="busca" i]', 'input[name*="filtro" i]',
+    'input[placeholder*="buscar" i]', 'input[placeholder*="pesquis" i]', 'input[placeholder*="filtr" i]',
+  ].join(',');
+  const ANIMACAO = 'iahub-busca-autofill';
+
+  function proteger(el) {
+    if (el.dataset.semAutofill || el.type === 'password') return;
+    el.dataset.semAutofill = '1';
+    el.setAttribute('autocomplete', 'off');
+    el.setAttribute('autocapitalize', 'off');
+    el.setAttribute('spellcheck', 'false');
+    el.setAttribute('data-lpignore', 'true');   // LastPass
+    el.setAttribute('data-1p-ignore', '');      // 1Password
+  }
+  function varrer(raiz) {
+    if (raiz.matches?.(SELETOR)) proteger(raiz);
+    raiz.querySelectorAll?.(SELETOR).forEach(proteger);
+  }
+
+  const estilo = document.createElement('style');
+  estilo.textContent = `@keyframes ${ANIMACAO} { from { opacity:1; } to { opacity:1; } }
+input[data-sem-autofill]:-webkit-autofill { animation-name:${ANIMACAO};animation-duration:.01s; }`;
+  document.head.appendChild(estilo);
+
+  // Desfaz e avisa a tela (input/keyup/change) para a grade tirar o filtro.
+  document.addEventListener('animationstart', (e) => {
+    if (e.animationName !== ANIMACAO || !e.target.value) return;
+    e.target.value = '';
+    for (const tipo of ['input', 'keyup', 'change']) e.target.dispatchEvent(new Event(tipo, { bubbles: true }));
+  }, true);
+
+  varrer(document);
+  new MutationObserver((mudancas) => {
+    for (const m of mudancas) m.addedNodes.forEach((n) => { if (n.nodeType === 1) varrer(n); });
+  }).observe(document.documentElement, { childList: true, subtree: true });
+})();
+
 // ── Logout ────────────────────────────────────────────────────────────────────
 function logout() {
   fetch('/api/logout', { method: 'POST' }).finally(() => {

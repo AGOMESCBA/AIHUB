@@ -72,6 +72,15 @@
     .rot-item-label    { font-size:13px;color:var(--text-hi); }
     .rot-item-icon     { width:18px;height:18px;display:flex;align-items:center;justify-content:center;color:var(--text-md);flex-shrink:0; }
     .rot-item-icon svg { width:16px;height:16px;stroke:currentColor; }
+    .rot-secao         { margin:2px 0 6px; }
+    .rot-secao-hdr     { display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;cursor:pointer; }
+    .rot-secao-hdr:hover { background:var(--bg-hover); }
+    .rot-secao-hdr input[type=checkbox] { cursor:pointer;width:14px;height:14px;flex-shrink:0; }
+    .rot-secao-nome    { flex:1;font-size:12.5px;font-weight:600;color:var(--text-hi); }
+    .rot-secao .rot-item { padding-left:30px; }
+    .rot-secao .rot-item-sub { padding-left:44px; }
+    .rot-sub           { padding:6px 8px 2px 38px;font-size:10.5px;font-weight:700;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em; }
+    .rot-item-nota     { display:block;font-size:11px;color:var(--text-lo);margin-top:1px; }
 
     .pass-wrap { position:relative; }
     .pass-wrap input { padding-right:40px; }
@@ -2127,88 +2136,152 @@ let _usuQuickFilterFn      = null;
 let _usuPermissoesMap      = {};  // { empresa_id: { ativo, rotinas: Set } }
 let _usuRotinasCollapsed   = {};
 
+// Rotinas por sistema = ESPELHO DO MENU de cada sistema (pedido do usuário,
+// 2026-10-28: "não existe rotina fora de um menu"). Mesmas seções, mesma
+// ordem e mesmos nomes de apps/*/frontend/js/sidebar.js — quem libera olha o
+// menu e acha a rotina no mesmo lugar. Tela que usa a permissão de outra
+// (ex.: Encaminhamentos usa a de Auditoria) aparece no seu lugar, ligada à
+// outra. Conferido por tests/rotinas-espelho-menu.test.js: mudou o menu,
+// atualize aqui.
 const _USU_ROTINAS_BASE = [
   {
-    id: 'ia-recruit',
-    label: 'IA Recruit',
-    icon: 'users',
-    items: [
-      { id: 'dashboard', label: 'Dashboard', icon: 'chart' },
-      { id: 'monitores', label: 'Monitores', icon: 'monitor' },
-      { id: 'monitor-whatsapp', label: 'Monitor WhatsApp', icon: 'message' },
-      { id: 'monitor-email', label: 'Monitor Email', icon: 'mail' },
-      { id: 'curriculos', label: 'Curriculos', icon: 'file' },
-      { id: 'funcoes', label: 'Funcoes', icon: 'briefcase' },
-      { id: 'vagas', label: 'Vagas', icon: 'badge' },
-      { id: 'processo-seletivo', label: 'Processo Seletivo', icon: 'workflow' },
-      { id: 'analisador', label: 'Analisador', icon: 'search' },
-      { id: 'historico', label: 'Historico', icon: 'clock' },
-      { id: 'config-analisador', label: 'Config. Analisador', icon: 'sliders' },
-      { id: 'se-integracoes', label: 'SE Integracoes', icon: 'plug' },
-      { id: 'se-curriculos', label: 'SE Curriculos', icon: 'file' },
-      { id: 'se-funcoes', label: 'SE Funcoes', icon: 'briefcase' },
-      { id: 'se-vagas', label: 'SE Vagas', icon: 'badge' },
-      { id: 'se-api-configurador', label: 'SE API Configurador', icon: 'code' },
-      { id: 'configuracoes', label: 'Configuracoes', icon: 'settings' },
+    id: 'ia-recruit', label: 'IA Recruit', icon: 'users',
+    secoes: [
+      { id: 'monitores', label: 'Monitores', itens: [
+        { id: 'dashboard', label: 'Dashboard', icon: 'chart' },
+        { id: 'monitores', label: 'Monitores', icon: 'monitor' },
+        { id: 'monitor-whatsapp', label: 'Monitor WhatsApp', icon: 'message' },
+        { id: 'monitor-email', label: 'Monitor E-mail', icon: 'mail' },
+      ] },
+      { id: 'recrutamento', label: 'Recrutamento', itens: [
+        { id: 'curriculos', label: 'Currículos', icon: 'file' },
+        { id: 'funcoes', label: 'Cadastro de Funções', icon: 'briefcase' },
+        { id: 'vagas', label: 'Vagas por Função', icon: 'badge' },
+        { id: 'processo-seletivo', label: 'Processo Seletivo', icon: 'workflow' },
+      ] },
+      { id: 'analisador', label: 'Analisador de Currículos', itens: [
+        { id: 'analisador', label: 'Analisador', icon: 'search' },
+        { id: 'historico', label: 'Histórico de Análises', icon: 'clock' },
+        { id: 'config-analisador', label: 'Configuração', icon: 'sliders' },
+      ] },
+      { id: 'integracoes', label: 'Integrações', itens: [
+        { id: 'se-integracoes', label: 'SE Integrações', icon: 'plug', nota: 'inclui Currículos, Funções e Vagas do SoftExpert' },
+        { id: 'se-api-configurador', label: 'SE API Configurador', icon: 'code' },
+      ] },
+      { id: 'configurador', label: 'Configurador', itens: [
+        { id: 'configuracoes', label: 'Configurações', icon: 'settings' },
+      ] },
     ],
   },
   {
-    id: 'ia-command',
-    label: 'IA Command',
-    icon: 'terminal',
-    items: [
-      { id: 'iac-dashboard', label: 'Dashboard', icon: 'chart' },
-      { id: 'iac-whatsapp-services', label: 'WhatsApp Services', icon: 'message' },
-      { id: 'iac-monitor-whatsapp', label: 'Monitor WhatsApp', icon: 'message' },
-      { id: 'iac-admin-canais-whatsapp', label: 'Canais WhatsApp', icon: 'monitor' },
-      { id: 'iac-admin-numeros-whatsapp', label: 'Numeros Autorizados', icon: 'message' },
-      { id: 'iac-admin-usuarios-protheus-web', label: 'Usuarios Protheus (Chat Web)', icon: 'message' },
-      { id: 'iac-admin-mensagens-whatsapp', label: 'Mensagens WhatsApp', icon: 'file' },
-      { id: 'iac-financeiro-whatsapp', label: 'Relatorio Financeiro WhatsApp', icon: 'file' },
-      { id: 'iac-config-conexoes', label: 'Conexoes ERP', icon: 'database' },
-      { id: 'iac-config-ia', label: 'Configurar IA', icon: 'spark' },
-      { id: 'iac-migrar-dados', label: 'Migrar Dados', icon: 'database' },
-      { id: 'iac-admin-modulos', label: 'Modulos', icon: 'file' },
-      { id: 'iac-admin-datasets', label: 'Datasets ERP', icon: 'table' },
-      { id: 'iac-admin-intencoes', label: 'Intencoes', icon: 'brain' },
-      { id: 'iac-admin-execucoes', label: 'Log de Execucoes', icon: 'list' },
-      { id: 'iac-admin-logs-consultas', label: 'Log de Consultas', icon: 'list' },
-      { id: 'iac-admin-auditoria', label: 'Auditoria', icon: 'shield' },
-      { id: 'iac-admin-spec-feedback', label: 'Propostas de Correcao', icon: 'shield' },
-      { id: 'iac-console-servidor', label: 'Console do Servidor', icon: 'terminal' },
-      { id: 'iac-admin-sinonimos', label: 'Equivalencias', icon: 'file' },
-      { id: 'iac-admin-normalizacao', label: 'Normalizacao', icon: 'sliders' },
-      { id: 'iac-admin-dialogos', label: 'Dialogos Conversacionais', icon: 'message' },
-      { id: 'iac-config-middleware', label: 'Middleware SQL', icon: 'shield' },
-      { id: 'iac-admin-protheus-sx2', label: 'Dicionario SX2', icon: 'file' },
-      { id: 'iac-admin-protheus-sx3', label: 'Dicionario SX3', icon: 'file' },
-      { id: 'iac-admin-protheus-sys-company', label: 'Dicionario SYS_COMPANY', icon: 'file' },
-      { id: 'iac-admin-protheus-sys-company-cfg', label: 'Dicionario SYS_COMPANY_CFG', icon: 'file' },
-      { id: 'iac-agente-local-cargas', label: 'Cargas Agente Local', icon: 'database' },
-      { id: 'iac-admin-instalador-agente', label: 'Instalador Agente Local', icon: 'file' },
-      { id: 'iac-admin-agendamento', label: 'Agendamento', icon: 'clock' },
-      { id: 'iac-admin-chat-favoritos', label: 'Chat Favoritos', icon: 'star' },
-      { id: 'iac-admin-compras', label: 'Consultas Compras', icon: 'table' },
-      { id: 'iac-admin-faturamento', label: 'Consultas Faturamento', icon: 'table' },
-      { id: 'iac-admin-financeiro', label: 'Consultas Financeiro', icon: 'table' },
-      { id: 'iac-admin-comissao', label: 'Consultas Comissao', icon: 'table' },
-      { id: 'iac-admin-estoque', label: 'Consultas Estoque', icon: 'table' },
+    id: 'ia-command', label: 'IA Command', icon: 'terminal',
+    secoes: [
+      { id: 'operacao', label: 'Operação', itens: [
+        { id: 'iac-dashboard', label: 'Dashboard', icon: 'chart' },
+        { id: 'iac-whatsapp-services', label: 'WhatsApp Services', icon: 'message' },
+        { id: 'iac-monitor-whatsapp', label: 'Monitor WhatsApp', icon: 'message' },
+      ] },
+      { id: 'auditoria-diagnostico', label: 'Auditoria e Diagnóstico', itens: [
+        { id: 'iac-admin-auditoria', label: 'Histórico de Interpretações', icon: 'list' },
+        { id: 'iac-admin-auditoria', label: 'Auditoria', icon: 'shield' },
+        { id: 'iac-admin-execucoes', label: 'Auditoria de Consultas IA', icon: 'list' },
+        { id: 'iac-admin-logs-consultas', label: 'Log de Consultas', icon: 'list' },
+        { id: 'iac-admin-execucoes', label: 'Consumo IA', icon: 'chart' },
+        { id: 'iac-console-servidor', label: 'Console do Servidor', icon: 'terminal' },
+      ] },
+      { id: 'whatsapp', label: 'WhatsApp', itens: [
+        { id: 'iac-admin-canais-whatsapp', label: 'Canais', icon: 'monitor' },
+        { id: 'iac-admin-numeros-whatsapp', label: 'Números Autorizados', icon: 'users' },
+        { id: 'iac-admin-grupos-whatsapp', label: 'Grupos', icon: 'users' },
+        { id: 'iac-admin-mensagens-whatsapp', label: 'Mensagens', icon: 'mail' },
+        { id: 'iac-admin-whatsapp-response-config', label: 'Modelos de Resposta', icon: 'file' },
+        { id: 'iac-financeiro-whatsapp', label: 'Relatório Financeiro WhatsApp', icon: 'file' },
+        { id: 'iac-admin-auditoria', label: 'Encaminhamentos', icon: 'workflow' },
+      ] },
+      { id: 'conhecimento-ia', label: 'Conhecimento da IA', itens: [
+        { id: 'iac-admin-modulos', label: 'Módulos', icon: 'file' },
+        { id: 'iac-admin-intencoes', label: 'Intenções', icon: 'brain' },
+        { id: 'iac-admin-sinonimos', label: 'Equivalências', icon: 'file' },
+        { id: 'iac-admin-normalizacao', label: 'Normalização Linguística', icon: 'sliders' },
+        { id: 'iac-admin-spec-feedback', label: 'Feedback Técnico da IA', icon: 'shield' },
+        { id: 'iac-admin-glossario', label: 'Glossário de Conceitos', icon: 'file' },
+      ] },
+      { id: 'configuracao', label: 'Configuração', itens: [
+        { id: 'iac-config-conexoes', label: 'Conexões ERP', icon: 'database' },
+        { id: 'iac-admin-datasets', label: 'Datasets ERP', icon: 'table' },
+        { id: 'iac-config-ia', label: 'Configuração de IA', icon: 'spark' },
+        { id: 'iac-config-middleware', label: 'Middleware SQL Protheus', icon: 'shield' },
+        { id: 'iac-migrar-dados', label: 'Migrar Dados', icon: 'database' },
+      ] },
+      { id: 'integracao', label: 'Integração', itens: [
+        { id: 'iac-admin-protheus-sx2', label: 'Tabelas Protheus (SX2)', icon: 'file', sub: 'ERP Protheus' },
+        { id: 'iac-admin-protheus-sx3', label: 'Campos Protheus (SX3)', icon: 'file', sub: 'ERP Protheus' },
+        { id: 'iac-admin-protheus-sys-company', label: 'Empresas Protheus', icon: 'database', sub: 'ERP Protheus' },
+        { id: 'iac-admin-protheus-sys-company-cfg', label: 'Configuração de Empresas Protheus', icon: 'settings', sub: 'ERP Protheus' },
+        { id: 'iac-admin-usuarios-protheus-web', label: 'Usuários Protheus', icon: 'users', sub: 'ERP Protheus' },
+        { id: 'iac-agente-local-cargas', label: 'Cargas', icon: 'database', sub: 'Agente Local' },
+      ] },
+      { id: 'agendamento', label: 'Agendamento', itens: [
+        { id: 'iac-admin-agendamento', label: 'Perguntas Agendadas', icon: 'clock' },
+        { id: 'iac-admin-agendamento', label: 'Histórico de Execuções', icon: 'list' },
+        { id: 'iac-admin-chat-favoritos', label: 'Favoritos do Chat', icon: 'star' },
+      ] },
+      { id: 'aprendizado', label: 'Aprendizado NL-SQL', itens: [
+        { id: 'iac-admin-auditoria', label: 'Saúde do Aprendizado', icon: 'chart' },
+        { id: 'iac-admin-auditoria', label: 'Shadow Mode', icon: 'search' },
+        { id: 'iac-admin-auditoria', label: 'Decisões Automáticas', icon: 'workflow' },
+        { id: 'iac-admin-auditoria', label: 'Calibração', icon: 'sliders' },
+        { id: 'iac-admin-auditoria', label: 'Embeddings', icon: 'brain' },
+        { id: 'iac-admin-auditoria', label: 'Backfill', icon: 'database' },
+      ] },
+      { id: 'administracao', label: 'Administração', itens: [
+        { id: 'iac-admin-dialogos', label: 'Diálogos Conversacionais', icon: 'message' },
+        { id: 'iac-admin-instalador-agente', label: 'Instalador do Agente Local', icon: 'file' },
+      ] },
     ],
   },
   {
-    // Espelho dos ids de apps/IA Service/frontend/js/sidebar.js. O servidor
-    // do IA Service confere cada rotina (services/rotina-permissao.js).
-    id: 'ia-service',
-    label: 'IA Service',
-    icon: 'message',
-    items: [
-      { id: 'svc-radar', label: 'Radar de Chamados', icon: 'monitor' },
-      { id: 'svc-atendimentos', label: 'Atendimentos', icon: 'message' },
-      { id: 'svc-homologacao', label: 'Homologacao da IA', icon: 'chart' },
-      { id: 'svc-monitor-acessos', label: 'Monitor e Historico de Acessos', icon: 'clock' },
-      { id: 'svc-numeros-autorizados', label: 'Numeros Autorizados', icon: 'users' },
-      { id: 'svc-base-historica', label: 'Base Historica', icon: 'database' },
-      { id: 'svc-config-ia', label: 'Configuracao de IA', icon: 'spark' },
+    id: 'ia-service', label: 'IA Service', icon: 'message',
+    secoes: [
+      { id: 'operacao', label: 'Operação', itens: [
+        { id: 'svc-radar', label: 'Radar de Chamados', icon: 'monitor' },
+        { id: 'svc-atendimentos', label: 'Atendimentos', icon: 'message' },
+        { id: 'svc-homologacao', label: 'Homologação da IA', icon: 'chart' },
+        { id: 'svc-monitor-acessos', label: 'Monitor de Acessos', icon: 'monitor' },
+        { id: 'svc-monitor-acessos', label: 'Histórico de Acessos', icon: 'clock' },
+      ] },
+      { id: 'base-conhecimento', label: 'Base de Conhecimento', itens: [
+        { id: 'svc-base-historica', label: 'Base Histórica', icon: 'database' },
+      ] },
+      { id: 'configuracao', label: 'Configuração', itens: [
+        { id: 'svc-numeros-autorizados', label: 'Números Autorizados', icon: 'users' },
+        { id: 'svc-config-ia', label: 'Configuração de IA', icon: 'spark' },
+      ] },
+    ],
+  },
+  {
+    id: 'master-crypto', label: 'Master Crypto', icon: 'chart',
+    secoes: [
+      { id: 'operacao', label: 'Operação', itens: [
+        { id: 'mc-radar', label: 'Radar de Oportunidades 24x7', icon: 'monitor' },
+        { id: 'mc-ativos', label: 'Ativos', icon: 'list' },
+      ] },
+      { id: 'analise-trade', label: 'Análise de Trade', itens: [
+        { id: 'mc-plano-trade', label: 'Plano de Trade & Binance Pro', icon: 'chart' },
+        { id: 'mc-analista-ia', label: 'Analista IA Assistente', icon: 'spark' },
+      ] },
+      { id: 'estrategias-mercado', label: 'Estratégias e Mercado', itens: [
+        { id: 'mc-ciclo-btc', label: 'Ciclos do Bitcoin & Halving', icon: 'clock' },
+        { id: 'mc-backtest', label: 'Backtest & Performance', icon: 'chart' },
+        { id: 'mc-noticias', label: 'Notícias & Sentimento Macro', icon: 'file' },
+      ] },
+      { id: 'simulacao', label: 'Simulação', itens: [
+        { id: 'mc-paper-trading', label: 'Paper Trading (Banca Virtual)', icon: 'briefcase' },
+        { id: 'mc-historico-trades', label: 'Histórico de Trades', icon: 'list' },
+      ] },
+      { id: 'configuracao', label: 'Configuração', itens: [
+        { id: 'mc-configuracoes', label: 'Parâmetros & Risco', icon: 'sliders' },
+      ] },
     ],
   },
 ];
@@ -2246,22 +2319,38 @@ function usuIcon(name) {
   return `<svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
 }
 
-function _rotinasOrigem() {
-  return Array.isArray(window.MENU) && window.MENU.length ? window.MENU : _USU_ROTINAS_BASE;
+// grupo.itens = rotinas DISTINTAS do sistema (contagem e "marcar todas");
+// grupo.secoes = como aparecem no menu (pode repetir rotina). Item repetido
+// leva mesmaDe = nome da primeira tela que usa a mesma permissão.
+function _menuParaRotinas(base) {
+  return base.map(g => {
+    const vistos = new Map();
+    const secoes = g.secoes.map(sec => ({
+      id: sec.id, label: sec.label,
+      itens: sec.itens.map(i => {
+        const item = { ...i };
+        if (vistos.has(i.id)) item.mesmaDe = vistos.get(i.id);
+        else vistos.set(i.id, i.label);
+        return item;
+      }),
+    }));
+    return { id: g.id, label: g.label, icon: g.icon, secoes, itens: [...vistos.keys()].map(id => ({ id })) };
+  });
 }
+let _USU_ROTINAS_MENU = _menuParaRotinas(_USU_ROTINAS_BASE);
+let _USU_ROTINAS_IDS = new Set(_USU_ROTINAS_MENU.flatMap(g => g.itens.map(i => i.id)));
+let _USU_TOTAL_ROTINAS = _USU_ROTINAS_IDS.size;
 
-function _menuParaRotinas(menu) {
-  return (menu || []).map(s => ({
-    id: s.id, label: s.label, icon: s.icon,
-    itens: (s.items || []).map(i => ({ id: i.id, label: i.label, icon: i.icon })),
-  }));
+// Conta só rotinas que existem no menu (permissão antiga de tela que saiu do
+// menu continua gravada, mas não entra no contador).
+function usuQtdRotinas(pm) {
+  return [...(pm?.rotinas || [])].filter(id => _USU_ROTINAS_IDS.has(id)).length;
 }
-let _USU_ROTINAS_MENU = _menuParaRotinas(_rotinasOrigem());
-let _USU_TOTAL_ROTINAS = _USU_ROTINAS_MENU.reduce((n,g) => n + g.itens.length, 0);
 
 function usuSincronizarRotinas() {
-  _USU_ROTINAS_MENU = _menuParaRotinas(_rotinasOrigem());
-  _USU_TOTAL_ROTINAS = _USU_ROTINAS_MENU.reduce((n,g) => n + g.itens.length, 0);
+  _USU_ROTINAS_MENU = _menuParaRotinas(_USU_ROTINAS_BASE);
+  _USU_ROTINAS_IDS = new Set(_USU_ROTINAS_MENU.flatMap(g => g.itens.map(i => i.id)));
+  _USU_TOTAL_ROTINAS = _USU_ROTINAS_IDS.size;
   if (_usuEmpresaSelecionada) usuRenderRotinas(_usuEmpresaSelecionada);
   Object.keys(_usuPermissoesMap).forEach(id => usuAtualizarEmpresaItem(Number(id)));
 }
@@ -2633,7 +2722,7 @@ function usuRenderEmpresasList() {
   }
   list.innerHTML = sorted.map(e => {
     const pm  = _usuPermissoesMap[e.id] || { ativo:false, rotinas:new Set() };
-    const qtd = pm.rotinas.size;
+    const qtd = usuQtdRotinas(pm);
     const isSel = e.id === _usuEmpresaSelecionada;
     const temAcesso = pm.ativo && qtd > 0;
     return `
@@ -2652,7 +2741,7 @@ function usuRenderEmpresasList() {
 
 function usuAtualizarEmpresaItem(empresaId) {
   const pm  = _usuPermissoesMap[empresaId] || { ativo:false, rotinas:new Set() };
-  const qtd = pm.rotinas.size;
+  const qtd = usuQtdRotinas(pm);
   const temAcesso = pm.ativo && qtd > 0;
   const toggle = document.getElementById(`usu-ap-emp-toggle-${empresaId}`);
   const cnt    = document.getElementById(`usu-ap-emp-cnt-${empresaId}`);
@@ -2696,10 +2785,8 @@ function usuRenderRotinas(empresaId) {
       <span>Esta empresa está sem acesso.<br>Clique no círculo para ativá-la.</span></div>`;
     return;
   }
+  let n = 0;
   body.innerHTML = _USU_ROTINAS_MENU.map(grupo => {
-    const todos  = grupo.itens.every(i => pm.rotinas.has(i.id));
-    const alguns = grupo.itens.some(i => pm.rotinas.has(i.id));
-    const qtd    = grupo.itens.filter(i => pm.rotinas.has(i.id)).length;
     const collapsed = !!_usuRotinasCollapsed[grupo.id];
     return `
       <div class="rot-grupo${collapsed?' collapsed':''}" id="usu-rot-grupo-${grupo.id}">
@@ -2707,28 +2794,42 @@ function usuRenderRotinas(empresaId) {
           <button type="button" class="rot-grupo-toggle" onclick="event.stopPropagation();usuToggleGrupoVisibilidade('${grupo.id}')" title="${collapsed?'Abrir grupo':'Recolher grupo'}">${collapsed?'+' : '-'}</button>
           <span class="rot-grupo-icon">${usuIcon(grupo.icon)}</span>
           <input type="checkbox" id="usu-rot-grp-${empresaId}-${grupo.id}"
-            ${todos?'checked':''} ${alguns&&!todos?'data-ind="1"':''}
             onclick="event.stopPropagation()"
             onchange="usuToggleGrupoRotinas(${empresaId},'${grupo.id}',this.checked)">
           <span class="rot-grupo-nome">${esc(grupo.label)}</span>
-          <span class="rot-grupo-count">${qtd}/${grupo.itens.length}</span>
+          <span class="rot-grupo-count" id="usu-rot-cnt-${empresaId}-${grupo.id}"></span>
         </div>
         <div class="rot-grupo-body">
-          ${grupo.itens.map(item=>`
-            <div class="rot-item">
-              <span class="rot-item-icon">${usuIcon(item.icon)}</span>
-              <input type="checkbox" id="usu-rot-${empresaId}-${item.id}"
-                ${pm.rotinas.has(item.id)?'checked':''}
-                onchange="usuToggleRotina(${empresaId},'${item.id}',this.checked,'${grupo.id}')">
-              <label class="rot-item-label" for="usu-rot-${empresaId}-${item.id}">${esc(item.label)}</label>
-            </div>`).join('')}
+          ${grupo.secoes.map(sec => {
+            let sub = null;
+            return `
+            <div class="rot-secao">
+              <label class="rot-secao-hdr">
+                <input type="checkbox" id="usu-rot-sec-${empresaId}-${grupo.id}-${sec.id}"
+                  onchange="usuToggleSecaoRotinas(${empresaId},'${grupo.id}','${sec.id}',this.checked)">
+                <span class="rot-secao-nome">${esc(sec.label)}</span>
+                <span class="rot-grupo-count" id="usu-rot-sec-cnt-${empresaId}-${grupo.id}-${sec.id}"></span>
+              </label>
+              ${sec.itens.map(item => {
+                const cab = item.sub && item.sub !== sub ? `<div class="rot-sub">${esc(item.sub)}</div>` : '';
+                sub = item.sub || null;
+                const id = `usu-rot-${empresaId}-${++n}`;
+                const nota = item.mesmaDe ? `mesma permissão de “${item.mesmaDe}”` : (item.nota || '');
+                return `${cab}
+                <div class="rot-item${item.sub ? ' rot-item-sub' : ''}">
+                  <span class="rot-item-icon">${usuIcon(item.icon)}</span>
+                  <input type="checkbox" id="${id}" data-rot="${item.id}"
+                    ${pm.rotinas.has(item.id)?'checked':''}
+                    onchange="usuToggleRotina(${empresaId},'${item.id}',this.checked)">
+                  <label class="rot-item-label" for="${id}">${esc(item.label)}${nota ? `<span class="rot-item-nota">${esc(nota)}</span>` : ''}</label>
+                </div>`;
+              }).join('')}
+            </div>`;
+          }).join('')}
         </div>
       </div>`;
   }).join('');
-  _USU_ROTINAS_MENU.forEach(grupo => {
-    const cb = document.getElementById(`usu-rot-grp-${empresaId}-${grupo.id}`);
-    if (cb && cb.dataset.ind === '1') cb.indeterminate = true;
-  });
+  usuAtualizarEstadosRotinas(empresaId);
 }
 
 function usuToggleGrupoVisibilidade(grupoId) {
@@ -2736,31 +2837,45 @@ function usuToggleGrupoVisibilidade(grupoId) {
   if (_usuEmpresaSelecionada) usuRenderRotinas(_usuEmpresaSelecionada);
 }
 
-function usuToggleRotina(empresaId, rotinaId, marcado, grupoId) {
+// Caixas de sistema e de seção: marcada / parcial (indeterminada) / vazia,
+// com contador. Tela repetida no menu = mesma rotina = mesmo estado.
+function usuAtualizarEstadosRotinas(empresaId) {
+  const pm = _usuPermissoesMap[empresaId] || { rotinas:new Set() };
+  const marcar = (cb, cnt, ids) => {
+    const q = ids.filter(id => pm.rotinas.has(id)).length;
+    if (cb) { cb.checked = q > 0 && q === ids.length; cb.indeterminate = q > 0 && q < ids.length; }
+    if (cnt) cnt.textContent = `${q}/${ids.length}`;
+  };
+  _USU_ROTINAS_MENU.forEach(grupo => {
+    marcar(document.getElementById(`usu-rot-grp-${empresaId}-${grupo.id}`),
+      document.getElementById(`usu-rot-cnt-${empresaId}-${grupo.id}`), grupo.itens.map(i => i.id));
+    grupo.secoes.forEach(sec => {
+      marcar(document.getElementById(`usu-rot-sec-${empresaId}-${grupo.id}-${sec.id}`),
+        document.getElementById(`usu-rot-sec-cnt-${empresaId}-${grupo.id}-${sec.id}`), [...new Set(sec.itens.map(i => i.id))]);
+    });
+  });
+  document.querySelectorAll('#usu-ap-rotinas-body [data-rot]').forEach(cb => { cb.checked = pm.rotinas.has(cb.dataset.rot); });
+}
+
+function _usuDefinirRotinas(empresaId, ids, marcado) {
   if (!_usuPermissoesMap[empresaId]) _usuPermissoesMap[empresaId] = { ativo:true, rotinas:new Set() };
-  if (marcado) _usuPermissoesMap[empresaId].rotinas.add(rotinaId);
-  else         _usuPermissoesMap[empresaId].rotinas.delete(rotinaId);
-  const grupo  = _USU_ROTINAS_MENU.find(g => g.id === grupoId);
-  if (grupo) {
-    const pm    = _usuPermissoesMap[empresaId];
-    const todos = grupo.itens.every(i => pm.rotinas.has(i.id));
-    const algs  = grupo.itens.some(i => pm.rotinas.has(i.id));
-    const cb    = document.getElementById(`usu-rot-grp-${empresaId}-${grupoId}`);
-    if (cb) { cb.checked = todos; cb.indeterminate = algs && !todos; }
-  }
+  ids.forEach(id => marcado ? _usuPermissoesMap[empresaId].rotinas.add(id) : _usuPermissoesMap[empresaId].rotinas.delete(id));
+  usuAtualizarEstadosRotinas(empresaId);
   usuAtualizarEmpresaItem(empresaId);
 }
 
+function usuToggleRotina(empresaId, rotinaId, marcado) {
+  _usuDefinirRotinas(empresaId, [rotinaId], marcado);
+}
+
+function usuToggleSecaoRotinas(empresaId, grupoId, secaoId, marcado) {
+  const sec = _USU_ROTINAS_MENU.find(g => g.id === grupoId)?.secoes.find(x => x.id === secaoId);
+  if (sec) _usuDefinirRotinas(empresaId, [...new Set(sec.itens.map(i => i.id))], marcado);
+}
+
 function usuToggleGrupoRotinas(empresaId, grupoId, marcado) {
-  if (!_usuPermissoesMap[empresaId]) _usuPermissoesMap[empresaId] = { ativo:true, rotinas:new Set() };
   const grupo = _USU_ROTINAS_MENU.find(g => g.id === grupoId);
-  if (!grupo) return;
-  grupo.itens.forEach(item => {
-    const cb = document.getElementById(`usu-rot-${empresaId}-${item.id}`);
-    if (marcado) { _usuPermissoesMap[empresaId].rotinas.add(item.id);    if(cb) cb.checked=true;  }
-    else         { _usuPermissoesMap[empresaId].rotinas.delete(item.id); if(cb) cb.checked=false; }
-  });
-  usuAtualizarEmpresaItem(empresaId);
+  if (grupo) _usuDefinirRotinas(empresaId, grupo.itens.map(i => i.id), marcado);
 }
 
 function usuMarcarTodasRotinas(marcar) {

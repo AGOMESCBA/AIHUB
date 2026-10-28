@@ -18,6 +18,9 @@
 
     .barra { display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 14px;margin-bottom:12px; }
     .barra #busca { flex:1 1 240px;min-width:0; }
+    /* Detecta o preenchimento automático do navegador na busca (ver JS) */
+    @keyframes busca-autofill { from { opacity:1; } to { opacity:1; } }
+    #busca:-webkit-autofill { animation-name:busca-autofill;animation-duration:.01s; }
     .barra select { width:auto;flex:0 0 auto; }
     .barra .acoes { display:flex;gap:8px;margin-left:auto; }
 
@@ -340,7 +343,20 @@
     if (!item) return;
     if (ed) abrir(item); else alternar(item);
   });
-  $('busca').addEventListener('input', render);
+  // O Chrome preenche a busca com o usuário salvo do login do IAHub mesmo
+  // com autocomplete="off" e a tabela some filtrada (mesmo caso do Monitor,
+  // da066cc). Duas defesas: a animação disparada por :-webkit-autofill e,
+  // para o preenchimento que não marca o campo, texto que aparece sem o
+  // usuário ter teclado, colado ou arrastado nada na busca.
+  let buscaPeloUsuario = false;
+  for (const ev of ['keydown', 'paste', 'cut', 'drop']) $('busca').addEventListener(ev, () => { buscaPeloUsuario = true; });
+  function desfazerAutofill() { $('busca').value = ''; render(); }
+  $('busca').addEventListener('animationstart', (e) => { if (e.animationName === 'busca-autofill') desfazerAutofill(); });
+  $('busca').value = ''; // texto que já estava lá ao abrir também é do navegador
+  $('busca').addEventListener('input', () => {
+    if (!buscaPeloUsuario && $('busca').value) return desfazerAutofill();
+    render();
+  });
   $('f-situacao').addEventListener('change', render);
   $('btn-novo').addEventListener('click', () => abrir(null));
   $('btn-atualizar').addEventListener('click', carregar);
