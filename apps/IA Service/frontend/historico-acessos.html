@@ -6,77 +6,107 @@
   <title>Histórico de Acessos - IA Service</title>
   <link rel="stylesheet" href="/css/iahub.css">
   <style>
-    /* Mesmos tokens e linguagem visual do Monitor de Acessos (monitor-acessos.html). */
+    /* Grade no mesmo padrão do Histórico de Interpretações do IA Command
+       (admin-interpretacoes-v2.html): agrupamento por arrastar, grupos
+       recolhíveis, filtro por coluna e ordenação no cabeçalho. Accent azul
+       do IA Service. */
     :root { --accent:#1d4ed8; --accent-light:#3b82f6; --accent-glow:rgba(29,78,216,.1); }
     .sidebar-logo .logo-icon { background:var(--accent) !important; }
-    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
-    .page-title { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
-    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
-    .page-head { margin-bottom:12px;display:flex;gap:12px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap; }
-    .error-banner { display:none;background:var(--bg-card);color:var(--error);border:1px solid var(--error);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px; }
-    .hist-stack { display:flex;flex-direction:column;gap:10px; }
-    .barra-filtros { display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:8px 12px; }
-    .barra-filtros .btn { white-space:nowrap; }
-    .grupo { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
-    .grupo.acoes { margin-left:auto; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:3px; }
+    .head-row { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px;flex-wrap:wrap; }
+    .head-title { font-size:20px;font-weight:800;color:var(--text-hi);display:flex;align-items:baseline;gap:8px;line-height:1.2;flex-wrap:wrap; }
+    .head-count { font-size:12px;color:var(--text-lo);font-weight:500; }
+    .head-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .head-actions .btn { white-space:nowrap; }
+    .error-banner { display:none;background:var(--bg-card);color:var(--error);border:1px solid var(--error);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px; }
+
+    .panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:10px 14px;margin-bottom:10px; }
+    .panel-row { display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap; }
+    .panel-status { font-size:12px;color:var(--text-lo); }
+    .panel-body { display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border); }
+    .panel.open .panel-body { display:block; }
+    .toggle-btn { font-weight:700; }
+
     .chip { font:inherit;font-size:12.5px;padding:5px 12px;border-radius:999px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-md);cursor:pointer; }
     .chip[aria-pressed="true"] { background:var(--bg-active);border-color:var(--accent);color:var(--accent);font-weight:600; }
-    .chip:focus-visible, .aba:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
-    .datas { display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-md); }
+    .chip:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
+    .filtros { display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap; }
+    .grupo { display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
+    .grupo-rot { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);margin-right:2px; }
+    .datas { display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-md);flex-wrap:wrap; }
     .datas input { width:auto;padding:5px 8px;font-size:12.5px; }
-    #busca { min-width:200px;max-width:280px;flex:1; }
-    #busca::-webkit-search-cancel-button { cursor:pointer; }
-    @keyframes busca-autofill { from { opacity:1; } to { opacity:1; } }
-    #busca:-webkit-autofill { animation-name:busca-autofill;animation-duration:.01s; }
-
-    .kpis { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px; }
-    .kpi { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;display:flex;flex-direction:column;gap:2px; }
-    .kpi-label { font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-md); }
-    .kpi-value { font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2;color:var(--text-hi); }
+    .kpis { display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:10px; }
+    .kpi { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 10px; }
+    .kpi-label { font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-md); }
+    .kpi-value { font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text-hi);line-height:1.25; }
     .kpi-foot { font-size:11px;color:var(--text-lo); }
 
-    .abas { display:flex;gap:2px;padding:0 12px;border-bottom:1px solid var(--border);flex-wrap:wrap; }
-    .aba { font:inherit;font-size:13px;font-weight:600;color:var(--text-md);background:none;border:none;border-bottom:2px solid transparent;padding:11px 12px;cursor:pointer;margin-bottom:-1px; }
-    .aba[aria-selected="true"] { color:var(--accent);border-bottom-color:var(--accent); }
-    .aba .qtd { margin-left:6px;font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--bg-hover);color:var(--text-md); }
-    .grid-toolbar { display:flex;justify-content:space-between;align-items:center;padding:10px 16px;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--border); }
-    .grid-meta, .hint, .stamp { font-size:12px;color:var(--text-lo); }
-    .tabela-wrap { overflow-x:auto; }
-    .mon-table { width:100%;border-collapse:collapse;min-width:980px; }
-    .mon-table th { font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-md);text-align:left;padding:9px 12px;background:var(--bg-base);border-bottom:1px solid var(--border);white-space:nowrap; }
-    .mon-table td { padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle;color:var(--text-hi); }
-    .mon-table tbody tr:hover { background:var(--bg-hover); }
-    .mon-table tbody tr.clicavel { cursor:pointer; }
-    .user { display:flex;align-items:center;gap:10px;min-width:0; }
-    .avatar { width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;flex:none; }
-    .nome { font-weight:600;white-space:nowrap; }
-    .fone, .mono { font-family:'Cascadia Code','Fira Code','Courier New',monospace;font-size:11.5px;color:var(--text-md);white-space:nowrap; }
+    .group-chip { height:30px;border:1px solid var(--border);border-radius:6px;background:var(--bg-base);color:var(--text-md);font-size:12px;font-weight:700;padding:0 10px;cursor:pointer; }
+    .group-chip:hover, .group-chip.active { border-color:var(--accent);color:var(--accent);background:var(--accent-glow); }
+    .group-options { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .group-target-row { flex:1 1 100%;display:flex;align-items:center;gap:12px;margin-top:4px; }
+    .group-dropzone { flex:1;min-width:240px;min-height:38px;border:1px dashed var(--border);border-radius:7px;background:var(--bg-base);color:var(--text-lo);display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:7px 10px;font-size:12px; }
+    .group-dropzone.drag-over { border-color:var(--accent);background:var(--accent-glow);color:var(--accent); }
+    .active-group-chip { display:inline-flex;align-items:center;gap:6px;border:1px solid var(--accent);border-radius:6px;background:var(--accent-glow);color:var(--accent);font-size:12px;font-weight:700;padding:4px 8px;cursor:grab; }
+    .active-group-chip.drag-target { box-shadow:0 0 0 2px rgba(29,78,216,.3); }
+    .active-group-remove { border:none;background:transparent;color:inherit;font-weight:900;line-height:1;cursor:pointer;padding:0 1px;font-size:14px; }
+
+    .table-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden; }
+    .modos { display:flex;gap:2px;padding:0 12px;border-bottom:1px solid var(--border);align-items:center;flex-wrap:wrap; }
+    .modo { font:inherit;font-size:13px;font-weight:700;color:var(--text-lo);background:none;border:none;border-bottom:2px solid transparent;padding:10px 12px;cursor:pointer;margin-bottom:-1px; }
+    .modo[aria-selected="true"] { color:var(--accent);border-bottom-color:var(--accent); }
+    .modo .qtd { margin-left:6px;font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--bg-hover);color:var(--text-md); }
+    .modos .dica { margin-left:auto;font-size:12px;color:var(--text-lo);padding:8px 4px; }
+    .table-wrap { height:calc(100vh - 330px);min-height:360px;overflow:auto;background:var(--bg-card); }
+    .grid { width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:13px; }
+    .grid thead th { position:sticky;top:0;z-index:2;background:var(--bg-card);border-bottom:1px solid var(--border);color:var(--text-lo);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .grid thead th.sortable { cursor:pointer;user-select:none; }
+    .grid thead th.sortable:hover { color:var(--accent);background:var(--bg-hover); }
+    .grid thead th .seta { color:var(--accent);margin-left:4px; }
+    .grid thead .filter-cell th { top:34px;padding:6px 10px;background:var(--bg-card); }
+    .grid thead input, .grid thead select { width:100%;height:26px;border:1px solid var(--border);border-radius:5px;background:var(--bg-base);color:var(--text-hi);font-size:11px;padding:3px 6px;box-sizing:border-box; }
+    .grid tbody td { border-bottom:1px solid var(--border);color:var(--text-md);padding:8px 10px;vertical-align:middle;background:var(--bg-card);overflow:hidden;text-overflow:ellipsis; }
+    .grid tbody tr.data-row:hover td { background:var(--bg-hover); }
+    .grid tbody tr.group-row td { background:var(--bg-base);color:var(--text-hi);font-weight:800;font-size:12px;padding:7px 10px;cursor:pointer; }
+    .grid tbody tr.group-row:hover td { background:var(--bg-hover); }
+    .grid tbody tr.group-row.level-1 td { padding-left:28px; }
+    .grid tbody tr.group-row.level-2 td { padding-left:46px; }
+    .grid tbody tr.group-row.level-3 td { padding-left:64px; }
+    .group-toggle-btn { width:22px;height:22px;border:1px solid var(--border);border-radius:5px;background:var(--bg-card);color:var(--text-hi);font-size:14px;font-weight:900;line-height:1;cursor:pointer;margin-right:8px;vertical-align:middle; }
+    .group-toggle-btn:hover { border-color:var(--accent);color:var(--accent);background:var(--accent-glow); }
+    .group-resumo { font-weight:600;color:var(--text-md);margin-left:8px; }
+    .empty-state { height:280px;display:flex;align-items:center;justify-content:center;color:var(--text-lo);font-size:16px;font-weight:700;text-align:center;padding:0 16px; }
+
+    .forte { color:var(--text-hi);font-weight:700; }
+    .nome { display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
     .num { font-variant-numeric:tabular-nums;white-space:nowrap; }
-    .sub { color:var(--text-lo);font-size:12px; }
-    .mon-table .badge { white-space:nowrap; }
+    .mono { font-family:'Cascadia Code','Fira Code','Courier New',monospace;font-size:11.5px;white-space:nowrap; }
+    .badge { white-space:nowrap; }
     .badge-neutro { background:var(--bg-hover);color:var(--text-md); }
     .badge-falha { background:rgba(220,38,38,.12);color:#dc2626; }
-    .chamados { font-size:12px;color:var(--text-md);max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
-    .vazio { padding:40px 16px;text-align:center;color:var(--text-md);font-size:13px; }
-    .filtro-pessoa[hidden] { display:none; }
+    .uso { display:flex;align-items:center;gap:6px; }
+    .uso .barra { flex:1;height:6px;border-radius:3px;background:var(--border);overflow:hidden;min-width:30px; }
+    .uso .barra i { display:block;height:100%;background:var(--accent); }
 
     .btn-excluir { background:transparent;border:1px solid rgba(220,38,38,.45);color:#dc2626; }
     .btn-excluir:hover { background:rgba(220,38,38,.08); }
-    .excluir-box { border:1px solid var(--error);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;font-size:13px;color:var(--text-md);background:var(--bg-card); }
-    .excluir-box[hidden] { display:none; }
-    .excluir-box b { color:var(--text-hi); }
-    .excluir-box .linha { display:flex;gap:8px;flex-wrap:wrap;align-items:center; }
-    .excluir-box input[type=text] { flex:1;min-width:220px; }
+    .modal-backdrop { position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,.48);z-index:500;padding:18px; }
+    .modal-backdrop.open { display:flex; }
+    .modal { width:min(540px,96vw);background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md);padding:22px; }
+    .modal-head { display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px; }
+    .modal-title { color:var(--text-hi);font-size:16px;font-weight:800; }
+    .modal-close { border:none;background:transparent;color:var(--text-lo);font-size:22px;line-height:1;cursor:pointer; }
+    .modal-actions { display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border);padding-top:14px;margin-top:16px; }
+    .danger-note { background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.35);color:#dc2626;border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;line-height:1.5;margin-top:12px; }
+    .date-row { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px; }
     .btn-perigo { background:var(--error);border:1px solid var(--error);color:#fff; }
     .btn-perigo:disabled { opacity:.6;cursor:wait; }
 
-    @media (max-width:720px) {
+    @media (max-width:900px) {
       .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
-      .grupo { width:100%; }
-      .grupo.acoes { margin-left:0; }
-      .datas { width:100%;flex-wrap:wrap; }
+      .group-target-row { align-items:stretch;flex-direction:column; }
+      .modos .dica { display:none; }
       .datas input { flex:1 1 120px;min-width:0; }
-      #busca { max-width:none;min-width:0; }
     }
   </style>
 </head>
@@ -100,91 +130,104 @@
     </div>
 
     <div class="page-content">
-      <div class="page-head">
+      <div class="head-row">
         <div>
           <div class="page-kicker">Operação</div>
-          <div class="page-title">Histórico de Acessos</div>
-          <div class="page-subtitle">Cada login no Radar (J2A) e nas rotinas do IA Service desta empresa: quando entrou, quanto tempo ficou, o que acessou e de onde. Inclui as tentativas de login que falharam.</div>
+          <div class="head-title">Histórico de Acessos <span class="head-count" id="count">carregando...</span></div>
         </div>
-        <a class="btn btn-ghost" href="/app/ia-service/monitor-acessos.html">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          Monitor ao vivo
-        </a>
+        <div class="head-actions">
+          <a class="btn btn-ghost" href="/app/ia-service/monitor-acessos.html" title="Quem está conectado agora">‹ Monitor ao vivo</a>
+          <button class="btn btn-ghost" id="btn-csv" type="button" title="Baixa as linhas filtradas em CSV (abre no Excel)">Exportar</button>
+          <button class="btn btn-excluir" id="btn-excluir" type="button" title="Apaga do histórico os acessos e falhas de um período">Excluir período</button>
+          <button class="btn btn-primary" id="btn-atualizar" type="button">↻ Atualizar</button>
+        </div>
       </div>
       <div id="error-banner" class="error-banner" role="alert"></div>
 
-      <div class="hist-stack">
-        <section class="card barra-filtros" aria-label="Filtros">
-          <div class="grupo" role="group" aria-label="Período">
-            <button class="chip" type="button" data-per="hoje" aria-pressed="false">Hoje</button>
-            <button class="chip" type="button" data-per="7" aria-pressed="true">7 dias</button>
-            <button class="chip" type="button" data-per="30" aria-pressed="false">30 dias</button>
-            <button class="chip" type="button" data-per="mes" aria-pressed="false">Este mês</button>
-            <span class="datas">
-              <input id="de" type="date" class="form-control" aria-label="Data inicial">
-              até
-              <input id="ate" type="date" class="form-control" aria-label="Data final">
-            </span>
-          </div>
-          <div class="grupo" role="group" aria-label="Origem">
-            <button class="chip" type="button" data-orig="todos" aria-pressed="true">Todas</button>
-            <button class="chip" type="button" data-orig="chat" aria-pressed="false">Chat (Radar J2A)</button>
-            <button class="chip" type="button" data-orig="interno" aria-pressed="false">IA Service interno</button>
-          </div>
-          <input id="busca" name="filtro-historico-acessos" class="form-control" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="Nome, telefone, chamado ou IP..." aria-label="Buscar nome, telefone, chamado ou IP">
-          <div class="grupo acoes">
-            <button class="btn btn-primary" id="btn-atualizar" type="button">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
-              Atualizar
-            </button>
-            <button class="btn btn-ghost" id="btn-csv" type="button" title="Baixa a aba aberta em CSV (abre no Excel)">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Exportar
-            </button>
-            <button class="btn btn-excluir" id="btn-excluir" type="button" title="Apaga do histórico os acessos e falhas do período selecionado">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-              Excluir período
-            </button>
-          </div>
-        </section>
-
-        <section class="excluir-box" id="excluir-box" hidden aria-label="Excluir período do histórico">
-          <div id="excluir-texto"></div>
-          <div class="linha">
-            <input type="text" id="excluir-motivo" class="form-control" maxlength="120" placeholder="Motivo (opcional, fica registrado na auditoria)">
-            <button class="btn btn-perigo" id="excluir-ok" type="button">Excluir definitivamente</button>
-            <button class="btn btn-ghost" id="excluir-cancelar" type="button">Cancelar</button>
-          </div>
-        </section>
-
-        <section class="kpis" aria-label="Resumo do período">
-          <div class="kpi"><span class="kpi-label">Acessos</span><span class="kpi-value" id="k-acessos">-</span><span class="kpi-foot">logins no período</span></div>
-          <div class="kpi"><span class="kpi-label">Usuários</span><span class="kpi-value" id="k-usuarios">-</span><span class="kpi-foot">pessoas diferentes</span></div>
-          <div class="kpi"><span class="kpi-label">Tempo de tela</span><span class="kpi-value" id="k-tempo">-</span><span class="kpi-foot">soma do tempo com a tela aberta e visível</span></div>
-          <div class="kpi"><span class="kpi-label">Falhas de login</span><span class="kpi-value" id="k-falhas">-</span><span class="kpi-foot">tentativas no Radar J2A que não entraram</span></div>
-        </section>
-
-        <section class="card" style="padding:0;overflow:hidden;min-width:0">
-          <div class="abas" role="tablist" aria-label="Visões do histórico">
-            <button class="aba" role="tab" type="button" data-aba="usuarios" aria-selected="true">Por usuário<span class="qtd" id="q-usuarios">0</span></button>
-            <button class="aba" role="tab" type="button" data-aba="acessos" aria-selected="false">Acessos<span class="qtd" id="q-acessos">0</span></button>
-            <button class="aba" role="tab" type="button" data-aba="falhas" aria-selected="false">Falhas de login<span class="qtd" id="q-falhas">0</span></button>
-          </div>
-          <div class="grid-toolbar">
-            <div class="grid-meta" id="meta">Carregando...</div>
-            <div class="grupo">
-              <button class="chip filtro-pessoa" id="filtro-pessoa" type="button" hidden title="Remover filtro de usuário"></button>
-              <span class="hint" id="dica"></span>
+      <!-- Período, origem e resumo (recolhível para a grade ganhar espaço) -->
+      <div class="panel" id="painel-filtros">
+        <div class="panel-row">
+          <button class="btn btn-ghost toggle-btn" id="toggle-filtros" type="button" aria-controls="corpo-filtros"></button>
+          <span class="panel-status" id="resumo-filtros"></span>
+        </div>
+        <div class="panel-body" id="corpo-filtros">
+          <div class="filtros">
+            <div class="grupo" role="group" aria-label="Origem">
+              <span class="grupo-rot">Origem</span>
+              <button class="chip" type="button" data-orig="chat">Chat (Radar J2A)</button>
+              <button class="chip" type="button" data-orig="interno">IA Service interno</button>
+              <button class="chip" type="button" data-orig="todos">Todas</button>
+            </div>
+            <div class="grupo" role="group" aria-label="Período">
+              <span class="grupo-rot">Período</span>
+              <button class="chip" type="button" data-per="hoje">Hoje</button>
+              <button class="chip" type="button" data-per="7">7 dias</button>
+              <button class="chip" type="button" data-per="30">30 dias</button>
+              <button class="chip" type="button" data-per="mes">Este mês</button>
+              <span class="datas">
+                <input id="de" type="date" class="form-control" aria-label="Data inicial">
+                até
+                <input id="ate" type="date" class="form-control" aria-label="Data final">
+              </span>
             </div>
           </div>
-          <div class="tabela-wrap">
-            <table class="mon-table">
-              <thead id="thead"></thead>
-              <tbody id="tbody"><tr><td><div class="vazio">Carregando histórico...</div></td></tr></tbody>
-            </table>
+          <div class="kpis" aria-label="Resumo das linhas filtradas">
+            <div class="kpi"><div class="kpi-label">Acessos</div><div class="kpi-value" id="k-acessos">-</div><div class="kpi-foot">logins nas linhas filtradas</div></div>
+            <div class="kpi"><div class="kpi-label">Usuários</div><div class="kpi-value" id="k-usuarios">-</div><div class="kpi-foot">pessoas diferentes</div></div>
+            <div class="kpi"><div class="kpi-label">Tempo de tela</div><div class="kpi-value" id="k-tempo">-</div><div class="kpi-foot">com a tela aberta e visível</div></div>
+            <div class="kpi"><div class="kpi-label">Uso ativo</div><div class="kpi-value" id="k-uso">-</div><div class="kpi-foot">tempo de tela ÷ tempo logado</div></div>
+            <div class="kpi"><div class="kpi-label">Chamados</div><div class="kpi-value" id="k-chamados">-</div><div class="kpi-foot">diferentes abertos no chat</div></div>
           </div>
-        </section>
+        </div>
       </div>
+
+      <!-- Agrupamento: mesmo comportamento do Histórico de Interpretações -->
+      <div class="panel" id="painel-grupo">
+        <div class="panel-row">
+          <button class="btn btn-ghost toggle-btn" id="toggle-grupo" type="button"></button>
+          <span class="panel-status" id="group-status">Sem agrupamento ativo</span>
+          <span class="panel-status" id="filter-status"></span>
+        </div>
+        <div class="panel-body">
+          <div class="group-options" id="group-options"></div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="modos" role="tablist" aria-label="O que mostrar">
+          <button class="modo" role="tab" type="button" data-modo="acessos">Acessos<span class="qtd" id="q-acessos">0</span></button>
+          <button class="modo" role="tab" type="button" data-modo="falhas">Falhas de login<span class="qtd" id="q-falhas">0</span></button>
+          <span class="dica" id="dica"></span>
+        </div>
+        <div class="table-wrap" id="table-wrap">
+          <table class="grid">
+            <colgroup id="colgroup"></colgroup>
+            <thead id="thead"></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+          <div class="empty-state" id="empty-state" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-excluir" role="dialog" aria-modal="true" aria-labelledby="modal-excluir-titulo">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="modal-excluir-titulo">Excluir período do histórico</div>
+      <button class="modal-close" id="excluir-fechar" type="button" aria-label="Fechar">&times;</button>
+    </div>
+    <div class="panel-status">Apaga os acessos que <b>entraram</b> no período e as falhas de login do período, de todas as origens e usuários desta empresa (os filtros da grade não se aplicam).</div>
+    <div class="date-row">
+      <div class="form-group"><label class="form-label" for="excluir-de">De</label><input class="form-control" id="excluir-de" type="date"></div>
+      <div class="form-group"><label class="form-label" for="excluir-ate">Até</label><input class="form-control" id="excluir-ate" type="date"></div>
+    </div>
+    <div class="form-group" style="margin-top:10px"><label class="form-label" for="excluir-motivo">Motivo (opcional, fica na auditoria)</label><input class="form-control" id="excluir-motivo" type="text" maxlength="120"></div>
+    <div class="danger-note">Não pode ser desfeito. A exclusão fica registrada na auditoria com o seu usuário.</div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="excluir-cancelar" type="button">Cancelar</button>
+      <button class="btn btn-perigo" id="excluir-ok" type="button">Excluir definitivamente</button>
     </div>
   </div>
 </div>
@@ -194,34 +237,29 @@
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
-  const CORES = ['#2563eb', '#7c3aed', '#0891b2', '#c2410c', '#15803d', '#be185d', '#4f46e5', '#0f766e'];
-  const SITUACAO = {
-    em_andamento: 'badge-green',
-    fora_da_tela: 'badge-yellow',
-    expirou: 'badge-neutro',
-    encerrado: 'badge-neutro',
-  };
-  const st = { dados: null, aba: 'usuarios', origem: 'todos', busca: '', pessoa: null, carregando: false };
+  const ESTADO_KEY = 'iasvc_historico_acessos_grid';
 
+  // ── Formatação ──────────────────────────────────────────────────────────────
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const dataHora = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';
-  const hora = (iso) => iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-';
+  const p2 = (n) => String(n).padStart(2, '0');
+  function fmtData(iso) { if (!iso) return '-'; const d = new Date(iso); return `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()}`; }
+  function fmtHora(iso) { if (!iso) return '-'; const d = new Date(iso); return `${p2(d.getHours())}:${p2(d.getMinutes())}`; }
+  const fmtDataHora = (iso) => iso ? `${fmtData(iso)} ${fmtHora(iso)}` : '-';
   const mesmoDia = (a, b) => a && b && new Date(a).toDateString() === new Date(b).toDateString();
+  const diaSemana = (iso) => new Date(iso).toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
   function dur(seg) {
-    const m = Math.round((seg || 0) / 60);
     if (!seg) return '0 min';
+    const m = Math.round(seg / 60);
     if (m < 1) return '< 1 min';
-    return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m} min`;
+    return m >= 60 ? `${Math.floor(m / 60)}h${p2(m % 60)}` : `${m} min`;
   }
-  const iniciais = (n) => String(n || '?').split(/\s+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
-  function cor(id) { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return CORES[h % CORES.length]; }
   function fone(t) {
     const d = String(t || '').replace(/\D/g, '');
-    if (d.length === 13) return `+${d.slice(0, 2)} ${d.slice(2, 4)} ${d.slice(4, 9)}-${d.slice(9)}`;
-    if (d.length === 12) return `+${d.slice(0, 2)} ${d.slice(2, 4)} ${d.slice(4, 8)}-${d.slice(8)}`;
-    return t || 'sem telefone';
+    const local = d.startsWith('55') && d.length >= 12 ? d.slice(2) : d;
+    if (local.length === 11) return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
+    if (local.length === 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
+    return d || '-';
   }
-  // Nome curto do navegador/aparelho a partir do User-Agent (o completo fica no title).
   function navegador(ua) {
     if (!ua) return '-';
     const nav = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /SamsungBrowser/.test(ua) ? 'Samsung' : /Firefox\//.test(ua) ? 'Firefox'
@@ -230,12 +268,119 @@
       : /Mac OS X/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '';
     return so ? `${nav} · ${so}` : nav;
   }
-  const origemBadge = (o) => `<span class="badge ${o === 'chat' ? 'badge-blue' : 'badge-purple'}">${o === 'chat' ? 'Chat J2A' : 'Interno'}</span>`;
+  const usoPct = (a) => a.duracaoSegundos > 0 ? Math.min(100, Math.round((a.segundosAtivos / a.duracaoSegundos) * 100)) : null;
+  const ORIGEM = { chat: 'Chat J2A', interno: 'Interno' };
+  const SITUACAO = {
+    em_andamento: { rot: 'Em andamento', cls: 'badge-green' },
+    fora_da_tela: { rot: 'Fora da tela', cls: 'badge-yellow' },
+    expirou: { rot: 'Expirou', cls: 'badge-neutro' },
+    encerrado: { rot: 'Encerrado', cls: 'badge-neutro' },
+  };
+
+  // ── Colunas ─────────────────────────────────────────────────────────────────
+  // val  = texto usado no filtro da coluna e no agrupamento
+  // ord  = valor de ordenação (número/ISO quando o texto não ordena certo)
+  // grp  = chave de agrupamento (arrastar o cabeçalho agrupa por ela)
+  // filtro: 'texto' | { opcoes } (select por valor exato de chave)
+  const COLUNAS = {
+    acessos: [
+      { k: 'entrou', rot: 'Entrou', w: 150, grp: 'data', val: (a) => fmtDataHora(a.entrouEm), ord: (a) => a.entrouEm, filtro: 'texto',
+        html: (a) => `<span class="num forte">${fmtData(a.entrouEm)}</span> <span class="num">${fmtHora(a.entrouEm)}</span>` },
+      { k: 'nome', rot: 'Usuário', w: 230, grp: 'usuario', val: (a) => a.nome, filtro: 'texto', html: (a) => `<span class="forte nome" title="${esc(a.nome)}">${esc(a.nome)}</span>` },
+      { k: 'telefone', rot: 'Celular', w: 140, grp: 'telefone', val: (a) => fone(a.telefone), filtro: 'texto', html: (a) => `<span class="num">${esc(fone(a.telefone))}</span>` },
+      { k: 'origem', rot: 'Origem', w: 100, grp: 'origem', val: (a) => ORIGEM[a.origem], chave: (a) => a.origem, filtro: { opcoes: ORIGEM },
+        html: (a) => `<span class="badge ${a.origem === 'chat' ? 'badge-blue' : 'badge-purple'}">${ORIGEM[a.origem]}</span>` },
+      { k: 'saiu', rot: 'Saiu / último sinal', w: 175, val: (a) => fmtDataHora(a.encerradoEm || a.ultimoSinalEm), ord: (a) => a.encerradoEm || a.ultimoSinalEm || '', filtro: 'texto',
+        html: (a) => { const fim = a.encerradoEm || a.ultimoSinalEm; return `<span class="num">${mesmoDia(a.entrouEm, fim) ? fmtHora(fim) : fmtDataHora(fim)}</span>`; } },
+      { k: 'duracao', rot: 'Tempo logado', w: 135, val: (a) => dur(a.duracaoSegundos), ord: (a) => a.duracaoSegundos, html: (a) => `<span class="num">${dur(a.duracaoSegundos)}</span>` },
+      { k: 'tela', rot: 'Tempo de tela', w: 135, val: (a) => dur(a.segundosAtivos), ord: (a) => a.segundosAtivos, html: (a) => `<span class="num forte">${dur(a.segundosAtivos)}</span>` },
+      { k: 'uso', rot: 'Uso ativo', w: 120, val: (a) => { const u = usoPct(a); return u === null ? '-' : `${u}%`; }, ord: (a) => usoPct(a) ?? -1,
+        html: (a) => { const u = usoPct(a); return u === null ? '<span>-</span>' : `<div class="uso" title="Tempo de tela ÷ tempo logado"><span class="num">${u}%</span><span class="barra"><i style="width:${u}%"></i></span></div>`; } },
+      { k: 'telas', rot: 'Telas', w: 70, val: (a) => String(a.telasVisitadas), ord: (a) => a.telasVisitadas, html: (a) => `<span class="num">${a.telasVisitadas}</span>` },
+      { k: 'chamados', rot: 'Chamados', w: 190, val: (a) => a.chamados.join(', '), ord: (a) => a.chamados.length, filtro: 'texto',
+        html: (a) => a.chamados.length ? `<span class="num" title="${esc(a.chamados.join(', '))}"><b>${a.chamados.length}</b> · ${esc(a.chamados.join(', '))}</span>` : '<span>-</span>' },
+      { k: 'situacao', rot: 'Situação', w: 210, grp: 'situacao', val: (a) => a.situacaoRotulo, chave: (a) => a.situacao, filtro: { opcoes: Object.fromEntries(Object.entries(SITUACAO).map(([k, v]) => [k, v.rot])) },
+        html: (a) => `<span class="badge ${SITUACAO[a.situacao]?.cls || 'badge-neutro'}" title="${esc(a.situacaoRotulo)}">${esc(a.situacaoRotulo)}</span>` },
+      { k: 'ip', rot: 'IP', w: 130, grp: 'ip', val: (a) => a.ip || '-', filtro: 'texto',
+        html: (a) => `<span class="mono" title="${esc(a.ipServidor && a.ipServidor !== a.ip ? 'Visto pelo servidor: ' + a.ipServidor : '')}">${esc(a.ip || '-')}</span>` },
+      { k: 'navegador', rot: 'Navegador', w: 150, grp: 'navegador', val: (a) => navegador(a.navegador), filtro: 'texto', html: (a) => `<span title="${esc(a.navegador || '')}">${esc(navegador(a.navegador))}</span>` },
+    ],
+    falhas: [
+      { k: 'em', rot: 'Quando', w: 150, grp: 'data', val: (f) => fmtDataHora(f.em), ord: (f) => f.em, filtro: 'texto',
+        html: (f) => `<span class="num forte">${fmtData(f.em)}</span> <span class="num">${fmtHora(f.em)}</span>` },
+      { k: 'telefone', rot: 'Celular', w: 150, grp: 'telefone', val: (f) => fone(f.telefone), filtro: 'texto', html: (f) => `<span class="num">${esc(fone(f.telefone))}</span>` },
+      { k: 'etapa', rot: 'Etapa', w: 150, grp: 'etapa', val: (f) => f.etapa, chave: (f) => f.etapa,
+        filtro: { opcoes: { 'Pedir código': 'Pedir código', 'Validar código': 'Validar código', 'Escolher empresa': 'Escolher empresa' } }, html: (f) => esc(f.etapa) },
+      { k: 'motivo', rot: 'Motivo', w: 340, grp: 'motivo', val: (f) => f.motivo, filtro: 'texto', html: (f) => `<span class="badge badge-falha" title="${esc(f.motivo)}">${esc(f.motivo)}</span>` },
+      { k: 'ip', rot: 'IP', w: 140, grp: 'ip', val: (f) => f.ip || '-', filtro: 'texto', html: (f) => `<span class="mono">${esc(f.ip || '-')}</span>` },
+      { k: 'navegador', rot: 'Navegador', w: 170, grp: 'navegador', val: (f) => navegador(f.navegador), filtro: 'texto', html: (f) => `<span title="${esc(f.navegador || '')}">${esc(navegador(f.navegador))}</span>` },
+    ],
+  };
+
+  // Campos de agrupamento (alguns não são colunas: dia da semana, hora cheia).
+  const GRUPOS = {
+    acessos: {
+      usuario: { rot: 'Usuário', val: (a) => a.nome },
+      data: { rot: 'Data', val: (a) => `${fmtData(a.entrouEm)} (${diaSemana(a.entrouEm)})`, ord: (a) => a.entrouEm.slice(0, 10) },
+      hora: { rot: 'Hora', val: (a) => `${p2(new Date(a.entrouEm).getHours())}h`, ord: (a) => p2(new Date(a.entrouEm).getHours()) },
+      origem: { rot: 'Origem', val: (a) => ORIGEM[a.origem] },
+      situacao: { rot: 'Situação', val: (a) => a.situacaoRotulo },
+      telefone: { rot: 'Celular', val: (a) => fone(a.telefone) },
+      ip: { rot: 'IP', val: (a) => a.ip || '-' },
+      navegador: { rot: 'Navegador', val: (a) => navegador(a.navegador) },
+    },
+    falhas: {
+      data: { rot: 'Data', val: (f) => `${fmtData(f.em)} (${diaSemana(f.em)})`, ord: (f) => f.em.slice(0, 10) },
+      telefone: { rot: 'Celular', val: (f) => fone(f.telefone) },
+      etapa: { rot: 'Etapa', val: (f) => f.etapa },
+      motivo: { rot: 'Motivo', val: (f) => f.motivo },
+      ip: { rot: 'IP', val: (f) => f.ip || '-' },
+      navegador: { rot: 'Navegador', val: (f) => navegador(f.navegador) },
+    },
+  };
+  const DICA = {
+    acessos: 'Tempo logado = da entrada até a saída/último sinal · Tempo de tela = só com a tela visível',
+    falhas: 'Login por telefone do Radar J2A que não terminou em acesso',
+  };
+
+  // ── Estado (agrupamento, painéis, origem e grupos recolhidos ficam salvos) ──
+  const st = {
+    dados: null, carregando: false, modo: 'acessos', origem: 'chat', per: '7',
+    filtros: { acessos: {}, falhas: {} },
+    ordem: { acessos: { k: 'entrou', dir: 'desc' }, falhas: { k: 'em', dir: 'desc' } },
+    grupos: { acessos: ['usuario'], falhas: [] },
+    recolhidos: new Set(), painelFiltros: true, painelGrupo: false,
+  };
+  function lerEstado() {
+    try {
+      const s = JSON.parse(localStorage.getItem(ESTADO_KEY) || 'null');
+      // Celular sem preferência salva: painéis recolhidos para a grade aparecer primeiro.
+      if (!s && window.innerWidth < 900) st.painelFiltros = false;
+      if (!s || s.versao !== 1) return;
+      for (const m of ['acessos', 'falhas']) {
+        if (Array.isArray(s.grupos?.[m])) st.grupos[m] = s.grupos[m].filter((g) => GRUPOS[m][g]);
+      }
+      if (['chat', 'interno', 'todos'].includes(s.origem)) st.origem = s.origem;
+      if (['hoje', '7', '30', 'mes'].includes(s.per)) st.per = s.per;
+      st.painelFiltros = s.painelFiltros !== false;
+      st.painelGrupo = !!s.painelGrupo;
+      st.recolhidos = new Set(Array.isArray(s.recolhidos) ? s.recolhidos : []);
+    } catch (_) {}
+  }
+  function salvarEstado() {
+    try {
+      localStorage.setItem(ESTADO_KEY, JSON.stringify({
+        versao: 1, grupos: st.grupos, origem: st.origem, per: st.per,
+        painelFiltros: st.painelFiltros, painelGrupo: st.painelGrupo, recolhidos: [...st.recolhidos],
+      }));
+    } catch (_) {}
+  }
+
   function erro(msg) { const el = $('error-banner'); el.textContent = msg || ''; el.style.display = msg ? 'block' : 'none'; }
   const empresaId = () => window._iahubEmpresa?.id || null;
 
-  // ── Período (datas do navegador → instantes ISO, o servidor não conhece o fuso) ──
-  const isoDia = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  // ── Período (datas do navegador → instantes ISO; o servidor não conhece o fuso) ──
+  const isoDia = (d) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
   function aplicarPreset(per) {
     const hoje = new Date();
     let ini = new Date(hoje);
@@ -244,15 +389,16 @@
     else if (per === 'mes') ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
     $('de').value = isoDia(ini);
     $('ate').value = isoDia(hoje);
-    document.querySelectorAll('.chip[data-per]').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.per === per)));
+    st.per = per;
   }
-  function periodo() {
-    const [y1, m1, d1] = ($('de').value || '').split('-').map(Number);
-    const [y2, m2, d2] = ($('ate').value || '').split('-').map(Number);
+  function intervalo(deStr, ateStr) {
+    const [y1, m1, d1] = (deStr || '').split('-').map(Number);
+    const [y2, m2, d2] = (ateStr || '').split('-').map(Number);
     if (!y1 || !y2) return null;
     return { de: new Date(y1, m1 - 1, d1, 0, 0, 0, 0).toISOString(), ate: new Date(y2, m2 - 1, d2, 23, 59, 59, 999).toISOString() };
   }
-  const periodoTexto = () => `${$('de').value.split('-').reverse().join('/')} a ${$('ate').value.split('-').reverse().join('/')}`;
+  const textoDia = (s) => s.split('-').reverse().join('/');
+  const periodoTexto = () => `${textoDia($('de').value)} a ${textoDia($('ate').value)}`;
 
   async function api(path, opts = {}) {
     const r = await fetch(path, { cache: 'no-store', ...opts });
@@ -265,174 +411,258 @@
 
   async function carregar() {
     const emp = empresaId();
-    const p = periodo();
+    const p = intervalo($('de').value, $('ate').value);
     if (!emp || st.carregando) return;
     if (!p) { erro('Informe a data inicial e a final.'); return; }
     if (p.de > p.ate) { erro('A data inicial é maior que a final.'); return; }
     st.carregando = true;
-    $('meta').textContent = 'Carregando...';
+    $('count').textContent = 'carregando...';
     try {
       const qs = new URLSearchParams({ empresa_id: emp, de: p.de, ate: p.ate });
       if (st.origem !== 'todos') qs.set('origem', st.origem);
       st.dados = await api(`/api/ia-service/monitor-acessos/historico?${qs}`);
       erro('');
-      render();
+      renderTabela();
     } catch (e) {
       erro('Não foi possível carregar o histórico: ' + e.message);
-      $('meta').textContent = '';
+      $('count').textContent = '';
     } finally {
       st.carregando = false;
     }
   }
 
-  // Busca é feita no navegador sobre o período carregado (resposta imediata).
-  function casa(...campos) {
-    const t = st.busca.toLowerCase();
-    if (!t) return true;
-    const dig = t.replace(/\D/g, '');
-    return campos.some((c) => {
-      const s = String(c || '').toLowerCase();
-      return s.includes(t) || (dig.length >= 3 && s.replace(/\D/g, '').includes(dig));
+  // ── Filtro, ordenação e agrupamento ─────────────────────────────────────────
+  const cols = () => COLUNAS[st.modo];
+  function linhasFiltradas(modo = st.modo) {
+    const base = (modo === 'acessos' ? st.dados?.acessos : st.dados?.falhas) || [];
+    const ativos = Object.entries(st.filtros[modo]).filter(([, v]) => v);
+    if (!ativos.length) return base.slice();
+    return base.filter((row) => ativos.every(([k, v]) => {
+      const col = COLUNAS[modo].find((c) => c.k === k);
+      if (!col) return true;
+      if (col.filtro !== 'texto') return String(col.chave(row)) === v;
+      const alvo = String(col.val(row) || '').toLowerCase();
+      const termo = v.trim().toLowerCase();
+      const dig = termo.replace(/\D/g, '');
+      return alvo.includes(termo) || (dig.length >= 3 && /^[\d\s()+-]+$/.test(termo) && alvo.replace(/\D/g, '').includes(dig));
+    }));
+  }
+  function ordenar(rows) {
+    const { k, dir } = st.ordem[st.modo];
+    const col = cols().find((c) => c.k === k);
+    if (!col) return rows;
+    const f = col.ord || col.val;
+    const m = dir === 'asc' ? 1 : -1;
+    return rows.sort((a, b) => {
+      const va = f(a), vb = f(b);
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * m;
+      return String(va ?? '').localeCompare(String(vb ?? ''), 'pt-BR', { numeric: true }) * m;
     });
   }
-  function acessosVisiveis() {
-    return (st.dados?.acessos || []).filter((a) => (!st.pessoa || a.pessoaRef === st.pessoa) && casa(a.nome, a.telefone, a.chamados.join(','), a.ip));
+  const chaveGrupo = (caminho) => `${st.modo}#` + caminho.map(([g, v]) => `${g}:${encodeURIComponent(v)}`).join('|');
+  function resumoGrupo(items) {
+    if (st.modo !== 'acessos') return `${items.length} falha(s)`;
+    const tela = items.reduce((s, a) => s + a.segundosAtivos, 0);
+    const logado = items.reduce((s, a) => s + a.duracaoSegundos, 0);
+    const pessoas = new Set(items.map((a) => a.pessoaRef)).size;
+    const chamados = new Set(items.flatMap((a) => a.chamados)).size;
+    const partes = [`${items.length} acesso(s)`, `${dur(tela)} de tela`];
+    if (logado > 0) partes.push(`${Math.min(100, Math.round((tela / logado) * 100))}% ativo`);
+    if (chamados) partes.push(`${chamados} chamado(s)`);
+    if (!st.grupos.acessos.includes('usuario') && pessoas > 1) partes.push(`${pessoas} usuários`);
+    return partes.join(' · ');
   }
-  function usuariosVisiveis() {
-    return (st.dados?.resumoPorUsuario || []).filter((u) => casa(u.nome, u.telefone));
+  function linhaDados(row) {
+    return `<tr class="data-row">${cols().map((c) => `<td>${c.html(row)}</td>`).join('')}</tr>`;
   }
-  function falhasVisiveis() {
-    return (st.dados?.falhas || []).filter((f) => casa(f.telefone, f.ip, f.motivo));
+  function renderAgrupado(partes, rows, nivel, caminho) {
+    const grupos = st.grupos[st.modo];
+    const g = grupos[nivel];
+    const def = GRUPOS[st.modo][g];
+    const baldes = new Map();
+    for (const row of rows) {
+      const v = def.val(row) || '-';
+      if (!baldes.has(v)) baldes.set(v, { ord: def.ord ? def.ord(row) : null, items: [] });
+      baldes.get(v).items.push(row);
+    }
+    let entradas = [...baldes.entries()];
+    // Data/Hora agrupam em ordem cronológica (mais recente primeiro); os demais
+    // seguem a ordem das linhas (que já vêm ordenadas pela coluna escolhida).
+    if (def.ord) entradas.sort((a, b) => String(b[1].ord).localeCompare(String(a[1].ord)));
+    for (const [v, { items }] of entradas) {
+      const prox = caminho.concat([[g, v]]);
+      const chave = chaveGrupo(prox);
+      const fechado = st.recolhidos.has(chave);
+      partes.push(`<tr class="group-row level-${Math.min(nivel, 3)}" data-group-key="${esc(chave)}"><td colspan="${cols().length}">`
+        + `<button class="group-toggle-btn" type="button" aria-label="${fechado ? 'Expandir' : 'Recolher'} grupo">${fechado ? '+' : '−'}</button>`
+        + `${esc(def.rot)}: ${esc(v)}<span class="group-resumo">${esc(resumoGrupo(items))}</span></td></tr>`);
+      if (fechado) continue;
+      if (nivel + 1 < grupos.length) renderAgrupado(partes, items, nivel + 1, prox);
+      else items.forEach((r) => partes.push(linhaDados(r)));
+    }
   }
 
-  function userCell(ref, nome, tel) {
-    return `<div class="user"><div class="avatar" style="background:${cor(ref)}">${esc(iniciais(nome))}</div>
-      <div style="min-width:0"><div class="nome">${esc(nome)}</div><div class="fone">${esc(fone(tel))}</div></div></div>`;
+  function renderCabecalho() {
+    const c = cols();
+    $('colgroup').innerHTML = c.map((col) => `<col style="width:${col.w}px">`).join('');
+    document.querySelector('.grid').style.minWidth = `${c.reduce((s, col) => s + col.w, 0)}px`;
+    const { k, dir } = st.ordem[st.modo];
+    const titulos = c.map((col) => `<th class="sortable" data-sort="${col.k}"${col.grp ? ` draggable="true" data-group-field="${col.grp}" title="Clique para ordenar · arraste para agrupar"` : ' title="Clique para ordenar"'}>`
+      + `${esc(col.rot)}${col.k === k ? `<span class="seta">${dir === 'asc' ? '▲' : '▼'}</span>` : ''}</th>`).join('');
+    const filtros = c.map((col) => {
+      const v = st.filtros[st.modo][col.k] || '';
+      if (!col.filtro) return '<th></th>';
+      if (col.filtro === 'texto') return `<th><input data-filter="${col.k}" value="${esc(v)}" autocomplete="off" spellcheck="false" aria-label="Filtrar ${esc(col.rot)}"></th>`;
+      return `<th><select data-filter="${col.k}" aria-label="Filtrar ${esc(col.rot)}"><option value="">Todos</option>${Object.entries(col.filtro.opcoes)
+        .map(([ov, ot]) => `<option value="${esc(ov)}"${ov === v ? ' selected' : ''}>${esc(ot)}</option>`).join('')}</select></th>`;
+    }).join('');
+    $('thead').innerHTML = `<tr>${titulos}</tr><tr class="filter-cell">${filtros}</tr>`;
   }
 
-  const VISOES = {
-    usuarios: {
-      cab: ['Usuário', 'Origem', 'Acessos', 'Dias com acesso', 'Tempo de tela', 'Primeiro acesso', 'Último acesso'],
-      linhas: usuariosVisiveis,
-      dica: 'Clique num usuário para ver os acessos dele',
-      vazio: 'Nenhum acesso no período.',
-      html: (u) => `<tr class="clicavel" data-pessoa="${esc(u.pessoaRef)}">
-        <td>${userCell(u.pessoaRef, u.nome, u.telefone)}</td>
-        <td>${u.origens.map(origemBadge).join(' ')}</td>
-        <td class="num">${u.acessos}</td>
-        <td class="num">${u.dias}</td>
-        <td class="num"><b>${dur(u.segundosAtivos)}</b></td>
-        <td class="num">${dataHora(u.primeiroAcessoEm)}</td>
-        <td class="num">${dataHora(u.ultimoAcessoEm)}</td></tr>`,
-      csv: (u) => [u.nome, u.telefone, u.origens.join('/'), u.acessos, u.dias, Math.round(u.segundosAtivos / 60), dataHora(u.primeiroAcessoEm), dataHora(u.ultimoAcessoEm)],
-      csvCab: ['Usuário', 'Telefone', 'Origem', 'Acessos', 'Dias com acesso', 'Tempo de tela (min)', 'Primeiro acesso', 'Último acesso'],
-    },
-    acessos: {
-      cab: ['Usuário', 'Origem', 'Entrou', 'Saiu / último sinal', 'Duração', 'Tempo de tela', 'Telas', 'Chamados', 'Situação', 'IP / navegador'],
-      linhas: acessosVisiveis,
-      dica: 'Duração = da entrada até a saída (ou último sinal); tempo de tela = só com a tela visível',
-      vazio: 'Nenhum acesso no período.',
-      html: (a) => {
-        const fim = a.encerradoEm || a.ultimoSinalEm;
-        return `<tr>
-        <td>${userCell(a.pessoaRef, a.nome, a.telefone)}</td>
-        <td>${origemBadge(a.origem)}</td>
-        <td class="num">${dataHora(a.entrouEm)}</td>
-        <td class="num">${mesmoDia(a.entrouEm, fim) ? hora(fim) : dataHora(fim)}</td>
-        <td class="num">${dur(a.duracaoSegundos)}</td>
-        <td class="num"><b>${dur(a.segundosAtivos)}</b></td>
-        <td class="num">${a.telasVisitadas}</td>
-        <td><div class="chamados" title="${esc(a.chamados.join(', '))}">${a.chamados.length ? esc(a.chamados.join(', ')) : '<span class="sub">-</span>'}</div></td>
-        <td><span class="badge ${SITUACAO[a.situacao] || 'badge-neutro'}">${esc(a.situacaoRotulo)}</span></td>
-        <td><div class="mono" title="${esc(a.ipServidor && a.ipServidor !== a.ip ? 'Visto pelo servidor: ' + a.ipServidor : '')}">${esc(a.ip || '-')}</div>
-          <div class="sub" style="white-space:nowrap" title="${esc(a.navegador || '')}">${esc(navegador(a.navegador))}</div></td></tr>`;
-      },
-      csv: (a) => [a.nome, a.telefone, a.origem === 'chat' ? 'Chat J2A' : 'Interno', dataHora(a.entrouEm), dataHora(a.encerradoEm || a.ultimoSinalEm),
-        Math.round(a.duracaoSegundos / 60), Math.round(a.segundosAtivos / 60), a.telasVisitadas, a.chamados.join(' '), a.situacaoRotulo, a.ip, a.navegador],
-      csvCab: ['Usuário', 'Telefone', 'Origem', 'Entrou', 'Saiu / último sinal', 'Duração (min)', 'Tempo de tela (min)', 'Telas', 'Chamados', 'Situação', 'IP', 'Navegador'],
-    },
-    falhas: {
-      cab: ['Quando', 'Telefone', 'Etapa', 'Motivo', 'IP', 'Navegador'],
-      linhas: falhasVisiveis,
-      dica: 'Só o login por telefone do Radar J2A; o login do IAHub não passa por aqui',
-      vazio: 'Nenhuma falha de login no período.',
-      html: (f) => `<tr>
-        <td class="num">${dataHora(f.em)}</td>
-        <td class="fone">${esc(f.telefone ? fone(f.telefone) : '-')}</td>
-        <td>${esc(f.etapa)}</td>
-        <td><span class="badge badge-falha">${esc(f.motivo)}</span></td>
-        <td class="mono">${esc(f.ip || '-')}</td>
-        <td class="sub" title="${esc(f.navegador || '')}">${esc(navegador(f.navegador))}</td></tr>`,
-      csv: (f) => [dataHora(f.em), f.telefone, f.etapa, f.motivo, f.ip, f.navegador],
-      csvCab: ['Quando', 'Telefone', 'Etapa', 'Motivo', 'IP', 'Navegador'],
-    },
-  };
+  function renderPainelGrupo() {
+    const defs = GRUPOS[st.modo];
+    const ativos = st.grupos[st.modo];
+    $('painel-grupo').classList.toggle('open', st.painelGrupo);
+    $('toggle-grupo').textContent = st.painelGrupo ? '− Ocultar agrupamento' : '+ Mostrar agrupamento';
+    $('group-status').textContent = ativos.length ? `Agrupamento ativo: ${ativos.map((g) => defs[g].rot).join(' › ')}` : 'Sem agrupamento ativo';
+    $('group-options').innerHTML = '<span class="panel-status">Arraste para agrupar:</span>'
+      + Object.entries(defs).map(([g, d]) => `<button class="group-chip${ativos.includes(g) ? ' active' : ''}" type="button" draggable="true" data-group-field="${g}">${esc(d.rot)}</button>`).join('')
+      + `<div class="group-target-row"><button class="btn btn-ghost" id="group-clear" type="button">Limpar agrupamento</button>`
+      + `<button class="btn btn-ghost" id="group-recolher" type="button"${ativos.length ? '' : ' disabled'}>Recolher todos</button>`
+      + `<button class="btn btn-ghost" id="group-expandir" type="button"${ativos.length ? '' : ' disabled'}>Expandir todos</button>`
+      + `<div class="group-dropzone" id="group-dropzone">${ativos.length
+        ? ativos.map((g) => `<span class="active-group-chip" draggable="true" data-active-group="${g}" title="Arraste para reordenar">${esc(defs[g].rot)}<button class="active-group-remove" type="button" data-remove-group="${g}" title="Remover agrupamento" aria-label="Remover ${esc(defs[g].rot)}">×</button></span>`).join('')
+        : 'Solte um campo aqui para agrupar'}</div></div>`;
+  }
 
-  function render() {
-    const d = st.dados;
-    if (!d) return;
-    const acessos = acessosVisiveis();
-    const usuarios = usuariosVisiveis();
-    const falhas = falhasVisiveis();
+  function renderPainelFiltros() {
+    $('painel-filtros').classList.toggle('open', st.painelFiltros);
+    $('toggle-filtros').textContent = st.painelFiltros ? '− Recolher filtros e resumo' : '+ Filtros e resumo';
+    document.querySelectorAll('.chip[data-orig]').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.orig === st.origem)));
+    document.querySelectorAll('.chip[data-per]').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.per === st.per)));
+    const orig = { chat: 'Chat (Radar J2A)', interno: 'IA Service interno', todos: 'Todas as origens' }[st.origem];
+    $('resumo-filtros').textContent = `${orig} · ${$('de').value ? periodoTexto() : ''}`;
+  }
+
+  function renderKpis(acessos, falhas) {
+    const tela = acessos.reduce((s, a) => s + a.segundosAtivos, 0);
+    const logado = acessos.reduce((s, a) => s + a.duracaoSegundos, 0);
     $('k-acessos').textContent = acessos.length;
     $('k-usuarios').textContent = new Set(acessos.map((a) => a.pessoaRef)).size;
-    $('k-tempo').textContent = dur(acessos.reduce((s, a) => s + a.segundosAtivos, 0));
-    $('k-falhas').textContent = falhas.length;
-    $('q-usuarios').textContent = usuarios.length;
+    $('k-tempo').textContent = dur(tela);
+    $('k-uso').textContent = logado > 0 ? `${Math.min(100, Math.round((tela / logado) * 100))}%` : '-';
+    $('k-chamados').textContent = new Set(acessos.flatMap((a) => a.chamados)).size;
     $('q-acessos').textContent = acessos.length;
     $('q-falhas').textContent = falhas.length;
-
-    const pessoa = st.pessoa ? d.resumoPorUsuario.find((u) => u.pessoaRef === st.pessoa) : null;
-    $('filtro-pessoa').hidden = !(pessoa && st.aba === 'acessos');
-    if (pessoa) $('filtro-pessoa').textContent = `${pessoa.nome} ✕`;
-
-    const v = VISOES[st.aba];
-    const linhas = v.linhas();
-    $('thead').innerHTML = `<tr>${v.cab.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>`;
-    $('tbody').innerHTML = linhas.length
-      ? linhas.map(v.html).join('')
-      : `<tr><td colspan="${v.cab.length}"><div class="vazio">${esc(v.vazio)}</div></td></tr>`;
-    $('dica').textContent = v.dica;
-    $('meta').textContent = `${periodoTexto()} · atualizado às ${hora(d.geradoEm)}${d.truncado ? ' · mostrando os 5.000 acessos mais recentes; reduza o período' : ''}`;
   }
 
-  function trocarAba(aba) {
-    st.aba = aba;
-    if (aba === 'usuarios') st.pessoa = null;
-    document.querySelectorAll('.aba').forEach((a) => a.setAttribute('aria-selected', String(a.dataset.aba === aba)));
-    render();
+  function renderTabela() {
+    renderPainelFiltros();
+    renderPainelGrupo();
+    if (!st.dados) return;
+    const acessos = linhasFiltradas('acessos');
+    const falhas = linhasFiltradas('falhas');
+    renderKpis(acessos, falhas);
+    const rows = ordenar(st.modo === 'acessos' ? acessos : falhas);
+    const total = (st.modo === 'acessos' ? st.dados.acessos : st.dados.falhas).length;
+    const filtrosAtivos = Object.values(st.filtros[st.modo]).some(Boolean);
+    $('count').textContent = `${rows.length} de ${total} ${st.modo === 'acessos' ? 'acesso(s)' : 'falha(s)'} · ${periodoTexto()}${st.dados.truncado ? ' · limitado aos 5.000 mais recentes, reduza o período' : ''}`;
+    $('filter-status').textContent = filtrosAtivos ? '· Filtros de coluna ativos' : '';
+    $('empty-state').style.display = rows.length ? 'none' : 'flex';
+    $('empty-state').textContent = total ? 'Nenhuma linha com esses filtros.' : (st.modo === 'acessos' ? 'Nenhum acesso no período.' : 'Nenhuma falha de login no período.');
+    const partes = [];
+    if (rows.length && st.grupos[st.modo].length) renderAgrupado(partes, rows, 0, []);
+    else rows.forEach((r) => partes.push(linhaDados(r)));
+    $('tbody').innerHTML = partes.join('');
+    ajustarAltura();
   }
 
+  // A grade ocupa o resto da tela (recolher os painéis aumenta a área útil).
+  function ajustarAltura() {
+    const wrap = $('table-wrap');
+    const topo = wrap.getBoundingClientRect().top + window.scrollY;
+    wrap.style.height = `${Math.max(360, window.innerHeight - topo - 16)}px`;
+  }
+
+  function trocarModo(modo) {
+    st.modo = modo;
+    document.querySelectorAll('.modo').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.modo === modo)));
+    $('dica').textContent = DICA[modo];
+    renderCabecalho();
+    renderTabela();
+  }
+
+  // ── Agrupamento (mesmas regras do Histórico de Interpretações) ──────────────
+  function addGrupo(g) {
+    if (!GRUPOS[st.modo][g] || st.grupos[st.modo].includes(g)) return;
+    st.grupos[st.modo].push(g);
+    st.recolhidos.clear();
+    salvarEstado();
+    renderTabela();
+  }
+  function removerGrupo(g) {
+    st.grupos[st.modo] = st.grupos[st.modo].filter((x) => x !== g);
+    st.recolhidos.clear();
+    salvarEstado();
+    renderTabela();
+  }
+  function reordenarGrupo(g, antes) {
+    if (!st.grupos[st.modo].includes(g)) return;
+    const prox = st.grupos[st.modo].filter((x) => x !== g);
+    const i = antes ? prox.indexOf(antes) : -1;
+    if (i >= 0) prox.splice(i, 0, g); else prox.push(g);
+    st.grupos[st.modo] = prox;
+    st.recolhidos.clear();
+    salvarEstado();
+    renderTabela();
+  }
+  function alternarGrupo(chave) {
+    if (st.recolhidos.has(chave)) st.recolhidos.delete(chave); else st.recolhidos.add(chave);
+    salvarEstado();
+    renderTabela();
+  }
+  function recolherTodos(recolher) {
+    st.recolhidos.clear();
+    if (recolher) document.querySelectorAll('tr.group-row.level-0').forEach((tr) => st.recolhidos.add(tr.dataset.groupKey));
+    salvarEstado();
+    renderTabela();
+  }
+
+  // ── Exportar (linhas filtradas e ordenadas, sem os cabeçalhos de grupo) ─────
   function exportarCsv() {
     if (!st.dados) return;
-    const v = VISOES[st.aba];
+    const c = cols();
+    const rows = ordenar(linhasFiltradas());
     const cel = (x) => { const s = String(x ?? ''); return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const texto = [v.csvCab, ...v.linhas().map(v.csv)].map((l) => l.map(cel).join(';')).join('\r\n');
-    const blob = new Blob(['﻿' + texto], { type: 'text/csv;charset=utf-8' });
+    const extra = st.modo === 'acessos'
+      ? { cab: ['Tempo logado (min)', 'Tempo de tela (min)', 'Navegador completo'], val: (a) => [Math.round(a.duracaoSegundos / 60), Math.round(a.segundosAtivos / 60), a.navegador] }
+      : { cab: ['Navegador completo'], val: (f) => [f.navegador] };
+    const linhas = [c.map((col) => col.rot).concat(extra.cab), ...rows.map((r) => c.map((col) => col.val(r)).concat(extra.val(r)))];
+    const blob = new Blob(['﻿' + linhas.map((l) => l.map(cel).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `historico-acessos-${st.aba}-${$('de').value}_a_${$('ate').value}.csv`;
+    a.download = `historico-acessos-${st.modo}-${$('de').value}_a_${$('ate').value}.csv`;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
   }
 
-  // ── Exclusão de período (única forma de apagar o histórico) ─────────────────
-  $('btn-excluir').addEventListener('click', () => {
-    const p = periodo();
-    if (!p) { erro('Informe a data inicial e a final do período a excluir.'); return; }
-    const nomeEmpresa = window._iahubEmpresa?.nome || 'esta empresa';
-    $('excluir-texto').innerHTML = `Excluir <b>definitivamente</b> do histórico de <b>${esc(nomeEmpresa)}</b> todos os acessos que <b>entraram</b> e todas as falhas de login de <b>${esc(periodoTexto())}</b>?<br>`
-      + 'Vale para todas as origens e usuários, independente dos filtros na tela. Não pode ser desfeito. A exclusão fica registrada na auditoria com seu usuário.';
+  // ── Excluir período (única forma de apagar o histórico) ─────────────────────
+  function abrirExcluir() {
+    $('excluir-de').value = $('de').value;
+    $('excluir-ate').value = $('ate').value;
     $('excluir-motivo').value = '';
-    $('excluir-box').hidden = false;
-    $('excluir-motivo').focus();
-  });
-  $('excluir-cancelar').addEventListener('click', () => { $('excluir-box').hidden = true; });
-  $('excluir-ok').addEventListener('click', async () => {
-    const p = periodo();
+    $('modal-excluir').classList.add('open');
+    $('excluir-de').focus();
+  }
+  const fecharExcluir = () => $('modal-excluir').classList.remove('open');
+  async function confirmarExcluir() {
+    const p = intervalo($('excluir-de').value, $('excluir-ate').value);
     const emp = empresaId();
-    if (!p || !emp) return;
+    if (!p || !emp) { alert('Informe a data inicial e a final.'); return; }
+    if (p.de > p.ate) { alert('A data inicial é maior que a final.'); return; }
+    const nomeEmpresa = window._iahubEmpresa?.nome || 'esta empresa';
+    if (!confirm(`Excluir definitivamente o histórico de acessos de ${nomeEmpresa} de ${textoDia($('excluir-de').value)} a ${textoDia($('excluir-ate').value)}?`)) return;
     const btn = $('excluir-ok');
     btn.disabled = true;
     try {
@@ -441,47 +671,102 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ empresa_id: emp, de: p.de, ate: p.ate, motivo: $('excluir-motivo').value.trim() || null }),
       });
-      $('excluir-box').hidden = true;
+      fecharExcluir();
       await carregar();
-      $('meta').textContent = `Excluídos: ${r.acessosRemovidos} acesso(s) e ${r.falhasRemovidas} falha(s) de login de ${periodoTexto()}.`;
+      alert(`Excluídos: ${r.acessosRemovidos} acesso(s) e ${r.falhasRemovidas} falha(s) de login.`);
     } catch (e) {
-      erro('Não foi possível excluir o período: ' + e.message);
+      alert('Não foi possível excluir o período: ' + e.message);
     } finally {
       btn.disabled = false;
     }
-  });
+  }
 
   // ── Eventos ─────────────────────────────────────────────────────────────────
-  document.querySelectorAll('.chip[data-per]').forEach((c) => c.addEventListener('click', () => { aplicarPreset(c.dataset.per); carregar(); }));
-  ['de', 'ate'].forEach((id) => $(id).addEventListener('change', () => {
-    document.querySelectorAll('.chip[data-per]').forEach((c) => c.setAttribute('aria-pressed', 'false'));
-    carregar();
-  }));
-  document.querySelectorAll('.chip[data-orig]').forEach((c) => c.addEventListener('click', () => {
-    st.origem = c.dataset.orig;
-    document.querySelectorAll('.chip[data-orig]').forEach((x) => x.setAttribute('aria-pressed', String(x === c)));
-    carregar();
-  }));
-  $('busca').addEventListener('input', (e) => { st.busca = e.target.value.trim(); render(); });
-  // Mesmo cuidado do Monitor: o Chrome às vezes preenche a busca com o usuário salvo do login.
-  $('busca').addEventListener('animationstart', (e) => {
-    if (e.animationName !== 'busca-autofill') return;
-    e.target.value = '';
-    st.busca = '';
-    render();
-  });
-  document.querySelectorAll('.aba').forEach((a) => a.addEventListener('click', () => trocarAba(a.dataset.aba)));
-  $('tbody').addEventListener('click', (e) => {
-    const tr = e.target.closest('tr[data-pessoa]');
-    if (!tr) return;
-    st.pessoa = tr.dataset.pessoa;
-    trocarAba('acessos');
-  });
-  $('filtro-pessoa').addEventListener('click', () => { st.pessoa = null; render(); });
+  $('toggle-filtros').addEventListener('click', () => { st.painelFiltros = !st.painelFiltros; salvarEstado(); renderPainelFiltros(); ajustarAltura(); });
+  $('toggle-grupo').addEventListener('click', () => { st.painelGrupo = !st.painelGrupo; salvarEstado(); renderPainelGrupo(); ajustarAltura(); });
+  document.querySelectorAll('.chip[data-orig]').forEach((c) => c.addEventListener('click', () => { st.origem = c.dataset.orig; salvarEstado(); renderPainelFiltros(); carregar(); }));
+  document.querySelectorAll('.chip[data-per]').forEach((c) => c.addEventListener('click', () => { aplicarPreset(c.dataset.per); salvarEstado(); renderPainelFiltros(); carregar(); }));
+  ['de', 'ate'].forEach((id) => $(id).addEventListener('change', () => { st.per = null; renderPainelFiltros(); carregar(); }));
+  document.querySelectorAll('.modo').forEach((b) => b.addEventListener('click', () => trocarModo(b.dataset.modo)));
   $('btn-atualizar').addEventListener('click', carregar);
   $('btn-csv').addEventListener('click', exportarCsv);
+  $('btn-excluir').addEventListener('click', abrirExcluir);
+  $('excluir-fechar').addEventListener('click', fecharExcluir);
+  $('excluir-cancelar').addEventListener('click', fecharExcluir);
+  $('excluir-ok').addEventListener('click', confirmarExcluir);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fecharExcluir(); });
+  window.addEventListener('resize', ajustarAltura);
 
-  aplicarPreset('7');
+  // Cabeçalho: ordenar (clique), agrupar (arrastar), filtrar (linha de filtros).
+  $('thead').addEventListener('click', (e) => {
+    const th = e.target.closest('th.sortable');
+    if (!th) return;
+    const o = st.ordem[st.modo];
+    if (o.k === th.dataset.sort) o.dir = o.dir === 'asc' ? 'desc' : 'asc';
+    else { o.k = th.dataset.sort; o.dir = 'asc'; }
+    renderCabecalho();
+    renderTabela();
+  });
+  const aoFiltrar = (e) => {
+    const el = e.target.closest('[data-filter]');
+    if (!el) return;
+    st.filtros[st.modo][el.dataset.filter] = el.value;
+    renderTabela();
+  };
+  $('thead').addEventListener('input', aoFiltrar);
+  $('thead').addEventListener('change', aoFiltrar);
+  document.addEventListener('dragstart', (e) => {
+    const chip = e.target.closest?.('[data-active-group]');
+    if (chip) {
+      e.dataTransfer.setData('application/x-active-group', chip.dataset.activeGroup);
+      e.dataTransfer.setData('text/plain', chip.dataset.activeGroup);
+      e.dataTransfer.effectAllowed = 'move';
+      return;
+    }
+    const campo = e.target.closest?.('[data-group-field]');
+    if (!campo) return;
+    e.dataTransfer.setData('text/plain', campo.dataset.groupField);
+    e.dataTransfer.effectAllowed = 'copy';
+    // Arrastar um cabeçalho abre o painel de agrupamento para ter onde soltar.
+    if (!st.painelGrupo) { st.painelGrupo = true; salvarEstado(); setTimeout(() => { renderPainelGrupo(); ajustarAltura(); }, 0); }
+  });
+  $('painel-grupo').addEventListener('dragover', (e) => {
+    const zona = e.target.closest('#group-dropzone');
+    if (!zona) return;
+    e.preventDefault();
+    zona.classList.add('drag-over');
+    document.querySelectorAll('.active-group-chip.drag-target').forEach((el) => el.classList.remove('drag-target'));
+    e.target.closest('[data-active-group]')?.classList.add('drag-target');
+  });
+  $('painel-grupo').addEventListener('dragleave', (e) => {
+    const zona = e.target.closest('#group-dropzone');
+    if (zona) zona.classList.remove('drag-over');
+  });
+  $('painel-grupo').addEventListener('drop', (e) => {
+    const zona = e.target.closest('#group-dropzone');
+    if (!zona) return;
+    e.preventDefault();
+    const ativo = e.dataTransfer.getData('application/x-active-group');
+    if (ativo) { reordenarGrupo(ativo, e.target.closest('[data-active-group]')?.dataset.activeGroup); return; }
+    addGrupo(e.dataTransfer.getData('text/plain'));
+  });
+  $('painel-grupo').addEventListener('click', (e) => {
+    const rem = e.target.closest('[data-remove-group]');
+    if (rem) return removerGrupo(rem.dataset.removeGroup);
+    if (e.target.closest('#group-clear')) { st.grupos[st.modo] = []; st.recolhidos.clear(); salvarEstado(); return renderTabela(); }
+    if (e.target.closest('#group-recolher')) return recolherTodos(true);
+    if (e.target.closest('#group-expandir')) return recolherTodos(false);
+    const chip = e.target.closest('.group-chip[data-group-field]');
+    if (chip) addGrupo(chip.dataset.groupField);
+  });
+  $('tbody').addEventListener('click', (e) => {
+    const tr = e.target.closest('tr.group-row');
+    if (tr) alternarGrupo(tr.dataset.groupKey);
+  });
+
+  lerEstado();
+  aplicarPreset(st.per || '7');
+  trocarModo('acessos');
   (window._iahubAuthReady || Promise.resolve()).then(carregar);
 })();
 </script>
