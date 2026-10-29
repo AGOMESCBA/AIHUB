@@ -42,10 +42,11 @@
 
     .mon-stack { display:flex;flex-direction:column;gap:10px; }
     .refresh-bar { display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:8px 12px; }
+    /* Uma linha só: filtros à esquerda, atualização + ações à direita; quebra só em tela estreita */
     .refresh-controls, .monitor-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
-    .refresh-controls { margin-left:auto; }
+    .bar-direita { display:flex;align-items:center;justify-content:flex-end;gap:8px 12px;flex-wrap:wrap;margin-left:auto; }
     .refresh-bar .btn { white-space:nowrap; }
-    .refresh-bar .filters { flex:1 1 560px; }
+    .refresh-bar .filters { flex:1 1 auto;min-width:0; }
     #btn-resumo svg { transition:transform .2s; }
     #btn-resumo[aria-expanded="false"] svg { transform:rotate(180deg); }
     #btn-situacao[hidden], .kpis[hidden] { display:none; }
@@ -79,7 +80,7 @@
     .filters { display:flex;gap:8px;flex-wrap:wrap;align-items:center; }
     .chip { font:inherit;font-size:12.5px;padding:5px 12px;border-radius:999px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-md);cursor:pointer; }
     .chip[aria-pressed="true"] { background:var(--bg-active);border-color:var(--accent);color:var(--accent);font-weight:600; }
-    .filters .form-control { flex:1;min-width:180px;max-width:300px; }
+    .filters .form-control { flex:1;min-width:160px;max-width:300px; }
     .chip:focus-visible, .kpi:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
 
     .board { display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start; }
@@ -157,7 +158,7 @@
 
     @media (max-width:1150px) { .board.com-gaveta { grid-template-columns:minmax(0,1fr); } }
     @media (max-width:760px) { .gaveta.ampliada .gv-corpo { display:block; } .gaveta.ampliada .gv-col + .gv-col { border-left:none; } }
-    @media (max-width:720px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } .filters .form-control { max-width:none; } .refresh-controls { margin-left:0; } .kpi { grid-template-columns:minmax(0,1fr); } .kpi-foot { grid-column:1; } }
+    @media (max-width:720px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } .filters .form-control { max-width:none; } .bar-direita { margin-left:0;justify-content:flex-start; } .kpi { grid-template-columns:minmax(0,1fr); } .kpi-foot { grid-column:1; } }
     .btn-derrubar-leve { align-self:flex-start;background:transparent;border:1px solid var(--error);color:var(--error); }
     .btn-derrubar-leve:hover { background:var(--bg-hover); }
     .btn-derrubar { background:var(--error);border:1px solid var(--error);color:#fff; }
@@ -175,6 +176,10 @@
     .desc-menu button:hover, .desc-menu button:focus-visible { background:var(--bg-hover); }
     .desc-menu b { font-size:13px;color:var(--text-hi);font-weight:600; }
     .desc-menu span { font-size:11.5px;color:var(--text-md); }
+    #orig-menu button { padding-left:28px;position:relative; }
+    #orig-menu button[aria-checked="true"]::before { content:'✓';position:absolute;left:10px;top:9px;color:var(--accent);font-weight:700; }
+    #orig-menu button[aria-checked="true"] b { color:var(--accent); }
+    #btn-origem.filtro-ativo { border-color:var(--accent);color:var(--accent);background:var(--bg-active); }
     .desc-opcoes { display:flex;gap:8px;flex-wrap:wrap; }
     /* Mensagens (2026-10-28): o MESMO Chat interno do J2A (chat-interno.js/.css),
        com os tokens de cor do J2A (radar.css) — igual ao chat, claro e escuro. */
@@ -237,12 +242,26 @@
 
       <div class="mon-stack">
         <section class="card refresh-bar" id="refresh-bar" aria-label="Filtros e atualização">
-          <div class="filters" role="group" aria-label="Filtros de origem">
-            <button class="chip" type="button" data-orig="todos" aria-pressed="true">Todas as origens</button>
-            <button class="chip" type="button" data-orig="chat" aria-pressed="false">Chat (Radar J2A)</button>
-            <button class="chip" type="button" data-orig="interno" aria-pressed="false">IA Service interno</button>
+          <div class="filters" role="group" aria-label="Busca e filtro de origem">
             <input id="busca" name="filtro-monitor-acessos" class="form-control" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="Buscar nome, telefone ou chamado..." aria-label="Buscar nome, telefone ou chamado">
+            <div class="desc-wrap" id="orig-wrap">
+              <button class="btn btn-ghost" id="btn-origem" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="orig-menu" title="Filtrar por origem do acesso">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                <span id="origem-rotulo">Todas as origens</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <div class="desc-menu" id="orig-menu" role="menu" hidden>
+                <button type="button" role="menuitemradio" aria-checked="true" data-orig="todos"><b>Todas as origens</b><span>Chat e rotinas internas</span></button>
+                <button type="button" role="menuitemradio" aria-checked="false" data-orig="chat"><b>Chat (Radar J2A)</b><span>Quem entrou pelo chat com o código</span></button>
+                <button type="button" role="menuitemradio" aria-checked="false" data-orig="interno"><b>IA Service interno</b><span>Quem está nas rotinas internas do IA Service</span></button>
+              </div>
+            </div>
           </div>
+          <div class="bar-direita">
+          <button class="btn btn-primary" id="btn-refresh" type="button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+            Atualizar
+          </button>
           <div class="refresh-controls" role="group" aria-label="Atualização automática">
           <div class="live" title="Atualização automática"><span class="pulse"></span><span id="live-txt">Automático</span></div>
           <svg class="ring" viewBox="0 0 24 24" aria-hidden="true"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" id="ring" cx="12" cy="12" r="9" stroke-dasharray="56.55" stroke-dashoffset="0"/></svg>
@@ -258,19 +277,15 @@
           </label>
           </div>
           <div class="monitor-actions">
-          <button class="btn btn-ghost" id="btn-resumo" type="button" aria-expanded="true" aria-controls="resumo">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
-            <span id="resumo-rotulo">Ocultar resumo</span>
-          </button>
-          <button class="btn btn-primary" id="btn-refresh" type="button">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
-            Atualizar
-          </button>
           <a class="btn btn-ghost" id="btn-historico" href="/app/ia-service/historico-acessos.html" title="Todos os logins por dia e hora, tempo logado, IP e falhas de login (o Desconectar não apaga o histórico)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/><polyline points="12 7 12 12 15 14"/></svg>
             Histórico
           </a>
-          <div class="desc-wrap">
+          <button class="btn btn-ghost" id="btn-resumo" type="button" aria-expanded="true" aria-controls="resumo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
+            <span id="resumo-rotulo">Ocultar resumo</span>
+          </button>
+          <div class="desc-wrap" id="desc-wrap">
             <button class="btn btn-limpar" id="btn-limpar" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="desc-menu" title="Desconectar quem está conectado nesta empresa (você nunca é desconectado)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
               Desconectar
@@ -281,6 +296,7 @@
               <button type="button" role="menuitem" data-desc="chat"><b>Chat (Radar J2A)</b><span>Encerra todos os logins do chat; entram de novo com o código</span></button>
               <button type="button" role="menuitem" data-desc="todos"><b>Todos</b><span>IA Service e Chat</span></button>
             </div>
+          </div>
           </div>
           </div>
         </section>
@@ -904,11 +920,38 @@
     }
     $('btn-limpar').setAttribute('aria-expanded', abrir ? 'true' : 'false');
   }
-  $('btn-limpar').addEventListener('click', (e) => { e.stopPropagation(); menuDesconectar($('desc-menu').hidden); });
-  document.addEventListener('click', (e) => { if (!e.target.closest('.desc-wrap')) menuDesconectar(false); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') menuDesconectar(false); });
-  window.addEventListener('resize', () => menuDesconectar(false));
-  window.addEventListener('scroll', () => menuDesconectar(false), true);
+  $('btn-limpar').addEventListener('click', (e) => { e.stopPropagation(); menuOrigem(false); menuDesconectar($('desc-menu').hidden); });
+  // Filtro de origem: mesmo modelo de submenu do Desconectar.
+  function menuOrigem(abrir) {
+    const menu = $('orig-menu');
+    menu.hidden = !abrir;
+    if (abrir) {
+      const r = $('btn-origem').getBoundingClientRect();
+      const larg = menu.offsetWidth;
+      menu.style.top = `${r.bottom + 6}px`;
+      menu.style.left = `${Math.max(16, Math.min(r.left, window.innerWidth - larg - 16))}px`;
+    }
+    $('btn-origem').setAttribute('aria-expanded', abrir ? 'true' : 'false');
+  }
+  function fecharMenus() { menuDesconectar(false); menuOrigem(false); }
+  $('btn-origem').addEventListener('click', (e) => { e.stopPropagation(); menuDesconectar(false); menuOrigem($('orig-menu').hidden); });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#desc-wrap')) menuDesconectar(false);
+    if (!e.target.closest('#orig-wrap')) menuOrigem(false);
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fecharMenus(); });
+  window.addEventListener('resize', fecharMenus);
+  window.addEventListener('scroll', fecharMenus, true);
+  $('orig-menu').addEventListener('click', (e) => {
+    const item = e.target.closest('[data-orig]');
+    if (!item) return;
+    st.filtroOrig = item.dataset.orig;
+    $('orig-menu').querySelectorAll('[data-orig]').forEach((x) => x.setAttribute('aria-checked', String(x === item)));
+    $('origem-rotulo').textContent = item.querySelector('b').textContent;
+    $('btn-origem').classList.toggle('filtro-ativo', st.filtroOrig !== 'todos');
+    menuOrigem(false);
+    render();
+  });
   $('desc-menu').addEventListener('click', async (e) => {
     const alvo = e.target.closest('[data-desc]')?.dataset.desc;
     if (!alvo) return;
@@ -962,11 +1005,6 @@
     st.filtroSit = jaMarcado ? 'ativos' : k.dataset.sit;
     document.querySelectorAll('.kpi').forEach((x) => x.setAttribute('aria-pressed', String(!jaMarcado && x === k)));
     atualizarFiltroSituacao();
-    render();
-  }));
-  document.querySelectorAll('.chip[data-orig]').forEach((c) => c.addEventListener('click', () => {
-    st.filtroOrig = c.dataset.orig;
-    document.querySelectorAll('.chip[data-orig]').forEach((x) => x.setAttribute('aria-pressed', String(x === c)));
     render();
   }));
   $('tbody').addEventListener('click', (e) => {
