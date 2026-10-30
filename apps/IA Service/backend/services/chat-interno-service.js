@@ -48,6 +48,10 @@ function _cifrar(texto) {
   const envelope = cryptoEnvelope.encryptPayload({ t: texto }, chave, { kid: 'chat-interno' });
   return PREFIXO_CIFRA + Buffer.from(JSON.stringify(envelope), 'utf8').toString('base64');
 }
+// Por caractere, não por unidade UTF-16: cortar um emoji ao meio geraria "�".
+function _previa(texto) {
+  return Array.from(String(texto ?? '')).slice(0, 140).join('');
+}
 function _decifrar(valor) {
   const s = String(valor ?? '');
   if (!s.startsWith(PREFIXO_CIFRA)) return s;
@@ -238,7 +242,7 @@ function listarContatos(empresaId, eu) {
       chamadosEmAndamento: chamados.get(c.id) || 0,
       conversaId: conv?.conversa_id || null,
       naoLidas: conv?.nao_lidas || 0,
-      ultimaMensagem: ultima ? { texto: ultima.apagado_em ? 'Mensagem apagada' : _decifrar(ultima.texto).slice(0, 140), em: ultima.criado_em, minha: ultima.remetente_id === String(eu) } : null,
+      ultimaMensagem: ultima ? { texto: ultima.apagado_em ? 'Mensagem apagada' : _previa(_decifrar(ultima.texto)), em: ultima.criado_em, minha: ultima.remetente_id === String(eu) } : null,
     };
   });
 
@@ -285,7 +289,7 @@ function listarContatos(empresaId, eu) {
     chamadosEmAndamento: 0,
     conversaId: minhaConversa?.id || null,
     naoLidas: 0,
-    ultimaMensagem: minhaUltima ? { texto: minhaUltima.apagado_em ? 'Mensagem apagada' : _decifrar(minhaUltima.texto).slice(0, 140), em: minhaUltima.criado_em, minha: true } : null,
+    ultimaMensagem: minhaUltima ? { texto: minhaUltima.apagado_em ? 'Mensagem apagada' : _previa(_decifrar(minhaUltima.texto)), em: minhaUltima.criado_em, minha: true } : null,
   });
 
   const naoLidasTotal = contatos.reduce((s, c) => s + c.naoLidas, 0);

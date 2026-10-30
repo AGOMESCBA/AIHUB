@@ -8,7 +8,7 @@
   'use strict';
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const iniciais = (n) => String(n || '?').split(/\s+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+  const iniciais = (n) => String(n || '?').split(/\s+/).map((p) => p.replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean).map((p) => Array.from(p)[0]).slice(0, 2).join('').toUpperCase();
   const hora = (iso) => (iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '');
   function quando(iso) {
     if (!iso) return '';
@@ -33,7 +33,21 @@
     return cores[h % cores.length];
   }
 
+  // Lista curta e sem bandeiras (o Windows não as desenha como emoji).
+  const EMOJIS = [
+    ['😀', 'Rostos', '😀 😃 😄 😁 😂 🤣 😅 😊 🙂 😉 😍 🥰 😘 😎 🤩 🥳 🤔 🤨 😐 😶 🙄 😏 😬 😴 😷 🤒 😕 😟 😮 😲 😳 🥺 😢 😭 😱 😓 😡 🤯 🤐 🤗'],
+    ['👍', 'Gestos', '👍 👎 👌 ✌️ 🤞 🤙 👏 🙌 🙏 🤝 💪 👋 ✋ 👉 👈 👆 👇 🫶 🤦 🤷 🙋 👀'],
+    ['❤️', 'Símbolos', '❤️ 💙 💚 💛 🧡 💜 🖤 💔 ✅ ❌ ⚠️ ❗ ❓ 💯 🔥 ⭐ ✨ 🎉 🎊 🏆 🚀'],
+    ['💼', 'Trabalho', '💼 💻 🖥️ 📱 📞 📧 📅 ⏰ ⏳ 📌 📎 📝 📄 📊 📈 🔍 💡 🔧 🔒 🐞 ☕ 🍕'],
+  ].map(([aba, titulo, lista]) => ({ aba, titulo, lista: lista.split(' ') }));
+
   const ICONES = {
+    emoji: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="M8 14.5s1.5 2 4 2 4-2 4-2"/><path d="M9 9.5h.01M15 9.5h.01" stroke-width="2.6"/></svg>',
+    copiar: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>',
+    editar: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+    selecionar: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="m8 12 3 3 5-6"/></svg>',
+    apagar: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6M10 11v6M14 11v6"/></svg>',
+    seta: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
     chat: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.6 8.6 0 0 1-3.9-.9L3 20.5l1.6-4.6A8.4 8.4 0 1 1 21 11.5Z"/></svg>',
     fechar: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
     voltar: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>',
@@ -156,15 +170,17 @@
         const sep = d !== ultimoDia ? `<div class="ci-dia"><span>${esc(d)}</span></div>` : '';
         ultimoDia = d;
         return `${sep}<div class="ci-msg ${m.minha ? 'ci-minha' : 'ci-dele'}${m.pendente ? ' ci-enviando' : ''}" data-msg="${esc(m.id)}">
-          ${st.selecao ? `<label class="ci-marcar"><input type="checkbox" data-ci-selecionar="${esc(m.id)}" aria-label="Selecionar mensagem: ${esc(m.texto.slice(0, 70))}" ${st.selecao.has(m.id) ? 'checked' : ''}> Selecionar</label>` : ''}
+          ${st.selecao ? `<label class="ci-marcar"><input type="checkbox" data-ci-selecionar="${esc(m.id)}" aria-label="Selecionar mensagem: ${esc(Array.from(m.texto).slice(0, 70).join(''))}" ${st.selecao.has(m.id) ? 'checked' : ''}> Selecionar</label>` : ''}
           ${m.transmissao ? '<span class="ci-transm">Mensagem para todos</span>' : ''}
           <span class="ci-texto${m.apagadoEm ? ' ci-apagada' : ''}">${esc(m.apagadoEm ? 'Mensagem apagada' : m.texto)}</span>
           <span class="ci-meta">${m.editadoEm && !m.apagadoEm ? '<span>editada</span>' : ''}${hora(m.criadoEm)}${m.apagadoEm ? '' : ticks(m)}</span>
-          ${!st.selecao && !m.pendente ? `<details class="ci-acoes-msg"><summary aria-label="Opções da mensagem">Opções</summary><div>
-            ${m.minha && !m.apagadoEm ? `<button type="button" data-ci="editar" data-ci-msg="${esc(m.id)}">Editar</button>
-            <button type="button" data-ci="apagar" data-ci-msg="${esc(m.id)}">Apagar para todos</button>` : ''}
-            <button type="button" data-ci="apagar-mim" data-ci-msg="${esc(m.id)}">Apagar para mim</button>
-            <button type="button" data-ci="selecionar" data-ci-msg="${esc(m.id)}">Selecionar</button>
+          ${!st.selecao && !m.pendente ? `<details class="ci-acoes-msg"><summary aria-label="Opções da mensagem" title="Opções da mensagem">${ICONES.seta}</summary><div>
+            ${m.apagadoEm ? '' : `<button type="button" data-ci="copiar" data-ci-msg="${esc(m.id)}">${ICONES.copiar}<span>Copiar</span></button>`}
+            ${m.minha && !m.apagadoEm ? `<button type="button" data-ci="editar" data-ci-msg="${esc(m.id)}">${ICONES.editar}<span>Editar</span></button>` : ''}
+            <button type="button" data-ci="selecionar" data-ci-msg="${esc(m.id)}">${ICONES.selecionar}<span>Selecionar</span></button>
+            <hr>
+            <button type="button" data-ci="apagar-mim" data-ci-msg="${esc(m.id)}">${ICONES.apagar}<span>Apagar para mim</span></button>
+            ${m.minha && !m.apagadoEm ? `<button type="button" data-ci="apagar" data-ci-msg="${esc(m.id)}">${ICONES.apagar}<span>Apagar para todos</span></button>` : ''}
           </div></details>` : ''}</div>`;
       }).join('') || '<p class="ci-vazio">Nenhuma mensagem ainda. Diga olá 👋</p>';
     }
@@ -204,6 +220,11 @@
           <button type="submit" class="ci-btn-primario" ${st.alterando ? 'disabled' : ''}>Salvar alteração</button></div>
         </form>` : ''}
         <form class="ci-compor" id="ci-form">
+          <div class="ci-emojis" id="ci-emojis" role="group" aria-label="Emojis" hidden>
+            <div class="ci-emojis-abas">${EMOJIS.map((g, i) => `<button type="button" class="${i ? '' : 'ci-ativa'}" data-ci-emoji-aba="${i}" title="${g.titulo}" aria-label="${g.titulo}">${g.aba}</button>`).join('')}</div>
+            <div class="ci-emojis-lista" id="ci-emojis-lista">${EMOJIS.map((g, i) => `<h4 data-ci-emoji-grupo="${i}">${g.titulo}</h4><div class="ci-emojis-grade">${g.lista.map((em) => `<button type="button" data-ci-emoji="${em}">${em}</button>`).join('')}</div>`).join('')}</div>
+          </div>
+          <button type="button" class="ci-icone ci-emoji-btn" data-ci="emojis" title="Emojis" aria-label="Emojis" aria-expanded="false" aria-controls="ci-emojis">${ICONES.emoji}</button>
           <textarea id="ci-texto" rows="1" maxlength="1000" placeholder="Digite uma mensagem" aria-label="Mensagem"></textarea>
           <button type="submit" class="ci-enviar" title="Enviar" aria-label="Enviar">${ICONES.enviar}</button>
         </form>`;
@@ -249,7 +270,8 @@
 
     function ajustarAltura(ta) {
       ta.style.height = 'auto';
-      ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
+      // scrollHeight não conta a borda: sem somá-la a caixa rola 2px e mostra a barra.
+      ta.style.height = `${Math.min(ta.scrollHeight + ta.offsetHeight - ta.clientHeight, 120)}px`;
     }
 
     // ── Ações ──────────────────────────────────────────────────────────
@@ -302,10 +324,59 @@
     // Envio como no WhatsApp (2026-10-28): o balão aparece na hora com o
     // relógio ("Enviando…") e o campo é limpo; com a resposta do servidor o
     // relógio vira ✓. Falhou: o balão sai, o texto volta para o campo.
+    function fecharMenusMensagem(exceto) {
+      painel.querySelectorAll('.ci-acoes-msg[open]').forEach((d) => { if (d !== exceto) d.open = false; });
+    }
+
+    function alternarEmojis(abrir) {
+      const caixa = painel.querySelector('#ci-emojis');
+      if (!caixa) return;
+      caixa.hidden = !abrir;
+      painel.querySelector('[data-ci="emojis"]').setAttribute('aria-expanded', String(!!abrir));
+    }
+
+    // Entra onde está o cursor. Só devolve o foco com mouse: no celular abriria
+    // o teclado por cima do painel de emojis.
+    function inserirEmoji(emoji) {
+      const ta = painel.querySelector('#ci-texto');
+      if (!ta || ta.value.length + emoji.length > ta.maxLength) return;
+      // Fora de foco o navegador pode perder a seleção: o cursor fica guardado aqui.
+      const { ini, fim } = st.cursorEmoji || { ini: ta.selectionStart, fim: ta.selectionEnd };
+      ta.setRangeText(emoji, ini, fim, 'end');
+      st.cursorEmoji = { ini: ini + emoji.length, fim: ini + emoji.length };
+      st.rascunho = ta.value;
+      ajustarAltura(ta);
+      if (matchMedia('(hover:hover)').matches) {
+        ta.focus();
+        ta.setSelectionRange(st.cursorEmoji.ini, st.cursorEmoji.fim);
+      }
+    }
+
+    async function copiarMensagem(id) {
+      const m = st.conversa?.mensagens.find((x) => x.id === id);
+      if (!m) return;
+      fecharMenusMensagem();
+      try {
+        await navigator.clipboard.writeText(m.texto);
+      } catch (_) {
+        // navigator.clipboard só existe em HTTPS; o servidor pode estar em HTTP.
+        const aux = document.createElement('textarea');
+        aux.value = m.texto;
+        aux.style.cssText = 'position:fixed;opacity:0';
+        painel.appendChild(aux);
+        aux.select();
+        const ok = document.execCommand('copy');
+        aux.remove();
+        if (!ok) return aviso('Não foi possível copiar a mensagem.');
+      }
+      aviso('Mensagem copiada.');
+    }
+
     async function enviar() {
       const ta = painel.querySelector('#ci-texto');
       const texto = ta.value.trim();
       if (!texto || st.enviando || !st.conversa) return;
+      alternarEmojis(false);
       st.enviando = true;
       const conversa = st.conversa;
       const temp = { id: `tmp-${Date.now()}`, conversaId: conversa.id, minha: true, pendente: true, texto, criadoEm: new Date().toISOString() };
@@ -324,7 +395,7 @@
         else conversa.mensagens[conversa.mensagens.findIndex((x) => x.id === temp.id)] = m;
         atualizarMensagensSemPerderTexto();
         const c = contato(conversa.consultorId);
-        if (c) c.ultimaMensagem = { texto: m.texto.slice(0, 140), em: m.criadoEm, minha: true };
+        if (c) c.ultimaMensagem = { texto: Array.from(m.texto).slice(0, 140).join(''), em: m.criadoEm, minha: true };
       } catch (err) {
         tirarTemp();
         atualizarMensagensSemPerderTexto();
@@ -549,7 +620,7 @@
     function notificarSistema(c, m) {
       if (!('Notification' in window) || Notification.permission !== 'granted') return;
       try {
-        const n = new Notification(`${c.nome} · Chat interno`, { body: m.texto.slice(0, 160), tag: `ci-${m.conversaId}` });
+        const n = new Notification(`${c.nome} · Chat interno`, { body: Array.from(m.texto).slice(0, 160).join(''), tag: `ci-${m.conversaId}` });
         n.onclick = () => { window.focus(); abrirConversa(c.consultorId); n.close(); };
       } catch (_) { /* navegador sem suporte em página não segura */ }
     }
@@ -579,7 +650,7 @@
       if (!c || !c.conversaId) { await carregarContatos().catch(() => null); c = contato(m.remetenteId); recarregou = true; }
       if (!c) return;
       c.conversaId = m.conversaId;
-      c.ultimaMensagem = { texto: m.texto.slice(0, 140), em: m.criadoEm, minha: false };
+      c.ultimaMensagem = { texto: Array.from(m.texto).slice(0, 140).join(''), em: m.criadoEm, minha: false };
       if (vendoAgora) c.naoLidas = 0;
       else {
         if (!recarregou) c.naoLidas = (c.naoLidas || 0) + 1;
@@ -651,6 +722,20 @@
       const acao = e.target.closest('[data-ci]')?.dataset.ci;
       if (acao === 'fechar') return fecharPainel();
       if (acao === 'voltar') { st.view = 'lista'; st.conversa = null; st.edicao = null; st.selecao = null; st.rascunho = ''; render(); return carregarContatos().catch(() => null); }
+      if (acao === 'emojis') return alternarEmojis(painel.querySelector('#ci-emojis')?.hidden);
+      const emoji = e.target.closest('[data-ci-emoji]');
+      if (emoji) return inserirEmoji(emoji.dataset.ciEmoji);
+      const abaEmoji = e.target.closest('[data-ci-emoji-aba]');
+      if (abaEmoji) {
+        const lista = painel.querySelector('#ci-emojis-lista');
+        const titulo = lista.querySelector(`[data-ci-emoji-grupo="${abaEmoji.dataset.ciEmojiAba}"]`);
+        // O último grupo pode não chegar ao topo: a aba tocada vence a rolagem.
+        st.abaEmojiFixaAte = Date.now() + 300;
+        painel.querySelectorAll('[data-ci-emoji-aba]').forEach((b) => b.classList.toggle('ci-ativa', b === abaEmoji));
+        lista.scrollTop = titulo.offsetTop - lista.offsetTop;
+        return;
+      }
+      if (acao === 'copiar') return copiarMensagem(e.target.closest('[data-ci-msg]').dataset.ciMsg);
       if (acao === 'editar') return iniciarEdicao(e.target.closest('[data-ci-msg]').dataset.ciMsg);
       if (acao === 'apagar') return alterarMensagem(true, e.target.closest('[data-ci-msg]').dataset.ciMsg);
       if (acao === 'apagar-mim') return excluirMensagens('mim', [e.target.closest('[data-ci-msg]').dataset.ciMsg]);
@@ -668,6 +753,37 @@
       if (acao === 'notificacoes') return pedirNotificacoes();
       const alvo = e.target.closest('[data-ci-contato]');
       if (alvo) abrirConversa(alvo.dataset.ciContato);
+    });
+    // Um menu de mensagem por vez, fechado ao tocar fora; sem espaço abaixo, abre
+    // para cima (como no WhatsApp).
+    painel.addEventListener('click', (e) => {
+      if (!e.target.closest('.ci-acoes-msg')) fecharMenusMensagem();
+      if (!e.target.closest('#ci-emojis, [data-ci="emojis"]')) alternarEmojis(false);
+    });
+    painel.addEventListener('toggle', (e) => {
+      if (!e.target.matches?.('.ci-acoes-msg') || !e.target.open) return;
+      fecharMenusMensagem(e.target);
+      e.target.classList.remove('ci-menu-cima');
+      const menu = e.target.querySelector('div');
+      const lista = painel.querySelector('#ci-msgs');
+      const box = lista.getBoundingClientRect();
+      if (menu.getBoundingClientRect().bottom > box.bottom) {
+        e.target.classList.add('ci-menu-cima');
+        // Acima do início da conversa ninguém alcança rolando: aí abre para baixo.
+        if (menu.getBoundingClientRect().top - box.top + lista.scrollTop < 0) e.target.classList.remove('ci-menu-cima');
+      }
+      menu.scrollIntoView({ block: 'nearest' });
+    }, true);
+    // A aba acompanha o grupo visível na rolagem.
+    painel.addEventListener('scroll', (e) => {
+      if (e.target.id !== 'ci-emojis-lista' || Date.now() < (st.abaEmojiFixaAte || 0)) return;
+      const lista = e.target;
+      const grupos = [...lista.querySelectorAll('[data-ci-emoji-grupo]')];
+      const atual = grupos.filter((g) => g.offsetTop - lista.offsetTop <= lista.scrollTop + 8).pop() || grupos[0];
+      painel.querySelectorAll('[data-ci-emoji-aba]').forEach((b) => b.classList.toggle('ci-ativa', b.dataset.ciEmojiAba === atual.dataset.ciEmojiGrupo));
+    }, true);
+    painel.addEventListener('focusout', (e) => {
+      if (e.target.id === 'ci-texto') st.cursorEmoji = { ini: e.target.selectionStart, fim: e.target.selectionEnd };
     });
     painel.addEventListener('input', (e) => {
       if (e.target.id === 'ci-busca') {
@@ -689,7 +805,11 @@
     });
     painel.addEventListener('keydown', (e) => {
       if (e.target.id === 'ci-texto' && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); }
-      if (e.key === 'Escape') fecharPainel();
+      if (e.key === 'Escape') {
+        const caixa = painel.querySelector('#ci-emojis');
+        if (caixa && !caixa.hidden) return alternarEmojis(false);
+        fecharPainel();
+      }
     });
     painel.addEventListener('submit', (e) => {
       e.preventDefault();

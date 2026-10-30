@@ -211,6 +211,14 @@ function definirPreferenciaPessoal(empresaId, consultorId, valor) {
   return getConsultor(empresaId, consultorId);
 }
 
+// O upsert da Platform só grava usuario_id_iahub quando informado; tirar o
+// vínculo no cadastro precisa ser explícito.
+function desvincularUsuario(empresaId, consultorId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  getDB().prepare('UPDATE consultores SET usuario_id_iahub = NULL, atualizado_em = ? WHERE id = ? AND empresa_id = ?')
+    .run(new Date().toISOString(), consultorId, Number(empresaId));
+}
+
 function atualizarConsultor(empresaId, consultorId, patch) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
@@ -271,6 +279,7 @@ module.exports = {
   listarConsultoresPorTelefoneNormalizado,
   upsertConsultorPlatform,
   definirPreferenciaPessoal,
+  desvincularUsuario,
   atualizarConsultor,
   excluirConsultor,
   getNomeTecnicoPorIdOrigem,

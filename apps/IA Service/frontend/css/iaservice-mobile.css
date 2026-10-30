@@ -55,7 +55,6 @@
   .ci-msgs, .ci-lista { overscroll-behavior: contain; }
   .ci-icone { width: 40px; height: 40px; }
   .ci-menu-conversa summary { width: 36px; height: 40px; }
-  .ci-acoes-msg summary { padding: 6px; }
   .ci-painel [data-ci="notificacoes"] { display: none; }
 }
 

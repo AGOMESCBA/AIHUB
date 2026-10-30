@@ -183,6 +183,12 @@ function getTecnicoPorOrigem(empresaId, sistemaOrigem, idOrigem) {
   `).get(Number(empresaId), sistemaOrigem, idOrigem));
 }
 
+function listarTecnicos(empresaId) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  return getDB().prepare('SELECT * FROM tecnicos WHERE empresa_id = ? ORDER BY nome COLLATE NOCASE ASC')
+    .all(Number(empresaId)).map(_tecnicoParaDominio);
+}
+
 function getTecnicoPorId(empresaId, id) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   if (!id) return null;
@@ -193,5 +199,5 @@ function getTecnicoPorId(empresaId, id) {
 module.exports = {
   upsertCliente, getClientePorCnpj, listarClientes, contarClientes,
   upsertUsuarioCliente, getUsuarioClientePorId, contarUsuariosCliente,
-  upsertTecnico, contarTecnicos, getTecnicoPorOrigem, getTecnicoPorId,
+  upsertTecnico, contarTecnicos, listarTecnicos, getTecnicoPorOrigem, getTecnicoPorId,
 };

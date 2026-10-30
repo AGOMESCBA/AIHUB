@@ -42,20 +42,35 @@
     .grid-title { font-weight:700;color:var(--text-hi); }
     .grid-meta { font-size:12px;color:var(--text-lo); }
 
-    /* Formulário */
-    .f-corpo .form-control:disabled { background:var(--bg-hover);color:var(--text-md);cursor:not-allowed;opacity:.85; }
-    dialog.form { margin:auto;border:1px solid var(--border);border-radius:12px;padding:0;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 32px);background:var(--bg-card);color:var(--text-hi);box-shadow:var(--shadow-md); }
-    dialog.form::backdrop { background:rgba(15,23,42,.45); }
-    .f-head { padding:16px 18px 10px;border-bottom:1px solid var(--border); }
-    .f-titulo { font-size:16px;font-weight:700; }
-    .f-sub { font-size:12.5px;color:var(--text-md);margin-top:3px; }
-    .f-corpo { padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px 14px; }
-    .f-corpo .full { grid-column:1 / -1; }
-    .f-corpo .form-group { margin:0; }
-    .f-corpo small { display:block;font-size:11.5px;color:var(--text-lo);margin-top:4px;line-height:1.4; }
-    .aviso { grid-column:1 / -1;font-size:12.5px;line-height:1.5;padding:9px 11px;border-radius:8px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-md); }
-    .f-erro { grid-column:1 / -1;display:none;color:var(--error);font-size:12.5px; }
-    .f-pe { display:flex;justify-content:flex-end;gap:8px;padding:12px 18px 16px;border-top:1px solid var(--border); }
+    /* Formulário: mesmo modelo de CRUD do IA Command (lista ↔ editor em página). */
+    .form-tabs { display:flex;gap:0;border-bottom:2px solid var(--border); }
+    .form-tab { padding:9px 18px;font-size:13px;font-weight:600;color:var(--text-lo);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px; }
+    .form-tab:hover { color:var(--text-hi); }
+    .form-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .tab-pane { display:none; }
+    .tab-pane.active { display:block; }
+    .tab-pane .form-section { margin:0; }
+    .tab-pane .form-section + .form-section { margin-top:16px; }
+    .f-campos { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px; }
+    .f-campos .full { grid-column:1 / -1; }
+    .f-campos .form-group { margin:0;min-width:0; }
+    .obrigatorio { color:var(--error); }
+    #sec-form .form-control:disabled, #sec-form .form-control[readonly] { background:var(--bg-hover);color:var(--text-md);cursor:not-allowed;opacity:.85; }
+    #f-link { cursor:text !important; }
+    .aviso { font-size:12.5px;line-height:1.5;padding:9px 11px;border-radius:8px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-md); }
+    .f-erro { display:none;color:var(--error);background:var(--bg-card);border:1px solid var(--error);border-radius:8px;padding:10px 12px;font-size:13px; }
+    .reg-field + .reg-field { margin-top:12px; }
+    .reg-label { font-size:11px;font-weight:600;color:var(--text-lo);margin-bottom:4px; }
+    .link-linha { display:flex;gap:8px; }
+    .link-linha input { min-width:0;flex:1;font-size:12px; }
+    .prontidao-titulo { display:flex;gap:8px;align-items:center;font-size:13.5px;font-weight:700;color:var(--text-hi);margin-bottom:10px; }
+    .prontidao { list-style:none;margin:0;padding:0;display:grid;gap:8px; }
+    .prontidao li { display:grid;grid-template-columns:16px minmax(0,1fr);gap:7px;font-size:12.5px;line-height:1.4;color:var(--text-md); }
+    .prontidao li::before { font-weight:700;text-align:center; }
+    .prontidao .ok::before { content:'✓';color:var(--success, #15803d); }
+    .prontidao .aviso-item::before { content:'!';color:var(--warning, #b45309); }
+    .prontidao .erro::before { content:'✕';color:var(--error); }
+    .prontidao .erro { color:var(--text-hi); }
     .toast { position:fixed;right:16px;bottom:16px;z-index:50;background:var(--text-hi);color:var(--bg-card);padding:10px 14px;border-radius:8px;font-size:13px;box-shadow:var(--shadow-md);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;pointer-events:none; }
     .toast.on { opacity:1;transform:none; }
 
@@ -88,12 +103,14 @@
       .nums td.td-acoes { grid-column:1 / -1;display:flex;gap:8px;white-space:normal; }
       .td-acoes .btn { flex:1;min-height:40px;font-size:13px;justify-content:center; }
 
-      dialog.form { width:100%;max-width:none;height:var(--iasvc-vh,100dvh);max-height:none;margin:0;border:none;border-radius:0;overflow:hidden; }
-      #form { display:flex;flex-direction:column;height:100%; }
-      .f-head { padding:12px 14px 8px; }
-      .f-corpo { flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;align-content:start;padding:12px 14px;grid-template-columns:minmax(0,1fr); }
-      .f-pe { padding:10px 14px; }
-      .f-pe .btn { flex:1;min-height:44px;justify-content:center; }
+      /* Salvar sempre à mão no topo, mesmo com o teclado aberto. */
+      /* A margem do iahub.css conta com os 24px de recuo do desktop; aqui são 12px. */
+      #sec-form .editor-actionbar { top:-12px;margin:-12px -12px 0;padding:10px 12px; }
+      #sec-form .editor-actions { width:100%;flex-wrap:nowrap; }
+      #sec-form .editor-actions .btn { flex:1;min-height:44px;justify-content:center; }
+      .f-campos { grid-template-columns:minmax(0,1fr); }
+      .form-tab { flex:1;min-height:44px;padding:8px 6px; }
+      .link-linha .btn { min-height:44px; }
     }
   </style>
 </head>
@@ -118,6 +135,7 @@
     </div>
 
     <div class="page-content">
+     <div id="sec-lista">
       <div class="page-head">
         <div class="page-kicker">Configuração</div>
         <div class="page-title">Números Autorizados</div>
@@ -151,56 +169,136 @@
           </table>
         </div>
       </section>
+     </div>
+
+     <div id="sec-form" hidden>
+      <form id="form" class="editor-shell" novalidate>
+        <div class="editor-actionbar">
+          <div class="editor-actionbar-title">
+            <strong id="f-titulo">Novo número</strong>
+            <span id="f-sub">Preencha os campos e salve.</span>
+          </div>
+          <div class="editor-actions">
+            <button class="btn btn-ghost" type="button" id="f-cancelar">← Voltar à lista</button>
+            <button class="btn btn-primary" type="submit" id="f-salvar">Salvar</button>
+          </div>
+        </div>
+        <div class="f-erro" id="f-erro" role="alert"></div>
+        <div class="editor-grid editor-grid-wide">
+          <main class="editor-main">
+            <div class="form-tabs" role="tablist">
+              <button class="form-tab active" type="button" role="tab" data-aba="geral">Geral</button>
+              <button class="form-tab" type="button" role="tab" data-aba="acesso">Acesso ao chat</button>
+            </div>
+            <div class="aviso" id="f-aviso" hidden></div>
+
+            <div class="tab-pane active" id="aba-geral">
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Identificação</div>
+                  <div class="form-section-subtitle">Nome da pessoa e número em que ela recebe o código de acesso.</div>
+                </div>
+                <div class="form-section-body f-campos">
+                  <div class="form-group">
+                    <label class="form-label" for="f-nome">Nome <span class="obrigatorio">*</span></label>
+                    <input id="f-nome" class="form-control" maxlength="120" autocomplete="off" placeholder="ex.: João da Silva">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="f-numero">Número WhatsApp <span class="obrigatorio">*</span></label>
+                    <input id="f-numero" class="form-control" type="tel" inputmode="tel" autocomplete="off" placeholder="+55 65 99999-9999">
+                    <div class="form-hint" id="f-numero-dica">Com DDI (55 no Brasil) e DDD. Se já existir em outro sistema, ele só ganha o acesso ao IA Service.</div>
+                  </div>
+                </div>
+              </section>
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Observações</div>
+                  <div class="form-section-subtitle">Informações internas, não aparecem para o analista.</div>
+                </div>
+                <div class="form-section-body">
+                  <textarea id="f-obs" class="form-control" rows="3" maxlength="500" aria-label="Observações"></textarea>
+                </div>
+              </section>
+            </div>
+
+            <div class="tab-pane" id="aba-acesso">
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Acesso e fila</div>
+                  <div class="form-section-subtitle">Liberam a entrada e definem quais chamados a pessoa vê no chat.</div>
+                </div>
+                <div class="form-section-body f-campos">
+                  <div class="form-group">
+                    <label class="form-label" for="f-liberado">Situação do acesso</label>
+                    <select id="f-liberado" class="form-control"><option value="true">Liberado</option><option value="false">Inativo</option></select>
+                    <div class="form-hint">Inativo: não entra no chat e, se estiver logado, é desconectado em até 1 minuto.</div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="f-idse">ID SoftExpert <span class="obrigatorio">*</span></label>
+                    <input id="f-idse" class="form-control" list="f-tecnicos" maxlength="40" autocomplete="off" placeholder="Digite o ID ou o nome do técnico">
+                    <datalist id="f-tecnicos"></datalist>
+                    <div class="form-hint" id="f-idse-info">Define a fila de chamados da pessoa.</div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="f-usuario">Usuário do IAHub</label>
+                    <select id="f-usuario" class="form-control"><option value="">Sem vínculo</option></select>
+                    <div class="form-hint">Opcional. Só para quem usa as Mensagens pelo login do IAHub (Monitor de Acessos).</div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="f-papel">Perfil</label>
+                    <select id="f-papel" class="form-control"><option value="analista">Analista</option><option value="gestor">Gestor</option></select>
+                  </div>
+                </div>
+              </section>
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Preferências da IA</div>
+                  <div class="form-section-subtitle">Valores iniciais. A pré-análise pode ser ajustada pelo analista no chat.</div>
+                </div>
+                <div class="form-section-body f-campos">
+                  <div class="form-group">
+                    <label class="form-label" for="f-pre">Pré-análise</label>
+                    <select id="f-pre" class="form-control"><option value="true">Automática</option><option value="false">Manual</option></select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="f-estilo">Estilo da resposta</label>
+                    <select id="f-estilo" class="form-control"><option value="NATURAL">Objetiva</option><option value="ORIGINAL">Técnica</option></select>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </main>
+
+          <aside class="editor-side">
+            <section class="form-section">
+              <div class="form-section-header"><div class="form-section-title">Entrada no chat</div></div>
+              <div class="form-section-body compact">
+                <div class="prontidao-titulo" id="f-pronto-titulo" role="status"></div>
+                <ul class="prontidao" id="f-pronto"></ul>
+                <div class="reg-field" style="margin-top:14px">
+                  <div class="reg-label">Link para o analista entrar</div>
+                  <div class="link-linha">
+                    <input id="f-link" class="form-control" readonly aria-label="Link para o analista entrar">
+                    <button class="btn btn-ghost" type="button" id="f-copiar">Copiar</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section class="form-section">
+              <div class="form-section-header"><div class="form-section-title">Dados do registro</div></div>
+              <div class="form-section-body compact">
+                <div class="reg-field"><div class="reg-label">Empresa</div><input id="f-empresa" class="form-control" disabled></div>
+                <div class="reg-field"><div class="reg-label">Cadastro geral do número</div><input id="f-cadastro" class="form-control" disabled></div>
+                <div class="reg-field"><div class="reg-label">ID do registro</div><input id="f-id" class="form-control" disabled placeholder="(gerado ao salvar)" style="font-family:monospace;font-size:12px"></div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </form>
+     </div>
     </div>
   </div>
 </div>
-
-<dialog class="form" id="dlg" aria-labelledby="f-titulo">
-  <form id="form" method="dialog" novalidate>
-    <div class="f-head">
-      <div class="f-titulo" id="f-titulo">Novo número</div>
-      <div class="f-sub" id="f-sub">Se o telefone já existir em outro sistema, ele só ganha o acesso ao IA Service.</div>
-    </div>
-    <div class="f-corpo">
-      <div class="aviso" id="f-aviso" hidden></div>
-      <div class="form-group full">
-        <label class="form-label" for="f-nome">Nome</label>
-        <input id="f-nome" class="form-control" maxlength="120" autocomplete="off">
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="f-numero">Telefone (WhatsApp)</label>
-        <input id="f-numero" class="form-control" inputmode="tel" autocomplete="off" placeholder="55 65 99999-9999">
-        <small>Com DDI e DDD.</small>
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="f-idse">ID SoftExpert</label>
-        <input id="f-idse" class="form-control" maxlength="40" autocomplete="off" placeholder="ex.: 784">
-        <small>Código do analista no SoftExpert desta empresa.</small>
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="f-papel">Perfil</label>
-        <select id="f-papel" class="form-control"><option value="analista">Analista</option><option value="gestor">Gestor</option></select>
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="f-pre">Pré-análise</label>
-        <select id="f-pre" class="form-control"><option value="true">Automática</option><option value="false">Manual</option></select>
-      </div>
-      <div class="form-group full">
-        <label class="form-label" for="f-estilo">Estilo da resposta</label>
-        <select id="f-estilo" class="form-control"><option value="NATURAL">Objetiva</option><option value="ORIGINAL">Técnica</option></select>
-      </div>
-      <div class="form-group full">
-        <label class="form-label" for="f-obs">Observações</label>
-        <input id="f-obs" class="form-control" maxlength="500" autocomplete="off">
-      </div>
-      <div class="f-erro" id="f-erro" role="alert"></div>
-    </div>
-    <div class="f-pe">
-      <button class="btn btn-ghost" type="button" id="f-cancelar">Cancelar</button>
-      <button class="btn btn-primary" type="submit" id="f-salvar">Salvar</button>
-    </div>
-  </form>
-</dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="/js/auth.js"></script>
@@ -210,7 +308,7 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const BASE = '/api/ia-service/numeros-autorizados';
-  const st = { itens: [], editando: null, salvando: false };
+  const st = { itens: [], editando: null, salvando: false, opcoes: null };
   const telaCelular = window.matchMedia('(max-width:720px)');
   const empresaId = () => window._iahubEmpresa?.id || null;
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -297,33 +395,114 @@
     }
   }
 
+  function mudarAba(nome) {
+    document.querySelectorAll('.form-tab').forEach((b) => b.classList.toggle('active', b.dataset.aba === nome));
+    document.querySelectorAll('.tab-pane').forEach((p) => p.classList.toggle('active', p.id === `aba-${nome}`));
+  }
+
+  function mostrarForm(sim) {
+    $('sec-lista').hidden = sim;
+    $('sec-form').hidden = !sim;
+    document.querySelector('.page-content').scrollTop = 0;
+    window.scrollTo(0, 0);
+  }
+
+  function preencherUsuarios(atual) {
+    const lista = st.opcoes?.usuarios || [];
+    const fora = atual && !lista.some((u) => u.id === atual) ? [{ id: atual, nome: `Usuário #${atual} (sem acesso ao IA Service)` }] : [];
+    $('f-usuario').innerHTML = '<option value="">Sem vínculo</option>'
+      + [...fora, ...lista].map((u) => `<option value="${u.id}">${esc(u.nome)}</option>`).join('');
+    $('f-usuario').value = atual ? String(atual) : '';
+  }
+
+  function aplicarOpcoes() {
+    const o = st.opcoes;
+    $('f-tecnicos').innerHTML = (o?.tecnicos || []).map((t) => `<option value="${esc(t.idSoftexpert)}" label="${esc(t.nome)}"></option>`).join('');
+    $('f-link').value = o?.linkAcesso ? location.origin + o.linkAcesso : '';
+    $('f-empresa').value = window._iahubEmpresa?.nome || o?.empresa?.nome || '';
+    atualizarResumo();
+  }
+
+  // O que falta para a pessoa conseguir entrar, com as mesmas condições do login
+  // por telefone: número ativo, acesso liberado e ID SoftExpert informado.
+  function atualizarResumo() {
+    const item = st.editando;
+    const idSe = $('f-idse').value.trim();
+    const qtd = digitos($('f-numero').value).length;
+    const tecnicos = st.opcoes?.tecnicos || [];
+    const tecnico = tecnicos.find((t) => t.idSoftexpert === idSe);
+    const mesmoId = st.itens.filter((i) => i.id !== item?.id && idSe && String(i.idSoftexpert) === idSe);
+    const inativoGeral = item?.situacao === 'inativo_cadastro';
+    const itens = [];
+    itens.push(qtd >= 10 && qtd <= 15 ? ['ok', 'Número WhatsApp informado'] : ['erro', 'Falta o número WhatsApp com DDI e DDD']);
+    if (!idSe) itens.push(['erro', 'Falta o ID SoftExpert']);
+    else if (tecnico) itens.push(['ok', `Fila de ${tecnico.nome || `ID ${idSe}`}`]);
+    else if (tecnicos.length) itens.push(['aviso-item', 'ID não encontrado nos técnicos importados: a fila pode vir vazia']);
+    else itens.push(['ok', 'ID SoftExpert informado']);
+    if (mesmoId.length) itens.push(['aviso-item', `Mesmo ID de ${mesmoId.map((i) => i.nome).join(', ')}: veem a mesma fila`]);
+    itens.push($('f-liberado').value === 'true' ? ['ok', 'Acesso liberado'] : ['erro', 'Acesso inativo']);
+    if (inativoGeral) itens.push(['erro', 'Número inativo no cadastro geral: só um administrador reativa']);
+    const pode = !itens.some(([cls]) => cls === 'erro');
+    $('f-pronto-titulo').textContent = pode ? 'Pronto para entrar no chat' : 'Ainda não consegue entrar';
+    $('f-pronto').innerHTML = itens.map(([cls, txt]) => `<li class="${cls}">${esc(txt)}</li>`).join('');
+
+    const info = $('f-idse-info');
+    info.textContent = tecnico?.nome ? `Técnico: ${tecnico.nome}` : 'Define a fila de chamados da pessoa.';
+  }
+
+  async function carregarOpcoes(usuarioAtual) {
+    try {
+      st.opcoes = await api(url('/opcoes'));
+      preencherUsuarios(st.editando ? st.editando.usuarioIdIahub : usuarioAtual);
+      aplicarOpcoes();
+    } catch (_) {
+      // Sem as listas o cadastro continua possível: usuário fica como estava (ver salvar).
+      st.opcoes = null;
+    }
+  }
+
   function abrir(item) {
     st.editando = item || null;
-    $('f-titulo').textContent = item ? 'Editar número' : 'Novo número';
-    $('f-sub').textContent = item ? fone(item.numero) : 'Se o telefone já existir em outro sistema, ele só ganha o acesso ao IA Service.';
+    $('f-titulo').textContent = item ? (item.nome || 'Editar número') : 'Novo número';
+    $('f-sub').textContent = item ? fone(item.numero) : 'Preencha os campos e salve.';
     $('f-nome').value = item?.nome || '';
     $('f-numero').value = item ? fone(item.numero) : '';
     $('f-idse').value = item?.idSoftexpert || '';
+    $('f-liberado').value = String(item ? item.liberado : true);
     $('f-papel').value = item?.papel || 'analista';
     $('f-pre').value = String(item ? item.preAnaliseAutomatica : true);
     $('f-estilo').value = item?.estiloResposta || 'NATURAL';
     $('f-obs').value = item?.observacoes || '';
+    $('f-id').value = item?.id || '';
+    $('f-cadastro').value = !item ? 'Ativo ao salvar' : (item.ativoCadastro ? 'Ativo' : 'Inativo (só administrador altera)');
+    $('f-numero-dica').hidden = !!item;
+    preencherUsuarios(item?.usuarioIdIahub || null);
     const travado = !!item?.compartilhado;
     ['f-nome', 'f-numero', 'f-obs'].forEach((id) => { $(id).disabled = travado; });
     $('f-aviso').hidden = !travado;
     $('f-aviso').textContent = travado ? `Este número também é usado em: ${item.outrosSistemas.join(', ')}. Nome, telefone e observações só podem ser alterados no painel de Administração.` : '';
     $('f-erro').style.display = 'none';
-    $('dlg').showModal();
-    (travado ? $('f-idse') : $('f-nome')).focus();
-    // Celular: o teclado só abre quando a pessoa tocar num campo; abrir já com
-    // ele cobriria metade do formulário.
-    if (telaCelular.matches) document.activeElement?.blur();
+    aplicarOpcoes();
+    mudarAba(travado ? 'acesso' : 'geral');
+    mostrarForm(true);
+    // Celular: o teclado só abre quando a pessoa tocar num campo.
+    if (!telaCelular.matches) (travado ? $('f-idse') : $('f-nome')).focus();
+    carregarOpcoes(null);
   }
 
-  function erroForm(msg) {
+  function fechar() {
+    st.editando = null;
+    mostrarForm(false);
+  }
+
+  // A barra de ações fica presa no topo: o erro vai logo abaixo dela, à vista.
+  function erroForm(msg, aba, campo) {
     $('f-erro').textContent = msg;
     $('f-erro').style.display = 'block';
-    $('f-erro').scrollIntoView({ block: 'nearest' }); // o erro fica no fim do formulário
+    if (aba) mudarAba(aba);
+    if (campo && !telaCelular.matches) $(campo).focus();
+    document.querySelector('.page-content').scrollTop = 0;
+    window.scrollTo(0, 0);
   }
 
   async function salvar(e) {
@@ -338,17 +517,20 @@
       preAnaliseAutomatica: $('f-pre').value === 'true',
       estiloResposta: $('f-estilo').value,
       observacoes: $('f-obs').value.trim(),
+      liberado: $('f-liberado').value === 'true',
     };
-    const falha = !st.editando?.compartilhado && !corpo.nome ? 'Informe o nome.'
-      : (corpo.numero.length < 10 || corpo.numero.length > 15) ? 'Telefone inválido. Informe DDI + DDD + número.'
-      : !corpo.idSoftexpert ? 'Informe o ID SoftExpert.' : '';
-    if (falha) { erroForm(falha); return; }
+    // Sem a lista carregada, não envia o campo: o servidor mantém o vínculo atual.
+    if (st.opcoes) corpo.usuarioIdIahub = $('f-usuario').value ? Number($('f-usuario').value) : null;
+    if (!st.editando?.compartilhado && !corpo.nome) return erroForm('Informe o nome.', 'geral', 'f-nome');
+    if (corpo.numero.length < 10 || corpo.numero.length > 15) return erroForm('Número inválido. Informe DDI + DDD + número.', 'geral', 'f-numero');
+    if (!corpo.idSoftexpert) return erroForm('Informe o ID SoftExpert.', 'acesso', 'f-idse');
     st.salvando = true;
     $('f-salvar').disabled = true;
     try {
       const r = await api(url(), { method: 'POST', body: JSON.stringify(corpo) });
-      $('dlg').close();
-      toast(r.vinculadoAExistente ? 'Número já existia em outro sistema: acesso ao IA Service incluído.' : 'Número salvo.');
+      fechar();
+      toast(r.inativoCadastro ? 'Acesso incluído, mas o número está inativo no cadastro geral: só um administrador reativa.'
+        : r.vinculadoAExistente ? 'Número já existia em outro sistema: acesso ao IA Service incluído.' : 'Número salvo.');
       await carregar();
     } catch (err) {
       erroForm(err.message);
@@ -400,8 +582,16 @@
   $('f-situacao').addEventListener('change', render);
   $('btn-novo').addEventListener('click', () => abrir(null));
   $('btn-atualizar').addEventListener('click', carregar);
-  $('f-cancelar').addEventListener('click', () => $('dlg').close());
+  $('f-cancelar').addEventListener('click', fechar);
   $('form').addEventListener('submit', salvar);
+  document.querySelector('.form-tabs').addEventListener('click', (e) => { if (e.target.dataset.aba) mudarAba(e.target.dataset.aba); });
+  for (const id of ['f-numero', 'f-idse']) $(id).addEventListener('input', atualizarResumo);
+  $('f-liberado').addEventListener('change', atualizarResumo);
+  $('f-copiar').addEventListener('click', async () => {
+    $('f-link').select();
+    try { await navigator.clipboard.writeText($('f-link').value); toast('Link copiado.'); }
+    catch (_) { toast('Link selecionado: copie pelo teclado ou pelo menu.'); }
+  });
 
   (window._iahubAuthReady || Promise.resolve()).then(carregar);
 })();

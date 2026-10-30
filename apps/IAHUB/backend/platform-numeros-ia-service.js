@@ -66,6 +66,7 @@ function _paraTela(identity, roles) {
     compartilhado: outros.length > 0,
     papel: role.papel || svc.papel || 'analista',
     idSoftexpert: svc.idSoftexpert || roleMeta.idSoftexpert || role.codigo_identidade || '',
+    usuarioIdIahub: Number(svc.usuarioIdIahub || roleMeta.usuarioIdIahub) || null,
     preAnaliseAutomatica: svc.preAnaliseAutomatica !== false && roleMeta.preAnaliseAutomatica !== false,
     estiloResposta: normalizarEstilo(svc.estiloResposta ?? roleMeta.estiloResposta),
     criadoEm: identity.criado_em || null,
@@ -98,12 +99,27 @@ function _dadosIaService(d) {
   if (idSoftexpert.length > 40) throw _erro(400, 'ID SoftExpert inválido.');
   const papel = String(d.papel || 'analista').toLowerCase();
   if (!PAPEIS.includes(papel)) throw _erro(400, 'Perfil inválido.');
-  return {
+  const svc = {
     idSoftexpert,
     papel,
     preAnaliseAutomatica: d.preAnaliseAutomatica !== false,
     estiloResposta: validarEstilo(d.estiloResposta || 'NATURAL'),
   };
+  // Ausente = mantém o vínculo atual; vazio = tira o vínculo.
+  if (d.usuarioIdIahub !== undefined) {
+    const usuario = d.usuarioIdIahub === null || d.usuarioIdIahub === '' ? null : Number(d.usuarioIdIahub);
+    if (usuario !== null && !(Number.isInteger(usuario) && usuario > 0)) throw _erro(400, 'Usuário IAHub inválido.');
+    svc.usuarioIdIahub = usuario;
+  }
+  return svc;
+}
+
+// O login grava o usuário em consultores, que aceita um só telefone por usuário
+// e empresa: repetir aqui faria o login do segundo número falhar.
+function _conferirUsuarioLivre(eid, svc, identityId) {
+  if (!svc.usuarioIdIahub) return;
+  const outro = listar(eid).find(i => i.id !== identityId && i.usuarioIdIahub === svc.usuarioIdIahub);
+  if (outro) throw _erro(409, `Este usuário do IAHub já está vinculado ao número de ${outro.nome}.`);
 }
 
 function _gravarVinculo(db, eid, identity, svc, { liberado, stamp }) {
@@ -116,6 +132,7 @@ function _gravarVinculo(db, eid, identity, svc, { liberado, stamp }) {
     preAnaliseAutomatica: svc.preAnaliseAutomatica,
     estiloResposta: svc.estiloResposta,
   };
+  if ('usuarioIdIahub' in svc) meta.iaService.usuarioIdIahub = svc.usuarioIdIahub;
   db.prepare('UPDATE platform_whatsapp_identities SET metadata_json = ?, atualizado_em = ? WHERE empresa_id = ? AND id = ?')
     .run(JSON.stringify(meta), stamp, eid, identity.id);
 
@@ -125,11 +142,12 @@ function _gravarVinculo(db, eid, identity, svc, { liberado, stamp }) {
       INSERT INTO platform_identity_roles (id, identity_id, empresa_id, sistema, modulo, papel, codigo_identidade, liberado, metadata_json, criado_em, atualizado_em)
       VALUES (?, ?, ?, 'ia-service', 'chat-web', ?, ?, ?, ?, ?, ?)
     `).run(crypto.randomUUID(), identity.id, eid, svc.papel, svc.idSoftexpert, liberado === false ? 0 : 1,
-      JSON.stringify({ idSoftexpert: svc.idSoftexpert, preAnaliseAutomatica: svc.preAnaliseAutomatica }), stamp, stamp);
+      JSON.stringify({ idSoftexpert: svc.idSoftexpert, preAnaliseAutomatica: svc.preAnaliseAutomatica, ...('usuarioIdIahub' in svc ? { usuarioIdIahub: svc.usuarioIdIahub } : {}) }), stamp, stamp);
     return;
   }
   for (const r of chatWeb) {
     const rMeta = { ..._json(r.metadata_json), idSoftexpert: svc.idSoftexpert, preAnaliseAutomatica: svc.preAnaliseAutomatica };
+    if ('usuarioIdIahub' in svc) rMeta.usuarioIdIahub = svc.usuarioIdIahub;
     db.prepare(`
       UPDATE platform_identity_roles
          SET papel = ?, codigo_identidade = ?, liberado = ?, metadata_json = ?,
@@ -153,6 +171,8 @@ function salvar(empresaId, dados = {}) {
   if (numero.length < 10 || numero.length > 15) throw _erro(400, 'Telefone inválido. Informe DDI + DDD + número.');
   const nome = String(dados.nome || '').trim().slice(0, 120);
   const observacoes = String(dados.observacoes || '').trim().slice(0, 500);
+  // Ausente = mantém a situação atual (novo número nasce liberado).
+  const liberado = dados.liberado === undefined ? undefined : dados.liberado !== false;
   const db = getDB();
 
   return db.transaction(() => {
@@ -163,22 +183,25 @@ function salvar(empresaId, dados = {}) {
       if (porNumero) {
         const roles = _rolesDa(db, eid, porNumero.id);
         if (roles.some(_ehChatWeb)) throw _erro(409, 'Este número já está cadastrado no IA Service.');
-        _gravarVinculo(db, eid, porNumero, svc, { liberado: true, stamp });
-        return { id: porNumero.id, criado: false, vinculadoAExistente: true };
+        _conferirUsuarioLivre(eid, svc, porNumero.id);
+        _gravarVinculo(db, eid, porNumero, svc, { liberado: liberado !== false, stamp });
+        return { id: porNumero.id, criado: false, vinculadoAExistente: true, inativoCadastro: Number(porNumero.ativo) === 0 };
       }
       if (!nome) throw _erro(400, 'Informe o nome.');
+      _conferirUsuarioLivre(eid, svc, null);
       const id = crypto.randomUUID();
       db.prepare(`
         INSERT INTO platform_whatsapp_identities (id, empresa_id, nome, numero, numero_normalizado, observacoes, ativo, metadata_json, criado_em, atualizado_em)
         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
       `).run(id, eid, nome, numero, numero, observacoes, JSON.stringify({ tipo: 'analista' }), stamp, stamp);
-      _gravarVinculo(db, eid, db.prepare('SELECT * FROM platform_whatsapp_identities WHERE id = ?').get(id), svc, { liberado: true, stamp });
+      _gravarVinculo(db, eid, db.prepare('SELECT * FROM platform_whatsapp_identities WHERE id = ?').get(id), svc, { liberado: liberado !== false, stamp });
       return { id, criado: true };
     }
 
     const atual = db.prepare('SELECT * FROM platform_whatsapp_identities WHERE empresa_id = ? AND id = ?').get(eid, String(dados.id));
     const roles = atual ? _rolesDa(db, eid, atual.id) : [];
     if (!atual || !roles.some(_ehChatWeb)) throw _erro(404, 'Número não encontrado no IA Service.');
+    _conferirUsuarioLivre(eid, svc, atual.id);
     const compartilhado = roles.some(r => !_ehChatWeb(r));
     const trocouNumero = numero !== atual.numero_normalizado;
     if (compartilhado) {
@@ -189,7 +212,7 @@ function salvar(empresaId, dados = {}) {
       db.prepare('UPDATE platform_whatsapp_identities SET nome = ?, numero = ?, numero_normalizado = ?, observacoes = ?, atualizado_em = ? WHERE empresa_id = ? AND id = ?')
         .run(nome, numero, numero, observacoes, stamp, eid, atual.id);
     }
-    _gravarVinculo(db, eid, db.prepare('SELECT * FROM platform_whatsapp_identities WHERE id = ?').get(atual.id), svc, { stamp });
+    _gravarVinculo(db, eid, db.prepare('SELECT * FROM platform_whatsapp_identities WHERE id = ?').get(atual.id), svc, { liberado, stamp });
     return { id: atual.id, criado: false };
   }).immediate();
 }
@@ -210,4 +233,14 @@ function definirLiberado(empresaId, identityId, liberado) {
   }).immediate();
 }
 
-module.exports = { listar, salvar, definirLiberado, PAPEIS };
+/** Caminho que o analista abre para entrar no chat desta empresa. */
+function linkDeAcesso(empresaId) {
+  try {
+    const row = getDB().prepare('SELECT login_externo_apelido AS apelido FROM platform_ai_configs WHERE empresa_id = ?').get(Number(empresaId));
+    return row?.apelido ? `/iaservice/${row.apelido}` : '/iaservice';
+  } catch (_) {
+    return '/iaservice';
+  }
+}
+
+module.exports = { listar, salvar, definirLiberado, linkDeAcesso, PAPEIS };
