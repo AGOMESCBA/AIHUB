@@ -113,6 +113,16 @@
     /* ── Topbar ──────────────────────────────────────────────────────── */
     .isvc-topbar { padding: 0 16px; gap: 8px; }
     .isvc-topbar .topbar-title { font-weight: 800; flex: 1; min-width: 0; }
+    /* Mensagens: o chat fica dentro do Monitor de Acessos; o aviso, em qualquer rotina. */
+    .isvc-msg-btn { position: relative; flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--text-md); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+    .isvc-msg-btn:hover { color: var(--accent); border-color: var(--accent); }
+    .isvc-msg-btn[hidden], .isvc-msg-badge[hidden] { display: none; }
+    .isvc-msg-badge { position: absolute; top: -6px; right: -6px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 999px; background: #00a884; color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--bg-card); }
+    @media (max-width: 760px) {
+      .isvc-msg-txt { display: none; }
+      .isvc-msg-btn { width: 40px; height: 40px; padding: 0; justify-content: center; }
+      .isvc-msg-badge { top: -3px; right: -4px; }
+    }
   </style>
 </head>
 <body>
@@ -139,6 +149,11 @@
         </svg>
       </button>
       <span class="topbar-title" id="shell-title">IA Service</span>
+      <button class="isvc-msg-btn" id="shell-mensagens" type="button" title="Mensagens da equipe" aria-label="Mensagens da equipe" hidden>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.6 8.6 0 0 1-3.9-.9L3 20.5l1.6-4.6A8.4 8.4 0 1 1 21 11.5Z"/></svg>
+        <span class="isvc-msg-txt">Mensagens</span>
+        <span class="isvc-msg-badge" id="shell-mensagens-qtd" hidden></span>
+      </button>
     </div>
 
     <div class="mdi-tabbar-wrap">
@@ -180,6 +195,40 @@
     window.openTab(url, label, icon);
     window.closeSidebarDrawer?.();
   });
+
+  // Aviso de mensagem não lida em qualquer rotina (2026-10-30). Só aparece para
+  // quem pode usar as Mensagens: rotina do Monitor e número vinculado ao usuário
+  // (a própria API recusa os demais). Lê o total, não abre nenhuma conversa.
+  (function avisoMensagens() {
+    const botao = document.getElementById('shell-mensagens');
+    const qtd = document.getElementById('shell-mensagens-qtd');
+    const tituloBase = document.title.replace(/^\(\d+\)\s*/, '');
+    async function atualizar() {
+      const empresaId = window._iahubEmpresa?.id;
+      if (!empresaId) return;
+      try {
+        const r = await fetch(`/api/ia-service/monitor-acessos/chat-interno/contatos?empresa_id=${encodeURIComponent(empresaId)}`, { cache: 'no-store' });
+        if (!r.ok) throw new Error(String(r.status));
+        const n = (await r.json()).naoLidasTotal || 0;
+        botao.hidden = false;
+        qtd.hidden = n === 0;
+        qtd.textContent = n > 99 ? '99+' : String(n);
+        botao.setAttribute('aria-label', n ? `Mensagens da equipe: ${n} não lida(s)` : 'Mensagens da equipe');
+        document.title = n ? `(${n}) ${tituloBase}` : tituloBase;
+      } catch (_) {
+        botao.hidden = true;
+        document.title = tituloBase;
+      }
+    }
+    botao.addEventListener('click', () => {
+      try { sessionStorage.setItem('iasvc_abrir_mensagens', '1'); } catch (_) { /* abre só o Monitor */ }
+      window.openTab('/app/ia-service/monitor-acessos.html', 'Monitor de Acessos', '📡');
+    });
+    window._iahubAuthReady?.then(atualizar);
+    setInterval(atualizar, 30 * 1000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) atualizar(); });
+    window.addEventListener('iasvc:empresa-trocada', atualizar);
+  })();
 
   // Monitor de Acessos (2026-10): sinal de presença a cada 30s, só com a
   // janela visível. Tela = aba ativa do MDI (lida do título do topo, que o
@@ -254,6 +303,7 @@
             window._iahubEmpresa = { id: emp.id, nome: empresaNome };
             window._iahubAtualizarEmpresaBadge?.({ id: emp.id, nome: empresaNome });
             await window.trocarEmpresaTodasAbas?.(emp.id, empresaNome);
+            window.dispatchEvent(new Event('iasvc:empresa-trocada'));
           }
 
           const drop = document.getElementById('_empresa-dropdown');

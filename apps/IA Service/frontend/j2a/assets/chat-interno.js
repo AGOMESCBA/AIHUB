@@ -650,10 +650,13 @@
       if (!c || !c.conversaId) { await carregarContatos().catch(() => null); c = contato(m.remetenteId); recarregou = true; }
       if (!c) return;
       c.conversaId = m.conversaId;
+      const ultimaAntes = c.ultimaMensagem;
       c.ultimaMensagem = { texto: Array.from(m.texto).slice(0, 140).join(''), em: m.criadoEm, minha: false };
       if (vendoAgora) c.naoLidas = 0;
       else {
-        if (!recarregou) c.naoLidas = (c.naoLidas || 0) + 1;
+        // A conferência de 30s pode já ter contado esta mensagem.
+        const jaContada = ultimaAntes && !ultimaAntes.minha && ultimaAntes.em === m.criadoEm;
+        if (!recarregou && !jaContada) c.naoLidas = (c.naoLidas || 0) + 1;
         // Painel aberto: a lista e o contador já mostram a novidade (modelo WhatsApp Web).
         if (!st.aberto || document.hidden) balao(c, m);
         if (document.hidden) notificarSistema(c, m);
@@ -672,19 +675,36 @@
       atualizarMensagensSemPerderTexto();
     }
 
-    // Sem socket: a cada 30s compara as não lidas e avisa o que chegou.
+    // A cada 30s confere as não lidas no servidor, mesmo com o tempo real ligado:
+    // um socket "conectado" que parou de entregar (rede, proxy, aparelho em
+    // segundo plano) deixava o contador do ícone zerado até recarregar a página.
     async function sincronizar(forcar = false) {
-      if (st.socket?.connected && !forcar) return;
+      const tempoReal = st.socket?.connected && !forcar;
       const antes = new Map(st.contatos.map((c) => [c.consultorId, c.naoLidas || 0]));
       await carregarContatos().catch(() => null);
+      const conversaAberta = st.aberto && st.view === 'conversa' ? st.conversa : null;
+      let novidade = false;
       for (const c of st.contatos) {
-        if ((c.naoLidas || 0) > (antes.get(c.consultorId) || 0) && c.ultimaMensagem && !c.ultimaMensagem.minha) {
-          const m = { conversaId: c.conversaId, texto: c.ultimaMensagem.texto, criadoEm: c.ultimaMensagem.em, transmissao: false };
-          balao(c, m);
-          if (document.hidden) notificarSistema(c, m);
+        if ((c.naoLidas || 0) <= (antes.get(c.consultorId) || 0) || !c.ultimaMensagem || c.ultimaMensagem.minha) continue;
+        // Com o tempo real ligado, mensagem bem recente ainda pode estar a caminho
+        // por ele: o balão fica para a chegada, sem repetir.
+        if (tempoReal && Date.now() - new Date(c.ultimaMensagem.em).getTime() < 5000) continue;
+        novidade = true;
+        if (conversaAberta?.id === c.conversaId && !document.hidden) continue;
+        const m = { conversaId: c.conversaId, texto: c.ultimaMensagem.texto, criadoEm: c.ultimaMensagem.em, transmissao: false };
+        balao(c, m);
+        if (document.hidden) notificarSistema(c, m);
+      }
+      if (tempoReal && !novidade) return;
+      request(api('/entregues'), { method: 'POST', body: JSON.stringify({}) }).catch(() => null);
+      if (conversaAberta && !document.hidden) {
+        const c = contatoDaConversa(conversaAberta.id);
+        if (c?.naoLidas) {
+          c.naoLidas = 0;
+          atualizarContador();
+          request(api(`/conversas/${encodeURIComponent(conversaAberta.id)}/vistas`), { method: 'POST' }).catch(() => null);
         }
       }
-      request(api('/entregues'), { method: 'POST', body: JSON.stringify({}) }).catch(() => null);
       if (st.aberto && st.view === 'conversa' && st.conversa) {
         const conversa = st.conversa;
         const r = await request(api(`/conversas/${encodeURIComponent(conversa.id)}/mensagens`)).catch(() => null);
@@ -818,6 +838,8 @@
       if (e.target.id === 'ci-form-todos') enviarTodos();
     });
     document.addEventListener('visibilitychange', () => {
+      // Voltou para a aba ou o aparelho: o contador não espera os 30s.
+      if (!document.hidden && st.ativo) sincronizar(true).catch(() => null);
       if (document.hidden || !st.aberto || st.view !== 'conversa' || !st.conversa) return;
       const c = contato(st.conversa.consultorId);
       if (c) c.naoLidas = 0;

@@ -810,6 +810,13 @@
     chat.api.start();
     chat.ok = true;
     render();
+    // Veio pelo ícone de Mensagens do topo do IA Service (shell.html).
+    try {
+      if (sessionStorage.getItem('iasvc_abrir_mensagens')) {
+        sessionStorage.removeItem('iasvc_abrir_mensagens');
+        document.querySelector('.monitor-actions .ci-botao')?.click();
+      }
+    } catch (_) { /* sem storage: só não abre sozinho */ }
   }
 
   function blocoMensagem(s) {

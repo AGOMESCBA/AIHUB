@@ -169,6 +169,8 @@
   .ci-compor textarea { min-width:0; min-height:44px; padding:10px 14px; max-height:clamp(44px, calc(var(--chat-vh, 100dvh) * .18), 120px); }
   .ci-icone, .ci-enviar, .ci-menu-conversa summary { width:44px; height:44px; }
   .ci-botao, .topbar .ci-botao { min-width:44px; height:44px; justify-content:center; }
+  /* No topo de 52px o contador não pode passar da borda da tela. */
+  .topbar .ci-badge { top:-2px; right:-3px; }
   .ci-acoes-msg button, .ci-menu-conversa button, .ci-selecao button, .ci-btn-primario { min-height:44px; }
   /* Área de toque de 44px sem aumentar a setinha nem o balão. */
   .ci-acoes-msg summary::after { content:''; position:absolute; inset:-10px; }
