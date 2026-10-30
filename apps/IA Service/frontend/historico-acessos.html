@@ -2,9 +2,10 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
   <title>Histórico de Acessos - IA Service</title>
   <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="/app/ia-service/css/iaservice-mobile.css">
   <style>
     /* Grade no mesmo padrão do Histórico de Interpretações do IA Command
        (admin-interpretacoes-v2.html): agrupamento por arrastar, grupos
@@ -108,10 +109,75 @@
     @media (max-width:900px) {
       .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
       .group-target-row { align-items:stretch;flex-direction:column; }
-      .modos .dica { display:none; }
+      .modos .dica { flex:1 1 100%;margin-left:0;padding:0 4px 8px; }
       .espaco { display:none; }
       .datas { flex-wrap:wrap; }
       .datas input { flex:1 1 120px;min-width:0; }
+    }
+
+    /* Celular (2026-10-30): cada acesso vira um cartão, com rolagem única da tela.
+       Filtro e ordenação das colunas ficam em "Filtrar e ordenar"; ações menos
+       usadas em "Mais". Desktop: .cel não altera a célula. */
+    .cel { display:contents; }
+    #btn-mais, #toggle-filtros, .so-toque { display:none; }
+    @media (max-width:760px) {
+      .barra { padding:10px; }
+      .barra-titulo { display:none; }
+      .barra .btn { height:40px;justify-content:center; }
+      .barra .sel { flex:1 1 130px;min-width:0;height:40px; }
+      #origem { order:1; }
+      #periodo { order:2; }
+      .barra #btn-atualizar { order:3;flex:0 0 44px;padding:0; }
+      .datas { order:5;flex:1 1 100%; }
+      .datas input { height:40px; }
+      .barra #toggle-resumo { order:6;flex:1 1 22%; }
+      .barra #toggle-grupo { order:7;flex:1 1 38%;min-width:0;display:block;overflow:hidden;text-overflow:ellipsis; }
+      .barra #btn-mais { order:8;display:inline-flex;flex:1 1 18%; }
+      .barra .bar-extra { order:9;flex:1 1 40%; }
+      .barra:not(.mais-aberto) .bar-extra { display:none; }
+      .group-chip { height:38px; }
+      .group-target-row .btn { min-height:40px; }
+      .group-dropzone { min-width:0; }
+      .so-mouse { display:none; }
+      .so-toque { display:inline; }
+
+      .modos { padding:0 8px; }
+      .modo { padding:10px 8px; }
+      .modos #toggle-filtros { display:inline-flex;align-items:center;min-height:36px;margin:6px 0 6px auto; }
+
+      .table-wrap { height:auto;min-height:0;overflow:visible; }
+      .grid { display:block;min-width:0 !important;table-layout:auto; }
+      .grid colgroup { display:none; }
+      .grid thead { display:none; }
+      .table-card.filtros-abertos .grid thead { display:block;padding:10px 12px;border-bottom:1px solid var(--border); }
+      .grid thead tr { display:flex;flex-wrap:wrap;gap:6px; }
+      .grid thead tr th { position:static;padding:7px 10px;border:1px solid var(--border);border-radius:6px;overflow:visible; }
+      .grid thead .filter-cell { display:block;margin-top:10px; }
+      .grid thead .filter-cell th { position:static;display:block;padding:0 0 8px;border:none;white-space:normal;text-transform:none;letter-spacing:0;font-weight:600; }
+      .grid thead .filter-cell th:empty { display:none; }
+      .grid thead .filter-cell th::before { content:attr(data-rot);display:block;margin-bottom:3px;font-size:12px;color:var(--text-md); }
+      .grid thead input, .grid thead select { height:40px; }
+
+      .grid tbody { display:block; }
+      .grid tbody tr.data-row { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px;padding:10px 12px;border-bottom:1px solid var(--border); }
+      .grid tbody tr.data-row td { display:block;min-width:0;padding:0;border:none;background:transparent;overflow:visible; }
+      .grid tbody tr.data-row td::before { content:attr(data-rot);display:block;margin-bottom:1px;color:var(--text-lo);font-size:11px; }
+      .grid tbody tr.data-row td[data-rot="Usuário"] { grid-column:1 / -1;order:-1; }
+      .grid tbody tr.data-row td[data-rot="Chamados"], .grid tbody tr.data-row td[data-rot="Motivo"] { grid-column:1 / -1; }
+      .cel { display:block;min-width:0; }
+      .nome, .num, .mono, .disp-nav, .badge { white-space:normal; }
+      .uso .medidor { max-width:90px; }
+      .grid tbody tr.group-row { display:block; }
+      .grid tbody tr.group-row td { display:block;padding:9px 12px;line-height:1.45; }
+      .group-toggle-btn { width:30px;height:30px; }
+      .group-resumo { display:block;margin:2px 0 0 38px; }
+      .empty-state { height:160px; }
+
+      .modal-backdrop { padding:12px; }
+      .modal { padding:16px;max-height:calc(var(--iasvc-vh,100dvh) - 24px);overflow:auto; }
+      .date-row { grid-template-columns:minmax(0,1fr); }
+      .modal-actions { flex-wrap:wrap; }
+      .modal-actions .btn { flex:1 1 auto;min-height:42px;justify-content:center; }
     }
   </style>
 </head>
@@ -125,6 +191,7 @@
     <div class="sidebar-nav"></div>
     <div class="sidebar-footer"></div>
   </nav>
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebarDrawer()" aria-hidden="true"></div>
 
   <div class="main">
     <div class="topbar">
@@ -157,10 +224,11 @@
           </span>
           <button class="btn btn-ghost btn-toggle" id="toggle-resumo" type="button" aria-expanded="false" aria-controls="painel-resumo" title="Mostrar/recolher os cartões de resumo">Resumo</button>
           <button class="btn btn-ghost btn-toggle" id="toggle-grupo" type="button" aria-expanded="false" aria-controls="painel-grupo" title="Mostrar/recolher o agrupamento">Agrupar</button>
+          <button class="btn btn-ghost" id="btn-mais" type="button" aria-expanded="false" title="Mais ações">Mais</button>
           <span class="espaco"></span>
-          <a class="btn btn-ghost" href="/app/ia-service/monitor-acessos.html" title="Quem está conectado agora">Monitor ao vivo</a>
-          <button class="btn btn-ghost" id="btn-csv" type="button" title="Baixa as linhas filtradas em CSV (abre no Excel)">Exportar</button>
-          <button class="btn btn-excluir" id="btn-excluir" type="button" title="Apaga do histórico os acessos e falhas de um período">Excluir período</button>
+          <a class="btn btn-ghost bar-extra" href="/app/ia-service/monitor-acessos.html" title="Quem está conectado agora">Monitor ao vivo</a>
+          <button class="btn btn-ghost bar-extra" id="btn-csv" type="button" title="Baixa as linhas filtradas em CSV (abre no Excel)">Exportar</button>
+          <button class="btn btn-excluir bar-extra" id="btn-excluir" type="button" title="Apaga do histórico os acessos e falhas de um período">Excluir período</button>
           <button class="btn btn-primary" id="btn-atualizar" type="button" title="Atualizar">↻</button>
         </div>
         <div class="barra-corpo" id="painel-resumo" hidden>
@@ -183,6 +251,7 @@
         <div class="modos" role="tablist" aria-label="O que mostrar">
           <button class="modo" role="tab" type="button" data-modo="acessos" title="Tempo logado = da entrada até a saída/último sinal · Tempo de tela = só com a tela visível">Acessos<span class="qtd" id="q-acessos">0</span></button>
           <button class="modo" role="tab" type="button" data-modo="falhas" title="Login por telefone do Radar J2A que não terminou em acesso">Falhas de login<span class="qtd" id="q-falhas">0</span></button>
+          <button class="btn btn-ghost" id="toggle-filtros" type="button" aria-expanded="false" aria-controls="thead">Filtrar e ordenar</button>
           <span class="dica"><span id="count">carregando...</span><span id="dica"></span><button class="link-limpar" id="limpar-filtros" type="button" hidden>Limpar filtros</button></span>
         </div>
         <div class="table-wrap" id="table-wrap">
@@ -219,11 +288,13 @@
 </div>
 
 <script src="/js/auth.js"></script>
+<script src="/app/ia-service/js/mobile-viewport.js"></script>
 <script src="/app/ia-service/js/sidebar.js"></script>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
   const ESTADO_KEY = 'iasvc_historico_acessos_grid';
+  const telaCelular = window.matchMedia('(max-width:760px)');
 
   // ── Formatação ──────────────────────────────────────────────────────────────
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -453,7 +524,7 @@
     return partes.join(' · ');
   }
   function linhaDados(row) {
-    return `<tr class="data-row">${cols().map((c) => `<td>${c.html(row)}</td>`).join('')}</tr>`;
+    return `<tr class="data-row">${cols().map((c) => `<td data-rot="${esc(c.rot)}"><div class="cel">${c.html(row)}</div></td>`).join('')}</tr>`;
   }
   function renderAgrupado(partes, rows, nivel, caminho) {
     const grupos = st.grupos[st.modo];
@@ -492,8 +563,8 @@
     const filtros = c.map((col) => {
       const v = st.filtros[st.modo][col.k] || '';
       if (!col.filtro) return '<th></th>';
-      if (col.filtro === 'texto') return `<th><input type="search" name="filtro-historico-${st.modo}-${col.k}" data-filter="${col.k}" value="${esc(v)}" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore aria-label="Filtrar ${esc(col.rot)}"></th>`;
-      return `<th><select data-filter="${col.k}" aria-label="Filtrar ${esc(col.rot)}"><option value="">Todos</option>${Object.entries(col.filtro.opcoes)
+      if (col.filtro === 'texto') return `<th data-rot="${esc(col.rot)}"><input type="search" name="filtro-historico-${st.modo}-${col.k}" data-filter="${col.k}" value="${esc(v)}" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore aria-label="Filtrar ${esc(col.rot)}"></th>`;
+      return `<th data-rot="${esc(col.rot)}"><select data-filter="${col.k}" aria-label="Filtrar ${esc(col.rot)}"><option value="">Todos</option>${Object.entries(col.filtro.opcoes)
         .map(([ov, ot]) => `<option value="${esc(ov)}"${ov === v ? ' selected' : ''}>${esc(ot)}</option>`).join('')}</select></th>`;
     }).join('');
     $('thead').innerHTML = `<tr>${titulos}</tr><tr class="filter-cell">${filtros}</tr>`;
@@ -505,14 +576,14 @@
     $('painel-grupo').hidden = !st.painelGrupo;
     $('toggle-grupo').setAttribute('aria-expanded', String(st.painelGrupo));
     $('toggle-grupo').textContent = ativos.length ? `Agrupar: ${ativos.map((g) => defs[g].rot).join(' › ')}` : 'Agrupar';
-    $('group-options').innerHTML = '<span class="panel-status">Arraste para agrupar:</span>'
+    $('group-options').innerHTML = '<span class="panel-status"><span class="so-mouse">Arraste para agrupar:</span><span class="so-toque">Toque para agrupar:</span></span>'
       + Object.entries(defs).map(([g, d]) => `<button class="group-chip${ativos.includes(g) ? ' active' : ''}" type="button" draggable="true" data-group-field="${g}">${esc(d.rot)}</button>`).join('')
       + `<div class="group-target-row"><button class="btn btn-ghost" id="group-clear" type="button">Limpar agrupamento</button>`
       + `<button class="btn btn-ghost" id="group-recolher" type="button"${ativos.length ? '' : ' disabled'}>Recolher todos</button>`
       + `<button class="btn btn-ghost" id="group-expandir" type="button"${ativos.length ? '' : ' disabled'}>Expandir todos</button>`
       + `<div class="group-dropzone" id="group-dropzone">${ativos.length
         ? ativos.map((g) => `<span class="active-group-chip" draggable="true" data-active-group="${g}" title="Arraste para reordenar">${esc(defs[g].rot)}<button class="active-group-remove" type="button" data-remove-group="${g}" title="Remover agrupamento" aria-label="Remover ${esc(defs[g].rot)}">×</button></span>`).join('')
-        : 'Solte um campo aqui para agrupar'}</div></div>`;
+        : '<span class="so-mouse">Solte um campo aqui para agrupar</span><span class="so-toque">Nenhum agrupamento</span>'}</div></div>`;
   }
 
   function renderPainelFiltros() {
@@ -550,6 +621,8 @@
     const filtrosAtivos = Object.values(st.filtros[st.modo]).some(Boolean);
     $('count').textContent = `${periodoTexto()} · ${filtrosAtivos ? `${rows.length} de ${total}` : rows.length} ${st.modo === 'acessos' ? 'acesso(s)' : 'falha(s)'}${st.dados.truncado ? ' · limitado aos 5.000 mais recentes' : ''}`;
     $('limpar-filtros').hidden = !filtrosAtivos;
+    const qtdFiltros = Object.values(st.filtros[st.modo]).filter(Boolean).length;
+    $('toggle-filtros').textContent = qtdFiltros ? `Filtrar e ordenar (${qtdFiltros})` : 'Filtrar e ordenar';
     $('empty-state').style.display = rows.length ? 'none' : 'flex';
     $('empty-state').textContent = total ? 'Nenhuma linha com esses filtros.' : (st.modo === 'acessos' ? 'Nenhum acesso no período.' : 'Nenhuma falha de login no período.');
     const partes = [];
@@ -562,6 +635,8 @@
   // A grade ocupa o resto da tela (recolher os painéis aumenta a área útil).
   function ajustarAltura() {
     const wrap = $('table-wrap');
+    // Celular: cartões na rolagem da própria tela, sem área de rolagem interna.
+    if (telaCelular.matches) { wrap.style.height = ''; return; }
     const topo = wrap.getBoundingClientRect().top + window.scrollY;
     wrap.style.height = `${Math.max(360, window.innerHeight - topo - 16)}px`;
   }
@@ -665,6 +740,14 @@
   // ── Eventos ─────────────────────────────────────────────────────────────────
   $('toggle-resumo').addEventListener('click', () => { st.painelResumo = !st.painelResumo; salvarEstado(); renderPainelFiltros(); ajustarAltura(); });
   $('toggle-grupo').addEventListener('click', () => { st.painelGrupo = !st.painelGrupo; salvarEstado(); renderPainelGrupo(); ajustarAltura(); });
+  $('btn-mais').addEventListener('click', () => {
+    const aberto = document.querySelector('.barra').classList.toggle('mais-aberto');
+    $('btn-mais').setAttribute('aria-expanded', String(aberto));
+  });
+  $('toggle-filtros').addEventListener('click', () => {
+    const aberto = document.querySelector('.table-card').classList.toggle('filtros-abertos');
+    $('toggle-filtros').setAttribute('aria-expanded', String(aberto));
+  });
   $('origem').addEventListener('change', (e) => {
     st.origem = e.target.value;
     if (st.origem !== 'todos') delete st.filtros.acessos.origem;

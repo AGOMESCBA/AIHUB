@@ -695,7 +695,7 @@
     const composer = $('composer');
     if (composer) composer.classList.toggle('somente-leitura', ro);
     const msg = $('message-input');
-    if (msg) msg.placeholder = ro ? 'Chamado encerrado: somente consulta.' : 'Digite sua mensagem para a IA Service...';
+    if (msg) msg.placeholder = ro ? 'Chamado encerrado: somente consulta.' : 'Digite sua mensagem...';
     const pesquisar = $('research-btn');
     if (pesquisar) { pesquisar.disabled = ro || pesquisar.disabled; pesquisar.title = ro ? 'Chamado encerrado: pesquisa indisponivel' : 'Pesquisar Soluções'; }
     const aviso = $('case-readonly-banner');
@@ -2533,6 +2533,7 @@
     $('composer').addEventListener('submit', sendMessage);
     $('message-input').addEventListener('input', ajustarAlturaMensagem);
     window.addEventListener('resize', ajustarAlturaMensagem);
+    window.addEventListener('iaservice:viewportchange', ajustarAlturaMensagem);
     $('file-input').addEventListener('change', (event) => {
       state.pendingFiles = [...event.target.files];
       renderPendingFiles();

@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
   <title>IA Service - Radar de Chamados</title>
   <link rel="stylesheet" href="/iaservice/assets/radar.css">
   <link rel="stylesheet" href="/iaservice/assets/retorno-softexpert.css">
@@ -280,7 +280,7 @@
                 <input id="file-input" type="file" multiple hidden>
                 <div class="composer-main">
                   <div id="pending-files" class="pending-files"></div>
-                  <textarea id="message-input" rows="1" placeholder="Digite sua mensagem para a IA Service..."></textarea>
+                  <textarea id="message-input" rows="1" placeholder="Digite sua mensagem..." aria-label="Mensagem para a IA Service"></textarea>
                 </div>
                 <button id="send-btn" type="submit" aria-label="Enviar mensagem" title="Enviar mensagem"><span class="send-icon" aria-hidden="true">➤</span><span class="send-trail" aria-hidden="true"></span></button>
               </form>
@@ -377,6 +377,7 @@
       </div>
     </div>
   </div>
+  <script src="/iaservice/assets/mobile-viewport.js"></script>
   <script src="/iaservice/assets/tab-export.js"></script>
   <script src="/iaservice/assets/retorno-softexpert.js"></script>
   <script src="/iaservice/assets/detalhes-tecnicos.js"></script>

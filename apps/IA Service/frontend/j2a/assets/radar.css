@@ -1541,7 +1541,14 @@ body.col-resizing { cursor: col-resize; user-select: none; }
   .hero-copy h2 { font-size: 28px; }
   .otp-visual { display: none; }
   .access-form-wrap { padding: 24px; }
-  .radar-screen { min-height: 100vh; height: auto; grid-template-rows: 54px 1fr 48px; }
+  .radar-screen {
+    position: relative;
+    top: var(--chat-top, 0px);
+    min-height: 0;
+    height: var(--chat-vh, 100dvh);
+    grid-template-rows: 54px minmax(0, 1fr) auto;
+    overflow: hidden;
+  }
   .topbar { grid-template-columns: auto 1fr auto; padding: 0 12px; gap: 8px; }
   .topbar-nav > .nav-item[data-panel-tab="risk"] { display: none; }
   .account-copy, .help-button strong { display: none; }
@@ -1554,32 +1561,48 @@ body.col-resizing { cursor: col-resize; user-select: none; }
   .topbar-nav { min-width: 0; }
   .radar-layout {
     display: block;
-    min-height: calc(100vh - 102px);
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
     padding: 0;
   }
   .panel { border-radius: 0; border-left: 0; border-right: 0; box-shadow: none; }
-  .queue-panel, .workspace { display: none; min-height: calc(100vh - 102px); }
+  .queue-panel, .workspace { display: none; min-height: 0; height: 100%; }
+  .queue-list, .messages, .tab-panel { overscroll-behavior: contain; }
+  .queue-panel { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); }
+  .queue-tools, .queue-tools input { min-width: 0; }
+  .queue-tools { max-height: calc(var(--chat-vh, 100dvh) * .55); overflow-y: auto; }
+  .queue-options { flex-wrap: wrap; }
+  #panel-conversation.active { grid-template-rows: auto minmax(0, 1fr) auto; }
+  #case-readonly-banner { grid-row: 1; }
+  #messages { grid-row: 2; }
+  #composer { grid-row: 3; }
   .radar-layout.mobile-queue .queue-panel,
   .radar-layout.mobile-conversation .workspace,
   .radar-layout.mobile-more .workspace { display: grid; }
   .radar-layout.mobile-more #panel-conversation { display: none; }
   .radar-layout.mobile-more .case-view { grid-template-rows: auto auto 1fr; }
   .case-header { padding: 10px 12px; }
+  .case-second-row { max-height: min(80px, calc(var(--chat-vh, 100dvh) * .12)); overflow: auto; }
+  .case-description { max-height: min(140px, calc(var(--chat-vh, 100dvh) * .22)); overflow: auto; }
   .case-top-row { flex-wrap: wrap; }
   .case-title-block { min-width: 100%; }
   .case-actions { justify-content: flex-end; }
   .messages { padding: 12px; }
   .message { max-width: 90%; }
   .composer { padding: 10px 12px; }
+  .composer textarea { max-height: clamp(40px, calc(var(--chat-vh, 100dvh) * .18), 120px); }
+  .pending-files { overflow-wrap: anywhere; max-height: 60px; overflow-y: auto; }
+  .composer > .attach-button, .composer > #send-btn { width: 44px; height: 44px; }
+  .composer { grid-template-columns: 44px minmax(0, 1fr) 44px; }
   .risk-toolbar { grid-template-columns: 1fr; }
   .risk-layout, .risk-layout.consultants-collapsed { grid-template-columns: 1fr; min-height: 360px; }
   .risk-layout.consultants-collapsed .risk-consultants-head { flex-direction: row; justify-content: space-between; padding: 9px 12px; }
   .risk-layout.consultants-collapsed .risk-consultants-head span { writing-mode: horizontal-tb; transform: none; }
   .risk-consultants { max-height: 180px; border-right: 0; border-bottom: 1px solid var(--line); }
   .mobile-nav {
-    position: sticky;
-    bottom: 0;
-    height: 48px;
+    min-height: 48px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     border-top: 1px solid var(--line);
@@ -1594,6 +1617,12 @@ body.col-resizing { cursor: col-resize; user-select: none; }
   }
   .mobile-nav button.active { color: var(--brand); }
   .info-grid { grid-template-columns: 1fr; }
+  .radar-screen input:not([type="checkbox"]):not([type="radio"]), .radar-screen select, .radar-screen textarea,
+  .avaliacao-modal select, .avaliacao-modal textarea { font-size: 16px; }
+  .avaliacao-modal-backdrop { top: var(--chat-top, 0px); bottom: auto; height: var(--chat-vh, 100dvh); padding: 12px; }
+  .avaliacao-modal { max-height: calc(var(--chat-vh, 100dvh) - 24px); }
+  .avaliacao-modal-head { flex-shrink: 0; }
+  .avaliacao-modal-close-btn { width: 44px; height: 44px; flex-shrink: 0; }
 }
 
 @media (max-width: 520px) {
@@ -1614,7 +1643,11 @@ body.col-resizing { cursor: col-resize; user-select: none; }
 .routine-title { padding: 10px 16px 6px; font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted, #8fa3b8); border-bottom: 1px solid var(--border, rgba(255,255,255,.08)); }
 
 @media (max-width: 600px) {
+  .topbar { padding: 0 8px; gap: 6px; }
   .topbar-brand > div:last-child { display: none; }
+  /* Chamados já está na navegação inferior; reserva espaço ao chat da equipe. */
+  .topbar-nav > [data-panel-tab="conversation"] { display: none; }
+  .help-button, .account-summary { width: 44px; min-height: 44px; }
   .topbar-nav { gap: 3px; }
   .topbar-nav .nav-item { padding-left: 7px; padding-right: 7px; font-size: 12px; }
 }

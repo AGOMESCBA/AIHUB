@@ -2,10 +2,11 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
   <title>Monitor de Acessos - IA Service</title>
   <link rel="stylesheet" href="/css/iahub.css">
   <link rel="stylesheet" href="/iaservice/assets/chat-interno.css">
+  <link rel="stylesheet" href="/app/ia-service/css/iaservice-mobile.css">
   <style>
     /* Só tokens do iahub.css (tema claro/escuro do sistema via data-theme) —
        mesma sobrescrita de accent das demais páginas do IA Service. */
@@ -198,6 +199,69 @@
     .sessoes-lista li { padding:8px 10px;border:1px solid var(--border, rgba(127,127,127,.25));border-radius:8px;font-size:12.5px;line-height:1.45; }
     .sessoes-lista li .badge { margin-right:6px; }
     @media (prefers-reduced-motion:reduce) { .pulse::after, .mon-table tr.flash td, #btn-refresh.girando svg { animation:none; } #btn-resumo svg { transition:none; } }
+
+    /* Celular (2026-10-30): a lista aparece na primeira tela, em cartões; os
+       controles menos usados ficam em "Mais". Desktop: .cel não altera a célula
+       e os itens só de celular ficam ocultos. */
+    .cel { display:contents; }
+    #btn-mais, .td-msg { display:none; }
+    @media (max-width:760px) {
+      .page-head { margin-bottom:8px; }
+      .page-kicker, .page-subtitle { display:none; }
+      /* Dentro do shell o nome da tela já está na aba (#_mdi-emp-bar só existe lá). */
+      body:has(#_mdi-emp-bar) .page-head { display:none; }
+      .page-title { font-size:17px; }
+      .mon-stack { gap:8px; }
+
+      .refresh-bar { padding:10px;gap:8px; }
+      .refresh-bar .filters, .refresh-bar .bar-direita, .refresh-bar .monitor-actions { display:contents; }
+      .refresh-bar #busca { flex:1 1 100%;max-width:none;order:0; }
+      .refresh-bar .btn, .refresh-bar .ci-botao { min-height:40px;justify-content:center; }
+      .refresh-bar .ci-botao { display:inline-flex;flex:1 1 30%;order:1; }
+      .refresh-bar .ci-botao-txt { display:inline; }
+      .refresh-bar #btn-refresh { flex:1 1 25%;order:2; }
+      .refresh-bar #btn-mais { display:inline-flex;flex:1 1 20%;order:3; }
+      #btn-mais svg { transition:transform .2s; }
+      #btn-mais[aria-expanded="true"] svg { transform:rotate(180deg); }
+      .refresh-bar .bar-extra { flex:1 1 45%;order:4; }
+      .refresh-bar .desc-wrap .btn { width:100%; }
+      .refresh-bar .refresh-controls { flex:1 1 100%;order:5;justify-content:space-between; }
+      .refresh-bar:not(.mais-aberto) .bar-extra { display:none; }
+
+      .kpis { gap:6px; }
+      .kpi { grid-template-columns:minmax(0,1fr) auto;padding:6px 10px; }
+      .kpi-label { font-size:10px;letter-spacing:.03em;gap:5px; }
+      .kpi-value { font-size:17px; }
+      .kpi-foot { display:none; }
+
+      .grid-toolbar { padding:8px 12px;gap:2px 8px; }
+      .grid-title, .grid-status .hint { display:none; }
+      .tabela-wrap { overflow:visible; }
+      .mon-table { display:block;min-width:0; }
+      .mon-table thead { display:none; }
+      .mon-table tbody { display:block; }
+      .mon-table tbody tr[data-id] { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px;padding:10px 12px;border-bottom:1px solid var(--border); }
+      .mon-table tbody tr:not([data-id]) { display:block; }
+      .mon-table td { display:block;padding:0;border:none;font-size:12.5px;min-width:0; }
+      .mon-table td[data-rot]::before { content:attr(data-rot);display:block;margin-bottom:1px;color:var(--text-md);font-size:11px; }
+      .mon-table td:first-child, .mon-table td[data-rot="Fazendo"], .mon-table .td-msg { grid-column:1 / -1; }
+      .cel { display:block;min-width:0; }
+      .nome, .tela span { white-space:normal;max-width:none; }
+      .barra { width:100%;max-width:140px; }
+      .mon-table .td-msg { display:block; }
+      .td-msg:empty { display:none !important; }
+      .td-msg .btn { width:100%;min-height:40px;justify-content:center; }
+
+      .gaveta.sobreposta { bottom:auto;height:var(--iasvc-vh,100dvh);overscroll-behavior:contain; }
+      .gv-head { padding:12px;gap:10px; }
+      .gv-head .avatar { width:36px;height:36px;font-size:13px; }
+      .gv-btn { width:38px;height:38px; }
+      .gv-btn[data-gv="ampliar"], .gaveta .gv-pos { display:none; }
+      .gv-col:first-child { display:flex;flex-direction:column; }
+      .gv-sec-msg { order:-1; }
+      .gv-sec-msg .btn { flex:1 1 100%;min-height:42px;justify-content:center; }
+      .gv-sec .btn { min-height:40px; }
+    }
   </style>
 </head>
 <body>
@@ -210,6 +274,7 @@
     <div class="sidebar-nav"></div>
     <div class="sidebar-footer"></div>
   </nav>
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebarDrawer()" aria-hidden="true"></div>
 
   <div class="main">
     <div class="topbar">
@@ -244,7 +309,7 @@
         <section class="card refresh-bar" id="refresh-bar" aria-label="Filtros e atualização">
           <div class="filters" role="group" aria-label="Busca e filtro de origem">
             <input id="busca" name="filtro-monitor-acessos" class="form-control" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="Buscar nome, telefone ou chamado..." aria-label="Buscar nome, telefone ou chamado">
-            <div class="desc-wrap" id="orig-wrap">
+            <div class="desc-wrap bar-extra" id="orig-wrap">
               <button class="btn btn-ghost" id="btn-origem" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="orig-menu" title="Filtrar por origem do acesso">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
                 <span id="origem-rotulo">Todas as origens</span>
@@ -262,7 +327,11 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
             Atualizar
           </button>
-          <div class="refresh-controls" role="group" aria-label="Atualização automática">
+          <button class="btn btn-ghost" id="btn-mais" type="button" aria-expanded="false" title="Mais filtros e ações">
+            Mais
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="refresh-controls bar-extra" role="group" aria-label="Atualização automática">
           <div class="live" title="Atualização automática"><span class="pulse"></span><span id="live-txt">Automático</span></div>
           <svg class="ring" viewBox="0 0 24 24" aria-hidden="true"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" id="ring" cx="12" cy="12" r="9" stroke-dasharray="56.55" stroke-dashoffset="0"/></svg>
           <span class="stamp" id="countdown" title="Tempo até a próxima atualização">-</span>
@@ -277,15 +346,15 @@
           </label>
           </div>
           <div class="monitor-actions">
-          <a class="btn btn-ghost" id="btn-historico" href="/app/ia-service/historico-acessos.html" title="Todos os logins por dia e hora, tempo logado, IP e falhas de login (o Desconectar não apaga o histórico)">
+          <a class="btn btn-ghost bar-extra" id="btn-historico" href="/app/ia-service/historico-acessos.html" title="Todos os logins por dia e hora, tempo logado, IP e falhas de login (o Desconectar não apaga o histórico)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/><polyline points="12 7 12 12 15 14"/></svg>
             Histórico
           </a>
-          <button class="btn btn-ghost" id="btn-resumo" type="button" aria-expanded="true" aria-controls="resumo">
+          <button class="btn btn-ghost bar-extra" id="btn-resumo" type="button" aria-expanded="true" aria-controls="resumo">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
             <span id="resumo-rotulo">Ocultar resumo</span>
           </button>
-          <div class="desc-wrap" id="desc-wrap">
+          <div class="desc-wrap bar-extra" id="desc-wrap">
             <button class="btn btn-limpar" id="btn-limpar" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="desc-menu" title="Desconectar quem está conectado nesta empresa (você nunca é desconectado)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
               Desconectar
@@ -334,6 +403,7 @@
 </div>
 
 <script src="/js/auth.js"></script>
+<script src="/app/ia-service/js/mobile-viewport.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <script src="/iaservice/assets/chat-interno.js"></script>
 <script src="/app/ia-service/js/sidebar.js"></script>
@@ -610,13 +680,14 @@
     return `<tr data-id="${esc(s.id)}" class="${s.id === st.selId ? 'sel' : ''} ${flash ? 'flash' : ''}">
       <td><div class="user"><span class="avatar" style="background:${cor(s.id)}">${esc(iniciais(s.nome))}<span class="dot d-${s.situacao}"></span></span>
         <div><div class="nome">${esc(s.nome)}${s.sessoes.length > 1 ? `<span class="qtd-sessoes" title="Sessões abertas por esta pessoa">${s.sessoes.length} sessões</span>` : ''}</div><div class="fone">${esc(fone(s.telefone))}</div></div></div></td>
-      <td><span class="badge ${sit.badge}">${sit.rotulo}</span></td>
-      <td><span class="badge ${s.origem === 'chat' ? 'badge-blue' : 'badge-purple'}">${s.origem === 'chat' ? 'Chat J2A' : 'Interno'}</span></td>
-      <td class="num">${hm(s.inicioEm)}<div class="sub">${ha(s.inicioEm)}</div></td>
-      <td class="num">${ha(s.ultimoSinalEm)}</td>
-      <td><div class="num">${dur(s.segundosAtivos)} <span class="sub">de ${dur(logadoSeg)}</span></div>
-        <div class="barra" title="${Math.round(pct)}% do tempo logado com a tela em uso"><i style="width:${pct}%"></i></div></td>
-      <td><div class="tela"><b>${esc(s.tela || '-')}</b>${s.acao ? `<span>${esc(s.acao)}</span>` : ''}${chamado}</div></td>
+      <td data-rot="Situação"><div class="cel"><span class="badge ${sit.badge}">${sit.rotulo}</span></div></td>
+      <td data-rot="Origem"><div class="cel"><span class="badge ${s.origem === 'chat' ? 'badge-blue' : 'badge-purple'}">${s.origem === 'chat' ? 'Chat J2A' : 'Interno'}</span></div></td>
+      <td class="num" data-rot="Entrou"><div class="cel">${hm(s.inicioEm)}<div class="sub">${ha(s.inicioEm)}</div></div></td>
+      <td class="num" data-rot="Último sinal"><div class="cel">${ha(s.ultimoSinalEm)}</div></td>
+      <td data-rot="Tempo de tela"><div class="cel"><div class="num">${dur(s.segundosAtivos)} <span class="sub">de ${dur(logadoSeg)}</span></div>
+        <div class="barra" title="${Math.round(pct)}% do tempo logado com a tela em uso"><i style="width:${pct}%"></i></div></div></td>
+      <td data-rot="Fazendo"><div class="cel"><div class="tela"><b>${esc(s.tela || '-')}</b>${s.acao ? `<span>${esc(s.acao)}</span>` : ''}${chamado}</div></div></td>
+      <td class="td-msg">${chat.ok && s.origem === 'chat' ? `<button type="button" class="btn btn-ghost" data-msg="${esc(s.id.replace(/^chat:/, ''))}">Enviar mensagem</button>` : ''}</td>
     </tr>`;
   }
 
@@ -644,6 +715,9 @@
   function renderGaveta() {
     const g = $('gaveta');
     const s = st.dados?.pessoas.find((x) => x.id === st.selId);
+    // A atualização automática refaz o painel; sem isto o teclado do celular
+    // fecha no meio da digitação do motivo.
+    const motivoFocado = document.activeElement?.id === 'gv-motivo';
     const sobreposta = !!s && (st.ampliada || telaEstreita.matches);
     $('board').classList.toggle('com-gaveta', !!s && !sobreposta);
     g.hidden = !s;
@@ -706,7 +780,7 @@
       <div class="gv-sec"><div class="gv-titulo">Atividade recente</div><ul class="tl">${eventos}</ul></div>
       </div></div>`;
     const motivo = $('gv-motivo');
-    if (motivo) { motivo.value = st.motivo || ''; if (st.focoMotivo) motivo.focus(); }
+    if (motivo) { motivo.value = st.motivo || ''; if (st.focoMotivo || motivoFocado) motivo.focus(); }
   }
 
   // Mensagens (2026-10-28): o mesmo Chat interno do J2A, como o analista do
@@ -735,7 +809,7 @@
     });
     chat.api.start();
     chat.ok = true;
-    renderGaveta();
+    render();
   }
 
   function blocoMensagem(s) {
@@ -744,7 +818,7 @@
       ? `<button type="button" class="btn btn-primary" data-gv="msg-abrir">Abrir conversa</button>
          <span class="msg-aviso">Mesma conversa do seu chat J2A.</span>`
       : `<span class="msg-aviso">${esc(chat.erro || 'Carregando mensagens…')}</span>`;
-    return `<div class="gv-sec"><div class="gv-titulo">Mensagem</div><div class="desc-opcoes" style="align-items:center">${corpo}</div></div>`;
+    return `<div class="gv-sec gv-sec-msg"><div class="gv-titulo">Mensagem</div><div class="desc-opcoes" style="align-items:center">${corpo}</div></div>`;
   }
 
   // Derrubar o acesso ao chat J2A (todas as sessões da pessoa). Pessoa das
@@ -889,6 +963,10 @@
     $('ring').style.strokeDashoffset = CIRC * (1 - st.restante / st.intervalo);
   }
 
+  $('btn-mais').addEventListener('click', () => {
+    const aberto = $('refresh-bar').classList.toggle('mais-aberto');
+    $('btn-mais').setAttribute('aria-expanded', String(aberto));
+  });
   $('btn-refresh').addEventListener('click', () => carregar(true));
   $('conn-retry').addEventListener('click', () => carregar(true));
   window.addEventListener('online', () => { if (st.falha) carregar(false); });
@@ -909,15 +987,18 @@
     todos: 'Desconectar TODOS (rotinas internas do IA Service e chat)',
   };
   // position:fixed — a barra de ferramentas corta o que passa da borda.
+  // Sem espaço embaixo (celular), abre para cima: o menu fecha ao rolar a tela.
+  function posicionarMenu(menu, btn) {
+    const r = btn.getBoundingClientRect();
+    const abaixo = r.bottom + 6;
+    const cabe = abaixo + menu.offsetHeight <= window.innerHeight - 8;
+    menu.style.top = `${cabe ? abaixo : Math.max(8, r.top - menu.offsetHeight - 6)}px`;
+    menu.style.left = `${Math.max(16, Math.min(r.left, window.innerWidth - menu.offsetWidth - 16))}px`;
+  }
   function menuDesconectar(abrir) {
     const menu = $('desc-menu');
     menu.hidden = !abrir;
-    if (abrir) {
-      const r = $('btn-limpar').getBoundingClientRect();
-      const larg = menu.offsetWidth;
-      menu.style.top = `${r.bottom + 6}px`;
-      menu.style.left = `${Math.max(16, Math.min(r.left, window.innerWidth - larg - 16))}px`;
-    }
+    if (abrir) posicionarMenu(menu, $('btn-limpar'));
     $('btn-limpar').setAttribute('aria-expanded', abrir ? 'true' : 'false');
   }
   $('btn-limpar').addEventListener('click', (e) => { e.stopPropagation(); menuOrigem(false); menuDesconectar($('desc-menu').hidden); });
@@ -925,12 +1006,7 @@
   function menuOrigem(abrir) {
     const menu = $('orig-menu');
     menu.hidden = !abrir;
-    if (abrir) {
-      const r = $('btn-origem').getBoundingClientRect();
-      const larg = menu.offsetWidth;
-      menu.style.top = `${r.bottom + 6}px`;
-      menu.style.left = `${Math.max(16, Math.min(r.left, window.innerWidth - larg - 16))}px`;
-    }
+    if (abrir) posicionarMenu(menu, $('btn-origem'));
     $('btn-origem').setAttribute('aria-expanded', abrir ? 'true' : 'false');
   }
   function fecharMenus() { menuDesconectar(false); menuOrigem(false); }
@@ -1008,6 +1084,8 @@
     render();
   }));
   $('tbody').addEventListener('click', (e) => {
+    const msg = e.target.closest('[data-msg]');
+    if (msg) { chat.api?.abrirConversa(msg.dataset.msg); return; }
     const tr = e.target.closest('tr[data-id]');
     if (!tr) return;
     selecionar(tr.dataset.id);
@@ -1049,6 +1127,12 @@
     else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); navegar(-1); }
   });
   telaEstreita.addEventListener?.('change', () => renderGaveta());
+  // Teclado do celular abrindo: a conversa continua na última mensagem.
+  window.visualViewport?.addEventListener('resize', () => {
+    if (document.activeElement?.id !== 'ci-texto') return;
+    const box = document.getElementById('ci-msgs');
+    if (box) box.scrollTop = box.scrollHeight;
+  });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && st.intervalo) carregar(false); });
 
   (window._iahubAuthReady || Promise.resolve()).then(() => {

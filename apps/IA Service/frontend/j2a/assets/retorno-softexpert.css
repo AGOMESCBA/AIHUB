@@ -49,7 +49,9 @@
   body.retorno-wide .radar-shell { width: calc(100% - min(900px, calc(100vw - 440px))); }
 }
 @media (max-width: 1100px) {
-  .retorno-panel, .retorno-panel.retorno-expanded { inset: 0; width: 100%; min-width: 0; height: 100dvh; border-radius: 0; }
+  .retorno-panel, .retorno-panel.retorno-expanded { inset: var(--chat-top, 0px) 0 auto; width: 100%; min-width: 0; height: var(--chat-vh, 100dvh); border-radius: 0; }
+  .retorno-head, .retorno-actions { flex-shrink: 0; }
+  .retorno-confirm { inset: var(--chat-top, 0px) 0 auto; margin: 12px auto; max-height: calc(var(--chat-vh, 100dvh) - 24px); }
   .retorno-resize, [data-retorno-expand] { display: none; }
   .retorno-head { padding-top: max(12px, env(safe-area-inset-top)); }
   .retorno-actions { padding-bottom: max(12px, env(safe-area-inset-bottom)); }

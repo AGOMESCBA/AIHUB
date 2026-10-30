@@ -2,9 +2,10 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
   <title>Números Autorizados - IA Service</title>
   <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="/app/ia-service/css/iaservice-mobile.css">
   <style>
     /* Só tokens do iahub.css (tema claro/escuro via data-theme) — mesma
        sobrescrita de accent das demais páginas do IA Service. */
@@ -58,16 +59,41 @@
     .toast { position:fixed;right:16px;bottom:16px;z-index:50;background:var(--text-hi);color:var(--bg-card);padding:10px 14px;border-radius:8px;font-size:13px;box-shadow:var(--shadow-md);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;pointer-events:none; }
     .toast.on { opacity:1;transform:none; }
 
+    /* Celular (2026-10-30): mesma base de css/iaservice-mobile.css. O formulário
+       ocupa a tela e Salvar fica sempre visível, mesmo com o teclado aberto. */
     @media (max-width:720px) {
-      .barra .acoes { margin-left:0;width:100%; }
-      .barra .acoes .btn { flex:1;justify-content:center; }
+      .page-head { margin-bottom:8px; }
+      .page-kicker, .page-subtitle { display:none; }
+      .page-title { font-size:17px; }
+      /* Dentro do shell o nome da tela já está na aba (#_mdi-emp-bar só existe lá). */
+      body:has(#_mdi-emp-bar) .page-head { display:none; }
+
+      .barra { padding:10px;margin-bottom:8px; }
+      .barra #busca { flex:1 1 100%; }
+      .barra select { flex:1 1 120px;min-width:0; }
+      .barra .acoes { display:contents; }
+      .barra .acoes .btn { flex:1 1 auto;min-height:40px;justify-content:center; }
+      .barra #btn-atualizar { flex:0 0 44px;padding:0; }
+      .atualizar-txt { display:none; }
+
+      .grid-head { padding:8px 12px; }
       .nums thead { display:none; }
-      .nums, .nums tbody, .nums tr, .nums td { display:block;width:100%; }
-      .nums tr { padding:10px 14px;border-bottom:1px solid var(--border); }
-      .nums td { border:none;padding:3px 0; }
-      .nums td[data-rot]::before { content:attr(data-rot) ': ';color:var(--text-lo);font-size:12px; }
-      .td-acoes { text-align:left;padding-top:8px !important; }
-      .f-corpo { grid-template-columns:1fr; }
+      .nums, .nums tbody { display:block;width:100%; }
+      .nums tbody tr { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px;padding:10px 12px;border-bottom:1px solid var(--border); }
+      .nums tbody tr:last-child { border-bottom:none; }
+      .nums td { display:block;min-width:0;border:none;padding:0;font-size:12.5px; }
+      .nums td[data-rot]::before { content:attr(data-rot);display:block;margin-bottom:1px;color:var(--text-lo);font-size:11px; }
+      .nums td:first-child, .nums td[colspan] { grid-column:1 / -1; }
+      .nums .nome { font-size:14px; }
+      .nums td.td-acoes { grid-column:1 / -1;display:flex;gap:8px;white-space:normal; }
+      .td-acoes .btn { flex:1;min-height:40px;font-size:13px;justify-content:center; }
+
+      dialog.form { width:100%;max-width:none;height:var(--iasvc-vh,100dvh);max-height:none;margin:0;border:none;border-radius:0;overflow:hidden; }
+      #form { display:flex;flex-direction:column;height:100%; }
+      .f-head { padding:12px 14px 8px; }
+      .f-corpo { flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;align-content:start;padding:12px 14px;grid-template-columns:minmax(0,1fr); }
+      .f-pe { padding:10px 14px; }
+      .f-pe .btn { flex:1;min-height:44px;justify-content:center; }
     }
   </style>
 </head>
@@ -81,6 +107,7 @@
     <div class="sidebar-nav"></div>
     <div class="sidebar-footer"></div>
   </nav>
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebarDrawer()" aria-hidden="true"></div>
 
   <div class="main">
     <div class="topbar">
@@ -107,7 +134,7 @@
           <option value="inativo">Inativos</option>
         </select>
         <div class="acoes">
-          <button class="btn btn-ghost" id="btn-atualizar" type="button">↻ Atualizar</button>
+          <button class="btn btn-ghost" id="btn-atualizar" type="button" aria-label="Atualizar">↻<span class="atualizar-txt"> Atualizar</span></button>
           <button class="btn btn-primary" id="btn-novo" type="button">+ Novo número</button>
         </div>
       </section>
@@ -177,12 +204,14 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="/js/auth.js"></script>
+<script src="/app/ia-service/js/mobile-viewport.js"></script>
 <script src="/app/ia-service/js/sidebar.js"></script>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
   const BASE = '/api/ia-service/numeros-autorizados';
   const st = { itens: [], editando: null, salvando: false };
+  const telaCelular = window.matchMedia('(max-width:720px)');
   const empresaId = () => window._iahubEmpresa?.id || null;
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const digitos = (s) => String(s || '').replace(/\D/g, '');
@@ -286,6 +315,15 @@
     $('f-erro').style.display = 'none';
     $('dlg').showModal();
     (travado ? $('f-idse') : $('f-nome')).focus();
+    // Celular: o teclado só abre quando a pessoa tocar num campo; abrir já com
+    // ele cobriria metade do formulário.
+    if (telaCelular.matches) document.activeElement?.blur();
+  }
+
+  function erroForm(msg) {
+    $('f-erro').textContent = msg;
+    $('f-erro').style.display = 'block';
+    $('f-erro').scrollIntoView({ block: 'nearest' }); // o erro fica no fim do formulário
   }
 
   async function salvar(e) {
@@ -304,7 +342,7 @@
     const falha = !st.editando?.compartilhado && !corpo.nome ? 'Informe o nome.'
       : (corpo.numero.length < 10 || corpo.numero.length > 15) ? 'Telefone inválido. Informe DDI + DDD + número.'
       : !corpo.idSoftexpert ? 'Informe o ID SoftExpert.' : '';
-    if (falha) { $('f-erro').textContent = falha; $('f-erro').style.display = 'block'; return; }
+    if (falha) { erroForm(falha); return; }
     st.salvando = true;
     $('f-salvar').disabled = true;
     try {
@@ -313,8 +351,7 @@
       toast(r.vinculadoAExistente ? 'Número já existia em outro sistema: acesso ao IA Service incluído.' : 'Número salvo.');
       await carregar();
     } catch (err) {
-      $('f-erro').textContent = err.message;
-      $('f-erro').style.display = 'block';
+      erroForm(err.message);
     } finally {
       st.salvando = false;
       $('f-salvar').disabled = false;
@@ -350,6 +387,9 @@
   // usuário ter teclado, colado ou arrastado nada na busca.
   let buscaPeloUsuario = false;
   for (const ev of ['keydown', 'paste', 'cut', 'drop']) $('busca').addEventListener(ev, () => { buscaPeloUsuario = true; });
+  // Sugestão do teclado do celular e ditado não disparam keydown: tocar no campo
+  // já conta como a pessoa usando a busca (senão o texto era apagado na hora).
+  $('busca').addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') buscaPeloUsuario = true; });
   function desfazerAutofill() { $('busca').value = ''; render(); }
   $('busca').addEventListener('animationstart', (e) => { if (e.animationName === 'busca-autofill') desfazerAutofill(); });
   $('busca').value = ''; // texto que já estava lá ao abrir também é do navegador
