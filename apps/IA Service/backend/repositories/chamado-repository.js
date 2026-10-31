@@ -429,7 +429,7 @@ function _pontuarSimilaridade(atual, candidato, tokens, textoCandidato) {
   return { score: scoreEstrutural + scoreTexto, temSolucaoAplicada, motivos };
 }
 
-function listarChamadosRelacionados(empresaId, chamadoId, { limite = 8 } = {}) {
+function listarChamadosRelacionados(empresaId, chamadoId, { limite = 8, textoContexto = '' } = {}) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   if (!chamadoId) throw new Error('chamadoId é obrigatório.');
 
@@ -444,7 +444,10 @@ function listarChamadosRelacionados(empresaId, chamadoId, { limite = 8 } = {}) {
      LIMIT 1200
   `).all(Number(empresaId), chamadoId).map(_chamadoParaDominio);
 
-  const tokens = _tokensDeBusca(atual);
+  const tokens = [...new Set([
+    ..._tokensDeBusca({ descricao: textoContexto }).slice(0, 12),
+    ..._tokensDeBusca(atual),
+  ])].slice(0, 24);
   const limiteSeguro = Math.min(Number(limite) || 8, 20);
   const pontuados = [];
 

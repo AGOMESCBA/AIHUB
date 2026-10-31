@@ -7,7 +7,7 @@ const { chromium } = require('playwright');
 let browser, server, base;
 before(async () => {
   const app = express(), frontend = path.resolve(__dirname, '../frontend');
-  app.use('/iaservice/j2a/assets', express.static(path.join(frontend, 'j2a/assets')));
+  app.use(['/iaservice/assets', '/iaservice/j2a/assets'], express.static(path.join(frontend, 'j2a/assets')));
   app.get('/j2a', (_req, res) => res.sendFile(path.join(frontend, 'j2a/index.html')));
   app.get('/radar-externo', (_req, res) => res.sendFile(path.join(frontend, 'radar.html')));
   server = await new Promise(r => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
@@ -57,8 +57,9 @@ for (const tela of ['j2a', 'radar-externo']) for (const width of [1440, 390]) {
       await route.fulfill({ json: body });
     });
     try {
+      const preferencias = page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/minhas-preferencias'));
       await page.goto(`${base}/${tela}`);
-      await page.waitForFunction(id => !document.getElementById(id).disabled, tela === 'j2a' ? 'response-style-select' : 'estiloRespostaSelect');
+      await preferencias;
       if (tela === 'j2a') await page.locator('#queue-list [data-ticket-id="ch-a"]').click();
       else {
         // O legado mantém suas funções globais; fixtures locais entram pela

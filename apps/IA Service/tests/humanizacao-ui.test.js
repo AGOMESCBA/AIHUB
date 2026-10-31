@@ -9,6 +9,7 @@ let server, browser, base;
 before(async () => {
   const app = express();
   const frontend = path.resolve(__dirname, '../frontend');
+  app.use('/iaservice/assets', express.static(path.join(frontend, 'j2a/assets')));
   app.use('/iaservice/j2a/assets', express.static(path.join(frontend, 'j2a/assets')));
   app.get('/j2a', (_req, res) => res.sendFile(path.join(frontend, 'j2a/index.html')));
   app.get('/radar-externo', (_req, res) => res.sendFile(path.join(frontend, 'radar.html')));
@@ -20,70 +21,74 @@ after(async () => { await browser?.close(); if (server) await new Promise(r => s
 
 for (const tela of ['j2a', 'radar-externo']) {
   for (const width of [1440, 390]) {
-    test(`${tela} ${width}px: estilo visível com automática desligada, salva e restaura sem investigação`, async () => {
+    test(`${tela} ${width}px: sem seletor editorial, pré-análise permanece funcional`, async () => {
       const page = await browser.newPage({ viewport: { width, height: 900 } });
-      let estilo = 'NATURAL';
-      let falhar = false;
+      let preAnalise = false;
       const escritas = [], erros = [];
       page.on('pageerror', e => erros.push(e.message));
       await page.addInitScript(() => localStorage.setItem('svc_token_externo', 'sessao-teste'));
       await page.route('**/api/ia-service-externo/**', async route => {
-        const req = route.request();
-        const pathname = new URL(req.url()).pathname;
+        const req = route.request(), pathname = new URL(req.url()).pathname;
         let body = {};
         if (pathname.endsWith('/whoami')) body = { empresaId: 1, empresaNome: 'Teste', consultorNome: 'Analista', outrasEmpresas: [] };
         else if (pathname.endsWith('/minhas-preferencias')) {
           if (req.method() === 'PUT') {
-            escritas.push(req.postDataJSON());
-            if (falhar) return route.fulfill({ status: 500, json: { error: 'Falha simulada' } });
-            estilo = req.postDataJSON().estiloResposta;
+            const payload = req.postDataJSON();
+            escritas.push(payload);
+            preAnalise = payload.preAnaliseAutomatica;
           }
-          body = { consultorEncontrado: true, preAnaliseAutomatica: false, preAnalisePadrao: false, preAnalisePessoal: false, estiloResposta: estilo };
+          body = { consultorEncontrado: true, preAnaliseAutomatica: preAnalise, preAnalisePadrao: false, preAnalisePessoal: preAnalise, estiloResposta: 'NATURAL' };
         } else if (pathname.endsWith('/fila') || pathname.endsWith('/risco-sla')) body = { chamados: [], consultores: [] };
         else if (pathname.endsWith('/config')) body = { autoRefreshSegundos: 0 };
         else if (req.method() !== 'GET') escritas.push({ endpoint: pathname });
         await route.fulfill({ json: body });
       });
       try {
+        const preferencias = page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/minhas-preferencias') && r.request().method() === 'GET');
         await page.goto(`${base}/${tela}`);
-        const seletor = page.locator(tela === 'j2a' ? '#response-style-select' : '#estiloRespostaSelect');
-        const toggle = page.locator(tela === 'j2a' ? '#pre-analysis-toggle' : '#preAnaliseAutomaticaToggle');
-        await page.waitForFunction(id => !document.getElementById(id).disabled, tela === 'j2a' ? 'response-style-select' : 'estiloRespostaSelect');
+        await preferencias;
+        const idToggle = tela === 'j2a' ? 'pre-analysis-toggle' : 'preAnaliseAutomaticaToggle';
+        await page.waitForFunction(id => !document.getElementById(id).disabled && !document.getElementById(id).checked, idToggle);
+        const toggle = page.locator('#' + idToggle);
         assert.equal(await toggle.isChecked(), false);
-        assert.equal(await seletor.isVisible(), true);
-        assert.equal(await seletor.inputValue(), 'NATURAL');
-        const box = await seletor.boundingBox();
-        assert.ok(box.x >= 0 && box.x + box.width <= width + 1, 'seletor dentro da tela');
-        // Somente dois estilos: Técnica (ORIGINAL) e Objetiva (NATURAL).
-        assert.deepEqual(await seletor.locator('option').evaluateAll(os => os.map(o => [o.value, o.textContent.trim()])),
-          [['ORIGINAL', 'Técnica'], ['NATURAL', 'Objetiva']]);
-        await seletor.selectOption('ORIGINAL');
-        await page.waitForFunction(id => !document.getElementById(id).disabled, tela === 'j2a' ? 'response-style-select' : 'estiloRespostaSelect');
-        assert.equal(estilo, 'ORIGINAL');
-        assert.deepEqual(escritas.filter(x => x.estiloResposta), [{ estiloResposta: 'ORIGINAL' }]);
-        assert.equal(await toggle.isChecked(), false);
+        assert.equal(await page.locator('#response-style-select, #estiloRespostaSelect').count(), 0);
+        const salva = page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/minhas-preferencias') && r.request().method() === 'PUT');
+        await toggle.locator('..').click();
+        await salva;
+        const recarregadas = page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/minhas-preferencias') && r.request().method() === 'GET');
         await page.reload();
-        await page.waitForFunction(id => document.getElementById(id).value === 'ORIGINAL' && !document.getElementById(id).disabled, tela === 'j2a' ? 'response-style-select' : 'estiloRespostaSelect');
-        falhar = true;
-        await seletor.selectOption('NATURAL');
-        await page.waitForFunction(id => document.getElementById(id).value === 'ORIGINAL' && !document.getElementById(id).disabled, tela === 'j2a' ? 'response-style-select' : 'estiloRespostaSelect');
-        assert.equal(await toggle.isChecked(), false);
+        await recarregadas;
+        await page.waitForFunction(id => !document.getElementById(id).disabled && document.getElementById(id).checked, idToggle);
+        assert.deepEqual(escritas.filter(x => !x.endpoint), [{ preAnaliseAutomatica: true }]);
         assert.equal(escritas.some(x => /investigar|pesquis/.test(x.endpoint || '')), false);
-        if (tela === 'radar-externo') {
-          const html = await page.evaluate(() => renderizarRespostaOperacional(
-            { temEstrutura: true, diagnostico: 'Diagnóstico original' }, { humanizacao: { status: 'aplicada' } }, null, 'Resposta humanizada', null));
-          assert.ok(html.includes('Resposta humanizada'));
-          assert.equal(html.includes('Diagnóstico original'), false, 'não repete ficha original junto da resposta final');
-          const fallback = await page.evaluate(() => renderizarRespostaOperacional(
-            null, { humanizacao: { status: 'fallback' } }, null, 'Resposta original preservada', null));
-          assert.ok(fallback.includes('Resposta original preservada'), 'fallback curto não pode ficar vazio');
-        }
         assert.deepEqual(erros, []);
-        if (width === 1440) await page.screenshot({ path: path.resolve(__dirname, `../../../tmp/humanizacao-${tela}.png`) });
+        if (width === 1440) await page.screenshot({ path: path.resolve(__dirname, `../../../tmp/dialogo-original-${tela}.png`) });
       } finally { await page.close(); }
     });
   }
 }
+
+test('Radar legado mostra perguntas e texto original sem recolher em ficha', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const texto = 'A imagem mostra falha ao carregar M185GRV.PRW.\n\nPode enviar o fonte completo e o log desta ocorrência?';
+  const { construirFichaOperacional } = require('../backend/services/resposta-operacional-service');
+  const ficha = construirFichaOperacional({ conteudo: texto });
+  await page.addInitScript(() => localStorage.setItem('svc_token_externo', 'sessao-teste'));
+  await page.route('**/api/**', route => route.fulfill({ json: { consultorEncontrado: true, preAnaliseAutomatica: false, chamados: [], consultores: [] } }));
+  try {
+    await page.goto(`${base}/radar-externo`);
+    for (const cenario of [{ ficha, diagnostico: null }, { ficha: null, diagnostico: { limpezaTecnica: [] } }]) {
+      await page.evaluate(({ cenario, texto }) => {
+        let host = document.getElementById('auditoria-original');
+        if (!host) { host = document.createElement('div'); host.id = 'auditoria-original'; document.body.append(host); }
+        host.innerHTML = renderizarRespostaOperacional(cenario.ficha, cenario.diagnostico, null, texto, 'm-auditoria');
+      }, { cenario, texto });
+      const host = page.locator('#auditoria-original');
+      assert.ok((await host.innerText()).includes('Pode enviar o fonte completo e o log desta ocorrência?'), 'a pergunta precisa ficar visível no chat');
+      assert.equal(await host.locator('details').count(), 0, 'a conversa não fica recolhida');
+    }
+  } finally { await page.close(); }
+});
 
 test('trilha mostra resposta primária e ajustada em sequência, com metadados e texto escapado', async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });

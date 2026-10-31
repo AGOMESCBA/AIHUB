@@ -123,23 +123,43 @@ function _maxTokensAjustadoPorProvider(cfg, systemPrompt, userPrompt, maxTokensP
 // `imagens` é uma lista de { mimeType, base64 } — vazia na maioria das
 // chamadas (texto puro), preenchida quando o atendimento tem anexos de imagem.
 
+function _mensagensConversa(userPrompt, conversa) {
+  if (conversa == null) return [{ role: 'user', content: userPrompt }];
+  if (!Array.isArray(conversa) || !conversa.length) throw new Error('Conversa vazia ou inválida.');
+  const mensagens = [];
+  for (const m of conversa) {
+    if (!['user', 'assistant'].includes(m?.role) || typeof m.content !== 'string' || !m.content.trim()) {
+      throw new Error('Conversa aceita somente mensagens de usuário/assistente com texto.');
+    }
+    const anterior = mensagens[mensagens.length - 1];
+    if (anterior?.role === m.role) anterior.content += `\n\n${m.content}`;
+    else mensagens.push({ role: m.role, content: m.content });
+  }
+  if (mensagens[0].role !== 'user' || mensagens.at(-1).role !== 'user') throw new Error('Conversa deve começar e terminar com mensagem de usuário.');
+  return mensagens;
+}
+
 async function _chamarOpenAICompatUmaVez(cfg, apiKey, systemPrompt, userPrompt, imagens, opts, maxTokens) {
   const model = opts.model || cfg.model;
-  const conteudoUser = imagens.length
+  const gpt54 = cfg.hostname === 'api.openai.com' && /^gpt-5\.4(?:-|$)/i.test(model);
+  const mensagens = _mensagensConversa(userPrompt, opts.conversa);
+  const ultima = mensagens.at(-1);
+  ultima.content = imagens.length
     ? [
-        { type: 'text', text: userPrompt },
+        { type: 'text', text: ultima.content },
         ...imagens.map(img => ({ type: 'image_url', image_url: { url: `data:${img.mimeType};base64,${img.base64}` } })),
       ]
-    : userPrompt;
+    : ultima.content;
 
   const body = {
     model,
     messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: conteudoUser },
+      { role: gpt54 ? 'developer' : 'system', content: systemPrompt },
+      ...mensagens,
     ],
-    temperature: opts.temperature ?? 0,
-    max_tokens: maxTokens,
+    ...(gpt54
+      ? { max_completion_tokens: maxTokens, reasoning_effort: 'none' }
+      : { temperature: opts.temperature ?? 0, max_tokens: maxTokens }),
   };
   if (opts.json) body.response_format = { type: 'json_object' };
 
@@ -150,7 +170,7 @@ async function _chamarOpenAICompatUmaVez(cfg, apiKey, systemPrompt, userPrompt, 
 }
 
 async function _chamarOpenAICompat(cfg, apiKey, systemPrompt, userPrompt, imagens, opts = {}) {
-  const maxTokensPedido = _maxTokensAjustadoPorProvider(cfg, systemPrompt, userPrompt, opts.maxTokens || 3000);
+  const maxTokensPedido = _maxTokensAjustadoPorProvider(cfg, systemPrompt, opts.conversa || userPrompt, opts.maxTokens || 3000);
   const maxTokensInicial = cfg.usaRaciocinio ? Math.max(maxTokensPedido, MIN_TOKENS_RACIOCINIO) : maxTokensPedido;
 
   let resultado = await _chamarOpenAICompatUmaVez(cfg, apiKey, systemPrompt, userPrompt, imagens, opts, maxTokensInicial);
@@ -169,12 +189,14 @@ async function _chamarOpenAICompat(cfg, apiKey, systemPrompt, userPrompt, imagen
 
 async function _chamarAnthropic(cfg, apiKey, systemPrompt, userPrompt, imagens, opts = {}) {
   const model = opts.model || cfg.model;
-  const conteudoUser = imagens.length
+  const mensagens = _mensagensConversa(userPrompt, opts.conversa);
+  const ultima = mensagens.at(-1);
+  ultima.content = imagens.length
     ? [
-        { type: 'text', text: userPrompt },
+        { type: 'text', text: ultima.content },
         ...imagens.map(img => ({ type: 'image', source: { type: 'base64', media_type: img.mimeType, data: img.base64 } })),
       ]
-    : userPrompt;
+    : ultima.content;
 
   const parsed = await _httpPost(
     cfg.hostname,
@@ -183,7 +205,7 @@ async function _chamarAnthropic(cfg, apiKey, systemPrompt, userPrompt, imagens, 
     {
       model,
       system: systemPrompt,
-      messages: [{ role: 'user', content: conteudoUser }],
+      messages: mensagens,
       max_tokens: opts.maxTokens || 3000,
       temperature: opts.temperature ?? 0,
     },
@@ -196,11 +218,13 @@ async function _chamarAnthropic(cfg, apiKey, systemPrompt, userPrompt, imagens, 
 async function _chamarGemini(cfg, apiKey, systemPrompt, userPrompt, imagens, opts = {}) {
   const model = opts.model || cfg.model;
   const path = `/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const parts = [{ text: userPrompt }, ...imagens.map(img => ({ inline_data: { mime_type: img.mimeType, data: img.base64 } }))];
+  const contents = _mensagensConversa(userPrompt, opts.conversa)
+    .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
+  contents.at(-1).parts.push(...imagens.map(img => ({ inline_data: { mime_type: img.mimeType, data: img.base64 } })));
 
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
-    contents: [{ role: 'user', parts }],
+    contents,
     generationConfig: { temperature: opts.temperature ?? 0, maxOutputTokens: opts.maxTokens || 3000 },
   };
 
@@ -320,6 +344,7 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
 
       const modeloDoProvedor = cfg?.modelos?.[provedor] || opts.model || PROVIDER_CONFIGS[provedor].model;
       let promptTentativa = userPrompt;
+      let conversaTentativa = opts.conversa;
       let imagensTentativa = imagens;
       let preparo = null;
       if (typeof opts.prepararParaCandidato === 'function') {
@@ -332,6 +357,7 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
           });
           if (prep) {
             if (typeof prep.userPrompt === 'string') promptTentativa = prep.userPrompt;
+            if (Object.hasOwn(prep, 'conversa')) conversaTentativa = prep.conversa;
             if (Array.isArray(prep.imagens)) imagensTentativa = prep.imagens;
             preparo = prep.registro || null;
           }
@@ -343,7 +369,7 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
           continue;
         }
       }
-      ultimoTokensPrompt = tokenBudget.estimarTokens(systemPrompt) + tokenBudget.estimarTokens(promptTentativa)
+      ultimoTokensPrompt = tokenBudget.estimarTokens(systemPrompt) + tokenBudget.estimarTokens(conversaTentativa ? JSON.stringify(conversaTentativa) : promptTentativa)
         + imagensTentativa.length * tokenBudget.estimarTokensImagem();
       // Janela nominal inteira (sem margem): a guarda so barra o que
       // comprovadamente nao cabe; a folga e responsabilidade do orcamento.
@@ -359,7 +385,7 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
       const extraTentativa = { tokensPromptEstimados: ultimoTokensPrompt, ...(preparo ? { preparo } : {}) };
       try {
         const resultado = await chamarProvedor(provedor, keys[provedor], systemPrompt, promptTentativa, imagensTentativa, {
-          ...opts, model: modeloDoProvedor,
+          ...opts, conversa: conversaTentativa, model: modeloDoProvedor,
           ...(restanteMs !== null ? { timeoutMs: Math.min(opts.timeoutMs || 45000, restanteMs) } : {}),
         });
         tentativas.push({ provider: provedor, model: modeloDoProvedor, status: 'ok', rodada, latenciaMs: Date.now() - inicioTentativa, ...extraTentativa });

@@ -466,8 +466,6 @@
   // nao da sessao.
   function _resetEstadoDoChat() {
     detalhesTecnicos?.close(false);
-    $('response-style-select').value = 'ORIGINAL';
-    $('response-style-select').disabled = true;
     retornoPanel?.clear();
     state.queue = [];
     state.risk = { consultores: [], chamados: [] };
@@ -533,9 +531,7 @@
 
   async function loadPreferences() {
     const toggle = $('pre-analysis-toggle');
-    const estilo = $('response-style-select');
     const tokenDoPedido = state.token;
-    estilo.disabled = true;
     let pref;
     try {
       pref = await request(ext('/radar/minhas-preferencias'));
@@ -550,9 +546,6 @@
     toggle.disabled = false;
     toggle.title = '';
     toggle.checked = pref.preAnaliseAutomatica !== false;
-    estilo.value = pref.estiloResposta || 'ORIGINAL';
-    estilo.dataset.salvo = estilo.value;
-    estilo.disabled = pref.consultorEncontrado === false;
     renderPreferenciaPadrao(pref);
     try {
       const config = await request(ext('/radar/config'));
@@ -589,27 +582,6 @@
       toast(enviar === null ? 'Voltou ao padrão do cadastro.' : 'Preferencia salva.');
     } catch (err) {
       toast(`Nao foi possivel salvar: ${err.message}`);
-    }
-  }
-
-  async function saveResponseStyle() {
-    const seletor = $('response-style-select');
-    const tokenDoPedido = state.token;
-    seletor.disabled = true;
-    try {
-      const pref = await request(ext('/radar/minhas-preferencias'), {
-        method: 'PUT', body: JSON.stringify({ estiloResposta: seletor.value }),
-      });
-      if (state.token !== tokenDoPedido) return;
-      seletor.value = pref.estiloResposta || 'ORIGINAL';
-      seletor.dataset.salvo = seletor.value;
-      toast('Estilo salvo para as próximas respostas.');
-    } catch (err) {
-      if (state.token !== tokenDoPedido) return;
-      seletor.value = seletor.dataset.salvo || 'ORIGINAL';
-      toast(`Não foi possível salvar o estilo: ${err.message}`);
-    } finally {
-      if (state.token === tokenDoPedido) seletor.disabled = false;
     }
   }
 
@@ -2437,7 +2409,6 @@
       saveAutoRefreshConfig();
     });
     $('pre-analysis-toggle').addEventListener('change', () => savePreferences());
-    $('response-style-select').addEventListener('change', saveResponseStyle);
     $('pre-analysis-padrao-btn').addEventListener('click', () => savePreferences(null));
     $('queue-list').addEventListener('click', (event) => {
       const btn = event.target.closest('[data-ticket-id]');

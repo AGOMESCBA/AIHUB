@@ -68,7 +68,7 @@ test('nenhum artigo relevante: nada é aberto, a resposta é orientada e o Quali
   assert.equal(abriu, false);
   const ctxPrompt = svc.formatarContextoParaPrompt(r, []);
   assert.match(ctxPrompt, /nenhum trata do problema relatado/);
-  assert.match(ctxPrompt, /nao encontrou artigo especifico/);
+  assert.match(ctxPrompt, /Informe o limite desta pesquisa/);
   assert.ok(!ctxPrompt.includes('Links relacionados'), 'artigo de outro módulo não vira link relacionado');
   const comRelacionado = svc.formatarContextoParaPrompt({ ...r, resultados: [...r.resultados, { titulo: 'SIGAFAT - Saldo do pedido de venda', url: 'https://c/4', oficial: true }] }, []);
   assert.ok(comRelacionado.includes('Links relacionados (oficiais, nao confirmam a causa):\n- SIGAFAT - Saldo do pedido de venda — https://c/4'));
@@ -111,8 +111,8 @@ test('regras fixas: página de seção, outro módulo e título sem termo do pro
 
 test('com página lida, a resposta é orientada a usar o artigo e não citar referência sem lastro', () => {
   const ctxPrompt = svc.formatarContextoParaPrompt({ configurado: true, modo: 'web', paginasLidas: [{ titulo: 'SIGAGCT - Alçada', url: 'https://c/1', status: 'lida', trecho: 'MV_CNALCAD' }] }, []);
-  assert.match(ctxPrompt, /USO OBRIGATORIO DAS PAGINAS LIDAS/);
-  assert.doesNotMatch(svc.formatarContextoParaPrompt({ configurado: true, modo: 'web', paginasLidas: [] }, []), /USO OBRIGATORIO/);
+  assert.match(ctxPrompt, /AVALIACAO DAS PAGINAS LIDAS/);
+  assert.doesNotMatch(svc.formatarContextoParaPrompt({ configurado: true, modo: 'web', paginasLidas: [] }, []), /AVALIACAO DAS PAGINAS LIDAS/);
 });
 
 test('consultas da IA não usam respostas anteriores da IA (evita eco de referência sem lastro)', async () => {
@@ -170,7 +170,7 @@ test('orientações da pesquisa sobrevivem quando o motor de contexto remonta o 
   const texto = svc.formatarContextoParaPrompt(pesquisa, []) + '\n\n## Chamado de customização\nPeça o fonte.';
   const r = _selecionarPesquisaExterna(pesquisa, texto, 5000);
   assert.match(r.texto, /Paginas abertas e lidas/);
-  assert.match(r.texto, /USO OBRIGATORIO DAS PAGINAS LIDAS/);
+  assert.match(r.texto, /AVALIACAO DAS PAGINAS LIDAS/);
   assert.match(r.texto, /Chamado de customização/);
   const curto = _selecionarPesquisaExterna({ configurado: true }, 'x'.repeat(20000) + '\n## Orientacoes para a resposta\nRegra Y', 200);
   assert.match(curto.texto, /Regra Y/, 'mesmo cortado por orçamento');

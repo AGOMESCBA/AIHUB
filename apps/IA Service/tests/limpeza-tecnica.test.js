@@ -57,3 +57,9 @@ test('resposta só com fecho genérico nunca é esvaziada', () => {
   const original = 'Estou à disposição.';
   assert.equal(limparTecnica(original).texto, original);
 });
+
+test('perguntas de continuidade preservam a resposta original inteira', () => {
+  const original = 'A rotina falhou ao carregar.\n\nSe precisar de mais informações, pode enviar a mensagem completa?';
+  assert.equal(limparTecnica(original).texto, original);
+  assert.deepEqual(limparTecnica(original).removidos, []);
+});

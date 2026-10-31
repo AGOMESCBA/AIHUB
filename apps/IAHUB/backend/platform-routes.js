@@ -268,15 +268,18 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
   // próprio teste de conexão do IA Service.
   app.post('/api/iahub/platform/ai-config/test', requireAuth, requireAdmin, requireEmpresa, async (req, res) => {
     const provedor = PROVIDERS.includes(req.body?.provedor) ? req.body.provedor : 'groq';
+    if (req.body?.modelo != null && (typeof req.body.modelo !== 'string' || req.body.modelo.length > 150)) {
+      return res.status(400).json({ ok: false, erro: 'Informe um nome de modelo válido.' });
+    }
     const row = getAiRow(empresaId(req));
     const field = `${provedor}_api_key_enc`;
     const apiKey = String(req.body?.api_key || '').trim() || decrypt(row?.[field]);
     if (!apiKey) return res.status(400).json({ ok: false, erro: 'Informe uma chave ou salve uma chave para este provedor.' });
     try {
       const aiProviderClient = require('../../IA Service/backend/services/ai-provider-client');
-      const modelo = row?.[`${provedor}_modelo`] || null;
+      const modelo = req.body?.modelo?.trim() || row?.[`${provedor}_modelo`] || aiProviderClient.PROVIDER_CONFIGS[provedor].model;
       await aiProviderClient.chamarProvedor(provedor, apiKey, 'Você é um assistente de teste.', 'Responda apenas OK.', [], { model: modelo, maxTokens: 10, timeoutMs: 15000 });
-      res.json({ ok: true });
+      res.json({ ok: true, modelo });
     } catch (err) {
       res.status(500).json({ ok: false, erro: err.message || 'Falha ao testar provedor.' });
     }

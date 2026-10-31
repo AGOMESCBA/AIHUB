@@ -110,14 +110,14 @@ test('upload reconhece linguagens, TXT, extensão aberta e conserva bytes do ori
   const r = await fetch(`${base}/api/ia-service/anexos/${a.id}/download`, { headers });
   assert.deepEqual(Buffer.from(await r.arrayBuffer()), bytes);
 });
-test('fonte e log chegam juntos ao motor; versão real é baixável com humanização ativa', async () => {
+test('fonte e log chegam juntos ao motor; versão real é baixável sem reescrita editorial', async () => {
   const at = criarAtendimento();
   const fonte = await upload(at, 'MeuWorkflow.PRW', original);
   const log = await upload(at, 'erro.log', 'Variable does not exist CRET no retorno de MeuWF.');
   const r = await fetch(`${base}/api/ia-service/atendimentos/${at.id}/investigar`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ texto: 'Corrija o fonte anexado com base no log.', anexoIds: [fonte.id, log.id] }) });
   assert.equal(r.status, 201, await r.clone().text());
   const m = await r.json();
-  assert.equal(m.diagnostico.humanizacao.status, 'aplicada');
+  assert.equal(m.diagnostico?.humanizacao, undefined);
   assert.equal(m.fontesCorrigidos.length, 1);
   assert.ok(prompts.some(p => p?.includes(original) && p.includes('Variable does not exist CRET')));
   const versao = m.fontesCorrigidos[0].versao;
@@ -129,12 +129,12 @@ test('fonte e log chegam juntos ao motor; versão real é baixável com humaniza
     assert.equal(download.status, 200); assert.equal(await download.text(), corrigido);
     const historico = await (await fetch(`${base}/api/${prefixo}/atendimentos/${at.id}/mensagens`, { headers: cabecalho })).json();
     const persistida = historico.find(x => x.id === m.id);
-    assert.equal(persistida.diagnostico.humanizacao.respostaOriginal, resposta);
+    assert.equal(persistida.conteudo, resposta);
     const anexos = await (await fetch(`${base}/api/${prefixo}/atendimentos/${at.id}/anexos`, { headers: cabecalho })).json();
     assert.ok(anexos.some(a => a.id === versao.id && a.mensagemOrigemId === m.id));
   }
   const antes = tecnicas + editoriais;
-  assert.equal(editoriais, 1); assert.equal(tecnicas, 1);
+  assert.equal(editoriais, 0); assert.equal(tecnicas, 1);
   // Novo anexo em atendimento que já tem investigação e versão corrigida.
   await upload(at, 'novo-log.txt', 'Nova evidência local, sem executar o fonte.');
   assert.equal(tecnicas + editoriais, antes, 'upload e consultas não invocam o provider');
@@ -163,7 +163,7 @@ test('correção de outra linguagem aceita bloco ancorado com CRLF, sem compila�
     assert.equal(r.status, 201, await r.clone().text());
     const m = await r.json();
     assert.equal(m.fontesCorrigidos.length, 1, JSON.stringify(m.avisosFonteCorrigido));
-    assert.equal(m.diagnostico.humanizacao.status, 'aplicada');
+    assert.equal(m.diagnostico?.humanizacao, undefined);
     const versao = m.fontesCorrigidos[0].versao;
     assert.equal(path.extname(versao.nomeOriginal), '.cs');
     const download = await fetch(`${base}/api/ia-service/anexos/${versao.id}/download`, { headers });

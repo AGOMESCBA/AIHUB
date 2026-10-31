@@ -10,8 +10,6 @@ const mensagemRepo = require('../repositories/mensagem-repository');
 const anexoRepo = require('../repositories/anexo-repository');
 const aiConfigService = require('./ai-config-service');
 const aiProviderClient = require('./ai-provider-client');
-const respostaHumanizada = require('./resposta-humanizada-service');
-const consultorService = require('./consultor-service');
 const promptBuilder = require('./prompt-builder');
 const versaoFonteService = require('./versao-fonte-service');
 const alteracaoAncorada = require('./alteracao-ancorada-service');
@@ -711,8 +709,8 @@ async function _carregarPayloadVisualReaproveitando(contexto, carregadas = []) {
   return _carregarPayloadVisual(contexto);
 }
 
-function _entradaDisponivelDoModelo(modelo) {
-  return tokenBudget.criarOrcamento({ modelo, systemPrompt: promptBuilder.SYSTEM_PROMPT }).entradaDisponivel;
+function _entradaDisponivelDoModelo(modelo, systemPrompt = promptBuilder.SYSTEM_PROMPT) {
+  return tokenBudget.criarOrcamento({ modelo, systemPrompt }).entradaDisponivel;
 }
 
 // Registro por tentativa (vai para tentativas_json da execucao): qual
@@ -748,20 +746,28 @@ function _registroPreparo(ctx, candidato, reconstruido, qtdImagens) {
  * `usadoPor(resultado)` devolve o contexto/prompt/imagens da tentativa
  * vencedora (ou null) para persistencia e Quality Gate.
  */
+function _conversaParaCandidato(contexto, prompt) {
+  if (!Array.isArray(contexto?.conversa) || !String(prompt).startsWith(contexto.userPrompt)) return undefined;
+  const conversa = contexto.conversa.map(m => ({ ...m }));
+  const complemento = String(prompt).slice(contexto.userPrompt.length);
+  if (complemento.trim()) conversa[conversa.length - 1].content += complemento;
+  return conversa;
+}
+
 function _criarPreparadorPorCandidato({ contexto, userPromptAtual, imagensAtuais, candidatoAtual, paramsContexto, evidenciaForcadaIds = [], decorar }) {
   const base = { contexto, userPrompt: userPromptAtual, imagens: [...imagensAtuais] };
   const usados = new Map();
   const reconstruidos = new Map();
-  const entradaBase = candidatoAtual ? _entradaDisponivelDoModelo(candidatoAtual.model) : null;
+  const entradaBase = candidatoAtual ? _entradaDisponivelDoModelo(candidatoAtual.model, paramsContexto.systemPrompt) : null;
 
   async function preparar({ provider, model, suportaImagem }) {
     const chave = `${provider}|${model}`;
     const mesmoOrcamento = entradaBase !== null
-      && _entradaDisponivelDoModelo(model) === entradaBase
+      && _entradaDisponivelDoModelo(model, paramsContexto.systemPrompt) === entradaBase
       && (suportaImagem || base.imagens.length === 0);
     if (mesmoOrcamento) {
       usados.set(chave, base);
-      return { registro: _registroPreparo(base.contexto, { provider, model }, false, base.imagens.length) };
+      return { conversa: _conversaParaCandidato(base.contexto, base.userPrompt), registro: _registroPreparo(base.contexto, { provider, model }, false, base.imagens.length) };
     }
     const chaveCache = `${chave}|${suportaImagem ? 'v' : 'n'}`;
     let pronto = reconstruidos.get(chaveCache);
@@ -783,6 +789,7 @@ function _criarPreparadorPorCandidato({ contexto, userPromptAtual, imagensAtuais
     usados.set(chave, pronto);
     return {
       userPrompt: pronto.userPrompt,
+      conversa: _conversaParaCandidato(pronto.contexto, pronto.userPrompt),
       imagens: pronto.imagens,
       registro: _registroPreparo(pronto.contexto, { provider, model }, true, pronto.imagens.length),
     };
@@ -954,10 +961,6 @@ function _comOrientacao(texto, bloco) {
 async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, consultorId = null, anexoIds = [], automatico = false, anexosComoContexto = false, forcarPesquisa = false, analistaAtualNome = null, origemAcao: origemAcaoInformada = null }) {
   const atendimento = mensagemService.getAtendimento(empresaId, atendimentoId);
   if (!atendimento) throw new Error('Atendimento não encontrado nesta empresa.');
-  // Turno manual usa a identidade autenticada, nunca a preferência do dono
-  // de outro atendimento. Pré-análise usa o consultor vinculado na abertura.
-  const consultorDoTurno = automatico ? atendimento.consultorId
-    : consultorId || (usuarioId ? consultorService.getConsultorPorUsuario(empresaId, usuarioId)?.id : null);
   // Chamado encerrado na origem: somente consulta — nenhuma interacao, pesquisa
   // ou chamada de IA (vale para botao, texto livre e pre-analise automatica).
   _garantirChamadoNaoEncerrado(empresaId, atendimento);
@@ -1035,6 +1038,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   }
 
   const todosAnexosDoAtendimento = anexoRepo.listarAnexos(empresaId, atendimentoId);
+  const systemPromptTurno = promptBuilder.selecionarSystemPrompt(todosAnexosDoAtendimento);
   const anexosTextoParaPesquisa = todosAnexosDoAtendimento.filter(a => a.conteudoExtraido);
 
   // Pergunta de processo/capacidade ("se eu te enviar o fonte, você
@@ -1119,18 +1123,16 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   let pesquisaTecnicaTexto = '';
   let pesquisaTecnica = null;
   let relacionados = [];
+  let textoPrintsPesquisa = '';
   let dossieOperacionalTurno = null;
   let chamado = null;
   try {
     chamado = atendimento.referenciaExterna
       ? chamadoRepo.getChamadoPorNumero(empresaId, atendimento.referenciaExterna, atendimento.origem)
       : null;
-    relacionados = chamado
-      ? chamadoRepo.listarChamadosRelacionados(empresaId, chamado.id, { limite: 5 })
-      : [];
     const { cfg: cfgPesquisa } = aiConfigService.resolverKeysEOrdem(empresaId);
     const modeloPesquisa = cfgPesquisa?.modelos?.[cfgPesquisa?.provedorPrimario] || Object.values(cfgPesquisa?.modelos || {})[0] || null;
-    const orcamentoPesquisa = tokenBudget.criarOrcamento({ modelo: modeloPesquisa, systemPrompt: promptBuilder.SYSTEM_PROMPT });
+    const orcamentoPesquisa = tokenBudget.criarOrcamento({ modelo: modeloPesquisa, systemPrompt: systemPromptTurno });
     try {
       dossieOperacionalTurno = dossieContextService.montarMemoriaOperacional({
         empresaId,
@@ -1193,6 +1195,15 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     const pesquisaExternaBloqueada = decisaoPesquisaExterna && !decisaoPesquisaExterna.liberada
       ? { responsavel: decisaoPesquisaExterna.pendencia.responsavel, origemAcao, motivo: decisaoPesquisaExterna.motivo }
       : null;
+    const primeiraAnalise = !historico.some(m => m.papel === 'assistant');
+    const temImagemNova = anexosDoTurno.some(a => String(a.mimeType || '').startsWith('image/'));
+    if (!pesquisaExternaBloqueada && (primeiraAnalise || temImagemNova)) {
+      textoPrintsPesquisa = await _transcreverPrintsParaBusca(empresaId, todosAnexosDoAtendimento);
+    }
+    relacionados = chamado ? chamadoRepo.listarChamadosRelacionados(empresaId, chamado.id, {
+      limite: 5,
+      textoContexto: [textoPrintsPesquisa, texto, ...historico.filter(m => m.papel !== 'assistant').slice(-4).map(m => m.conteudo)].filter(Boolean).join('\n'),
+    }) : [];
     const pesquisa = await technicalResearchService.pesquisar({
       empresaId,
       atendimentoId,
@@ -1201,6 +1212,8 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       atendimento,
       mensagens: historico,
       anexos: anexosTextoParaPesquisa,
+      textoPrints: textoPrintsPesquisa,
+      primeiraAnalise,
       // Só é chamado pela pesquisa quando ela de fato vai buscar (ver pesquisar).
       obterTextoPrints: () => _transcreverPrintsParaBusca(empresaId, todosAnexosDoAtendimento),
       texto,
@@ -1291,9 +1304,10 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     anexosDoTurno,
     anexosComoContexto,
     pesquisaTecnicaTexto,
+    textoPrints: textoPrintsPesquisa,
     pesquisa: pesquisaTecnica,
     relacionados,
-    systemPrompt: promptBuilder.SYSTEM_PROMPT,
+    systemPrompt: systemPromptTurno,
     cfg,
     keys,
     dossieOperacionalPrecarregado: dossieOperacionalTurno,
@@ -1451,7 +1465,8 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       decorar: (ctx, prompt) => _adicionarInstrucaoObservacaoVisual(prompt, ctx),
     });
     progressoTurno.registrar(empresaId, atendimentoId, 'Analisando as evidências e escrevendo a resposta');
-    resultado = await aiProviderClient.chamarIA(keys, cfg, promptBuilder.SYSTEM_PROMPT, promptUsado, imagens, {
+    resultado = await aiProviderClient.chamarIA(keys, cfg, systemPromptTurno, promptUsado, imagens, {
+      conversa: _conversaParaCandidato(contexto, promptUsado),
       maxTokens: 6000,
       timeoutMs,
       prepararParaCandidato: preparador.preparar,
@@ -1531,7 +1546,8 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
         decorar: (ctx, prompt) => `${_adicionarInstrucaoObservacaoVisual(prompt, ctx)}\n\n## Reprocessamento por Quality Gate\n${qualityGateService.montarInstrucaoRetry(qualityGateAntesRetry, { manifesto: ctx.manifesto })}`,
       });
       progressoTurno.registrar(empresaId, atendimentoId, 'Revisando a qualidade da resposta');
-      resultado = await aiProviderClient.chamarIA(keys, cfg, promptBuilder.SYSTEM_PROMPT, promptUsado, imagens, {
+      resultado = await aiProviderClient.chamarIA(keys, cfg, systemPromptTurno, promptUsado, imagens, {
+        conversa: _conversaParaCandidato(contexto, promptUsado),
         maxTokens: 6000,
         timeoutMs,
         maxProviderRounds: 1,
@@ -1612,7 +1628,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
           '## Resposta anterior a reescrever',
           _removerIdsInternosTexto(resultado.texto),
         ].join('\n');
-        resultado = await aiProviderClient.chamarIA(keys, cfg, promptBuilder.SYSTEM_PROMPT, promptUsado, [], {
+        resultado = await aiProviderClient.chamarIA(keys, cfg, systemPromptTurno, promptUsado, [], {
           maxTokens: 2200,
           timeoutMs: Math.min(timeoutMs, 60000),
           maxProviderRounds: 1,
@@ -1757,12 +1773,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   // Depois do Quality Gate (não altera o que ele avaliou). Entra também no aviso
   // de análise bloqueada: as fontes abertas são fato, não a recomendação
   // reprovada, e o analista precisa ver o que foi pesquisado.
-  const corpoAntesDasFontes = String(textoFinal || '').trim();
   textoFinal = _anexarFontesConsultadas(textoFinal, pesquisaTecnica);
-  const textoComFontesSeparado = {
-    corpo: corpoAntesDasFontes,
-    blocoFontes: textoFinal.startsWith(corpoAntesDasFontes) ? textoFinal.slice(corpoAntesDasFontes.length) : '',
-  };
 
   let secoes = _extrairSecoes(textoFinal);
   let nivelConfianca = _extrairNivelConfianca(textoFinal);
@@ -1797,33 +1808,12 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     nivelConfianca = null;
   }
 
-  // Bloqueios são redigidos deterministicamente, sem chamada editorial.
-  // Propostas aprovadas e respostas sem proposta mantêm a humanização atual.
-  if (!respostaBloqueada) progressoTurno.registrar(empresaId, atendimentoId, 'Preparando a versão objetiva da resposta');
-  // A Objetiva resume só o corpo: o bloco "Fontes consultadas" é montado pelo
-  // sistema e volta intacto depois. Antes ia junto, a Objetiva encurtava os
-  // links e o gate travava por "referência técnica removida" (validação real
-  // 2026-10-22: #036596, #036731 e #036704 caíram na Técnica só por isso).
-  const corpoTecnica = textoComFontesSeparado.corpo;
-  const blocoFontes = textoComFontesSeparado.blocoFontes;
-  const comunicacao = respostaBloqueada ? { respostaFinal: textoFinal, estilo: 'ORIGINAL' } : await respostaHumanizada.prepararResposta({
-    empresaId, consultorId: consultorDoTurno, respostaOriginal: corpoTecnica,
-    aprovado: qualityGate?.aprovado === true && !revisaoNecessariaQualityGate && !resultado.truncado,
-    avaliacaoTecnica: qualityGate,
-  });
-  if (!respostaBloqueada && blocoFontes) {
-    comunicacao.respostaFinal = `${String(comunicacao.respostaFinal || '').trim()}${blocoFontes}`;
-    if (typeof comunicacao.respostaOriginal === 'string') comunicacao.respostaOriginal = `${comunicacao.respostaOriginal.trim()}${blocoFontes}`;
-  }
-  const { respostaFinal, ...auditoriaHumanizacao } = comunicacao;
-
+  // Entrega direta após as validações técnicas. A reescrita editorial não
+  // participa de novos turnos; auditorias de mensagens antigas são preservadas.
   const dadosResposta = {
     papel: 'assistant',
-    conteudo: respostaFinal,
-    diagnostico: (() => {
-      const base = comunicacao.estilo !== 'ORIGINAL' || comunicacao.status === 'fallback' ? { ...secoes, humanizacao: auditoriaHumanizacao } : secoes;
-      return limpezaTecnica ? { ...(base || {}), limpezaTecnica } : base;
-    })(),
+    conteudo: textoFinal,
+    diagnostico: limpezaTecnica ? { ...(secoes || {}), limpezaTecnica } : secoes,
     nivelConfianca,
     provider: resultado.provider,
     model: resultado.model,

@@ -11,7 +11,7 @@
 //  2. Fecho genérico no fim ("estou à disposição", "essas ações devem
 //     ajudar"): mesma rotina da Objetiva (validacao-preservacao-service).
 //
-// Não atua em resposta com bloco de código ou proposta de alteração de fonte.
+// Não atua em resposta com pergunta, bloco de código ou proposta de alteração de fonte.
 // O que for removido volta para a auditoria da mensagem.
 
 const { referencias, limparConclusaoGenerica } = require('./validacao-preservacao-service');
@@ -59,7 +59,7 @@ function _removerResumoRepetido(texto) {
 
 function limparTecnica(texto) {
   const original = String(texto || '');
-  if (!original.trim() || /```|\[\[ORIGINAL\]\]|\[\[ALTERADO\]\]/.test(original)) return { texto: original, removidos: [] };
+  if (!original.trim() || /\?|```|\[\[ORIGINAL\]\]|\[\[ALTERADO\]\]/.test(original)) return { texto: original, removidos: [] };
   const removidos = [];
   let atual = original.replace(/\s+$/, '');
   // Fecho genérico antes e depois da lista final (pode estar em qualquer lado).

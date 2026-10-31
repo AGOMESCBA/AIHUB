@@ -57,7 +57,7 @@ test('Objetiva sem Situação/Já feito e Técnica sem resumo do histórico', ()
   assert.match(SYSTEM_PROMPT, /Não abra a resposta resumindo o histórico/);
 });
 
-test('prompt pede assertividade: causa mais provável, primeiro teste e no máximo 2 alternativas', () => {
-  assert.match(SYSTEM_PROMPT, /Assertividade acima de quantidade/);
-  assert.match(SYSTEM_PROMPT, /no maximo 2, em ordem de probabilidade/);
-});
+// A antiga asserção de redação exigia escolher uma causa e limitar sempre
+// a duas alternativas. Esse formato foi retirado a pedido do usuário:
+// evidência insuficiente deve permitir uma pergunta, sem forçar diagnóstico.
+// A continuidade é coberta pelo teste de integração em humanizacao-respostas.

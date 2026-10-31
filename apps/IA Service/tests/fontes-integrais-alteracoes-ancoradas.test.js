@@ -227,8 +227,7 @@ test('cadeia positiva LOCAL/SIMULADA: Else preserva finalização, versão, down
     assert.equal(d.etapas.ancoras, 'aprovadas'); assert.equal(d.etapas.estrutura, 'aprovada');
     assert.equal(d.etapas.fluxo.estado, 'aprovado'); assert.equal(d.etapas.causal, 'consistente');
     assert.equal(criacoesVersao.length, antes + 1); assert.equal(m.fontesCorrigidos.length, 1);
-    assert.equal(m.diagnostico.humanizacao.status, 'aplicada', 'humanização aprovada permanece normal');
-    assert.equal(m.diagnostico.humanizacao.respostaOriginal, respostaDoProvider);
+    assert.equal(m.diagnostico?.humanizacao, undefined, 'correção validada é entregue sem reescrita editorial');
     assert.match(m.conteudo, /iahub-alteracao/); assert.match(m.conteudo, /Compilar e testar em homologação/);
     assert.ok(!exec.qualityGate.validacaoFontes?.respostaRejeitada);
     const versao = m.fontesCorrigidos[0].versao;
@@ -378,7 +377,7 @@ test('nenhuma rota estática do IA Service expõe o diretório de anexos', () =>
   }
 });
 
-test('fonte grande chega inteiro e a versão corrigida preserva o restante com humanização ativa', async () => {
+test('fonte grande chega inteiro e a versão corrigida preserva o restante sem reescrita editorial', async () => {
   modelo = 'claude-sonnet-teste'; prompts = [];
   const at = criarAtendimento();
   const bytes = fonteGrande();
@@ -391,8 +390,8 @@ test('fonte grande chega inteiro e a versão corrigida preserva o restante com h
   const m = await investigar(at, 'Corrija o fonte anexado com base no log.', [fonte.id, log.id]);
   assert.ok(prompts.at(-1).includes(fonte.conteudoExtraido), 'o prompt recebeu o fonte completo');
   assert.ok(prompts.at(-1).includes('[FONTE INTEGRAL'), 'o prompt indica que o arquivo está completo');
-  assert.equal(m.diagnostico.humanizacao.status, 'aplicada');
-  assert.equal(tecnicas - antes.tecnicas, 1); assert.equal(editoriais - antes.editoriais, 1);
+  assert.equal(m.diagnostico?.humanizacao, undefined);
+  assert.equal(tecnicas - antes.tecnicas, 1); assert.equal(editoriais - antes.editoriais, 0);
   assert.equal(m.fontesCorrigidos.length, 1, JSON.stringify(m.avisosFonteCorrigido));
   assert.deepEqual(m.avisosFonteCorrigido, [], 'arquivo gerado não exibe aviso');
   const versao = m.fontesCorrigidos[0].versao;

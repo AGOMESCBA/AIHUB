@@ -260,10 +260,6 @@
                     <label class="form-label" for="f-pre">Pré-análise</label>
                     <select id="f-pre" class="form-control"><option value="true">Automática</option><option value="false">Manual</option></select>
                   </div>
-                  <div class="form-group">
-                    <label class="form-label" for="f-estilo">Estilo da resposta</label>
-                    <select id="f-estilo" class="form-control"><option value="NATURAL">Objetiva</option><option value="ORIGINAL">Técnica</option></select>
-                  </div>
                 </div>
               </section>
             </div>
@@ -373,7 +369,7 @@
         <td data-rot="ID SoftExpert">${esc(i.idSoftexpert || '—')}</td>
         <td data-rot="Perfil">${i.papel === 'gestor' ? 'Gestor' : 'Analista'}</td>
         <td data-rot="Pré-análise">${i.preAnaliseAutomatica ? 'Automática' : 'Manual'}</td>
-        <td data-rot="Resposta">${i.estiloResposta === 'ORIGINAL' ? 'Técnica' : 'Objetiva'}</td>
+        <td data-rot="Resposta">Original</td>
         <td data-rot="Situação"><span class="badge ${cls}" title="${esc(dica)}">${rot}</span></td>
         <td class="td-acoes">
           <button class="btn btn-ghost" type="button" data-editar="${esc(i.id)}">Editar</button>
@@ -471,7 +467,6 @@
     $('f-liberado').value = String(item ? item.liberado : true);
     $('f-papel').value = item?.papel || 'analista';
     $('f-pre').value = String(item ? item.preAnaliseAutomatica : true);
-    $('f-estilo').value = item?.estiloResposta || 'NATURAL';
     $('f-obs').value = item?.observacoes || '';
     $('f-id').value = item?.id || '';
     $('f-cadastro').value = !item ? 'Ativo ao salvar' : (item.ativoCadastro ? 'Ativo' : 'Inativo (só administrador altera)');
@@ -515,7 +510,6 @@
       idSoftexpert: $('f-idse').value.trim(),
       papel: $('f-papel').value,
       preAnaliseAutomatica: $('f-pre').value === 'true',
-      estiloResposta: $('f-estilo').value,
       observacoes: $('f-obs').value.trim(),
       liberado: $('f-liberado').value === 'true',
     };

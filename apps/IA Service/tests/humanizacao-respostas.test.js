@@ -286,10 +286,12 @@ test('trilha mantém versões em ordem, indica fallback e inclui conversa curta 
   assert.equal(antiga.detalhes.conteudo, 'Texto final');
 });
 
-test('fluxo investigativo humaniza somente após o gate e mantém dossiê e consumo técnico originais', async () => {
+test('fluxo entrega diálogo original sem editorial mesmo com preferência NATURAL', async () => {
   const etapas = [];
   let pesquisas = 0, dossie;
   store.definirEstiloResposta(1, consultor.telefone, 'NATURAL');
+  const conversa = 'O print mostra Failed to load program M185GRV.PRW. Ainda falta confrontar o erro com o código.\n\nPode enviar o fonte completo M185GRV.PRW e o log desta ocorrência? Houve compilação recente?';
+  let textoGerado = conversa;
   const at = atendimentoRepo.criarAtendimento(1, { origem: 'manual', conteudoBruto: 'Erro técnico', consultorId: consultor.id });
   const anterior = mensagemRepo.salvarMensagem(1, at.id, {
     papel: 'assistant', conteudo: 'Texto humanizado anterior',
@@ -298,50 +300,57 @@ test('fluxo investigativo humaniza somente após o gate e mantém dossiê e cons
   const realProvider = require('../backend/services/ai-provider-client');
   const realContexto = require('../backend/services/context-engine');
   const investigacao = carregar('../backend/services/investigacao-service.js', {
-    './ai-provider-client': { ...realProvider, chamarIA: async () => {
+    './ai-provider-client': { ...realProvider, chamarIA: async (_keys, _cfg, systemPrompt, _userPrompt, _imagens, opts) => {
+      if (systemPrompt.includes('Você classifica uma única mensagem')) return { texto: '{"tipo":"investigacao"}' };
+      assert.ok(Array.isArray(opts.conversa), 'orquestrador entrega histórico nativo ao provedor');
+      assert.equal(opts.conversa.at(-1).role, 'user');
+      assert.ok(opts.conversa.some(m => m.role === 'assistant' && m.content.includes('Texto técnico anterior completo')));
+      if (textoGerado !== conversa) {
+        assert.ok(opts.conversa.at(-1).content.includes('Não tenho o fonte. Houve compilação ontem.'));
+        assert.ok(opts.conversa.some(m => m.role === 'assistant' && m.content.includes('Pode enviar o fonte completo M185GRV.PRW')));
+      }
       etapas.push('resposta_tecnica');
-      return { texto: original, provider: 'openai', model: 'gpt-4o-mini', usage: { total_tokens: 100 } };
+      return { texto: textoGerado, provider: 'openai', model: 'gpt-4o-mini', usage: { total_tokens: 100 } };
     } },
     './ai-config-service': { ...config, resolverConfigPesquisa: () => ({}) },
     './consultor-service': consultores,
     './context-engine': { ...realContexto, montarContextoInvestigacao: dados => {
-      if (dados.atendimento.id === at.id) assert.equal(dados.mensagens.find(m => m.id === anterior.id).conteudo, 'Texto técnico anterior completo');
-      return realContexto.montarContextoInvestigacao(dados);
+      assert.equal(dados.mensagens.find(m => m.id === anterior.id).conteudo, 'Texto técnico anterior completo');
+      const montado = realContexto.montarContextoInvestigacao(dados);
+      if (dados.mensagemAtual === 'Não tenho o fonte. Houve compilação ontem.') {
+        assert.ok(dados.mensagens.some(m => m.conteudo === conversa), 'a continuação recebe a pergunta anterior');
+        assert.ok(montado.userPrompt.includes(dados.mensagemAtual), 'a continuação recebe a resposta atual do usuário');
+      }
+      return montado;
     } },
-    './resposta-humanizada-service': { prepararResposta: async dados => {
-      etapas.push('humanizacao');
-      assert.equal(dados.aprovado, true);
-      return humanizador.prepararResposta(dados);
-    } },
+    './resposta-humanizada-service': { prepararResposta: async () => { throw new Error('Não deve reescrever'); } },
     './technical-research-service': { pesquisar: async () => { pesquisas++; return {}; }, formatarContextoParaPrompt: () => '' },
     './quality-gate-service': { avaliarResposta: dados => {
-      etapas.push('quality_gate'); assert.equal(dados.textoResposta, original);
+      etapas.push('quality_gate'); assert.equal(dados.textoResposta, textoGerado);
       return { aprovado: true, deveRetry: false, falhas: [] };
     } },
     './investigacao-dossie-atualizador-service': { atualizarAposTurno: async (_e, _a, dados) => { dossie = dados; } },
   });
-  respostaMock = reescritaValida;
   const retorno = await investigacao.processarPreAnalise(1, at.id);
-  assert.deepEqual(etapas, ['resposta_tecnica', 'quality_gate', 'humanizacao']);
-  assert.equal(pesquisas, 1, 'humanização não repete pesquisa');
-  assert.equal(retorno.diagnostico.humanizacao.status, 'aplicada');
-  assert.equal(dossie.respostaAssistente, original);
+  assert.deepEqual(etapas, ['resposta_tecnica', 'quality_gate']);
+  assert.equal(pesquisas, 1);
+  assert.equal(retorno.conteudo, conversa, 'preserva perguntas e parágrafos da resposta original');
+  assert.equal(retorno.diagnostico?.humanizacao, undefined);
+  assert.equal(dossie.respostaAssistente, conversa);
   const historico = mensagemRepo.listarMensagens(1, at.id);
-  assert.equal(historico.length, 2, 'somente uma nova mensagem');
-  assert.equal(historico.find(m => m.id === anterior.id).conteudo, 'Texto humanizado anterior', 'não reescreve mensagem antiga');
+  assert.equal(historico.length, 2);
+  assert.equal(historico.find(m => m.id === anterior.id).conteudo, 'Texto humanizado anterior');
   const execucoes = require('../backend/repositories/investigacao-execucao-repository').listarPorAtendimento(1, at.id);
   assert.equal(execucoes.length, 1);
-  assert.equal(execucoes[0].model, 'gpt-4o-mini', 'auditoria investigativa mantém o modelo técnico');
-  assert.equal(retorno.diagnostico.humanizacao.usage.total_tokens, 42);
+  assert.equal(execucoes[0].model, 'gpt-4o-mini');
+  textoGerado = 'A compilação de ontem é uma pista para conferir no log, mas ainda não confirma a causa.\n\nComo o fonte não está disponível, pode enviar o log completo da ocorrência para verificarmos a falha de carregamento?';
   etapas.length = 0;
-  const fallbackAt = atendimentoRepo.criarAtendimento(1, { origem: 'manual', conteudoBruto: 'Erro técnico', consultorId: consultor.id });
-  respostaMock = { texto: original.replace('C7_FILIAL', 'C7_FILIA2'), provider: 'openai', model: 'mock' };
-  const fallback = await investigacao.processarPreAnalise(1, fallbackAt.id);
-  assert.deepEqual(etapas, ['resposta_tecnica', 'quality_gate', 'humanizacao'], 'falha editorial não repete gate nem investigação');
-  assert.equal(fallback.conteudo, original);
-  assert.equal(fallback.diagnostico.humanizacao.aprovacaoTecnica.aprovado, true);
-  assert.ok(fallback.diagnostico.humanizacao.respostaCandidata.includes('C7_FILIA2'));
-  assert.ok(fallback.diagnostico.humanizacao.validacaoPreservacao.falhas.some(f => f.codigo === 'REFERENCIA_TECNICA_REMOVIDA'));
+  const continuacao = await investigacao.processarTurno(1, at.id, {
+    texto: 'Não tenho o fonte. Houve compilação ontem.', usuarioId: null, consultorId: consultor.id,
+  });
+  assert.deepEqual(etapas, ['resposta_tecnica', 'quality_gate']);
+  assert.equal(continuacao.conteudo, textoGerado, 'entrega a continuação sem reescrever perguntas');
+  assert.equal(continuacao.diagnostico?.humanizacao, undefined);
 });
 
 test('provider respeita orçamento total de timeout e desliga retry extra de raciocínio somente quando solicitado', async () => {
