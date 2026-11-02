@@ -959,6 +959,8 @@ function _comOrientacao(texto, bloco) {
   return t.includes(MARCADOR_ORIENTACOES) ? `${t}\n\n${bloco}` : `${t}\n\n${MARCADOR_ORIENTACOES}\n${bloco}`;
 }
 
+const ETAPA_RESPOSTA_PRONTA = 'Resposta pronta; atualizando o dossiê do chamado';
+
 const GARANTIA_ANEXOS_TEMPO_MAX_MS = Number(process.env.SVC_GARANTIA_ANEXOS_TEMPO_MAX_MS) || 45000;
 // Depois de um tempo esgotado, as próximas análises da empresa não esperam de novo
 // o agente travado: seguem na hora, com o aviso, até a pausa acabar.
@@ -1899,6 +1901,25 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     console.error('[IA Service] Falha ao registrar auditoria da investigação:', auditErr.message);
   }
 
+  if (!mensagemUsuario && !anexosComoContexto) {
+    for (const anexo of anexosDoTurno) {
+      anexoRepo.vincularMensagem(empresaId, anexo.id, mensagemAssistente.id);
+    }
+  }
+
+  mensagemAssistente.fontesCorrigidos = geracaoFontes.fontes;
+  mensagemAssistente.avisosFonteCorrigido = avisoAnexos ? [avisoAnexos, ...geracaoFontes.avisos] : geracaoFontes.avisos;
+  mensagemAssistente.avaliacoesFonteCorrigido = geracaoFontes.avaliacoes;
+  if (mensagemAssistente.avisosFonteCorrigido.length || geracaoFontes.avaliacoes.length) {
+    const persistida = mensagemRepo.atualizarAvisosFonteCorrigido(empresaId, mensagemAssistente.id, mensagemAssistente.avisosFonteCorrigido, geracaoFontes.avaliacoes);
+    mensagemAssistente.diagnostico = persistida.diagnostico;
+  }
+
+  // A resposta já está completa (texto, anexos e avisos): a tela mostra na hora,
+  // sem esperar a atualização do dossiê, que chama a IA de novo (~15 s, achado
+  // real 2026-11-02). O turno só termina depois do dossiê, como antes.
+  progressoTurno.registrar(empresaId, atendimentoId, ETAPA_RESPOSTA_PRONTA);
+
   try {
     await investigacaoDossieAtualizador.atualizarAposTurno(empresaId, atendimentoId, {
       mensagemUsuarioId: mensagemUsuario?.id ?? null,
@@ -1927,19 +1948,6 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     }
   }
 
-  if (!mensagemUsuario && !anexosComoContexto) {
-    for (const anexo of anexosDoTurno) {
-      anexoRepo.vincularMensagem(empresaId, anexo.id, mensagemAssistente.id);
-    }
-  }
-
-  mensagemAssistente.fontesCorrigidos = geracaoFontes.fontes;
-  mensagemAssistente.avisosFonteCorrigido = avisoAnexos ? [avisoAnexos, ...geracaoFontes.avisos] : geracaoFontes.avisos;
-  mensagemAssistente.avaliacoesFonteCorrigido = geracaoFontes.avaliacoes;
-  if (mensagemAssistente.avisosFonteCorrigido.length || geracaoFontes.avaliacoes.length) {
-    const persistida = mensagemRepo.atualizarAvisosFonteCorrigido(empresaId, mensagemAssistente.id, mensagemAssistente.avisosFonteCorrigido, geracaoFontes.avaliacoes);
-    mensagemAssistente.diagnostico = persistida.diagnostico;
-  }
 
   mensagemAssistente.respostaOperacional = respostaOperacionalService.construirFichaOperacional({
     diagnostico: mensagemAssistente.diagnostico,

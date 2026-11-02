@@ -1140,9 +1140,13 @@
 
   // Consulta o andamento do turno a cada 1,5 s e mostra as etapas na mensagem
   // de status. Sem progresso (backend antigo/reiniciado), fica o texto genérico.
+  // Mesma frase de ETAPA_RESPOSTA_PRONTA (investigacao-service.js).
+  const ETAPA_RESPOSTA_PRONTA = 'Resposta pronta';
+
   function acompanharProgresso(atendimentoId, texto) {
     let ativo = true;
     let ultimo = '';
+    let respostaCarregada = false;
     const timer = setInterval(async () => {
       try {
         const p = await request(ext(`/atendimentos/${encodeURIComponent(atendimentoId)}/progresso`));
@@ -1151,6 +1155,12 @@
         if (ativo && etapas.length && assinatura !== ultimo && state.chatStatusAtendimentoId === atendimentoId) {
           ultimo = assinatura;
           showChatStatus(texto, atendimentoId, etapas);
+        }
+        // Resposta já gravada: mostra agora, sem esperar o fim do turno.
+        if (ativo && !respostaCarregada && atendimentoId === state.atendimentoId
+          && etapas.some((e) => String(e?.texto ?? e).startsWith(ETAPA_RESPOSTA_PRONTA))) {
+          respostaCarregada = true;
+          loadMessages().catch(() => {});
         }
       } catch (_) { /* sem progresso: mantém o texto genérico */ }
     }, 1500);
