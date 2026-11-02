@@ -135,7 +135,7 @@ async function testarQualityGateRegressao() {
   assert.ok(ruim.falhas.some(f => f.codigo === 'REGRESSAO_INVESTIGATIVA_TESTE_REPETIDO'));
   assert.ok(ruim.falhas.some(f => f.codigo === 'REGRESSAO_INVESTIGATIVA_HIPOTESE_DESCARTADA'));
   assert.ok(ruim.falhas.some(f => f.codigo === 'REGRESSAO_INVESTIGATIVA_EVIDENCIA_JA_RECEBIDA'));
-  assert.strictEqual(ruim.deveRetry, true);
+  assert.strictEqual(ruim.deveRetry, false);
   assert.ok(qualityGate.montarInstrucaoRetry(ruim).includes('Regressao investigativa'));
 
   const justificada = qualityGate.avaliarResposta({

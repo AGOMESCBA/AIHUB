@@ -242,7 +242,7 @@ async function main() {
     pesquisa: { configurado: false },
     pergunta: 'pesquise documentação e analise o anexo',
   });
-  assert.strictEqual(gate.deveRetry, true);
+  assert.strictEqual(gate.deveRetry, false);
   assert.ok(gate.falhas.some(f => f.codigo === 'CRITICAL_EVIDENCE_OMITTED' && f.evidenciaId === 'a1'));
   const gateRetry = qualityGate.avaliarResposta({ textoResposta: 'curta', manifesto: { selecionados: [{ tipo: 'anexo', status: 'ANALISADA' }], omitidos: [] }, pergunta: 'anexo', houveRetry: true });
   assert.strictEqual(gateRetry.deveRetry, false);

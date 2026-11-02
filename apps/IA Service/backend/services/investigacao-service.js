@@ -530,7 +530,8 @@ function _prepararTextoResposta(texto, pesquisa) {
   return _adicionarLimitePesquisaSemPaginaLida(_limparBastidoresRetryTexto(texto), pesquisa);
 }
 
-// O retry existe para corrigir atribuicao/certeza, nunca para piorar a analise.
+// Compatibilidade com verificações e registros antigos de retry. O fluxo
+// atual não reescreve respostas por decisão do Quality Gate.
 // Se a resposta do retry for uma recusa do provider ("Desculpe, nao posso
 // ajudar"), vazia ou muito mais curta que a anterior, ela e descartada e a
 // resposta anterior e mantida (com seus alertas registrados).
@@ -544,14 +545,10 @@ function _retryDegradouResposta(textoRetry, textoAnterior) {
   return null;
 }
 
-function _temBloqueioObjetivoQualityGate(qualityGate) {
-  return (qualityGate?.falhas || []).some(f => (f.decisionKind || f.categoriaDecisao) === 'bloqueio_objetivo');
-}
-
 // O Quality Gate nunca substitui a analise da IA (decisao do usuario,
 // 2026-10-23, caso #036537: artigo da Central TOTVS lido pela propria pesquisa
 // vetou a resposta inteira — "o gate nao pode travar a mensagem"). Falha
-// remanescente apos o retry vira observacao ao analista no fim da resposta e
+// encontrada na geração original vira observacao ao analista no fim da resposta e
 // status de alerta. Revisao necessaria fica so para resposta cortada.
 function _statusFinalQualityGate(qualityGate) {
   return qualityGate?.aprovado ? 'concluido' : 'concluido_com_alerta_quality_gate';
@@ -589,24 +586,6 @@ function _removerIdsInternosTexto(texto) {
   return String(texto || '')
     .replace(/\baud[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D-](?:msg|an|at|ch)[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D-][a-z0-9_\u2010-\u2015\u2212\uFE58\uFE63\uFF0D-]+\b/gi, '[ID_INTERNO_REMOVIDO]')
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '[UUID_INTERNO_REMOVIDO]');
-}
-
-function _resumirEvidenciaSemId(e) {
-  const nome = e.nome ? `arquivo "${e.nome}"` : e.tipo === 'mensagem' ? 'mensagem do historico' : `${e.tipo || 'evidencia'} selecionada`;
-  return `${nome} (${e.status || 'ANALISADA'}; ${e.motivo || 'sem motivo registrado'})`;
-}
-
-function _resumoQualityGate(gate) {
-  return {
-    aprovado: !!gate?.aprovado,
-    falhas: (gate?.falhas || []).map(f => ({
-      codigo: f.codigo,
-      decisionKind: f.decisionKind || f.categoriaDecisao || null,
-      termos: f.termos || [],
-      classificacaoContextual: f.classificacaoContextual || null,
-    })),
-    decisoes: gate?.decisoes || null,
-  };
 }
 
 async function _carregarPayloadVisual(contexto) {
@@ -1088,7 +1067,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   const { avisoAnalista: avisoAnexos, avisoIA: avisoAnexosIA } = anexosSoftExpertService.descreverGarantia(garantiaAnexos);
 
   const todosAnexosDoAtendimento = anexoRepo.listarAnexos(empresaId, atendimentoId);
-  const systemPromptBase = promptBuilder.selecionarSystemPrompt(todosAnexosDoAtendimento);
+  const systemPromptBase = promptBuilder.selecionarSystemPrompt(todosAnexosDoAtendimento, { automatico, forcarPesquisa });
   const systemPromptTurno = avisoAnexosIA ? `${systemPromptBase}\n\n${avisoAnexosIA}` : systemPromptBase;
   const anexosTextoParaPesquisa = todosAnexosDoAtendimento.filter(a => a.conteudoExtraido);
 
@@ -1500,8 +1479,9 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
 
   let resultado;
   let qualityGate = null;
-  let retryDeQualityGate = false;
-  let acoesRetry = [];
+  // Campos mantidos na auditoria por compatibilidade com execuções anteriores.
+  const retryDeQualityGate = false;
+  const acoesRetry = [];
   let promptUsado = userPrompt;
   const inicioIa = Date.now();
   try {
@@ -1544,205 +1524,8 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       indiceReferencias: contexto.indiceReferencias,
       fontesOriginais: _fontesIntegraisDoContexto(empresaId, atendimentoId, contexto.manifesto),
     });
-    if (qualityGate.deveRetry) {
-      retryDeQualityGate = true;
-      const qualityGateAntesRetry = qualityGate;
-      const resultadoAntesRetry = resultado;
-      const respostaAntesRetry = String(resultado.texto || '');
-      const idsForcados = (qualityGate.falhas || []).map(f => f.evidenciaId).filter(Boolean);
-      if (idsForcados.length) {
-        contexto = contextEngine.montarContextoInvestigacao({
-          ...paramsContexto,
-          evidenciaForcadaIds: idsForcados,
-          candidatoOrcamento: candidatoBase,
-          permitirImagens: true,
-        });
-        userPrompt = contexto.userPrompt;
-        const payloadVisualRetry = await _carregarPayloadVisual(contexto);
-        imagens.splice(0, imagens.length, ...payloadVisualRetry.imagens);
-        if (payloadVisualRetry.falhasImagem.length > 0 || payloadVisualRetry.falhasPdfVisual.length > 0) {
-          return _registrarErroVisual({
-            empresaId,
-            atendimentoId,
-            mensagemUsuario,
-            contexto,
-            pesquisaTecnica,
-            userPrompt,
-            falhasImagem: payloadVisualRetry.falhasImagem,
-            falhasPdfVisual: payloadVisualRetry.falhasPdfVisual,
-          });
-        }
-        acoesRetry.push({ tipo: 'contexto_reconstruido', evidenciaForcadaIds: idsForcados });
-      }
-      if ((qualityGate.falhas || []).some(f => f.codigo === 'GENERIC_RESPONSE_WITH_SPECIFIC_EVIDENCE')) {
-        acoesRetry.push({ tipo: 'reforco_evidencias_especificas' });
-      }
-      userPrompt = _adicionarInstrucaoObservacaoVisual(userPrompt, contexto);
-      promptUsado = `${userPrompt}\n\n## Reprocessamento por Quality Gate\n${qualityGateService.montarInstrucaoRetry(qualityGate, { manifesto: contexto.manifesto })}`;
-      // maxProviderRounds:1 — teto global de tentativas por investigacao: a
-      // primeira chamada ja varreu todos os providers elegiveis em ate 3
-      // rodadas; repetir rodadas completas tambem no retry do Quality Gate
-      // multiplicava o pior caso teorico para ~45 tentativas HTTP numa unica
-      // investigacao sem nenhum limite agregado (achado real, auditoria do
-      // fallback multi-provider 2026-10). Uma rodada aqui ainda tenta TODOS
-      // os providers elegiveis uma vez, so nao reinsiste em erro transitorio.
-      const contextoRetry = contexto;
-      const preparadorRetry = _criarPreparadorPorCandidato({
-        contexto: contextoRetry,
-        userPromptAtual: promptUsado,
-        imagensAtuais: imagens,
-        candidatoAtual: candidatoBase,
-        paramsContexto,
-        evidenciaForcadaIds: idsForcados,
-        decorar: (ctx, prompt) => `${_adicionarInstrucaoObservacaoVisual(prompt, ctx)}\n\n## Reprocessamento por Quality Gate\n${qualityGateService.montarInstrucaoRetry(qualityGateAntesRetry, { manifesto: ctx.manifesto })}`,
-      });
-      progressoTurno.registrar(empresaId, atendimentoId, 'Revisando a qualidade da resposta');
-      resultado = await aiProviderClient.chamarIA(keys, cfg, systemPromptTurno, promptUsado, imagens, {
-        conversa: _conversaParaCandidato(contexto, promptUsado),
-        maxTokens: 6000,
-        timeoutMs,
-        maxProviderRounds: 1,
-        prepararParaCandidato: preparadorRetry.preparar,
-      });
-      const motivoDescarteRetry = _retryDegradouResposta(resultado.texto, respostaAntesRetry);
-      if (motivoDescarteRetry) {
-        acoesRetry.push({ tipo: 'retry_descartado_resposta_degradada', motivo: motivoDescarteRetry });
-        resultado = {
-          ...resultadoAntesRetry,
-          tentativas: [...(resultadoAntesRetry.tentativas || []), ...(resultado.tentativas || [])],
-        };
-      }
-      const usadoRetry = motivoDescarteRetry ? null : preparadorRetry.usadoPor(resultado);
-      if (usadoRetry) {
-        contexto = usadoRetry.contexto;
-        promptUsado = usadoRetry.userPrompt;
-        imagens.splice(0, imagens.length, ...usadoRetry.imagens);
-      }
-      resultado = _aplicarObservacoesVisuais(resultado, contexto);
-      resultado.texto = _prepararTextoResposta(resultado.texto, pesquisaTecnica);
-      qualityGate = qualityGateService.avaliarResposta({
-        textoResposta: resultado.texto,
-        manifesto: contexto.manifesto,
-        pesquisa: pesquisaTecnica,
-        pergunta: texto,
-        houveRetry: true,
-        historicoMensagens: historico,
-        indiceReferencias: contexto.indiceReferencias,
-        fontesOriginais: _fontesIntegraisDoContexto(empresaId, atendimentoId, contexto.manifesto),
-      });
-      const codigosReescritaFinal = new Set([
-        'ROBOTIC_TEMPLATE_RESPONSE',
-        'WEAK_ACTIONABLE_CORRECTION',
-        'SPECIFIC_ERROR_NOT_PRIORITIZED',
-        'INTERNAL_IDS_USED_AS_EVIDENCE',
-        'CUSTOMIZATION_DISCARDED_WITHOUT_CODE_OR_LOG',
-        'OVERCONFIDENT_CAUSE_WITH_PARTIAL_SOURCE',
-        'HYPOTHESIS_PROMOTED_TO_CONFIRMED_CAUSE',
-        'RESEARCH_FOUND_BUT_NOT_READ',
-      ]);
-      const falhasReescritaFinal = (qualityGate.falhas || []).filter(f => codigosReescritaFinal.has(f.codigo));
-      if (falhasReescritaFinal.length > 0 && (qualityGate.falhas || []).every(f => codigosReescritaFinal.has(f.codigo))) {
-        acoesRetry.push({ tipo: 'reescrita_final_quality_gate', falhas: falhasReescritaFinal.map(f => f.codigo) });
-        const evidenciasResumo = (contexto.manifesto?.selecionados || [])
-          .slice(0, 12)
-          .map(_resumirEvidenciaSemId)
-          .join('\n');
-        const fontesResumo = (pesquisaTecnica?.paginasLidas || [])
-          .slice(0, 6)
-          .map(p => `${p.status || 'fonte'}: ${p.titulo || p.url}`)
-          .join('\n');
-        promptUsado = [
-          '## Reescrita final obrigatoria por Quality Gate',
-          qualityGateService.montarInstrucaoRetry(qualityGate, { manifesto: contexto.manifesto }),
-          '',
-          'A resposta abaixo ja analisou o caso, mas ainda falhou no Quality Gate. Reescreva SEM reinvestigar do zero.',
-          '',
-          'Regras obrigatorias:',
-          '- nao use cabecalhos Markdown;',
-          '- nao use checklist de laudo;',
-          '- nao mencione Quality Gate, reescrita, retry, resposta anterior ou qualquer bastidor interno;',
-          '- nao recomende videochamada;',
-          '- comece pelo erro especifico mais forte;',
-          '- diga o primeiro teste/ajuste tecnico concreto;',
-          '- mantenha evidencias visuais e fontes oficiais que sustentam a analise;',
-          '- se mencionar parametros/documentacao, trate como apoio e nao como primeira trilha quando existir erro especifico de tela/log.',
-          '- se houver apenas trecho de fonte/codigo, nao apresente declaracao, escopo ou inicializacao de variavel como causa confirmada; trate como hipotese e peca fonte completo + compilacao/execucao controlada;',
-          '- em SoftExpert Workflow, se HTTP 200 coexistir com atividade parada, trate HTTP 200 como fato de recebimento/processamento do callback; trate permissao, papel ou responsavel como hipotese ate haver log interno/auditoria/configuracao confirmando;',
-          '- se a pesquisa tecnica encontrou links mas nenhuma pagina foi lida/reutilizada, declare essa limitacao em uma frase curta e nao cite a documentacao como fonte consultada;',
-          '',
-          '## Evidencias selecionadas resumidas',
-          evidenciasResumo || 'Sem resumo de evidencias.',
-          '',
-          '## Fontes tecnicas lidas/reutilizadas',
-          fontesResumo || 'Sem fontes tecnicas.',
-          '',
-          '## Resposta anterior a reescrever',
-          _removerIdsInternosTexto(resultado.texto),
-        ].join('\n');
-        resultado = await aiProviderClient.chamarIA(keys, cfg, systemPromptTurno, promptUsado, [], {
-          maxTokens: 2200,
-          timeoutMs: Math.min(timeoutMs, 60000),
-          maxProviderRounds: 1,
-        });
-        resultado.texto = _prepararTextoResposta(resultado.texto, pesquisaTecnica);
-        qualityGate = qualityGateService.avaliarResposta({
-          textoResposta: resultado.texto,
-          manifesto: contexto.manifesto,
-          pesquisa: pesquisaTecnica,
-          pergunta: texto,
-          houveRetry: true,
-          historicoMensagens: historico,
-          indiceReferencias: contexto.indiceReferencias,
-          fontesOriginais: _fontesIntegraisDoContexto(empresaId, atendimentoId, contexto.manifesto),
-        });
-      }
-      if (!qualityGate.aprovado && qualityGateService.temFalhaDeIntegridade(qualityGate)) {
-        const respostaSegura = planoRespostaRastreavel.gerarRespostaSeguraDeterministica({
-          plano: contexto.manifesto?.planoRespostaRastreavel,
-          gate: qualityGate,
-        });
-        if (respostaSegura?.texto) {
-          const qualityGateSeguro = qualityGateService.avaliarResposta({
-            textoResposta: respostaSegura.texto,
-            manifesto: contexto.manifesto,
-            pesquisa: pesquisaTecnica,
-            pergunta: texto,
-            houveRetry: true,
-            historicoMensagens: historico,
-            indiceReferencias: contexto.indiceReferencias,
-            fontesOriginais: _fontesIntegraisDoContexto(empresaId, atendimentoId, contexto.manifesto),
-          });
-          const bloqueioSeguro = _temBloqueioObjetivoQualityGate(qualityGateSeguro);
-          acoesRetry.push({
-            tipo: 'resposta_segura_deterministica',
-            modo: respostaSegura.modo,
-            aplicado: !bloqueioSeguro,
-            falhasAntes: (qualityGate.falhas || []).map(f => f.codigo),
-            falhasDepois: (qualityGateSeguro.falhas || []).map(f => f.codigo),
-          });
-          if (!bloqueioSeguro) {
-            resultado = { ...resultado, texto: _prepararTextoResposta(respostaSegura.texto, pesquisaTecnica), recuperacaoDeterministica: respostaSegura };
-            qualityGate = qualityGateSeguro;
-            qualityGate.recuperacaoDeterministica = {
-              aplicada: true,
-              modo: respostaSegura.modo,
-              origem: respostaSegura.origem,
-            };
-          }
-        }
-      }
-      qualityGate.retryCorretivo = {
-        executado: true,
-        acoes: acoesRetry,
-        antes: {
-          qualityGate: _resumoQualityGate(qualityGateAntesRetry),
-          respostaResumo: _removerIdsInternosTexto(respostaAntesRetry).slice(0, 2200),
-        },
-        depois: {
-          qualityGate: _resumoQualityGate(qualityGate),
-        },
-      };
-    }
+    // Gate sinalizador: entrega original, sem segunda geracao ou substituicao automatica.
+
   } catch (erro) {
     // Mensagem de erro registrada como turno do assistente, para o analista
     // ver no próprio chat — nunca expõe stack trace, só a causa amigável.

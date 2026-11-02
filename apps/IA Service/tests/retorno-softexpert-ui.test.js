@@ -21,7 +21,7 @@ async function setup() {
   if (!browser) {
     server = await new Promise((resolve) => {
       const srv = http.createServer((req, res) => {
-        const files = new Set(['radar.css', 'radar.js', 'tab-export.js', 'tab-export.css', 'retorno-softexpert.css', 'retorno-softexpert.js', 'detalhes-tecnicos.js', 'detalhes-tecnicos.css', 'chat-interno.js', 'chat-interno.css']);
+        const files = new Set(['radar.css', 'radar.js', 'mobile-viewport.js', 'tab-export.js', 'tab-export.css', 'retorno-softexpert.css', 'retorno-softexpert.js', 'detalhes-tecnicos.js', 'detalhes-tecnicos.css', 'chat-interno.js', 'chat-interno.css']);
         const name = req.url.replace(/^\/iaservice\/(?:j2a\/)?assets\//, '').replace(/^\//, '');
         if (req.url === '/') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); return res.end(harness); }
         if (req.url === '/j2a') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); return res.end(fs.readFileSync(path.join(assets, '../index.html'))); }
@@ -152,8 +152,8 @@ test('J2A real integra o painel e mantém o chat utilizável no desktop e no mob
       await page.locator('#message-input').evaluate((el) => { el.style.height = '120px'; });
       for (const selector of ['.attach-button', '#send-btn']) {
         const bounds = await page.locator(selector).boundingBox();
-        assert.equal(bounds.width, 40, `${selector}: largura fixa`);
-        assert.equal(bounds.height, 40, `${selector}: altura fixa mesmo com mensagem alta`);
+        assert.equal(bounds.width, width <= 900 ? 44 : 40, `${selector}: largura fixa`);
+        assert.equal(bounds.height, width <= 900 ? 44 : 40, `${selector}: altura fixa mesmo com mensagem alta`);
       }
       // Campo de mensagem cresce enquanto digita (como no WhatsApp), para no
       // limite e passa a rolar; vazio volta ao tamanho inicial.
@@ -167,7 +167,7 @@ test('J2A real integra o painel e mantém o chat utilizável no desktop e no mob
       const quatro = await altura();
       assert.ok(quatro > umaLinha + 40, `cresce com as linhas: ${umaLinha} -> ${quatro}`);
       await campo.fill(Array.from({ length: 40 }, (_, i) => `linha ${i}`).join('\n'));
-      assert.equal(Math.round(await altura()), 200, 'para no limite');
+      assert.equal(Math.round(await altura()), width <= 900 ? 120 : 200, 'para no limite adequado à tela');
       assert.equal(await campo.evaluate(el => getComputedStyle(el).overflowY), 'auto', 'acima do limite rola por dentro');
       await campo.fill('');
       assert.ok(Math.abs((await altura()) - vazio) <= 1, 'vazio volta ao tamanho inicial');

@@ -144,12 +144,12 @@ teste('gate: na primeira tentativa de um novo turno humano, "resposta anterior" 
 
 // 2026-10-23 (caso #036537): o gate nunca trava a mensagem. Apos o retry, a
 // resposta da IA e entregue com alerta; os codigos ficam so na auditoria.
-teste('fluxo: resposta reprovada -> 1 retry permitido -> nova reprovacao -> entrega com alerta, sem loop', async () => {
+teste('fluxo: resposta reprovada é entregue com alerta, sem retry automático', async () => {
   const at = criarAtendimento();
   await comFluxoSimulado({ respostas: [REJEITADA] }, async (reg) => {
     const msg = await investigacaoService.processarTurno(EMPRESA, at.id, { texto: PEDIDO_TURNO_1, usuarioId: 1 });
-    assert.strictEqual(reg.principais.length, 2, `uma chamada + um retry, nunca mais (foram ${reg.principais.length})`);
-    assert.match(reg.principais[1], /Reprocessamento por Quality Gate/);
+    assert.strictEqual(reg.principais.length, 1, 'somente a geração original');
+    assert.ok(!reg.principais[0].includes('Reprocessamento por Quality Gate'));
     const exec = ultimaExecucao(EMPRESA, at.id);
     assert.strictEqual(exec.status, 'concluido_com_alerta_quality_gate');
     assert.ok(exec.qualityGate.falhas.some(f => f.codigo === 'RETRY_CONTEXT_LEAKED'), 'codigo interno preservado na auditoria');
@@ -183,14 +183,14 @@ teste('#036765 sintetico: turno 2 humano pedindo nova pesquisa executa a investi
     assert.ok(!falha(exec2.qualityGate, 'RETRY_CONTEXT_LEAKED'));
     assert.ok(!falha(exec2.qualityGate, 'RESEARCH_CONFIGURED_WITHOUT_RESULTS'));
     assert.notStrictEqual(exec2.status, 'revisao_necessaria_quality_gate');
-    assert.strictEqual(msg2.conteudo, RESPOSTA_BOA_2);
+    assert.strictEqual(msg2.conteudo.split('\n\n⚠️')[0], RESPOSTA_BOA_2, 'corpo original preservado antes dos avisos');
   });
 });
 
 teste('novo turno humano apos resposta entregue com alerta: investiga normalmente, sem codigos internos no prompt', async () => {
   const at = criarAtendimento();
   await comFluxoSimulado({
-    respostas: (prompt, n) => (n <= 2 ? REJEITADA : RESPOSTA_BOA_2),
+    respostas: (prompt, n) => (n === 1 ? REJEITADA : RESPOSTA_BOA_2),
     semantica: c => interpretacao({ pedido: c.texto === 'Pesquise novamente.' }),
   }, async (reg) => {
     await investigacaoService.processarTurno(EMPRESA, at.id, { texto: PEDIDO_TURNO_1, usuarioId: 1 });
@@ -199,12 +199,12 @@ teste('novo turno humano apos resposta entregue com alerta: investiga normalment
     const msg = await investigacaoService.processarTurno(EMPRESA, at.id, { texto: 'Pesquise novamente.', usuarioId: 1 });
     const exec = ultimaExecucao(EMPRESA, at.id);
     const prompt = reg.principais.at(-1);
-    assert.strictEqual(reg.principais.length, 3, 'nova investigacao executada em uma unica tentativa');
+    assert.strictEqual(reg.principais.length, 2, 'uma geração em cada turno humano');
     assert.ok(reg.semanticaCtx.some(c => c.texto === 'Pesquise novamente.'), 'mensagem curta do analista vai para a camada semantica');
     assert.strictEqual(exec.pesquisa.plano.devePesquisar, true, `motivo: ${exec.pesquisa.plano.motivo}`);
     assert.ok(!/bloqueada para revisao|RETRY_CONTEXT_LEAKED/.test(prompt), 'aviso de bloqueio e codigos nao entram no prompt');
     assert.notStrictEqual(exec.status, 'revisao_necessaria_quality_gate');
-    assert.strictEqual(msg.conteudo, RESPOSTA_BOA_2);
+    assert.strictEqual(msg.conteudo.split('\n\n⚠️')[0], RESPOSTA_BOA_2, 'corpo original preservado antes dos avisos');
   });
 });
 
@@ -248,7 +248,7 @@ teste('nova evidencia apos bloqueio: novo turno investiga com o contexto tecnico
   const at = criarAtendimento();
   const novoLog = 'Segue novo log do servidor: java.lang.IllegalStateException PrazoValidator linha 88 ao gravar a solicitacao. Reavalie.';
   await comFluxoSimulado({
-    respostas: (prompt, n) => (n === 1 ? RESPOSTA_BOA_1 : n <= 3 ? REJEITADA : RESPOSTA_BOA_2),
+    respostas: (prompt, n) => (n === 1 ? RESPOSTA_BOA_1 : n === 2 ? REJEITADA : RESPOSTA_BOA_2),
     semantica: c => interpretacao({ evidenciaNova: c.texto === novoLog }),
   }, async (reg) => {
     await investigacaoService.processarTurno(EMPRESA, at.id, { texto: PEDIDO_TURNO_1, usuarioId: 1 });
@@ -261,7 +261,7 @@ teste('nova evidencia apos bloqueio: novo turno investiga com o contexto tecnico
     assert.ok(prompt.includes('prazo configurado de 20 dias'), 'resposta tecnica aprovada anterior continua no contexto');
     assert.ok(!prompt.includes('Reprocessamento por Quality Gate'), 'instrucao de retry nao vaza para o turno seguinte');
     assert.ok(reg.pesquisaCtx.at(-1).dossieOperacional, 'dossie continua sendo montado');
-    assert.strictEqual(msg.conteudo, RESPOSTA_BOA_2);
+    assert.strictEqual(msg.conteudo.split('\n\n⚠️')[0], RESPOSTA_BOA_2, 'corpo original preservado antes dos avisos');
   });
 });
 

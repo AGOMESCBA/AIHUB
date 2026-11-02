@@ -62,7 +62,7 @@ function testarAtribuicaoFalsaAoCasoBloqueia() {
   const f = falha(g, 'MODEL_KNOWLEDGE_PRESENTED_AS_CASE_EVIDENCE');
   assert.ok(f, 'fato inventado sobre o chamado deve ser sinalizado');
   assert.strictEqual(f.decisionKind, 'bloqueio_objetivo');
-  assert.ok(g.deveRetry, 'deve acionar retry para corrigir a atribuicao');
+  assert.equal(g.deveRetry, false, 'atribuicao falsa permanece sinalizada, sem reescrita automatica');
   assert.ok(qg.temFalhaDeIntegridade(g));
 
   // Afirmada como causa confirmada, sem hedge.

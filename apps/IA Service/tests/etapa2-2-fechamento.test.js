@@ -199,18 +199,16 @@ async function main() {
         }),
       ],
     });
-    const chamadasImagemPrincipais = chamadasImagem.filter(c => !c.body.response_format);
-    assert.strictEqual(chamadasImagemPrincipais.length, 2);
+    const chamadasImagemPrincipais = chamadasImagem.filter(c => !c.body.response_format && !/transcreve texto visivel/i.test(JSON.stringify(c.body.messages?.[0])));
+    assert.strictEqual(chamadasImagemPrincipais.length, 1, 'gate não reprocessa imagem omitida');
     assert.strictEqual(chamadasImagemPrincipais[0].hostname, 'api.groq.com');
     assert.strictEqual(typeof chamadasImagemPrincipais[0].body.messages[1].content, 'string');
-    assert.strictEqual(chamadasImagemPrincipais[1].hostname, 'api.openai.com');
-    assert.strictEqual(chamadasImagemPrincipais[1].body.messages[1].content[1].type, 'image_url');
-    assert.match(chamadasImagemPrincipais[1].body.messages[1].content[1].image_url.url, /^data:image\/png;base64,/);
     const execImagem = execucaoRepo.listarPorAtendimento(9802, atendimentoImagem.id)[0];
-    assert.strictEqual(execImagem.retryDeQualityGate, true);
+    assert.strictEqual(execImagem.retryDeQualityGate, false);
     assert.strictEqual(execImagem.qualityGate.deveRetry, false);
-    assert.ok(execImagem.qualityGate.retryCorretivo.acoes.some(a => a.tipo === 'contexto_reconstruido'));
-    assert.ok(execImagem.manifesto.selecionados.some(e => e.id === imagem.id && e.enviadoComoImagem === true));
+    assert.ok(execImagem.manifesto.omitidos.some(e => e.id === imagem.id), 'omissão continua registrada');
+    assert.ok(execImagem.qualityGate.falhas.some(f => f.codigo === 'CRITICAL_EVIDENCE_OMITTED'));
+    assert.match(mensagemRepo.listarMensagens(9802, atendimentoImagem.id).at(-1).conteudo, /Pontos de atenção/);
 
     const atendimentoPdf = atendimentoRepo.criarAtendimento(9803, { origem: 'manual', canalEntrada: 'web', conteudoBruto: 'pdf visual omitido' });
     const pdf = criarPdfBuffer('PDF VISUAL RETRY 2244');
@@ -249,14 +247,13 @@ async function main() {
         }),
       ],
     });
-    const chamadasPdfPrincipais = chamadasPdf.filter(c => !c.body.response_format);
-    assert.strictEqual(chamadasPdfPrincipais.length, 2);
+    const chamadasPdfPrincipais = chamadasPdf.filter(c => !c.body.response_format && !/transcreve texto visivel/i.test(JSON.stringify(c.body.messages?.[0])));
+    assert.strictEqual(chamadasPdfPrincipais.length, 1, 'gate não solicita nova leitura do PDF omitido');
     assert.strictEqual(chamadasPdfPrincipais[0].hostname, 'api.groq.com');
-    assert.strictEqual(chamadasPdfPrincipais[1].hostname, 'api.openai.com');
-    assert.match(chamadasPdfPrincipais[1].body.messages[1].content[1].image_url.url, /^data:image\/png;base64,/);
     const execPdf = execucaoRepo.listarPorAtendimento(9803, atendimentoPdf.id)[0];
-    assert.ok(execPdf.manifesto.selecionados.some(e => e.id === anexoPdf.id && e.enviadoComoImagem === true && e.pdfPaginasEnviadas.includes(1)));
-    assert.strictEqual(execPdf.qualityGate.retryCorretivo.executado, true);
+    assert.ok(execPdf.manifesto.omitidos.some(e => e.id === anexoPdf.id));
+    assert.strictEqual(execPdf.retryDeQualityGate, false);
+    assert.match(mensagemRepo.listarMensagens(9803, atendimentoPdf.id).at(-1).conteudo, /Pontos de atenção/);
 
     const atendimentoGate = atendimentoRepo.criarAtendimento(9804, { origem: 'manual', canalEntrada: 'web', conteudoBruto: 'rateio com erro' });
     mensagemRepo.salvarMensagem(9804, atendimentoGate.id, { papel: 'customer', conteudo: 'Rateio de notas fica em 100% mesmo informando valores corretos.' });

@@ -341,7 +341,7 @@ function testarRespostaRejeitadaPeloQualityGateNaoEhValidada() {
   // Contrato explicito: o motor NUNCA deve tratar aprovado:false como
   // "resposta final valida" — quem consome avaliarResposta() precisa checar
   // aprovado antes de persistir/exibir como solucao.
-  assert.strictEqual(resultado.deveRetry, true, 'resposta rejeitada deve sinalizar necessidade de retry, nao ser aceita direto');
+  assert.strictEqual(resultado.deveRetry, false, 'resposta reprovada deve ser sinalizada sem nova geracao');
 }
 
 // ---------------------------------------------------------------------------

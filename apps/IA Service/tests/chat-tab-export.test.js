@@ -26,7 +26,7 @@ test('todas as abas exportam conteúdo completo sem alterar a tela', async () =>
       res.end(JSON.stringify(data));
       return;
     }
-    const relative = url.pathname.replace(/^\/iaservice\/j2a\/?/, '') || 'index.html';
+    const relative = url.pathname.replace(/^\/iaservice\/(?:j2a\/)?assets\//, 'assets/').replace(/^\/iaservice\/j2a\/?/, '') || 'index.html';
     const filename = path.resolve(root, relative);
     if (!filename.startsWith(root + path.sep) || !fs.existsSync(filename)) { res.writeHead(404); res.end(); return; }
     res.setHeader('Content-Type', filename.endsWith('.js') ? 'text/javascript' : filename.endsWith('.css') ? 'text/css' : 'text/html');

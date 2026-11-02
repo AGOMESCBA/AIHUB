@@ -353,6 +353,65 @@ test('fluxo entrega diálogo original sem editorial mesmo com preferência NATUR
   assert.equal(continuacao.diagnostico?.humanizacao, undefined);
 });
 
+test('gate reprovado entrega original com alerta, mesmo se um avaliador antigo solicitar retry', async () => {
+  const at = atendimentoRepo.criarAtendimento(1, { origem: 'manual', conteudoBruto: 'Faltam colunas no Browser.' });
+  let geracoes = 0;
+  const original = 'A configuração das colunas pode diferir. Peça ao cliente prints das propriedades dos campos de valor e fornecedor nos dois contextos para confirmar.';
+  const realProvider = require('../backend/services/ai-provider-client');
+  const realGate = require('../backend/services/quality-gate-service');
+  const investigacao = carregar('../backend/services/investigacao-service.js', {
+    './ai-config-service': { ...config, resolverConfigPesquisa: () => ({}) },
+    './ai-provider-client': { ...realProvider, chamarIA: async () => { geracoes++; return { texto: original, provider: 'openai', model: 'gpt-4o' }; } },
+    './technical-research-service': { pesquisar: async () => ({}), formatarContextoParaPrompt: () => '' },
+    './quality-gate-service': { ...realGate, avaliarResposta: () => ({ aprovado: false, aprovadoSemRessalvas: false, deveRetry: true,
+      falhas: [{ codigo: 'HYPOTHESIS_PROMOTED_TO_CONFIRMED_CAUSE', severidade: 'alta' }] }) },
+    './investigacao-dossie-atualizador-service': { atualizarAposTurno: async () => ({}) },
+  });
+  const retorno = await investigacao.processarTurno(1, at.id, { texto: 'Revise o layout.', forcarPesquisa: true });
+  assert.equal(geracoes, 1, 'gate não aciona reescrita nem recuperação determinística');
+  assert.ok(retorno.conteudo.startsWith(original));
+  assert.match(retorno.conteudo, /Pontos de atenção/);
+  const exec = require('../backend/repositories/investigacao-execucao-repository').listarPorAtendimento(1, at.id)[0];
+  assert.equal(exec.retryDeQualityGate, false);
+  assert.equal(exec.status, 'concluido_com_alerta_quality_gate');
+});
+
+test('resposta truncada é entregue com aviso e fica em revisão, sem segunda geração', async () => {
+  const at = atendimentoRepo.criarAtendimento(1, { origem: 'manual', conteudoBruto: 'Erro na rotina.' });
+  let geracoes = 0;
+  const realProvider = require('../backend/services/ai-provider-client');
+  const investigacao = carregar('../backend/services/investigacao-service.js', {
+    './ai-config-service': { ...config, resolverConfigPesquisa: () => ({}) },
+    './ai-provider-client': { ...realProvider, chamarIA: async () => { geracoes++; return { texto: 'O erro ainda precisa de confirmação pelo log', truncado: true, provider: 'openai', model: 'gpt-4o' }; } },
+    './technical-research-service': { pesquisar: async () => ({}), formatarContextoParaPrompt: () => '' },
+    './investigacao-dossie-atualizador-service': { atualizarAposTurno: async () => ({}) },
+  });
+  const retorno = await investigacao.processarTurno(1, at.id, { texto: 'Analise.', forcarPesquisa: true });
+  assert.equal(geracoes, 1);
+  assert.match(retorno.conteudo, /Resposta cortada pelo limite/);
+  const exec = require('../backend/repositories/investigacao-execucao-repository').listarPorAtendimento(1, at.id)[0];
+  assert.equal(exec.status, 'revisao_necessaria_quality_gate');
+});
+
+test('imagem selecionada e ilegível mantém interrupção e aviso, sem inferência da IA', async () => {
+  const at = atendimentoRepo.criarAtendimento(1, { origem: 'manual', conteudoBruto: 'Analise o erro no print.' });
+  const anexos = require('../backend/repositories/anexo-repository');
+  anexos.salvarMetadadosAnexo(1, at.id, { nomeOriginal: 'erro-indisponivel.png', nomeInterno: 'erro-indisponivel.png', mimeType: 'image/png', tamanho: 10,
+    caminhoRelativo: `1/${at.id}/erro-indisponivel.png` });
+  let geracoes = 0;
+  const realProvider = require('../backend/services/ai-provider-client');
+  const investigacao = carregar('../backend/services/investigacao-service.js', {
+    './ai-config-service': { ...config, resolverConfigPesquisa: () => ({}) },
+    './ai-provider-client': { ...realProvider, chamarIA: async () => { geracoes++; throw Error('Não deveria gerar análise sem o print'); } },
+    './technical-research-service': { pesquisar: async () => ({}), formatarContextoParaPrompt: () => '' },
+  });
+  const retorno = await investigacao.processarPreAnalise(1, at.id);
+  assert.equal(geracoes, 0);
+  assert.match(retorno.conteudo, /Não foi possível carregar/);
+  assert.match(retorno.conteudo, /erro-indisponivel\.png/);
+  assert.match(retorno.conteudo, /interrompida/);
+});
+
 test('provider respeita orçamento total de timeout e desliga retry extra de raciocínio somente quando solicitado', async () => {
   const https = require('https');
   const { EventEmitter } = require('events');

@@ -78,7 +78,7 @@ function _temRespostaGenerica(texto) {
 }
 
 function _temAcaoOuProximoPasso(texto) {
-  return /\b(apli(?:que|car|cado|cada|ca[cç][aã]o)|execut(?:e|ar|ado|ada)|valid(?:e|ar|ado|ada|a[cç][aã]o)|envi(?:e|ar|ado|ada)|anex(?:e|ar|ado|ada)|corrij\w*|corrig\w*|corre[cç][aã]o|test(?:e|ar|ado|ada)|compar(?:e|ar|ado|ada)|verifi(?:que|car|cado|cada)|colet(?:e|ar|ado|ada))\b/i.test(texto || '');
+  return /\b(apli(?:que|car|cado|cada|ca[cç][aã]o)|execut(?:e|ar|ado|ada)|valid(?:e|ar|ado|ada|a[cç][aã]o)|envi(?:e|ar|ado|ada)|anex(?:e|ar|ado|ada)|pe[cç]a|pedir|solicit(?:e|ar|ado|ada)|corrij\w*|corrig\w*|corre[cç][aã]o|test(?:e|ar|ado|ada)|compar(?:e|ar|ado|ada)|verifi(?:que|car|cado|cada)|colet(?:e|ar|ado|ada))\b/i.test(texto || '');
 }
 
 function _propostaDeCorrecao(texto) {
@@ -99,7 +99,7 @@ function _propostaDeCorrecao(texto) {
 function _temRespostaCurtaObjetiva(texto) {
   const s = _normalizar(texto);
   const temEvidenciaTecnica = /\b(evidencia|log|fonte|print|anexo|trecho|linha|stack|exception|erro|rotina|campo|tabela|parametro|advpl|prw|tlpp|array|indice)\b/i.test(s);
-  const pedeEvidenciaEspecifica = /\b(evidencia insuficiente|faltam?|preciso|envie|enviar|anexe|anexar|colete|coletar)\b/i.test(s) && /\b(log|fonte|print|anexo|trecho|linha|stack|rotina|campo|passo|reproducao)\b/i.test(s);
+  const pedeEvidenciaEspecifica = /\b(evidencia insuficiente|faltam?|preciso|envie|enviar|anexe|anexar|colete|coletar|peca|pedir|solicite|solicitar)\b/i.test(s) && /\b(log|fonte|prints?|anexo|trecho|linha|stack|rotina|campo|passo|reproducao)\b/i.test(s);
   const temValidacao = /\b(valid\w*|homologa\w*|teste\w*|reteste\w*|reproduz\w*|compil\w*)\b/i.test(s);
   return (temEvidenciaTecnica && _temAcaoOuProximoPasso(texto) && temValidacao) || (pedeEvidenciaEspecifica && _temAcaoOuProximoPasso(texto));
 }
@@ -736,6 +736,12 @@ function temFalhaDeIntegridade(gate) {
 // turno e cairia em RETRY_CONTEXT_LEAKED.
 const _CAUSA_COM_CERTEZA_DEMAIS = 'A causa foi apresentada com mais certeza do que as evidências do chamado permitem; trate como hipótese até validar no ambiente do cliente.';
 const OBSERVACAO_POR_FALHA = {
+  ATTACHMENT_NOT_ANALYZED: () => 'Um anexo disponível não foi analisado; confira esse material antes de aplicar a orientação.',
+  CRITICAL_EVIDENCE_OMITTED: () => 'Uma evidência relevante ficou fora da análise; confira o material omitido antes de concluir.',
+  RETRY_CONTEXT_LEAKED: () => 'A resposta menciona verificações internas do assistente; essas menções não sustentam o diagnóstico.',
+  REDUNDANT_OPERATIONAL_ESCALATION: () => 'O histórico já registra um encaminhamento; confira seu resultado antes de solicitar a mesma ação.',
+  REDUNDANT_OPERATIONAL_MEETING: () => 'O histórico já registra reunião ou demonstração; confirme qual evidência nova justificaria repeti-la.',
+  RESEARCH_FOUND_BUT_NOT_READ: () => 'Foram encontrados links, mas o conteúdo não foi lido; não os trate como confirmação da causa.',
   PRR_EXTERNAL_REFERENCE_USED_AS_CAUSE: t => `A causa ou a ação principal se apoia em referência externa (artigo/pesquisa)${t}, não em evidência deste chamado. Confirme na base do cliente antes de aplicar.`,
   PRR_VISUAL_REFERENCE_USED_AS_CAUSE: t => `A causa se apoia em algo visto em print${t}; confirme no sistema antes de tratar como causa.`,
   EXTERNAL_REFERENCE_PRESENTED_AS_CASE_EVIDENCE: t => `Uma referência${t} veio da pesquisa externa, mas o texto a trata como se estivesse no histórico ou nos anexos do chamado.`,
@@ -756,7 +762,7 @@ const OBSERVACAO_POR_FALHA = {
   GENERIC_RESPONSE_WITH_SPECIFIC_EVIDENCE: () => 'A análise ficou genérica apesar de o chamado ter evidência específica; confira se ela trata do problema relatado.',
   INTERNAL_IDS_USED_AS_EVIDENCE: () => 'Identificadores internos do sistema foram retirados do texto.',
 };
-const _SEM_OBSERVACAO = new Set(['TRUNCATED_RESPONSE_INCOMPLETE', 'RETRY_CONTEXT_LEAKED']);
+const _SEM_OBSERVACAO = new Set(['TRUNCATED_RESPONSE_INCOMPLETE']);
 
 function montarObservacaoAnalista(gate) {
   const itens = [];
@@ -764,9 +770,10 @@ function montarObservacaoAnalista(gate) {
     if (!f?.codigo || _SEM_OBSERVACAO.has(f.codigo)) continue;
     const termos = (Array.isArray(f.termos) ? f.termos : []).filter(Boolean).slice(0, 3);
     const t = termos.length ? ` (${termos.join(', ')})` : '';
-    // So falhas com explicacao util ao analista; as demais ficam na auditoria
-    // (frase generica em resposta boa era ruido — teste #036765 sintetico).
-    const frase = OBSERVACAO_POR_FALHA[f.codigo] ? OBSERVACAO_POR_FALHA[f.codigo](t) : null;
+    // Falhas conhecidas recebem orientação específica. Reprovação sem texto
+    // mapeado também é sinalizada; avisos de estilo em resposta aprovada não.
+    const frase = OBSERVACAO_POR_FALHA[f.codigo] ? OBSERVACAO_POR_FALHA[f.codigo](t)
+      : gate.aprovado === false ? 'Há uma ressalva na verificação automática; revise a sustentação da orientação nas evidências antes de aplicá-la.' : null;
     if (frase && !itens.includes(frase)) itens.push(frase);
   }
   if (!itens.length) return null;
@@ -1376,7 +1383,9 @@ function avaliarResposta({ textoResposta, manifesto, pesquisa, pergunta, houveRe
   // disponível (conteúdo, não forma) e vazamento de bastidor interno (integridade).
   const ESTILO_QUE_CONTINUA_VALENDO = new Set(['GENERIC_RESPONSE_WITH_SPECIFIC_EVIDENCE', 'RETRY_CONTEXT_LEAKED']);
   const naoEstilo = falhasClassificadas.filter(f => f.decisionKind !== DECISAO_QG.CORRECAO_ESTILO || ESTILO_QUE_CONTINUA_VALENDO.has(f.codigo));
-  const deveRetry = !houveRetry && naoEstilo.some(f => ['alta', 'media'].includes(f.severidade) && f.decisionKind !== DECISAO_QG.SUSPEITA_SEMANTICA);
+  // O gate sinaliza; não solicita outra geração nem substitui a análise.
+  // Aprovação sem ressalvas continua obrigatória para liberar arquivo corrigido.
+  const deveRetry = false;
   const decisoes = {
     bloqueiosObjetivos: falhasClassificadas.filter(f => f.decisionKind === DECISAO_QG.BLOQUEIO_OBJETIVO).length,
     suspeitasSemanticas: falhasClassificadas.filter(f => f.decisionKind === DECISAO_QG.SUSPEITA_SEMANTICA).length,

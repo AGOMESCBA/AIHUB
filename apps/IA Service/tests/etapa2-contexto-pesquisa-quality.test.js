@@ -206,7 +206,7 @@ async function main() {
       pesquisa: pesquisaSemChave,
       pergunta: 'analise o anexo e o print',
     });
-    assert.strictEqual(gate.deveRetry, true);
+    assert.strictEqual(gate.deveRetry, false);
     assert.ok(gate.falhas.some(f => f.codigo === 'GENERIC_RESPONSE_WITH_SPECIFIC_EVIDENCE' || f.legado === 'RESPOSTA_GENERICA_COM_EVIDENCIA_DISPONIVEL'));
 
     const gatePesquisaReutilizada = qualityGate.avaliarResposta({
@@ -282,7 +282,7 @@ async function main() {
     });
     assert.ok(gateAcaoOperacionalRedundante.falhas.some(f => f.codigo === 'REDUNDANT_OPERATIONAL_ESCALATION'), 'encaminhamento ja feito a Fabrica/desenvolvimento nao deve ser recomendado como se fosse novo');
     assert.ok(gateAcaoOperacionalRedundante.falhas.some(f => f.codigo === 'REDUNDANT_OPERATIONAL_MEETING'), 'meet ja realizado nao deve ser recomendado como se fosse novo');
-    assert.strictEqual(gateAcaoOperacionalRedundante.deveRetry, true, 'reprovacao operacional media deve acionar retry corretivo normal do Quality Gate');
+    assert.strictEqual(gateAcaoOperacionalRedundante.deveRetry, false, 'reprovacao operacional deve gerar alerta sem reescrita');
 
     const gateAcompanhamentoOperacional = qualityGate.avaliarResposta({
       textoResposta: 'Como o chamado ja foi retornado para Fabrica e a chamada via meet ja foi realizada, eu nao trataria isso como correcao concluida. O proximo passo e acompanhar o retorno da Fabrica e, tecnicamente, revisar o ponto de entrada/validacao que tenta atribuir % Rateio em modo protegido.',
