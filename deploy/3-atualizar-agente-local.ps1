@@ -125,8 +125,10 @@ function New-AgentBackup {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
 
     $backupZip = Join-Path $BACKUP_ROOT ("agente-local-before-update-{0}.zip" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
-    $excludeDirs = @("venv", "logs", "__pycache__", ".pytest_cache", "dist")
-    $excludeFiles = @("*.pyc")
+    # Banco de historico e logs nao sao tocados pela atualizacao: fora do backup,
+    # que antes ficava lento demais (servico parado) com audit.db grande.
+    $excludeDirs = @("venv", "logs", "__pycache__", ".pytest_cache", "dist", "backup_original", "tests")
+    $excludeFiles = @("*.pyc", "*.db", "*.db-wal", "*.db-shm", "*.sqlite", "*.sqlite3", "*.log", "*.err", "*.zip")
 
     $files = Get-ChildItem -Path $Path -Recurse -File | Where-Object {
         $relative = $_.FullName.Substring($Path.Length + 1)
@@ -257,7 +259,8 @@ Write-Host "[5/6] Validando Agente Local..." -ForegroundColor Yellow
 $pyFiles = @(
     (Join-Path $Destino "main.py"),
     (Join-Path $Destino "crypto_envelope.py"),
-    (Join-Path $Destino "config.py")
+    (Join-Path $Destino "config.py"),
+    (Join-Path $Destino "modules\arquivo_softexpert.py")
 )
 & $python -m py_compile $pyFiles
 if ($LASTEXITCODE -ne 0) { throw "py_compile falhou." }

@@ -115,6 +115,7 @@ function getAgentConfig(empresaId) {
     ativo: !!row.agente_local_ativo,
     cryptoAtivo: !!row.agente_local_crypto_ativo,
     cryptoKey: decrypt(row.agente_local_crypto_key_enc),
+    pastaArquivos: row.agente_local_pasta_arquivos || '',
     atualizadoEm: row.atualizado_em,
   };
 }

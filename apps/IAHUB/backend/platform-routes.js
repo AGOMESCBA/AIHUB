@@ -411,6 +411,7 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
       agenteLocalTokenConfigurado: !!row.agente_local_token_enc,
       agenteLocalCryptoAtivo: !!row.agente_local_crypto_ativo,
       agenteLocalCryptoKeyConfigurada: !!row.agente_local_crypto_key_enc,
+      agenteLocalPastaArquivos: row.agente_local_pasta_arquivos || '',
     } : {});
   });
 
@@ -432,6 +433,13 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
     const atual = getAgentRow(eid);
     const body = req.body || {};
 
+    const pastaArquivos = body.agenteLocalPastaArquivos !== undefined
+      ? String(body.agenteLocalPastaArquivos || '').trim()
+      : atual?.agente_local_pasta_arquivos || '';
+    if (pastaArquivos && (!/^([a-zA-Z]:[\\/]|\\\\[^\\/]|\/)/.test(pastaArquivos) || /(^|[\\/])\.\.([\\/]|$)/.test(pastaArquivos))) {
+      return res.status(400).json({ error: 'Pasta de arquivos inválida. Use um caminho completo, como C:\\GED\\C3I ou \\\\servidor\\GED\\C3I.' });
+    }
+
     const data = {
       id: atual?.id || uuid(),
       agente_local_url: body.agenteLocalUrl !== undefined ? String(body.agenteLocalUrl || '').trim() : atual?.agente_local_url || '',
@@ -439,6 +447,7 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
       agente_local_token_enc: body.agenteLocalToken ? encrypt(body.agenteLocalToken) : atual?.agente_local_token_enc || null,
       agente_local_crypto_ativo: body.agenteLocalCryptoAtivo !== undefined ? (body.agenteLocalCryptoAtivo ? 1 : 0) : (atual?.agente_local_crypto_ativo ?? 0),
       agente_local_crypto_key_enc: body.agenteLocalCryptoKey ? encrypt(body.agenteLocalCryptoKey) : atual?.agente_local_crypto_key_enc || null,
+      agente_local_pasta_arquivos: pastaArquivos,
       atualizado_em: now(),
     };
 
@@ -446,18 +455,18 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
       getDB().prepare(`
         UPDATE platform_agent_configs
            SET agente_local_url = ?, agente_local_ativo = ?, agente_local_token_enc = ?,
-               agente_local_crypto_ativo = ?, agente_local_crypto_key_enc = ?, atualizado_em = ?
+               agente_local_crypto_ativo = ?, agente_local_crypto_key_enc = ?, agente_local_pasta_arquivos = ?, atualizado_em = ?
          WHERE empresa_id = ?
       `).run(data.agente_local_url, data.agente_local_ativo, data.agente_local_token_enc,
-        data.agente_local_crypto_ativo, data.agente_local_crypto_key_enc, data.atualizado_em, eid);
+        data.agente_local_crypto_ativo, data.agente_local_crypto_key_enc, data.agente_local_pasta_arquivos, data.atualizado_em, eid);
     } else {
       getDB().prepare(`
         INSERT INTO platform_agent_configs (
           id, empresa_id, agente_local_url, agente_local_ativo, agente_local_token_enc,
-          agente_local_crypto_ativo, agente_local_crypto_key_enc, criado_em, atualizado_em
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          agente_local_crypto_ativo, agente_local_crypto_key_enc, agente_local_pasta_arquivos, criado_em, atualizado_em
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(data.id, eid, data.agente_local_url, data.agente_local_ativo, data.agente_local_token_enc,
-        data.agente_local_crypto_ativo, data.agente_local_crypto_key_enc, data.atualizado_em, data.atualizado_em);
+        data.agente_local_crypto_ativo, data.agente_local_crypto_key_enc, data.agente_local_pasta_arquivos, data.atualizado_em, data.atualizado_em);
     }
 
     const row = getAgentRow(eid);
@@ -469,6 +478,7 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
       agenteLocalTokenConfigurado: !!row.agente_local_token_enc,
       agenteLocalCryptoAtivo: !!row.agente_local_crypto_ativo,
       agenteLocalCryptoKeyConfigurada: !!row.agente_local_crypto_key_enc,
+      agenteLocalPastaArquivos: row.agente_local_pasta_arquivos || '',
     });
   });
 

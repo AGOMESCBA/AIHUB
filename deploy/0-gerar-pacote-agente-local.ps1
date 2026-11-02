@@ -34,7 +34,7 @@ Write-Host "ZIP:    $OUTPUT_PATH"
 Write-Host "Script: $UPDATER_OUT"
 Write-Host ""
 
-$EXCLUDE_DIRS  = @("venv", "logs", "__pycache__", ".pytest_cache", "dist", "backup_original")
+$EXCLUDE_DIRS  = @("venv", "logs", "__pycache__", ".pytest_cache", "dist", "backup_original", "tests")
 $EXCLUDE_FILES = @(".env", "*.log", "*.err", "audit.db", "*.db", "*.sqlite", "*.sqlite3", "*.pyc")
 
 function Test-AgenteDeployFile {

@@ -1,4 +1,6 @@
+import asyncio
 import secrets
+import time
 import uuid as _uuid
 import uvicorn
 from pathlib import Path
@@ -13,6 +15,7 @@ import shutil
 from database import init_db, registrar_execucao, listar_execucoes, limpar_historico, get_stats, sincronizar_empresas, listar_empresas, listar_empresas_public, remover_empresa, get_execucao, salvar_conexao_erp, get_conexao_erp, listar_conexoes_erp, remover_conexao_dados
 from auth import verificar_token_api, verificar_sessao_web, autenticar_admin, alterar_senha, salvar_hash
 from modules.erp_executor import executar_sql, testar_conexao
+from modules.arquivo_softexpert import ler_arquivo
 from modules.factory_reset import resetar_fabrica
 from crypto_envelope import decrypt_payload, encrypt_payload, encrypt_text, decrypt_text, generate_key_base64, is_encrypted_envelope, normalize_key
 
@@ -199,6 +202,74 @@ async def execute(request: Request, authorization: str = Header(default=None)):
             raise HTTPException(status_code=500, detail="Falha ao criptografar resposta do agente.")
 
     return resultado
+
+
+# ── Arquivo do SoftExpert em diretorio controlado (Bearer token, SO LEITURA) ──
+# Rota isolada: nao altera o /execute. Mesma autenticacao e criptografia dele.
+# O conteudo nunca vai para o historico de execucoes.
+# Limite de leituras simultaneas e trabalho pesado fora da linha principal: arquivo
+# grande nao pode atrasar nem consumir a capacidade das consultas do /execute.
+_ARQUIVOS_SIMULTANEOS = asyncio.Semaphore(2)
+
+
+@app.post("/arquivo-softexpert")
+async def arquivo_softexpert(request: Request, authorization: str = Header(default=None)):
+    raw_token = (authorization or "").removeprefix("Bearer ").strip()
+    if not verificar_token_api(raw_token):
+        raise HTTPException(status_code=401, detail="Token inválido.")
+
+    ip_origem = request.client.host if request.client else "desconhecido"
+    cfg = get_config()
+    crypto_key = cfg.get("CRYPTO_KEY", "")
+    body_raw = await request.json()
+    request_encrypted = is_encrypted_envelope(body_raw)
+
+    if request_encrypted:
+        if not crypto_key:
+            raise HTTPException(status_code=400, detail="Chave de criptografia nao configurada no agente.")
+        try:
+            body = decrypt_payload(body_raw, crypto_key)
+        except Exception as exc:
+            _registrar_anomalia_crypto(ip_origem=ip_origem, erro=f"Falha ao descriptografar payload: {exc}", detalhe="Envelope invalido em /arquivo-softexpert.")
+            raise HTTPException(status_code=400, detail="Payload criptografado invalido.")
+    else:
+        if _bool_cfg(cfg.get("CRYPTO_REQUIRED", "false")):
+            raise HTTPException(status_code=426, detail="Criptografia obrigatoria para /arquivo-softexpert.")
+        body = body_raw
+
+    cdfile = body.get("cdfile")
+    empresa_id = str(body.get("empresa_id") or "")
+    uuid_tx = body.get("uuid") or str(_uuid.uuid4())
+
+    inicio = time.monotonic()
+    async with _ARQUIVOS_SIMULTANEOS:
+        resultado = await asyncio.to_thread(ler_arquivo, body.get("pasta"), cdfile, body.get("extensao"))
+        ok = resultado.get("status") == "ok"
+        if request_encrypted:
+            try:
+                cifrado = await asyncio.to_thread(encrypt_payload, resultado, crypto_key, kid=str(empresa_id or "default"))
+            except Exception as exc:
+                _registrar_anomalia_crypto(ip_origem=ip_origem, erro=f"Falha ao criptografar resposta: {exc}", detalhe="Resposta de /arquivo-softexpert.", uuid_tx=uuid_tx, empresa_id=empresa_id or None)
+                raise HTTPException(status_code=500, detail="Falha ao criptografar resposta do agente.")
+
+    registrar_execucao(
+        uuid=uuid_tx,
+        modulo=str(body.get("modulo") or "ia-service-arquivos"),
+        operacao="arquivo_softexpert",
+        sql_entrada=f"[arquivo] CDFILE {str(cdfile)[:20]}",
+        sql_executado="",
+        payload_saida=[{"nome_gravado": resultado.get("nome_gravado"), "tamanho": resultado.get("tamanho")}] if ok else [],
+        duracao_ms=int((time.monotonic() - inicio) * 1000),
+        status="ok" if ok else "erro",
+        erro=None if ok else resultado.get("erro"),
+        ip_origem=ip_origem,
+        empresa_id=empresa_id or None,
+        linhas_retornadas=1 if ok else 0,
+        limite_solicitado=1,
+        tipo_erro=None if ok else "arquivo",
+    )
+
+    return cifrado if request_encrypted else resultado
 
 
 # ── Web: Login ────────────────────────────────────────────────────────────────

@@ -148,6 +148,7 @@ function ensurePlatformSchema(db) {
     ['platform_import_runs', 'erro', 'TEXT'],
     ['platform_import_runs', 'finalizado_em', 'TEXT'],
     ['platform_ai_configs', 'login_externo_apelido', 'TEXT'],
+    ['platform_agent_configs', 'agente_local_pasta_arquivos', 'TEXT'],
   ].forEach(([table, column, definition]) => addColumnIfMissing(db, table, column, definition));
 
   // Índice único parcial — criado à parte do CREATE TABLE porque bancos já
