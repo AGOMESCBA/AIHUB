@@ -44,6 +44,35 @@ function selecionarPaginasPdf({ conteudoExtraido, pergunta = '', maxPaginas = LI
   return paginas.filter(p => p > 0).slice(0, maxPaginas);
 }
 
+// Navegador instalado no servidor. Como serviço do Windows, o Chrome baixado pelo
+// puppeteer fica no perfil de outro usuário e não é achado (erro real em produção,
+// 2026-11-02, #036912). Mesma ordem do WhatsApp do IA Command, com o Edge, que vem
+// no Windows Server, como último recurso.
+function _navegadoresInstalados() {
+  const encontrados = [
+    process.env.CHROME_PATH,
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+  ].filter(Boolean).filter(p => { try { return fs.existsSync(p); } catch (_) { return false; } });
+  // Por último, o navegador próprio do puppeteer (quando instalado).
+  return [...new Set(encontrados), null];
+}
+
+// Tenta cada navegador até um abrir: um caminho quebrado não derruba a análise.
+async function _abrirNavegador(puppeteer) {
+  const falhas = [];
+  for (const executablePath of _navegadoresInstalados()) {
+    try {
+      return await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'], ...(executablePath ? { executablePath } : {}) });
+    } catch (err) {
+      falhas.push(`${executablePath || 'navegador do puppeteer'}: ${String(err.message).split('\n')[0]}`);
+    }
+  }
+  throw new Error(`Nenhum navegador disponível para converter o PDF em imagem (${falhas.join('; ')}). Instale o Google Chrome no servidor ou informe CHROME_PATH no .env.`);
+}
+
 async function rasterizarPdfPaginas(buffer, paginas = [1], opts = {}) {
   let puppeteer;
   try {
@@ -58,7 +87,7 @@ async function rasterizarPdfPaginas(buffer, paginas = [1], opts = {}) {
   const imagens = [];
   let browser;
   try {
-    browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    browser = await _abrirNavegador(puppeteer);
     const page = await browser.newPage();
     page.setDefaultTimeout(opts.timeoutMs || LIMITES.timeoutMs);
     await page.setViewport({ width: opts.viewportWidth || LIMITES.viewportWidth, height: opts.viewportHeight || LIMITES.viewportHeight, deviceScaleFactor: 1 });
