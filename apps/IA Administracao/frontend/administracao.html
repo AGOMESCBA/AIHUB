@@ -121,6 +121,7 @@
     .acao-login_bloqueado { background:rgba(239,68,68,.18);  color:#dc2626; }
     .acao-logout          { background:var(--bg-hover);      color:var(--text-md); }
     .acao-empresa_selecionada { background:rgba(37,99,235,.1); color:var(--accent); }
+    .acao-limpeza_anexos_lgpd { background:rgba(100,116,139,.14); color:var(--text-md); }
     .acao-default         { background:var(--bg-hover);      color:var(--text-lo); }
 
     .adm-tab-content { display:none; }
@@ -951,6 +952,7 @@
                   <option value="login_bloqueado">Login bloqueado</option>
                   <option value="logout">Logout</option>
                   <option value="empresa_selecionada">Empresa selecionada</option>
+                  <option value="limpeza_anexos_lgpd">Limpeza de anexos (LGPD)</option>
                 </select>
                   <div class="audit-date-range">
                     <label class="audit-date-field">
@@ -3185,6 +3187,7 @@ function audInitTabulator(dados) {
             login_bloqueado: 'Login bloqueado',
             logout: 'Logout',
             empresa_selecionada: 'Empresa selecionada',
+            limpeza_anexos_lgpd: 'Limpeza de anexos (LGPD)',
           },
         },
         formatter: cell => {

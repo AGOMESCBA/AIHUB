@@ -18,6 +18,28 @@ const anexoRepo = require('../repositories/anexo-repository');
 const armazenamento = require('./armazenamento-anexos');
 
 const PRAZO_PADRAO_DIAS = 15;
+const ACAO_AUDITORIA = 'limpeza_anexos_lgpd';
+
+// Um registro por chamado no log de Auditoria da IA Gestão (aba Auditoria):
+// o que foi apagado, quando e por qual processo. Nunca o conteúdo dos arquivos.
+function _registrarNaAuditoria(apagadosPorChamado, prazoDias) {
+  let auditoria;
+  try {
+    auditoria = require('../../../IAHUB/backend/auth/database');
+  } catch (err) {
+    console.error('[IA Service] Log de auditoria indisponível para a limpeza de anexos:', err.message);
+    return;
+  }
+  for (const [numero, { empresaId, nomes, bytes }] of apagadosPorChamado) {
+    auditoria.registrarAuditoria({
+      usuario: 'sistema (IA Service)',
+      acao: ACAO_AUDITORIA,
+      ip: '-',
+      empresa_id: empresaId,
+      detalhes: `Chamado ${numero} encerrado há mais de ${prazoDias} dias: ${nomes.length} anexo(s) apagado(s), ${(bytes / (1024 * 1024)).toFixed(2)} MB. Arquivos: ${nomes.join('; ')}. O original continua no SoftExpert.`,
+    });
+  }
+}
 const PRIMEIRA_EXECUCAO_MS = 10 * 60 * 1000;
 const INTERVALO_MS = 24 * 60 * 60 * 1000;
 
@@ -79,14 +101,22 @@ function executar({ modo = configuracao().modo, prazoDias = configuracao().prazo
     };
     if (modo === 'apagar') {
       const quando = agora.toISOString();
+      const apagadosPorChamado = new Map();
       for (const l of linhas) {
         try {
           _apagarArquivo(l.caminho_relativo);
-          if (anexoRepo.marcarArquivoRemovido(l.empresa_id, l.id, quando)) resumo.removidos += 1;
+          if (anexoRepo.marcarArquivoRemovido(l.empresa_id, l.id, quando)) {
+            resumo.removidos += 1;
+            const item = apagadosPorChamado.get(l.numero) || { empresaId: l.empresa_id, nomes: [], bytes: 0 };
+            item.nomes.push(l.nome_original);
+            item.bytes += Number(l.tamanho) || 0;
+            apagadosPorChamado.set(l.numero, item);
+          }
         } catch (err) {
           resumo.erros.push({ chamado: l.numero, anexoId: l.id, erro: err.message });
         }
       }
+      _registrarNaAuditoria(apagadosPorChamado, prazoDias);
     }
     const mb = (resumo.bytes / (1024 * 1024)).toFixed(1);
     console.log(`[IA Service] Limpeza de anexos de chamados encerrados (${modo}, ${prazoDias} dias): ${resumo.anexos} anexo(s), ${mb} MB, ${resumo.chamados} chamado(s)` +
@@ -111,4 +141,4 @@ function iniciarAgendamento() {
   }, PRIMEIRA_EXECUCAO_MS).unref?.();
 }
 
-module.exports = { executar, listarCandidatos, iniciarAgendamento, configuracao };
+module.exports = { executar, listarCandidatos, iniciarAgendamento, configuracao, ACAO_AUDITORIA };

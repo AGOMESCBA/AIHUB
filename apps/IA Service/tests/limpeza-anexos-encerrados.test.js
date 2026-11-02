@@ -36,6 +36,9 @@ const atendimentoRepo = require('../backend/repositories/atendimento-repository'
 const anexoRepo = require('../backend/repositories/anexo-repository');
 const armazenamento = require('../backend/services/armazenamento-anexos');
 const servico = require('../backend/services/anexos-softexpert-service');
+const auditoriaPath = require.resolve('../../IAHUB/backend/auth/database');
+const registrosAuditoria = [];
+require.cache[auditoriaPath] = { id: auditoriaPath, filename: auditoriaPath, loaded: true, exports: { registrarAuditoria: (r) => registrosAuditoria.push(r) } };
 const limpeza = require('../backend/services/limpeza-anexos-encerrados-service');
 
 const EMPRESA = 99105;
@@ -129,6 +132,21 @@ test('caminho adulterado fora da pasta de anexos não é apagado', async () => {
   assert.ok(r.erros.some((e) => e.anexoId === c.anexo.id));
   assert.ok(fs.existsSync(fora));
   fs.unlinkSync(fora);
+});
+
+test('cada chamado limpo vira um registro na Auditoria; simulação não registra', async () => {
+  const c = await chamadoComAnexo({ status: 'Encerrado', ultimaMovimentacao: '2026-03-01T10:00:00.000Z', nome: 'rg-cliente.png' });
+  registrosAuditoria.length = 0;
+  limpeza.executar({ modo: 'simular', agora: AGORA });
+  assert.equal(registrosAuditoria.length, 0);
+  limpeza.executar({ modo: 'apagar', agora: AGORA });
+  const doChamado = registrosAuditoria.find((r) => r.detalhes.includes(`Chamado ${c.numero}`));
+  assert.ok(doChamado);
+  assert.equal(doChamado.acao, 'limpeza_anexos_lgpd');
+  assert.equal(doChamado.usuario, 'sistema (IA Service)');
+  assert.equal(doChamado.empresa_id, EMPRESA);
+  assert.match(doChamado.detalhes, /1 anexo\(s\) apagado\(s\).*Arquivos: rg-cliente\.png/);
+  assert.doesNotMatch(doChamado.detalhes, /conteudo pessoal/, 'nunca o conteúdo');
 });
 
 test('modo padrão é simular', () => {
