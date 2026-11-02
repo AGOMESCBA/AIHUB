@@ -46,6 +46,8 @@
       id: 'configuracao', label: 'Configuração', icon: '⚙', defaultOpen: false,
       items: [
         { id: 'svc-numeros-autorizados', label: 'Números Autorizados', href: '/app/ia-service/numeros-autorizados.html', icon: '📱' },
+        // Mesma permissão do Monitor (a API exige svc-monitor-acessos).
+        { id: 'svc-limpeza-anexos', rotina: 'svc-monitor-acessos', label: 'Limpeza de Anexos (LGPD)', href: '/app/ia-service/limpeza-anexos.html', icon: '🧹' },
         { id: 'svc-config-ia',   label: 'Configuração de IA', href: '/app/ia-service/config-ia.html', icon: '🤖' },
       ],
     },

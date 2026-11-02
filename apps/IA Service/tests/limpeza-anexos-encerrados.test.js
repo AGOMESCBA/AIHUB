@@ -149,6 +149,29 @@ test('cada chamado limpo vira um registro na Auditoria; simulação não registr
   assert.doesNotMatch(doChamado.detalhes, /conteudo pessoal/, 'nunca o conteúdo');
 });
 
+test('tela: registros da empresa a partir da Auditoria e pendentes', async () => {
+  const segurancaPath = require.resolve('../../IAHUB/backend/seguranca/database');
+  require.cache[segurancaPath] = { id: segurancaPath, filename: segurancaPath, loaded: true, exports: {
+    getAuditoria: () => registrosAuditoria.map((r) => ({ ts: '2026-11-02T12:00:00.000Z', ...r })).concat([{ ts: 'x', acao: 'login_sucesso', empresa_id: EMPRESA, detalhes: '' }]),
+  } };
+  const d = limpeza.resumoParaTela(EMPRESA);
+  assert.equal(d.modo, 'simular');
+  assert.ok(d.registros.length >= 1);
+  const r = d.registros.find((x) => x.arquivos.includes('rg-cliente.png'));
+  assert.ok(r, 'registro do chamado limpo');
+  assert.equal(r.anexos, 1);
+  assert.ok(/^\d+$/.test(r.chamado));
+  assert.ok(d.registros.every((x) => x.chamado), 'login e outras ações ficam de fora');
+  assert.equal(limpeza.resumoParaTela(EMPRESA + 1).registros.length, 0, 'outra empresa não vê');
+});
+
+test('menu do IA Service tem a tela, com a permissão do Monitor', () => {
+  const menu = fs.readFileSync(path.resolve(__dirname, '../frontend/js/sidebar.js'), 'utf8');
+  assert.match(menu, /id: 'svc-limpeza-anexos', rotina: 'svc-monitor-acessos'.*limpeza-anexos\.html/);
+  const rotas = fs.readFileSync(path.resolve(__dirname, '../backend/routes/monitor-acessos-routes.js'), 'utf8');
+  assert.match(rotas, /app\.get\('\/api\/ia-service\/limpeza-anexos', podeMonitorar/);
+});
+
 test('modo padrão é simular', () => {
   delete process.env.SVC_LIMPEZA_ANEXOS_MODO;
   assert.equal(limpeza.configuracao().modo, 'simular');

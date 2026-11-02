@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+  <title>Limpeza de Anexos - IA Service</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="/app/ia-service/css/iaservice-mobile.css">
+  <style>
+    :root { --accent:#1d4ed8; --accent-light:#3b82f6; --accent-glow:rgba(29,78,216,.1); }
+    .sidebar-logo .logo-icon { background:var(--accent) !important; }
+    .error-banner { display:none;background:var(--bg-card);color:var(--error);border:1px solid var(--error);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:10px; }
+    .barra { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:8px 12px;margin-bottom:10px; }
+    .barra-linha { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .barra-titulo { font-size:16px;font-weight:800;color:var(--text-hi);margin-right:6px; }
+    .espaco { flex:1; }
+    .barra .btn { height:32px;padding:0 12px;font-size:12.5px; }
+    .barra .sel { width:auto;height:32px;padding:4px 8px;font-size:12.5px; }
+    .kpis { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px; }
+    .kpi { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px; }
+    .kpi-label { font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-md); }
+    .kpi-value { font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text-hi); }
+    .kpi-foot { font-size:11px;color:var(--text-lo); }
+    .nota { font-size:12px;color:var(--text-md);margin:0 0 10px; }
+    .tabela-wrap { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:auto; }
+    table.reg { width:100%;border-collapse:collapse;font-size:12.5px; }
+    table.reg th { position:sticky;top:0;background:var(--bg-base);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-md);padding:8px 10px;border-bottom:1px solid var(--border); }
+    table.reg td { padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text-hi);vertical-align:top; }
+    table.reg td.num { font-variant-numeric:tabular-nums;white-space:nowrap; }
+    .arquivos { color:var(--text-md);overflow-wrap:anywhere; }
+    .vazio { padding:24px;text-align:center;color:var(--text-lo);font-size:13px; }
+    @media (max-width:760px) {
+      .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      table.reg thead { display:none; }
+      table.reg tr { display:block;border-bottom:1px solid var(--border);padding:8px 10px; }
+      table.reg td { display:block;border:0;padding:2px 0; }
+      table.reg td[data-rotulo]::before { content:attr(data-rotulo) ': ';color:var(--text-lo);font-size:11.5px; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Service</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebarDrawer()" aria-hidden="true"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Service ›</span> Limpeza de Anexos (LGPD)</span>
+    </div>
+
+    <div class="page-content">
+      <div id="erro" class="error-banner" role="alert"></div>
+      <div class="barra">
+        <div class="barra-linha">
+          <span class="barra-titulo">Limpeza de Anexos (LGPD)</span>
+          <select id="periodo" class="form-control sel" aria-label="Período">
+            <option value="30">Últimos 30 dias</option>
+            <option value="90">Últimos 90 dias</option>
+            <option value="365">Último ano</option>
+            <option value="0">Tudo</option>
+          </select>
+          <span class="espaco"></span>
+          <button id="atualizar" class="btn" type="button">Atualizar</button>
+        </div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi"><div class="kpi-label">Modo da rotina</div><div class="kpi-value" id="k-modo">—</div><div class="kpi-foot" id="k-prazo"></div></div>
+        <div class="kpi"><div class="kpi-label">Aguardando limpeza</div><div class="kpi-value" id="k-pendentes">—</div><div class="kpi-foot" id="k-pendentes-mb"></div></div>
+        <div class="kpi"><div class="kpi-label">Chamados limpos</div><div class="kpi-value" id="k-chamados">—</div><div class="kpi-foot">no período</div></div>
+        <div class="kpi"><div class="kpi-label">Espaço liberado</div><div class="kpi-value" id="k-mb">—</div><div class="kpi-foot" id="k-anexos"></div></div>
+      </div>
+      <p class="nota">São apagadas só as cópias de anexos do SoftExpert de chamados encerrados; o original continua no SoftExpert e volta a ser copiado se o chamado for reaberto. Cada chamado limpo também aparece na Auditoria da IA Gestão.</p>
+
+      <div class="tabela-wrap">
+        <table class="reg">
+          <thead><tr><th>Data / Hora</th><th>Chamado</th><th>Anexos</th><th>Espaço</th><th>Arquivos apagados</th></tr></thead>
+          <tbody id="linhas"><tr><td colspan="5" class="vazio">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-service/js/mobile-viewport.js"></script>
+<script src="/app/ia-service/js/sidebar.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const mb = (bytes) => `${(Number(bytes || 0) / (1024 * 1024)).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`;
+  const dataHora = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }); };
+  const empresaId = () => window._iahubEmpresa?.id || new URLSearchParams(location.search).get('empresa_id') || '';
+
+  function erro(msg) {
+    $('erro').textContent = msg || '';
+    $('erro').style.display = msg ? 'block' : 'none';
+  }
+
+  async function carregar() {
+    erro('');
+    const dias = Number($('periodo').value);
+    const de = dias ? new Date(Date.now() - dias * 864e5).toISOString().slice(0, 10) : '';
+    try {
+      const qs = new URLSearchParams({ empresa_id: empresaId(), ...(de ? { de } : {}) });
+      const r = await fetch(`/api/ia-service/limpeza-anexos?${qs}`, { cache: 'no-store' });
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 403) throw new Error(d.error || 'Você não tem permissão para esta rotina.');
+      if (!r.ok) throw new Error(d.error || `Erro ${r.status}`);
+      $('k-modo').textContent = d.modo === 'apagar' ? 'Apagando' : 'Simulação';
+      $('k-prazo').textContent = `${d.prazoDias} dias após o encerramento`;
+      $('k-pendentes').textContent = d.pendentes.anexos.toLocaleString('pt-BR');
+      $('k-pendentes-mb').textContent = `${mb(d.pendentes.bytes)} em ${d.pendentes.chamados} chamado(s)`;
+      $('k-chamados').textContent = d.registros.length.toLocaleString('pt-BR');
+      $('k-mb').textContent = mb(d.registros.reduce((s, x) => s + x.bytes, 0));
+      $('k-anexos').textContent = `${d.registros.reduce((s, x) => s + x.anexos, 0)} anexo(s)`;
+      $('linhas').innerHTML = d.registros.length
+        ? d.registros.map((x) => `<tr>
+            <td class="num" data-rotulo="Data">${esc(dataHora(x.em))}</td>
+            <td class="num" data-rotulo="Chamado">#${esc(x.chamado)}</td>
+            <td class="num" data-rotulo="Anexos">${esc(x.anexos)}</td>
+            <td class="num" data-rotulo="Espaço">${esc(mb(x.bytes))}</td>
+            <td class="arquivos" data-rotulo="Arquivos">${esc(x.arquivos.join('; '))}</td>
+          </tr>`).join('')
+        : `<tr><td colspan="5" class="vazio">${d.modo === 'apagar' ? 'Nenhum chamado limpo no período.' : 'A rotina está em simulação: nada foi apagado ainda.'}</td></tr>`;
+    } catch (err) {
+      erro(err.message);
+      $('linhas').innerHTML = '<tr><td colspan="5" class="vazio">Não foi possível carregar.</td></tr>';
+    }
+  }
+
+  $('atualizar').addEventListener('click', carregar);
+  $('periodo').addEventListener('change', carregar);
+  const iniciar = () => (window._iahubEmpresa ? carregar() : setTimeout(iniciar, 150));
+  iniciar();
+})();
+</script>
+</body>
+</html>

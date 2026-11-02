@@ -141,4 +141,43 @@ function iniciarAgendamento() {
   }, PRIMEIRA_EXECUCAO_MS).unref?.();
 }
 
-module.exports = { executar, listarCandidatos, iniciarAgendamento, configuracao, ACAO_AUDITORIA };
+const _RE_DETALHE = /^Chamado (\S+) .*?: (\d+) anexo\(s\) apagado\(s\), ([\d.]+) MB\. Arquivos: (.*)\. O original continua no SoftExpert\.$/;
+
+/**
+ * Tela "Limpeza de Anexos (LGPD)": registros da Auditoria desta empresa e o que
+ * ainda aguarda limpeza. Só leitura.
+ */
+function resumoParaTela(empresaId, { de = '' } = {}) {
+  const { modo, prazoDias } = configuracao();
+  const { linhas } = listarCandidatos({ prazoDias });
+  const daEmpresa = linhas.filter(l => Number(l.empresa_id) === Number(empresaId));
+  let registros = [];
+  try {
+    registros = require('../../../IAHUB/backend/seguranca/database')
+      .getAuditoria({ acao: ACAO_AUDITORIA, data_ini: de, limite: 100000 })
+      .filter(r => r.acao === ACAO_AUDITORIA && Number(r.empresa_id) === Number(empresaId))
+      .map(r => {
+        const m = String(r.detalhes || '').match(_RE_DETALHE);
+        return {
+          em: r.ts,
+          chamado: m ? m[1] : '',
+          anexos: m ? Number(m[2]) : 0,
+          bytes: m ? Math.round(Number(m[3]) * 1024 * 1024) : 0,
+          arquivos: m ? m[4].split('; ') : [String(r.detalhes || '')],
+        };
+      });
+  } catch (err) {
+    console.error('[IA Service] Leitura da Auditoria para a tela de limpeza falhou:', err.message);
+  }
+  return {
+    modo, prazoDias,
+    pendentes: {
+      anexos: daEmpresa.length,
+      bytes: daEmpresa.reduce((s, l) => s + (Number(l.tamanho) || 0), 0),
+      chamados: new Set(daEmpresa.map(l => l.numero)).size,
+    },
+    registros,
+  };
+}
+
+module.exports = { executar, listarCandidatos, iniciarAgendamento, configuracao, resumoParaTela, ACAO_AUDITORIA };

@@ -162,6 +162,17 @@ function registrarInterno(app) {
 
   // Histórico de Acessos: logins e falhas de login da empresa da sessão num
   // período (de/ate = instantes ISO calculados no fuso do navegador).
+  // Limpeza de Anexos (LGPD): mesma permissão do Monitor (rotina administrativa).
+  app.get('/api/ia-service/limpeza-anexos', podeMonitorar, (req, res) => {
+    try {
+      const de = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query?.de || '')) ? req.query.de : '';
+      res.set('Cache-Control', 'no-store');
+      res.json(require('../services/limpeza-anexos-encerrados-service').resumoParaTela(req.svcEmpresaId, { de }));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   app.get('/api/ia-service/monitor-acessos/historico', podeMonitorar, (req, res) => {
     try {
       const q = req.query || {};
