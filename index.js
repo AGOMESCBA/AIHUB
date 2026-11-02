@@ -620,6 +620,8 @@ require('./apps/IA Service/backend/routes/login-externo-routes')(app);
 require('./apps/IA Service/backend/routes/externo-routes')(app);
 // Chat interno do J2A: tempo real em namespace próprio do Socket.IO (ver chat-interno-realtime.js).
 require('./apps/IA Service/backend/services/chat-interno-realtime').iniciar(io, { sessionMiddleware });
+// Limpeza diária de anexos de chamados encerrados (só simula, salvo SVC_LIMPEZA_ANEXOS_MODO=apagar).
+require('./apps/IA Service/backend/services/limpeza-anexos-encerrados-service').iniciarAgendamento();
 
 // ── Master Crypto AI ─────────────────────────────────────────────────────────
 const masterCryptoService = require('./apps/Master Crypto/backend/service-manager');

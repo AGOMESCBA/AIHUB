@@ -1071,7 +1071,7 @@ button.loading .loader { display: block; }
 .avaliacao-modal-head { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
 .avaliacao-modal-title { font-weight: 900; color: var(--text); font-size: 14px; }
 .avaliacao-modal-subtitle { color: var(--muted); font-size: 12px; margin-top: 2px; }
-.avaliacao-modal-close-btn { border: 1px solid var(--line); background: var(--panel-2); border-radius: 7px; cursor: pointer; width: 30px; height: 30px; color: var(--text); }
+.avaliacao-modal-close-btn, .anexos-modal-close-btn { border: 1px solid var(--line); background: var(--panel-2); border-radius: 7px; cursor: pointer; width: 30px; height: 30px; color: var(--text); }
 .avaliacao-modal-body { overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 .avaliacao-criterio { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .avaliacao-criterio label { font-size: 12.5px; color: var(--text); font-weight: 700; flex: 1; }
@@ -1115,6 +1115,50 @@ button.loading .loader { display: block; }
   width: fit-content;
 }
 .message-attachment:hover { text-decoration: underline; }
+.case-anexos-btn { flex: 0 0 auto; width: fit-content; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); color: var(--brand); font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer; }
+.case-anexos-btn:hover:not(:disabled) { border-color: var(--brand); }
+.case-anexos-btn:disabled { color: var(--muted); cursor: default; }
+.anexos-modal { width: min(560px, 96vw); max-height: 86vh; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.anexos-secao-titulo { margin: 0 0 8px; font-size: 11px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); }
+.anexos-aviso { font-size: 12px; color: var(--warn); }
+
+/* Anexos no formato do WhatsApp: imagem em miniatura e documento em cartão. */
+.wa-anexos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; max-width: 340px; }
+.wa-anexos.anexos-modal-lista { max-width: none; margin-bottom: 0; }
+.anexos-modal-lista .wa-midia, .anexos-modal-lista .wa-midia:only-child { flex: 0 0 120px; height: 120px; }
+.wa-midia { position: relative; display: block; flex: 1 1 140px; max-width: 100%; height: 170px; padding: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); cursor: pointer; }
+.wa-midia:only-child { flex-basis: 100%; height: 210px; }
+.wa-midia img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* visibility (não display): o IntersectionObserver ignora elemento sem caixa. */
+.wa-midia img:not([src]) { visibility: hidden; }
+.wa-midia-legenda { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 10px; font-size: 11.5px; color: var(--muted); text-align: center; overflow-wrap: anywhere; }
+.wa-midia:has(img[src]) .wa-midia-legenda { display: none; }
+.wa-midia:hover, .wa-midia:focus-visible { border-color: var(--brand); }
+.anexos-aviso-ia { padding: 8px 12px; border-left: 3px solid var(--warn); background: var(--panel-2); font-size: 12px; color: var(--text); overflow-wrap: anywhere; }
+.anexos-aviso-ia > div + div { margin-top: 4px; }
+.message-attachment.wa-doc, .wa-doc-off { flex: 1 1 100%; display: flex; align-items: center; gap: 10px; width: auto; max-width: 100%; min-height: 52px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--text); box-sizing: border-box; }
+.message-attachment.wa-doc:hover { border-color: var(--brand); text-decoration: none; }
+.wa-doc-off { cursor: default; }
+.wa-doc-off .wa-doc-icone { background: var(--muted); }
+.wa-doc-icone { flex: 0 0 34px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 5px; background: var(--brand); color: #fff; font-size: 9.5px; font-weight: 800; }
+.wa-doc-info { flex: 1 1 auto; min-width: 0; }
+.wa-doc-nome { display: block; font-size: 12.5px; font-weight: 700; overflow-wrap: anywhere; }
+.wa-doc-detalhe { display: block; margin-top: 2px; font-size: 11px; color: var(--muted); }
+.wa-doc-baixar { flex: 0 0 auto; display: flex; color: var(--muted); }
+
+.anexo-visualizador { display: none; position: fixed; inset: 0; z-index: 500; flex-direction: column; background: rgba(0, 0, 0, .92); color: #fff; }
+.anexo-visualizador.ativo { display: flex; }
+.anexo-visualizador-barra { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+.anexo-visualizador-nome { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.anexo-visualizador-barra button { flex: 0 0 auto; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 50%; background: none; color: inherit; font-size: 24px; cursor: pointer; }
+.anexo-visualizador-barra button:hover { background: rgba(255, 255, 255, .14); }
+.anexo-visualizador-area { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 12px 12px; }
+.anexo-visualizador-area img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.anexo-visualizador-status { font-size: 13px; opacity: .8; }
+
+@media (max-width: 900px) {
+  .case-anexos-btn { min-height: 44px; }
+}
 .message-source-warnings { margin-top: 6px; padding: 6px 8px; border-left: 3px solid var(--warn); border-radius: 4px; font-size: 11.5px; overflow-wrap: anywhere; }
 .message-source-warnings p { margin: 0; }
 .message-source-warnings p + p { margin-top: 4px; }

@@ -51,6 +51,7 @@ function _resolverConfig(empresaId) {
       token: platform.token || null,
       cryptoKey: platform.cryptoKey || null,
       cryptoAtivo: platform.cryptoAtivo,
+      pastaArquivos: platform.pastaArquivos || null,
       ultimoTesteEm: null,
       ultimoTesteOk: null,
       tokenConfigurado: !!platform.token,
@@ -275,7 +276,23 @@ async function executarSelectNaFonte(empresaId, fonteId, { sql, params, limit })
   });
 }
 
+function getPastaArquivos(empresaId) {
+  return _resolverConfig(empresaId)?.pastaArquivos || null;
+}
+
+async function lerArquivoDaPasta(empresaId, { cdfile, extensao }) {
+  const config = _resolverConfig(empresaId);
+  if (!config?.url || !config?.token) throw new Error('Agente Local não configurado para esta empresa.');
+  if (!config.pastaArquivos) throw new Error('Pasta de arquivos do SoftExpert não configurada.');
+  return provider.lerArquivo(config.url, config.token, {
+    cdfile, extensao, pasta: config.pastaArquivos,
+    cryptoAtivo: config.cryptoAtivo, cryptoKey: config.cryptoKey, empresaId,
+  });
+}
+
 module.exports = {
+  getPastaArquivos,
+  lerArquivoDaPasta,
   getConfig,
   salvarConfig,
   getTokenRevelado,

@@ -19,6 +19,7 @@ const { validarFluxoFonte } = require('./validacao-fluxo-fonte-service');
 const respostaOperacionalService = require('./resposta-operacional-service');
 const { construirRespostaBloqueada } = require('./resposta-validacao-fonte-service');
 const chamadoRepo = require('../repositories/chamado-repository');
+const anexosSoftExpertService = require('./anexos-softexpert-service');
 const technicalResearchService = require('./technical-research-service');
 const contextEngine = require('./context-engine');
 const qualityGateService = require('./quality-gate-service');
@@ -958,6 +959,46 @@ function _comOrientacao(texto, bloco) {
   return t.includes(MARCADOR_ORIENTACOES) ? `${t}\n\n${bloco}` : `${t}\n\n${MARCADOR_ORIENTACOES}\n${bloco}`;
 }
 
+const GARANTIA_ANEXOS_TEMPO_MAX_MS = Number(process.env.SVC_GARANTIA_ANEXOS_TEMPO_MAX_MS) || 45000;
+// Depois de um tempo esgotado, as próximas análises da empresa não esperam de novo
+// o agente travado: seguem na hora, com o aviso, até a pausa acabar.
+const GARANTIA_ANEXOS_PAUSA_MS = Number(process.env.SVC_GARANTIA_ANEXOS_PAUSA_MS) || 2 * 60 * 1000;
+const _agenteSemRespostaAte = new Map();
+
+// Todo turno confere os anexos do chamado antes de montar o contexto. Com o
+// Agente Local travado, a análise segue no tempo máximo, e a IA e o analista
+// são avisados do que não foi verificado.
+async function _garantirAnexosDoChamado(empresaId, atendimento) {
+  let temporizador;
+  try {
+    if (!atendimento.referenciaExterna) return null;
+    const chamado = chamadoRepo.getChamadoPorNumero(empresaId, atendimento.referenciaExterna, atendimento.origem);
+    if (!chamado) return null;
+    if ((_agenteSemRespostaAte.get(empresaId) || 0) > Date.now()) {
+      return { verificado: false, erro: 'o Agente Local não respondeu há pouco; conferência adiada', total: 0, copiados: [], faltantes: [] };
+    }
+    let esgotou = false;
+    const garantia = await Promise.race([
+      anexosSoftExpertService.garantirAnexosParaIA(empresaId, chamado.id, atendimento.id),
+      new Promise((resolve) => {
+        temporizador = setTimeout(() => {
+          esgotou = true;
+          resolve({ verificado: false, erro: 'tempo esgotado ao consultar o Agente Local', total: 0, copiados: [], faltantes: [] });
+        }, GARANTIA_ANEXOS_TEMPO_MAX_MS);
+      }),
+    ]);
+    if (esgotou) _agenteSemRespostaAte.set(empresaId, Date.now() + GARANTIA_ANEXOS_PAUSA_MS);
+    else _agenteSemRespostaAte.delete(empresaId);
+    if (!garantia.verificado && /não configurado/i.test(garantia.erro || '')) return null;
+    return garantia;
+  } catch (err) {
+    console.error('[IA Service] Falha ao garantir os anexos do chamado:', err.message);
+    return { verificado: false, erro: err.message, total: 0, copiados: [], faltantes: [] };
+  } finally {
+    clearTimeout(temporizador);
+  }
+}
+
 async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, consultorId = null, anexoIds = [], automatico = false, anexosComoContexto = false, forcarPesquisa = false, analistaAtualNome = null, origemAcao: origemAcaoInformada = null }) {
   const atendimento = mensagemService.getAtendimento(empresaId, atendimentoId);
   if (!atendimento) throw new Error('Atendimento não encontrado nesta empresa.');
@@ -1037,8 +1078,16 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     }
   }
 
+  // Arquivo copiado agora é evidência nova: entra como anexo deste turno.
+  const garantiaAnexos = await _garantirAnexosDoChamado(empresaId, atendimento);
+  for (const copiado of garantiaAnexos?.copiados || []) {
+    if (copiado?.id && !anexosDoTurno.some(a => a.id === copiado.id)) anexosDoTurno.push(copiado);
+  }
+  const { avisoAnalista: avisoAnexos, avisoIA: avisoAnexosIA } = anexosSoftExpertService.descreverGarantia(garantiaAnexos);
+
   const todosAnexosDoAtendimento = anexoRepo.listarAnexos(empresaId, atendimentoId);
-  const systemPromptTurno = promptBuilder.selecionarSystemPrompt(todosAnexosDoAtendimento);
+  const systemPromptBase = promptBuilder.selecionarSystemPrompt(todosAnexosDoAtendimento);
+  const systemPromptTurno = avisoAnexosIA ? `${systemPromptBase}\n\n${avisoAnexosIA}` : systemPromptBase;
   const anexosTextoParaPesquisa = todosAnexosDoAtendimento.filter(a => a.conteudoExtraido);
 
   // Pergunta de processo/capacidade ("se eu te enviar o fonte, você
@@ -1885,7 +1934,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   }
 
   mensagemAssistente.fontesCorrigidos = geracaoFontes.fontes;
-  mensagemAssistente.avisosFonteCorrigido = geracaoFontes.avisos;
+  mensagemAssistente.avisosFonteCorrigido = avisoAnexos ? [avisoAnexos, ...geracaoFontes.avisos] : geracaoFontes.avisos;
   mensagemAssistente.avaliacoesFonteCorrigido = geracaoFontes.avaliacoes;
   if (mensagemAssistente.avisosFonteCorrigido.length || geracaoFontes.avaliacoes.length) {
     const persistida = mensagemRepo.atualizarAvisosFonteCorrigido(empresaId, mensagemAssistente.id, mensagemAssistente.avisosFonteCorrigido, geracaoFontes.avaliacoes);

@@ -14,7 +14,14 @@ const LIMITES = {
 function detectarNecessidadeVisualPdf({ conteudoExtraido, pergunta = '', nomeOriginal = '' } = {}) {
   const texto = String(conteudoExtraido || '');
   const perguntaTexto = String(pergunta || '');
-  const poucoTexto = texto.replace(/\[[^\]]+\]/g, '').trim().length < 120;
+  // Marcadores e linhas fixas da extração ("Paginas: 1", "Observacao: imagens...")
+  // não são conteúdo: sem descontá-las, um PDF só com print passava de 120
+  // caracteres e não era enviado como imagem (achado real, #036912, 2026-11-02).
+  const poucoTexto = texto
+    .replace(/\[[^\]]+\]/g, '')
+    .replace(/^\s*(Paginas|Páginas|Pages?)\s*:.*$/gim, '')
+    .replace(/^\s*Observacao\s*:.*$/gim, '')
+    .trim().length < 120;
   // "pdf" fica de fora da regex: casaria com a extensao de todo arquivo .pdf
   // e forcaria rasterizacao visual mesmo com texto extraido de sobra.
   const pedeVisual = /\b(print|screenshot|imagem|tela|visual|grafico|gr[aá]fico|diagrama|scan|escanead)\b/i.test(`${perguntaTexto} ${nomeOriginal}`);

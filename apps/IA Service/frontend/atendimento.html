@@ -381,7 +381,8 @@
         ${CRITERIOS_AVALIACAO.map(([campo, rotulo]) => `
           <div class="avaliacao-criterio">
             <label for="avaliacao-${campo}">${escapeHtml(rotulo)}</label>
-            <select id="avaliacao-${campo}">
+            <select id="avaliacao-${campo}" required>
+              <option value="" disabled ${Number.isInteger(valores?.notas?.[campo]) ? '' : 'selected'}>—</option>
               ${[0,1,2,3,4,5].map(n => `<option value="${n}" ${valores?.notas?.[campo] === n ? 'selected' : ''}>${n}</option>`).join('')}
             </select>
           </div>
@@ -427,13 +428,13 @@
         // nao e mais o desta mensagem.
         if (_mensagemIdAvaliacaoAtual !== mensagemId) return;
         const avisoAtual = document.getElementById('avaliacao-sugestao-aviso');
-        if (!resp?.sucesso) {
-          if (avisoAtual) avisoAtual.innerHTML = '';
-          return;
-        }
-        const campos = document.getElementById('avaliacao-campos');
-        if (campos) campos.innerHTML = _renderizarCamposAvaliacao(resp.sugestao);
-        if (avisoAtual) avisoAtual.innerHTML = `<div class="avaliacao-sugestao-rotulo">Sugestão da IA — revise antes de salvar</div>`;
+        // As notas da sugestao nao sao aplicadas: ficam vazias para nao induzir
+        // o avaliador. So a observacao e sugerida, sem apagar o que ja foi
+        // preenchido enquanto a chamada estava em voo.
+        const observacoes = document.getElementById('avaliacao-observacoes');
+        const aplicar = !!resp?.sucesso && !!resp.sugestao?.observacoes && !!observacoes && !observacoes.value.trim();
+        if (aplicar) observacoes.value = resp.sugestao.observacoes;
+        if (avisoAtual) avisoAtual.innerHTML = aplicar ? `<div class="avaliacao-sugestao-rotulo">Observação sugerida pela IA — revise antes de salvar</div>` : '';
       } catch (err) {
         if (_mensagemIdAvaliacaoAtual !== mensagemId) return;
         const avisoAtual = document.getElementById('avaliacao-sugestao-aviso');
@@ -451,7 +452,10 @@
       if (!mensagemId) return;
       const notas = {};
       for (const [campo] of CRITERIOS_AVALIACAO) {
-        notas[campo] = Number(document.getElementById(`avaliacao-${campo}`).value);
+        const select = document.getElementById(`avaliacao-${campo}`);
+        // Sem esta trava, Number('') gravaria nota 0 sem o avaliador ter escolhido.
+        if (!select.reportValidity()) return;
+        notas[campo] = Number(select.value);
       }
       const observacoes = document.getElementById('avaliacao-observacoes').value.trim() || null;
       const erroTecnicoCritico = document.getElementById('avaliacao-erro-critico').checked;

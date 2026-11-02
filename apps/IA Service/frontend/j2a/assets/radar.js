@@ -29,6 +29,11 @@
     messages: [],
     localAttachments: [],
     softAttachments: [],
+    arquivosBlob: new Map(),
+    miniaturas: new Map(),
+    miniaturasComFalha: new Set(),
+    filaMiniaturas: [],
+    miniaturasAtivas: 0,
     pendingFiles: [],
     research: null,
     dossie: null,
@@ -498,6 +503,9 @@
       if (el) el.innerHTML = '';
     }
     fecharModalAvaliacao();
+    fecharModalAnexos();
+    fecharVisualizadorAnexo();
+    limparArquivosEmMemoria();
   }
 
   async function bootRadar() {
@@ -783,6 +791,10 @@
     state.trilhaExpandida = new Set();
     state.localAttachments = [];
     state.softAttachments = [];
+    state.softAttachmentsErro = null;
+    state.softAttachmentsCarregando = true;
+    state.anexosFaltantes = [];
+    limparArquivosEmMemoria();
     state.messages = [];
     state.atendimentoId = null;
     renderQueue();
@@ -793,7 +805,8 @@
       // Anexos do SoftExpert vêm ao vivo pelo Agente Local: carregam em
       // paralelo e não seguram mais a abertura da conversa (antes eram
       // aguardados primeiro, a cada clique no chamado).
-      const anexosSoftExpert = loadSoftAttachments(ticket.id);
+      // Também não seguram os painéis: a lista se renderiza sozinha ao chegar.
+      loadSoftAttachments(ticket.id);
       const open = await request(ext(`/radar/chamados/${encodeURIComponent(ticket.id)}/abrir-atendimento`), { method: 'POST' });
       state.atendimentoId = open.atendimentoId;
       if (open.chamado) {
@@ -806,8 +819,7 @@
       state.atendimentoIdPorChamado.set(String(ticket.id), open.atendimentoId);
       state.concluidosNaoVistos.delete(open.atendimentoId);
       syncBotoesAcao();
-      await Promise.allSettled([
-        anexosSoftExpert,
+      const [conversa] = await Promise.allSettled([
         loadMessages(),
         loadLocalAttachments(),
         loadResearch(ticket.id),
@@ -816,6 +828,7 @@
         loadTrilha(),
       ]);
       renderAllCaseData();
+      if (conversa.status === 'rejected') mostrarFalhaConversa(ticket.id, conversa.reason);
       // Bug real corrigido (2026-10): a chamada nao passava atendimentoId
       // como 1o argumento (assinatura exige -- ver comentario de
       // pollMessages), entao a guarda "atendimentoId !== state.atendimentoId"
@@ -826,7 +839,17 @@
       if (open.preAnaliseDisparada) pollMessages(state.atendimentoId, 60, 3000, 'Aguardando pre-analise automatica da IA...');
     } catch (err) {
       toast(`Nao foi possivel abrir o chamado: ${err.message}`);
+      mostrarFalhaConversa(ticket.id, err);
     }
+  }
+
+  function mostrarFalhaConversa(ticketId, err) {
+    if (String(state.selected?.id) !== String(ticketId)) return;
+    $('messages').innerHTML = `<div class="empty-block" role="alert">Não foi possível carregar a conversa (${escapeHtml(mensagemDeErro(err))}). <button type="button" class="message-reenviar" data-tentar-abrir="${escapeHtml(ticketId)}">Tentar de novo</button></div>`;
+  }
+
+  function mensagemDeErro(err) {
+    return err?.name === 'TimeoutError' ? 'tempo esgotado' : (err?.message || 'erro de comunicação');
   }
 
   function renderCaseShell() {
@@ -847,6 +870,8 @@
       ['Previsao', c.slaDataPrevFim ? formatDateTime(c.slaDataPrevFim) : null],
     ].map(([k, v]) => `<div><span>${escapeHtml(k)}</span><strong>${escapeHtml(text(v))}</strong></div>`).join('');
     $('messages').innerHTML = '<div class="empty-block">Carregando conversa...</div>';
+    renderBotaoAnexosChamado();
+    renderAvisoAnexos();
     renderDescription();
     renderDetails();
   }
@@ -865,6 +890,7 @@
 
   function renderAllCaseData() {
     renderMessages();
+    renderAvisoAnexos();
     renderEvidence();
     renderKnowledge();
     renderTrail();
@@ -884,15 +910,69 @@
 
   async function loadSoftAttachments(ticketId) {
     try {
-      const body = await request(ext(`/radar/chamados/${encodeURIComponent(ticketId)}/anexos-softexpert`));
+      const body = await request(ext(`/radar/chamados/${encodeURIComponent(ticketId)}/anexos-softexpert`), { signal: AbortSignal.timeout(LISTA_ANEXOS_TEMPO_MAX_MS) });
       // Resposta atrasada de outro chamado (o analista já trocou) não sobrescreve a lista atual.
       if (state.selected && String(state.selected.id) !== String(ticketId)) return;
       state.softAttachments = body.anexos || [];
+      state.softAttachmentsErro = null;
     } catch (err) {
       if (state.selected && String(state.selected.id) !== String(ticketId)) return;
       state.softAttachments = [];
-      toast(`Anexos SoftExpert indisponiveis: ${err.message}`);
+      state.softAttachmentsErro = mensagemDeErro(err);
+      toast(`Anexos SoftExpert indisponiveis: ${state.softAttachmentsErro}`);
     }
+    // A lista pode chegar depois da conversa: atualiza os clipes já na tela.
+    state.softAttachmentsCarregando = false;
+    renderBotaoAnexosChamado();
+    renderAvisoAnexos();
+    renderEvidence();
+    if (state.messages.length) renderMessages();
+  }
+
+  const LISTA_ANEXOS_TEMPO_MAX_MS = 30000;
+  const ARQUIVO_TEMPO_MAX_MS = 60000;
+  const TIPOS_NAO_LIDOS_PELA_IA = /\.(xls|doc|zip)$/i;
+
+  function ehAnexoDeAbertura(a) {
+    return ['chamado', 'anexo', 'workflow'].includes(a.origem);
+  }
+
+  function copiaLocalDe(a) {
+    return state.localAttachments.find((l) => l.origemOid && String(l.origemOid) === String(a.oid)) || null;
+  }
+
+  // Aviso fixo acima da conversa: o analista sabe o que a IA não está recebendo.
+  function renderAvisoAnexos() {
+    const aviso = $('anexos-aviso-ia');
+    if (!aviso) return;
+    const naoLidos = new Map((state.anexosFaltantes || []).map((f) => [f.nome, f.motivo]));
+    if (!state.softAttachmentsCarregando) {
+      for (const a of state.softAttachments) {
+        if (copiaLocalDe(a)) continue;
+        if (a.conteudoAcessivel === false) naoLidos.set(a.nome, 'somente_softexpert');
+        else if (TIPOS_NAO_LIDOS_PELA_IA.test(a.nome || '')) naoLidos.set(a.nome, 'tipo_nao_lido');
+      }
+    }
+    const motivos = { somente_softexpert: 'guardado só no SoftExpert', tipo_nao_lido: 'tipo que a IA não lê', falha_copia: 'falha ao obter o arquivo', agente_desatualizado: 'Agente Local precisa ser atualizado', pasta_inacessivel: 'o Agente Local não acessa a pasta configurada', arquivo_nao_encontrado: 'arquivo não encontrado na pasta configurada', arquivo_corrompido: 'arquivo corrompido na origem', arquivo_grande: 'arquivo acima do limite de 25 MB' };
+    const lista = [...naoLidos].map(([nome, motivo]) => `${escapeHtml(nome)} (${escapeHtml(motivos[motivo] || motivo)})`).join('; ');
+    const partes = [];
+    if (state.softAttachmentsErro) {
+      partes.push(`⚠️ Não foi possível verificar os anexos do SoftExpert (${escapeHtml(state.softAttachmentsErro)}). A IA usa só os já copiados. <button type="button" class="message-reenviar" data-verificar-anexos>Tentar de novo</button>`);
+    }
+    if (lista) partes.push(`⚠️ A IA não está recebendo ${naoLidos.size === 1 ? '1 anexo' : `${naoLidos.size} anexos`}: ${lista}.`);
+    aviso.innerHTML = partes.map((p) => `<div>${p}</div>`).join('');
+    aviso.hidden = !partes.length;
+  }
+
+  function renderBotaoAnexosChamado() {
+    const btn = $('anexos-chamado-btn');
+    if (!btn) return;
+    const abertura = state.softAttachments.filter(ehAnexoDeAbertura).length;
+    const outros = state.softAttachments.length - abertura;
+    btn.disabled = !!state.softAttachmentsCarregando;
+    btn.textContent = state.softAttachmentsCarregando ? '📎 Carregando anexos...'
+      : state.softAttachmentsErro ? '📎 Anexos indisponíveis'
+        : `📎 Anexos abertura ${abertura}${outros ? ` · outros ${outros}` : ''}`;
   }
 
   async function loadResearch(ticketId) {
@@ -965,7 +1045,42 @@
   }
 
   function messageAttachments(m) {
-    return state.localAttachments.filter((a) => [a.mensagemId, a.mensagemOrigemId].some(id => id != null && String(id) === String(m.id)));
+    return state.localAttachments.filter((a) => {
+      // Cópia de anexo do SoftExpert fica só na mensagem de origem (sem depender do
+      // Agente Local), mesmo que tenha sido usada numa análise posterior.
+      if (a.origemOid) return pertenceAMensagem(m, a.origemReferenciaOid);
+      return [a.mensagemId, a.mensagemOrigemId].some(id => id != null && String(id) === String(m.id));
+    });
+  }
+
+  // Anexos do SoftExpert ligados à mensagem importada (abertura ou
+  // posicionamento) pelo OID de referência. Cópia local já listada na mesma
+  // mensagem não repete.
+  function anexosSoftExpertDaMensagem(m, locais = []) {
+    if (!m?.origemReferenciaOid || !m?.origemReferencia) return [];
+    // O SoftExpert pode listar o mesmo arquivo em mais de uma origem: dentro da
+    // mensagem aparece uma vez. Nome igual com tamanho diferente é outro arquivo.
+    const vistos = new Set(locais.map(chaveDoArquivo));
+    return state.softAttachments.filter((a) => {
+      if (!pertenceAMensagem(m, a.referenciaOid)) return false;
+      if (locais.some((l) => l.origemOid && String(l.origemOid) === String(a.oid))) return false;
+      if (vistos.has(chaveDoArquivo(a))) return false;
+      vistos.add(chaveDoArquivo(a));
+      return true;
+    });
+  }
+
+  function chaveDoArquivo(a) {
+    return `${a.nome || a.nomeOriginal || ''}|${Number(a.tamanho) || 0}`;
+  }
+
+  // Todo anexo do chamado tem lugar: na mensagem da sua referência ou, sem
+  // mensagem correspondente, na abertura.
+  function pertenceAMensagem(m, referenciaOid) {
+    if (!m?.origemReferenciaOid) return false;
+    if (referenciaOid && String(referenciaOid) === String(m.origemReferenciaOid)) return true;
+    if (!String(m.origemReferencia || '').startsWith('chamado:')) return false;
+    return !referenciaOid || !state.messages.some((x) => x.origemReferenciaOid && String(x.origemReferenciaOid) === String(referenciaOid));
   }
 
   // Analista rolando para cima para ler mensagens antigas nao deve ser
@@ -1070,11 +1185,10 @@
       const assistant = m.papel === 'assistant';
       const side = messageSide(m);
       const attachments = messageAttachments(m);
-      const attachmentsHtml = attachments.length ? `
-        <div class="message-attachments">${attachments.map((a) => `
-          <a class="message-attachment" href="${escapeHtml(ext(`/anexos/${encodeURIComponent(a.id)}/download`))}" data-download-name="${escapeHtml(a.nome || a.nomeOriginal || 'Anexo')}">📎 ${escapeHtml(a.nome || a.nomeOriginal || 'Anexo')}${a.anexoOriginalId ? ' — Correção proposta: validar antes de usar' : ''}</a>
-        `).join('')}</div>
-      ` : '';
+      const anexosSoft = anexosSoftExpertDaMensagem(m, attachments);
+      const attachmentsHtml = attachments.length || anexosSoft.length
+        ? `<div class="wa-anexos">${attachments.map((a) => cartaoDoAnexo(a, 'local')).join('')}${anexosSoft.map((a) => cartaoDoAnexo(a, 'soft')).join('')}</div>`
+        : '';
       // Avisos de fonte corrigido vêm do servidor (persistidos na mensagem),
       // independentes da redação humanizada.
       const avisosFonte = assistant && Array.isArray(m.avisosFonteCorrigido) ? m.avisosFonteCorrigido : [];
@@ -1099,8 +1213,8 @@
           <div class="message-card${menuHtml ? ' com-menu' : ''}">
             ${menuHtml}
             <div class="message-head"><strong>${escapeHtml(messageRole(m))}</strong><span>${escapeHtml(formatDateTime(messageTimestamp(m)))}</span></div>
-            <div class="message-text">${escapeHtml(messageText(m))}</div>
             ${attachmentsHtml}
+            <div class="message-text">${escapeHtml(messageText(m))}</div>
             ${avisosFonteHtml}
             ${acoesHtml}
             ${estadoEnvio}
@@ -1109,6 +1223,7 @@
       `;
     }).join('');
     container.querySelectorAll('[data-reenviar]').forEach((b) => b.addEventListener('click', () => reenviarPendente(b.dataset.reenviar)));
+    observarMiniaturas(container);
     if (statusPertenceAoAtual) appendChatStatusRow(state.chatStatusText, pertoDoFim);
     if (pertoDoFim) container.scrollTop = container.scrollHeight;
     // Re-render (polling) com o menu aberto: mensagem sumiu => fecha o menu.
@@ -1222,7 +1337,8 @@
       ${CRITERIOS_AVALIACAO.map(([campo, rotulo]) => `
         <div class="avaliacao-criterio">
           <label for="avaliacao-${campo}">${escapeHtml(rotulo)}</label>
-          <select id="avaliacao-${campo}">
+          <select id="avaliacao-${campo}" required>
+            <option value="" disabled ${Number.isInteger(valores?.notas?.[campo]) ? '' : 'selected'}>—</option>
             ${[0, 1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${valores?.notas?.[campo] === n ? 'selected' : ''}>${n}</option>`).join('')}
           </select>
         </div>
@@ -1260,13 +1376,13 @@
       // desta mensagem.
       if (state.avaliacaoMensagemId !== mensagemId) return;
       const avisoAtual = $('avaliacao-modal-sugestao-aviso');
-      if (!resp?.sucesso) {
-        if (avisoAtual) avisoAtual.innerHTML = '';
-        return;
-      }
-      const campos = $('avaliacao-modal-campos');
-      if (campos) campos.innerHTML = _renderizarCamposAvaliacao(resp.sugestao);
-      if (avisoAtual) avisoAtual.innerHTML = '<div class="avaliacao-sugestao-rotulo">Sugestão da IA — revise antes de salvar</div>';
+      // As notas da sugestao nao sao aplicadas: ficam vazias para nao induzir
+      // o avaliador. So a observacao e sugerida, sem apagar o que ja foi
+      // preenchido enquanto a chamada estava em voo.
+      const observacoes = $('avaliacao-observacoes');
+      const aplicar = !!resp?.sucesso && !!resp.sugestao?.observacoes && !!observacoes && !observacoes.value.trim();
+      if (aplicar) observacoes.value = resp.sugestao.observacoes;
+      if (avisoAtual) avisoAtual.innerHTML = aplicar ? '<div class="avaliacao-sugestao-rotulo">Observação sugerida pela IA — revise antes de salvar</div>' : '';
     } catch (_) {
       if (state.avaliacaoMensagemId !== mensagemId) return;
       const avisoAtual = $('avaliacao-modal-sugestao-aviso');
@@ -1279,7 +1395,10 @@
     if (!mensagemId) return;
     const notas = {};
     for (const [campo] of CRITERIOS_AVALIACAO) {
-      notas[campo] = Number($(`avaliacao-${campo}`).value);
+      const select = $(`avaliacao-${campo}`);
+      // Sem esta trava, Number('') gravaria nota 0 sem o avaliador ter escolhido.
+      if (!select.reportValidity()) return;
+      notas[campo] = Number(select.value);
     }
     const observacoes = $('avaliacao-observacoes').value.trim() || null;
     const erroTecnicoCritico = $('avaliacao-erro-critico').checked;
@@ -1442,11 +1561,14 @@
     const pararProgresso = acompanharProgresso(atendimentoId, 'Pesquisando no histórico completo do chamado...');
     let concluiu = false;
     try {
-      await request(ext(`/radar/chamados/${encodeURIComponent(state.selected.id)}/anexos-softexpert/sincronizar`), {
+      const copia = await request(ext(`/radar/chamados/${encodeURIComponent(state.selected.id)}/anexos-softexpert/sincronizar`), {
         method: 'POST',
         body: JSON.stringify({ atendimentoId }),
-      }).catch(() => null);
+      }).catch((err) => ({ verificado: false, erro: err.message, faltantes: [] }));
+      state.anexosFaltantes = copia.faltantes || [];
+      state.softAttachmentsErro = copia.verificado === false ? (copia.erro || 'Agente Local indisponível') : state.softAttachmentsErro;
       await loadLocalAttachments();
+      renderAvisoAnexos();
       const anexoIds = state.localAttachments.map((a) => a.id).filter(Boolean);
       await request(ext(`/atendimentos/${encodeURIComponent(atendimentoId)}/investigar`), {
         method: 'POST',
@@ -1537,15 +1659,226 @@
     }
   }
 
+  function urlDoAnexo(a, source) {
+    return source === 'soft'
+      ? ext(`/radar/chamados/${encodeURIComponent(state.selected.id)}/anexos-softexpert/${encodeURIComponent(a.oid)}`)
+      : ext(`/anexos/${encodeURIComponent(a.id)}/download`);
+  }
+
+  const EXTENSOES_IMAGEM = /\.(png|jpe?g|gif|webp|bmp)$/i;
+  // Imagem maior que isto só baixa quando o analista clica, como no WhatsApp.
+  const MINIATURA_MAX_BYTES = 2 * 1024 * 1024;
+  const MINIATURAS_SIMULTANEAS = 2;
+
+  function cartaoDoAnexo(a, source) {
+    const copia = source === 'soft' ? copiaLocalDe(a) : null;
+    if (copia) return cartaoDoAnexo(copia, 'local');
+    const nome = a.nome || a.nomeOriginal || 'Anexo';
+    const tamanho = formatSize(a.tamanho);
+    if (a.conteudoAcessivel === false) {
+      return `<div class="wa-doc wa-doc-off" title="Abra este arquivo no SoftExpert">
+        <span class="wa-doc-icone" aria-hidden="true">${escapeHtml((nome.match(/\.([a-z0-9]{1,5})$/i)?.[1] || 'arq').toUpperCase())}</span>
+        <span class="wa-doc-info"><span class="wa-doc-nome">${escapeHtml(nome)}</span><span class="wa-doc-detalhe">${escapeHtml([tamanho, 'Guardado só no SoftExpert: a IA não leu este arquivo'].filter(Boolean).join(' · '))}</span></span>
+      </div>`;
+    }
+    const url = urlDoAnexo(a, source);
+    if (EXTENSOES_IMAGEM.test(nome)) {
+      const pronta = state.miniaturas.get(url);
+      // Miniatura automática só de arquivo já no servidor; a que depende do Agente
+      // Local, de tamanho desconhecido ou que já falhou espera o clique.
+      const automatica = source === 'local' && Number(a.tamanho) > 0 && Number(a.tamanho) <= MINIATURA_MAX_BYTES && !state.miniaturasComFalha.has(url);
+      const fonte = pronta ? `src="${escapeHtml(pronta)}"` : automatica ? `data-miniatura="${escapeHtml(url)}"` : '';
+      const legenda = [nome, tamanho, automatica ? '' : 'clique para ver'].filter(Boolean).join(' · ');
+      return `<button type="button" class="wa-midia" data-anexo-ver="${escapeHtml(url)}" data-anexo-nome="${escapeHtml(nome)}" title="${escapeHtml(nome)}" aria-label="Ver imagem ${escapeHtml(nome)}">
+        <img alt="" ${fonte}><span class="wa-midia-legenda">${escapeHtml(legenda)}</span>
+      </button>`;
+    }
+    const extensao = (nome.match(/\.([a-z0-9]{1,5})$/i)?.[1] || 'arq').toUpperCase();
+    const detalhe = [extensao, tamanho, a.anexoOriginalId ? 'Correção proposta: validar antes de usar' : ''].filter(Boolean).join(' · ');
+    return `<a class="message-attachment wa-doc" href="${escapeHtml(url)}" data-download-name="${escapeHtml(nome)}" title="Baixar ${escapeHtml(nome)}">
+      <span class="wa-doc-icone" aria-hidden="true">${escapeHtml(extensao)}</span>
+      <span class="wa-doc-info"><span class="wa-doc-nome">${escapeHtml(nome)}</span><span class="wa-doc-detalhe">${escapeHtml(detalhe)}</span></span>
+      <span class="wa-doc-baixar" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    </a>`;
+  }
+
+  // Blob reaproveitado entre miniatura, visualizador e re-render do polling,
+  // para não buscar o mesmo arquivo de novo enquanto o chamado está aberto.
+  function carregarArquivoBlob(url) {
+    if (!state.arquivosBlob.has(url)) {
+      const promessa = fetch(url, { headers: apiHeaders(false), signal: AbortSignal.timeout(ARQUIVO_TEMPO_MAX_MS) }).then(async (res) => {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error || `Erro ${res.status}`);
+        }
+        return URL.createObjectURL(await res.blob());
+      });
+      promessa.catch(() => { if (state.arquivosBlob.get(url) === promessa) state.arquivosBlob.delete(url); });
+      state.arquivosBlob.set(url, promessa);
+    }
+    return state.arquivosBlob.get(url);
+  }
+
+  function limparArquivosEmMemoria() {
+    state.arquivosBlob.forEach((promessa) => promessa.then((blobUrl) => URL.revokeObjectURL(blobUrl)).catch(() => {}));
+    state.arquivosBlob = new Map();
+    state.miniaturas = new Map();
+    state.miniaturasComFalha = new Set();
+    state.filaMiniaturas = [];
+  }
+
+  function processarFilaMiniaturas() {
+    while (state.miniaturasAtivas < MINIATURAS_SIMULTANEAS && state.filaMiniaturas.length) {
+      const url = state.filaMiniaturas.shift();
+      const arquivos = state.arquivosBlob;
+      state.miniaturasAtivas += 1;
+      carregarArquivoBlob(url).then((blobUrl) => {
+        if (arquivos !== state.arquivosBlob) return;
+        state.miniaturas.set(url, blobUrl);
+        document.querySelectorAll('img[data-miniatura]').forEach((img) => {
+          if (img.dataset.miniatura === url) { img.src = blobUrl; img.removeAttribute('data-miniatura'); }
+        });
+      }).catch(() => {
+        // Falhou: fica a legenda com o nome. Não repete a cada atualização da
+        // conversa (seria uma chamada pesada ao Agente Local); o clique tenta de novo.
+        if (arquivos !== state.arquivosBlob) return;
+        state.miniaturasComFalha.add(url);
+        document.querySelectorAll('img[data-miniatura]').forEach((img) => {
+          if (img.dataset.miniatura === url) img.removeAttribute('data-miniatura');
+        });
+      }).finally(() => {
+        state.miniaturasAtivas -= 1;
+        processarFilaMiniaturas();
+      });
+    }
+  }
+
+  // Só busca a miniatura que entrou na tela: histórico longo não dispara um
+  // download por imagem ao abrir o chamado.
+  function observarMiniaturas(raiz) {
+    raiz._observadorMiniaturas?.disconnect();
+    const imagens = raiz.querySelectorAll('img[data-miniatura]');
+    if (!imagens.length) return;
+    const observador = new IntersectionObserver((entradas) => {
+      entradas.filter((e) => e.isIntersecting).forEach((e) => {
+        observador.unobserve(e.target);
+        const url = e.target.dataset.miniatura;
+        if (url && !state.filaMiniaturas.includes(url)) state.filaMiniaturas.push(url);
+      });
+      processarFilaMiniaturas();
+    });
+    imagens.forEach((img) => observador.observe(img));
+    raiz._observadorMiniaturas = observador;
+  }
+
+  async function abrirVisualizadorAnexo(url, nome) {
+    const img = $('anexo-visualizador-img');
+    const status = $('anexo-visualizador-status');
+    state.visualizadorUrl = url;
+    $('anexo-visualizador-nome').textContent = nome;
+    img.hidden = true;
+    img.removeAttribute('src');
+    img.alt = nome;
+    status.hidden = false;
+    $('anexo-visualizador-baixar').disabled = true;
+    $('anexo-visualizador').classList.add('ativo');
+    $('anexo-visualizador-fechar').focus();
+    try {
+      const blobUrl = await carregarArquivoBlob(url);
+      if (state.visualizadorUrl !== url) return;
+      img.src = blobUrl;
+      img.hidden = false;
+      status.hidden = true;
+      $('anexo-visualizador-baixar').disabled = false;
+    } catch (err) {
+      if (state.visualizadorUrl !== url) return;
+      fecharVisualizadorAnexo();
+      toast(`Nao foi possivel abrir o anexo: ${mensagemDeErro(err)}`);
+    }
+  }
+
+  function fecharVisualizadorAnexo() {
+    state.visualizadorUrl = null;
+    $('anexo-visualizador')?.classList.remove('ativo');
+  }
+
+  function baixarImagemDoVisualizador() {
+    const img = $('anexo-visualizador-img');
+    if (!img.src) return;
+    const a = document.createElement('a');
+    a.href = img.src;
+    a.download = $('anexo-visualizador-nome').textContent;
+    document.body.append(a); a.click(); a.remove();
+  }
+
+  // Clique em anexo vale tanto na conversa quanto no modal do chamado.
+  function tratarCliqueAnexo(event) {
+    const imagem = event.target.closest('[data-anexo-ver]');
+    if (imagem) { abrirVisualizadorAnexo(imagem.dataset.anexoVer, imagem.dataset.anexoNome); return true; }
+    const documento = event.target.closest('.message-attachment');
+    if (documento) {
+      event.preventDefault();
+      baixarDocumento(documento);
+      return true;
+    }
+    return false;
+  }
+
+  // Indica o download no próprio cartão e ignora novos cliques até terminar.
+  async function baixarDocumento(documento) {
+    if (documento.dataset.baixando) return;
+    documento.dataset.baixando = '1';
+    const detalhe = documento.querySelector('.wa-doc-detalhe');
+    const original = detalhe?.textContent;
+    if (detalhe) detalhe.textContent = 'Baixando...';
+    try {
+      await openAttachment(documento.href, documento.dataset.downloadName);
+    } finally {
+      delete documento.dataset.baixando;
+      if (detalhe) detalhe.textContent = original;
+    }
+  }
+
+  function secaoDoModalAnexos(titulo, list, source) {
+    return list.length
+      ? `<section><h3 class="anexos-secao-titulo">${escapeHtml(titulo)}</h3><div class="wa-anexos anexos-modal-lista">${list.map((a) => cartaoDoAnexo(a, source)).join('')}</div></section>`
+      : '';
+  }
+
+  function fecharModalAnexos() {
+    $('anexos-modal-backdrop').classList.remove('ativo');
+  }
+
+  function abrirAnexosDoChamado() {
+    const abertura = state.softAttachments.filter(ehAnexoDeAbertura);
+    // O SoftExpert pode listar o mesmo arquivo na abertura e num posicionamento:
+    // a abertura tem prioridade e o nome não aparece de novo em outra seção.
+    const chavesAbertura = new Set(abertura.map(chaveDoArquivo));
+    const outros = state.softAttachments.filter((a) => !abertura.includes(a) && !chavesAbertura.has(chaveDoArquivo(a)));
+    const oids = new Set(state.softAttachments.map((a) => String(a.oid)));
+    const chaves = new Set(state.softAttachments.map(chaveDoArquivo));
+    const locais = state.localAttachments.filter((a) => !(a.origemOid && oids.has(String(a.origemOid))) && !chaves.has(chaveDoArquivo(a)));
+    const aviso = state.softAttachmentsErro
+      ? `<div class="anexos-aviso" role="alert">Não foi possível consultar os anexos do SoftExpert: ${escapeHtml(state.softAttachmentsErro)}</div>` : '';
+    const corpo = $('anexos-modal-corpo');
+    corpo.innerHTML = (aviso
+      + secaoDoModalAnexos('Abertura do chamado', abertura, 'soft')
+      + secaoDoModalAnexos('Posicionamentos', outros, 'soft')
+      + secaoDoModalAnexos('Arquivos do atendimento', locais, 'local'))
+      || '<div class="empty-block">Nenhum anexo encontrado.</div>';
+    $('anexos-modal-backdrop').classList.add('ativo');
+    $('anexos-modal-close').focus();
+    observarMiniaturas(corpo);
+  }
+
   function attachmentRows(list, source) {
     if (!list.length) return '<div class="empty-block">Nenhum anexo encontrado.</div>';
     return `<div class="risk-grid"><table class="risk-table"><thead><tr><th>Arquivo</th><th>Origem</th><th>Tamanho</th><th>Acoes</th></tr></thead><tbody>${
       list.map((a) => {
         const name = a.nome || a.nomeOriginal || 'Anexo';
-        const open = source === 'soft'
-          ? ext(`/radar/chamados/${encodeURIComponent(state.selected.id)}/anexos-softexpert/${encodeURIComponent(a.oid)}`)
-          : ext(`/anexos/${encodeURIComponent(a.id)}/download`);
-        return `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(a.origem || source)}</td><td>${escapeHtml(formatSize(a.tamanho))}</td><td><button data-open-url="${escapeHtml(open)}">Abrir</button></td></tr>`;
+        const open = urlDoAnexo(a, source);
+        const acao = a.conteudoAcessivel === false ? 'Só no SoftExpert' : `<button data-open-url="${escapeHtml(open)}">Abrir</button>`;
+        return `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(a.origem || source)}</td><td>${escapeHtml(formatSize(a.tamanho))}</td><td>${acao}</td></tr>`;
       }).join('')
     }</tbody></table></div>`;
   }
@@ -2515,10 +2848,11 @@
     // "Avaliar investigação"/"editar" e reconstruido a cada renderMessages,
     // mesmo padrao ja usado para data-ticket-id/data-open-url).
     $('messages').addEventListener('click', (event) => {
-      const download = event.target.closest('.message-attachment');
-      if (download) { event.preventDefault(); openAttachment(download.href, download.dataset.downloadName); return; }
+      if (tratarCliqueAnexo(event)) return;
       const menuTrigger = event.target.closest('[data-menu-msg]');
       if (menuTrigger) { event.stopPropagation(); abrirMenuMensagem(menuTrigger); return; }
+      const tentarAbrir = event.target.closest('[data-tentar-abrir]');
+      if (tentarAbrir) { selectTicket(tentarAbrir.dataset.tentarAbrir); return; }
       const btn = event.target.closest('[data-avaliacao-abrir]');
       if (btn) abrirModalAvaliacao(btn.dataset.avaliacaoAbrir);
     });
@@ -2535,11 +2869,37 @@
     $('avaliacao-modal-close').addEventListener('click', fecharModalAvaliacao);
     $('avaliacao-modal-cancelar').addEventListener('click', fecharModalAvaliacao);
     $('avaliacao-modal-salvar').addEventListener('click', salvarAvaliacaoInvestigacao);
+
+    $('anexos-aviso-ia').addEventListener('click', (event) => {
+      if (!event.target.closest('[data-verificar-anexos]') || !state.selected) return;
+      state.softAttachmentsErro = null;
+      state.softAttachmentsCarregando = true;
+      renderBotaoAnexosChamado();
+      renderAvisoAnexos();
+      loadSoftAttachments(state.selected.id);
+    });
+    $('anexos-chamado-btn').addEventListener('click', abrirAnexosDoChamado);
+    $('anexos-modal-close').addEventListener('click', fecharModalAnexos);
+    $('anexos-modal-backdrop').addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) { fecharModalAnexos(); return; }
+      tratarCliqueAnexo(event);
+    });
+    $('anexo-visualizador-fechar').addEventListener('click', fecharVisualizadorAnexo);
+    $('anexo-visualizador-baixar').addEventListener('click', baixarImagemDoVisualizador);
+    $('anexo-visualizador-area').addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) fecharVisualizadorAnexo();
+    });
+    // Esc fecha uma camada por vez: primeiro o visualizador, depois o modal.
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      if (state.visualizadorUrl) fecharVisualizadorAnexo();
+      else fecharModalAnexos();
+    });
   }
 
   async function openAttachment(url, nomeDownload = null) {
     try {
-      const res = await fetch(url, { headers: apiHeaders(false) });
+      const res = await fetch(url, { headers: apiHeaders(false), signal: AbortSignal.timeout(ARQUIVO_TEMPO_MAX_MS) });
       const body = res.ok ? null : await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.error || `Erro ${res.status}`);
       const blobUrl = URL.createObjectURL(await res.blob());
@@ -2550,7 +2910,7 @@
       } else window.open(blobUrl, '_blank', 'noopener');
       setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
     } catch (err) {
-      toast(`Nao foi possivel abrir o anexo: ${err.message}`);
+      toast(`Nao foi possivel abrir o anexo: ${mensagemDeErro(err)}`);
     }
   }
 

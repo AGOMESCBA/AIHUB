@@ -198,8 +198,8 @@ module.exports = function registrarRotasExterno(app) {
     try {
       const { atendimentoId } = req.body || {};
       if (!atendimentoId) return res.status(400).json({ error: 'atendimentoId é obrigatório.' });
-      const { sincronizados, indisponiveis } = await anexosSoftExpertService.sincronizarEValidarAnexosParaAtendimento(req.svcEmpresaId, req.params.chamadoId, atendimentoId);
-      res.json({ sincronizados: sincronizados.length, indisponiveis });
+      const { sincronizados, indisponiveis, verificado, erro, faltantes } = await anexosSoftExpertService.sincronizarEValidarAnexosParaAtendimento(req.svcEmpresaId, req.params.chamadoId, atendimentoId);
+      res.json({ sincronizados: sincronizados.length, indisponiveis, verificado, erro, faltantes });
     } catch (err) {
       _handleErro(res, err);
     }

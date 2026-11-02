@@ -1356,6 +1356,13 @@ const MIGRATIONS = [
       CREATE INDEX idx_svc_acessos_falhas ON svc_acessos_falhas (empresa_id, criado_em);
     `,
   },
+  {
+    version: 55,
+    descricao: 'Limpeza de anexos de chamados encerrados (pedido do usuário, 2026-11-02, LGPD e disco): marca a cópia do SoftExpert cujo arquivo e texto extraído foram apagados. O registro fica (dossiê e validações apontam para ele); o original continua no SoftExpert e volta a ser copiado no primeiro uso.',
+    sql: `
+      ALTER TABLE anexos ADD COLUMN arquivo_removido_em TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

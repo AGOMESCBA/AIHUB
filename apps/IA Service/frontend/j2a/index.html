@@ -251,6 +251,7 @@
                 <div class="case-second-row">
                   <div id="case-badges" class="case-badges"></div>
                   <div class="case-meta" id="case-meta"></div>
+                  <button type="button" id="anexos-chamado-btn" class="case-anexos-btn"></button>
                 </div>
               </div>
             </header>
@@ -266,6 +267,7 @@
             <div id="routine-title" class="routine-title" hidden></div>
 
             <section id="panel-conversation" class="tab-panel active">
+              <div id="anexos-aviso-ia" class="anexos-aviso-ia" role="status" hidden></div>
               <div id="case-readonly-banner" class="readonly-banner" hidden>Chamado encerrado: a conversa está disponível apenas para consulta. Não é possível interagir nem pesquisar.</div>
               <div id="messages" class="messages"></div>
               <form id="composer" class="composer">
@@ -345,6 +347,31 @@
     </section>
 
     <div id="toast" class="toast" role="status"></div>
+
+    <div id="anexos-modal-backdrop" class="avaliacao-modal-backdrop">
+      <div class="anexos-modal" role="dialog" aria-modal="true" aria-labelledby="anexos-modal-titulo">
+        <div class="avaliacao-modal-head">
+          <div>
+            <div id="anexos-modal-titulo" class="avaliacao-modal-title">Anexos do chamado</div>
+            <div class="avaliacao-modal-subtitle">Arquivos vinculados ao chamado</div>
+          </div>
+          <button id="anexos-modal-close" type="button" class="anexos-modal-close-btn" title="Fechar" aria-label="Fechar">×</button>
+        </div>
+        <div id="anexos-modal-corpo" class="avaliacao-modal-body"></div>
+      </div>
+    </div>
+
+    <div id="anexo-visualizador" class="anexo-visualizador" role="dialog" aria-modal="true" aria-labelledby="anexo-visualizador-nome">
+      <div class="anexo-visualizador-barra">
+        <span id="anexo-visualizador-nome" class="anexo-visualizador-nome"></span>
+        <button id="anexo-visualizador-baixar" type="button" title="Baixar" aria-label="Baixar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button id="anexo-visualizador-fechar" type="button" title="Fechar" aria-label="Fechar">×</button>
+      </div>
+      <div id="anexo-visualizador-area" class="anexo-visualizador-area">
+        <span id="anexo-visualizador-status" class="anexo-visualizador-status">Carregando imagem...</span>
+        <img id="anexo-visualizador-img" alt="" hidden>
+      </div>
+    </div>
 
     <div id="avaliacao-modal-backdrop" class="avaliacao-modal-backdrop">
       <div class="avaliacao-modal" role="dialog" aria-modal="true">

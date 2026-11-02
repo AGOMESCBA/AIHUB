@@ -36,6 +36,7 @@ function _rowParaDominio(row) {
     anexoOriginalId: row.anexo_original_id,
     mensagemOrigemId: row.mensagem_origem_id,
     explicacaoAlteracao: row.explicacao_alteracao,
+    arquivoRemovidoEm: row.arquivo_removido_em ?? null,
   };
 }
 
@@ -137,7 +138,7 @@ function listarAnexos(empresaId, atendimentoId) {
 
   const db = getDB();
   const rows = db.prepare(`
-    SELECT * FROM anexos WHERE empresa_id = ? AND atendimento_id = ? ORDER BY criado_em ASC
+    SELECT * FROM anexos WHERE empresa_id = ? AND atendimento_id = ? AND arquivo_removido_em IS NULL ORDER BY criado_em ASC
   `).all(Number(empresaId), atendimentoId);
 
   return rows.map(_rowParaDominio);
@@ -224,7 +225,8 @@ function atualizarArquivoSincronizado(empresaId, anexoId, {
            conteudo_extraido = ?,
            linguagem_detectada = ?,
            encoding_detectado = ?,
-           e_codigo = ?
+           e_codigo = ?,
+           arquivo_removido_em = NULL
      WHERE id = ? AND empresa_id = ?
   `).run(
     nomeOriginal,
@@ -243,6 +245,19 @@ function atualizarArquivoSincronizado(empresaId, anexoId, {
   return getAnexo(empresaId, anexoId);
 }
 
+// Limpeza de chamado encerrado: apaga o texto extraído e marca o arquivo como
+// removido. O registro fica; uma nova cópia (atualizarArquivoSincronizado) o restaura.
+function marcarArquivoRemovido(empresaId, anexoId, quando = new Date().toISOString()) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!anexoId) throw new Error('anexoId é obrigatório.');
+  const info = getDB().prepare(`
+    UPDATE anexos
+       SET conteudo_extraido = NULL, arquivo_removido_em = ?
+     WHERE id = ? AND empresa_id = ? AND origem_sistema = 'softexpert'
+  `).run(quando, anexoId, Number(empresaId));
+  return info.changes > 0;
+}
+
 function listarVersoes(empresaId, anexoOriginalId) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
@@ -258,6 +273,7 @@ function listarVersoes(empresaId, anexoOriginalId) {
 }
 
 module.exports = {
+  marcarArquivoRemovido,
   salvarMetadadosAnexo,
   listarAnexos,
   getAnexo,

@@ -151,4 +151,44 @@ async function executarSelect(url, token, { sql, params, limit, connectionKey, c
   throw new Error('Resposta do agente não contém "rows". Verifique o endpoint/connection_key configurados.');
 }
 
-module.exports = { testarAgente, listarConexoes, executarSelect };
+/**
+ * Lê um anexo gravado em diretório controlado (POST /arquivo-softexpert). O agente
+ * monta o nome do arquivo a partir do código e devolve o conteúdo já descompactado.
+ */
+async function lerArquivo(url, token, { cdfile, extensao, pasta, cryptoAtivo, cryptoKey, empresaId }) {
+  const requestId = require('crypto').randomUUID();
+  const plainBody = {
+    cdfile, extensao, pasta,
+    uuid: requestId, empresa_id: String(empresaId || ''), modulo: 'ia-service-arquivos', request_id: requestId, iat: Date.now(),
+  };
+  let body = plainBody;
+  if (cryptoAtivo) {
+    if (!cryptoKey) throw new Error('Criptografia do Agente Local ativa, mas a chave AES-256-GCM não está configurada.');
+    body = encryptPayload(plainBody, cryptoKey, { kid: String(empresaId || 'default') });
+  }
+  let resposta;
+  try {
+    resposta = await _request(new URL('/arquivo-softexpert', url).toString(), 'POST', body, token);
+  } catch (err) {
+    // Agente sem esta rota responde 404 "Not Found" do FastAPI.
+    if (/^(Not Found|Agente retornou HTTP 404)$/.test(err.message)) {
+      const desatualizado = new Error('Agente Local desatualizado: instale o pacote mais recente para ler os arquivos do SoftExpert.');
+      desatualizado.codigo = 'agente_desatualizado';
+      throw desatualizado;
+    }
+    throw err;
+  }
+  let data = resposta;
+  if (cryptoAtivo) {
+    if (!isEncryptedEnvelope(resposta)) throw new Error('Agente Local retornou resposta não criptografada com criptografia ativa.');
+    data = decryptPayload(resposta, cryptoKey);
+  }
+  if (data?.status !== 'ok') {
+    const erro = new Error(data?.erro || 'Agente Local não conseguiu ler o arquivo.');
+    erro.codigo = data?.codigo || 'leitura_falhou';
+    throw erro;
+  }
+  return { conteudoBase64: data.conteudo_base64, nomeGravado: data.nome_gravado, tamanho: Number(data.tamanho) || 0 };
+}
+
+module.exports = { testarAgente, listarConexoes, executarSelect, lerArquivo };

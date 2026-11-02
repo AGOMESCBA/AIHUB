@@ -351,45 +351,75 @@ async function listarPosicionamentosDoLote(empresaId, fonte, idProcessList) {
  */
 // comConteudo=false: só metadados (FLDATA vira NULL) — a listagem da tela não usa o
 // binário; antes cada clique no chamado trazia todos os arquivos pelo Agente Local.
-async function listarAnexosDoChamado(empresaId, fonte, idProcess, { comConteudo = true } = {}) {
+// oid: traz só esse arquivo, sempre dentro do chamado informado — sem isso, cada
+// download (e cada miniatura do chat) trazia o binário de todos os anexos.
+async function listarAnexosDoChamado(empresaId, fonte, idProcess, { comConteudo = true, oid = null } = {}) {
   const colunaConteudo = comConteudo ? "B.FLDATA" : "NULL AS FLDATA";
+  const filtroOid = oid ? ' AND B.OID = @oid' : '';
+  // 5ª origem (confirmada em 2026-10-30, #036912): anexos do painel do workflow.
+  // WFPROCATTACHMENT -> ADATTACHFILE -> GNFILE. Quase todos ficam em diretório do
+  // SoftExpert, fora do banco (FLFILE nulo): CONTEUDO_ACESSIVEL=0 avisa o chamador.
+  const conteudoWorkflow = comConteudo ? "F.FLFILE AS FLDATA" : "NULL AS FLDATA";
+  const oidWorkflow = "'wf-' + CAST(F.CDFILE AS varchar(20))";
+  const filtroOidWorkflow = oid ? ` AND ${oidWorkflow} = @oid` : '';
   const incluirAnexosPosicionamento = require('../retorno-softexpert-config').leituraAnexosHabilitada(empresaId, fonte.id);
   const sqlAnexosPosicionamento = incluirAnexosPosicionamento ? `
     UNION ALL
     SELECT 'posicionamento_anexo' AS origem, P.OID AS OID_REFERENCIA, P.DATAATUAL AS DATA_REFERENCIA, P.ANALISTAJ2A AS AUTOR_REFERENCIA,
-           B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, ${colunaConteudo}
+           B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, ${colunaConteudo}, 1 AS CONTEUDO_ACESSIVEL
     FROM DYNITSMGRIDREGISTR P
     INNER JOIN DYNITSMGRIDANEXOAP A ON A.OIDABCCMV6IBMOTU70 = P.OID
     INNER JOIN SEBLOB B ON B.OID = A.OIDARQUIVO1
-    WHERE P.CHAMADO = @idProcess` : '';
+    WHERE P.CHAMADO = @idProcess${filtroOid}` : '';
   const sql = `
     SELECT 'chamado' AS origem, D.OID AS OID_REFERENCIA, D.DT AS DATA_REFERENCIA, D.NMSOLICITANTE AS AUTOR_REFERENCIA,
-           B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, ${colunaConteudo}
+           B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, ${colunaConteudo}, 1 AS CONTEUDO_ACESSIVEL
     FROM DYNITSM D
     INNER JOIN SEBLOB B ON B.OID = D.OIDARQUIVO2
-    WHERE D.IDPROCESS = @idProcess
+    WHERE D.IDPROCESS = @idProcess${filtroOid}
 
     UNION ALL
 
     SELECT 'posicionamento' AS origem, P.OID AS OID_REFERENCIA, P.DATAATUAL AS DATA_REFERENCIA, P.ANALISTAJ2A AS AUTOR_REFERENCIA,
-           B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, ${colunaConteudo}
+           B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, ${colunaConteudo}, 1 AS CONTEUDO_ACESSIVEL
     FROM DYNITSMGRIDREGISTR P
     INNER JOIN SEBLOB B ON B.OID = P.OIDARQUIVO2
-    WHERE P.CHAMADO = @idProcess
+    WHERE P.CHAMADO = @idProcess${filtroOid}
 
     ${sqlAnexosPosicionamento}
 
     UNION ALL
 
     SELECT 'anexo' AS origem, D.OID AS OID_REFERENCIA, D.DT AS DATA_REFERENCIA, D.NMSOLICITANTE AS AUTOR_REFERENCIA,
-           B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, ${colunaConteudo}
+           B.OID, B.NMNAME, B.IDEXTENSION, B.NRSIZE, ${colunaConteudo}, 1 AS CONTEUDO_ACESSIVEL
     FROM DYNITSM D
     INNER JOIN DYNITSMGRIDANEXO A ON A.OIDABC58815SXW3N8D = D.OID
     INNER JOIN SEBLOB B ON B.OID = A.OIDARQUIVO1
-    WHERE D.IDPROCESS = @idProcess
+    WHERE D.IDPROCESS = @idProcess${filtroOid}
+
+    UNION ALL
+
+    SELECT 'workflow' AS origem,
+           -- A origem não liga o anexo ao posicionamento: a etapa "Registrar Chamado" é a
+           -- abertura; nas demais, vale o posicionamento seguinte ao anexo, senão o anterior.
+           CASE WHEN S.IDSTRUCT = 'ATV-01' THEN D.OID ELSE COALESCE(
+             (SELECT TOP 1 R.OID FROM DYNITSMGRIDREGISTR R WHERE R.CHAMADO = D.IDPROCESS AND R.BNCREATED >= A2.BNUPDATED ORDER BY R.BNCREATED ASC),
+             (SELECT TOP 1 R.OID FROM DYNITSMGRIDREGISTR R WHERE R.CHAMADO = D.IDPROCESS AND R.BNCREATED < A2.BNUPDATED ORDER BY R.BNCREATED DESC),
+             D.OID) END AS OID_REFERENCIA,
+           A2.[DTINSERT] AS DATA_REFERENCIA, NULL AS AUTOR_REFERENCIA,
+           ${oidWorkflow} AS OID, F.NMFILE AS NMNAME, NULL AS IDEXTENSION, F.BNSIZE AS NRSIZE, ${conteudoWorkflow},
+           CASE WHEN F.FLFILE IS NULL THEN 0 ELSE 1 END AS CONTEUDO_ACESSIVEL
+    FROM DYNITSM D
+    INNER JOIN WFPROCESS WP ON WP.IDPROCESS = D.IDPROCESS
+    INNER JOIN WFPROCATTACHMENT W ON W.IDPROCESS = WP.IDOBJECT
+    INNER JOIN ADATTACHMENT A2 ON A2.CDATTACHMENT = W.CDATTACHMENT
+    INNER JOIN ADATTACHFILE AF ON AF.CDATTACHMENT = W.CDATTACHMENT
+    INNER JOIN GNFILE F ON F.CDCOMPLEXFILECONT = AF.CDCOMPLEXFILECONT
+    LEFT JOIN WFSTRUCT S ON S.IDOBJECT = W.IDSTRUCT
+    WHERE D.IDPROCESS = @idProcess${filtroOidWorkflow}
   `;
   return agenteLocalService.executarSelectNaFonte(empresaId, fonte.id, {
-    sql, params: { idProcess }, limit: 100,
+    sql, params: oid ? { idProcess, oid } : { idProcess }, limit: oid ? 1 : 100,
   });
 }
 
