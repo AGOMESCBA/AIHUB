@@ -48,9 +48,20 @@ Explique o que mudou, onde, por quê e como testar antes de usar em produção. 
 // perguntava nada a ele: tudo virava "Peça ao cliente...".
 const INSTRUCAO_DIALOGO = `## Pergunta ao analista — somente quando houver dúvida
 
-Se, depois de analisar tudo o que já existe, ainda faltar um dado essencial para avançar e o próprio analista puder saber (o que aparece na tela, filial, rotina, ambiente ou o que já foi testado), entregue primeiro a análise completa e, só no final, faça uma única pergunta direta a ele. Se não houver dúvida, não faça pergunta. Nunca troque a análise pela pergunta e não pergunte o que já está no histórico ou nos anexos. O que depender do cliente continua como orientação do que pedir a ele. Quando o analista disser que não tem um material ou que um teste já falhou, reconheça isso e siga por outro caminho.`;
+Se, depois de analisar tudo o que já existe, ainda faltar um dado essencial para avançar e o próprio analista puder saber (o que aparece na tela, filial, rotina, ambiente ou o que já foi testado), entregue primeiro a análise completa e, só no final, faça uma única pergunta direta a ele. Antes de terminar, confira: o analista provavelmente sabe algo que mudaria a sua análise ou o próximo passo (o que o cliente disse fora do chamado, como o teste foi feito, qual empresa, filial, rotina ou ambiente)? Se sim, essa é a sua dúvida. Se não houver dúvida, não faça pergunta. Nunca troque a análise pela pergunta e não pergunte o que já está no histórico ou nos anexos. O que depender do cliente continua como orientação do que pedir a ele. Quando o analista disser que não tem um material ou que um teste já falhou, reconheça isso e siga por outro caminho.`;
 
-function selecionarSystemPrompt(anexos = [], { automatico = false, forcarPesquisa = false } = {}) {
+// Tamanho de referência (2026-11-02): respostas do gpt-5.4 saíam com 400–600
+// palavras repetindo a mesma orientação (#036912), o que também alonga a
+// espera. É orientação, não corte (o limite de tokens não muda). Correção de
+// fonte tem regras próprias e fica fora.
+const INSTRUCAO_TAMANHO = 'Tamanho: em geral, até cerca de 300 palavras; passe disso só quando houver procedimento com vários passos, várias hipóteses a separar ou análise de log. Nunca encurte à custa do conteúdo técnico: mantenha o achado, as ressalvas, o próximo passo com o objeto concreto (rotina, campo, tabela, parâmetro) e o que pedir ao cliente. Corte só repetição e explicação do que já foi dito; não repita a mesma orientação em parágrafos diferentes. A pergunta ao analista (quando houver dúvida) e o resultado da pesquisa (inclusive quando não encontrou nada aplicável) não são repetição: mantenha-os. Se houver dúvida que o analista possa esclarecer, termine com essa pergunta mesmo numa resposta curta.';
+
+// "Pesquisar Soluções" repetido sem material novo: as respostas anteriores da
+// IA ficam ocultas (cópia, #036580), e sem este aviso ela refazia o laudo
+// inteiro a cada clique.
+const INSTRUCAO_SEM_MATERIAL_NOVO = 'Pelo registro do sistema, não há mensagem nem anexo posterior à última análise da IA neste chamado. Não refaça a análise completa: diga em poucas linhas se a nova pesquisa trouxe algo diferente (ou que não trouxe) e qual continua sendo o próximo passo concreto. Se mesmo assim houver informação nova no histórico, analise-a normalmente.';
+
+function selecionarSystemPrompt(anexos = [], { automatico = false, forcarPesquisa = false, semMaterialNovo = false } = {}) {
   const turno = automatico
     ? 'Esta é uma pré-análise automática, sem pergunta do analista: entregue o entendimento inicial e o primeiro avanço útil, indicando a evidência que faltar.'
     : forcarPesquisa
@@ -59,7 +70,12 @@ function selecionarSystemPrompt(anexos = [], { automatico = false, forcarPesquis
   const temCodigo = anexos.some(a => a.eCodigo || /\.(?:prw|tlpp|js|ts|py|cs|java|php|sql)$/i.test(a.nomeOriginal || ''));
   // Pré-análise automática não tem analista na conversa para responder.
   const dialogo = automatico ? '' : INSTRUCAO_DIALOGO;
-  return [SYSTEM_PROMPT, dialogo, turno, temCodigo ? INSTRUCOES_FONTE : ''].filter(Boolean).join('\n\n');
+  const tamanho = temCodigo ? '' : INSTRUCAO_TAMANHO;
+  const semNovidade = forcarPesquisa && semMaterialNovo ? INSTRUCAO_SEM_MATERIAL_NOVO : '';
+  // A regra de pergunta vem depois da de tamanho: na ordem inversa, o tamanho
+  // fazia a IA tratar a pergunta como corte opcional (8 de 8 testes reais sem
+  // pergunta, 2026-11-02).
+  return [SYSTEM_PROMPT, tamanho, dialogo, turno, semNovidade, temCodigo ? INSTRUCOES_FONTE : ''].filter(Boolean).join('\n\n');
 }
 
 function _formatarAnexoTexto(anexo) {
@@ -118,4 +134,4 @@ function buildUserPrompt({ atendimento, mensagens, anexosTextoDoTurno, mensagemA
   return partes.join('\n');
 }
 
-module.exports = { SYSTEM_PROMPT, INSTRUCOES_FONTE, INSTRUCAO_DIALOGO, selecionarSystemPrompt, buildUserPrompt };
+module.exports = { SYSTEM_PROMPT, INSTRUCOES_FONTE, INSTRUCAO_DIALOGO, INSTRUCAO_TAMANHO, INSTRUCAO_SEM_MATERIAL_NOVO, selecionarSystemPrompt, buildUserPrompt };

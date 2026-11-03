@@ -978,6 +978,22 @@ const GARANTIA_ANEXOS_TEMPO_MAX_MS = Number(process.env.SVC_GARANTIA_ANEXOS_TEMP
 const GARANTIA_ANEXOS_PAUSA_MS = Number(process.env.SVC_GARANTIA_ANEXOS_PAUSA_MS) || 2 * 60 * 1000;
 const _agenteSemRespostaAte = new Map();
 
+// "Pesquisar Soluções" repetido (2026-11-02, #036912: 5 cliques sem material
+// novo, cada um refazendo o laudo inteiro). Nada do cliente, do analista ou da
+// origem depois da última resposta da IA, nem anexo novo. Mensagem importada
+// do SoftExpert usa a data original do posicionamento, por isso o aviso à IA
+// manda analisar normalmente se houver novidade no histórico.
+function _semMaterialNovoDesdeUltimaAnalise(mensagens, anexos) {
+  const lista = Array.isArray(mensagens) ? mensagens : [];
+  const indice = lista.map(m => m.papel).lastIndexOf('assistant');
+  if (indice < 0) return false;
+  const desde = new Date(lista[indice].criadoEm).getTime();
+  if (!Number.isFinite(desde)) return false;
+  const mensagemNova = lista.some((m, i) => m.papel !== 'assistant' && (i > indice || new Date(m.criadoEm).getTime() > desde));
+  const anexoNovo = (anexos || []).some(a => !(new Date(a.criadoEm).getTime() <= desde));
+  return !mensagemNova && !anexoNovo;
+}
+
 // Tempo de cada etapa do turno (2026-11-02), gravado na execução para medir em
 // produção onde o analista espera. Não muda o resultado da etapa.
 function _medir(tempos, etapa, promessa) {
@@ -1125,7 +1141,11 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   const { avisoAnalista: avisoAnexos, avisoIA: avisoAnexosIA } = anexosSoftExpertService.descreverGarantia(garantiaAnexos);
 
   const todosAnexosDoAtendimento = anexoRepo.listarAnexos(empresaId, atendimentoId);
-  const systemPromptBase = promptBuilder.selecionarSystemPrompt(todosAnexosDoAtendimento, { automatico, forcarPesquisa });
+  const semMaterialNovo = forcarPesquisa && _semMaterialNovoDesdeUltimaAnalise(
+    mensagemRepo.listarMensagens(empresaId, atendimentoId).filter(m => m.id !== mensagemUsuario?.id),
+    todosAnexosDoAtendimento,
+  );
+  const systemPromptBase = promptBuilder.selecionarSystemPrompt(todosAnexosDoAtendimento, { automatico, forcarPesquisa, semMaterialNovo });
   const systemPromptTurno = avisoAnexosIA ? `${systemPromptBase}\n\n${avisoAnexosIA}` : systemPromptBase;
   const anexosTextoParaPesquisa = todosAnexosDoAtendimento.filter(a => a.conteudoExtraido);
 
@@ -1794,6 +1814,7 @@ module.exports = {
   SYSTEM_PROMPT_CLASSIFICACAO_CONVERSA,
   INSTRUCAO_CONVERSA,
   _ultimaRespostaDaIA,
+  _semMaterialNovoDesdeUltimaAnalise,
   processarTurno,
   processarPreAnalise,
   _criarPreparadorPorCandidato,

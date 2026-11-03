@@ -57,8 +57,8 @@ test('regra de pergunta: só com dúvida, só no final, sem trocar a análise; v
   assert.match(regra, /Se não houver dúvida, não faça pergunta/);
   assert.match(regra, /Nunca troque a análise pela pergunta/);
   const codigo = [{ nomeOriginal: 'MT103.prw' }];
-  assert.equal(promptBuilder.selecionarSystemPrompt([], {}), `${promptBuilder.SYSTEM_PROMPT}\n\n${regra}`);
-  assert.equal(promptBuilder.selecionarSystemPrompt(codigo, {}), `${promptBuilder.SYSTEM_PROMPT}\n\n${regra}\n\n${promptBuilder.INSTRUCOES_FONTE}`);
+  assert.equal(promptBuilder.selecionarSystemPrompt([], {}), `${promptBuilder.SYSTEM_PROMPT}\n\n${promptBuilder.INSTRUCAO_TAMANHO}\n\n${regra}`);
+  assert.equal(promptBuilder.selecionarSystemPrompt(codigo, {}), `${promptBuilder.SYSTEM_PROMPT}\n\n${regra}\n\n${promptBuilder.INSTRUCOES_FONTE}`, 'correção de fonte fica fora do tamanho de referência');
   assert.ok(promptBuilder.selecionarSystemPrompt(codigo, { forcarPesquisa: true }).includes(regra));
   const pre = promptBuilder.selecionarSystemPrompt(codigo, { automatico: true });
   assert.ok(!pre.includes(regra), 'pré-análise automática não tem analista para responder');
@@ -196,4 +196,35 @@ test('botão Pesquisar Soluções e turno com anexo novo não passam pelo classi
     await investigacao.processarTurno(EMPRESA, at.id, { texto: 'ok, obrigado', usuarioId: null, anexoIds: [], ...extra }).catch(() => null);
     assert.ok(!sistemas.includes(investigacao.SYSTEM_PROMPT_CLASSIFICACAO_CONVERSA), JSON.stringify(extra));
   }
+});
+
+test('tamanho de referência é orientação, não corte, e preserva o conteúdo técnico', () => {
+  const t = promptBuilder.INSTRUCAO_TAMANHO;
+  assert.match(t, /em geral, até cerca de 300 palavras/);
+  assert.match(t, /Nunca encurte à custa do conteúdo técnico/);
+  assert.match(t, /não repita a mesma orientação/);
+});
+
+test('"Pesquisar Soluções" sem material novo: aviso só no botão e só quando nada chegou depois da última análise', () => {
+  const aviso = promptBuilder.INSTRUCAO_SEM_MATERIAL_NOVO;
+  assert.ok(promptBuilder.selecionarSystemPrompt([], { forcarPesquisa: true, semMaterialNovo: true }).includes(aviso));
+  assert.ok(!promptBuilder.selecionarSystemPrompt([], { forcarPesquisa: true }).includes(aviso));
+  assert.ok(!promptBuilder.selecionarSystemPrompt([], { semMaterialNovo: true }).includes(aviso), 'texto livre não recebe o aviso');
+  assert.match(aviso, /Se mesmo assim houver informação nova no histórico, analise-a normalmente/);
+  const ia = { papel: 'assistant', criadoEm: '2026-11-02T10:00:00Z' };
+  const semNada = investigacao._semMaterialNovoDesdeUltimaAnalise;
+  assert.equal(semNada([{ papel: 'customer', criadoEm: '2026-11-01T10:00:00Z' }, ia], []), true);
+  assert.equal(semNada([ia, { papel: 'customer', criadoEm: '2026-11-02T11:00:00Z' }], []), false, 'retorno do cliente depois da análise');
+  assert.equal(semNada([ia, { papel: 'customer', criadoEm: '2026-11-01T09:00:00Z' }], []), false, 'posicionamento listado depois da análise, mesmo com data antiga');
+  assert.equal(semNada([ia], [{ criadoEm: '2026-11-02T10:30:00Z' }]), false, 'anexo novo');
+  assert.equal(semNada([ia], [{ criadoEm: '2026-11-01T10:30:00Z' }]), true, 'anexo antigo');
+  assert.equal(semNada([ia], [{}]), false, 'anexo sem data conta como novo (conservador)');
+  assert.equal(semNada([{ papel: 'customer', criadoEm: '2026-11-01T10:00:00Z' }], []), false, 'sem análise anterior');
+});
+
+test('tamanho de referência não descarta a pergunta ao analista nem o resultado da pesquisa', () => {
+  // Teste real 2026-11-02: ao encurtar, a IA tirou a pergunta ao analista (#036668)
+  // e o resultado da pesquisa sem artigo aplicável (#036912).
+  assert.match(promptBuilder.INSTRUCAO_TAMANHO, /A pergunta ao analista \(quando houver dúvida\) e o resultado da pesquisa \(inclusive quando não encontrou nada aplicável\) não são repetição: mantenha-os/);
+  assert.match(promptBuilder.INSTRUCAO_TAMANHO, /Se houver dúvida que o analista possa esclarecer, termine com essa pergunta mesmo numa resposta curta/);
 });
