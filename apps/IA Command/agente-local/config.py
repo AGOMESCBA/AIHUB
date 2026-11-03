@@ -20,19 +20,38 @@ _DEFAULTS = {
 }
 
 
+# Cache do .env: get_config() roda várias vezes por consulta; só relê o arquivo
+# quando a data de alteração ou o tamanho mudam (edição manual ou set_config).
+_env_cache = {"chave": None, "valores": {}}
+
+
+def _ler_env() -> dict:
+    try:
+        st = ENV_FILE.stat()
+    except FileNotFoundError:
+        return {}
+    chave = (st.st_mtime_ns, st.st_size)
+    if _env_cache["chave"] == chave:
+        return _env_cache["valores"]
+    valores = {}
+    for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        val = val.strip().strip('"').strip("'")
+        if key in _DEFAULTS:
+            valores[key] = val
+    _env_cache["valores"] = valores
+    _env_cache["chave"] = chave
+    return valores
+
+
 def get_config() -> dict:
     """Retorna todas as configurações mesclando .env + os.environ."""
     values = dict(_DEFAULTS)
-    if ENV_FILE.exists():
-        for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, val = line.partition("=")
-            key = key.strip()
-            val = val.strip().strip('"').strip("'")
-            if key in _DEFAULTS:
-                values[key] = val
+    values.update(_ler_env())
     # Variáveis de ambiente têm precedência
     for key in _DEFAULTS:
         if key in os.environ:
@@ -57,3 +76,4 @@ def set_config(key: str, value: str):
     if not found:
         lines.append(f'{key}="{value}"')
     ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _env_cache["chave"] = None

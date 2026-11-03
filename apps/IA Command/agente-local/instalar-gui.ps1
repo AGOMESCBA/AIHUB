@@ -196,7 +196,7 @@ function RunInstall([string]$dest) {
         if ($SkipCopy -or $sameDir) {
             LogOK 'Cópia ignorada (Inno Setup ou instalação in-place).'
         } else {
-            $skipNames = @('venv','logs','audit.db','.env','__pycache__','dist')
+            $skipNames = @('venv','logs','audit.db','audit.db-wal','audit.db-shm','.env','__pycache__','dist')
             if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest -Force | Out-Null }
             Get-ChildItem $SRC | Where-Object { $skipNames -notcontains $_.Name } | ForEach-Object {
                 Copy-Item $_.FullName (Join-Path $dest $_.Name) -Recurse -Force

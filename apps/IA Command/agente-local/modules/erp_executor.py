@@ -74,9 +74,9 @@ def _resolver_credenciais(empresa_id: str = "", connection_key: str = "") -> dic
     }
 
 
-def _get_pyodbc_conn(empresa_id: str = "", connection_key: str = ""):
+def _get_pyodbc_conn(empresa_id: str = "", connection_key: str = "", cred: dict | None = None):
     import pyodbc
-    cred = _resolver_credenciais(empresa_id, connection_key)
+    cred = cred or _resolver_credenciais(empresa_id, connection_key)
     if cred.get("origem") == "conexao_nao_encontrada":
         raise RuntimeError(f"Conexao '{connection_key}' nao encontrada para a empresa {empresa_id}. Sincronize a conexao pelo IA Command.")
     conn_str = (
@@ -138,7 +138,7 @@ async def executar_sql(sql: str, limit: int = 10_000, empresa_id: str = "", conn
 
     def _run_query():
         import pyodbc
-        conn   = _get_pyodbc_conn(empresa_id, connection_key)
+        conn   = _get_pyodbc_conn(empresa_id, connection_key, cred_resolvida)
         try:
             cursor = conn.cursor()
             cursor.execute(sql_final)

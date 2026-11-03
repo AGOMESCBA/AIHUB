@@ -9,13 +9,19 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 
 def _conn():
-    c = sqlite3.connect(DB_PATH)
+    # timeout: espera o banco liberar em vez de falhar com "database is locked".
+    c = sqlite3.connect(DB_PATH, timeout=10)
     c.row_factory = sqlite3.Row
+    # Com WAL (ligado em init_db), NORMAL não perde dados por queda do processo e
+    # evita gravar fisicamente no disco a cada execução registrada.
+    c.execute("PRAGMA synchronous=NORMAL")
     return c
 
 
 def init_db():
     with _conn() as db:
+        # WAL: leitura do Monitor não bloqueia a gravação das execuções (fica salvo no arquivo).
+        db.execute("PRAGMA journal_mode=WAL")
         db.execute("""
             CREATE TABLE IF NOT EXISTS execucoes (
                 id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,6 +61,11 @@ def init_db():
                 db.execute(f"ALTER TABLE execucoes ADD COLUMN {col} {typ}")
             except Exception:
                 pass
+        # Índices do Monitor: listagem mais recente (com e sem empresa) e média de duração.
+        # Criados depois das migrações porque empresa_id é coluna adicionada por ALTER.
+        db.execute("CREATE INDEX IF NOT EXISTS idx_exec_chegada     ON execucoes (chegada_em)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_exec_empresa     ON execucoes (empresa_id, chegada_em)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_exec_status_dur  ON execucoes (status, duracao_ms)")
 
         db.execute("""
             CREATE TABLE IF NOT EXISTS empresas (
@@ -184,9 +195,28 @@ def get_execucao(id_: int):
     return dict(row) if row else None
 
 
-def limpar_historico():
-    with _conn() as db:
-        db.execute("DELETE FROM execucoes")
+def limpar_historico(*, ate: str, de: str = "", empresa_id: str = "", lote: int = 5000) -> int:
+    """Remove execuções com chegada_em em [de, ate). Sem `de` = desde o início.
+    Datas em ISO UTC (mesmo formato de chegada_em). Apaga em lotes, cada um na sua
+    transação, para não segurar o banco e atrasar o registro das consultas em andamento."""
+    where, params = ["chegada_em < ?"], [ate]
+    if de:         where.append("chegada_em >= ?"); params.append(de)
+    if empresa_id: where.append("empresa_id = ?");  params.append(empresa_id)
+    sql = (f"DELETE FROM execucoes WHERE id IN "
+           f"(SELECT id FROM execucoes WHERE {' AND '.join(where)} LIMIT ?)")
+
+    removidos = 0
+    db = _conn()
+    try:
+        while True:
+            with db:
+                n = db.execute(sql, (*params, lote)).rowcount
+            removidos += n
+            if n < lote:
+                break
+    finally:
+        db.close()
+    return removidos
 
 
 # ── Empresas ─────────────────────────────────────────────────────────────────

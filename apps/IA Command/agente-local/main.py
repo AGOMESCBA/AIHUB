@@ -3,6 +3,7 @@ import secrets
 import time
 import uuid as _uuid
 import uvicorn
+from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, Request, HTTPException, Form, Header
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -164,7 +165,9 @@ async def execute(request: Request, authorization: str = Header(default=None)):
         else:
             tipo_erro = "erp"
 
-    registrar_execucao(
+    # Fora da linha principal: a gravação no SQLite não pode parar as outras consultas.
+    await asyncio.to_thread(
+        registrar_execucao,
         uuid=uuid_tx,
         modulo=modulo,
         operacao=operacao,
@@ -333,11 +336,50 @@ def api_log_detalhe(request: Request, log_id: int):
     return rec
 
 
-@app.delete("/api/logs")
-def api_limpar_logs(request: Request):
+def _iso_utc(valor) -> str:
+    """Valida data/hora ISO enviada pela tela (já convertida para UTC, sem 'Z')."""
+    txt = str(valor or "").strip()
+    if not txt:
+        return ""
+    try:
+        return datetime.fromisoformat(txt.removesuffix("Z")).isoformat()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Data inválida.")
+
+
+@app.post("/api/logs/limpar")
+async def api_limpar_logs(request: Request):
     verificar_sessao_web(request)
-    limpar_historico()
-    return {"ok": True}
+    body = await request.json()
+    ate = _iso_utc(body.get("ate_utc"))
+    de  = _iso_utc(body.get("de_utc"))
+    if not ate:
+        raise HTTPException(status_code=400, detail="Informe a data final (Até).")
+    if de and de >= ate:
+        raise HTTPException(status_code=400, detail="A data inicial não pode ser maior que a data final.")
+    empresa_id = str(body.get("empresa_id") or "").strip()
+
+    removidos = await asyncio.to_thread(limpar_historico, ate=ate, de=de, empresa_id=empresa_id)
+
+    # Auditoria da limpeza: fica no próprio histórico, como registro do sistema.
+    br = lambda d: "/".join(reversed(str(d)[:10].split("-")))
+    periodo = f"{br(body['de']) if body.get('de') else 'início'} até {br(body.get('ate') or ate)}"
+    await asyncio.to_thread(
+        registrar_execucao,
+        uuid=str(_uuid.uuid4()),
+        modulo="sistema",
+        operacao="limpar_log",
+        sql_entrada=f"Limpeza do histórico: {periodo}" + (f" — empresa {empresa_id}" if empresa_id else " — todas as empresas"),
+        sql_executado="",
+        payload_saida=[],
+        duracao_ms=0,
+        status="ok",
+        erro=None,
+        ip_origem=request.client.host if request.client else "desconhecido",
+        empresa_id=empresa_id or None,
+        linhas_retornadas=removidos,
+    )
+    return {"ok": True, "removidos": removidos}
 
 
 # ── API Web: config ERP ───────────────────────────────────────────────────────
