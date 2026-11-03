@@ -183,9 +183,9 @@ test('resposta curta (pergunta de processo) é gravada como a IA escreveu, sem r
   store.definirEstiloResposta(1, consultor.telefone, 'NATURAL');
   const at = atendimentoRepo.criarAtendimento(1, { origem: 'manual', conteudoBruto: 'Erro', consultorId: consultor.id });
   const curtoProvider = {};
-  // Classificação é a primeira chamada do fluxo existente; não é humanização.
+  // Classificação é a primeira chamada do fluxo; não é humanização.
   let n = 0;
-  curtoProvider.chamarIA = async () => ++n === 1 ? { texto: '{"tipo":"pergunta_processo"}' } : { texto: original, provider: 'openai', model: 'mock' };
+  curtoProvider.chamarIA = async () => ++n === 1 ? { texto: '{"tipo":"conversa"}' } : { texto: original, provider: 'openai', model: 'mock' };
   respostaMock = reescritaValida;
   const investigacao = carregar('../backend/services/investigacao-service.js', {
     './ai-provider-client': curtoProvider, './ai-config-service': config,
@@ -195,7 +195,7 @@ test('resposta curta (pergunta de processo) é gravada como a IA escreveu, sem r
   const retorno = await investigacao.processarTurno(1, at.id, { texto: 'Você consegue ajudar?', consultorId: consultor.id });
   assert.equal(retorno.conteudo, original.trim(), 'texto da IA, sem reescrita');
   assert.equal(retorno.diagnostico, null, 'sem auditoria de humanização');
-  assert.equal(retorno.respostaCurta, 'pergunta_processo');
+  assert.equal(retorno.respostaCurta, 'conversa');
   assert.equal(n, 2, 'só classificação + resposta curta; nenhuma chamada de reescrita');
   const mensagens = mensagemRepo.listarMensagens(1, at.id);
   assert.equal(mensagens.filter(m => m.papel === 'assistant').length, 1);
@@ -301,7 +301,7 @@ test('fluxo entrega diálogo original sem editorial mesmo com preferência NATUR
   const realContexto = require('../backend/services/context-engine');
   const investigacao = carregar('../backend/services/investigacao-service.js', {
     './ai-provider-client': { ...realProvider, chamarIA: async (_keys, _cfg, systemPrompt, _userPrompt, _imagens, opts) => {
-      if (systemPrompt.includes('Você classifica uma única mensagem')) return { texto: '{"tipo":"investigacao"}' };
+      if (systemPrompt.includes('Você classifica a mensagem atual')) return { texto: '{"tipo":"investigacao"}' };
       assert.ok(Array.isArray(opts.conversa), 'orquestrador entrega histórico nativo ao provedor');
       assert.equal(opts.conversa.at(-1).role, 'user');
       assert.ok(opts.conversa.some(m => m.role === 'assistant' && m.content.includes('Texto técnico anterior completo')));

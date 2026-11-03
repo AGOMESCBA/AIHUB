@@ -43,6 +43,13 @@ Explique o que mudou, onde, por quê e como testar antes de usar em produção. 
 
 `;
 
+// A IA pode perguntar ao próprio analista, só no fim e só com dúvida
+// (2026-11-02, texto aprovado pelo usuário). Nos testes reais nenhuma resposta
+// perguntava nada a ele: tudo virava "Peça ao cliente...".
+const INSTRUCAO_DIALOGO = `## Pergunta ao analista — somente quando houver dúvida
+
+Se, depois de analisar tudo o que já existe, ainda faltar um dado essencial para avançar e o próprio analista puder saber (o que aparece na tela, filial, rotina, ambiente ou o que já foi testado), entregue primeiro a análise completa e, só no final, faça uma única pergunta direta a ele. Se não houver dúvida, não faça pergunta. Nunca troque a análise pela pergunta e não pergunte o que já está no histórico ou nos anexos. O que depender do cliente continua como orientação do que pedir a ele. Quando o analista disser que não tem um material ou que um teste já falhou, reconheça isso e siga por outro caminho.`;
+
 function selecionarSystemPrompt(anexos = [], { automatico = false, forcarPesquisa = false } = {}) {
   const turno = automatico
     ? 'Esta é uma pré-análise automática, sem pergunta do analista: entregue o entendimento inicial e o primeiro avanço útil, indicando a evidência que faltar.'
@@ -50,7 +57,9 @@ function selecionarSystemPrompt(anexos = [], { automatico = false, forcarPesquis
       ? 'O analista pediu Pesquisar Soluções: reavalie todo o material disponível e entregue o achado sustentado e o próximo avanço. A abrangência da revisão não exige narrar todo o histórico nem enumerar todas as verificações possíveis.'
       : '';
   const temCodigo = anexos.some(a => a.eCodigo || /\.(?:prw|tlpp|js|ts|py|cs|java|php|sql)$/i.test(a.nomeOriginal || ''));
-  return [SYSTEM_PROMPT, turno, temCodigo ? INSTRUCOES_FONTE : ''].filter(Boolean).join('\n\n');
+  // Pré-análise automática não tem analista na conversa para responder.
+  const dialogo = automatico ? '' : INSTRUCAO_DIALOGO;
+  return [SYSTEM_PROMPT, dialogo, turno, temCodigo ? INSTRUCOES_FONTE : ''].filter(Boolean).join('\n\n');
 }
 
 function _formatarAnexoTexto(anexo) {
@@ -109,4 +118,4 @@ function buildUserPrompt({ atendimento, mensagens, anexosTextoDoTurno, mensagemA
   return partes.join('\n');
 }
 
-module.exports = { SYSTEM_PROMPT, INSTRUCOES_FONTE, selecionarSystemPrompt, buildUserPrompt };
+module.exports = { SYSTEM_PROMPT, INSTRUCOES_FONTE, INSTRUCAO_DIALOGO, selecionarSystemPrompt, buildUserPrompt };

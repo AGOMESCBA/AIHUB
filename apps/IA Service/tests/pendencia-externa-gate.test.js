@@ -256,7 +256,7 @@ async function comProvidersFake({ decisaoGate, situacaoOrigem = { ok: false, mot
       registro.classificadorPrompts.push(prompt);
       return { texto: JSON.stringify(decisaoGate), provider: 'groq', model: 'x' };
     }
-    if (/classifica uma única mensagem/.test(system)) {
+    if (/classifica a mensagem atual/.test(system)) {
       return { texto: '{"tipo":"investigacao"}', provider: 'groq', model: 'x' };
     }
     registro.promptsPrincipais.push(prompt);

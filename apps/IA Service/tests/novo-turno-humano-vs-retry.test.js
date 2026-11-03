@@ -85,8 +85,8 @@ async function comFluxoSimulado({ respostas, semantica = interpretacao() }, fn) 
   };
   investigacaoDossieAtualizador.atualizarAposTurno = async () => ({ aplicado: false });
   aiProviderClient.chamarIA = async (_keys, _cfg, system, prompt) => {
-    if (/classifica uma única mensagem/.test(system)) return { texto: '{"tipo":"investigacao"}', provider: 'groq', model: 'x' };
-    if (system !== promptBuilder.SYSTEM_PROMPT) throw new Error('chamada de IA inesperada no teste');
+    if (/classifica a mensagem atual/.test(system)) return { texto: '{"tipo":"investigacao"}', provider: 'groq', model: 'x' };
+    if (system !== promptBuilder.selecionarSystemPrompt([])) throw new Error('chamada de IA inesperada no teste');
     reg.principais.push(prompt);
     const texto = typeof respostas === 'function' ? respostas(prompt, reg.principais.length) : respostas[Math.min(reg.principais.length - 1, respostas.length - 1)];
     return { texto, provider: 'groq', model: 'x', tentativas: [] };

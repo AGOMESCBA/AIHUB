@@ -1,8 +1,8 @@
 'use strict';
 // Regressao 2026-10-26 (producao): "favor resumir o texto acima" era tratado
 // como fora_de_escopo e a IA recusava; "só resuma o seu retorno técnico" ia
-// para a investigação completa e o resumo perdia orientações. Pedido sobre a
-// última resposta vira "reformulacao" e é aplicado sobre ela.
+// para a investigação completa e o resumo perdia orientações. Desde 2026-11-02
+// o pedido é conversa (caminho único) e a última resposta da IA vai inteira.
 // Sem rede e sem IA: o provider é simulado. Dados sintéticos.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -30,30 +30,29 @@ test('a última resposta da IA é o "texto acima"', () => {
   assert.equal(investigacao._ultimaRespostaDaIA(null), null);
 });
 
-test('prompt leva a última resposta INTEIRA, o pedido e a instrução de não recusar nem perder orientações', () => {
-  const p = investigacao._montarPromptReformulacao(historico, 'favor resumir o texto acima');
-  assert.ok(p.includes(RESPOSTA), 'resposta inteira, com as 3 orientações');
-  assert.ok(!p.includes('Primeira análise antiga'), 'só a última resposta');
-  assert.match(p, /Pedido atual do analista\nfavor resumir o texto acima/);
-  assert.match(p, /mantenha TODAS as orientações/);
-  assert.match(p, /nunca diga que não consegue/);
-  assert.match(p, /não faça nova análise/);
-  assert.equal(investigacao._montarPromptReformulacao([{ papel: 'user', conteudo: 'x' }], 'resume'), null, 'sem resposta anterior segue o fluxo normal');
+test('conversa leva a última resposta INTEIRA e a instrução de não recusar nem perder orientações', () => {
+  const conversa = investigacao._montarConversaCurta({ historico, texto: 'favor resumir o texto acima', codigoAtendimento: 'AI-1' });
+  const ultimaIA = conversa.filter(m => m.role === 'assistant').at(-1);
+  assert.equal(ultimaIA.content, RESPOSTA, 'resposta inteira, com as 3 orientações');
+  assert.equal(conversa.at(-1).content, 'favor resumir o texto acima');
+  const instrucao = investigacao.INSTRUCAO_CONVERSA;
+  assert.match(instrucao, /"texto acima"/);
+  assert.match(instrucao, /mantenha todas as orientações/);
+  assert.match(instrucao, /nunca diga que não consegue/);
+  assert.match(instrucao, /Não faça nova análise/);
 });
 
-test('classificador aceita "reformulacao" e o prompt dele explica o contexto do chamado', async () => {
+test('classificador trata pedido sobre o texto acima como conversa e explica o contexto do chamado', async () => {
   const original = aiProviderClient.chamarIA;
   try {
-    for (const tipo of ['reformulacao', 'pergunta_processo', 'fora_de_escopo', 'investigacao']) {
-      aiProviderClient.chamarIA = async () => ({ texto: JSON.stringify({ tipo }) });
-      assert.equal(await investigacao._classificarTurno('favor resumir o texto acima', { keys: {}, cfg: {} }), tipo);
-    }
+    aiProviderClient.chamarIA = async () => ({ texto: '{"tipo":"conversa"}' });
+    assert.equal(await investigacao._classificarTurnoConversa('favor resumir o texto acima', { keys: {}, cfg: {} }), 'conversa');
     aiProviderClient.chamarIA = async () => ({ texto: '{"tipo":"desconhecido"}' });
-    assert.equal(await investigacao._classificarTurno('resume', { keys: {}, cfg: {} }), 'investigacao', 'falha aberta');
+    assert.equal(await investigacao._classificarTurnoConversa('resume', { keys: {}, cfg: {} }), 'investigacao', 'falha aberta');
   } finally { aiProviderClient.chamarIA = original; }
-  const prompt = investigacao.SYSTEM_PROMPT_CLASSIFICACAO_TURNO;
+  const prompt = investigacao.SYSTEM_PROMPT_CLASSIFICACAO_CONVERSA;
   assert.match(prompt, /"O texto acima".*ÚLTIMA RESPOSTA DA IA/s);
   assert.match(prompt, /favor resumir o texto acima/);
   assert.match(prompt, /só resuma o seu retorno técnico/);
-  assert.match(prompt, /Pedido sobre o texto da conversa NUNCA é "fora_de_escopo"/);
+  assert.match(prompt, /regra de negócio/);
 });

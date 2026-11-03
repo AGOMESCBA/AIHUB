@@ -89,19 +89,19 @@ test('a Objetiva que perde um link do bloco de fontes é rejeitada pelo validado
 
 // ── Contexto da pergunta curta ─────────────────────────────────────────────
 test('pergunta curta: última resposta da IA vai inteira (com o link); as demais seguem resumidas', () => {
-  const longaAntiga = 'A'.repeat(1500);
-  const ultima = `${'Contexto técnico sintético. '.repeat(40)}Link: ${ARTIGO}`;
+  const longaAntiga = 'A'.repeat(3500);
+  const ultima = `${'Contexto técnico sintético. '.repeat(150)}Link: ${ARTIGO}`;
   const historico = [
     { papel: 'assistant', conteudo: longaAntiga },
     { papel: 'user', conteudo: 'Pesquise mais.' },
     { papel: 'assistant', conteudo: ultima },
-    { papel: 'user', conteudo: 'Por que não mandou o link?' },
   ];
-  const ctx = investigacao._historicoParaPerguntaCurta(historico);
-  assert.ok(ultima.indexOf(ARTIGO) > 600, 'o link fica depois do caractere 600 (cenário real)');
+  const conversa = investigacao._montarConversaCurta({ historico, texto: 'Por que não mandou o link?' });
+  const ctx = conversa.map(m => m.content).join('\n');
+  assert.ok(ultima.indexOf(ARTIGO) > 3000, 'o link fica depois do limite das demais mensagens (cenário real)');
   assert.ok(ctx.includes(ARTIGO), 'a IA enxerga o link que ela mesma enviou');
-  assert.ok(!ctx.includes('A'.repeat(601)), 'mensagens anteriores continuam cortadas em 600 caracteres');
-  assert.match(ctx, /\[Analista\]: Por que não mandou o link\?/);
+  assert.ok(!ctx.includes('A'.repeat(3001)), 'mensagens anteriores continuam cortadas');
+  assert.deepEqual(conversa.at(-1), { role: 'user', content: 'Por que não mandou o link?' });
 });
 
 // ── Registro real da última pesquisa (pergunta curta) ──────────────────────

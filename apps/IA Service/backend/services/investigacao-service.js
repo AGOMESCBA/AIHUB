@@ -782,50 +782,29 @@ function _criarPreparadorPorCandidato({ contexto, userPromptAtual, imagensAtuais
   return { preparar, usadoPor };
 }
 
-const SYSTEM_PROMPT_CLASSIFICACAO_TURNO = `Você classifica uma única mensagem de um analista de suporte técnico dentro de um chat de investigação. Responda APENAS com um JSON: {"tipo": "reformulacao" | "pergunta_processo" | "fora_de_escopo" | "investigacao"}.
+// Conversa no chat (2026-11-02): o classificador só decide se o turno precisa
+// da investigação completa ou é conversa sobre o que já foi dito; a conversa é
+// uma só, com o histórico nativo, sem instrução fixa por categoria. Substitui o
+// fluxo de 4 categorias (reformulacao/pergunta_processo/fora_de_escopo), que em
+// testes reais respondia "Não tenho como consultar isso aqui" a "ok, obrigado"
+// e reabria a investigação para "de onde você tirou essa informação?".
+// Lições de produção preservadas: "o texto acima" é a última resposta da IA e
+// pedido sobre ele nunca é recusado (2026-10-26); pergunta de processo não
+// reabre o diagnóstico (2026-10); regra de negócio é sempre investigação.
+const SYSTEM_PROMPT_CLASSIFICACAO_CONVERSA = `Você classifica a mensagem atual de um analista de suporte técnico dentro do chat de um chamado, depois de respostas da IA sobre esse chamado. Responda APENAS com um JSON: {"tipo": "conversa" | "investigacao"}.
 
-Contexto fixo: a mensagem é SEMPRE enviada dentro do chat de um chamado, depois de respostas da IA sobre esse chamado. "O texto acima", "isso", "sua resposta", "o retorno", "o que você disse" referem-se à ÚLTIMA RESPOSTA DA IA neste chamado.
+"O texto acima", "isso", "sua resposta", "o retorno", "o que você disse" referem-se à ÚLTIMA RESPOSTA DA IA neste chamado. Quando vier o final dessa resposta, use-o para entender a mensagem.
 
-"reformulacao": o analista pede para TRANSFORMAR o que já foi respondido, sem pedir análise nova — resumir, simplificar, encurtar, reescrever, reorganizar, explicar melhor, transformar em passos/tópicos, deixar mais formal ou pronto para enviar ao cliente/registrar no SoftExpert, traduzir. Exemplos: "favor resumir o texto acima", "resume", "só resuma o seu retorno técnico para eu fazer o retorno no SoftExpert", "explica de forma mais simples", "coloca em tópicos", "escreve um texto para eu mandar ao cliente com isso". Pedido sobre o texto da conversa NUNCA é "fora_de_escopo".
+"conversa": a mensagem é sobre a própria conversa ou o atendimento e não traz fato técnico novo nem pede análise técnica nova. Exemplos: agradecimento ou confirmação ("ok, obrigado", "beleza", "tá", "combinado"); pedido para transformar a resposta anterior ("favor resumir o texto acima", "só resuma o seu retorno técnico para eu fazer o retorno no SoftExpert", "explica melhor", "não entendi o passo 2", "coloca em tópicos", "escreve um texto para eu mandar ao cliente"); aceitar uma oferta da IA de preparar ou transformar um texto ("sim, monta a mensagem"); pergunta sobre a IA, a resposta ou as fontes dela ("de onde você tirou isso?", "qual a fonte?", "você consegue ver vídeo?", "se eu te enviar o fonte, você consegue corrigir?"); pergunta sobre o processo ("o que você precisa de mim?", "e agora?", "precisa abrir chamado na TOTVS?"); assunto alheio ao chamado ("me conta uma piada").
 
-"pergunta_processo": a mensagem é sobre VOCÊ (a IA) ou sobre O PROCESSO administrativo de atendimento — sua capacidade, limites, próximos passos administrativos, prazos, ou se um passo administrativo é necessário. NÃO envolve nenhum conceito técnico do domínio do chamado (regra de negócio, campo, rotina, cálculo, comportamento esperado do sistema). Exemplos: "se eu te enviar o fonte, você consegue corrigir?", "você consegue ver vídeo?", "precisa abrir chamado na TOTVS também?", "em quanto tempo você responde?", "o que você precisa de mim agora?".
+"investigacao": a mensagem traz informação técnica nova (erro, log, resultado de teste, comportamento observado, retorno do cliente, material que o analista tem ou não tem); RESPONDE a uma pergunta que a IA fez ao analista sobre o caso, mesmo que seja só "sim", "não" ou um dado curto; pergunta sobre regra de negócio ou comportamento esperado do sistema ("esse campo deveria somar ou subtrair?", "qual a regra para X?"); ou pede para investigar, pesquisar, analisar ou corrigir algo.
 
-"fora_de_escopo": a mensagem é CLARAMENTE alheia ao chamado, ao sistema/ERP e ao atendimento — assunto geral sem nenhuma relação com o trabalho de suporte. Exemplos: "qual a temperatura em Cuiabá agora?", "que dia é hoje?", "me conta uma piada", "quem ganhou o jogo ontem?". Só use quando NÃO houver qualquer ligação plausível com o chamado, com um sistema ou com o atendimento.
+Na dúvida, responda "investigacao" (nunca deixe de investigar uma evidência técnica real por classificar errado).`;
 
-"investigacao": a mensagem pergunta sobre o PROBLEMA TÉCNICO em si — isso inclui perguntar sobre uma REGRA DE NEGÓCIO ou COMPORTAMENTO ESPERADO do sistema (ex.: "esse campo deveria somar ou subtrair?", "qual a regra para X?"), trazer evidência técnica nova (erro, log, trecho de código, resultado de teste), ou pedir para investigar/corrigir/pesquisar algo concreto do domínio do chamado. Perguntas sobre REGRA DE NEGÓCIO SEMPRE são "investigacao", mesmo que pareçam pedidos de confirmação ou esclarecimento pontual — elas exigem evidência técnica do caso para responder com segurança, não são sobre o processo de atendimento.
-
-Na dúvida entre os dois, responda "investigacao" (nunca deixe de investigar uma evidência técnica real por classificar errado).`;
-
-/**
- * Classifica a mensagem ATUAL do analista antes de montar o prompt completo
- * de investigação — 2026-10, achado real em produção: perguntas pontuais
- * sobre processo/capacidade ("se eu te enviar o fonte, você consegue
- * corrigir?") recebiam de volta o MESMO diagnóstico técnico já dado antes,
- * ignorando a pergunta. Só pedir no texto do system prompt para "responder a
- * pergunta pontual primeiro" não resolveu (testado contra o caso real: o
- * modelo seguiu reabrindo o diagnóstico) — o prompt principal carrega demais
- * contexto técnico competindo pela atenção do modelo. Esta classificação
- * roda ANTES, isolada, com uma chamada curta e barata, para decidir se vale
- * a pena montar o prompt completo ou responder de forma curta e direta.
- *
- * Falha aberta: qualquer erro na classificação (provider fora, JSON
- * inválido) devolve 'investigacao' — o comportamento padrão já existente,
- * nunca pior do que o que já estava em produção antes desta função existir.
- */
-// Contexto da pergunta curta (pergunta de processo / fora de escopo). A última
-// resposta da IA vai inteira, com links e fontes: cortada em 600 caracteres, a
-// IA não viu o link que ela mesma tinha enviado e inventou uma justificativa
-// (achado real, chamado #036765). As demais mensagens seguem resumidas para a
-// pergunta curta continuar barata.
-function _historicoParaPerguntaCurta(historico) {
-  const recentes = (Array.isArray(historico) ? historico : []).slice(-8);
-  const ultimaDaIA = recentes.map(m => m.papel).lastIndexOf('assistant');
-  return recentes
-    .map((m, i) => `[${m.papel === 'user' ? 'Analista' : 'Você'}]: ${redigirValor(String(m.conteudo || '').slice(0, i === ultimaDaIA ? 8000 : 600))}`)
-    .join('\n');
-}
-
-const INSTRUCAO_REFORMULACAO = 'O analista pediu algo sobre a SUA ÚLTIMA RESPOSTA neste chamado (o "texto acima" é ela). Faça exatamente o que ele pediu (resumir, simplificar, reescrever, reorganizar, explicar melhor, colocar em passos, preparar o texto para o cliente ou para o retorno no SoftExpert). Use somente o conteúdo da sua última resposta: não acrescente fatos, hipóteses, links nem passos novos e não faça nova análise. Ao resumir, mantenha TODAS as orientações e verificações, só que de forma mais curta. Preserve exatamente nomes de rotinas, campos, parâmetros, tabelas, empresas e códigos. O texto está disponível acima: nunca diga que não consegue fazer o pedido.';
+// Final da última resposta da IA: é onde fica a pergunta ao analista (sem ele,
+// "sim" ou "só na filial 02" pareceriam confirmação e a resposta à pergunta da
+// IA seria ignorada).
+const TRECHO_FINAL_RESPOSTA_IA = 600;
 
 function _ultimaRespostaDaIA(historico) {
   const lista = Array.isArray(historico) ? historico : [];
@@ -836,29 +815,82 @@ function _ultimaRespostaDaIA(historico) {
   return null;
 }
 
-// Prompt do pedido de reformulação: a última resposta da IA vai inteira (até
-// 12 mil caracteres) — cortar perderia justamente orientações a resumir.
-// Sem resposta anterior devolve null (o turno segue o fluxo normal).
-function _montarPromptReformulacao(historico, texto) {
-  const ultima = _ultimaRespostaDaIA(historico);
-  if (!ultima) return null;
-  return `## Sua última resposta neste chamado (o "texto acima")\n${redigirValor(String(ultima.conteudo).slice(0, 12000))}\n\n## Pedido atual do analista\n${redigirValor(texto)}\n\n${INSTRUCAO_REFORMULACAO}`;
-}
-
-async function _classificarTurno(texto, { keys, cfg }) {
+/**
+ * Classifica a mensagem ATUAL do analista antes de montar o prompt completo
+ * de investigação, numa chamada curta e barata, isolada do contexto técnico
+ * (no prompt principal, pedir para "responder a pergunta pontual primeiro" não
+ * bastou: o modelo seguiu reabrindo o diagnóstico — achado real 2026-10).
+ *
+ * Falha aberta: qualquer erro (provider fora, JSON inválido) devolve
+ * 'investigacao', o fluxo completo.
+ */
+async function _classificarTurnoConversa(texto, { keys, cfg, ultimaRespostaIA = '' }) {
   if (!texto || texto.length > 400) return 'investigacao';
+  const finalDaIA = String(ultimaRespostaIA || '').trim().slice(-TRECHO_FINAL_RESPOSTA_IA);
+  const entrada = finalDaIA
+    ? `## Final da última resposta da IA\n${redigirValor(finalDaIA)}\n\n## Mensagem atual do analista\n${redigirValor(texto)}`
+    : redigirValor(texto);
   try {
     const resultado = await aiProviderClient.chamarIA(
-      keys, cfg, SYSTEM_PROMPT_CLASSIFICACAO_TURNO, texto, [],
+      keys, cfg, SYSTEM_PROMPT_CLASSIFICACAO_CONVERSA, entrada, [],
       { maxTokens: 30, timeoutMs: 12000, json: true, maxProviderRounds: 1 },
     );
     const parsed = JSON.parse(resultado.texto.match(/\{[\s\S]*\}/)?.[0] || '{}');
-    if (['reformulacao', 'pergunta_processo', 'fora_de_escopo'].includes(parsed.tipo)) return parsed.tipo;
-    return 'investigacao';
+    return parsed.tipo === 'conversa' ? 'conversa' : 'investigacao';
   } catch (err) {
-    console.error('[IA Service] Classificação de turno falhou, seguindo como investigação:', err.message);
+    console.error('[IA Service] Classificação do turno falhou, seguindo como investigação:', err.message);
     return 'investigacao';
   }
+}
+
+// Sinal da própria IA de que a mensagem precisa da investigação completa
+// (classificador errou para "conversa"): o turno segue o fluxo completo.
+const SINAL_INVESTIGAR = '[[INVESTIGAR]]';
+
+const INSTRUCAO_CONVERSA = `Responda à última mensagem do analista continuando a conversa acima, de forma natural e proporcional ao que ele escreveu.
+- Agradecimento ou confirmação: uma frase cordial, sem repetir o diagnóstico.
+- Pedido para resumir, simplificar, explicar ou reescrever a sua resposta anterior (o "texto acima"), inclusive para o cliente ou o SoftExpert: use somente o conteúdo dela, mantenha todas as orientações e verificações e preserve exatamente nomes de rotinas, campos, parâmetros, tabelas, empresas e códigos. O texto está no histórico: nunca diga que não consegue fazê-lo.
+- Aceite de uma oferta sua (por exemplo, montar a mensagem para o cliente): faça o que ofereceu, com base no histórico.
+- Pergunta sobre você, suas fontes ou a origem de uma informação: responda só o que foi perguntado, em poucas frases, citando o link ou a origem quando existir no histórico, sem propor novos passos. Pergunta sobre o próximo passo: responda direto, com base no histórico, sem repetir pedidos já feitos. Sobre pesquisa externa e fontes, use somente o "Registro da pesquisa externa": não diga que pesquisou se ele não mostrar pesquisa e não negue fontes que aparecem nele. Link citado pelo analista não é pesquisa feita por você. Se a informação não estiver no histórico, diga isso; nunca invente justificativa sobre o seu comportamento.
+- Assunto sem relação com o chamado: até 2 frases, sem dados em tempo real que você não tem e sem reabrir o chamado.
+Não faça nova análise técnica nem acrescente fatos, hipóteses, links ou passos novos. Se a mensagem trouxer informação técnica nova, responder a uma pergunta que você fez sobre o caso ou pedir análise, pesquisa ou correção, responda somente ${SINAL_INVESTIGAR}.`;
+
+const LIMITE_MENSAGENS_CONVERSA = 16;
+
+// Conversa nativa (papéis reais) para o turno curto: material de apoio, as
+// mensagens recentes e a mensagem atual. A última resposta da IA vai inteira
+// (até 12 mil caracteres): pedido de resumo precisa dela toda e, cortada, a IA
+// não viu o link que ela mesma enviou (achado real #036765). As demais são
+// limitadas para o turno continuar barato.
+function _montarConversaCurta({ historico, texto, codigoAtendimento, registroPesquisa }) {
+  const recentes = (Array.isArray(historico) ? historico : [])
+    .filter(m => String(m?.conteudo || '').trim())
+    .slice(-LIMITE_MENSAGENS_CONVERSA);
+  const ultimaDaIA = recentes.map(m => m.papel).lastIndexOf('assistant');
+  const apoio = [
+    `Atendimento ${codigoAtendimento || ''}`.trim() + '. As mensagens a seguir são o histórico deste chamado; respostas anteriores da IA não são fatos confirmados.',
+    registroPesquisa ? `## Registro da pesquisa externa (fato do sistema)\n${registroPesquisa}` : '',
+  ].filter(Boolean).join('\n\n');
+  return [
+    { role: 'user', content: redigirValor(apoio) },
+    ...recentes.map((m, i) => ({
+      role: m.papel === 'assistant' ? 'assistant' : 'user',
+      content: redigirValor(String(m.conteudo).slice(0, i === ultimaDaIA ? 12000 : 3000)),
+    })),
+    { role: 'user', content: redigirValor(texto) },
+  ];
+}
+
+// Devolve o texto da resposta curta, ou null quando o turno deve seguir a
+// investigação completa (sinal da IA, resposta vazia ou truncada).
+async function _responderConversaCurta({ keys, cfg, conversa, systemPrompt }) {
+  const resultado = await aiProviderClient.chamarIA(
+    keys, cfg, systemPrompt, conversa.at(-1).content, [],
+    { conversa, maxTokens: 1500, timeoutMs: 30000 },
+  );
+  const conteudo = String(resultado.texto || '').trim();
+  if (!conteudo || resultado.truncado || conteudo.includes(SINAL_INVESTIGAR)) return null;
+  return { conteudo, provider: resultado.provider, model: resultado.model };
 }
 
 /**
@@ -1071,79 +1103,43 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   const systemPromptTurno = avisoAnexosIA ? `${systemPromptBase}\n\n${avisoAnexosIA}` : systemPromptBase;
   const anexosTextoParaPesquisa = todosAnexosDoAtendimento.filter(a => a.conteudoExtraido);
 
-  // Pergunta de processo/capacidade ("se eu te enviar o fonte, você
-  // consegue corrigir?") não passa pelo prompt completo de investigação —
-  // ver _classificarTurno acima. Só roda em turno manual, sem forcarPesquisa
-  // (o botão "Pesquisar Soluções" sempre quer investigação completa) e sem
-  // anexo novo deste turno (anexo novo é, quase sempre, evidência técnica).
+  // Conversa sobre o que já foi dito (agradecimento, resumo, "de onde veio
+  // isso?") não passa pela investigação completa — ver
+  // _classificarTurnoConversa. Só em turno manual, sem forcarPesquisa (o botão
+  // "Pesquisar Soluções" sempre quer investigação completa) e sem anexo novo
+  // deste turno (anexo novo é, quase sempre, evidência técnica). Falha,
+  // resposta truncada ou sinal da IA seguem para o fluxo completo.
   if (!automatico && !forcarPesquisa && anexoIds.length === 0 && mensagemUsuario) {
-    const { keys: keysClassificacao, cfg: cfgClassificacao } = aiConfigService.resolverKeysEOrdem(empresaId);
-    const tipoTurno = await _classificarTurno(texto, { keys: keysClassificacao, cfg: cfgClassificacao });
-    // reformulacao (2026-10-26, achado real): "favor resumir o texto acima" caía
-    // em fora_de_escopo e a IA, seguindo a instrução, recusava; "só resuma o seu
-    // retorno técnico" ia para a investigação completa e o "resumo" perdia
-    // orientações. Agora o pedido é aplicado sobre a última resposta da IA,
-    // sem nova análise e sem a reescrita de estilo (o formato é o pedido).
-    // Sem resposta anterior da IA, segue o fluxo normal.
+    const { keys: keysConversa, cfg: cfgConversa } = aiConfigService.resolverKeysEOrdem(empresaId);
     // "O texto acima" é o que o analista VÊ (mensagem persistida), não a versão
-    // técnica que o `historico` acima usa no lugar da humanizada.
-    const promptReformulacao = tipoTurno === 'reformulacao'
-      ? _montarPromptReformulacao(mensagemRepo.listarMensagens(empresaId, atendimentoId).filter(m => m.id !== mensagemUsuario.id), texto)
-      : null;
-    if (promptReformulacao) {
+    // técnica que o `historico` acima usa no lugar da humanizada (2026-10-26).
+    const historicoVisivel = mensagemRepo.listarMensagens(empresaId, atendimentoId).filter(m => m.id !== mensagemUsuario.id);
+    const ultimaRespostaIA = _ultimaRespostaDaIA(historicoVisivel)?.conteudo || '';
+    if (await _classificarTurnoConversa(texto, { keys: keysConversa, cfg: cfgConversa, ultimaRespostaIA }) === 'conversa') {
       try {
-        const resultado = await aiProviderClient.chamarIA(
-          keysClassificacao, cfgClassificacao, promptBuilder.SYSTEM_PROMPT, promptReformulacao, [],
-          { maxTokens: 1500, timeoutMs: 30000 },
-        );
-        const conteudo = String(resultado.texto || '').trim();
-        if (conteudo && !resultado.truncado) {
+        // redigirValor (em _montarConversaCurta): este caminho NUNCA passa pelo
+        // Context Engine, que aplica a redação no fluxo principal (achado real,
+        // homologação 2026-10: CPF/senha/token iam em texto claro).
+        const conversa = _montarConversaCurta({
+          historico: historicoVisivel, texto, codigoAtendimento: atendimento.codigo,
+          registroPesquisa: _resumoUltimaPesquisa(empresaId, atendimentoId),
+        });
+        // Sem reescrita de estilo (2026-10-26): a resposta curta já é conversa
+        // direta. Não grava execução de investigação, então a avaliação humana
+        // não é oferecida (ver resposta-operacional-service.execucaoAvaliavel).
+        const resposta = await _responderConversaCurta({
+          keys: keysConversa, cfg: cfgConversa, conversa,
+          systemPrompt: `${promptBuilder.SYSTEM_PROMPT}\n\n${INSTRUCAO_CONVERSA}`,
+        });
+        if (resposta) {
           return mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
-            papel: 'assistant', conteudo, usuarioId: null, diagnostico: null,
-            provider: resultado.provider, model: resultado.model,
-            respostaCurta: 'reformulacao',
+            papel: 'assistant', conteudo: resposta.conteudo, usuarioId: null, diagnostico: null,
+            provider: resposta.provider, model: resposta.model,
+            respostaCurta: 'conversa',
           });
         }
-        console.warn('[IA Service] Reformulação vazia ou truncada, seguindo fluxo completo.');
       } catch (err) {
-        console.error('[IA Service] Falha ao reformular a última resposta, seguindo fluxo completo:', err.message);
-      }
-    }
-    if (tipoTurno === 'pergunta_processo' || tipoTurno === 'fora_de_escopo') {
-      // redigirValor: este atalho curto NUNCA passa pelo Context Engine (que
-      // aplica a redacao no fluxo principal) — sem isso, CPF/senha/token do
-      // historico iam em texto claro para o provider sempre que o turno fosse
-      // classificado como pergunta_processo (achado real, homologacao 2026-10).
-      const historicoRecente = _historicoParaPerguntaCurta(historico);
-      // fora_de_escopo: resposta curta que não reabre o chamado (2026-10,
-      // pedido do usuário: pergunta de clima/data gerava resposta longa
-      // reabrindo o chamado inteiro). Este atalho não grava execução de
-      // investigação, então a avaliação humana não é oferecida (ver
-      // resposta-operacional-service.execucaoAvaliavel).
-      const instrucaoFinal = tipoTurno === 'fora_de_escopo'
-        ? 'Esta pergunta não tem relação com o chamado. Responda em no máximo 2 frases: se souber responder com segurança (sem inventar dados em tempo real, que você não tem), responda; caso contrário, diga que não tem como consultar isso aqui. Não reabra, não resuma e não repita nada do chamado; apenas convide o analista a seguir com o chamado quando quiser.'
-        : 'Responda SOMENTE essa pergunta, de forma direta e breve (poucas frases). Não reabra nem repita o diagnóstico técnico já dado nas mensagens anteriores. Use apenas o contexto acima: se a resposta estiver nele (por exemplo, um link ou fonte já enviado), aponte-a; se não estiver, diga claramente que não tem essa informação. Nunca invente justificativa sobre o seu próprio comportamento ou sobre o que estava disponível em mensagens anteriores. Sobre pesquisa externa e fontes, use somente o "Registro da pesquisa externa": não diga que pesquisou se ele não mostrar pesquisa e não negue fontes que aparecem nele. Link ou documento citado no histórico pelo analista não é pesquisa feita por você.';
-      const registroPesquisa = tipoTurno === 'pergunta_processo' ? _resumoUltimaPesquisa(empresaId, atendimentoId) : '';
-      const promptCurto = `## Contexto recente da conversa\n${historicoRecente}\n\n${registroPesquisa ? `## Registro da pesquisa externa (fato do sistema)\n${registroPesquisa}\n\n` : ''}## Pergunta atual do analista\n${redigirValor(texto)}\n\n${instrucaoFinal}`;
-      try {
-        const resultadoCurto = await aiProviderClient.chamarIA(
-          keysClassificacao, cfgClassificacao, promptBuilder.SYSTEM_PROMPT, promptCurto, [],
-          { maxTokens: tipoTurno === 'fora_de_escopo' ? 200 : 500, timeoutMs: 20000 },
-        );
-        // Sem reescrita de estilo (2026-10-26, achado real): a resposta curta já
-        // é conversa direta; a Objetiva força o formato "Falta:/Próximos
-        // passos:" (feito para análise técnica) e transformava "Sim, consigo
-        // avaliar se você enviar o error.log e o fonte" em "Falta: error.log e
-        // o código fonte." — seco e robótico.
-        const conteudoCurto = String(resultadoCurto.texto || '').trim();
-        if (!conteudoCurto) throw new Error('resposta curta vazia');
-        return mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
-          papel: 'assistant', conteudo: conteudoCurto, usuarioId: null, diagnostico: null,
-          provider: resultadoCurto.provider, model: resultadoCurto.model,
-          respostaCurta: tipoTurno,
-        });
-      } catch (err) {
-        console.error('[IA Service] Falha ao responder pergunta de processo curta, seguindo fluxo completo:', err.message);
+        console.error('[IA Service] Falha na resposta de conversa, seguindo fluxo completo:', err.message);
         // cai para o fluxo normal abaixo — falha aqui não deve bloquear o turno
       }
     }
@@ -1767,11 +1763,12 @@ async function processarPreAnalise(empresaId, atendimentoId, { anexoIds = [] } =
 module.exports = {
   _anexarFontesConsultadas,
   _resumoUltimaPesquisa,
-  _historicoParaPerguntaCurta,
-  _classificarTurno,
-  _montarPromptReformulacao,
+  _classificarTurnoConversa,
+  _montarConversaCurta,
+  _responderConversaCurta,
+  SYSTEM_PROMPT_CLASSIFICACAO_CONVERSA,
+  INSTRUCAO_CONVERSA,
   _ultimaRespostaDaIA,
-  SYSTEM_PROMPT_CLASSIFICACAO_TURNO,
   processarTurno,
   processarPreAnalise,
   _criarPreparadorPorCandidato,
