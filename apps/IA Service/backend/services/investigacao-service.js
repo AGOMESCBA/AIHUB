@@ -978,6 +978,13 @@ const GARANTIA_ANEXOS_TEMPO_MAX_MS = Number(process.env.SVC_GARANTIA_ANEXOS_TEMP
 const GARANTIA_ANEXOS_PAUSA_MS = Number(process.env.SVC_GARANTIA_ANEXOS_PAUSA_MS) || 2 * 60 * 1000;
 const _agenteSemRespostaAte = new Map();
 
+// Tempo de cada etapa do turno (2026-11-02), gravado na execução para medir em
+// produção onde o analista espera. Não muda o resultado da etapa.
+function _medir(tempos, etapa, promessa) {
+  const inicio = Date.now();
+  return Promise.resolve(promessa).finally(() => { tempos[etapa] = Date.now() - inicio; });
+}
+
 // Todo turno confere os anexos do chamado antes de montar o contexto. Com o
 // Agente Local travado, a análise segue no tempo máximo, e a IA e o analista
 // são avisados do que não foi verificado.
@@ -1013,6 +1020,8 @@ async function _garantirAnexosDoChamado(empresaId, atendimento) {
 }
 
 async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, consultorId = null, anexoIds = [], automatico = false, anexosComoContexto = false, forcarPesquisa = false, analistaAtualNome = null, origemAcao: origemAcaoInformada = null }) {
+  const inicioTurno = Date.now();
+  const temposEtapasMs = {};
   const atendimento = mensagemService.getAtendimento(empresaId, atendimentoId);
   if (!atendimento) throw new Error('Atendimento não encontrado nesta empresa.');
   // Chamado encerrado na origem: somente consulta — nenhuma interacao, pesquisa
@@ -1091,8 +1100,25 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     }
   }
 
+  // Conversa sobre o que já foi dito (agradecimento, resumo, "de onde veio
+  // isso?") não passa pela investigação completa — ver
+  // _classificarTurnoConversa. Só em turno manual, sem forcarPesquisa (o botão
+  // "Pesquisar Soluções" sempre quer investigação completa) e sem anexo novo
+  // deste turno (anexo novo é, quase sempre, evidência técnica). A
+  // classificação roda junto com a conferência de anexos (não depende dela).
+  const podeSerConversa = !automatico && !forcarPesquisa && anexoIds.length === 0 && !!mensagemUsuario;
+  let conversaTurno = null;
+  if (podeSerConversa) {
+    const { keys, cfg } = aiConfigService.resolverKeysEOrdem(empresaId);
+    // "O texto acima" é o que o analista VÊ (mensagem persistida), não a versão
+    // técnica que o `historico` acima usa no lugar da humanizada (2026-10-26).
+    const historicoVisivel = mensagemRepo.listarMensagens(empresaId, atendimentoId).filter(m => m.id !== mensagemUsuario.id);
+    const ultimaRespostaIA = _ultimaRespostaDaIA(historicoVisivel)?.conteudo || '';
+    conversaTurno = { keys, cfg, historicoVisivel, tipo: _medir(temposEtapasMs, 'classificacaoTurno', _classificarTurnoConversa(texto, { keys, cfg, ultimaRespostaIA })) };
+  }
+
   // Arquivo copiado agora é evidência nova: entra como anexo deste turno.
-  const garantiaAnexos = await _garantirAnexosDoChamado(empresaId, atendimento);
+  const garantiaAnexos = await _medir(temposEtapasMs, 'conferenciaAnexos', _garantirAnexosDoChamado(empresaId, atendimento));
   for (const copiado of garantiaAnexos?.copiados || []) {
     if (copiado?.id && !anexosDoTurno.some(a => a.id === copiado.id)) anexosDoTurno.push(copiado);
   }
@@ -1103,19 +1129,10 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   const systemPromptTurno = avisoAnexosIA ? `${systemPromptBase}\n\n${avisoAnexosIA}` : systemPromptBase;
   const anexosTextoParaPesquisa = todosAnexosDoAtendimento.filter(a => a.conteudoExtraido);
 
-  // Conversa sobre o que já foi dito (agradecimento, resumo, "de onde veio
-  // isso?") não passa pela investigação completa — ver
-  // _classificarTurnoConversa. Só em turno manual, sem forcarPesquisa (o botão
-  // "Pesquisar Soluções" sempre quer investigação completa) e sem anexo novo
-  // deste turno (anexo novo é, quase sempre, evidência técnica). Falha,
-  // resposta truncada ou sinal da IA seguem para o fluxo completo.
-  if (!automatico && !forcarPesquisa && anexoIds.length === 0 && mensagemUsuario) {
-    const { keys: keysConversa, cfg: cfgConversa } = aiConfigService.resolverKeysEOrdem(empresaId);
-    // "O texto acima" é o que o analista VÊ (mensagem persistida), não a versão
-    // técnica que o `historico` acima usa no lugar da humanizada (2026-10-26).
-    const historicoVisivel = mensagemRepo.listarMensagens(empresaId, atendimentoId).filter(m => m.id !== mensagemUsuario.id);
-    const ultimaRespostaIA = _ultimaRespostaDaIA(historicoVisivel)?.conteudo || '';
-    if (await _classificarTurnoConversa(texto, { keys: keysConversa, cfg: cfgConversa, ultimaRespostaIA }) === 'conversa') {
+  // Falha, resposta truncada ou sinal da IA seguem para o fluxo completo.
+  if (conversaTurno) {
+    const { keys: keysConversa, cfg: cfgConversa, historicoVisivel } = conversaTurno;
+    if (await conversaTurno.tipo === 'conversa') {
       try {
         // redigirValor (em _montarConversaCurta): este caminho NUNCA passa pelo
         // Context Engine, que aplica a redação no fluxo principal (achado real,
@@ -1184,11 +1201,11 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       try {
         // Usa a situacao mais recente disponivel: confirma na origem quando o
         // valor local aponta pendencia externa (ver situacao-origem-service).
-        const pendencia = await pendenciaExternaGate.avaliarPendencia({
+        const pendencia = await _medir(temposEtapasMs, 'pendenciaExterna', pendenciaExternaGate.avaliarPendencia({
           chamado,
           posicionamentos: chamadoRepo.listarPosicionamentosDoChamado(empresaId, chamado.id),
           consultarSituacaoOrigem: () => situacaoOrigemService.consultarSituacaoAtual(empresaId, chamado),
-        });
+        }));
         if (pendencia.externa) {
           decisaoPesquisaExterna = await pendenciaExternaGate.decidirPesquisaExterna({ pendencia, origemAcao });
         }
@@ -1224,7 +1241,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     const primeiraAnalise = !historico.some(m => m.papel === 'assistant');
     const temImagemNova = anexosDoTurno.some(a => String(a.mimeType || '').startsWith('image/'));
     if (!pesquisaExternaBloqueada && (primeiraAnalise || temImagemNova)) {
-      textoPrintsPesquisa = await _transcreverPrintsParaBusca(empresaId, todosAnexosDoAtendimento);
+      textoPrintsPesquisa = await _medir(temposEtapasMs, 'leituraPrints', _transcreverPrintsParaBusca(empresaId, todosAnexosDoAtendimento));
     }
     relacionados = chamado ? chamadoRepo.listarChamadosRelacionados(empresaId, chamado.id, {
       limite: 5,
@@ -1618,13 +1635,13 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     papel: 'assistant', conteudo: 'Proposta de alteração de fonte em validação. Nenhuma orientação de aplicação está aprovada nesta etapa.',
     provider: resultado.provider, model: resultado.model,
   }) : null;
-  const geracaoFontes = await _gerarFontesCorrigidos(empresaId, atendimentoId, {
+  const geracaoFontes = await _medir(temposEtapasMs, 'fontesCorrigidos', _gerarFontesCorrigidos(empresaId, atendimentoId, {
     mensagemId: mensagemReservada?.id ?? null,
     pedido: texto, textoResposta: textoFinal, fonteCorrigidoTexto,
     manifesto: contexto.manifesto, respostaTruncada: !!resultado.truncado,
     explicacaoGeral: secoes?.['Alterações realizadas'] || null,
     aprovadaQualityGate: qualityGate?.aprovadoSemRessalvas === true && !revisaoNecessariaQualityGate && !resultado.truncado,
-  });
+  }));
   const respostaBloqueada = construirRespostaBloqueada(geracaoFontes);
   if (respostaBloqueada) {
     // A proposta bruta fica na auditoria existente, fora das seções e de
@@ -1662,7 +1679,15 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       model: resultado.model,
       status: _statusFinalExecucao({ qualityGate, retryDeQualityGate, respostaTruncada: !!resultado.truncado }),
       manifesto: contexto.manifesto,
-      contexto: contexto.contextoResumo,
+      contexto: {
+        ...contexto.contextoResumo,
+        temposEtapasMs: {
+          ...temposEtapasMs,
+          pesquisa: pesquisaTecnica?.temposMs || null,
+          geracaoResposta: resultado.latenciaMs ?? (Date.now() - inicioIa),
+          totalAteGravacao: Date.now() - inicioTurno,
+        },
+      },
       pesquisa: pesquisaTecnica,
       qualityGate,
       usage: resultado.usage || null,

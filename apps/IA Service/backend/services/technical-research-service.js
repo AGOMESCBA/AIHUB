@@ -12,6 +12,31 @@ const investigativeDiscipline = require('./investigative-discipline-service');
 const pendenciaExternaGate = require('./pendencia-externa-gate');
 const RAW_URL = Symbol('rawUrl');
 
+// As consultas de um turno (até 5) saem juntas em vez de uma de cada vez. O
+// teto de chamadas simultâneas a cada serviço externo soma todos os turnos do
+// servidor (2026-11-02, decisão do usuário: 25): na simulação de 10 analistas
+// ao mesmo tempo, teto 5 deixava o último esperando 15 s (hoje 9,5 s) e teto 25
+// deixa todos em ~4 s, abaixo do limite do plano do Serper. O excedente espera
+// a vez na fila em vez de estourar o limite do provedor.
+function _criarLimitador(maximo) {
+  let ativos = 0;
+  const fila = [];
+  const proximo = () => {
+    if (ativos >= maximo() || !fila.length) return;
+    ativos += 1;
+    const { fn, ok, falha } = fila.shift();
+    Promise.resolve().then(fn).then(ok, falha).finally(() => { ativos -= 1; proximo(); });
+  };
+  return fn => new Promise((ok, falha) => { fila.push({ fn, ok, falha }); proximo(); });
+}
+const _simultaneas = (env) => () => Math.max(1, Number(process.env[env]) || 25);
+const _limiteSerper = _criarLimitador(_simultaneas('SVC_PESQUISA_SERPER_SIMULTANEAS'));
+const _limiteCentral = _criarLimitador(_simultaneas('SVC_PESQUISA_CENTRAL_SIMULTANEAS'));
+const _limitePaginas = _criarLimitador(_simultaneas('SVC_PESQUISA_PAGINAS_SIMULTANEAS'));
+// HTTP 429 (limite do provedor) espera e tenta de novo uma vez: antes o turno
+// desistia do Serper e caía para Gemini/OpenAI, que levam até 60 s.
+const _esperaLimiteProvedorMs = () => Number(process.env.SVC_PESQUISA_ESPERA_429_MS) || 1000;
+
 const STATUS_URL_REUTILIZAVEL = new Set(['lida', 'reutilizada']);
 const STATUS_URL_RETRY_PERMITIDO = new Set(['erro_fetch', 'timeout', 'erro', 'bloqueada', 'content_type_invalido', 'limite_download']);
 
@@ -1000,7 +1025,7 @@ function _postJson({ hostname, path, headers, body, timeoutMs = 8000 }) {
       res.on('end', () => {
         let parsed;
         try { parsed = JSON.parse(data); } catch (_) { parsed = { raw: data }; }
-        if (res.statusCode >= 400) return reject(new Error(parsed.message || parsed.error || `HTTP ${res.statusCode}`));
+        if (res.statusCode >= 400) return reject(Object.assign(new Error(parsed.message || parsed.error || `HTTP ${res.statusCode}`), { status: res.statusCode }));
         resolve(parsed);
       });
     });
@@ -1020,7 +1045,7 @@ function _getJson({ hostname, path, headers, timeoutMs = 8000 }) {
       res.on('end', () => {
         let parsed;
         try { parsed = JSON.parse(data); } catch (_) { parsed = { raw: data }; }
-        if (res.statusCode >= 400) return reject(new Error(parsed.message || parsed.error || `HTTP ${res.statusCode}`));
+        if (res.statusCode >= 400) return reject(Object.assign(new Error(parsed.message || parsed.error || `HTTP ${res.statusCode}`), { status: res.statusCode }));
         resolve(parsed);
       });
     });
@@ -1325,7 +1350,7 @@ async function _buscarCentralTotvs(consulta, limite = 4) {
   const termos = _consultaCentralTotvs(consulta);
   if (!termos) return [];
   const api = `https://centraldeatendimento.totvs.com/api/v2/help_center/articles/search.json?query=${encodeURIComponent(termos)}&locale=pt-br&per_page=10`;
-  const pagina = await safeFetch.fetchTextoSeguro(api, { contentTypes: ['application/json'] });
+  const pagina = await _limiteCentral(() => safeFetch.fetchTextoSeguro(api, { contentTypes: ['application/json'] }));
   const artigos = JSON.parse(pagina.raw)?.results || [];
   return artigos
     .filter(a => a?.html_url && /protheus/i.test(a.title || '') && !a.draft)
@@ -1405,6 +1430,24 @@ function _selecionarTrechoRelevante(raw, plano, { maxChars = 2200, janela = 500 
   };
 }
 
+// Download de uma página candidata (artigo da Central pela API JSON; demais
+// pelo fetch seguro; fonte oficial grande tenta de novo com limite maior).
+function _baixarPagina(r) {
+  const url = r[RAW_URL] || r.url;
+  return _limitePaginas(async () => {
+    try {
+      return (await _lerArtigoCentralTotvs(url)) || await safeFetch.fetchTextoSeguro(url);
+    } catch (err) {
+      const oficial = _fonteOficial(url);
+      if (!oficial || !/limite de download/i.test(String(err.message || ''))) throw err;
+      return safeFetch.fetchTextoSeguro(url, {
+        maxBytes: Number(process.env.IA_SERVICE_SAFE_FETCH_OFICIAL_MAX_BYTES || 900000),
+        timeoutMs: Number(process.env.IA_SERVICE_SAFE_FETCH_OFICIAL_TIMEOUT_MS || 12000),
+      });
+    }
+  });
+}
+
 async function _abrirResultados(resultados, limite = 4, plano = {}, opts = {}) {
   const paginas = [];
   const ordenados = _rankearResultados(resultados, plano);
@@ -1413,7 +1456,25 @@ async function _abrirResultados(resultados, limite = 4, plano = {}, opts = {}) {
   const trechosOmitidos = [];
   const urlsTentadas = new Set();
   const maxTentativas = Math.max(limite, opts.maxTentativas || limite);
-  for (const r of ordenados) {
+  // As próximas candidatas são baixadas antes, ao mesmo tempo (até `limite`
+  // à frente), mas o laço abaixo continua decidindo na mesma ordem e com as
+  // mesmas regras de antes (2026-11-02: eram baixadas uma de cada vez). Uma
+  // candidata adiantada e depois descartada pelo laço só custa o download.
+  const downloads = new Map();
+  const reutilizavel = (r) => {
+    const lidaAntes = urlsJaLidas.get(_normalizar(r.url));
+    return !!lidaAntes && !_politicaRefreshUrl(lidaAntes, plano, opts).deveRefresh;
+  };
+  const adiantar = (desde) => {
+    let aFrente = 0;
+    for (let j = desde; j < ordenados.length && aFrente < limite; j += 1) {
+      const candidata = ordenados[j];
+      if (reutilizavel(candidata) || urlsTentadas.has(_chaveUrl(candidata.url))) continue;
+      aFrente += 1;
+      if (!downloads.has(j)) downloads.set(j, _baixarPagina(candidata).then(pagina => ({ pagina }), erro => ({ erro })));
+    }
+  };
+  for (const [indice, r] of ordenados.entries()) {
     if (paginas.filter(p => p.status === 'lida' || p.status === 'reutilizada').length >= limite) break;
     if (paginas.length >= maxTentativas && paginas.some(p => p.status === 'lida' || p.status === 'reutilizada')) break;
     if (paginas.length >= maxTentativas + 2) break;
@@ -1442,17 +1503,10 @@ async function _abrirResultados(resultados, limite = 4, plano = {}, opts = {}) {
       continue;
     }
     try {
-      let pagina;
-      try {
-        pagina = (await _lerArtigoCentralTotvs(r[RAW_URL] || r.url)) || await safeFetch.fetchTextoSeguro(r[RAW_URL] || r.url);
-      } catch (err) {
-        const oficial = _fonteOficial(r[RAW_URL] || r.url);
-        if (!oficial || !/limite de download/i.test(String(err.message || ''))) throw err;
-        pagina = await safeFetch.fetchTextoSeguro(r[RAW_URL] || r.url, {
-          maxBytes: Number(process.env.IA_SERVICE_SAFE_FETCH_OFICIAL_MAX_BYTES || 900000),
-          timeoutMs: Number(process.env.IA_SERVICE_SAFE_FETCH_OFICIAL_TIMEOUT_MS || 12000),
-        });
-      }
+      adiantar(indice);
+      const baixada = await (downloads.get(indice) || _baixarPagina(r).then(pagina => ({ pagina }), erro => ({ erro })));
+      if (baixada.erro) throw baixada.erro;
+      const { pagina } = baixada;
       // Artigo que redireciona para página-índice de seção/categoria (artigo
       // arquivado): não é artigo, não conta como lido (validação real #036668).
       if (RE_PAGINA_INDICE_CENTRAL.test(String(pagina.url || ''))) {
@@ -1515,20 +1569,33 @@ async function _buscarSerper(consultas, limitePorConsulta, { apiKey } = {}) {
   // com o caminho legado (searchConfig ausente).
   const key = apiKey || process.env.SERPER_API_KEY;
   if (!key) return [];
+  // Consultas ao mesmo tempo (eram uma de cada vez, ~1,4 s cada); resultados
+  // juntados na ordem das consultas, como antes. Falha de uma consulta continua
+  // sendo falha do provider (fallback operacional).
+  const consultar = async (q) => {
+    for (let tentativa = 1; ; tentativa += 1) {
+      try {
+        return await _limiteSerper(() => _postJson({
+          hostname: 'google.serper.dev',
+          path: '/search',
+          headers: { 'X-API-KEY': key },
+          body: { q, num: limitePorConsulta },
+        }));
+      } catch (err) {
+        if (err.status !== 429 || tentativa >= 2) throw err;
+        await new Promise(r => setTimeout(r, _esperaLimiteProvedorMs()));
+      }
+    }
+  };
+  const respostas = await Promise.all(consultas.map(consultar));
   const resultados = [];
-  for (const q of consultas) {
-    const data = await _postJson({
-      hostname: 'google.serper.dev',
-      path: '/search',
-      headers: { 'X-API-KEY': key },
-      body: { q, num: limitePorConsulta },
-    });
+  respostas.forEach((data, i) => {
     for (const item of data.organic || []) {
-      const r = { titulo: item.title, url: redigirUrl(item.link), trecho: redigirTexto(item.snippet), fonte: 'Serper/Google', consulta: q, status: 'ENCONTRADA', oficial: _fonteOficial(item.link) };
+      const r = { titulo: item.title, url: redigirUrl(item.link), trecho: redigirTexto(item.snippet), fonte: 'Serper/Google', consulta: consultas[i], status: 'ENCONTRADA', oficial: _fonteOficial(item.link) };
       r[RAW_URL] = item.link;
       resultados.push(r);
     }
-  }
+  });
   return resultados;
 }
 
@@ -1777,8 +1844,28 @@ async function pesquisar(ctx = {}, { limitePorConsulta = 3, buscarSerper, buscar
   }
   else avisar(ctx.pesquisaExternaBloqueada ? 'Pesquisa externa não executada: chamado aguardando retorno' : 'Pesquisa externa não necessária neste turno');
 
+  const temposMs = { planejamento: Date.now() - inicio };
   if (plano.devePesquisar) {
     consultasExecutadas = plano.consultas;
+    const inicioBusca = Date.now();
+    // Central TOTVS é consultada direto, além do provider de busca: é grátis,
+    // oficial e acha artigos que o Google com "site:" não traz. Recebe todas as
+    // consultas escritas pela IA (achado real, #036580: o artigo de alçada na
+    // mudança de situação só veio da 2ª consulta). Roda só no caminho com
+    // pedido explícito da investigação real (centralTotvs) ou quando injetada.
+    // Não depende do provider de busca: as consultas saem juntas, ao mesmo
+    // tempo que ele (2026-11-02); a junção abaixo segue a mesma ordem de antes.
+    const consultarCentral = plano.dominio === 'protheus' && (buscarCentralTotvs || centralTotvs);
+    const consultasCentral = consultarCentral ? (plano.consultasCentral?.length ? plano.consultasCentral : plano.consultas.slice(0, 1)) : [];
+    const centralEmAndamento = Promise.all(consultasCentral.map(async (consulta) => {
+      const inicioCentral = Date.now();
+      try {
+        const central = await (buscarCentralTotvs || _buscarCentralTotvs)(consulta, limitePorConsulta + 1);
+        return { consulta, central, latenciaMs: Date.now() - inicioCentral };
+      } catch (err) {
+        return { consulta, erro: err, latenciaMs: Date.now() - inicioCentral };
+      }
+    }));
     // Fallback OPERACIONAL: só avança para o próximo provider se o atual
     // FALHOU (exceção — chave inválida, timeout, erro de rede), nunca
     // porque "não achou resultado" (isso é resposta válida, não falha) nem
@@ -1836,28 +1923,21 @@ async function pesquisar(ctx = {}, { limitePorConsulta = 3, buscarSerper, buscar
       }
     }
 
-    // Central TOTVS é consultada direto, além do provider de busca: é grátis,
-    // oficial e acha artigos que o Google com "site:" não traz. Recebe todas as
-    // consultas escritas pela IA (achado real, #036580: o artigo de alçada na
-    // mudança de situação só veio da 2ª consulta). Roda só no caminho com
-    // pedido explícito da investigação real (centralTotvs) ou quando injetada.
-    if (plano.dominio === 'protheus' && (buscarCentralTotvs || centralTotvs)) {
-      const consultasCentral = plano.consultasCentral?.length ? plano.consultasCentral : plano.consultas.slice(0, 1);
+    if (consultarCentral) {
       const jaEncontradas = new Set(resultados.map(r => r.url));
       const daCentral = [];
-      for (const consulta of consultasCentral) {
-        const inicioCentral = Date.now();
-        try {
-          const central = await (buscarCentralTotvs || _buscarCentralTotvs)(consulta, limitePorConsulta + 1);
-          tentativasBusca.push({ provider: 'Central TOTVS', status: central.length ? 'ok' : 'sem_resultado', consulta: _consultaCentralTotvs(consulta) || null, latenciaMs: Date.now() - inicioCentral });
-          for (const r of central) if (!jaEncontradas.has(r.url)) { jaEncontradas.add(r.url); daCentral.push(r); }
-        } catch (err) {
-          tentativasBusca.push({ provider: 'Central TOTVS', status: 'erro', erro: redigirTexto(err.message), consulta: _consultaCentralTotvs(consulta) || null, latenciaMs: Date.now() - inicioCentral });
+      for (const { consulta, central, erro, latenciaMs: latenciaCentral } of await centralEmAndamento) {
+        if (erro) {
+          tentativasBusca.push({ provider: 'Central TOTVS', status: 'erro', erro: redigirTexto(erro.message), consulta: _consultaCentralTotvs(consulta) || null, latenciaMs: latenciaCentral });
+          continue;
         }
+        tentativasBusca.push({ provider: 'Central TOTVS', status: central.length ? 'ok' : 'sem_resultado', consulta: _consultaCentralTotvs(consulta) || null, latenciaMs: latenciaCentral });
+        for (const r of central) if (!jaEncontradas.has(r.url)) { jaEncontradas.add(r.url); daCentral.push(r); }
       }
       resultados = _dedupPorUrl([...daCentral, ...resultados]);
       if (daCentral.length && !providerBusca) providerBusca = 'Central TOTVS';
     }
+    temposMs.busca = Date.now() - inicioBusca;
     const daCentralTotal = resultados.filter(r => r.fonte === 'Central TOTVS').length;
     avisar(resultados.length
       ? `${resultados.length} resultado(s) encontrado(s)${daCentralTotal ? ` (${daCentralTotal} da Central TOTVS)` : ''}`
@@ -1900,7 +1980,9 @@ async function pesquisar(ctx = {}, { limitePorConsulta = 3, buscarSerper, buscar
           }
         }
         const abrir = abrirResultados || _abrirResultados;
+        const inicioPaginas = Date.now();
         paginasLidas = limiteAbrir ? await abrir(paraAbrir, limiteAbrir, plano, { forcarRefresh, maxTentativas: 6 }) : [];
+        temposMs.paginas = Date.now() - inicioPaginas;
         const lidas = (Array.isArray(paginasLidas) ? paginasLidas : []).filter(p => p.status === 'lida' || p.status === 'reutilizada').length;
         if (limiteAbrir) avisar(`${lidas} artigo(s) lido(s)`);
         urlsReutilizadas = paginasLidas.urlsReutilizadas || [];
@@ -1945,6 +2027,13 @@ async function pesquisar(ctx = {}, { limitePorConsulta = 3, buscarSerper, buscar
     ].join('\n')),
     latenciaMs,
     pesquisaLatenciaMs: latenciaMs,
+    temposMs: {
+      ...temposMs,
+      consultasIA: plano.consultasIA?.latenciaMs ?? null,
+      selecaoArtigos: selecaoArtigos?.latenciaMs ?? null,
+      interpretacao: plano.interpretacaoSemantica?.latenciaMs ?? null,
+      total: latenciaMs,
+    },
     providerBusca,
     modo,
     erroBusca,
@@ -2106,6 +2195,8 @@ module.exports = {
   _classificarStatusUrl,
   _politicaRefreshUrl,
   _abrirResultados,
+  _buscarSerper,
+  _criarLimitador,
   _rankearResultados,
   _selecionarTrechoRelevante,
 };
