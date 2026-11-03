@@ -43,6 +43,7 @@ database.inicializarDB(':memory:');
 const consultorRepo = require('../backend/repositories/consultor-repository');
 const atendimentoRepo = require('../backend/repositories/atendimento-repository');
 const mensagemRepo = require('../backend/repositories/mensagem-repository');
+const { analisarPreservacao } = require('../backend/services/validacao-preservacao-service');
 const consultor = consultorRepo.criarConsultor(1, { telefone: '5599999999999', preAnaliseAutomatica: false });
 const consultores = carregar('../backend/services/consultor-service.js', {
   '../../../IAHUB/backend/platform-store': store,
@@ -93,8 +94,7 @@ test('alterar estilo pelo chat sincroniza cadastro e preserva resposta automáti
 test('validador: identificador trocado e comando novo reprovam; frase nova é só aviso', () => {
   const aprovado = (a, b) => analisarPreservacao(a, b).aprovado;
   assert.equal(aprovado('Use aItens.', 'Use bItens.'), false);
-  assert.equal(aprovado('Verificar o retorno.', 'Verificar o retorno.
-curl exemplo'), false);
+  assert.equal(aprovado('Verificar o retorno.', 'Verificar o retorno.\ncurl exemplo'), false);
   assert.equal(aprovado('O erro não foi resolvido.', 'O erro não foi resolvido. Foi resolvido.'), true);
   assert.equal(aprovado('O erro ocorre na rotina ROTINA99.', 'O erro ocorre.'), false);
 });
@@ -245,7 +245,6 @@ test('fluxo entrega diálogo original sem editorial mesmo com preferência NATUR
       }
       return montado;
     } },
-    './resposta-humanizada-service': { prepararResposta: async () => { throw new Error('Não deve reescrever'); } },
     './technical-research-service': { pesquisar: async () => { pesquisas++; return {}; }, formatarContextoParaPrompt: () => '' },
     './quality-gate-service': { avaliarResposta: dados => {
       etapas.push('quality_gate'); assert.equal(dados.textoResposta, textoGerado);

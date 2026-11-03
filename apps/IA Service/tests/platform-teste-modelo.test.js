@@ -81,7 +81,7 @@ test('botão envia modelo selecionado e mostra o modelo realmente testado', asyn
   await ctx.testarProvedor('openai');
   assert.equal(enviado.modelo, 'gpt-5.4');
   assert.match(elementos['test-openai'].textContent, /modelo gpt-5\.4/);
-  assert.match(html, /GPT-5\.4 — Versão fixa recomendada para IA Service/);
+  assert.match(html, /gpt-5\.4-2026-03-05 — Fixo \(recomendado\)/);
   assert.doesNotMatch(html, /gpt-4o-mini - Recomendado/);
 });
 

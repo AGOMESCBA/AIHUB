@@ -1,15 +1,14 @@
 'use strict';
-// Objetiva: síntese controlada, perda de estrutura e botão Copiar. Sem rede.
+// Validador de preservação (síntese controlada, perda de estrutura) e botão
+// Copiar. O serviço de reescrita Objetiva foi removido em 2026-11-02; o
+// validador continua em uso pela limpeza técnica. Sem rede.
 // A Técnica abaixo é uma RECONSTRUÇÃO do cenário caso sintético a partir do relatório
 // de 18/10/2026 (o texto real só existe na produção).
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const aiProvider = require('../backend/services/ai-provider-client');
-const aiConfig = require('../backend/services/ai-config-service');
 const { analisarPreservacao } = require('../backend/services/validacao-preservacao-service');
-const { humanizar } = require('../backend/services/resposta-humanizada-service');
 
 const OPC = { permitirSintese: true, exigirEstrutura: true };
 const tecnica = [
@@ -74,30 +73,6 @@ test('gate final: frase nova e dado técnico acrescentado são aviso (a IA tem p
   const comDado = analisarPreservacao(tecnica, objetiva + '\n\nAjuste também o parâmetro MV_INVENTADO.', OPC);
   assert.equal(comDado.aprovado, true);
   assert.ok(codigosDe(comDado).includes('REFERENCIA_TECNICA_NOVA'));
-});
-
-test('humanizar: emendada e estruturada são entregues; perda de identificador volta à Técnica', async () => {
-  const orig = { resolverKeysEOrdem: aiConfig.resolverKeysEOrdem, chamarIA: aiProvider.chamarIA };
-  aiConfig.resolverKeysEOrdem = () => ({ keys: {}, cfg: {} });
-  try {
-    aiProvider.chamarIA = async () => ({ texto: objetiva.replace(/\n/g, ' '), provider: 'x', model: 'y' });
-    const emendada = await humanizar({ empresaId: 1, respostaOriginal: tecnica, estilo: 'NATURAL' });
-    assert.equal(emendada.status, 'aplicada');
-    aiProvider.chamarIA = async () => ({ texto: objetiva.split('MT103FIM').join('outro ponto de entrada'), provider: 'x', model: 'y' });
-    const ruim = await humanizar({ empresaId: 1, respostaOriginal: tecnica, estilo: 'NATURAL' });
-    assert.equal(ruim.status, 'fallback');
-    assert.equal(ruim.respostaFinal, tecnica);
-    aiProvider.chamarIA = async () => ({ texto: objetiva, provider: 'x', model: 'y' });
-    const boa = await humanizar({ empresaId: 1, respostaOriginal: tecnica, estilo: 'NATURAL' });
-    assert.equal(boa.status, 'aplicada');
-    assert.equal(boa.respostaFinal, objetiva);
-  } finally { Object.assign(aiConfig, { resolverKeysEOrdem: orig.resolverKeysEOrdem }); aiProvider.chamarIA = orig.chamarIA; }
-});
-
-test('prompt base não induz conversa de WhatsApp e exige manter quebras', () => {
-  const src = fs.readFileSync(path.join(__dirname, '../backend/services/resposta-humanizada-service.js'), 'utf8');
-  assert.ok(!/WhatsApp/i.test(src));
-  assert.match(src, /quebras de linha/);
 });
 
 test('botão Copiar: usa alternativa sem contexto seguro (HTTP)', () => {
@@ -240,23 +215,11 @@ test('título com conteúdo mantido ou parafraseado é aceito', () => {
 });
 
 // ── Marcadores rígidos × identificadores simples ───────────────────────────
-const { proteger } = require('../backend/services/resposta-humanizada-service');
 // Normaliza o fim de linha: no Windows o checkout pode converter os fixtures
 // para CRLF, e os cortes do teste trabalham com \n.
 const lerFixture = nome => fs.readFileSync(path.join(__dirname, 'fixtures', nome), 'utf8').replace(/\r\n/g, '\n').replace(/\n$/, '');
 const TECNICA_REAL = lerFixture('tecnica-sintetica.md');
 const OBJETIVA_REF = lerFixture('objetiva-sintetica-referencia.md');
-
-test('proteger: identificadores simples não viram marcador; código, comandos e dado sensível continuam rígidos', () => {
-  assert.equal(proteger(TECNICA_REAL).trechos.length, 0, 'Return, MsgStop, MT103FIM, MT103OK, MT103ANT e MATA103 não são marcadores');
-  const r = proteger('Rode `SELECT * FROM SD1 WHERE D1_DOC = 1` e depois\n```advpl\nReturn .T.\n```\nSELECT D1_DOC FROM SD1\nUse `MATA103` e `a = b + 1`.');
-  const rigidos = r.trechos.map(t => t.replace(/\s+/g, ' '));
-  assert.ok(rigidos.some(t => t.includes('SELECT * FROM SD1')), 'expressão com espaço');
-  assert.ok(rigidos.some(t => t.includes('```advpl')), 'bloco de código');
-  assert.ok(rigidos.some(t => t.startsWith('SELECT D1_DOC')), 'comando em linha própria');
-  assert.ok(rigidos.some(t => t === '`a = b + 1`'), 'expressão de código');
-  assert.ok(r.protegido.includes('`MATA103`'), 'identificador simples segue no texto');
-});
 
 test('identificador simples pode mudar de posição e de formatação, mas não some, muda ou surge', () => {
   const orig = 'Revise `MT103FIM` e depois `MATA103`; confira D1_DOC no SD1.';

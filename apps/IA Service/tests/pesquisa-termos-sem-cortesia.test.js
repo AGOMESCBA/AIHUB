@@ -50,10 +50,8 @@ test('pesquisa não devolve links de busca não verificados', async () => {
   assert.deepEqual(r.links, []);
 });
 
-test('Objetiva sem Situação/Já feito e Técnica sem resumo do histórico', () => {
-  const fonte = require('node:fs').readFileSync(require.resolve('../backend/services/resposta-humanizada-service'), 'utf8');
-  assert.ok(!/Situação: uma ou duas frases|Já feito: itens curtos/.test(fonte));
-  assert.match(fonte, /Não descreva o andamento do chamado/);
+// A reescrita Objetiva foi removida em 2026-11-02; a regra segue no prompt principal.
+test('Técnica sem resumo do histórico', () => {
   assert.match(SYSTEM_PROMPT, /Não abra a resposta resumindo o histórico/);
 });
 
