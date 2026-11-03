@@ -1029,6 +1029,8 @@ button.loading .loader { display: block; }
 .message-context-item:hover,
 .message-context-item:focus-visible { background: var(--panel-2); outline: none; }
 .message-context-item svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.message-context-item[hidden] { display: none; }
+.message-context-item-perigo { color: var(--danger); }
 .message-text { white-space: pre-wrap; line-height: 1.45; overflow-wrap: anywhere; font-size: 13px; }
 
 /* Avaliacao Humana (2026-10) -- utilidade tecnica real da resposta da IA,

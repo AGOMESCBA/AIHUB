@@ -182,6 +182,25 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
+
+  // Exclusão lógica de mensagem do chat (2026-11-02): só mensagem digitada no
+  // chat ou resposta da IA; do SoftExpert nunca (regras em
+  // atendimento-service.excluirMensagem). Bloqueada durante uma análise em
+  // andamento no mesmo atendimento. Quem excluiu vem da sessão, nunca do corpo da requisição.
+  app.delete('/api/ia-service/atendimentos/:id/mensagens/:mensagemId', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const quem = req.session?.user_id ? `usuario:${req.session.user_id}` : null;
+      if (!quem) return res.status(401).json({ error: 'Usuário não identificado para excluir a mensagem.' });
+      if (turnoLockService.estaProcessando(empresaId, req.params.id)) {
+        return res.status(409).json({ error: 'Aguarde a análise em andamento terminar antes de excluir mensagens.' });
+      }
+      res.json(atendimentoService.excluirMensagem(empresaId, req.params.id, req.params.mensagemId, { excluidaPor: quem }));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   // Fase 3 — Confirmação explícita do analista (seção 3/4): sempre cria um
   // evento novo em validacoes_solucao, nunca sobrescreve o anterior. Exige
   // usuário autenticado (nunca confia em ID enviado pelo corpo da requisição

@@ -112,6 +112,37 @@ function listarMensagens(empresaId, atendimentoId) {
   return mensagemRepo.listarMensagens(empresaId, atendimentoId);
 }
 
+// Exclusão de mensagem do chat (2026-11-02, decisões do usuário): lógica
+// (o registro fica para avaliações e auditoria); qualquer analista com acesso
+// ao chamado; cada mensagem sozinha; mensagem do SoftExpert nunca; chamado
+// encerrado é só consulta. O dossiê fica marcado para revisão, porque pode ter
+// aprendido algo com a mensagem excluída.
+function _erro(status, mensagem) {
+  return Object.assign(new Error(mensagem), { status });
+}
+
+function excluirMensagem(empresaId, atendimentoId, mensagemId, { excluidaPor = null } = {}) {
+  const atendimento = atendimentoRepo.getAtendimento(empresaId, atendimentoId);
+  if (!atendimento) throw _erro(404, 'Atendimento não encontrado nesta empresa.');
+  const chamado = atendimento.referenciaExterna
+    ? require('../repositories/chamado-repository').getChamadoPorNumero(empresaId, atendimento.referenciaExterna, atendimento.origem)
+    : null;
+  if (chamado?.statusEncerramento === 'Encerrado') throw _erro(409, 'Chamado encerrado: a conversa está disponível apenas para consulta.');
+  const mensagem = mensagemRepo.getMensagem(empresaId, mensagemId);
+  if (!mensagem || mensagem.atendimentoId !== atendimentoId || mensagem.excluidaEm) throw _erro(404, 'Mensagem não encontrada neste atendimento.');
+  if (mensagem.origemSistema) throw _erro(409, 'Mensagens que vieram do SoftExpert não podem ser excluídas.');
+  if (!['user', 'assistant'].includes(mensagem.papel)) throw _erro(409, 'Esta mensagem não pode ser excluída.');
+  if (!mensagemRepo.excluirMensagem(empresaId, atendimentoId, mensagemId, { excluidaPor })) {
+    throw _erro(409, 'A mensagem não pôde ser excluída. Atualize a tela e tente novamente.');
+  }
+  try {
+    require('./investigacao-dossie-service').marcarStale(empresaId, atendimentoId, true);
+  } catch (err) {
+    console.error('[IA Service] Mensagem excluída, mas o dossiê não foi marcado para revisão:', err.message);
+  }
+  return { excluida: true, mensagemId };
+}
+
 function listarAnexos(empresaId, atendimentoId) {
   const atendimento = atendimentoRepo.getAtendimento(empresaId, atendimentoId);
   if (!atendimento) throw new Error('Atendimento não encontrado nesta empresa.');
@@ -128,5 +159,6 @@ module.exports = {
   atualizarStatus,
   adicionarMensagem,
   listarMensagens,
+  excluirMensagem,
   listarAnexos,
 };

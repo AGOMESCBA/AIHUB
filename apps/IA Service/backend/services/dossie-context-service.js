@@ -62,7 +62,8 @@ function _buscarEvidenciasBatch(empresaId, atendimentoId, relacoes, db) {
     if (!ids.length) continue;
     let rows = [];
     if (tipo === 'mensagem') {
-      rows = db.prepare(`SELECT id, conteudo FROM mensagens WHERE empresa_id = ? AND atendimento_id = ? AND id IN (${_placeholder('mensagens', ids)})`).all(empresa, atendimentoId, ...ids);
+      // Mensagem excluída no chat não volta para a IA pela memória do dossiê.
+      rows = db.prepare(`SELECT id, conteudo FROM mensagens WHERE empresa_id = ? AND atendimento_id = ? AND excluida_em IS NULL AND id IN (${_placeholder('mensagens', ids)})`).all(empresa, atendimentoId, ...ids);
       for (const row of rows) add(tipo, row, `[Mensagem ${row.id}]\n${row.conteudo}`);
     } else if (tipo === 'anexo' || tipo === 'versao_anexo') {
       rows = db.prepare(`SELECT id, nome_original, mime_type, linguagem_detectada, conteudo_extraido FROM anexos WHERE empresa_id = ? AND atendimento_id = ? AND id IN (${_placeholder('anexos', ids)})`).all(empresa, atendimentoId, ...ids);
@@ -201,4 +202,4 @@ function montarMemoriaOperacional({ empresaId, atendimentoId, mensagemAtual = ''
   };
 }
 
-module.exports = { montarMemoriaOperacional };
+module.exports = { montarMemoriaOperacional, _buscarEvidenciasBatch };

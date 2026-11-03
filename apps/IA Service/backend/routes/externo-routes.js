@@ -290,6 +290,24 @@ module.exports = function registrarRotasExterno(app) {
   // V1 quanto no Radar, e o Radar roda neste namespace quando acessado via
   // login externo. Identidade vem de req.svcConsultorExterno (nunca do
   // corpo da requisição — seção 10).
+// Exclusão lógica de mensagem do chat (2026-11-02): só mensagem digitada no
+  // chat ou resposta da IA; do SoftExpert nunca (regras em
+  // atendimento-service.excluirMensagem). Bloqueada durante uma análise em
+  // andamento no mesmo atendimento. Quem excluiu vem da sessão externa.
+  app.delete('/api/ia-service-externo/atendimentos/:id/mensagens/:mensagemId', (req, res) => {
+    try {
+      const empresaId = req.svcEmpresaId;
+      const quem = req.svcConsultorExterno ? `consultor:${req.svcConsultorExterno}` : null;
+      if (!quem) return res.status(401).json({ error: 'Usuário não identificado para excluir a mensagem.' });
+      if (turnoLockService.estaProcessando(empresaId, req.params.id)) {
+        return res.status(409).json({ error: 'Aguarde a análise em andamento terminar antes de excluir mensagens.' });
+      }
+      res.json(atendimentoService.excluirMensagem(empresaId, req.params.id, req.params.mensagemId, { excluidaPor: quem }));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   app.post('/api/ia-service-externo/atendimentos/:id/mensagens/:mensagemId/validacao', async (req, res) => {
     try {
       if (!req.svcConsultorExterno) return res.status(401).json({ error: 'Consultor não identificado para confirmar solução.' });

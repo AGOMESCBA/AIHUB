@@ -40,6 +40,39 @@ const MAX_TENTATIVAS_TIMEOUT = 2;
 // Substitui, no historico enviado a IA, a resposta bloqueada para revisao.
 const RESPOSTA_NAO_ENTREGUE_NO_HISTORICO = '[Neste ponto a IA nao entregou parecer tecnico ao analista; nao ha conclusao a herdar desta mensagem. Siga com as evidencias do chamado e a solicitacao atual.]';
 
+// Atualizações de dossiê em andamento, por atendimento. Atualizações seguidas
+// do mesmo atendimento rodam em fila (uma depois da outra), e o turno seguinte
+// com investigação espera a pendente antes de ler o dossiê, para usar a
+// memória já atualizada. Em memória: um reinício perde só a atualização em
+// curso (a conversa continua íntegra no histórico).
+const _dossiePendente = new Map();
+const _esperaMaximaDossieMs = () => Number(process.env.SVC_ESPERA_DOSSIE_PENDENTE_MS) || 60000;
+
+function _atualizarDossieEmSegundoPlano(empresaId, atendimentoId, executar) {
+  const chave = `${empresaId}:${atendimentoId}`;
+  const anterior = _dossiePendente.get(chave) || Promise.resolve();
+  const promessa = anterior.then(executar, executar).catch(err => {
+    console.error('[IA Service] Falha na atualização do dossiê em segundo plano:', err?.message);
+  });
+  _dossiePendente.set(chave, promessa);
+  promessa.finally(() => { if (_dossiePendente.get(chave) === promessa) _dossiePendente.delete(chave); });
+  return promessa;
+}
+
+// true quando não havia pendência ou ela terminou; false se o tempo esgotou
+// (o turno segue com o dossiê como estiver, como numa falha de atualização).
+async function aguardarDossiePendente(empresaId, atendimentoId, limiteMs = _esperaMaximaDossieMs()) {
+  const pendente = _dossiePendente.get(`${empresaId}:${atendimentoId}`);
+  if (!pendente) return true;
+  let temporizador;
+  const esgotou = new Promise(resolve => { temporizador = setTimeout(() => resolve(false), limiteMs); });
+  try {
+    return await Promise.race([pendente.then(() => true), esgotou]);
+  } finally {
+    clearTimeout(temporizador);
+  }
+}
+
 function _garantirDossieSeguro(empresaId, atendimentoId, mensagemUsuario) {
   try {
     investigacaoDossieService.obterOuCriarDossie(empresaId, atendimentoId, {
@@ -1197,6 +1230,9 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     const modeloPesquisa = cfgPesquisa?.modelos?.[cfgPesquisa?.provedorPrimario] || Object.values(cfgPesquisa?.modelos || {})[0] || null;
     const orcamentoPesquisa = tokenBudget.criarOrcamento({ modelo: modeloPesquisa, systemPrompt: systemPromptTurno });
     try {
+      if (!(await _medir(temposEtapasMs, 'esperaDossiePendente', aguardarDossiePendente(empresaId, atendimentoId)))) {
+        console.warn('[IA Service] Atualização anterior do dossiê ainda em curso; turno segue com o dossiê atual.');
+      }
       dossieOperacionalTurno = dossieContextService.montarMemoriaOperacional({
         empresaId,
         atendimentoId,
@@ -1739,12 +1775,13 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     mensagemAssistente.diagnostico = persistida.diagnostico;
   }
 
-  // A resposta já está completa (texto, anexos e avisos): a tela mostra na hora,
-  // sem esperar a atualização do dossiê, que chama a IA de novo (~15 s, achado
-  // real 2026-11-02). O turno só termina depois do dossiê, como antes.
+  // A resposta já está completa (texto, anexos e avisos): a tela mostra na hora.
+  // A atualização do dossiê (chama a IA de novo, 14–24 s em testes reais de
+  // 2026-11-02) roda em segundo plano e o turno termina aqui, liberando o
+  // atendimento; o próximo turno com investigação espera ela terminar.
   progressoTurno.registrar(empresaId, atendimentoId, ETAPA_RESPOSTA_PRONTA);
 
-  try {
+  _atualizarDossieEmSegundoPlano(empresaId, atendimentoId, async () => { try {
     await investigacaoDossieAtualizador.atualizarAposTurno(empresaId, atendimentoId, {
       mensagemUsuarioId: mensagemUsuario?.id ?? null,
       mensagemAssistenteId: mensagemAssistente.id,
@@ -1770,8 +1807,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     } catch (staleErr) {
       console.error('[IA Service] Falha ao marcar dossie como stale:', staleErr.message);
     }
-  }
-
+  } });
 
   mensagemAssistente.respostaOperacional = respostaOperacionalService.construirFichaOperacional({
     diagnostico: mensagemAssistente.diagnostico,
@@ -1815,6 +1851,7 @@ module.exports = {
   INSTRUCAO_CONVERSA,
   _ultimaRespostaDaIA,
   _semMaterialNovoDesdeUltimaAnalise,
+  aguardarDossiePendente,
   processarTurno,
   processarPreAnalise,
   _criarPreparadorPorCandidato,

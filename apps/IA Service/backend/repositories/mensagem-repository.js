@@ -67,6 +67,8 @@ function _rowParaDominio(row) {
     provider: row.provider,
     model: row.model,
     origemSistema: row.origem_sistema,
+    excluidaEm: row.excluida_em ?? null,
+    excluidaPor: row.excluida_por ?? null,
     origemReferencia: row.origem_referencia,
     origemReferenciaOid: row.origem_referencia_oid ?? null,
     origemData: row.origem_data,
@@ -210,6 +212,7 @@ function listarMensagens(empresaId, atendimentoId, filtros = {}) {
            END AS origem_referencia_oid
       FROM mensagens m
      WHERE m.empresa_id = ? AND m.atendimento_id = ?
+       ${filtros.incluirExcluidas ? '' : 'AND m.excluida_em IS NULL'}
      ORDER BY m.criado_em ASC
      LIMIT ?
   `).all(Number(empresaId), atendimentoId, limite);
@@ -233,6 +236,7 @@ function getUltimaMensagemAssistente(empresaId, atendimentoId) {
      WHERE empresa_id = ?
        AND atendimento_id = ?
        AND papel = 'assistant'
+       AND excluida_em IS NULL
        AND TRIM(COALESCE(conteudo, '')) <> ''
      ORDER BY criado_em DESC, rowid DESC
      LIMIT 1
@@ -240,4 +244,18 @@ function getUltimaMensagemAssistente(empresaId, atendimentoId) {
   return _rowParaDominio(row);
 }
 
-module.exports = { salvarMensagem, contarMensagensImportadas, listarMensagens, getMensagem, getUltimaMensagemAssistente, removerHistoricoImportado, atualizarAvisosFonteCorrigido, atualizarResposta, PAPEIS_VALIDOS };
+// Exclusão lógica (2026-11-02): só mensagem digitada no chat ou resposta da IA,
+// nunca mensagem do SoftExpert (origem_sistema). O registro fica para
+// avaliações, validações e auditoria; listagens normais deixam de trazê-la.
+function excluirMensagem(empresaId, atendimentoId, mensagemId, { excluidaPor = null } = {}) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const db = getDB();
+  const r = db.prepare(`
+    UPDATE mensagens SET excluida_em = ?, excluida_por = ?
+     WHERE id = ? AND empresa_id = ? AND atendimento_id = ?
+       AND excluida_em IS NULL AND origem_sistema IS NULL AND papel IN ('user', 'assistant')
+  `).run(new Date().toISOString(), excluidaPor ? String(excluidaPor).slice(0, 120) : null, mensagemId, Number(empresaId), atendimentoId);
+  return r.changes === 1;
+}
+
+module.exports = { excluirMensagem, salvarMensagem, contarMensagensImportadas, listarMensagens, getMensagem, getUltimaMensagemAssistente, removerHistoricoImportado, atualizarAvisosFonteCorrigido, atualizarResposta, PAPEIS_VALIDOS };

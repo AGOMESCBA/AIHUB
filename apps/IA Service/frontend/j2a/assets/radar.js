@@ -1240,8 +1240,31 @@
     if (state.menuMensagemId && !container.querySelector(`[data-menu-msg="${CSS.escape(state.menuMensagemId)}"]`)) fecharMenuMensagem();
   }
 
+  // Excluir (2026-11-02): só mensagem digitada no chat ou resposta da IA, já
+  // gravada; mensagem do SoftExpert nunca; chamado encerrado é só consulta. O
+  // servidor confere as mesmas regras.
+  function podeExcluirMensagem(m) {
+    return !!m && !!m.id && !m._pendente && !m._falhou && !state.somenteLeitura
+      && !m.origemSistema && (m.papel === 'user' || m.papel === 'assistant');
+  }
+
+  async function excluirMensagem(mensagem) {
+    if (!podeExcluirMensagem(mensagem)) return;
+    const quem = mensagem.papel === 'assistant' ? 'esta resposta da IA' : 'esta mensagem';
+    if (!window.confirm(`Excluir ${quem}?\n\nEla sai do chat e deixa de ser considerada pela IA nas próximas análises. O registro fica guardado para auditoria.`)) return;
+    try {
+      await request(ext(`/atendimentos/${encodeURIComponent(state.atendimentoId)}/mensagens/${encodeURIComponent(mensagem.id)}`), { method: 'DELETE' });
+      state.messages = state.messages.filter((m) => String(m.id) !== String(mensagem.id));
+      renderMessages();
+      toast('Mensagem excluída.');
+    } catch (err) {
+      toast(err.message || 'Não foi possível excluir a mensagem.');
+    }
+  }
+
   // Menu de opções da mensagem (setinha estilo WhatsApp). Um único menu
-  // flutuante, criado sob demanda; por enquanto só "Copiar mensagem".
+  // flutuante, criado sob demanda: "Copiar mensagem" e, quando permitido,
+  // "Excluir mensagem".
   function menuMensagemEl() {
     let menu = $('message-context-menu');
     if (menu) return menu;
@@ -1254,6 +1277,10 @@
       <button type="button" class="message-context-item" role="menuitem" data-menu-action="copiar">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>
         <span>Copiar mensagem</span>
+      </button>
+      <button type="button" class="message-context-item message-context-item-perigo" role="menuitem" data-menu-action="excluir" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg>
+        <span>Excluir mensagem</span>
       </button>`;
     menu.addEventListener('click', async (event) => {
       const item = event.target.closest('[data-menu-action]');
@@ -1263,6 +1290,7 @@
       if (item.dataset.menuAction === 'copiar' && mensagem) {
         toast(await copiarTextoMensagem(messageText(mensagem)) ? 'Mensagem copiada.' : 'Não foi possível copiar a mensagem.');
       }
+      if (item.dataset.menuAction === 'excluir' && mensagem) await excluirMensagem(mensagem);
     });
     document.body.appendChild(menu);
     return menu;
@@ -1274,6 +1302,8 @@
     if (state.menuMensagemId === id) { fecharMenuMensagem(); return; }
     fecharMenuMensagem();
     const menu = menuMensagemEl();
+    const itemExcluir = menu.querySelector('[data-menu-action="excluir"]');
+    if (itemExcluir) itemExcluir.hidden = !podeExcluirMensagem(state.messages.find((m) => String(m.id) === id));
     state.menuMensagemId = id;
     trigger.classList.add('open');
     menu.classList.add('open');

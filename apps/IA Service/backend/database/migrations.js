@@ -1363,6 +1363,14 @@ const MIGRATIONS = [
       ALTER TABLE anexos ADD COLUMN arquivo_removido_em TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 56,
+    descricao: 'Exclusão de mensagens do chat (pedido do usuário, 2026-11-02): exclusão lógica de mensagens digitadas no chat e de respostas da IA (mensagens do SoftExpert nunca). A mensagem some do chat e deixa de ir para a IA, mas o registro fica: avaliações, validações e auditoria continuam apontando para ela.',
+    sql: `
+      ALTER TABLE mensagens ADD COLUMN excluida_em TEXT DEFAULT NULL;
+      ALTER TABLE mensagens ADD COLUMN excluida_por TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;
