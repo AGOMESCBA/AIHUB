@@ -959,40 +959,48 @@ function _garantirChamadoNaoEncerrado(empresaId, atendimento) {
 // busca (antes a imagem só era vista na chamada que escreve a resposta, depois
 // da pesquisa — achado real #036566: "Sem registros para o filtro selecionado"
 // estava no print e não na busca). Só transcreve, não interpreta. Até 3 prints
-// mais recentes; resultado guardado em memória por conjunto de anexos.
-const _cacheTextoPrints = new Map();
-async function _transcreverPrintsParaBusca(empresaId, anexos) {
+// mais recentes, um por chamada (em paralelo). O texto fica gravado no próprio
+// anexo (texto_print_busca, 2026-11-03: #036914 levou 24,5 s relendo prints
+// que só ficavam em memória e se perdiam a cada reinício): print já lido nunca
+// volta para a IA. Falha não grava — tenta de novo no próximo turno.
+const SYSTEM_TRANSCRICAO_PRINT = 'Voce transcreve texto visivel em prints de sistemas (ERP). Liste, em linhas curtas, so o que esta escrito: titulo da tela ou rotina, mensagens de erro/aviso/help, nomes de campos e filtros relevantes, codigos. Nao interprete, nao conclua causa, nao invente. Se nao houver texto legivel, responda vazio.';
+const LIMITE_TEXTO_PRINTS = 1500;
+
+async function _lerTextoDoPrint(empresaId, print, { keys, cfg }) {
   const fs = require('fs');
   const path = require('path');
   const armazenamento = require('./armazenamento-anexos');
+  let buffer;
+  try { buffer = fs.readFileSync(path.join(armazenamento.ANEXOS_DIR, print.caminhoRelativo)); } catch (_) { return null; } // print ilegível: a análise principal trata e avisa
+  if (!buffer.length) return null;
+  try {
+    const r = await aiProviderClient.chamarIA(keys, cfg, SYSTEM_TRANSCRICAO_PRINT,
+      'Transcreva o texto visivel deste print.', [{ mimeType: print.mimeType, base64: buffer.toString('base64') }], { maxTokens: 400, timeoutMs: 20000, temperature: 0 });
+    const texto = String(r?.texto || '').trim().slice(0, LIMITE_TEXTO_PRINTS);
+    anexoRepo.salvarTextoPrintBusca(empresaId, print.id, texto);
+    print.textoPrintBusca = texto; // a mesma lista do turno é relida pela pesquisa (obterTextoPrints)
+    return texto;
+  } catch (err) {
+    console.error('[IA Service] Leitura do texto de um print para a busca falhou (segue sem):', err.message);
+    return null;
+  }
+}
+
+async function _transcreverPrintsParaBusca(empresaId, anexos) {
   const prints = (anexos || [])
-    .filter(a => /^image\/(png|jpeg|gif|webp)$/.test(String(a.mimeType || '')) && a.caminhoRelativo)
+    .filter(a => /^image\/(png|jpeg|gif|webp)$/.test(String(a.mimeType || '')) && a.caminhoRelativo && !a.arquivoRemovidoEm)
     .sort((a, b) => String(b.criadoEm || '').localeCompare(String(a.criadoEm || '')))
     .slice(0, 3);
   if (!prints.length) return '';
-  const chave = `${empresaId}:${prints.map(p => p.id).join(',')}`;
-  if (_cacheTextoPrints.has(chave)) return _cacheTextoPrints.get(chave);
-  const imagens = [];
-  for (const p of prints) {
-    try {
-      const buffer = fs.readFileSync(path.join(armazenamento.ANEXOS_DIR, p.caminhoRelativo));
-      if (buffer.length) imagens.push({ mimeType: p.mimeType, base64: buffer.toString('base64') });
-    } catch (_) { /* print ilegível: a análise principal trata e avisa */ }
+  const pendentes = prints.filter(p => p.textoPrintBusca == null);
+  const lidos = new Map(prints.filter(p => p.textoPrintBusca != null).map(p => [p.id, p.textoPrintBusca]));
+  if (pendentes.length) {
+    const provedor = aiConfigService.resolverKeysEOrdem(empresaId);
+    const textos = await Promise.all(pendentes.map(p => _lerTextoDoPrint(empresaId, p, provedor)));
+    pendentes.forEach((p, i) => { if (textos[i] != null) lidos.set(p.id, textos[i]); });
   }
-  if (!imagens.length) return '';
-  try {
-    const { keys, cfg } = aiConfigService.resolverKeysEOrdem(empresaId);
-    const r = await aiProviderClient.chamarIA(keys, cfg,
-      'Voce transcreve texto visivel em prints de sistemas (ERP). Liste, em linhas curtas, so o que esta escrito: titulo da tela ou rotina, mensagens de erro/aviso/help, nomes de campos e filtros relevantes, codigos. Nao interprete, nao conclua causa, nao invente. Se nao houver texto legivel, responda vazio.',
-      'Transcreva o texto visivel destes prints.', imagens, { maxTokens: 400, timeoutMs: 20000, temperature: 0 });
-    const texto = String(r?.texto || '').trim().slice(0, 1500);
-    if (_cacheTextoPrints.size > 500) _cacheTextoPrints.clear();
-    _cacheTextoPrints.set(chave, texto);
-    return texto;
-  } catch (err) {
-    console.error('[IA Service] Leitura do texto dos prints para a busca falhou (segue sem):', err.message);
-    return '';
-  }
+  const porPrint = Math.floor(LIMITE_TEXTO_PRINTS / prints.length);
+  return prints.map(p => String(lidos.get(p.id) || '').slice(0, porPrint)).filter(Boolean).join('\n').trim();
 }
 
 // Orientações para a resposta vão na seção marcada do texto da pesquisa, que o
@@ -1851,6 +1859,7 @@ module.exports = {
   INSTRUCAO_CONVERSA,
   _ultimaRespostaDaIA,
   _semMaterialNovoDesdeUltimaAnalise,
+  _transcreverPrintsParaBusca,
   aguardarDossiePendente,
   processarTurno,
   processarPreAnalise,

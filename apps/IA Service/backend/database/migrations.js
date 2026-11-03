@@ -1371,6 +1371,13 @@ const MIGRATIONS = [
       ALTER TABLE mensagens ADD COLUMN excluida_por TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 57,
+    descricao: 'Texto lido de cada print para a pesquisa (2026-11-03, #036914: 24,5 s relendo prints a cada turno e a cada reinício). Antes só em memória do processo; agora gravado no próprio anexo — print já lido nunca volta para a IA. NULL = ainda não lido; vazio = lido, sem texto legível. Apagado junto com o arquivo (limpeza de encerrados) e quando o arquivo é copiado de novo.',
+    sql: `
+      ALTER TABLE anexos ADD COLUMN texto_print_busca TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

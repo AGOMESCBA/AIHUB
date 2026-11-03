@@ -37,6 +37,7 @@ function _rowParaDominio(row) {
     mensagemOrigemId: row.mensagem_origem_id,
     explicacaoAlteracao: row.explicacao_alteracao,
     arquivoRemovidoEm: row.arquivo_removido_em ?? null,
+    textoPrintBusca: row.texto_print_busca ?? null,
   };
 }
 
@@ -226,7 +227,8 @@ function atualizarArquivoSincronizado(empresaId, anexoId, {
            linguagem_detectada = ?,
            encoding_detectado = ?,
            e_codigo = ?,
-           arquivo_removido_em = NULL
+           arquivo_removido_em = NULL,
+           texto_print_busca = NULL
      WHERE id = ? AND empresa_id = ?
   `).run(
     nomeOriginal,
@@ -252,9 +254,18 @@ function marcarArquivoRemovido(empresaId, anexoId, quando = new Date().toISOStri
   if (!anexoId) throw new Error('anexoId é obrigatório.');
   const info = getDB().prepare(`
     UPDATE anexos
-       SET conteudo_extraido = NULL, arquivo_removido_em = ?
+       SET conteudo_extraido = NULL, texto_print_busca = NULL, arquivo_removido_em = ?
      WHERE id = ? AND empresa_id = ? AND origem_sistema = 'softexpert'
   `).run(quando, anexoId, Number(empresaId));
+  return info.changes > 0;
+}
+
+// Texto lido do print para a pesquisa (vazio = lido, sem texto legível).
+function salvarTextoPrintBusca(empresaId, anexoId, texto) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!anexoId) throw new Error('anexoId é obrigatório.');
+  const info = getDB().prepare('UPDATE anexos SET texto_print_busca = ? WHERE id = ? AND empresa_id = ?')
+    .run(String(texto ?? ''), anexoId, Number(empresaId));
   return info.changes > 0;
 }
 
@@ -274,6 +285,7 @@ function listarVersoes(empresaId, anexoOriginalId) {
 
 module.exports = {
   marcarArquivoRemovido,
+  salvarTextoPrintBusca,
   salvarMetadadosAnexo,
   listarAnexos,
   getAnexo,
