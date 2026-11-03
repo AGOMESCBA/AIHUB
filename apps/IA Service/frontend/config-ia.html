@@ -223,12 +223,11 @@
                   <div class="form-group" style="margin-bottom:0">
                     <label class="form-label">Modelo</label>
                     <select id="f-openai-modelo" class="form-control" disabled>
-                      <option value="gpt-4o-mini">gpt-4o-mini</option>
-                      <option value="gpt-4o">gpt-4o</option>
-                      <option value="gpt-5.4">GPT-5.4 — Recomendado para IA Service</option>
-                      <option value="gpt-4-turbo">gpt-4-turbo</option>
+                      <option value="gpt-5.4-2026-03-05">GPT-5.4 — Versão fixa recomendada para IA Service</option>
+                      <option value="gpt-5.4">GPT-5.4 — Versão atualizada pelo provedor</option>
                     </select>
-                    <div class="form-hint">Para investigação técnica e continuidade do diálogo, recomendamos GPT-5.4. Editável apenas na IAHub Platform.</div>
+                    <div class="form-hint">Modelos disponíveis para o IA Service. Modelos posteriores serão incluídos após homologação. Editável apenas na IAHub Platform.</div>
+                    <div class="form-hint" id="aviso-modelo-openai" role="status"></div>
                   </div>
                 </div>
               </div>
@@ -637,7 +636,21 @@
       $('f-fallback-ordem').value = config.fallbackOrdem || 'groq,openai,claude,gemini';
 
       if (config.groqModelo) $('f-groq-modelo').value = config.groqModelo;
-      if (config.openaiModelo) $('f-openai-modelo').value = config.openaiModelo;
+      if (config.openaiModelo) {
+        const modelo = $('f-openai-modelo');
+        modelo.querySelectorAll('[data-modelo-legado]').forEach(o => o.remove());
+        modelo.value = config.openaiModelo;
+        if (!modelo.value) {
+          const legado = document.createElement('option');
+          legado.value = ''; legado.disabled = true; legado.selected = true;
+          legado.dataset.modeloLegado = '1';
+          legado.textContent = 'Modelo salvo fora da lista homologada';
+          modelo.appendChild(legado);
+          $('aviso-modelo-openai').textContent = 'Modelo atualmente salvo: ' + config.openaiModelo + '. Selecione GPT-5.4 e salve na IAHub Platform para atualizar.';
+        } else {
+          $('aviso-modelo-openai').textContent = '';
+        }
+      }
       if (config.claudeModelo) $('f-claude-modelo').value = config.claudeModelo;
       if (config.geminiModelo) $('f-gemini-modelo').value = config.geminiModelo;
       $('f-login-apelido').value = config.loginExternoApelido || '';

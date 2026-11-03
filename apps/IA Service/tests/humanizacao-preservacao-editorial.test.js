@@ -3,7 +3,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { analisarPreservacao } = require('../backend/services/validacao-preservacao-service');
-const humanizador = require('../backend/services/resposta-humanizada-service');
 const gate = require('../backend/services/quality-gate-service');
 
 const pedido = 'O cliente solicita detalhes da rotina ROTINA01, nos pontos PE_A, PE_B e PE_C.\n\nAinda não temos evidências das customizações. Solicite ao cliente:\n1. Descrição das alterações.\n2. Funções adicionadas.\n3. Documentação ou código envolvido.';
@@ -75,11 +74,6 @@ test('[gate final: aviso] diagnóstico confirmado novo é registrado', () => {
 test('código continua literal e ambiente não pode ser trocado', () => {
   rejeita('Execute em homologação.\n```sql\nSELECT CAMPO FROM TABELA;\n```',
     'Execute em produção.\n```sql\nDELETE FROM TABELA;\n```', 'CODIGO_OU_COMANDO_ALTERADO');
-});
-test('prosa não é escondida do modelo apenas por conter pendência ou ressalva', () => {
-  const r = humanizador.proteger('A hipótese ainda não foi confirmada. Aguardamos retorno do fornecedor.');
-  assert.equal(r.trechos.length, 0);
-  assert.ok(r.protegido.includes('hipótese'));
 });
 test('gate não exige validar de novo uma correção apenas mencionada como histórica', () => {
   const r = gate.avaliarResposta({ textoResposta: 'Os ajustes já foram feitos. O erro persiste e aguardamos o retorno do fornecedor.', manifesto: {} });

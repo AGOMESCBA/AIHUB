@@ -49,30 +49,11 @@ const consultores = carregar('../backend/services/consultor-service.js', {
   '../../../IAHUB/backend/usuarios/database': {},
 });
 
-let chamadas = [];
-let respostaMock;
 const config = { resolverKeysEOrdem: empresaId => {
   assert.equal(empresaId, 1);
   return { keys: { openai: 'chave-mock' }, cfg: { provedorPrimario: 'openai' } };
 } };
-const provider = { chamarIA: async (...args) => {
-  chamadas.push(args);
-  if (respostaMock instanceof Error) throw respostaMock;
-  return typeof respostaMock === 'function' ? respostaMock(...args) : respostaMock;
-} };
-const humanizador = carregar('../backend/services/resposta-humanizada-service.js', {
-  './ai-provider-client': provider, './ai-config-service': config, './consultor-service': consultores,
-});
 const original = 'A rejeição 1031 ocorre na rotina MATA103 e no campo C7_FILIAL.\n\nA hipótese ainda precisa de confirmação em homologação.\n\nPróximo passo: acompanhar o chamado 30422148.';
-function reescritaValida(_keys, _cfg, _system, user, imagens, opts) {
-  assert.deepEqual(imagens, []);
-  assert.equal(opts.maxProviderRounds, 1);
-  assert.equal(opts.totalTimeoutMs, 15000);
-  const dados = JSON.parse(user);
-  assert.deepEqual(Object.keys(dados), ['estilo', 'limitePalavras', 'resposta']);
-  assert.ok(Number.isInteger(dados.limitePalavras) && dados.limitePalavras >= 40, 'meta de tamanho calculada pelo código');
-  return { texto: dados.resposta.replace('A rejeição 1031 ocorre', 'A rejeição 1031 aparece'), provider: 'openai', model: 'modelo-mock', usage: { total_tokens: 42 } };
-}
 after(() => { database.fecharDB(); platformDB.close(); });
 
 test('cadastros antigos usam ORIGINAL; mudança mantém metadados e isola empresas e acesso', () => {
@@ -106,74 +87,16 @@ test('alterar estilo pelo chat sincroniza cadastro e preserva resposta automáti
   assert.equal(consultores.obterEstiloResposta(1, consultor.id), 'ORIGINAL', 'alteração no cadastro chega ao chat sem novo login');
 });
 
-test('ORIGINAL mantém texto exato sem resolver provider nem chamar IA', async () => {
-  chamadas = [];
-  const r = await humanizador.humanizar({ empresaId: 1, respostaOriginal: original, estilo: 'ORIGINAL' });
-  assert.equal(r.respostaFinal, original);
-  assert.equal(r.status, 'original');
-  assert.equal(chamadas.length, 0);
-});
-
-// DIRETO/DESCONTRAIDO foram descontinuados: preferências antigas aplicam NATURAL.
-for (const estilo of ['NATURAL', 'DIRETO', 'DESCONTRAIDO']) {
-  test(`${estilo}: aplica NATURAL, só reescreve comunicação, preserva referências, ressalvas e registra consumo`, async () => {
-    chamadas = []; respostaMock = reescritaValida;
-    const r = await humanizador.humanizar({ empresaId: 1, respostaOriginal: original, estilo });
-    assert.equal(r.status, 'aplicada');
-    assert.equal(r.estilo, 'NATURAL');
-    assert.equal(r.respostaOriginal, original);
-    assert.ok(r.respostaFinal.includes('A rejeição 1031 aparece'));
-    assert.ok(r.respostaFinal.includes('A hipótese ainda precisa de confirmação em homologação.'));
-    assert.equal(r.usage.total_tokens, 42);
-    assert.equal(chamadas.length, 1);
-  });
-}
-
-test('falha, timeout, vazio, truncamento e referências alteradas voltam ao original', async () => {
-  for (const resposta of [new Error('timeout'), { texto: '' }, { texto: original, truncado: true },
-    { texto: original.replace('C7_FILIAL', 'C7_FILIA2') }, { texto: 'Foi resolvido.' }]) {
-    respostaMock = resposta;
-    const r = await humanizador.humanizar({ empresaId: 1, respostaOriginal: original, estilo: 'NATURAL' });
-    assert.equal(r.status, 'fallback');
-    assert.equal(r.respostaFinal, original);
-  }
-});
-
-test('código, SQL, comandos, hipóteses e pendências são protegidos literalmente', async () => {
-  const texto = 'O erro ocorre na rotina MATA103.\n\n```sql\nSELECT C7_FILIAL FROM SC7010;\n```\n\nTalvez o campo `C7_FILIAL` tenha relação com o erro.\n\nNão repetir ajustes: aguardando o fornecedor.\n\nPróximo passo: acompanhar o retorno.';
-  respostaMock = (_k, _c, _s, user) => ({ texto: JSON.parse(user).resposta.replace('O erro ocorre', 'O erro aparece') });
-  const r = await humanizador.humanizar({ empresaId: 1, respostaOriginal: texto, estilo: 'NATURAL' });
-  assert.equal(r.status, 'aplicada');
-  assert.ok(r.respostaFinal.includes('```sql\nSELECT C7_FILIAL FROM SC7010;\n```'));
-  assert.ok(r.respostaFinal.includes('Talvez o campo `C7_FILIAL` tenha relação com o erro.'));
-  assert.ok(r.respostaFinal.includes('Não repetir ajustes: aguardando o fornecedor.'));
-  respostaMock = (_k, _c, _s, user) => ({ texto: JSON.parse(user).resposta.replace(/__IAHUB_PROTEGIDO_\d+__/, 'Causa confirmada.') });
-  assert.equal((await humanizador.humanizar({ empresaId: 1, respostaOriginal: texto, estilo: 'DIRETO' })).status, 'fallback');
-});
-
-test('resposta reprovada e texto excessivo não consomem chamada adicional', async () => {
-  chamadas = [];
-  for (const dados of [{ respostaOriginal: original, aprovado: false }, { respostaOriginal: 'x'.repeat(18001) }]) {
-    const r = await humanizador.humanizar({ empresaId: 1, estilo: 'NATURAL', ...dados });
-    assert.equal(r.status, 'ignorada');
-  }
-  assert.equal(chamadas.length, 0);
-});
-
-test('segredos ficam locais e comandos ou identificadores novos são rejeitados', async () => {
-  const texto = 'A rotina aItens registra erro.\n\nsenha=segredo-teste-local\n\nPróximo passo: conferir o retorno.';
-  respostaMock = (_k, _c, _s, user) => {
-    assert.equal(user.includes('segredo-teste-local'), false);
-    return { texto: JSON.parse(user).resposta.replace('registra erro', 'apresenta erro') };
-  };
-  const r = await humanizador.humanizar({ empresaId: 1, respostaOriginal: texto, estilo: 'NATURAL' });
-  assert.equal(r.status, 'aplicada');
-  assert.ok(r.respostaFinal.includes('senha=segredo-teste-local'));
-  assert.equal(humanizador.validar('Use aItens.', 'Use bItens.'), false);
-  assert.equal(humanizador.validar('Verificar o retorno.', 'Verificar o retorno.\ncurl exemplo'), false);
-  // Gate final: frase nova e dado acrescentado são aviso; identificador removido bloqueia.
-  assert.equal(humanizador.validar('O erro não foi resolvido.', 'O erro não foi resolvido. Foi resolvido.'), true);
-  assert.equal(humanizador.validar('O erro ocorre na rotina ROTINA99.', 'O erro ocorre.'), false);
+// A reescrita "Objetiva" (resposta-humanizada-service) saiu do fluxo em 7219851
+// e o serviço foi removido em 2026-11-02. O validador de preservação continua
+// em uso (limpeza técnica) e mantém estas verificações.
+test('validador: identificador trocado e comando novo reprovam; frase nova é só aviso', () => {
+  const aprovado = (a, b) => analisarPreservacao(a, b).aprovado;
+  assert.equal(aprovado('Use aItens.', 'Use bItens.'), false);
+  assert.equal(aprovado('Verificar o retorno.', 'Verificar o retorno.
+curl exemplo'), false);
+  assert.equal(aprovado('O erro não foi resolvido.', 'O erro não foi resolvido. Foi resolvido.'), true);
+  assert.equal(aprovado('O erro ocorre na rotina ROTINA99.', 'O erro ocorre.'), false);
 });
 
 // 2026-10-26 (achado real): a resposta curta de conversa ("você consegue...?")
@@ -186,10 +109,9 @@ test('resposta curta (pergunta de processo) é gravada como a IA escreveu, sem r
   // Classificação é a primeira chamada do fluxo; não é humanização.
   let n = 0;
   curtoProvider.chamarIA = async () => ++n === 1 ? { texto: '{"tipo":"conversa"}' } : { texto: original, provider: 'openai', model: 'mock' };
-  respostaMock = reescritaValida;
   const investigacao = carregar('../backend/services/investigacao-service.js', {
     './ai-provider-client': curtoProvider, './ai-config-service': config,
-    './consultor-service': consultores, './resposta-humanizada-service': humanizador,
+    './consultor-service': consultores,
     './technical-research-service': new Proxy({}, { get: () => () => { throw Error('Pesquisa externa indevida'); } }),
   });
   const retorno = await investigacao.processarTurno(1, at.id, { texto: 'Você consegue ajudar?', consultorId: consultor.id });

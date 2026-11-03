@@ -33,6 +33,17 @@ const conversa = [
   { role: 'user', content: 'Segue o log. A recompilação não resolveu.' },
 ];
 
+test('snapshot GPT-5.4 envia parâmetros compatíveis com sua API', async () => {
+  await capturar(async corpos => {
+    await provider.chamarProvedor('openai', 'fixture', 'Instruções.', 'Turno atual.', [], { model: 'gpt-5.4-2026-03-05', maxTokens: 1200, conversa });
+    assert.equal(corpos[0].model, 'gpt-5.4-2026-03-05');
+    assert.equal(corpos[0].messages[0].role, 'developer');
+    assert.equal(corpos[0].max_completion_tokens, 1200);
+    assert.equal(corpos[0].max_tokens, undefined);
+    assert.equal(corpos[0].temperature, undefined);
+  });
+});
+
 test('GPT-5.4 usa contrato próprio sem alterar parâmetros dos modelos anteriores', async () => {
   await capturar(async corpos => {
     await provider.chamarProvedor('openai', 'fixture', 'Instruções.', 'Turno atual.', [], { model: 'gpt-5.4', maxTokens: 1200, conversa });

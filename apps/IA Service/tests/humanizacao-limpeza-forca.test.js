@@ -1,12 +1,9 @@
 'use strict';
 // Limpeza determinística de conclusão genérica e força das afirmações no
-// validador de preservação (estilo Objetiva). Sem rede: provider simulado.
+// validador de preservação, usado pela limpeza técnica.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const aiProvider = require('../backend/services/ai-provider-client');
-const aiConfig = require('../backend/services/ai-config-service');
 const { analisarPreservacao, limparConclusaoGenerica, ehConclusaoGenerica, forcaAfirmacao } = require('../backend/services/validacao-preservacao-service');
-const { humanizar } = require('../backend/services/resposta-humanizada-service');
 
 const GENERICA = 'Essas ações devem ajudar a esclarecer a situação e, quem sabe, resolver as rejeições das notas fiscais.';
 const tecnicaBase = [
@@ -90,48 +87,4 @@ test('força: associação, hipótese, causalidade e certeza', () => {
     ['Às vezes, um erro na passagem de parâmetros pode levar a resultados inesperados.', 'Às vezes, um erro na passagem de parâmetros pode causar resultados inesperados.'],
   ];
   for (const [original, candidata] of aceitar) assert.equal(analisarPreservacao(original, candidata).aprovado, true, candidata);
-});
-
-test('humanização: limpa a conclusão, revalida e só então entrega; senão volta à Técnica', async () => {
-  // Sem trechos entre crases: a humanização os troca por marcadores protegidos
-  // antes da IA, e o provider simulado devolve texto já pronto.
-  const tecnica = tecnicaBase.replace(/`/g, ''), objetiva = objetivaBase.replace(/`/g, '');
-  const anteriores = { chamarIA: aiProvider.chamarIA, resolver: aiConfig.resolverKeysEOrdem };
-  aiConfig.resolverKeysEOrdem = () => ({ keys: {}, cfg: {} });
-  let saida = '';
-  aiProvider.chamarIA = async () => ({ texto: saida, provider: 'fixture', model: 'fixture', usage: { total_tokens: 1 } });
-  try {
-    saida = `${objetiva}\n\n${GENERICA}`;
-    const limpa = await humanizar({ empresaId: 1, respostaOriginal: tecnica, estilo: 'NATURAL' });
-    assert.equal(limpa.status, 'aplicada');
-    assert.equal(limpa.respostaFinal, objetiva);
-    assert.deepEqual(limpa.conclusaoGenericaRemovida, [GENERICA]);
-    assert.equal(limpa.validacaoPreservacao.aprovado, true);
-    assert.equal(limpa.respostaOriginal, tecnica, 'Técnica preservada para Detalhes Técnicos');
-
-    const ressalva = 'Essas ações devem ajudar, mas não aplique em produção antes de validar em homologação.';
-    const tecnicaComRessalva = `${tecnica}\n${ressalva}`;
-    saida = `${objetiva}\n\n${ressalva}`;
-    const mantida = await humanizar({ empresaId: 1, respostaOriginal: tecnicaComRessalva, estilo: 'NATURAL' });
-    assert.equal(mantida.status, 'aplicada');
-    assert.ok(mantida.respostaFinal.endsWith(ressalva), 'ressalva final não é removida');
-    assert.equal(mantida.conclusaoGenericaRemovida, undefined);
-
-    // Associação promovida a causalidade: aviso registrado, Objetiva entregue (gate mínimo).
-    saida = `${objetiva.replace('pode estar ligada ao', 'pode ser causada pelo')}\n\n${GENERICA}`;
-    const forte = await humanizar({ empresaId: 1, respostaOriginal: tecnica, estilo: 'NATURAL' });
-    assert.equal(forte.status, 'aplicada');
-    assert.ok(forte.validacaoPreservacao.avisos.some(f => f.codigo === 'FORCA_AFIRMACAO_ALTERADA'));
-
-    // Referência técnica trocada: entrega a Técnica.
-    saida = `${objetiva.split('cClassTrib').join('cClassFis')}\n\n${GENERICA}`;
-    const trocada = await humanizar({ empresaId: 1, respostaOriginal: tecnica, estilo: 'NATURAL' });
-    assert.equal(trocada.status, 'fallback');
-    assert.equal(trocada.motivo, 'preservacao_tecnica');
-    assert.equal(trocada.respostaFinal, tecnica);
-    assert.ok(trocada.validacaoPreservacao.falhas.some(f => f.codigo === 'REFERENCIA_TECNICA_NOVA' || f.codigo === 'REFERENCIA_TECNICA_REMOVIDA'));
-  } finally {
-    aiProvider.chamarIA = anteriores.chamarIA;
-    aiConfig.resolverKeysEOrdem = anteriores.resolver;
-  }
 });

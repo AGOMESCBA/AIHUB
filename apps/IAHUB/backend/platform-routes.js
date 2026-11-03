@@ -7,6 +7,8 @@ const { importarNumerosJ2A } = require('./platform-import-ia-command');
 const DB_PATH = path.join(__dirname, '..', 'data', 'iahub-platform.db');
 const PREFIX = 'iahub-aes-gcm:';
 const PROVIDERS = ['groq', 'openai', 'gemini', 'deepseek', 'claude'];
+// Este cadastro atende ao IA Service. Outros aplicativos mantêm seus cadastros.
+const MODELOS_OPENAI_IA_SERVICE = new Set(['gpt-5.4-2026-03-05', 'gpt-5.4']);
 
 let db;
 
@@ -193,6 +195,11 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
     const eid = empresaId(req);
     const atual = getAiRow(eid);
     const body = req.body || {};
+
+    const modeloOpenai = body.openaiModelo !== undefined ? body.openaiModelo : body.openai_modelo;
+    if (modeloOpenai !== undefined && !MODELOS_OPENAI_IA_SERVICE.has(modeloOpenai)) {
+      return res.status(400).json({ error: 'Selecione GPT-5.4 na configuração do IA Service. Outros modelos precisam ser homologados antes de serem disponibilizados.' });
+    }
 
     let apelido = atual?.login_externo_apelido ?? null;
     if (body.loginExternoApelido !== undefined) {
