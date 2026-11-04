@@ -19,7 +19,7 @@ function tela() {
   Object.assign(ui, {
     ocupado: false, versaoAnalise: 0, opcoes: { contexto: () => contexto },
     el: id => {
-      if (!elementos.has(id)) elementos.set(id, { value: '', textContent: '', scrollIntoView() {}, replaceChildren() {} });
+      if (!elementos.has(id)) elementos.set(id, { value: '', textContent: '', setAttribute() {}, scrollIntoView() {}, replaceChildren() {} });
       return elementos.get(id);
     },
     limparResultado() {}, renderizar(r) { this.exibido = r; }, status(s) { this.mensagem = s; },

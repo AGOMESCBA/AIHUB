@@ -19,8 +19,10 @@ class AnaliseLogs {
     this.el('atualizar').addEventListener('click', () => this.carregar());
     this.el('analisar').addEventListener('click', () => this.analisar());
     this.el('baixar').addEventListener('click', () => this.baixar());
-    this.el('historico').addEventListener('click', () => this.carregarHistorico());
-    this.el('historico-fechar').addEventListener('click', () => { this.el('historico-area').hidden = true; });
+    this.el('historico').addEventListener('click', () => {
+      if (this.el('historico-area').hidden) this.carregarHistorico();
+      else this.fecharHistorico();
+    });
     this.el('historico-todas').addEventListener('change', () => {
       this.el('historico-lista').querySelectorAll('[data-log-historico-id]').forEach(c => { c.checked = this.el('historico-todas').checked; });
       this.atualizarSelecaoHistorico();
@@ -64,9 +66,9 @@ class AnaliseLogs {
       <div class="logs-shell">
         <header class="logs-hero">
           <div><span class="logs-eyebrow">DIAGNÓSTICO PROTHEUS</span><h2>Do log ao próximo passo.</h2><p>Encontre o que importa, entenda os erros e saiba por onde começar.</p><div class="logs-hero-tags"><span>Erros agrupados</span><span>Evidências do arquivo</span><span>Próximos passos</span></div></div>
-          <div class="logs-hero-tools"><button type="button" id="logs-historico">Histórico de análises</button><span class="logs-hero-icon">${this.icone('brilho')}</span></div>
+          <div class="logs-hero-tools"><button type="button" id="logs-historico" aria-expanded="false" aria-controls="logs-historico-area">Histórico de análises</button><span class="logs-hero-icon">${this.icone('brilho')}</span></div>
         </header>
-        <section id="logs-historico-area" class="logs-history" hidden><div class="logs-list-heading"><div><h3>Análises salvas</h3><p>Últimas 50 análises da empresa. Reabra sem chamar a IA novamente.</p></div><button type="button" id="logs-historico-fechar">Fechar</button></div><div id="logs-historico-acoes" class="logs-history-actions" hidden><label><input type="checkbox" id="logs-historico-todas"> Selecionar todas as exibidas</label><button type="button" id="logs-historico-excluir" disabled>Excluir selecionadas</button></div><p id="logs-historico-status" role="status" aria-live="polite"></p><div id="logs-historico-lista" aria-live="polite"></div></section>
+        <section id="logs-historico-area" class="logs-history" hidden><div class="logs-list-heading"><div><h3>Análises salvas</h3><p>Últimas 50 análises da empresa. Reabra sem chamar a IA novamente.</p></div></div><div id="logs-historico-acoes" class="logs-history-actions" hidden><label><input type="checkbox" id="logs-historico-todas"> Selecionar todas as exibidas</label><button type="button" id="logs-historico-excluir" disabled>Excluir selecionadas</button></div><p id="logs-historico-status" role="status" aria-live="polite"></p><div id="logs-historico-lista" aria-live="polite"></div></section>
         <div class="logs-workspace">
           <section class="logs-source" aria-label="Escolha do arquivo">
             <div class="logs-section-head"><span class="logs-step-number">01</span><div><h3>Comece pelo arquivo</h3><p>Escolha a origem do log que deseja investigar.</p></div><span class="logs-format">.log / .log.txt</span></div>
@@ -85,7 +87,6 @@ class AnaliseLogs {
             </div>
             <footer class="logs-source-footer"><span id="logs-ajuda">Escolha um arquivo para continuar.</span><button type="button" id="logs-analisar" class="logs-primario">${this.icone('brilho')}<span>Analisar log</span></button></footer>
           </section>
-          <aside class="logs-guide" id="logs-guia"><span class="logs-guide-symbol">${this.icone('brilho')}</span><span class="logs-eyebrow">SEU DIAGNÓSTICO, ORGANIZADO</span><h3>Menos leitura.<br>Mais direção.</h3><div><b>01 · O que aconteceu</b><p>Erros repetidos reunidos, com os trechos que ajudam a entender cada ocorrência.</p></div><div><b>02 · Onde investigar</b><p>Possíveis causas e o que as evidências ainda não permitem confirmar.</p></div><div><b>03 · Como avançar</b><p>Ações objetivas e como verificar se o problema foi resolvido.</p></div><span class="logs-guide-note">Continue atendendo enquanto analisamos. O resultado fica no histórico da empresa quando salvo.</span></aside>
         </div>
         <div class="logs-feedback"><p id="logs-status" role="status" aria-live="polite"></p><button type="button" id="logs-ver-progresso" hidden>Ver andamento</button></div>
         <section id="logs-resultados-area" hidden>
@@ -208,11 +209,17 @@ class AnaliseLogs {
       if (chave === this.chave() && versao === this.versaoAnalise && !this.relatorio && !this.ocupado && r.analises?.[0]) await this.abrirSalva(r.analises[0].id);
     } catch (_) { /* A consulta de anexos e o acesso manual ao histórico continuam disponíveis. */ }
   }
+  fecharHistorico() {
+    this.el('historico-area').hidden = true;
+    this.el('historico').setAttribute('aria-expanded', 'false');
+    this.versaoHistorico = (this.versaoHistorico || 0) + 1;
+  }
   async carregarHistorico() {
     if (this.ocupado || this.excluindoHistorico) return;
     const empresa = this.opcoes.contexto().empresa;
     const versao = this.versaoHistorico = (this.versaoHistorico || 0) + 1;
     this.el('historico-area').hidden = false;
+    this.el('historico').setAttribute('aria-expanded', 'true');
     this.el('historico-lista').textContent = 'Consultando as análises salvas…';
     this.el('historico-acoes').hidden = true; this.el('historico-status').textContent = '';
     try {
@@ -253,7 +260,7 @@ class AnaliseLogs {
       if (ids.includes(this.relatorio?.historico?.id)) this.limparResultado();
       if (ids.includes(this.concluida?.resultado?.historico?.id)) { this.concluida = null; this.monitor.hidden = true; }
       this.excluindoHistorico = false;
-      await this.carregarHistorico();
+      if (!this.el('historico-area').hidden) await this.carregarHistorico();
       if (empresa === this.opcoes.contexto().empresa) this.el('historico-status').textContent = `${r.excluidas} análise(s) excluída(s). Os arquivos originais foram preservados.`;
     } catch (err) {
       if (empresa === this.opcoes.contexto().empresa) this.el('historico-status').textContent = `Não foi possível excluir: ${err.message}`;
@@ -271,7 +278,7 @@ class AnaliseLogs {
       this.limparResultado(); this.relatorio = r; this.reaberta = true;
       if (r.origem?.tipo !== 'avulso') this.fonteAnalise = { modo: 'chamado', caminho: '/radar/logs/analisar', opts: { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chamadoId: r.origem.chamadoId, tipo: r.origem.tipo, arquivoId: r.origem.arquivoId }) } };
       else { this.el('arquivo').value = ''; this.el('nome-arquivo').textContent = 'Selecione o original somente se quiser buscar no arquivo completo.'; }
-      this.renderizar(r); this.el('historico-area').hidden = true;
+      this.renderizar(r); this.fecharHistorico();
       this.status('Análise recuperada do histórico. Nenhuma nova chamada à IA foi feita.', 'sucesso');
       this.el('resultados-area').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (err) { if (chave === this.chave() && versao === this.versaoAnalise) this.status(`Não foi possível reabrir a análise: ${err.message}`, 'erro'); }
@@ -291,7 +298,7 @@ class AnaliseLogs {
     this.el('arquivo').value = '';
     this.el('nome-arquivo').textContent = 'Nenhum arquivo selecionado';
     this.el('lista').replaceChildren();
-    this.el('historico-area').hidden = true; this.el('historico-lista').replaceChildren();
+    this.fecharHistorico(); this.el('historico-lista').replaceChildren();
     this.el('contexto').textContent = 'Selecione um chamado para consultar seus logs ou anexe um log avulso.';
     this.status('');
     this.atualizarArquivo();
@@ -413,7 +420,7 @@ class AnaliseLogs {
     this.fonteAnalise = null;
     this.el('resultado').replaceChildren();
     this.el('baixar').hidden = true;
-    this.el('resultados-area').hidden = true; this.el('guia').hidden = false;
+    this.el('resultados-area').hidden = true;
     this.el('busca').value = ''; this.el('busca-arquivo').replaceChildren(); this.el('busca-status').textContent = '';
   }
   setOcupado(valor) {
@@ -526,7 +533,7 @@ class AnaliseLogs {
   }
   renderizar(r) {
     this.root.classList.add('tem-resultado');
-    this.el('resultados-area').hidden = false; this.el('guia').hidden = true;
+    this.el('resultados-area').hidden = false;
     const container = this.el('resultado'); container.replaceChildren();
     const resumo = this.node('section', null, 'logs-resumo');
     resumo.append(this.node('h3', `${r.origem?.tipo === 'avulso' ? 'Análise avulsa' : `Chamado #${r.origem?.numero}`} · ${r.arquivo.nome}`));

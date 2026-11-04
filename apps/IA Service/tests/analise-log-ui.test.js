@@ -94,6 +94,12 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     assert.equal(await page.locator('.logs-shortcut-text').textContent(), 'ANALISE DE ERROR.LOG');
     assert.equal(await page.locator('#panel-logs').isVisible(), true);
     assert.match(await page.locator('#logs-contexto').textContent(), /Nenhum chamado/);
+    const cabecalho = await page.locator('.logs-hero').boundingBox();
+    const entrada = await page.locator('.logs-source').boundingBox();
+    assert.ok(Math.abs(cabecalho.width - entrada.width) < 1, 'entrada ocupa a largura do cabeçalho, conforme referência');
+    assert.equal(await page.locator('.logs-guide').count(), 0, 'sem painel lateral de orientações');
+    await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
+    await page.screenshot({ path: path.resolve(__dirname, '../../../tmp/analise-logs-entrada-referencia.png'), animations: 'disabled' });
     await page.locator('#logs-modo-avulso').click();
     await page.evaluate(() => document.documentElement.dataset.theme = 'light');
     await page.screenshot({ path: path.resolve(__dirname, '../../../tmp/analise-logs-novo-claro.png'), animations: 'disabled' });
@@ -132,6 +138,13 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     assert.match(await page.locator('#logs-resultado').textContent(), /Salvo no histórico/);
     await page.locator('#logs-historico').click();
     await page.locator('.logs-history-item').first().waitFor();
+    assert.equal(await page.locator('#logs-historico-fechar').count(), 0, 'não há botão Fechar separado');
+    assert.equal(await page.locator('#logs-historico').getAttribute('aria-expanded'), 'true');
+    await page.locator('#logs-historico').click();
+    assert.equal(await page.locator('#logs-historico-area').isVisible(), false);
+    assert.equal(await page.locator('#logs-historico').getAttribute('aria-expanded'), 'false');
+    await page.locator('#logs-historico').click();
+    await page.locator('.logs-history-item').first().waitFor();
     await page.locator('#logs-historico-todas').check();
     assert.equal(await page.locator('[data-log-historico-id]:checked').count(), 1);
     page.once('dialog', dialog => dialog.dismiss());
@@ -142,7 +155,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     await page.getByText('1 análise(s) excluída(s). Os arquivos originais foram preservados.', { exact: true }).waitFor();
     assert.deepEqual(exclusoes, [['hist-1']]);
     assert.equal(await page.locator('.logs-history-item').count(), 0);
-    await page.locator('#logs-historico-fechar').click();
+    await page.locator('#logs-historico').click();
 
     await page.locator('[data-ticket-id="A"]').first().click();
     await abrirLogs();
