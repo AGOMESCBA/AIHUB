@@ -36,6 +36,7 @@ class AnaliseLogs {
     this.el('continuar').addEventListener('click', () => this.el('splash').close());
     this.el('ver-progresso').addEventListener('click', () => this.expandirProgresso());
     this.el('busca').addEventListener('input', () => this.filtrar());
+    this.el('somente-analisados').addEventListener('change', () => this.filtrar());
     this.el('buscar-arquivo').addEventListener('click', () => this.buscarArquivo());
     this.el('busca').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); this.buscarArquivo(); } });
     this.el('lista').addEventListener('change', () => this.atualizarBotao());
@@ -92,6 +93,8 @@ class AnaliseLogs {
         <section id="logs-resultados-area" hidden>
           <div class="logs-results-header"><div><span class="logs-eyebrow">02 · RESULTADO DA ANÁLISE</span><h2>O que o log está dizendo</h2></div><button type="button" id="logs-baixar" hidden>Baixar relatório</button></div>
           <div class="logs-search"><label for="logs-busca">${this.icone('busca')}<span class="logs-sr-only">Buscar palavra, mensagem ou rotina</span></label><input type="search" id="logs-busca" maxlength="100" placeholder="Buscar palavra, mensagem, campo ou rotina…"><button type="button" id="logs-buscar-arquivo">Buscar no arquivo completo</button></div>
+          <div class="logs-filter-row"><label><input type="checkbox" id="logs-somente-analisados"> Somente analisados pela IA</label><span id="logs-filtro-status" role="status" aria-live="polite"></span></div>
+          <p id="logs-filtro-vazio" class="logs-filter-empty" role="status" hidden></p>
           <p id="logs-busca-status" class="logs-search-status" role="status" aria-live="polite"></p><div id="logs-busca-arquivo"></div>
           <div id="logs-resultado"></div>
         </section>
@@ -423,6 +426,7 @@ class AnaliseLogs {
     this.el('baixar').hidden = true;
     this.el('resultados-area').hidden = true;
     this.el('busca').value = ''; this.el('busca-arquivo').replaceChildren(); this.el('busca-status').textContent = '';
+    this.el('somente-analisados').checked = false; this.el('filtro-status').textContent = ''; this.el('filtro-vazio').hidden = true;
   }
   setOcupado(valor) {
     this.ocupado = valor;
@@ -496,10 +500,21 @@ class AnaliseLogs {
     const controller = new AbortController();
     this.controller = controller;
     const timeout = setTimeout(() => controller.abort(), 120000);
-    const anterior = grupoId ? this.relatorio : null;
+    // Reanalisar a mesma fonte complementa o relatório; trocar o arquivo cria outro.
+    const fonteAnterior = this.fonteAnalise;
+    let mesmaFonte = false;
+    if (!grupoId && fonteAnterior?.modo === modo && fonteAnterior.caminho === caminho) {
+      if (modo === 'avulso') mesmaFonte = !!opts.body?.get('arquivo') && opts.body.get('arquivo') === fonteAnterior.opts.body?.get('arquivo');
+      else {
+        const atual = JSON.parse(opts.body); const previa = JSON.parse(fonteAnterior.opts.body);
+        mesmaFonte = ['chamadoId', 'arquivoId', 'tipo'].every(c => String(atual[c]) === String(previa[c]));
+      }
+    }
+    const anterior = grupoId || mesmaFonte ? this.relatorio : null;
+    if (!grupoId && anterior?.historico?.id) caminho += `?historicoId=${encodeURIComponent(anterior.historico.id)}`;
     if (!grupoId) {
-      this.limparResultado();
-      this.fonteAnalise = { caminho, opts, modo };
+      if (!anterior) this.limparResultado();
+      this.fonteAnalise = { caminho: caminho.split('?')[0], opts, modo };
     }
     const fonte = this.fonteAnalise;
     this.el('monitor-arquivo').textContent = nomeArquivo || 'Log selecionado';
@@ -557,8 +572,9 @@ class AnaliseLogs {
       if (comDiagnostico) {
         const ver = this.node('button', 'Ver possíveis soluções'); ver.type = 'button';
         ver.addEventListener('click', () => {
-          const alvo = this.el('resultado').querySelector('.logs-diagnostico.solucoes');
+          const alvo = this.el('resultado').querySelector('[data-log-card]:not([hidden]) .logs-diagnostico.solucoes');
           if (alvo) { alvo.closest('details').open = true; alvo.scrollIntoView({ behavior: 'smooth', block: 'center' }); alvo.focus({ preventScroll: true }); }
+          else this.status('Nenhuma solução corresponde aos filtros atuais. Altere a busca ou desmarque o filtro para consultar outros diagnósticos.', 'aviso');
         });
         diagnostico.append(ver);
       } else diagnostico.append(this.node('p', this.fonteAnalise ? 'Use “Analisar este erro” para tentar gerar o diagnóstico e as soluções de uma ocorrência.' : 'Para tentar novamente, acesse o anexo do chamado ou selecione o arquivo avulso original.'));
@@ -593,7 +609,7 @@ class AnaliseLogs {
     container.append(resumo);
     for (const grupo of r.grupos) {
       const card = this.node('article', null, 'logs-cartao');
-      card.dataset.logCard = grupo.id; card.dataset.busca = this.normalizar(JSON.stringify(grupo));
+      card.dataset.logCard = grupo.id; card.dataset.busca = this.normalizar(JSON.stringify(grupo)); card.dataset.analisado = String(!!grupo.analise);
       const cabecalho = this.node('div', null, 'logs-error-header');
       cabecalho.append(this.node('span', grupo.id.replace('erro-', '#'), 'logs-error-index'), this.node('span', `${grupo.quantidade} ocorrência(s)`, 'logs-count'), this.node('span', grupo.analise ? 'Analisado pela IA' : 'Evidência localizada', 'logs-analysis-label'));
       card.append(cabecalho, this.node('h3', grupo.titulo));
@@ -634,9 +650,15 @@ class AnaliseLogs {
   filtrar() {
     if (this.buscando) { this.buscaController?.abort(); this.buscando = false; this.el('buscar-arquivo').disabled = this.ocupado; }
     const termo = this.normalizar(this.el('busca').value.trim()); let visiveis = 0;
+    const somenteAnalisados = this.el('somente-analisados').checked;
+    let total = 0; let analisados = 0;
     this.root.querySelectorAll('[data-log-card]').forEach(card => {
-      card.hidden = !!termo && !card.dataset.busca.includes(termo); if (!card.hidden) visiveis++;
+      total++; if (card.dataset.analisado === 'true') analisados++;
+      card.hidden = (somenteAnalisados && card.dataset.analisado !== 'true') || (!!termo && !card.dataset.busca.includes(termo)); if (!card.hidden) visiveis++;
     });
+    this.el('filtro-status').textContent = `${visiveis} de ${total} erro(s) exibido(s) · ${analisados} analisado(s)`;
+    this.el('filtro-vazio').hidden = visiveis > 0 || !total;
+    this.el('filtro-vazio').textContent = somenteAnalisados && !analisados ? 'Nenhum erro deste relatório possui diagnóstico por IA ainda. Desmarque o filtro para escolher um erro e analisá-lo.' : 'Nenhum erro corresponde aos filtros. Altere a busca ou desmarque “Somente analisados pela IA”.';
     this.el('busca-status').textContent = termo ? `${visiveis} de ${this.relatorio?.grupos.length || 0} grupos correspondem à busca. Use “Buscar no arquivo completo” para localizar também outros trechos do log.` : '';
     this.el('busca-arquivo').replaceChildren();
   }

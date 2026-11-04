@@ -106,6 +106,10 @@
 .logs-search input::placeholder { color:var(--logs-muted); }
 .logs-search button { font-size:11px; padding:9px 11px; white-space:nowrap; }
 .logs-search-status { font-size:12px; margin:10px 0 !important; }
+.logs-filter-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 14px; margin:10px 0; font-size:12px; color:var(--logs-muted); }
+.logs-filter-row label { display:flex; align-items:center; gap:7px; cursor:pointer; color:var(--logs-text); }
+.logs-filter-row input { width:16px; height:16px; accent-color:#2563eb; }
+.logs-filter-empty { padding:12px 14px; border:1px dashed var(--logs-line); border-radius:8px; font-size:12px; }
 .logs-resumo { margin:20px 0; }
 .logs-file-summary { border:1px solid var(--logs-line); border-radius:8px; padding:10px 14px; background:var(--logs-panel); }
 .logs-file-summary > summary h3 { display:inline; font-size:12px; color:var(--logs-muted); overflow-wrap:anywhere; }

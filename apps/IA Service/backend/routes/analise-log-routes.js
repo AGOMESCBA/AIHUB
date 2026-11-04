@@ -128,7 +128,7 @@ module.exports = function registrar(app, prefixo) {
       try {
         relatorio.historico = historicoRepo.salvar(req.svcEmpresaId, { resultado: relatorio, hashArquivo, historicoId, autor });
       } catch (_) {
-        relatorio.historico = { salvo: false };
+        relatorio.historico = { salvo: false, ...(historicoId ? { id: historicoId } : {}) };
         relatorio.avisos.push('Não foi possível salvar o histórico. Baixe o relatório para preservar este resultado.');
       }
       if (streaming) {

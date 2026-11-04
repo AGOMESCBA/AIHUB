@@ -9,6 +9,7 @@ const caminho = require.resolve('../backend/routes/analise-log-routes');
 let liberar;
 let filaLiberar = [];
 let bloquear = false;
+let falharHistorico = false;
 const chamadas = [];
 const historicos = new Map();
 const stubs = {
@@ -22,6 +23,7 @@ const stubs = {
     listar: empresa => [...historicos.values()].filter(h => h.empresa === Number(empresa)).map(h => ({ id: h.id, nome: h.resultado.arquivo.nome })),
     obter: (empresa, id) => { const h = historicos.get(id); return h?.empresa === Number(empresa) ? h : null; },
     salvar: (empresa, { resultado, hashArquivo, historicoId, autor }) => {
+      if (falharHistorico) throw new Error('Falha de gravação simulada');
       const id = historicoId || `hist-${historicos.size + 1}`; historicos.set(id, { id, empresa: Number(empresa), hashArquivo, resultado: structuredClone(resultado), autor });
       return { id, salvo: true, atualizadoEm: new Date().toISOString(), bytesHistorico: 200 };
     },
@@ -237,4 +239,17 @@ test('exclui apenas análises selecionadas da empresa nos dois namespaces sem to
     assert.equal(res.status, 200); assert.equal((await res.json()).excluidas, 1);
     assert.equal(historicos.has(id), false); assert.equal(chamadas.length, leiturasAntes);
   }
+});
+
+test('falha temporária ao salvar mantém o vínculo com a análise anterior', async () => {
+  const body = { chamadoId: 'chamado-A', tipo: 'chat', arquivoId: 'anexo-A' };
+  const criado = await (await post('/api/ia-service', body)).json();
+  falharHistorico = true;
+  try {
+    const res = await fetch(`${base}/api/ia-service/radar/logs/analisar?grupoId=erro-1&historicoId=${criado.historico.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    assert.equal(res.status, 200);
+    const r = await res.json();
+    assert.equal(r.historico.salvo, false);
+    assert.equal(r.historico.id, criado.historico.id, 'a próxima tentativa continua ligada ao mesmo histórico');
+  } finally { falharHistorico = false; }
 });

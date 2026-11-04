@@ -108,3 +108,24 @@ test('exclusão individual e em lote é definitiva e atômica dentro da empresa'
   assert.throws(() => repo.excluir(1, ["' OR 1=1"]), /Selecione/);
   assert.throws(() => repo.excluir(1, Array(51).fill('id')), /Selecione/);
 });
+
+test('quatro erros distantes entre 30 permanecem na mesma análise após reabrir o banco', () => {
+  const conteudo = Buffer.from(Array.from({ length: 30 }, (_, i) => `THREAD ERROR\nErro distinto ${i} on U_TESTE(TESTE.PRW)\n`).join(''));
+  const hashArquivo = crypto.createHash('sha256').update(conteudo).digest('hex');
+  const novo = () => ({ ...localizarErros(conteudo, 'trinta.log'), origem: { tipo: 'avulso' } });
+  const historico = repo.salvar(7, { resultado: novo(), hashArquivo });
+  for (const n of [0, 29, 7, 15]) {
+    const resultado = novo();
+    resultado.grupos[n].analise = { explicacao: `Diagnóstico ${n + 1}`, causaProvavel: 'A confirmar.', solucoes: `Ação ${n + 1}`, validacao: 'Conferir.', informacoesFaltantes: 'Contexto.' };
+    resultado.ia = { gruposAnalisados: 1 };
+    repo.salvar(7, { resultado, hashArquivo, historicoId: historico.id });
+  }
+  // Uma nova varredura sem diagnósticos não deve sobrescrever os já salvos.
+  repo.salvar(7, { resultado: novo(), hashArquivo, historicoId: historico.id });
+  db.close(); db = new Database(arquivoDb); db.pragma('foreign_keys = ON');
+  const salvo = repo.obter(7, historico.id);
+  assert.deepEqual(salvo.resultado.grupos.filter(g => g.analise).map(g => g.id), ['erro-1', 'erro-8', 'erro-16', 'erro-30']);
+  assert.equal(salvo.resultado.ia.gruposAnalisados, 4);
+  assert.equal(repo.listar(7).length, 1);
+  assert.equal(repo.obter(8, historico.id), null);
+});
