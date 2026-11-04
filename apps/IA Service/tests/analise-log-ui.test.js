@@ -20,6 +20,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
   const requestsLogs = [];
   const exclusoes = [];
   const relatorio = localizarErros(Buffer.from('THREAD ERROR\nVariable does not exist CTEST on U_TESTE(TESTE.PRW) line 42\n'), 'error.log');
+  relatorio.contextoArquivo = [{ evidencia: [{ linha: 300, texto: '[INFO] Service Stopped.' }] }];
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname === '/radar-externo') {
@@ -128,6 +129,8 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     assert.equal(await page.locator('.logs-metrics').isVisible(), true, 'permite consultar os indicadores');
     await page.locator('.logs-file-summary > summary').click();
     assert.equal(await page.locator('.logs-overview').count(), 0, 'plano de investigação removido mesmo quando existe no histórico');
+    assert.equal(await page.getByText('Cobertura e limites desta análise', { exact: true }).count(), 0);
+    assert.equal(await page.getByText('Eventos de contexto do arquivo', { exact: true }).count(), 0);
     await page.getByRole('heading', { name: 'As possíveis soluções ainda não foram geradas', exact: true }).waitFor();
     assert.match(await page.locator('#logs-resultado').textContent(), /Análise avulsa/);
     await page.locator('#logs-busca').fill('texto inexistente');
@@ -158,6 +161,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     const download = await downloadPromise;
     assert.match(fs.readFileSync(await download.path(), 'utf8'), /Evidência.*trecho limitado/);
     assert.doesNotMatch(fs.readFileSync(await download.path(), 'utf8'), /O que foi observado|Onde começar|Próximos passos/);
+    assert.doesNotMatch(fs.readFileSync(await download.path(), 'utf8'), /Evento de contexto|Service Stopped|A varredura percorreu|Cada grupo mostra um trecho/);
     const chamadasAntesHistorico = requestsLogs.filter(p => p.includes('/avulso')).length;
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('[data-ticket-id="A"]').first().waitFor(); await abrirLogs();

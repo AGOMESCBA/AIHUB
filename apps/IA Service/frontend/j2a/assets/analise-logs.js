@@ -585,16 +585,6 @@ class AnaliseLogs {
       const item = this.node('span', null, 'logs-family'); item.append(this.node('b', familia.quantidade), this.node('span', familia.titulo)); familias.append(item);
     }
     estatisticas.append(familias);
-    if (r.avisos?.length) {
-      const limites = this.node('details', null, 'logs-limites'); limites.append(this.node('summary', 'Cobertura e limites desta análise'));
-      limites.append(this.node('p', `Arquivo lido em ${r.arquivo.encoding}. Credenciais reconhecidas pelo filtro são ocultadas nas evidências.`));
-      for (const aviso of r.avisos) limites.append(this.node('p', aviso)); resumo.append(limites);
-    }
-    if (r.contextoArquivo?.length) {
-      const eventos = this.node('details', null, 'logs-limites'); eventos.append(this.node('summary', 'Eventos de contexto do arquivo'));
-      eventos.append(this.node('pre', r.contextoArquivo.flatMap(e => e.evidencia.map(l => `${l.linha}: ${l.texto}`)).join('\n')));
-      resumo.append(eventos);
-    }
     if (!r.grupos.length) resumo.append(this.node('p', 'Nenhum erro foi reconhecido pelos padrões examinados. Isso não confirma que o ambiente está livre de problemas.'));
     container.append(resumo);
     for (const grupo of r.grupos) {
@@ -693,9 +683,8 @@ class AnaliseLogs {
     if (!this.relatorio) return;
     const r = this.relatorio;
     const partes = [`Análise de Logs — ${r.arquivo.nome}`, r.origem?.tipo === 'avulso' ? 'Análise avulsa' : `Chamado #${r.origem?.numero}`,
-      `${r.cobertura.linhasLidas} linhas lidas; ${r.cobertura.ocorrencias} ocorrências.`, ...(r.avisos || [])];
+      `${r.cobertura.linhasLidas} linhas lidas; ${r.cobertura.ocorrencias} ocorrências.`];
     for (const familia of r.familias || []) partes.push(`${familia.titulo}: ${familia.quantidade} ocorrência(s).`);
-    for (const evento of r.contextoArquivo || []) partes.push('Evento de contexto:', ...evento.evidencia.map(l => `${l.linha}: ${l.texto}`));
     for (const g of r.grupos) {
       partes.push(`\n${g.id}: ${g.titulo}`, `${g.quantidade} ocorrência(s); linhas: ${g.linhas.join(', ')}`);
       if (g.analise) for (const [campo, titulo] of [['explicacao', 'O que aconteceu'], ['causaProvavel', 'Causa provável'], ['solucoes', 'Possíveis soluções'], ['validacao', 'Como validar'], ['informacoesFaltantes', 'O que falta confirmar']]) partes.push(`${titulo}: ${g.analise[campo]}`);

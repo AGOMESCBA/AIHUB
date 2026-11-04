@@ -122,8 +122,7 @@
 .logs-family-list { display:flex; flex-wrap:wrap; gap:8px; margin:15px 0; }
 .logs-family { display:flex; align-items:center; gap:8px; border:1px solid var(--logs-line); padding:6px 10px; border-radius:7px; background:var(--logs-panel); font-size:11px; color:var(--logs-muted); }
 .logs-family b { font-size:13px; color:var(--logs-text); }
-.logs-limites { border-bottom:1px solid var(--logs-line); padding:8px 0; color:var(--logs-muted); font-size:12px; }
-.logs-tela details summary { cursor:pointer; padding:6px 0; font-size:12px; } .logs-limites p { margin:8px 0; font-size:11px; }
+.logs-tela details summary { cursor:pointer; padding:6px 0; font-size:12px; }
 .logs-cartao { margin:14px 0; padding:22px; border:1px solid var(--logs-line); border-radius:10px; background:var(--logs-panel); overflow-wrap:anywhere; }
 .logs-error-header { display:flex; align-items:center; gap:10px; margin-bottom:13px; }
 .logs-error-index { font:700 12px 'Cascadia Code',monospace; color:#649cf3; }
