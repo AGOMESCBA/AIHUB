@@ -131,7 +131,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     assert.equal(await page.locator('.logs-overview').count(), 0, 'plano de investigação removido mesmo quando existe no histórico');
     assert.equal(await page.getByText('Cobertura e limites desta análise', { exact: true }).count(), 0);
     assert.equal(await page.getByText('Eventos de contexto do arquivo', { exact: true }).count(), 0);
-    await page.getByRole('heading', { name: 'As possíveis soluções ainda não foram geradas', exact: true }).waitFor();
+    assert.equal(await page.locator('.logs-solutions-summary').count(), 0, 'sem quadro adicional de diagnóstico');
     assert.match(await page.locator('#logs-resultado').textContent(), /Análise avulsa/);
     await page.locator('#logs-busca').fill('texto inexistente');
     assert.equal(await page.locator('[data-log-card]:visible').count(), 0);
@@ -149,8 +149,8 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     await page.locator('.logs-informacoes-analise > summary').click();
     assert.equal(await page.locator('.logs-diagnostico-grid').isVisible(), true, 'permite expandir novamente');
     await page.locator('.logs-informacoes-analise > summary').click();
-    await page.getByRole('button', { name: 'Ver possíveis soluções', exact: true }).click();
-    assert.equal(await page.locator('.logs-informacoes-analise').evaluate(el => el.open), true, 'atalho reabre o diagnóstico recolhido');
+    await page.locator('.logs-informacoes-analise > summary').click();
+    assert.equal(await page.getByRole('button', { name: 'Ver possíveis soluções', exact: true }).count(), 0, 'atalho adicional removido');
     assert.equal(await page.locator('.logs-diagnostico.solucoes h4').textContent(), 'Possíveis soluções');
     assert.match(await page.locator('.logs-diagnostico.solucoes').textContent(), /Encaminhar ao desenvolvedor/);
     assert.ok(requestsLogs.some(p => /avulso\?grupoId=erro-1/.test(p)));
@@ -287,8 +287,8 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     falhaIA = true;
     await page.locator('#logs-analisar').click();
     await page.getByText('Leitura concluída com aviso', { exact: true }).waitFor();
-    await page.getByRole('heading', { name: 'As possíveis soluções ainda não foram geradas', exact: true }).waitFor();
-    assert.match(await page.locator('.logs-solutions-summary').textContent(), /não respondeu no tempo disponível/);
+    assert.equal(await page.locator('.logs-solutions-summary').count(), 0);
+    assert.match(await page.locator('#logs-monitor-status').textContent(), /não respondeu no tempo disponível/);
     assert.equal(await page.getByRole('button', { name: 'Ver possíveis soluções', exact: true }).count(), 0, 'falha não é apresentada como diagnóstico concluído');
     assert.deepEqual(errors, []);
   } finally {

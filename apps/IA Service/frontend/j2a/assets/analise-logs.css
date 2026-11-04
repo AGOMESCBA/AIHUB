@@ -133,11 +133,6 @@
 .logs-diagnostico h4 { font-size:11px; text-transform:uppercase; letter-spacing:.6px; margin-bottom:6px; color:#6a9ff2; }
 .logs-diagnostico p { font-size:13px; line-height:1.7; white-space:pre-wrap; }
 .logs-diagnostico.solucoes { grid-column:1 / -1; border-left:3px solid #3b82f6; background:var(--logs-tint); border-radius:0 7px 7px 0; padding:15px 18px; }
-.logs-solutions-summary { margin:14px 0; padding:14px 16px; border:1px solid color-mix(in srgb,#3b82f6 45%,var(--logs-line)); border-radius:8px; background:var(--logs-tint); }
-.logs-solutions-summary[data-estado=pendente] { border-color:color-mix(in srgb,#d6a256 55%,var(--logs-line)); }
-.logs-solutions-summary h3 { font-size:15px; }
-.logs-solutions-summary p { font-size:12px; margin-top:6px; }
-.logs-solutions-summary button { margin-top:10px; }
 .logs-cartao > p { font-size:12px; margin-bottom:12px; }
 .logs-cartao > details { border-top:1px solid var(--logs-line); padding-top:10px; color:var(--logs-muted); margin-top:15px; }
 .logs-tela pre { max-height:350px; overflow:auto; background:var(--logs-soft); color:var(--logs-text); padding:14px; border:1px solid var(--logs-line); border-radius:7px; font:11px/1.8 'Cascadia Code',monospace; white-space:pre-wrap; overflow-wrap:anywhere; }

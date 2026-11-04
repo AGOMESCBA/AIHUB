@@ -54,8 +54,7 @@ test('30 erros: acumula quatro diagnósticos, filtra por análise e busca, e pre
     await page.locator('#logs-busca').fill('FALHA_30');
     assert.equal(await page.locator('[data-log-card]:visible').count(), 1);
     assert.equal(await page.locator('[data-log-card]:visible').getAttribute('data-log-card'), 'erro-30');
-    await page.getByRole('button', { name: 'Ver possíveis soluções', exact: true }).click();
-    assert.equal(await page.locator('[data-log-card="erro-30"] .logs-diagnostico.solucoes').evaluate(el => document.activeElement === el), true, 'atalho aponta para uma solução que corresponde à busca');
+    assert.equal(await page.locator('[data-log-card="erro-30"] .logs-diagnostico.solucoes').isVisible(), true, 'soluções continuam no cartão filtrado');
     await page.locator('#logs-busca').fill('FALHA_2');
     assert.equal(await page.locator('[data-log-card]:visible').count(), 0);
     assert.equal(await page.locator('#logs-filtro-vazio').isVisible(), true);

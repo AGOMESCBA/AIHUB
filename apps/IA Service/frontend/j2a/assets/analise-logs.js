@@ -563,23 +563,6 @@ class AnaliseLogs {
     }
     estatisticas.append(numeros, this.node('p', 'Ocorrências repetidas não são necessariamente causas diferentes. Confira o contexto antes de decidir uma ação.', 'logs-muted'));
     resumo.append(estatisticas);
-    if (r.grupos.length) {
-      const comDiagnostico = r.grupos.filter(g => g.analise?.solucoes?.trim()).length;
-      const diagnostico = this.node('section', null, 'logs-solutions-summary');
-      diagnostico.dataset.estado = comDiagnostico ? 'disponivel' : 'pendente';
-      diagnostico.append(this.node('h3', comDiagnostico ? 'Diagnóstico e possíveis soluções' : 'As possíveis soluções ainda não foram geradas'));
-      diagnostico.append(this.node('p', comDiagnostico ? `${comDiagnostico} de ${r.grupos.length} grupo(s) com diagnóstico. Consulte as possíveis soluções destacadas em cada erro.` : r.ia?.falha?.mensagem || (r.ia?.indisponivel ? 'A leitura do arquivo terminou, mas a IA não concluiu o diagnóstico. Abaixo estão as evidências, sem soluções geradas.' : 'A IA não retornou um diagnóstico válido para estes grupos.')));
-      if (comDiagnostico) {
-        const ver = this.node('button', 'Ver possíveis soluções'); ver.type = 'button';
-        ver.addEventListener('click', () => {
-          const alvo = this.el('resultado').querySelector('[data-log-card]:not([hidden]) .logs-diagnostico.solucoes');
-          if (alvo) { alvo.closest('details').open = true; alvo.scrollIntoView({ behavior: 'smooth', block: 'center' }); alvo.focus({ preventScroll: true }); }
-          else this.status('Nenhuma solução corresponde aos filtros atuais. Altere a busca ou desmarque o filtro para consultar outros diagnósticos.', 'aviso');
-        });
-        diagnostico.append(ver);
-      } else diagnostico.append(this.node('p', this.fonteAnalise ? 'Use “Analisar este erro” para tentar gerar o diagnóstico e as soluções de uma ocorrência.' : 'Para tentar novamente, acesse o anexo do chamado ou selecione o arquivo avulso original.'));
-      resumo.append(diagnostico);
-    }
     const familias = this.node('div', null, 'logs-family-list');
     for (const familia of r.familias || []) {
       const item = this.node('span', null, 'logs-family'); item.append(this.node('b', familia.quantidade), this.node('span', familia.titulo)); familias.append(item);

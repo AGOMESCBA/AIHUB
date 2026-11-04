@@ -4,6 +4,8 @@ Implementação local em 04/11/2026, sem publicação. O usuário autorizou expl
 
 ## Revisão de espaço e descoberta das soluções
 
+Simplificação final solicitada: remover também o quadro “Diagnóstico e possíveis soluções” e o atalho “Ver possíveis soluções”. Os diagnósticos e as soluções permanecem nos cartões dos respectivos erros, com recolhimento e filtro de analisados. Os avisos de falha continuam no status da análise e no cartão de acompanhamento.
+
 Decisão posterior do usuário: remover o “Plano de investigação” da tela e do relatório exportado. Os cartões de cada erro continuam exibindo explicação, causa provável, possíveis soluções e validação. Dados de visão geral já armazenados no histórico não são apagados nem exigem migração, mas deixam de ser apresentados.
 
 Simplificação adicional solicitada: retirar da tela e do relatório exportado “Cobertura e limites desta análise” e “Eventos de contexto do arquivo”. O contexto continua disponível para o diagnóstico e os alertas de falha da IA continuam explícitos na tela. O relatório preserva identificação, contagens, diagnósticos, soluções, validação e evidências por erro; nenhuma alteração de banco é necessária.
