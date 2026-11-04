@@ -17,6 +17,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
   let historicoSalvo = null;
   const postsChat = [];
   const requestsLogs = [];
+  const exclusoes = [];
   const relatorio = localizarErros(Buffer.from('THREAD ERROR\nVariable does not exist CTEST on U_TESTE(TESTE.PRW) line 42\n'), 'error.log');
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
@@ -35,6 +36,11 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
         return;
       }
       let data = {};
+      if (url.pathname.endsWith('/radar/logs/historico') && req.method === 'DELETE') {
+        let body = ''; req.on('data', c => { body += c; });
+        req.on('end', () => { exclusoes.push(JSON.parse(body).ids); historicoSalvo = null; res.end(JSON.stringify({ excluidas: exclusoes.at(-1).length })); });
+        return;
+      }
       if (url.pathname.endsWith('/radar/logs/historico')) data = { analises: historicoSalvo && !url.searchParams.has('chamadoId') ? [{ id: 'hist-1', nome: historicoSalvo.arquivo.nome, tipo: 'avulso', atualizadoEm: '2026-11-04T12:00:00Z', ocorrencias: 1, bytesHistorico: 900 }] : [] };
       if (url.pathname.endsWith('/radar/logs/historico/hist-1')) data = historicoSalvo;
       if (url.pathname.endsWith('/whoami')) data = { empresaNome: 'Teste', consultorNome: 'Analista' };
@@ -84,7 +90,8 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     await page.goto(`http://127.0.0.1:${server.address().port}/iaservice/j2a/`, { waitUntil: 'domcontentloaded' });
     await page.locator('[data-ticket-id="A"]').first().waitFor();
     await abrirLogs();
-    assert.equal(await page.locator('.ci-botao + [data-panel-tab="logs"]').count(), 1, 'atalho fica ao lado de Mensagens');
+    assert.equal(await page.locator('.topbar-actions > [data-panel-tab="logs"]:first-child + .ci-botao').count(), 1, 'análise aparece primeiro, seguida de Mensagens');
+    assert.equal(await page.locator('.logs-shortcut-text').textContent(), 'ANALISE DE ERROR.LOG');
     assert.equal(await page.locator('#panel-logs').isVisible(), true);
     assert.match(await page.locator('#logs-contexto').textContent(), /Nenhum chamado/);
     await page.locator('#logs-modo-avulso').click();
@@ -123,6 +130,19 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     await page.getByText('Análise recuperada do histórico. Nenhuma nova chamada à IA foi feita.', { exact: true }).waitFor();
     assert.equal(requestsLogs.filter(p => p.includes('/avulso')).length, chamadasAntesHistorico);
     assert.match(await page.locator('#logs-resultado').textContent(), /Salvo no histórico/);
+    await page.locator('#logs-historico').click();
+    await page.locator('.logs-history-item').first().waitFor();
+    await page.locator('#logs-historico-todas').check();
+    assert.equal(await page.locator('[data-log-historico-id]:checked').count(), 1);
+    page.once('dialog', dialog => dialog.dismiss());
+    await page.locator('#logs-historico-excluir').click();
+    assert.equal(exclusoes.length, 0, 'cancelar a confirmação preserva o histórico');
+    page.once('dialog', async dialog => { assert.match(dialog.message(), /toda a equipe/); await dialog.accept(); });
+    await page.locator('#logs-historico-excluir').click();
+    await page.getByText('1 análise(s) excluída(s). Os arquivos originais foram preservados.', { exact: true }).waitFor();
+    assert.deepEqual(exclusoes, [['hist-1']]);
+    assert.equal(await page.locator('.logs-history-item').count(), 0);
+    await page.locator('#logs-historico-fechar').click();
 
     await page.locator('[data-ticket-id="A"]').first().click();
     await abrirLogs();
@@ -138,14 +158,45 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
       await new Promise(resolve => setTimeout(resolve, 10));
     }
     await page.waitForFunction(() => document.querySelector('[data-log-step="ia"]').dataset.estado === 'ativo');
+    assert.equal(await page.locator('#logs-splash').isVisible(), false, 'inicia com acompanhamento compacto');
+    assert.equal(await page.locator('#logs-monitor').isVisible(), true);
+    await page.locator('#logs-monitor-detalhes').click();
     assert.equal(await page.locator('#logs-splash').isVisible(), true);
+    assert.equal(await page.locator('dialog:modal').count(), 0, 'detalhes não bloqueiam a página');
     await page.locator('#logs-analisar').evaluate(b => { b.click(); b.click(); });
     assert.equal(requestsLogs.filter(p => p.includes('/radar/logs/analisar')).length, 1, 'cliques repetidos não reenviam análise');
     await page.screenshot({ path: path.resolve(__dirname, '../../../tmp/analise-logs-novo-splash.png'), animations: 'disabled' });
+    await page.locator('[data-ticket-id="B"]').first().click();
+    assert.equal(await page.locator('#logs-splash').isVisible(), true, 'troca de chamado funciona mesmo com detalhes abertos');
     await page.locator('#logs-continuar').click();
     assert.equal(await page.locator('#logs-analisar').isDisabled(), true);
-    await page.locator('[data-ticket-id="B"]').first().click();
+    await page.locator('#message-input').fill('Continuo atendendo enquanto o log é analisado.');
+    assert.equal(await page.locator('#logs-monitor').isVisible(), true, 'acompanhamento permanece no chat de outro chamado');
+    assert.match(await page.locator('#logs-monitor-arquivo').textContent(), /error-A.log/);
+    const monitorBox = await page.locator('#logs-monitor').boundingBox();
+    const composerBox = await page.locator('#composer').boundingBox();
+    assert.ok(monitorBox.y + monitorBox.height < composerBox.y, 'cartão não encobre a área de escrever/enviar mensagens');
+    await page.screenshot({ path: path.resolve(__dirname, '../../../tmp/analise-logs-monitor-chat.png'), animations: 'disabled' });
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.locator('#message-input').click();
+      const card = await page.locator('#logs-monitor').boundingBox();
+      const campo = await page.locator('#message-input').boundingBox();
+      assert.ok(card.x >= 0 && card.x + card.width <= width + 1, `acompanhamento cabe em ${width}px`);
+      assert.ok(card.y + card.height < campo.y, `acompanhamento não encobre a mensagem em ${width}px`);
+      await page.screenshot({ path: path.resolve(__dirname, `../../../tmp/analise-logs-monitor-${width}.png`), animations: 'disabled' });
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.locator('#logs-monitor-recolher').click();
+    assert.ok((await page.locator('#logs-monitor').boundingBox()).height < 80, 'permite recolher o acompanhamento sem interromper a análise');
+    await page.locator('#logs-monitor-recolher').click();
+    await page.locator('#message-input').focus();
     if (resolverAnalise) resolverAnalise();
+    await page.getByText('Análise concluída', { exact: true }).waitFor();
+    assert.equal(await page.locator('#message-input').evaluate(el => document.activeElement === el), true, 'conclusão não tira o foco do atendimento');
+    await page.locator('#logs-monitor-resultado').click();
+    await page.locator('#logs-resultado h3').first().waitFor();
+    assert.match(await page.locator('#logs-resultado').textContent(), /Chamado #123/, 'resultado mantém a origem A após atender B');
     await abrirLogs();
     await page.locator('.logs-item').filter({ hasText: 'error-B.log' }).waitFor();
     assert.equal(await page.locator('#logs-resultado').textContent(), '', 'resultado do chamado anterior não aparece no novo chamado');
@@ -179,6 +230,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     await page.locator('#logs-resultado h3').first().waitFor();
     assert.match(await page.locator('#logs-resultado').textContent(), /Análise avulsa/);
     await page.screenshot({ path: path.resolve(__dirname, '../../../tmp/analise-logs-radar-desktop.png') });
+    await page.locator('#logs-monitor-fechar').click();
     assert.deepEqual(errors, []);
   } finally {
     resolverLista?.();

@@ -92,3 +92,19 @@ test('migração do histórico aplica pelo inicializador completo e pode ser rea
     assert.equal(database.getDB().prepare('SELECT COUNT(*) AS total FROM analises_logs').get().total, 0);
   } finally { database.fecharDB(); }
 });
+
+test('exclusão individual e em lote é definitiva e atômica dentro da empresa', () => {
+  const a = repo.salvar(1, dados()); const b = repo.salvar(1, dados()); const outra = repo.salvar(2, dados());
+  assert.throws(() => repo.excluir(1, [a.id, outra.id]), /não foi encontrada nesta empresa/);
+  assert.ok(repo.obter(1, a.id), 'seleção mista não exclui parcialmente');
+  assert.equal(repo.excluir(1, [a.id]), 1);
+  assert.equal(repo.obter(1, a.id), null);
+  assert.throws(() => repo.salvar(1, { ...dados(), historicoId: a.id }), /não encontrada/, 'uma análise em andamento não recria o histórico excluído');
+  const c = repo.salvar(1, dados());
+  assert.equal(repo.excluir(1, [b.id, c.id]), 2);
+  assert.equal(repo.obter(1, b.id), null); assert.equal(repo.obter(1, c.id), null);
+  assert.ok(repo.obter(2, outra.id), 'preserva outra empresa');
+  assert.throws(() => repo.excluir(1, []), /Selecione/);
+  assert.throws(() => repo.excluir(1, ["' OR 1=1"]), /Selecione/);
+  assert.throws(() => repo.excluir(1, Array(51).fill('id')), /Selecione/);
+});

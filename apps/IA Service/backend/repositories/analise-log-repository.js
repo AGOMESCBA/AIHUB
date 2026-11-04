@@ -53,4 +53,16 @@ function salvar(empresaId, { resultado, hashArquivo, historicoId = null, autor =
       autor: anterior ? anterior.autor : autor, atualizadoPor: autor };
   })();
 }
-module.exports = { obter, listar, salvar };
+function excluir(empresaId, ids) {
+  if (!Array.isArray(ids) || !ids.length || ids.length > 50 || ids.some(id => typeof id !== 'string' || !/^[\w-]{1,128}$/.test(id))) {
+    throw Object.assign(new Error('Selecione de 1 a 50 análises válidas para excluir.'), { status: 400 });
+  }
+  const selecionadas = [...new Set(ids)];
+  const marcadores = selecionadas.map(() => '?').join(',');
+  return getDB().transaction(() => {
+    const quantidade = getDB().prepare(`SELECT COUNT(*) AS total FROM analises_logs WHERE empresa_id = ? AND id IN (${marcadores})`).get(Number(empresaId), ...selecionadas).total;
+    if (quantidade !== selecionadas.length) throw Object.assign(new Error('Uma das análises não foi encontrada nesta empresa. Atualize o histórico.'), { status: 404 });
+    return getDB().prepare(`DELETE FROM analises_logs WHERE empresa_id = ? AND id IN (${marcadores})`).run(Number(empresaId), ...selecionadas).changes;
+  })();
+}
+module.exports = { obter, listar, salvar, excluir };

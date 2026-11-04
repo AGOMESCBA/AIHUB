@@ -17,8 +17,9 @@ Implementação local em 04/11/2026, sem publicação. O usuário autorizou expl
 - No J2A, o acesso saiu do menu Mais e fica ao lado de Mensagens, com ícone de arquivo e lupa e nome acessível “Análise de Logs”.
 - A interface compartilhada com o radar interno foi redesenhada, com seleção de origem, envio por arraste e indicadores claros de arquivo pronto.
 - A consulta de anexos distingue carregamento, ausência de chamado, lista vazia, consulta parcial e erro. Possui tempo limite e descarta respostas antigas.
-- O splash abre imediatamente e recebe as etapas do backend por NDJSON: preparar arquivo, localizar ocorrências, investigar com IA e organizar diagnóstico. Não simula porcentagens. Clientes anteriores continuam recebendo JSON normal.
-- Os botões principal e individuais ficam bloqueados durante a análise. “Continuar navegando” fecha o splash, preserva o processamento e permite reabrir o andamento.
+- A análise abre um cartão global compacto e recolhível, fora da aba de logs. Recebe as etapas reais por NDJSON: preparar arquivo, localizar ocorrências, investigar com IA e organizar diagnóstico. “Ver etapas” expande os detalhes sem janela modal nem bloqueio do chat. Não simula porcentagens. Clientes anteriores continuam recebendo JSON normal.
+- Os botões principal e individuais ficam bloqueados durante a análise. Trocar de chamado na mesma empresa preserva a requisição; a conclusão avisa sem trocar a tela, rolar a página ou tirar o foco da mensagem. “Ver resultado” abre o relatório com sua origem, mesmo depois de atender outro chamado. Trocar de empresa ou sair da sessão limpa o acompanhamento e invalida respostas antigas.
+- A tela inicial da própria Análise de Logs recebeu cabeçalho em cartão, indicadores do conteúdo e orientação visual consistente com o painel de etapas; a tela de login permanece fora do escopo esclarecido pelo usuário.
 - O diagnóstico privilegia uma explicação breve, causa provável e até três ações. Validação e evidências ficam recolhidas. O prompt orienta concisão, sem transformar shutdown em prova de parada planejada.
 - A primeira chamada alterna tipos de ocorrência para evitar analisar só workflows e deixar o encerramento, no final do arquivo, sem representante. A IA recebe também o inventário dos grupos e o contexto para produzir a visão geral.
 
@@ -34,6 +35,10 @@ A migração **58** cria `analises_logs` no banco próprio do IA Service. Guarda
 
 O usuário reabre o relatório sem chamar a IA. Uma análise individual acrescenta seu diagnóstico ao mesmo histórico, preservando os anteriores em transação. Empresa, origem e hash são conferidos para impedir mistura de arquivos. Uma nova análise completa gera uma nova entrada.
 
+O histórico permite marcar uma ou várias análises, selecionar todas as **exibidas** (até 50) e excluir as selecionadas. Uma confirmação informa que a exclusão é definitiva e vale para toda a equipe da empresa. `DELETE /radar/logs/historico` recebe IDs explícitos, com limite de 50; valida toda a seleção na empresa autenticada e exclui em transação. Uma seleção com ID ausente ou de outra empresa falha sem apagar parcialmente. Os anexos e arquivos originais são preservados. Atualização em andamento não recria um histórico já excluído. O espaço liberado fica disponível para reutilização pelo SQLite; não é executado `VACUUM` no banco em uso.
+
+O relatório concluído pode ser reaberto após novo login, sem IA. O cartão acompanha a requisição somente enquanto a página/sessão continua aberta; retomada de processamento após recarregar, sair do sistema ou reiniciar o servidor ainda não é um mecanismo de jobs persistentes.
+
 Para buscar no original de um avulso reaberto ou analisar outros grupos, o usuário precisa selecionar novamente o mesmo arquivo. O hash é validado antes do processamento. No chamado, usa-se o anexo da origem, sujeito à disponibilidade e aos controles já existentes. A política de limpeza dos originais do SoftExpert não foi alterada.
 
 Falha de gravação não descarta o resultado: a tela avisa e oferece o download. A migração foi exercitada somente em bancos temporários; será aplicada pelo inicializador normal ao reiniciar o serviço. Não foram migrados ou modificados bancos reais durante os testes.
@@ -48,3 +53,5 @@ Falha de gravação não descarta o resultado: a tela avisa e oferece o download
 - Para o arquivo real de **5.580.089 bytes**, o relatório medido possui **94.017 bytes de JSON** e **10.303 bytes comprimidos**, sem incluir o overhead de metadados e páginas do SQLite. É uma medição desse caso, não uma promessa de tamanho para todos os relatórios.
 
 Evidências em `tmp/`: `analise-logs-historico-validacao.txt`, `analise-logs-migracao-final.txt`, `analise-logs-historico-origem-final.txt`, `analise-logs-ia-objetiva-final.txt`, `log-real-objetivo.json` e capturas `analise-logs-novo-*.png`.
+
+Validação das melhorias de acompanhamento e exclusão: 42 testes de serviço, rotas, histórico, concorrência e navegador. Inclui desktop e 320/390 px, uso do campo de mensagem durante a análise, detalhes sem modal, conclusão sem perder foco, origem correta após trocar de chamado, seleção e cancelamento/confirmação de exclusão, exclusão atômica entre empresas e proteção contra recriação por atualização tardia. Evidências: `tmp/logs-melhorias-validacao-final.txt` e `tmp/analise-logs-monitor-*.png`.

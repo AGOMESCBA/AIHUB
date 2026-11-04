@@ -57,6 +57,12 @@ module.exports = function registrar(app, prefixo) {
       res.json({ ...entrada.resultado, historico: { id: entrada.id, salvo: true, criadoEm: entrada.criadoEm, atualizadoEm: entrada.atualizadoEm, bytesHistorico: entrada.bytesHistorico, autor: entrada.autor, atualizadoPor: entrada.atualizadoPor } });
     } catch (err) { falha(res, err); }
   });
+  app.delete(`${base}/historico`, (req, res) => {
+    try {
+      identidade(req);
+      res.json({ excluidas: historicoRepo.excluir(req.svcEmpresaId, req.body?.ids) });
+    } catch (err) { falha(res, err); }
+  });
   app.get(base, async (req, res) => {
     try {
       const { chamado, atendimento } = contexto(req.svcEmpresaId, req.query.chamadoId);

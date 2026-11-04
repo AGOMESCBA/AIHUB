@@ -2953,6 +2953,7 @@
   <script src="/iaservice/j2a/assets/analise-logs.js"></script>
   <script>
     window._analiseLogs = new AnaliseLogs({
+      abrirPainel: () => trocarAbaChat('logs'),
       contexto: () => ({ chamadoId: chamadoSelecionadoId, empresa: modoExterno ? tokenExterno : empresaIdAtual() }),
       url: caminho => {
         const qs = qsEmpresa(empresaIdAtual());

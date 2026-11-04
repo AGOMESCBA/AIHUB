@@ -13,6 +13,12 @@ const chamadas = [];
 const historicos = new Map();
 const stubs = {
   '../repositories/analise-log-repository': {
+    excluir: (empresa, ids) => {
+      if (!Array.isArray(ids) || !ids.length) throw Object.assign(new Error('Selecione análises.'), { status: 400 });
+      if (ids.some(id => historicos.get(id)?.empresa !== Number(empresa))) throw Object.assign(new Error('Análise não encontrada nesta empresa.'), { status: 404 });
+      for (const id of ids) historicos.delete(id);
+      return ids.length;
+    },
     listar: empresa => [...historicos.values()].filter(h => h.empresa === Number(empresa)).map(h => ({ id: h.id, nome: h.resultado.arquivo.nome })),
     obter: (empresa, id) => { const h = historicos.get(id); return h?.empresa === Number(empresa) ? h : null; },
     salvar: (empresa, { resultado, hashArquivo, historicoId, autor }) => {
@@ -218,4 +224,17 @@ test('reattach de arquivo diferente do histórico é recusado antes da IA', asyn
   const form = new FormData(); form.append('arquivo', new Blob(['outro conteúdo']), 'teste.log');
   const res = await fetch(`${base}/api/ia-service/radar/logs/avulso?busca=teste&historicoId=${lista.analises[0].id}`, { method: 'POST', body: form });
   assert.equal(res.status, 409);
+});
+
+test('exclui apenas análises selecionadas da empresa nos dois namespaces sem tocar anexos', async () => {
+  for (const prefixo of ['/api/ia-service', '/api/ia-service-externo']) {
+    const r = await (await post(prefixo, { chamadoId: 'chamado-A', tipo: 'chat', arquivoId: 'anexo-A' })).json();
+    const id = r.historico.id; const leiturasAntes = chamadas.length;
+    const apagar = headers => fetch(`${base}${prefixo}/radar/logs/historico`, { method: 'DELETE', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify({ ids: [id], empresa_id: 1 }) });
+    assert.equal((await apagar({ 'x-empresa': '2' })).status, 404);
+    assert.ok(historicos.has(id));
+    const res = await apagar({ 'x-usuario': 'outro-usuario' });
+    assert.equal(res.status, 200); assert.equal((await res.json()).excluidas, 1);
+    assert.equal(historicos.has(id), false); assert.equal(chamadas.length, leiturasAntes);
+  }
 });

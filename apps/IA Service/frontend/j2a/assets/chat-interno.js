@@ -76,7 +76,9 @@
     botao.setAttribute('aria-label', 'Mensagens da equipe');
     botao.innerHTML = `${ICONES.chat}<span class="ci-botao-txt">Mensagens</span><span class="ci-badge" hidden></span>`;
     botao.hidden = true;
-    anchor.prepend(botao);
+    const analiseLogs = anchor.querySelector('[data-panel-tab="logs"]');
+    if (analiseLogs) analiseLogs.after(botao);
+    else anchor.prepend(botao);
 
     const painel = document.createElement('aside');
     painel.className = 'ci-painel';

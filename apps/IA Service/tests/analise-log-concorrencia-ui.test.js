@@ -51,3 +51,21 @@ test('erro de pesquisa anterior não sobrescreve o estado de uma nova pesquisa',
   consulta.reject(new Error('Falha da busca anterior')); await tarefa;
   assert.equal(ui.el('busca-status').textContent, 'Procurando novo termo…');
 });
+
+test('trocar de chamado na mesma empresa preserva a análise em execução', () => {
+  const { ui } = tela(); let abortou = false;
+  ui.empresaAtual = 1; ui.ocupado = true; ui.versaoLista = 0;
+  ui.controller = { abort() { abortou = true; } };
+  ui.contextChanged();
+  assert.equal(abortou, false);
+  assert.equal(ui.ocupado, true);
+  assert.equal(ui.versaoAnalise, 0);
+});
+
+test('trocar de empresa exige reset antes de continuar qualquer acompanhamento', () => {
+  const { ui } = tela(); let limpou = false;
+  ui.empresaAtual = 2; ui.ocupado = true;
+  ui.reset = () => { limpou = true; };
+  ui.contextChanged();
+  assert.equal(limpou, true);
+});

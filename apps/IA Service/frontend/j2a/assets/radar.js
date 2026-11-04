@@ -3050,6 +3050,7 @@
     context: state.activePanel === 'risk' ? '' : [ $('case-number').textContent, $('case-title').textContent ].join(' — '),
   }), { itens: [$('retorno-btn')], icones: true });
   analiseLogs = new window.AnaliseLogs({
+    abrirPainel: () => { setPanel('logs'); setMobileTarget('more'); },
     contexto: () => ({ chamadoId: state.selected?.id, empresa: state.token }),
     url: caminho => '/api/ia-service-externo' + caminho,
     headers: () => apiHeaders(false),
