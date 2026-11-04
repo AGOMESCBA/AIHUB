@@ -83,6 +83,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   require('./retorno-softexpert-routes')(app, '/api/ia-service');
   require('./monitor-acessos-routes').registrarInterno(app);
   require('./numeros-autorizados-routes').registrar(app);
+  require('./analise-log-routes')(app, '/api/ia-service');
 
   // ── Atendimentos ────────────────────────────────────────────────────────
   app.post('/api/ia-service/atendimentos', (req, res) => {

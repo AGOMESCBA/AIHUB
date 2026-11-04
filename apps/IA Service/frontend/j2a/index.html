@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
   <title>IA Service - Radar de Chamados</title>
   <link rel="stylesheet" href="/iaservice/assets/radar.css">
+  <link rel="stylesheet" href="/iaservice/assets/analise-logs.css">
   <link rel="stylesheet" href="/iaservice/assets/retorno-softexpert.css">
   <link rel="stylesheet" href="/iaservice/assets/detalhes-tecnicos.css">
   <link rel="stylesheet" href="/iaservice/assets/chat-interno.css">
@@ -121,6 +122,7 @@
               <button class="nav-item" type="button" role="menuitem" data-panel-tab="evidence">Evidências</button>
               <button class="nav-item" type="button" role="menuitem" data-panel-tab="trail">Trilha de Investigação</button>
               <button class="nav-item" type="button" role="menuitem" data-panel-tab="knowledge">Base de Conhecimento</button>
+              <button class="nav-item" type="button" role="menuitem" data-panel-tab="logs">Análise de Logs</button>
             </div>
           </details>
         </nav>
@@ -281,6 +283,29 @@
               </form>
             </section>
 
+            <section id="panel-logs" class="tab-panel" aria-label="Análise de Logs">
+              <div class="logs-tela">
+                <div class="logs-cabecalho"><h2>Análise de Logs</h2><p>Entenda os erros do Protheus e as possíveis soluções.</p></div>
+                <div class="logs-acoes" role="group" aria-label="Origem do log">
+                  <button type="button" id="logs-modo-chamado" aria-pressed="true">Logs do atendimento</button>
+                  <button type="button" id="logs-modo-avulso" aria-pressed="false">Anexar log avulso</button>
+                </div>
+                <div id="logs-origem-chamado">
+                  <p id="logs-contexto">Selecione um chamado para consultar seus logs ou anexe um log avulso.</p>
+                  <button type="button" id="logs-atualizar">Atualizar arquivos</button>
+                  <div id="logs-lista" class="logs-lista"></div>
+                </div>
+                <div id="logs-origem-avulso" hidden>
+                  <label for="logs-arquivo">Arquivo .log ou .log.txt (até 20 MB)</label>
+                  <input type="file" id="logs-arquivo" accept=".log,.txt" hidden>
+                  <div class="logs-acoes"><button type="button" id="logs-escolher">Selecionar arquivo</button><span id="logs-nome-arquivo">Nenhum arquivo selecionado</span></div>
+                  <p>O arquivo avulso não será vinculado ao chamado. O resultado fica disponível nesta tela até sair ou recarregar.</p>
+                </div>
+                <div class="logs-acoes"><button type="button" id="logs-analisar" class="logs-primario">Analisar</button><button type="button" id="logs-baixar" hidden>Baixar relatório</button></div>
+                <p id="logs-status" role="status" aria-live="polite"></p>
+                <div id="logs-resultado"></div>
+              </div>
+            </section>
             <section id="panel-trail" class="tab-panel">
               <div id="trail-content" class="section-stack"></div>
             </section>
@@ -403,6 +428,7 @@
   <script src="/iaservice/assets/detalhes-tecnicos.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/iaservice/assets/chat-interno.js"></script>
+  <script src="/iaservice/assets/analise-logs.js"></script>
   <script src="/iaservice/assets/radar.js"></script>
 </body>
 </html>

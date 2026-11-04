@@ -21,7 +21,7 @@ async function setup() {
   if (!browser) {
     server = await new Promise((resolve) => {
       const srv = http.createServer((req, res) => {
-        const files = new Set(['radar.css', 'radar.js', 'mobile-viewport.js', 'tab-export.js', 'tab-export.css', 'retorno-softexpert.css', 'retorno-softexpert.js', 'detalhes-tecnicos.js', 'detalhes-tecnicos.css', 'chat-interno.js', 'chat-interno.css']);
+        const files = new Set(['radar.css', 'radar.js', 'mobile-viewport.js', 'tab-export.js', 'tab-export.css', 'retorno-softexpert.css', 'retorno-softexpert.js', 'detalhes-tecnicos.js', 'detalhes-tecnicos.css', 'chat-interno.js', 'chat-interno.css', 'analise-logs.js', 'analise-logs.css']);
         const name = req.url.replace(/^\/iaservice\/(?:j2a\/)?assets\//, '').replace(/^\//, '');
         if (req.url === '/') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); return res.end(harness); }
         if (req.url === '/j2a') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); return res.end(fs.readFileSync(path.join(assets, '../index.html'))); }

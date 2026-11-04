@@ -496,6 +496,7 @@
   <link rel="stylesheet" href="/iaservice/j2a/assets/retorno-softexpert.css">
   <link rel="stylesheet" href="/iaservice/j2a/assets/detalhes-tecnicos.css">
   <script src="/iaservice/j2a/assets/detalhes-tecnicos.js"></script>
+  <link rel="stylesheet" href="/iaservice/j2a/assets/analise-logs.css">
 </head>
 <body>
   <script>
@@ -596,6 +597,9 @@
             <button class="view-tab" id="tab-banco-conhecimento" type="button" role="tab" aria-selected="false" onclick="trocarAbaChat('banco-conhecimento')">
               <span class="badge-dot"></span> Banco de Conhecimento
             </button>
+            <button class="view-tab" id="tab-logs" type="button" role="tab" aria-selected="false" aria-controls="painel-logs" onclick="trocarAbaChat('logs')">
+              <span class="badge-dot"></span> Análise de Logs
+            </button>
           </div>
 
           <div class="view-stack">
@@ -636,6 +640,30 @@
                   <button class="composer-btn enviar" type="button" title="Enviar" onclick="enviarMensagem()">➤</button>
                 </div>
                 <div class="composer-hint">Ctrl+Enter para enviar · anexe prints, logs e fonte relacionados ao problema</div>
+              </div>
+            </div>
+
+            <div class="view-panel" id="painel-logs" role="tabpanel" aria-labelledby="tab-logs">
+              <div class="logs-tela">
+                <div class="logs-cabecalho"><h2>Análise de Logs</h2><p>Entenda os erros do Protheus e as possíveis soluções.</p></div>
+                <div class="logs-acoes" role="group" aria-label="Origem do log">
+                  <button type="button" id="logs-modo-chamado" aria-pressed="true">Logs do atendimento</button>
+                  <button type="button" id="logs-modo-avulso" aria-pressed="false">Anexar log avulso</button>
+                </div>
+                <div id="logs-origem-chamado">
+                  <p id="logs-contexto">Selecione um chamado para consultar seus logs ou anexe um log avulso.</p>
+                  <button type="button" id="logs-atualizar">Atualizar arquivos</button>
+                  <div id="logs-lista" class="logs-lista"></div>
+                </div>
+                <div id="logs-origem-avulso" hidden>
+                  <label for="logs-arquivo">Arquivo .log ou .log.txt (até 20 MB)</label>
+                  <input type="file" id="logs-arquivo" accept=".log,.txt" hidden>
+                  <div class="logs-acoes"><button type="button" id="logs-escolher">Selecionar arquivo</button><span id="logs-nome-arquivo">Nenhum arquivo selecionado</span></div>
+                  <p>O arquivo avulso não será vinculado ao chamado. O resultado fica disponível nesta tela até sair ou recarregar.</p>
+                </div>
+                <div class="logs-acoes"><button type="button" id="logs-analisar" class="logs-primario">Analisar</button><button type="button" id="logs-baixar" hidden>Baixar relatório</button></div>
+                <p id="logs-status" role="status" aria-live="polite"></p>
+                <div id="logs-resultado"></div>
               </div>
             </div>
 
@@ -1344,6 +1372,7 @@
       window._detalhesTecnicos?.close(false);
       mensagensDetalhesTecnicos.clear();
       chamadoSelecionadoId = chamadoId;
+      window._analiseLogs?.contextChanged();
       window._retornoSoftExpert?.contextChanged();
       document.querySelectorAll('.fila-item').forEach(el => el.classList.remove('selecionado'));
       renderizarSelecaoNaLista();
@@ -1716,7 +1745,7 @@
     // de apps/IA Command/modules/protheus_whatsapp/public/protheus-chat.html
     // (trocarAba). Cada aba já carrega seu conteúdo sob demanda, só na
     // primeira vez que é aberta (abrirInformacoesChamado/carregarPesquisaTecnica).
-    const ABAS_CHAT = ['conversa', 'informacoes', 'banco-conhecimento', 'risco'];
+    const ABAS_CHAT = ['conversa', 'informacoes', 'banco-conhecimento', 'risco', 'logs'];
     function trocarAbaChat(aba) {
       if (!ABAS_CHAT.includes(aba)) return;
       ABAS_CHAT.forEach(id => {
@@ -1733,6 +1762,7 @@
       // dela chama selecionarChamado() normalmente, que troca de volta para
       // a aba Conversa.
       if (aba === 'risco') carregarRiscoSla();
+      if (aba === 'logs') window._analiseLogs?.abrir();
     }
 
     function preencherCabecalho(c) {
@@ -2886,6 +2916,17 @@
     }
 
     window._iahubAuthReady?.then(iniciar) ?? iniciar();
+  </script>
+  <script src="/iaservice/j2a/assets/analise-logs.js"></script>
+  <script>
+    window._analiseLogs = new AnaliseLogs({
+      contexto: () => ({ chamadoId: chamadoSelecionadoId, empresa: modoExterno ? tokenExterno : empresaIdAtual() }),
+      url: caminho => {
+        const qs = qsEmpresa(empresaIdAtual());
+        return apiPath(caminho) + (qs ? (caminho.includes('?') ? '&' : '?') + qs : '');
+      },
+      headers: () => modoExterno ? { 'x-sessao-externa': tokenExterno } : {},
+    });
   </script>
   <script src="/iaservice/j2a/assets/tab-export.js"></script>
   <script src="/iaservice/j2a/assets/retorno-softexpert.js"></script>

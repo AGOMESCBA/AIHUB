@@ -7,6 +7,7 @@
   let retornoPanel = null;
   let detalhesTecnicos = null;
   let chatInterno = null;
+  let analiseLogs = null;
 
   const state = {
     token: localStorage.getItem(TOKEN_KEY) || '',
@@ -473,6 +474,7 @@
     detalhesTecnicos?.close(false);
     retornoPanel?.clear();
     state.queue = [];
+    analiseLogs?.reset();
     state.risk = { consultores: [], chamados: [] };
     state.selected = null;
     state.atendimentoId = null;
@@ -782,6 +784,7 @@
     const atendimentoConhecido = state.atendimentoIdPorChamado.get(String(ticket.id));
     if (atendimentoConhecido) state.concluidosNaoVistos.delete(atendimentoConhecido);
     state.selected = ticket;
+    analiseLogs?.contextChanged();
     detalhesTecnicos?.close(false);
     retornoPanel?.contextChanged();
     state.research = null;
@@ -2493,6 +2496,7 @@
     trail: 'Trilha de Investigação',
     details: 'Detalhes',
     knowledge: 'Base de Conhecimento',
+    logs: 'Análise de Logs',
   };
 
   function filaRecolhidaSalva() {
@@ -2503,18 +2507,19 @@
     if (panel !== 'conversation') detalhesTecnicos?.close(false);
     state.activePanel = panel;
     document.querySelectorAll('[data-panel-tab]').forEach((btn) => btn.classList.toggle('active', btn.dataset.panelTab === panel));
-    ['conversation', 'evidence', 'knowledge', 'trail', 'details', 'risk'].forEach((name) => {
+    ['conversation', 'evidence', 'knowledge', 'trail', 'details', 'risk', 'logs'].forEach((name) => {
       const el = $(`panel-${name}`);
       if (el) el.classList.toggle('active', name === panel);
     });
     // Radar de Chamados lista todos os chamados: cabecalho e descricao do
     // chamado selecionado nao se aplicam e so tomam espaco da grade.
     $('case-view').classList.toggle('modo-radar', panel === 'risk');
+    $('case-view').classList.toggle('modo-logs', panel === 'logs');
     // O Radar nao depende de chamado selecionado: sem chamado aberto, mostra a
     // area do Radar no lugar do "Selecione um chamado" (antes ficava vazia).
     if (!state.selected) {
-      $('case-view').hidden = panel !== 'risk';
-      $('empty-state').hidden = panel === 'risk';
+      $('case-view').hidden = panel !== 'risk' && panel !== 'logs';
+      $('empty-state').hidden = panel === 'risk' || panel === 'logs';
     }
     // No Radar a Fila tambem recolhe (o Resumo ja recolhe acima), para a grade
     // usar a largura toda. Nao grava preferencia: ao sair, volta ao que o
@@ -2538,6 +2543,7 @@
       rotuloEl.hidden = !rotulo || panel === 'conversation';
     }
     if (panel === 'risk') loadRisk();
+    if (panel === 'logs') analiseLogs?.abrir();
     if (panel === 'knowledge') renderKnowledge();
     if (panel === 'trail') renderTrail();
     enviarPresenca();
@@ -2831,7 +2837,8 @@
     document.querySelectorAll('[data-panel-tab]').forEach((btn) => btn.addEventListener('click', () => {
       setPanel(btn.dataset.panelTab);
       closeTopbarMenus();
-      if (state.selected && state.mobileTarget === 'queue') setMobileTarget('conversation');
+      if (btn.dataset.panelTab === 'logs') setMobileTarget('more');
+      else if (state.selected && state.mobileTarget === 'queue') setMobileTarget('conversation');
     }));
     document.querySelectorAll('[data-knowledge-tab]').forEach((btn) => btn.addEventListener('click', () => {
       state.knowledgeTab = btn.dataset.knowledgeTab;
@@ -3020,6 +3027,11 @@
     title: ROTULOS_ROTINA[state.activePanel],
     context: state.activePanel === 'risk' ? '' : [ $('case-number').textContent, $('case-title').textContent ].join(' — '),
   }), { itens: [$('retorno-btn')], icones: true });
+  analiseLogs = new window.AnaliseLogs({
+    contexto: () => ({ chamadoId: state.selected?.id, empresa: state.token }),
+    url: caminho => '/api/ia-service-externo' + caminho,
+    headers: () => apiHeaders(false),
+  });
   bindEvents();
     bootRadar();
   }
