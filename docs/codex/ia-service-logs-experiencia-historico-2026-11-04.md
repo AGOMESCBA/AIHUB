@@ -4,6 +4,8 @@ Implementação local em 04/11/2026, sem publicação. O usuário autorizou expl
 
 ## Revisão de espaço e descoberta das soluções
 
+O quadro “Comece pelo arquivo” possui controle visível “Recolher/Expandir”, começa aberto na entrada e é recolhido automaticamente ao abrir uma análise do histórico. Pode ser expandido novamente para selecionar o original ou iniciar outra análise.
+
 Simplificação final solicitada: remover também o quadro “Diagnóstico e possíveis soluções” e o atalho “Ver possíveis soluções”. Os diagnósticos e as soluções permanecem nos cartões dos respectivos erros, com recolhimento e filtro de analisados. Os avisos de falha continuam no status da análise e no cartão de acompanhamento.
 
 Decisão posterior do usuário: remover o “Plano de investigação” da tela e do relatório exportado. Os cartões de cada erro continuam exibindo explicação, causa provável, possíveis soluções e validação. Dados de visão geral já armazenados no histórico não são apagados nem exigem migração, mas deixam de ser apresentados.

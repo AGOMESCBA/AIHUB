@@ -72,7 +72,7 @@ class AnaliseLogs {
         <section id="logs-historico-area" class="logs-history" hidden><div class="logs-list-heading"><div><h3>Análises salvas</h3><p>Últimas 50 análises da empresa. Reabra sem chamar a IA novamente.</p></div></div><div id="logs-historico-acoes" class="logs-history-actions" hidden><label><input type="checkbox" id="logs-historico-todas"> Selecionar todas as exibidas</label><button type="button" id="logs-historico-excluir" disabled>Excluir selecionadas</button></div><p id="logs-historico-status" role="status" aria-live="polite"></p><div id="logs-historico-lista" aria-live="polite"></div></section>
         <div class="logs-workspace">
           <details class="logs-source" aria-label="Escolha do arquivo" open>
-            <summary class="logs-section-head"><span class="logs-step-number">01</span><span class="logs-source-title"><b>Comece pelo arquivo</b><small>Escolha a origem do log que deseja investigar.</small></span><span class="logs-format">.log / .log.txt</span></summary>
+            <summary class="logs-section-head"><span class="logs-step-number">01</span><span class="logs-source-title"><b>Comece pelo arquivo</b><small>Escolha a origem do log que deseja investigar.</small></span><span class="logs-format">.log / .log.txt</span><span class="logs-source-toggle"><span class="logs-source-recolher">Recolher</span><span class="logs-source-expandir">Expandir</span></span></summary>
             <div class="logs-source-actions"><div class="logs-source-tabs" role="group" aria-label="Origem do log">
               <button type="button" id="logs-modo-chamado" aria-pressed="true">${this.icone('arquivo')}<span>Logs do atendimento</span></button>
               <button type="button" id="logs-modo-avulso" aria-pressed="false">${this.icone('upload')}<span>Anexar log avulso</span></button>
@@ -282,12 +282,14 @@ class AnaliseLogs {
       if (r.origem?.tipo !== 'avulso') this.fonteAnalise = { modo: 'chamado', caminho: '/radar/logs/analisar', opts: { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chamadoId: r.origem.chamadoId, tipo: r.origem.tipo, arquivoId: r.origem.arquivoId }) } };
       else { this.el('arquivo').value = ''; this.el('nome-arquivo').textContent = 'Selecione o original somente se quiser buscar no arquivo completo.'; }
       this.renderizar(r); this.fecharHistorico();
+      this.root.querySelector('.logs-source').open = false;
       this.atualizarBotao();
       this.status('Análise recuperada do histórico. Nenhuma nova chamada à IA foi feita.', 'sucesso');
       this.el('resultados-area').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (err) { if (chave === this.chave() && versao === this.versaoAnalise) this.status(`Não foi possível reabrir a análise: ${err.message}`, 'erro'); }
   }
   reset() {
+    this.root.querySelector('.logs-source').open = true;
     this.empresaAtual = this.opcoes.contexto().empresa;
     this.concluida = null;
     this.monitor.hidden = true;

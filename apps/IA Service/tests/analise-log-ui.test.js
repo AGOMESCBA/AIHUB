@@ -107,9 +107,11 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     assert.ok(analisar.x > abas.x + abas.width + 10, 'ação Analisar log separada das origens');
     assert.ok(cabecalho.height < 150, 'cabeçalho compacto');
     assert.equal(await page.locator('.logs-source').evaluate(el => el.open), true, 'seleção do arquivo começa aberta');
-    await page.locator('.logs-section-head').click();
+    assert.equal(await page.locator('.logs-source-recolher').isVisible(), true);
+    await page.locator('.logs-source-toggle').click();
     assert.equal(await page.locator('#logs-analisar').isVisible(), false, 'permite recolher a seleção do arquivo');
-    await page.locator('.logs-section-head').click();
+    assert.equal(await page.locator('.logs-source-expandir').isVisible(), true);
+    await page.locator('.logs-source-toggle').click();
     assert.equal(await page.locator('#logs-analisar').isVisible(), true);
     await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
     await page.screenshot({ path: path.resolve(__dirname, '../../../tmp/analise-logs-entrada-referencia.png'), animations: 'disabled' });
@@ -172,6 +174,10 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     assert.match(await page.locator('#logs-resultado').textContent(), /Salvo no histórico/);
     assert.equal(await page.locator('#logs-analisar').isDisabled(), true, 'histórico avulso sem original não habilita nova análise');
     assert.doesNotMatch(await page.locator('#logs-ajuda').textContent(), /Arquivo pronto/);
+    assert.equal(await page.locator('.logs-source').evaluate(el => el.open), false, 'abrir análise salva recolhe a seleção do arquivo');
+    assert.equal(await page.locator('#logs-modo-avulso').isVisible(), false);
+    await page.locator('.logs-source-toggle').click();
+    assert.equal(await page.locator('.logs-source').evaluate(el => el.open), true, 'permite reabrir a seleção depois do histórico');
     await page.locator('#logs-modo-avulso').click();
     const envioAntes = await page.locator('#logs-drop').boundingBox();
     await page.locator('#logs-historico').click();
