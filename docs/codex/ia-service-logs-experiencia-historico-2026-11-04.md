@@ -4,6 +4,8 @@ Implementação local em 04/11/2026, sem publicação. O usuário autorizou expl
 
 ## Revisão de espaço e descoberta das soluções
 
+Organização final dos blocos: seleção do arquivo, plano de investigação e informações de cada diagnóstico abertos por padrão, com opção de recolher. Resumo do arquivo (metadados, indicadores e famílias) começa recolhido; a identificação do arquivo permanece no título. Validação, evidências, cobertura e contexto continuam recolhidos. O atalho de soluções reabre o diagnóstico fechado. Validado em seis testes de interface/concorrência, incluindo navegador desktop e celular, em `tmp/analise-logs-organizacao-colapsar-validacao.txt`.
+
 - Entrada compacta: cabeçalho menor, origens agrupadas à esquerda e “Analisar log” separado à direita na mesma linha em desktop. O envio de arquivo usa o formato horizontal desde o início, sem depender de resultado aberto ou de alternância do histórico. Em celular, os controles se reorganizam para caber na tela.
 - Atalho passa a “Analise de Error.log”, conforme solicitado, antes de Mensagens.
 - “Possíveis soluções” passa a ser o título explícito das ações de cada diagnóstico. Um resumo acima dos erros informa quantos grupos têm diagnóstico e oferece acesso direto às soluções, sem duplicar seu conteúdo no histórico.

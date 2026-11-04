@@ -70,8 +70,8 @@ class AnaliseLogs {
         </header>
         <section id="logs-historico-area" class="logs-history" hidden><div class="logs-list-heading"><div><h3>Análises salvas</h3><p>Últimas 50 análises da empresa. Reabra sem chamar a IA novamente.</p></div></div><div id="logs-historico-acoes" class="logs-history-actions" hidden><label><input type="checkbox" id="logs-historico-todas"> Selecionar todas as exibidas</label><button type="button" id="logs-historico-excluir" disabled>Excluir selecionadas</button></div><p id="logs-historico-status" role="status" aria-live="polite"></p><div id="logs-historico-lista" aria-live="polite"></div></section>
         <div class="logs-workspace">
-          <section class="logs-source" aria-label="Escolha do arquivo">
-            <div class="logs-section-head"><span class="logs-step-number">01</span><div><h3>Comece pelo arquivo</h3><p>Escolha a origem do log que deseja investigar.</p></div><span class="logs-format">.log / .log.txt</span></div>
+          <details class="logs-source" aria-label="Escolha do arquivo" open>
+            <summary class="logs-section-head"><span class="logs-step-number">01</span><span class="logs-source-title"><b>Comece pelo arquivo</b><small>Escolha a origem do log que deseja investigar.</small></span><span class="logs-format">.log / .log.txt</span></summary>
             <div class="logs-source-actions"><div class="logs-source-tabs" role="group" aria-label="Origem do log">
               <button type="button" id="logs-modo-chamado" aria-pressed="true">${this.icone('arquivo')}<span>Logs do atendimento</span></button>
               <button type="button" id="logs-modo-avulso" aria-pressed="false">${this.icone('upload')}<span>Anexar log avulso</span></button>
@@ -86,7 +86,7 @@ class AnaliseLogs {
               <p class="logs-source-note">Análise independente: não cria chamado nem vincula o arquivo ao atendimento aberto.</p>
             </div>
             <footer class="logs-source-footer"><span id="logs-ajuda">Escolha um arquivo para continuar.</span></footer>
-          </section>
+          </details>
         </div>
         <div class="logs-feedback"><p id="logs-status" role="status" aria-live="polite"></p><button type="button" id="logs-ver-progresso" hidden>Ver andamento</button></div>
         <section id="logs-resultados-area" hidden>
@@ -537,13 +537,17 @@ class AnaliseLogs {
     this.el('resultados-area').hidden = false;
     const container = this.el('resultado'); container.replaceChildren();
     const resumo = this.node('section', null, 'logs-resumo');
-    resumo.append(this.node('h3', `${r.origem?.tipo === 'avulso' ? 'Análise avulsa' : `Chamado #${r.origem?.numero}`} · ${r.arquivo.nome}`));
-    if (r.historico?.salvo) resumo.append(this.node('p', `Salvo no histórico · ${new Date(r.historico.atualizadoEm).toLocaleString('pt-BR')} · ${(r.historico.bytesHistorico / 1024).toFixed(1)} KB. O arquivo original não é armazenado no histórico.`, 'logs-muted'));
+    const estatisticas = this.node('details', null, 'logs-file-summary');
+    const tituloArquivo = this.node('summary');
+    tituloArquivo.append(this.node('h3', `${r.origem?.tipo === 'avulso' ? 'Análise avulsa' : `Chamado #${r.origem?.numero}`} · ${r.arquivo.nome} — Resumo do arquivo`));
+    estatisticas.append(tituloArquivo);
+    if (r.historico?.salvo) estatisticas.append(this.node('p', `Salvo no histórico · ${new Date(r.historico.atualizadoEm).toLocaleString('pt-BR')} · ${(r.historico.bytesHistorico / 1024).toFixed(1)} KB. O arquivo original não é armazenado no histórico.`, 'logs-muted'));
     const numeros = this.node('div', null, 'logs-metrics');
     for (const [valor, label] of [[r.cobertura.ocorrencias, 'ocorrências no arquivo'], [r.grupos.length, 'grupos de mensagens'], [r.ia?.gruposAnalisados || 0, 'grupos avaliados pela IA'], [Number(r.cobertura.linhasLidas).toLocaleString('pt-BR'), 'linhas percorridas']]) {
       const metrica = this.node('div'); metrica.append(this.node('strong', valor), this.node('span', label)); numeros.append(metrica);
     }
-    resumo.append(numeros, this.node('p', 'Ocorrências repetidas não são necessariamente causas diferentes. Confira o contexto antes de decidir uma ação.', 'logs-muted'));
+    estatisticas.append(numeros, this.node('p', 'Ocorrências repetidas não são necessariamente causas diferentes. Confira o contexto antes de decidir uma ação.', 'logs-muted'));
+    resumo.append(estatisticas);
     if (r.grupos.length) {
       const comDiagnostico = r.grupos.filter(g => g.analise?.solucoes?.trim()).length;
       const diagnostico = this.node('section', null, 'logs-solutions-summary');
@@ -554,25 +558,27 @@ class AnaliseLogs {
         const ver = this.node('button', 'Ver possíveis soluções'); ver.type = 'button';
         ver.addEventListener('click', () => {
           const alvo = this.el('resultado').querySelector('.logs-diagnostico.solucoes');
-          if (alvo) { alvo.scrollIntoView({ behavior: 'smooth', block: 'center' }); alvo.focus({ preventScroll: true }); }
+          if (alvo) { alvo.closest('details').open = true; alvo.scrollIntoView({ behavior: 'smooth', block: 'center' }); alvo.focus({ preventScroll: true }); }
         });
         diagnostico.append(ver);
       } else diagnostico.append(this.node('p', this.fonteAnalise ? 'Use “Analisar este erro” para tentar gerar o diagnóstico e as soluções de uma ocorrência.' : 'Para tentar novamente, acesse o anexo do chamado ou selecione o arquivo avulso original.'));
       resumo.append(diagnostico);
     }
     if (r.visaoGeral) {
-      const visao = this.node('section', null, 'logs-overview');
-      visao.append(this.node('span', 'PLANO DE INVESTIGAÇÃO', 'logs-eyebrow'));
+      const visao = this.node('details', null, 'logs-overview');
+      visao.open = true;
+      visao.append(this.node('summary', 'Plano de investigação'));
+      const conteudoVisao = this.node('div', null, 'logs-overview-content');
       for (const [campo, titulo] of [['observado', 'O que foi observado'], ['atencao', 'Onde começar'], ['proximosPassos', 'Próximos passos']]) {
-        const parte = this.node('div'); parte.append(this.node('h4', titulo), this.node('p', r.visaoGeral[campo])); visao.append(parte);
+        const parte = this.node('div'); parte.append(this.node('h4', titulo), this.node('p', r.visaoGeral[campo])); conteudoVisao.append(parte);
       }
-      resumo.append(visao);
+      visao.append(conteudoVisao); resumo.append(visao);
     }
     const familias = this.node('div', null, 'logs-family-list');
     for (const familia of r.familias || []) {
       const item = this.node('span', null, 'logs-family'); item.append(this.node('b', familia.quantidade), this.node('span', familia.titulo)); familias.append(item);
     }
-    resumo.append(familias);
+    estatisticas.append(familias);
     if (r.avisos?.length) {
       const limites = this.node('details', null, 'logs-limites'); limites.append(this.node('summary', 'Cobertura e limites desta análise'));
       limites.append(this.node('p', `Arquivo lido em ${r.arquivo.encoding}. Credenciais reconhecidas pelo filtro são ocultadas nas evidências.`));
@@ -592,13 +598,16 @@ class AnaliseLogs {
       cabecalho.append(this.node('span', grupo.id.replace('erro-', '#'), 'logs-error-index'), this.node('span', `${grupo.quantidade} ocorrência(s)`, 'logs-count'), this.node('span', grupo.analise ? 'Analisado pela IA' : 'Evidência localizada', 'logs-analysis-label'));
       card.append(cabecalho, this.node('h3', grupo.titulo));
       if (grupo.analise) {
+        const informacoes = this.node('details', null, 'logs-informacoes-analise');
+        informacoes.open = true;
+        informacoes.append(this.node('summary', 'Informações da análise'));
         const conteudo = this.node('div', null, 'logs-diagnostico-grid');
         for (const [campo, titulo] of [['explicacao', 'O que aconteceu'], ['causaProvavel', 'Causa provável'], ['solucoes', 'Possíveis soluções']]) {
           const bloco = this.node('section', null, `logs-diagnostico ${campo}`);
           if (campo === 'solucoes') bloco.tabIndex = -1;
           bloco.append(this.node('h4', titulo), this.node('p', grupo.analise[campo])); conteudo.append(bloco);
         }
-        card.append(conteudo);
+        informacoes.append(conteudo); card.append(informacoes);
         const validacao = this.node('details', null, 'logs-validation'); validacao.append(this.node('summary', 'Como validar e o que falta confirmar'));
         for (const [campo, titulo] of [['validacao', 'Como validar'], ['informacoesFaltantes', 'O que falta confirmar']]) {
           validacao.append(this.node('h4', titulo), this.node('p', grupo.analise[campo]));

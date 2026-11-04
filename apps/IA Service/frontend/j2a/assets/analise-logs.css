@@ -48,10 +48,13 @@
 .logs-hero-icon svg { width:25px; height:25px; }
 .logs-workspace { display:grid; grid-template-columns:minmax(0,1fr); gap:20px; align-items:start; }
 .logs-source { min-width:0; background:var(--logs-panel); border:1px solid var(--logs-line); border-radius:10px; box-shadow:0 3px 14px rgba(0,0,0,.04); overflow:hidden; }
-.logs-section-head { display:flex; align-items:center; gap:10px; padding:12px 16px; }
+.logs-tela summary.logs-section-head { display:flex; align-items:center; gap:10px; padding:12px 16px; }
+.logs-section-head::after { content:'▾'; color:var(--logs-muted); }
+.logs-source:not([open]) > .logs-section-head::after { content:'▸'; }
+.logs-source-title { flex:1; min-width:0; }
+.logs-source-title b { display:block; font-size:16px; font-weight:700; }
+.logs-source-title small { display:block; font-size:12px; color:var(--logs-muted); margin-top:2px; }
 .logs-step-number { display:grid; place-items:center; width:34px; height:34px; border-radius:10px; background:var(--logs-tint); color:#669fff; font:700 13px 'Cascadia Code',monospace; flex:none; }
-.logs-section-head h3 { font-size:16px; font-weight:700; }
-.logs-section-head p { font-size:12px; margin-top:2px; }
 .logs-format { margin-left:auto; font:11px 'Cascadia Code',monospace; white-space:nowrap; color:var(--logs-muted); }
 .logs-source-actions { display:flex; align-items:center; gap:20px; padding:0 16px 12px; }
 .logs-source-actions > .logs-primario { margin-left:auto; flex:none; }
@@ -104,15 +107,18 @@
 .logs-search button { font-size:11px; padding:9px 11px; white-space:nowrap; }
 .logs-search-status { font-size:12px; margin:10px 0 !important; }
 .logs-resumo { margin:20px 0; }
-.logs-resumo > h3 { font-size:12px; color:var(--logs-muted); overflow-wrap:anywhere; }
+.logs-file-summary { border:1px solid var(--logs-line); border-radius:8px; padding:10px 14px; background:var(--logs-panel); }
+.logs-file-summary > summary h3 { display:inline; font-size:12px; color:var(--logs-muted); overflow-wrap:anywhere; }
+.logs-file-summary > p { font-size:12px; margin-top:8px; }
 .logs-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:13px 0; }
 .logs-metrics > div { padding:16px; border:1px solid var(--logs-line); border-radius:10px; background:var(--logs-panel); }
 .logs-metrics strong { display:block; font-size:26px; line-height:1.25; letter-spacing:-.7px; }
 .logs-metrics span { display:block; font-size:11px; color:var(--logs-muted); margin-top:5px; }
 .logs-muted { font-size:11px; }
-.logs-overview { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin:20px 0; padding:22px; border:1px solid color-mix(in srgb,#3b82f6 35%,var(--logs-line)); border-radius:10px; background:var(--logs-tint); }
-.logs-overview > .logs-eyebrow { grid-column:1 / -1; }
-.logs-overview > div:last-child { grid-column:1 / -1; padding-top:15px; border-top:1px solid var(--logs-line); }
+.logs-overview { margin:20px 0; padding:22px; border:1px solid color-mix(in srgb,#3b82f6 35%,var(--logs-line)); border-radius:10px; background:var(--logs-tint); }
+.logs-overview > summary { color:#5d94ee; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; }
+.logs-overview-content { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:18px; }
+.logs-overview-content > div:last-child { grid-column:1 / -1; padding-top:15px; border-top:1px solid var(--logs-line); }
 .logs-overview h4 { font-size:13px; margin-bottom:6px; } .logs-overview p { white-space:pre-wrap; font-size:13px; }
 .logs-family-list { display:flex; flex-wrap:wrap; gap:8px; margin:15px 0; }
 .logs-family { display:flex; align-items:center; gap:8px; border:1px solid var(--logs-line); padding:6px 10px; border-radius:7px; background:var(--logs-panel); font-size:11px; color:var(--logs-muted); }
@@ -204,14 +210,14 @@
 @media(max-width:600px) {
   .logs-hero-tools { flex-direction:column-reverse; align-items:flex-end; gap:8px; } .logs-hero-tools button { font-size:10px; padding:6px; max-width:100px; }
   .logs-tela { padding:12px; } .logs-hero { margin-bottom:12px; gap:10px; padding:12px; } .logs-hero h2 { font-size:21px; letter-spacing:-.7px; } .logs-hero p { font-size:11px; } .logs-hero-icon { display:none; }
-  .logs-section-head { padding:16px; gap:9px; } .logs-section-head h3 { font-size:14px; } .logs-section-head p { font-size:11px; } .logs-format { display:none; }
+  .logs-tela summary.logs-section-head { padding:12px; gap:9px; } .logs-source-title b { font-size:14px; } .logs-source-title small { font-size:11px; } .logs-format { display:none; }
   .logs-source-actions { flex-wrap:wrap; gap:8px; padding:0 12px 12px; } .logs-source-actions > .logs-primario { width:100%; } .logs-source-tabs { flex:1 1 100%; gap:2px; } .logs-source-tabs button { font-size:11px; padding:9px 5px; gap:5px; } .logs-source-tabs svg { width:15px; height:15px; }
   .logs-source-body { padding:0 14px 16px; } .logs-drop { padding:20px 12px; }
   .logs-source-footer { padding:8px 12px; }
   .logs-results-header { align-items:flex-start; gap:10px; } .logs-results-header h2 { font-size:18px; } .logs-results-header button { font-size:10px; padding:8px; }
   .logs-search { flex-wrap:wrap; gap:5px; padding:8px 10px; } .logs-search button { width:100%; } .logs-search label { width:20px; } .logs-search input { width:calc(100% - 30px); font-size:12px; }
   .logs-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; } .logs-metrics > div { padding:12px; } .logs-metrics strong { font-size:23px; }
-  .logs-overview, .logs-diagnostico-grid { grid-template-columns:minmax(0,1fr); } .logs-overview { padding:16px; } .logs-cartao { padding:15px; } .logs-analysis-label, .logs-count { font-size:9px; } .logs-cartao > h3 { font-size:11px; padding:10px; }
+  .logs-overview-content, .logs-diagnostico-grid { grid-template-columns:minmax(0,1fr); } .logs-overview { padding:16px; } .logs-cartao { padding:15px; } .logs-analysis-label, .logs-count { font-size:9px; } .logs-cartao > h3 { font-size:11px; padding:10px; }
   .logs-dialog { padding:24px 16px 18px; } .logs-dialog h2 { font-size:21px; } .logs-step-state { font-size:8px; } .logs-progress-steps li { gap:8px; padding:12px 4px; } .logs-progress-steps small { max-width:160px; font-size:9px; } .logs-progress-steps b { font-size:11px; } .logs-dialog-bottom button { padding:8px 10px; font-size:11px; }
 }
 @media(prefers-reduced-motion:reduce) { .logs-tela *, .logs-tela *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
