@@ -580,16 +580,6 @@ class AnaliseLogs {
       } else diagnostico.append(this.node('p', this.fonteAnalise ? 'Use “Analisar este erro” para tentar gerar o diagnóstico e as soluções de uma ocorrência.' : 'Para tentar novamente, acesse o anexo do chamado ou selecione o arquivo avulso original.'));
       resumo.append(diagnostico);
     }
-    if (r.visaoGeral) {
-      const visao = this.node('details', null, 'logs-overview');
-      visao.open = true;
-      visao.append(this.node('summary', 'Plano de investigação'));
-      const conteudoVisao = this.node('div', null, 'logs-overview-content');
-      for (const [campo, titulo] of [['observado', 'O que foi observado'], ['atencao', 'Onde começar'], ['proximosPassos', 'Próximos passos']]) {
-        const parte = this.node('div'); parte.append(this.node('h4', titulo), this.node('p', r.visaoGeral[campo])); conteudoVisao.append(parte);
-      }
-      visao.append(conteudoVisao); resumo.append(visao);
-    }
     const familias = this.node('div', null, 'logs-family-list');
     for (const familia of r.familias || []) {
       const item = this.node('span', null, 'logs-family'); item.append(this.node('b', familia.quantidade), this.node('span', familia.titulo)); familias.append(item);
@@ -704,7 +694,6 @@ class AnaliseLogs {
     const r = this.relatorio;
     const partes = [`Análise de Logs — ${r.arquivo.nome}`, r.origem?.tipo === 'avulso' ? 'Análise avulsa' : `Chamado #${r.origem?.numero}`,
       `${r.cobertura.linhasLidas} linhas lidas; ${r.cobertura.ocorrencias} ocorrências.`, ...(r.avisos || [])];
-    if (r.visaoGeral) for (const [campo, titulo] of [['observado', 'O que foi observado'], ['atencao', 'Onde começar'], ['proximosPassos', 'Próximos passos']]) partes.push(`${titulo}: ${r.visaoGeral[campo]}`);
     for (const familia of r.familias || []) partes.push(`${familia.titulo}: ${familia.quantidade} ocorrência(s).`);
     for (const evento of r.contextoArquivo || []) partes.push('Evento de contexto:', ...evento.evidencia.map(l => `${l.linha}: ${l.texto}`));
     for (const g of r.grupos) {

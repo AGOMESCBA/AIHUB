@@ -127,11 +127,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     await page.locator('.logs-file-summary > summary').click();
     assert.equal(await page.locator('.logs-metrics').isVisible(), true, 'permite consultar os indicadores');
     await page.locator('.logs-file-summary > summary').click();
-    assert.equal(await page.locator('.logs-overview').evaluate(el => el.open), true, 'plano de investigação aberto por padrão');
-    await page.locator('.logs-overview > summary').click();
-    assert.equal(await page.locator('.logs-overview-content').isVisible(), false, 'plano permite recolher');
-    await page.locator('.logs-overview > summary').click();
-    assert.equal(await page.locator('.logs-overview-content').isVisible(), true, 'plano permite expandir novamente');
+    assert.equal(await page.locator('.logs-overview').count(), 0, 'plano de investigação removido mesmo quando existe no histórico');
     await page.getByRole('heading', { name: 'As possíveis soluções ainda não foram geradas', exact: true }).waitFor();
     assert.match(await page.locator('#logs-resultado').textContent(), /Análise avulsa/);
     await page.locator('#logs-busca').fill('texto inexistente');
@@ -161,6 +157,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     await page.locator('#logs-baixar').click();
     const download = await downloadPromise;
     assert.match(fs.readFileSync(await download.path(), 'utf8'), /Evidência.*trecho limitado/);
+    assert.doesNotMatch(fs.readFileSync(await download.path(), 'utf8'), /O que foi observado|Onde começar|Próximos passos/);
     const chamadasAntesHistorico = requestsLogs.filter(p => p.includes('/avulso')).length;
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('[data-ticket-id="A"]').first().waitFor(); await abrirLogs();

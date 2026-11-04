@@ -119,11 +119,6 @@
 .logs-metrics strong { display:block; font-size:26px; line-height:1.25; letter-spacing:-.7px; }
 .logs-metrics span { display:block; font-size:11px; color:var(--logs-muted); margin-top:5px; }
 .logs-muted { font-size:11px; }
-.logs-overview { margin:20px 0; padding:22px; border:1px solid color-mix(in srgb,#3b82f6 35%,var(--logs-line)); border-radius:10px; background:var(--logs-tint); }
-.logs-overview > summary { color:#5d94ee; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; }
-.logs-overview-content { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:18px; }
-.logs-overview-content > div:last-child { grid-column:1 / -1; padding-top:15px; border-top:1px solid var(--logs-line); }
-.logs-overview h4 { font-size:13px; margin-bottom:6px; } .logs-overview p { white-space:pre-wrap; font-size:13px; }
 .logs-family-list { display:flex; flex-wrap:wrap; gap:8px; margin:15px 0; }
 .logs-family { display:flex; align-items:center; gap:8px; border:1px solid var(--logs-line); padding:6px 10px; border-radius:7px; background:var(--logs-panel); font-size:11px; color:var(--logs-muted); }
 .logs-family b { font-size:13px; color:var(--logs-text); }
@@ -221,7 +216,7 @@
   .logs-results-header { align-items:flex-start; gap:10px; } .logs-results-header h2 { font-size:18px; } .logs-results-header button { font-size:10px; padding:8px; }
   .logs-search { flex-wrap:wrap; gap:5px; padding:8px 10px; } .logs-search button { width:100%; } .logs-search label { width:20px; } .logs-search input { width:calc(100% - 30px); font-size:12px; }
   .logs-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; } .logs-metrics > div { padding:12px; } .logs-metrics strong { font-size:23px; }
-  .logs-overview-content, .logs-diagnostico-grid { grid-template-columns:minmax(0,1fr); } .logs-overview { padding:16px; } .logs-cartao { padding:15px; } .logs-analysis-label, .logs-count { font-size:9px; } .logs-cartao > h3 { font-size:11px; padding:10px; }
+  .logs-diagnostico-grid { grid-template-columns:minmax(0,1fr); } .logs-cartao { padding:15px; } .logs-analysis-label, .logs-count { font-size:9px; } .logs-cartao > h3 { font-size:11px; padding:10px; }
   .logs-dialog { padding:24px 16px 18px; } .logs-dialog h2 { font-size:21px; } .logs-step-state { font-size:8px; } .logs-progress-steps li { gap:8px; padding:12px 4px; } .logs-progress-steps small { max-width:160px; font-size:9px; } .logs-progress-steps b { font-size:11px; } .logs-dialog-bottom button { padding:8px 10px; font-size:11px; }
 }
 @media(prefers-reduced-motion:reduce) { .logs-tela *, .logs-tela *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
