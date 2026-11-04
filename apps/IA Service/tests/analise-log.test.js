@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { localizarErros, analisarBuffer, MAX_BYTES } = require('../backend/services/analise-log-service');
+const { localizarErros, analisarBuffer, buscarNoLog, MAX_BYTES } = require('../backend/services/analise-log-service');
 const buffer = texto => Buffer.from(texto);
 const incidente = (mensagem = 'Variable does not exist CTEST on U_TESTE(TESTE.PRW) line 42', hora = '10:00:00') =>
   `THREAD ERROR ([123], teste) 03/11/2026 ${hora}\n${mensagem}\nCalled from U_TESTE(TESTE.PRW) line 42\n`;
@@ -152,4 +152,43 @@ test('permite analisar individualmente grupo além dos oito iniciais', async () 
   assert.equal(r.grupos[9].analise.explicacao, 'Falha.');
   assert.equal(r.grupos[0].analise, undefined);
   await assert.rejects(analisarBuffer(1, conteudo, 'x.log', {}, 'erro-99'), /não encontrado/);
+});
+
+test('análise inicial distribui exemplos entre famílias e recebe inventário e visão geral', async () => {
+  const texto = Array.from({ length: 12 }, (_, i) => `[INFO]Msg...:[Erro ao cancelar o Workflow: WF.${i}/2026 | Não encontrado]\n`).join('') +
+    '[ERROR][SERVER] deleting server, TESTE\n' + incidente('Application Server is Shutting Down. on TESTE(TESTE.PRX)');
+  const etapas = []; let payload;
+  const r = await analisarBuffer(1, buffer(texto), 'x.log', {
+    onProgress: e => etapas.push(e),
+    config: { resolverKeysEOrdem: () => ({ keys: {}, cfg: {} }) },
+    client: { chamarIA: async (_k, _c, _s, user) => {
+      payload = JSON.parse(user);
+      return { texto: JSON.stringify({ visaoGeral: { observado: 'Eventos distintos.', atencao: 'Verificar a parada.', proximosPassos: 'Consultar o responsável.' }, analises: [] }) };
+    } },
+  });
+  assert.deepEqual(etapas, ['varredura', 'ia', 'relatorio']);
+  assert.equal(payload.incidentes.length, 8);
+  assert.ok(payload.incidentes.some(g => g.evidencia.some(l => /Shutting Down/.test(l.texto))));
+  assert.ok(payload.incidentes.some(g => g.evidencia.some(l => /\[ERROR\]\[SERVER\]/.test(l.texto))));
+  assert.equal(payload.inventario.length, 14);
+  assert.equal(r.visaoGeral.atencao, 'Verificar a parada.');
+  assert.equal(r.familias.reduce((s, f) => s + f.quantidade, 0), 14);
+});
+
+test('busca percorre o arquivo inteiro, ignora acentos e trata termo como texto literal', () => {
+  const texto = 'normal\n'.repeat(50000) + 'Erro: falha de execução\nCampo CTEST(A)\n';
+  const r = buscarNoLog(buffer(texto), 'x.log.txt', 'EXECUCAO');
+  assert.equal(r.total, 1); assert.equal(r.resultados[0].linha, 50001);
+  assert.match(r.resultados[0].evidencia[1].texto, /execução/);
+  assert.equal(buscarNoLog(buffer(texto), 'x.log', 'CTEST(A)').total, 1);
+  assert.equal(buscarNoLog(buffer(texto), 'x.log', 'CTEST.*').total, 0);
+  assert.throws(() => buscarNoLog(buffer(texto), 'x.log', 'a'), /2 e 100/);
+});
+
+test('busca conta todas as linhas, limita trechos e filtra credenciais antes do recorte', () => {
+  const texto = ('Erro: ' + 'x'.repeat(900) + ' CTEST senha=SEGREDO123\n').repeat(70);
+  const r = buscarNoLog(buffer(texto), 'x.log', 'CTEST');
+  assert.equal(r.total, 70); assert.equal(r.resultados.length, 50);
+  assert.match(r.resultados[0].evidencia[0].texto, /CTEST/);
+  assert.doesNotMatch(JSON.stringify(r), /SEGREDO123/);
 });

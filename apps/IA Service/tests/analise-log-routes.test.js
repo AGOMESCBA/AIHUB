@@ -7,11 +7,23 @@ const express = require('express');
 const analiseReal = require('../backend/services/analise-log-service');
 const caminho = require.resolve('../backend/routes/analise-log-routes');
 let liberar;
+let filaLiberar = [];
 let bloquear = false;
 const chamadas = [];
+const historicos = new Map();
 const stubs = {
-  '../services/analise-log-service': { ...analiseReal, analisarBuffer: async (_empresa, conteudo, nome) => {
-    if (bloquear) await new Promise(resolve => { liberar = resolve; });
+  '../repositories/analise-log-repository': {
+    listar: empresa => [...historicos.values()].filter(h => h.empresa === Number(empresa)).map(h => ({ id: h.id, nome: h.resultado.arquivo.nome })),
+    obter: (empresa, id) => { const h = historicos.get(id); return h?.empresa === Number(empresa) ? h : null; },
+    salvar: (empresa, { resultado, hashArquivo, historicoId, autor }) => {
+      const id = historicoId || `hist-${historicos.size + 1}`; historicos.set(id, { id, empresa: Number(empresa), hashArquivo, resultado: structuredClone(resultado), autor });
+      return { id, salvo: true, atualizadoEm: new Date().toISOString(), bytesHistorico: 200 };
+    },
+  },
+  '../services/analise-log-service': { ...analiseReal, analisarBuffer: async (_empresa, conteudo, nome, deps = {}) => {
+    deps.onProgress?.('varredura');
+    if (bloquear) await new Promise(resolve => { liberar = resolve; filaLiberar.push(resolve); });
+    deps.onProgress?.('relatorio', { semErros: true });
     return analiseReal.localizarErros(conteudo, nome);
   } },
   '../repositories/chamado-repository': { getChamado: (empresa, id) => Number(empresa) === 1 && id === 'chamado-A' ? { id, numero: '123', sistemaOrigem: 'softexpert' } : null },
@@ -46,7 +58,12 @@ let base;
 before(async () => {
   const app = express();
   app.use(express.json());
-  app.use((req, _res, next) => { req.svcEmpresaId = Number(req.headers['x-empresa'] || 1); next(); });
+  app.use((req, _res, next) => {
+    req.svcEmpresaId = Number(req.headers['x-empresa'] || 1);
+    if (req.headers['x-consultor']) req.svcConsultorExterno = req.headers['x-consultor'];
+    else if (req.headers['x-usuario'] !== 'ausente') req.session = { user_id: req.headers['x-usuario'] || '1' };
+    next();
+  });
   registrar(app, '/api/ia-service');
   registrar(app, '/api/ia-service-externo');
   servidor = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
@@ -105,7 +122,7 @@ test('rejeita avulso ausente, extensão incorreta e origem inválida', async () 
   assert.equal((await post('/api/ia-service', { chamadoId: 'chamado-A', tipo: 'invalido' })).status, 400);
 });
 
-test('análises simultâneas na mesma empresa são limitadas e o lock é liberado', async () => {
+test('bloqueia duplicidade do mesmo usuário e libera a operação ao terminar', async () => {
   bloquear = true;
   const pendente = post('/api/ia-service', { chamadoId: 'chamado-A', tipo: 'chat', arquivoId: 'anexo-A' });
   const inicio = Date.now();
@@ -114,7 +131,91 @@ test('análises simultâneas na mesma empresa são limitadas e o lock é liberad
     await new Promise(resolve => setTimeout(resolve, 10));
   }
   assert.equal((await post('/api/ia-service-externo', { chamadoId: 'chamado-A', tipo: 'chat', arquivoId: 'anexo-A' })).status, 429);
-  bloquear = false; liberar();
+  bloquear = false; liberar(); filaLiberar = [];
   assert.equal((await pendente).status, 200);
   assert.equal((await post('/api/ia-service', { chamadoId: 'chamado-A', tipo: 'chat', arquivoId: 'anexo-A' })).status, 200);
+});
+
+test('permite usuários diferentes em paralelo, limita capacidade e isola empresas e identidades', async () => {
+  bloquear = true; filaLiberar = [];
+  const pendentes = [];
+  const enviar = headers => {
+    const form = new FormData(); form.append('arquivo', new Blob(['normal']), 'teste.log');
+    return fetch(`${base}/api/ia-service/radar/logs/avulso`, { method: 'POST', body: form, headers });
+  };
+  async function iniciar(headers, esperado) {
+    pendentes.push(enviar(headers));
+    const inicio = Date.now();
+    while (filaLiberar.length < esperado) {
+      if (Date.now() - inicio > 3000) throw new Error('Operação concorrente não iniciou');
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+  }
+  try {
+    await iniciar({ 'x-usuario': '7' }, 1);
+    await iniciar({ 'x-consultor': '7' }, 2);
+    assert.equal((await enviar({ 'x-usuario': '8' })).status, 429);
+    await iniciar({ 'x-empresa': '2', 'x-usuario': '7' }, 3);
+    await iniciar({ 'x-empresa': '2', 'x-usuario': '8' }, 4);
+    assert.equal((await enviar({ 'x-empresa': '3', 'x-usuario': '9' })).status, 429);
+  } finally {
+    bloquear = false; filaLiberar.forEach(resolve => resolve()); filaLiberar = [];
+    const respostas = await Promise.all(pendentes);
+    for (const r of respostas) assert.equal(r.status, 200);
+  }
+  assert.equal((await enviar({ 'x-usuario': '8' })).status, 200);
+});
+
+test('rejeita identidade ausente e registra autoria da sessão sem aceitar autor enviado pelo cliente', async () => {
+  const body = { chamadoId: 'chamado-A', tipo: 'chat', arquivoId: 'anexo-A', autor: { tipo: 'usuario_iahub', id: 'fraude' } };
+  assert.equal((await post('/api/ia-service', body, { 'x-usuario': 'ausente' })).status, 401);
+  const r = await (await post('/api/ia-service', body, { 'x-usuario': '42' })).json();
+  const salvo = await (await fetch(`${base}/api/ia-service/radar/logs/historico/${r.historico.id}`, { headers: { 'x-usuario': '99' } })).json();
+  assert.deepEqual(salvo.historico.autor, { tipo: 'usuario_iahub', id: '42' });
+});
+
+test('streaming transmite etapas e relatório, mantendo JSON padrão para clientes anteriores', async () => {
+  const res = await post('/api/ia-service', { chamadoId: 'chamado-A', tipo: 'chat', arquivoId: 'anexo-A' });
+  assert.match(res.headers.get('content-type'), /application\/json/);
+  const streaming = await fetch(`${base}/api/ia-service/radar/logs/analisar?progresso=1`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chamadoId: 'chamado-A', tipo: 'chat', arquivoId: 'anexo-A' }),
+  });
+  assert.match(streaming.headers.get('content-type'), /application\/x-ndjson/);
+  const eventos = (await streaming.text()).trim().split('\n').map(l => JSON.parse(l));
+  assert.deepEqual(eventos.filter(e => e.tipo === 'progresso').map(e => e.etapa), ['arquivo', 'varredura', 'relatorio']);
+  assert.equal(eventos.at(-1).tipo, 'resultado');
+  assert.equal(eventos.at(-1).resultado.origem.numero, '123');
+});
+
+test('streaming devolve erro legível quando arquivo de outro atendimento é solicitado', async () => {
+  const res = await fetch(`${base}/api/ia-service/radar/logs/analisar?progresso=1`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chamadoId: 'chamado-A', tipo: 'chat', arquivoId: 'outro' }) });
+  const eventos = (await res.text()).trim().split('\n').map(l => JSON.parse(l));
+  assert.equal(eventos.at(-1).tipo, 'erro');
+  assert.match(eventos.at(-1).error, /não encontrado neste chamado/);
+});
+
+test('busca avulsa retorna trechos do arquivo e preserva o vínculo de acesso para busca no chamado', async () => {
+  const form = new FormData(); form.append('arquivo', new Blob(['normal\nCTEST encontrado\n']), 'teste.log');
+  const res = await fetch(`${base}/api/ia-service-externo/radar/logs/avulso?busca=ctest`, { method: 'POST', body: form });
+  const r = await res.json(); assert.equal(r.total, 1); assert.equal(r.resultados[0].linha, 2);
+  const negado = await fetch(`${base}/api/ia-service/radar/logs/analisar?busca=ctest`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chamadoId: 'chamado-A', tipo: 'chat', arquivoId: 'outro' }) });
+  assert.equal(negado.status, 404);
+});
+
+test('histórico reabre o relatório sem executar análise e nega outra empresa', async () => {
+  const antes = chamadas.length;
+  const lista = await (await fetch(`${base}/api/ia-service/radar/logs/historico`)).json();
+  assert.ok(lista.analises.length > 0);
+  const id = lista.analises[0].id;
+  const r = await fetch(`${base}/api/ia-service-externo/radar/logs/historico/${id}`);
+  assert.equal(r.status, 200); assert.equal((await r.json()).historico.salvo, true);
+  assert.equal(chamadas.length, antes);
+  assert.equal((await fetch(`${base}/api/ia-service/radar/logs/historico/${id}`, { headers: { 'x-empresa': '2' } })).status, 404);
+});
+
+test('reattach de arquivo diferente do histórico é recusado antes da IA', async () => {
+  const lista = await (await fetch(`${base}/api/ia-service/radar/logs/historico`)).json();
+  const form = new FormData(); form.append('arquivo', new Blob(['outro conteúdo']), 'teste.log');
+  const res = await fetch(`${base}/api/ia-service/radar/logs/avulso?busca=teste&historicoId=${lista.analises[0].id}`, { method: 'POST', body: form });
+  assert.equal(res.status, 409);
 });

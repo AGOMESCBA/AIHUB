@@ -4,10 +4,13 @@
 // empresaId+atendimentoId), para o chat mostrar as etapas enquanto a IA
 // trabalha (pedido do usuário, 2026-10-21). Mesmo padrão do turno-lock-service:
 // não precisa sobreviver a restart — sem registro, o chat só mostra o texto
-// genérico de "pesquisando". Guarda apenas textos curtos de etapa (sem
-// conteúdo do chamado além dos termos de busca) e expira sozinho.
+// genérico de "pesquisando". Guarda textos curtos de etapa e, desde
+// 2026-11-04, o RASCUNHO da resposta enquanto a IA escreve (streaming): o
+// mesmo texto que o chat recebe ao fim do turno, lido só pela mesma empresa
+// (chave empresaId+atendimentoId), nunca gravado, apagado no fim do turno.
 const TTL_MS = 10 * 60 * 1000;
 const MAX_ETAPAS = 12;
+const MAX_RASCUNHO = 30000;
 const progresso = new Map();
 
 function _chave(empresaId, atendimentoId) {
@@ -33,6 +36,14 @@ function registrar(empresaId, atendimentoId, texto, { concluida = false } = {}) 
   p.atualizadoEm = Date.now();
 }
 
+// Texto acumulado da resposta em streaming ('' = recomeçou: nova tentativa).
+function registrarRascunho(empresaId, atendimentoId, texto) {
+  const p = progresso.get(_chave(empresaId, atendimentoId));
+  if (!p) return;
+  p.rascunho = String(texto || '').slice(0, MAX_RASCUNHO);
+  p.atualizadoEm = Date.now();
+}
+
 function finalizar(empresaId, atendimentoId) {
   progresso.delete(_chave(empresaId, atendimentoId));
 }
@@ -40,7 +51,7 @@ function finalizar(empresaId, atendimentoId) {
 function obter(empresaId, atendimentoId) {
   const p = progresso.get(_chave(empresaId, atendimentoId));
   if (!p || Date.now() - p.atualizadoEm > TTL_MS) return { etapas: [] };
-  return { etapas: p.etapas.map(e => ({ ...e })) };
+  return { etapas: p.etapas.map(e => ({ ...e })), ...(p.rascunho ? { rascunho: p.rascunho } : {}) };
 }
 
 // Callback curto para os serviços (pesquisa etc.) sem conhecerem a chave.
@@ -48,4 +59,4 @@ function reporter(empresaId, atendimentoId) {
   return (texto, opts) => registrar(empresaId, atendimentoId, texto, opts);
 }
 
-module.exports = { iniciar, registrar, finalizar, obter, reporter };
+module.exports = { iniciar, registrar, registrarRascunho, finalizar, obter, reporter };

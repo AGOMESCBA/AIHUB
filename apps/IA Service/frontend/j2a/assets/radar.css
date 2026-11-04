@@ -1093,6 +1093,9 @@ button.loading .loader { display: block; }
 .chat-status-etapas { flex-basis: 100%; display: grid; gap: 3px; margin-top: 4px; }
 .chat-status-etapa { color: var(--text); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
 .chat-status-etapa.ok { color: var(--muted); }
+/* Resposta em streaming: bolha da IA com o texto parcial e "escrevendo". */
+.chat-rascunho-tag { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 11.5px; font-style: italic; }
+.chat-rascunho-tag .chat-status-dot { width: 4px; height: 4px; }
 .chat-status-dot {
   width: 6px;
   height: 6px;

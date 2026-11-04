@@ -989,8 +989,10 @@ function _conectarSocket() {
       const url       = typeof payload === 'string' ? payload : (payload?.url || payload?.qr || payload?.data || '');
       const channelId = typeof payload === 'object' ? (payload?.channelId || null) : null;
       const origem    = channelId ? canais.find(x => x.id === channelId) : canais.find(x => x.id === canalSelecionadoId);
-      if (origem && origem.estado !== 'connected') { origem.estado = 'starting'; renderListaCanais(); }
-      if (url && (!channelId || channelId === canalSelecionadoId)) _mostrarQr(url);
+      if (!origem || origem.estado === 'connected') return;
+      origem.estado = 'starting';
+      renderListaCanais();
+      if (url && (!channelId || channelId === canalSelecionadoId)) _mostrarQr(url, origem.id);
     });
 
     // Mensagem recebida — igual ao monitor
@@ -1031,16 +1033,25 @@ function _conectarSocket() {
 // Aplica status no painel direito sem tocar no selecionarCanal (igual ao monitor.aplicarStatus)
 function _aplicarStatusPainel(status) {
   if (status === 'connected') {
+    if (_fallbackQrTimer) { clearTimeout(_fallbackQrTimer); _fallbackQrTimer = null; }
     _esconderQr();
     document.getElementById('qr-waiting').style.display   = 'none';
     document.getElementById('qr-connected').style.display = 'block';
     setTimeout(() => carregarCanais(), 2000);
-  } else if (status === 'stopped' || status === 'starting') {
+  } else if (status === 'starting') {
+    document.getElementById('qr-connected').style.display = 'none';
+    if (!_temQrDoCanal(canalSelecionadoId)) {
+      _esconderQr();
+      document.getElementById('qr-waiting').style.display = 'block';
+      document.getElementById('qr-waiting').textContent = 'Iniciando… aguarde o QR Code.';
+    }
+    if (!_fallbackQrTimer) _agendarFallbackQr(canalSelecionadoId, 0);
+  } else if (status === 'stopped' || status === 'error' || status === 'sem_servico') {
+    if (_fallbackQrTimer) { clearTimeout(_fallbackQrTimer); _fallbackQrTimer = null; }
     _esconderQr();
     document.getElementById('qr-connected').style.display = 'none';
     document.getElementById('qr-waiting').style.display   = 'block';
-    document.getElementById('qr-waiting').textContent =
-      status === 'starting' ? 'Iniciando… aguarde o QR Code.' : 'Inicie o serviço para conectar o WhatsApp.';
+    document.getElementById('qr-waiting').textContent = 'Inicie o serviço para conectar o WhatsApp.';
   }
 }
 
@@ -1071,6 +1082,12 @@ function _receberLog(canalId, entry) {
 
 let _fallbackQrTimer = null;
 
+function _temQrDoCanal(canalId) {
+  const img = document.getElementById('qr-img');
+  return !!(img && img.dataset.channelId === canalId &&
+    (img.getAttribute('src') || '').startsWith('data:image/'));
+}
+
 function _agendarFallbackQr(canalId, delayMs) {
   if (_fallbackQrTimer) clearTimeout(_fallbackQrTimer);
   _fallbackQrTimer = setTimeout(async () => {
@@ -1079,26 +1096,39 @@ function _agendarFallbackQr(canalId, delayMs) {
     const canal = canais.find(c => c.id === canalId);
     if (!canal || canal.estado !== 'starting') return;
     if (canalId !== canalSelecionadoId) return;
-    // Verifica se QR já está visível
-    const img = document.getElementById('qr-img');
-    if (img && img.src && img.src.startsWith('data:')) return;
-    // Solicita QR explicitamente via API
+    // Recupera e renova a imagem mesmo quando eventos em tempo real se perdem.
     try {
-      await fetch('/api/ia-command/whatsapp/services/get-qr', {
+      const res = await fetch('/api/ia-command/whatsapp/services/get-qr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ channel_id: canalId }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const atual = canais.find(c => c.id === canalId);
+      if (canalId === canalSelecionadoId && atual?.estado === 'starting') {
+        if (['connected', 'stopped', 'error'].includes(data.status)) {
+          atual.estado = data.status;
+          renderListaCanais();
+          _aplicarStatusPainel(data.status);
+        } else if (data.qr) {
+          _mostrarQr(data.qr, canalId);
+        }
+      }
     } catch (_) {}
+    const atual = canais.find(c => c.id === canalId);
+    if (canalId === canalSelecionadoId && atual?.estado === 'starting' && !_fallbackQrTimer) {
+      _agendarFallbackQr(canalId, 5000);
+    }
   }, delayMs);
 }
 
-function _mostrarQr(url) {
+function _mostrarQr(url, canalId = canalSelecionadoId) {
   const img = document.getElementById('qr-img');
-  if (!img || !url) return;
-  // Cancela fallback — QR chegou via Socket.IO
-  if (_fallbackQrTimer) { clearTimeout(_fallbackQrTimer); _fallbackQrTimer = null; }
+  if (!img || !url || canalId !== canalSelecionadoId) return;
+  if (canais.find(c => c.id === canalId)?.estado !== 'starting') return;
   img.src = url;
+  img.dataset.channelId = canalId;
   img.style.display = 'block';
   document.getElementById('qr-hint').style.display      = 'block';
   document.getElementById('qr-waiting').style.display   = 'none';
@@ -1109,7 +1139,7 @@ function _mostrarQr(url) {
 
 function _esconderQr() {
   const img = document.getElementById('qr-img');
-  if (img) { img.src = ''; img.style.display = 'none'; }
+  if (img) { img.removeAttribute('src'); delete img.dataset.channelId; img.style.display = 'none'; }
   document.getElementById('qr-hint').style.display = 'none';
 }
 
@@ -1324,6 +1354,10 @@ function atualizarResumo() {
 // SELEÇÃO DE CANAL
 // ═══════════════════════════════════════════════════════════════
 function selecionarCanal(id) {
+  if (canalSelecionadoId !== id) {
+    if (_fallbackQrTimer) { clearTimeout(_fallbackQrTimer); _fallbackQrTimer = null; }
+    _esconderQr();
+  }
   // Sai da sala do canal anterior e entra na nova
   if (_socket) {
     if (canalSelecionadoId && canalSelecionadoId !== id) _socket.emit('leave-channel', canalSelecionadoId);
@@ -1340,16 +1374,21 @@ function selecionarCanal(id) {
   document.getElementById('main-channel').style.display = 'flex';
 
   // QR — canal conectado sempre ganha prioridade sobre qualquer estado visual antigo.
-  const qrImg = document.getElementById('qr-img');
-  const temQr = qrImg && qrImg.src && qrImg.src.length > 10;
+  const temQr = _temQrDoCanal(id);
   if (canal.estado === 'connected') {
     _esconderQr();
     document.getElementById('qr-waiting').style.display   = 'none';
     document.getElementById('qr-connected').style.display = 'block';
-  } else if (!temQr) {
+  } else if (canal.estado !== 'starting' || !temQr) {
     _esconderQr();
     document.getElementById('qr-waiting').style.display   = 'block';
     document.getElementById('qr-connected').style.display = 'none';
+    document.getElementById('qr-waiting').textContent = canal.estado === 'starting'
+      ? 'Iniciando… aguarde o QR Code.' : 'Inicie o serviço para conectar o WhatsApp.';
+  }
+  if (canal.estado === 'starting' && !_fallbackQrTimer) _agendarFallbackQr(id, 0);
+  if (canal.estado !== 'starting' && _fallbackQrTimer) {
+    clearTimeout(_fallbackQrTimer); _fallbackQrTimer = null;
   }
 
   document.getElementById('ctrl-canal-nome').textContent = `${canal.icone} ${canal.nome}`;
@@ -1569,6 +1608,7 @@ async function acao(tipo, canalId) {
     if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
 
     if (tipo === 'get-qr') {
+      if (json.qr && canalSelecionadoId === canalId) _mostrarQr(json.qr, canalId);
       if (json.hasQr) toast('success', 'QR Code solicitado — verifique o painel.');
       else toast('warning', 'QR Code ainda não disponível. Aguarde o serviço inicializar.');
     } else if (tipo === 'instalar' || tipo === 'iniciar') {

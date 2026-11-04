@@ -379,6 +379,7 @@ class IACWhatsAppService extends EventEmitter {
     this._logBuffer  = [];
     this._wired      = false;
     this._startingPromise = null;
+    this._clearBootTimers = null;
     this._msgCount   = 0;
     this._senderContext = new Map();
     this._senderCancelledAt = new Map();
@@ -460,6 +461,8 @@ class IACWhatsAppService extends EventEmitter {
       );
     }
 
+    this._clearBootTimers?.();
+    this.lastQrUrl = null;
     this._empresaId = Number(empresaId);
     this._channelId = String(channel.id);
     this._channelName = channel.nome || `Canal ${channel.id}`;
@@ -494,6 +497,8 @@ class IACWhatsAppService extends EventEmitter {
       qrMaxRetries: 8, // ~200s de janela (QR renova a cada ~25s)
     });
     this._bootLog('cliente WhatsApp criado');
+    const bootClient = this.client;
+    const isCurrentClient = () => this.client === bootClient && !this._stopping;
 
     let receivedBootEvent = false;
     let retryingCleanSession = false;
@@ -501,7 +506,7 @@ class IACWhatsAppService extends EventEmitter {
     let firstQrAt = null;
     let qrCount = 0;
     let qrAuthTimer = null;
-    let preservingQrFromSavedSession = false;
+    let warnedQrFromSavedSession = false;
 
     const retryWithCleanSession = async (motivo) => {
       if (retryingCleanSession || this.status !== 'starting' || cfg.cleanSessionRetry) return false;
@@ -546,13 +551,13 @@ class IACWhatsAppService extends EventEmitter {
     };
 
     const progressTimer = setInterval(() => {
-      if (this.status !== 'starting') { clearInterval(progressTimer); return; }
+      if (!isCurrentClient() || this.status !== 'starting') { clearInterval(progressTimer); return; }
       this._bootLog('aguardando evento do WhatsApp Web');
     }, 15000);
 
     if (!cfg.cleanSessionRetry && _sessionExists(this._authClientId)) {
       silentSessionTimer = setTimeout(() => {
-        if (receivedBootEvent || this.status !== 'starting') return;
+        if (!isCurrentClient() || receivedBootEvent || this.status !== 'starting') return;
         if (WHATSAPP_PRESERVE_AUTH_SESSION_ON_TIMEOUT && hadAuthenticatedSessionAtStart) {
           this.log(
             `Sessao salva nao emitiu QR/autenticacao/ready em ${Math.round(WHATSAPP_SILENT_SESSION_RETRY_MS / 1000)}s; ` +
@@ -569,7 +574,7 @@ class IACWhatsAppService extends EventEmitter {
     }
 
     const initTimeout = setTimeout(async () => {
-      if (this.status !== 'starting') return;
+      if (!isCurrentClient() || this.status !== 'starting') return;
       if (firstQrAt) {
         this.log(`QR exibido; aguardando autenticacao por ate ${Math.round(WHATSAPP_QR_AUTH_TIMEOUT_MS / 1000)}s.`, 'warning');
         return;
@@ -586,32 +591,28 @@ class IACWhatsAppService extends EventEmitter {
       clearTimeout(initTimeout);
       if (silentSessionTimer) clearTimeout(silentSessionTimer);
       if (qrAuthTimer) clearTimeout(qrAuthTimer);
+      if (this._clearBootTimers === clearTimers) this._clearBootTimers = null;
     };
+    this._clearBootTimers = clearTimers;
 
     this.client.on('qr', async (qr) => {
+      if (!isCurrentClient() || this.status !== 'starting') return;
       receivedBootEvent = true;
       if (
         !cfg.cleanSessionRetry &&
         WHATSAPP_PRESERVE_AUTH_SESSION_ON_TIMEOUT &&
         hadAuthenticatedSessionAtStart &&
-        !preservingQrFromSavedSession
+        !warnedQrFromSavedSession
       ) {
-        preservingQrFromSavedSession = true;
-        clearTimers();
+        warnedQrFromSavedSession = true;
         const sessao = this._authClientId;
+        // Arquivos locais nao comprovam que o vinculo ainda e valido. Um QR nao
+        // deve encerrar o navegador: a sessao pode autenticar enquanto aguardamos.
         this.log(
-          `WhatsApp gerou QR para a sessao salva "${sessao}", mas ela parece autenticada; preservando a sessao. ` +
-          'Aguarde 1 ou 2 minutos e inicie o servico novamente. Use "Novo QR" apenas se quiser desconectar esta sessao.',
+          `WhatsApp solicitou QR para a sessao salva "${sessao}". ` +
+          'Mantendo o cliente ativo e os arquivos da sessao preservados; aguardando autenticacao.',
           'warning'
         );
-        if (this.client) {
-          await this.client.destroy().catch(() => {});
-          this.client = null;
-        }
-        await this._killChromeForSession(sessao);
-        this.lastQrUrl = null;
-        this.setStatus('stopped');
-        return;
       }
       if (silentSessionTimer) {
         clearTimeout(silentSessionTimer);
@@ -621,7 +622,7 @@ class IACWhatsAppService extends EventEmitter {
       if (!firstQrAt) {
         firstQrAt = Date.now();
         qrAuthTimer = setTimeout(async () => {
-          if (this.status !== 'starting') return;
+          if (!isCurrentClient() || this.status !== 'starting') return;
           clearTimers();
           this.log(`QR exibido por ${Math.round(WHATSAPP_QR_AUTH_TIMEOUT_MS / 1000)}s sem autenticacao. Encerrando para evitar loop infinito de QR.`, 'error');
           this.log('No celular, remova qualquer aparelho IA Command antigo em Aparelhos conectados e inicie novamente para gerar um QR novo.', 'warning');
@@ -630,17 +631,22 @@ class IACWhatsAppService extends EventEmitter {
       }
       this._bootLog('QR recebido', this._startTime, `tentativa=${qrCount}`);
       this.log('QR Code gerado — escaneie com o WhatsApp.', 'info');
-      this.lastQrUrl = await qrcode.toDataURL(qr);
+      const qrClient = this.client;
+      const qrUrl = await qrcode.toDataURL(qr);
+      if (this.client !== qrClient || this.status !== 'starting') return;
+      this.lastQrUrl = qrUrl;
       this.emit('iac-qr', this.lastQrUrl);
     });
 
     this.client.on('loading_screen', (percent, message) => {
+      if (!isCurrentClient()) return;
       receivedBootEvent = true;
       const p = percent !== undefined && percent !== null ? `${percent}%` : '?';
       this._bootLog('loading_screen', this._startTime, `${p}${message ? ` - ${message}` : ''}`);
     });
 
     this.client.on('authenticated', () => {
+      if (!isCurrentClient() || this.status !== 'starting') return;
       receivedBootEvent = true;
       if (qrAuthTimer) {
         clearTimeout(qrAuthTimer);
@@ -651,11 +657,13 @@ class IACWhatsAppService extends EventEmitter {
     });
 
     this.client.on('change_state', (state) => {
+      if (!isCurrentClient()) return;
       receivedBootEvent = true;
       this._bootLog('change_state', this._startTime, String(state || 'desconhecido'));
     });
 
     this.client.on('ready', () => {
+      if (!isCurrentClient() || this.status !== 'starting') return;
       receivedBootEvent = true;
       clearTimers();
       this.lastQrUrl = null;
@@ -677,6 +685,7 @@ class IACWhatsAppService extends EventEmitter {
     });
 
     this.client.on('auth_failure', () => {
+      if (!isCurrentClient()) return;
       receivedBootEvent = true;
       clearTimers();
       this._bootLog('auth_failure');
@@ -685,6 +694,7 @@ class IACWhatsAppService extends EventEmitter {
     });
 
     this.client.on('disconnected', (reason) => {
+      if (!isCurrentClient()) return;
       receivedBootEvent = true;
       clearTimers();
       this._bootLog('disconnected', this._startTime, String(reason || 'desconhecido'));
@@ -720,6 +730,7 @@ class IACWhatsAppService extends EventEmitter {
     this._bootLog('initialize chamado');
     this.client.initialize().catch(async (err) => {
       clearTimers();
+      if (!isCurrentClient()) return;
       this._bootLog('initialize erro', this._startTime, err?.message || String(err));
       this.client = null;
       this.setStatus('stopped');
@@ -829,6 +840,7 @@ class IACWhatsAppService extends EventEmitter {
     if (this._stopping) return;
     this._cancelarAutoReconnect();
     this._stopping = true;
+    this._clearBootTimers?.();
     const clientId = this._authClientId;
     if (this.client) {
       await this.client.destroy().catch(() => {});
@@ -848,6 +860,7 @@ class IACWhatsAppService extends EventEmitter {
 
     this._cancelarAutoReconnect();
     this._stopping = true;
+    this._clearBootTimers?.();
     if (this.client) {
       await this.client.logout().catch(() => {});
       await this.client.destroy().catch(() => {});

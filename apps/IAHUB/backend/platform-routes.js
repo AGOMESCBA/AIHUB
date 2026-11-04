@@ -9,6 +9,9 @@ const PREFIX = 'iahub-aes-gcm:';
 const PROVIDERS = ['groq', 'openai', 'gemini', 'deepseek', 'claude'];
 // Este cadastro atende ao IA Service. Outros aplicativos mantêm seus cadastros.
 const MODELOS_OPENAI_IA_SERVICE = new Set(['gpt-5.4-2026-03-05', 'gpt-5.4']);
+// Claude como reserva do GPT-5.4 (2026-11-04): só modelos testados com streaming.
+// claude-opus-4-8 recusa `temperature`; claude-3-5-sonnet-latest foi descontinuado.
+const MODELOS_CLAUDE_IA_SERVICE = new Set(['claude-sonnet-4-6', 'claude-haiku-4-5-20251001']);
 
 let db;
 
@@ -200,6 +203,10 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
     if (modeloOpenai !== undefined && !MODELOS_OPENAI_IA_SERVICE.has(modeloOpenai)) {
       return res.status(400).json({ error: 'Selecione GPT-5.4 na configuração do IA Service. Outros modelos precisam ser homologados antes de serem disponibilizados.' });
     }
+    const modeloClaude = body.claudeModelo !== undefined ? body.claudeModelo : body.claude_modelo;
+    if (modeloClaude !== undefined && !MODELOS_CLAUDE_IA_SERVICE.has(modeloClaude)) {
+      return res.status(400).json({ error: 'Selecione claude-sonnet-4-6 ou claude-haiku-4-5 na configuração do IA Service. Outros modelos Claude precisam ser testados antes de serem disponibilizados.' });
+    }
 
     let apelido = atual?.login_externo_apelido ?? null;
     if (body.loginExternoApelido !== undefined) {
@@ -228,7 +235,7 @@ module.exports = function registrarPlatformRoutes(app, { requireAuth, requireAdm
       openai_modelo: body.openaiModelo || body.openai_modelo || atual?.openai_modelo || 'gpt-4o-mini',
       gemini_modelo: body.geminiModelo || body.gemini_modelo || atual?.gemini_modelo || 'gemini-3.5-flash',
       deepseek_modelo: body.deepseekModelo || body.deepseek_modelo || atual?.deepseek_modelo || 'deepseek-chat',
-      claude_modelo: body.claudeModelo || body.claude_modelo || atual?.claude_modelo || 'claude-haiku-4-5-20251001',
+      claude_modelo: body.claudeModelo || body.claude_modelo || atual?.claude_modelo || 'claude-sonnet-4-6',
       groq_api_key_enc: body.groq_api_key ? encrypt(body.groq_api_key) : atual?.groq_api_key_enc || null,
       openai_api_key_enc: body.openai_api_key ? encrypt(body.openai_api_key) : atual?.openai_api_key_enc || null,
       gemini_api_key_enc: body.gemini_api_key ? encrypt(body.gemini_api_key) : atual?.gemini_api_key_enc || null,

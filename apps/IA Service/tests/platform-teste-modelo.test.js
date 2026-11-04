@@ -144,3 +144,56 @@ test('telas do IA Service só oferecem modelos homologados; legado não é subst
   assert.equal(select.value, 'gpt-5.4-2026-03-05');
   assert.equal(aviso.textContent, '');
 });
+
+// Claude como reserva do GPT-5.4 (2026-11-04): só modelos testados com streaming.
+// Teste real: opus-4-8 recusa `temperature` e claude-3-5-sonnet-latest não existe mais.
+test('salvamento do Claude aceita só modelos testados e grava o escolhido', async () => {
+  for (const modelo of ['claude-opus-4-8', 'claude-3-5-sonnet-latest', 'claude-sonnet-4-5', '', {}, null]) {
+    const { salvar, escritas } = preparar();
+    const res = await salvar({ openaiModelo: 'gpt-5.4-2026-03-05', claudeModelo: modelo });
+    assert.equal(res.codigo, 400);
+    assert.match(res.body.error, /claude-sonnet-4-6/);
+    assert.equal(escritas.length, 0);
+  }
+  for (const modelo of ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001']) {
+    const { salvar, escritas } = preparar();
+    assert.equal((await salvar({ openaiModelo: 'gpt-5.4-2026-03-05', claudeModelo: modelo })).codigo, 200);
+    assert.equal(escritas[0][16], modelo);
+  }
+  const { salvar, escritas } = preparar();
+  assert.equal((await salvar({ openaiModelo: 'gpt-5.4-2026-03-05' })).codigo, 200, 'campo não enviado não é validado');
+  assert.equal(escritas[0][16], 'claude-sonnet-4-6', 'empresa sem modelo salvo recebe o recomendado');
+});
+
+test('telas só oferecem Claude testado; modelo salvo fora da lista exige escolha explícita', () => {
+  const html = fs.readFileSync(path.resolve(__dirname, '../../IA Administracao/frontend/platform-config.html'), 'utf8');
+  const service = fs.readFileSync(path.resolve(__dirname, '../frontend/config-ia.html'), 'utf8');
+  for (const [conteudo, id] of [[html, 'model-claude'], [service, 'f-claude-modelo']]) {
+    const select = conteudo.match(new RegExp('<select id="' + id + '"[^>]*>([\\s\\S]*?)</select>'))[1];
+    assert.deepEqual([...select.matchAll(/<option value="([^"]+)"/g)].map(m => m[1]), ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001']);
+  }
+  const options = new Set(['claude-sonnet-4-6', 'claude-haiku-4-5-20251001']);
+  let selecionado = '', legado;
+  const select = {
+    get value() { return selecionado; },
+    set value(v) { selecionado = options.has(v) ? v : ''; },
+    querySelectorAll() { return []; },
+    appendChild(o) { legado = o; selecionado = o.value; },
+  };
+  const aviso = { textContent: '' };
+  const ctx = vm.createContext({ document: {
+    getElementById: id => id === 'model-claude' ? select : aviso,
+    createElement: () => ({ dataset: {} }),
+  } });
+  vm.runInContext(html.slice(html.indexOf('function preencherModeloOpenai('), html.indexOf('async function carregarIa(')), ctx);
+  ctx.preencherModeloClaude('claude-opus-4-8');
+  assert.equal(select.value, '');
+  assert.equal(legado.disabled, true);
+  assert.match(aviso.textContent, /claude-opus-4-8.*permanece ativa/);
+  ctx.preencherModeloClaude('claude-haiku-4-5-20251001');
+  assert.equal(select.value, 'claude-haiku-4-5-20251001');
+  assert.equal(aviso.textContent, '');
+  ctx.preencherModeloClaude(null);
+  assert.equal(select.value, 'claude-sonnet-4-6');
+  assert.match(html, /if\(!document\.getElementById\('model-claude'\)\.value\)\{ toast\(/, 'salvar exige escolha explícita do Claude');
+});

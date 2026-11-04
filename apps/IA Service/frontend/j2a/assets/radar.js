@@ -1104,6 +1104,24 @@
     const container = $('messages');
     if (!container) return;
     const row = document.createElement('article');
+    // Resposta em streaming (2026-11-04): enquanto a IA escreve, o status vira
+    // a própria bolha da resposta, no lugar onde a mensagem gravada vai entrar.
+    const rascunho = state.chatStatusAtendimentoId === state.atendimentoId ? (state.chatStatusRascunho || '') : '';
+    if (rascunho) {
+      const ia = { papel: 'assistant' };
+      row.className = `message message-${messageSide(ia)} assistant chat-status-row chat-rascunho-row`;
+      row.id = 'chat-status-row';
+      row.innerHTML = `
+        <div class="message-avatar">${escapeHtml(messageAvatar(ia))}</div>
+        <div class="message-card">
+          <div class="message-head"><strong>${escapeHtml(messageRole(ia))}</strong><span class="chat-rascunho-tag" role="status"><span class="chat-status-dot"></span><span class="chat-status-dot"></span><span class="chat-status-dot"></span> escrevendo</span></div>
+          <div class="message-text">${escapeHtml(rascunho)}</div>
+        </div>
+      `;
+      container.appendChild(row);
+      if (pertoDoFim) container.scrollTop = container.scrollHeight;
+      return;
+    }
     row.className = 'message message-left chat-status-row';
     row.id = 'chat-status-row';
     row.innerHTML = `
@@ -1133,10 +1151,11 @@
   // chamados, nao so no que estava sendo pesquisado). Corrigido associando
   // o texto ao atendimentoId que o gerou -- so e exibido quando esse
   // atendimento ainda e o visivel na tela.
-  function showChatStatus(texto, atendimentoId = state.atendimentoId, etapas = null) {
+  function showChatStatus(texto, atendimentoId = state.atendimentoId, etapas = null, rascunho = '') {
     state.chatStatusText = texto || 'Processando...';
     state.chatStatusAtendimentoId = atendimentoId;
     state.chatStatusEtapas = etapas;
+    state.chatStatusRascunho = rascunho || '';
     // Atualização de etapas só rola o chat se o analista já estava no fim dele.
     if (atendimentoId === state.atendimentoId) appendChatStatusRow(state.chatStatusText, etapas ? _estaPertoDoFim($('messages')) : true);
   }
@@ -1154,10 +1173,12 @@
       try {
         const p = await request(ext(`/atendimentos/${encodeURIComponent(atendimentoId)}/progresso`));
         const etapas = Array.isArray(p?.etapas) ? p.etapas : [];
-        const assinatura = JSON.stringify(etapas);
+        // Texto da resposta enquanto a IA escreve (streaming); some quando gravada.
+        const rascunho = typeof p?.rascunho === 'string' ? p.rascunho : '';
+        const assinatura = JSON.stringify([etapas, rascunho]);
         if (ativo && etapas.length && assinatura !== ultimo && state.chatStatusAtendimentoId === atendimentoId) {
           ultimo = assinatura;
-          showChatStatus(texto, atendimentoId, etapas);
+          showChatStatus(texto, atendimentoId, etapas, rascunho);
         }
         // Resposta já gravada: mostra agora, sem esperar o fim do turno.
         if (ativo && !respostaCarregada && atendimentoId === state.atendimentoId
@@ -1175,6 +1196,7 @@
     state.chatStatusText = null;
     state.chatStatusAtendimentoId = null;
     state.chatStatusEtapas = null;
+    state.chatStatusRascunho = '';
     const row = $('chat-status-row');
     if (row) row.remove();
   }

@@ -43,7 +43,7 @@ test('todas as abas exportam conteúdo completo sem alterar a tela', async () =>
       localStorage.setItem('svc_token_externo', 'test-token');
       Object.defineProperty(navigator, 'clipboard', { value: { writeText: async text => { window.copied = text; } } });
     });
-    await page.goto(`http://127.0.0.1:${server.address().port}/iaservice/j2a/`);
+    await page.goto(`http://127.0.0.1:${server.address().port}/iaservice/j2a/`, { waitUntil: 'domcontentloaded' });
     await page.locator('[data-ticket-id="ticket1"]').first().waitFor();
     assert.equal(await page.locator('#nav-radar-btn').count(), 0);
     assert.equal(await page.locator('.topbar-nav > [data-panel-tab="details"]').textContent(), 'Detalhes');

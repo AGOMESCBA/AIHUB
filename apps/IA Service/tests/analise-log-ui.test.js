@@ -8,10 +8,13 @@ const path = require('node:path');
 const { chromium } = require('playwright');
 const { localizarErros } = require('../backend/services/analise-log-service');
 
-test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado e telas móveis', { timeout: 60000 }, async () => {
+test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado e telas móveis', { timeout: 90000 }, async () => {
   const root = path.resolve(__dirname, '../frontend/j2a');
   const tickets = ['A', 'B'].map(id => ({ id, numero: id === 'A' ? '123' : '456', titulo: `Chamado ${id}`, clienteNome: 'Teste', descricao: 'Descrição de teste' }));
   let resolverAnalise;
+  let modoLista = 'normal';
+  let resolverLista;
+  let historicoSalvo = null;
   const postsChat = [];
   const requestsLogs = [];
   const relatorio = localizarErros(Buffer.from('THREAD ERROR\nVariable does not exist CTEST on U_TESTE(TESTE.PRW) line 42\n'), 'error.log');
@@ -26,10 +29,14 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
       if (url.pathname.includes('/radar/logs')) requestsLogs.push(url.pathname + url.search);
       else if (req.method === 'POST' && /\/(?:abrir-atendimento|iniciar-analise|mensagens|investigar)$/.test(url.pathname)) postsChat.push(url.pathname);
       if (url.pathname.endsWith('/radar/logs/analisar')) {
-        resolverAnalise = () => res.end(JSON.stringify({ ...relatorio, origem: { tipo: 'chat', numero: '123', chamadoId: 'A' } }));
+        res.setHeader('Content-Type', 'application/x-ndjson');
+        for (const etapa of ['arquivo', 'varredura', 'ia']) res.write(JSON.stringify({ tipo: 'progresso', etapa }) + '\n');
+        resolverAnalise = () => { if (!res.destroyed && !res.writableEnded) res.end(JSON.stringify({ tipo: 'resultado', resultado: { ...relatorio, origem: { tipo: 'chat', numero: '123', chamadoId: 'A' } } }) + '\n'); };
         return;
       }
       let data = {};
+      if (url.pathname.endsWith('/radar/logs/historico')) data = { analises: historicoSalvo && !url.searchParams.has('chamadoId') ? [{ id: 'hist-1', nome: historicoSalvo.arquivo.nome, tipo: 'avulso', atualizadoEm: '2026-11-04T12:00:00Z', ocorrencias: 1, bytesHistorico: 900 }] : [] };
+      if (url.pathname.endsWith('/radar/logs/historico/hist-1')) data = historicoSalvo;
       if (url.pathname.endsWith('/whoami')) data = { empresaNome: 'Teste', consultorNome: 'Analista' };
       if (url.pathname.endsWith('/fila')) data = { chamados: tickets };
       if (url.pathname.endsWith('/risco-sla')) data = { consultores: [], chamados: tickets };
@@ -38,12 +45,21 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
       if (url.pathname.endsWith('/radar/logs')) {
         const id = url.searchParams.get('chamadoId');
         data = { chamadoId: id, numero: id === 'A' ? '123' : '456', arquivos: [{ id: `anexo-${id}`, nome: `error-${id}.log`, tipo: 'chat', origem: 'Chat IA Service', disponivel: true }], avisos: [] };
+        if (modoLista === 'vazio') data.arquivos = [];
+        if (modoLista === 'erro') { res.statusCode = 503; data = { error: 'Falha de consulta simulada.' }; }
+        if (modoLista === 'lento') { resolverLista = () => { if (!res.destroyed) res.end(JSON.stringify(data)); }; return; }
       }
       if (url.pathname.endsWith('/radar/logs/avulso')) {
         data = structuredClone({ ...relatorio, origem: { tipo: 'avulso' } });
+        data.visaoGeral = { observado: 'Foi localizada uma referência a variável não existente.', atencao: 'Confirmar o contexto da rotina antes de alterar o código.', proximosPassos: 'Analista: encaminhar as evidências ao desenvolvedor.\nEquipe técnica: revisar a variável e validar em homologação.' };
         if (url.searchParams.get('grupoId')) {
           data.grupos[0].analise = { explicacao: 'Falha de variável.', causaProvavel: 'Verificar o fonte.', solucoes: 'Encaminhar ao desenvolvedor.', validacao: 'Repetir em homologação.', informacoesFaltantes: 'Fonte da rotina.' };
           data.ia = { gruposAnalisados: 1 };
+        }
+        if (url.searchParams.has('busca')) data = { termo: url.searchParams.get('busca'), total: 1, limite: 50, resultados: [{ linha: 301, evidencia: [{ linha: 301, texto: 'CTEST encontrado fora do trecho inicial' }] }] };
+        else {
+          data.historico = { id: 'hist-1', salvo: true, atualizadoEm: '2026-11-04T12:00:00Z', bytesHistorico: 900 };
+          historicoSalvo = structuredClone(data);
         }
       }
       res.end(JSON.stringify(data)); return;
@@ -65,24 +81,48 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     const errors = [];
     page.on('pageerror', err => errors.push(err.message));
     await page.addInitScript(() => localStorage.setItem('svc_token_externo', 'token-teste'));
-    await page.goto(`http://127.0.0.1:${server.address().port}/iaservice/j2a/`);
+    await page.goto(`http://127.0.0.1:${server.address().port}/iaservice/j2a/`, { waitUntil: 'domcontentloaded' });
     await page.locator('[data-ticket-id="A"]').first().waitFor();
     await abrirLogs();
+    assert.equal(await page.locator('.ci-botao + [data-panel-tab="logs"]').count(), 1, 'atalho fica ao lado de Mensagens');
     assert.equal(await page.locator('#panel-logs').isVisible(), true);
     assert.match(await page.locator('#logs-contexto').textContent(), /Nenhum chamado/);
     await page.locator('#logs-modo-avulso').click();
+    await page.evaluate(() => document.documentElement.dataset.theme = 'light');
+    await page.screenshot({ path: path.resolve(__dirname, '../../../tmp/analise-logs-novo-claro.png'), animations: 'disabled' });
+    await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
+    const fundoDrop = await page.locator('#logs-drop').evaluate(el => ({ fundo: getComputedStyle(el).backgroundColor, soft: getComputedStyle(el).getPropertyValue('--logs-soft'), panel2: getComputedStyle(el).getPropertyValue('--panel-2') }));
+    assert.equal(fundoDrop.soft.trim(), '#0c1c26', JSON.stringify(fundoDrop));
+    await page.screenshot({ path: path.resolve(__dirname, '../../../tmp/analise-logs-novo-inicio.png'), animations: 'disabled' });
     await page.locator('#logs-arquivo').setInputFiles({ name: 'avulso.log.txt', mimeType: 'text/plain', buffer: Buffer.from('THREAD ERROR\nFalha de teste') });
     await page.locator('#logs-analisar').click();
     await page.locator('#logs-resultado h3').first().waitFor();
     assert.match(await page.locator('#logs-resultado').textContent(), /Análise avulsa/);
+    await page.locator('#logs-busca').fill('texto inexistente');
+    assert.equal(await page.locator('[data-log-card]:visible').count(), 0);
+    await page.locator('#logs-busca').fill('CTEST');
+    assert.equal(await page.locator('[data-log-card]:visible').count(), 1);
+    await page.locator('#logs-buscar-arquivo').click();
+    await page.locator('#logs-busca-arquivo mark').waitFor();
+    assert.match(await page.locator('#logs-busca-status').textContent(), /1 linha/);
+    await page.locator('#logs-busca').fill('');
     await page.getByRole('button', { name: 'Analisar este erro', exact: true }).click();
     await page.getByText('Falha de variável.', { exact: true }).waitFor();
     assert.ok(requestsLogs.some(p => /avulso\?grupoId=erro-1/.test(p)));
+    await page.screenshot({ path: path.resolve(__dirname, '../../../tmp/analise-logs-novo-resultado.png'), animations: 'disabled' });
     assert.equal(postsChat.length, 0, 'avulso não inicia chamado nem envia mensagem');
     const downloadPromise = page.waitForEvent('download');
     await page.locator('#logs-baixar').click();
     const download = await downloadPromise;
     assert.match(fs.readFileSync(await download.path(), 'utf8'), /Evidência.*trecho limitado/);
+    const chamadasAntesHistorico = requestsLogs.filter(p => p.includes('/avulso')).length;
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('[data-ticket-id="A"]').first().waitFor(); await abrirLogs();
+    await page.locator('#logs-historico').click();
+    await page.locator('.logs-history-item').first().click();
+    await page.getByText('Análise recuperada do histórico. Nenhuma nova chamada à IA foi feita.', { exact: true }).waitFor();
+    assert.equal(requestsLogs.filter(p => p.includes('/avulso')).length, chamadasAntesHistorico);
+    assert.match(await page.locator('#logs-resultado').textContent(), /Salvo no histórico/);
 
     await page.locator('[data-ticket-id="A"]').first().click();
     await abrirLogs();
@@ -97,12 +137,28 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
       if (Date.now() - inicioEspera > 3000) throw new Error('Requisição simulada de análise não iniciou.');
       await new Promise(resolve => setTimeout(resolve, 10));
     }
+    await page.waitForFunction(() => document.querySelector('[data-log-step="ia"]').dataset.estado === 'ativo');
+    assert.equal(await page.locator('#logs-splash').isVisible(), true);
+    await page.locator('#logs-analisar').evaluate(b => { b.click(); b.click(); });
+    assert.equal(requestsLogs.filter(p => p.includes('/radar/logs/analisar')).length, 1, 'cliques repetidos não reenviam análise');
+    await page.screenshot({ path: path.resolve(__dirname, '../../../tmp/analise-logs-novo-splash.png'), animations: 'disabled' });
+    await page.locator('#logs-continuar').click();
+    assert.equal(await page.locator('#logs-analisar').isDisabled(), true);
     await page.locator('[data-ticket-id="B"]').first().click();
     if (resolverAnalise) resolverAnalise();
     await abrirLogs();
     await page.locator('.logs-item').filter({ hasText: 'error-B.log' }).waitFor();
     assert.equal(await page.locator('#logs-resultado').textContent(), '', 'resultado do chamado anterior não aparece no novo chamado');
     assert.match(await page.locator('#logs-contexto').textContent(), /#456/);
+    modoLista = 'vazio'; await page.locator('#logs-atualizar').click();
+    await page.getByRole('heading', { name: 'Nenhum log neste atendimento' }).waitFor();
+    assert.equal(await page.locator('#logs-analisar').isDisabled(), true);
+    modoLista = 'erro'; await page.locator('#logs-atualizar').click();
+    await page.getByRole('heading', { name: 'Não conseguimos buscar os logs' }).waitFor();
+    modoLista = 'lento'; await page.locator('#logs-atualizar').click();
+    await page.getByRole('heading', { name: 'Buscando os logs do atendimento' }).waitFor();
+    assert.equal(await page.locator('#logs-atualizar').isDisabled(), true);
+    await page.locator('#logs-modo-avulso').click(); resolverLista?.(); modoLista = 'normal';
 
     for (const width of [390, 320]) {
       await page.setViewportSize({ width, height: 844 });
@@ -111,10 +167,10 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       assert.equal(overflow, false, `sem rolagem horizontal em ${width}px`);
       await page.locator('#logs-modo-avulso').click();
-      await page.screenshot({ path: path.resolve(__dirname, `../../../tmp/analise-logs-${width}.png`) });
+      await page.screenshot({ path: path.resolve(__dirname, `../../../tmp/analise-logs-${width}.png`), animations: 'disabled' });
     }
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`http://127.0.0.1:${server.address().port}/radar-externo`);
+    await page.goto(`http://127.0.0.1:${server.address().port}/radar-externo`, { waitUntil: 'domcontentloaded' });
     await page.locator('#tab-logs').click();
     assert.equal(await page.locator('#painel-logs').isVisible(), true);
     await page.locator('#logs-modo-avulso').click();
@@ -125,6 +181,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     await page.screenshot({ path: path.resolve(__dirname, '../../../tmp/analise-logs-radar-desktop.png') });
     assert.deepEqual(errors, []);
   } finally {
+    resolverLista?.();
     resolverAnalise?.();
     await browser.close();
     server.closeAllConnections();

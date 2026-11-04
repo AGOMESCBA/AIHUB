@@ -266,9 +266,11 @@
                   <div class="form-group" style="margin-bottom:0">
                     <label class="form-label">Modelo</label>
                     <select id="f-claude-modelo" class="form-control" disabled>
-                      <option value="claude-haiku-4-5-20251001">claude-haiku-4-5-20251001 — ⭐ Recomendado (menor custo)</option>
+                      <option value="claude-sonnet-4-6">claude-sonnet-4-6 — Recomendado (reserva do GPT-5.4)</option>
+                      <option value="claude-haiku-4-5-20251001">claude-haiku-4-5-20251001 — Rápido (respostas mais simples)</option>
                     </select>
-                    <div class="form-hint">Editável apenas na IAHub Platform.</div>
+                    <div class="form-hint">Modelos Claude testados para o IA Service. Editável apenas na IAHub Platform.</div>
+                    <div class="form-hint" id="aviso-modelo-claude" role="status"></div>
                   </div>
                 </div>
               </div>
@@ -651,7 +653,21 @@
           $('aviso-modelo-openai').textContent = '';
         }
       }
-      if (config.claudeModelo) $('f-claude-modelo').value = config.claudeModelo;
+      if (config.claudeModelo) {
+        const modelo = $('f-claude-modelo');
+        modelo.querySelectorAll('[data-modelo-legado]').forEach(o => o.remove());
+        modelo.value = config.claudeModelo;
+        if (!modelo.value) {
+          const legado = document.createElement('option');
+          legado.value = ''; legado.disabled = true; legado.selected = true;
+          legado.dataset.modeloLegado = '1';
+          legado.textContent = 'Modelo salvo fora da lista testada';
+          modelo.appendChild(legado);
+          $('aviso-modelo-claude').textContent = 'Modelo atualmente salvo: ' + config.claudeModelo + '. Selecione claude-sonnet-4-6 e salve na IAHub Platform para atualizar.';
+        } else {
+          $('aviso-modelo-claude').textContent = '';
+        }
+      }
       if (config.geminiModelo) $('f-gemini-modelo').value = config.geminiModelo;
       $('f-login-apelido').value = config.loginExternoApelido || '';
       atualizarLinkApelido();

@@ -1378,6 +1378,39 @@ const MIGRATIONS = [
       ALTER TABLE anexos ADD COLUMN texto_print_busca TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 58,
+    descricao: 'Histórico de análises de logs autorizado em 2026-11-04: diagnóstico comprimido, evidências selecionadas e hash do arquivo, sem guardar o log original.',
+    sql: `
+      CREATE TABLE analises_logs (
+        id TEXT PRIMARY KEY,
+        empresa_id INTEGER NOT NULL,
+        chamado_id TEXT REFERENCES chamados(id) ON DELETE SET NULL,
+        numero_chamado TEXT,
+        nome_arquivo TEXT NOT NULL,
+        hash_arquivo TEXT NOT NULL,
+        origem_tipo TEXT NOT NULL CHECK (origem_tipo IN ('avulso', 'chat', 'softexpert')),
+        ocorrencias INTEGER NOT NULL DEFAULT 0,
+        grupos INTEGER NOT NULL DEFAULT 0,
+        resultado_gzip BLOB NOT NULL,
+        bytes_resultado INTEGER NOT NULL,
+        criado_em TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      );
+      CREATE INDEX idx_svc_logs_empresa_data ON analises_logs (empresa_id, atualizado_em DESC);
+      CREATE INDEX idx_svc_logs_chamado_data ON analises_logs (empresa_id, chamado_id, atualizado_em DESC);
+    `,
+  },
+  {
+    version: 59,
+    descricao: 'Autoria das análises de logs: identidades internas e externas distintas, mantendo o compartilhamento por empresa.',
+    sql: `
+      ALTER TABLE analises_logs ADD COLUMN criador_tipo TEXT;
+      ALTER TABLE analises_logs ADD COLUMN criador_id TEXT;
+      ALTER TABLE analises_logs ADD COLUMN editor_tipo TEXT;
+      ALTER TABLE analises_logs ADD COLUMN editor_id TEXT;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

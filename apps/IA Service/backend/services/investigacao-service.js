@@ -488,6 +488,32 @@ function _aplicarObservacoesVisuais(resultado, contexto) {
   };
 }
 
+// Rascunho mostrado no chat enquanto a IA escreve (streaming, 2026-11-04).
+// Nunca exibe o bloco interno de observações visuais, nem pela metade, e passa
+// pela mesma limpeza da resposta final. Na dúvida mostra menos: o texto
+// gravado substitui o rascunho ao fim do turno.
+function _textoRascunhoParaChat(texto) {
+  let s = String(texto || '');
+  const ini = s.search(/<<<\s*OBSERVACOES_VISUAIS_AUDITORIA/i);
+  if (ini >= 0) {
+    const fim = s.slice(ini).match(/<<<\s*FIM_OBSERVACOES_VISUAIS_AUDITORIA\s*>>>/i);
+    s = fim ? s.slice(0, ini) + s.slice(ini + fim.index + fim[0].length) : s.slice(0, ini);
+  }
+  const chave = s.indexOf('"observacoesVisuais"');
+  if (chave >= 0) {
+    const sem = _removerBlocoJsonComChave(s, 'observacoesVisuais');
+    if (sem.bloco) s = sem.texto;
+    else {
+      const abre = s.lastIndexOf('{', chave);
+      s = s.slice(0, abre >= 0 ? abre : chave).replace(/```(?:json)?\s*$/i, '');
+    }
+  }
+  // Começo de bloco interno ainda sem a chave (ex.: "<<<OBS", "{", "```json").
+  if (/^\s*(?:```|[{<])/.test(s)) return '';
+  s = s.replace(/<{1,3}[A-Z_]*$/i, '');
+  return _limparBastidoresRetryTexto(_limparMarcadoresProtocolo(s));
+}
+
 function _limparBastidoresRetryTexto(texto) {
   let s = String(texto || '');
   s = s.replace(/^\s*#{1,4}\s*reescrita[^\r\n]*(?:\r?\n)+/i, '');
@@ -1578,6 +1604,8 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       maxTokens: 6000,
       timeoutMs,
       prepararParaCandidato: preparador.preparar,
+      // Streaming: o chat mostra a resposta enquanto a IA escreve.
+      aoReceberTexto: (t) => progressoTurno.registrarRascunho(empresaId, atendimentoId, _textoRascunhoParaChat(t)),
     });
     // O contexto/manifesto/imagens persistidos e avaliados pelo Quality Gate
     // sao os da tentativa vencedora (podem ter sido reconstruidos para o
@@ -1788,6 +1816,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   // 2026-11-02) roda em segundo plano e o turno termina aqui, liberando o
   // atendimento; o próximo turno com investigação espera ela terminar.
   progressoTurno.registrar(empresaId, atendimentoId, ETAPA_RESPOSTA_PRONTA);
+  progressoTurno.registrarRascunho(empresaId, atendimentoId, '');
 
   _atualizarDossieEmSegundoPlano(empresaId, atendimentoId, async () => { try {
     await investigacaoDossieAtualizador.atualizarAposTurno(empresaId, atendimentoId, {
@@ -1860,6 +1889,7 @@ module.exports = {
   _ultimaRespostaDaIA,
   _semMaterialNovoDesdeUltimaAnalise,
   _transcreverPrintsParaBusca,
+  _textoRascunhoParaChat,
   aguardarDossiePendente,
   processarTurno,
   processarPreAnalise,

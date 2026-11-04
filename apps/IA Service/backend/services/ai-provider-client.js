@@ -99,6 +99,131 @@ function _httpPost(hostname, path, headers, body, timeoutMs = 45000) {
   });
 }
 
+// Formato do streaming de cada provider: `evento` lê um evento SSE (devolve o
+// pedaço de texto e anota fim/uso/erro em `st`); `json` lê a resposta inteira
+// quando a API (ou um proxy) ignora o `stream`.
+const FORMATO_STREAM = {
+  openai: {
+    evento(ev, st) {
+      if (ev.error) { st.erro = new Error(ev.error?.message || JSON.stringify(ev.error)); return null; }
+      if (ev.usage) st.usage = ev.usage;
+      const escolha = ev.choices?.[0];
+      if (escolha?.finish_reason) st.fim = escolha.finish_reason;
+      return escolha?.delta?.content;
+    },
+    json: (p) => ({ content: p.choices?.[0]?.message?.content, usage: p.usage || {}, finishReason: p.choices?.[0]?.finish_reason || null }),
+  },
+  // Anthropic (2026-11-04, fallback do gpt-5.4): message_start traz o uso de
+  // entrada, content_block_delta o texto, message_delta o stop_reason e o uso
+  // de saída; erro (ex.: overloaded_error) pode vir no meio do stream.
+  anthropic: {
+    evento(ev, st) {
+      if (ev.type === 'error' || ev.error) { st.erro = new Error(ev.error?.message || JSON.stringify(ev.error)); return null; }
+      if (ev.type === 'message_start') st.usage = { ...(ev.message?.usage || {}) };
+      if (ev.type === 'message_delta') {
+        if (ev.delta?.stop_reason) st.fim = ev.delta.stop_reason;
+        if (ev.usage) st.usage = { ...st.usage, ...ev.usage };
+      }
+      // Mais de um bloco de texto: mesma junção ('\n') da resposta sem streaming.
+      if (ev.type === 'content_block_start' && ev.content_block?.type === 'text' && st.temTexto) return '\n';
+      if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') return ev.delta.text;
+      return null;
+    },
+    json: (p) => ({ content: Array.isArray(p.content) ? p.content.map(c => c.text || '').join('\n') : null, usage: p.usage || {}, finishReason: p.stop_reason || null }),
+  },
+};
+
+// Resposta em streaming (SSE, 2026-11-04): o texto chega em pedaços e cada
+// pedaço acumulado vai para `aoReceberTexto`, para o chat mostrar a resposta
+// enquanto a IA escreve (#036914: ~18 s de tela parada com gpt-5.4).
+// Mesmo Buffer explícito e mesmo AbortController do _httpPost. Resposta que
+// não é SSE (erro HTTP da API vem em JSON) é tratada como no _httpPost.
+// Stream que termina sem motivo de fim é falha de rede (nunca entrega texto
+// cortado como se fosse completo) — o chamarIA tenta de novo, como hoje.
+function _httpPostStream(hostname, path, headers, body, timeoutMs = 45000, aoReceberTexto = null, formato = FORMATO_STREAM.openai) {
+  return new Promise((resolve, reject) => {
+    const bodyBuf = Buffer.from(JSON.stringify(body), 'utf8');
+    const controller = new AbortController();
+    const prazo = setTimeout(() => controller.abort(new Error(`Timeout de ${Math.round(timeoutMs / 1000)}s excedido.`)), timeoutMs);
+    let encerrado = false;
+    const falhar = (err) => {
+      if (encerrado) return;
+      encerrado = true;
+      clearTimeout(prazo);
+      reject(controller.signal.aborted ? (controller.signal.reason || err) : err);
+    };
+    const req = https.request({
+      hostname,
+      path,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': bodyBuf.length,
+        ...headers,
+      },
+      signal: controller.signal,
+    }, (res) => {
+      res.setEncoding?.('utf8');
+      const ehSse = /text\/event-stream/i.test(String(res.headers?.['content-type'] || ''));
+      let raw = '';
+      let pendente = '';
+      let content = '';
+      const st = { fim: null, usage: {}, erro: null, temTexto: false };
+      const processarLinha = (linha) => {
+        if (!linha.startsWith('data:')) return;
+        const dado = linha.slice(5).trim();
+        if (!dado || dado === '[DONE]') return;
+        let evento;
+        try { evento = JSON.parse(dado); } catch (_) { return; }
+        const pedaco = formato.evento(evento, st);
+        if (typeof pedaco === 'string' && pedaco) {
+          content += pedaco;
+          st.temTexto = true;
+          // Falha de quem exibe o rascunho nunca derruba a chamada à IA.
+          try { aoReceberTexto?.(content); } catch (_) {}
+        }
+      };
+      res.on('data', (c) => {
+        if (!ehSse) { raw += c; return; }
+        pendente += c;
+        const linhas = pendente.split(/\r?\n/);
+        pendente = linhas.pop();
+        for (const linha of linhas) processarLinha(linha);
+      });
+      res.on('error', falhar);
+      res.on('end', () => {
+        if (encerrado) return;
+        if (!ehSse) {
+          let parsed;
+          try {
+            parsed = JSON.parse(raw);
+          } catch (_) {
+            return falhar(new Error(`Resposta inválida do provider: ${raw.slice(0, 200)}`));
+          }
+          if (parsed.error) return falhar(new Error(parsed.error?.message || parsed.error?.error?.message || JSON.stringify(parsed.error)));
+          // Resposta inteira sem streaming (proxy ou API ignorando `stream`): vale como antes.
+          encerrado = true;
+          clearTimeout(prazo);
+          return resolve(formato.json(parsed));
+        }
+        if (pendente) processarLinha(pendente);
+        if (st.erro) return falhar(st.erro);
+        if (!st.fim) return falhar(new Error('Falha de network: resposta em streaming encerrada antes do fim.'));
+        encerrado = true;
+        clearTimeout(prazo);
+        resolve({ content, usage: st.usage, finishReason: st.fim });
+      });
+      // Conexão cortada no meio (ECONNRESET depois dos headers) sem 'end'.
+      res.on('close', () => {
+        if (!encerrado && !res.complete) falhar(new Error('read ECONNRESET (resposta em streaming interrompida)'));
+      });
+    });
+    req.on('error', falhar);
+    req.write(bodyBuf);
+    req.end();
+  });
+}
+
 function _normalizarTexto(data, providerName) {
   const texto = String(data || '').trim();
   if (!texto) throw new Error(`Resposta vazia do ${providerName}.`);
@@ -163,6 +288,15 @@ async function _chamarOpenAICompatUmaVez(cfg, apiKey, systemPrompt, userPrompt, 
   };
   if (opts.json) body.response_format = { type: 'json_object' };
 
+  // Streaming só na OpenAI (entre os openai_compat; o Claude tem o seu) e só
+  // para quem pediu o rascunho (geração da resposta do chat). Demais: igual.
+  if (typeof opts.aoReceberTexto === 'function' && cfg.hostname === 'api.openai.com' && !opts.json) {
+    body.stream = true;
+    body.stream_options = { include_usage: true };
+    const r = await _httpPostStream(cfg.hostname, cfg.path, { Authorization: `Bearer ${apiKey}` }, body, opts.timeoutMs, opts.aoReceberTexto, FORMATO_STREAM.openai);
+    return { content: r.content, usage: r.usage || {}, truncado: r.finishReason === 'length' };
+  }
+
   const parsed = await _httpPost(cfg.hostname, cfg.path, { Authorization: `Bearer ${apiKey}` }, body, opts.timeoutMs);
   const content = parsed.choices?.[0]?.message?.content;
   const finishReason = parsed.choices?.[0]?.finish_reason;
@@ -198,19 +332,21 @@ async function _chamarAnthropic(cfg, apiKey, systemPrompt, userPrompt, imagens, 
       ]
     : ultima.content;
 
-  const parsed = await _httpPost(
-    cfg.hostname,
-    cfg.path,
-    { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-    {
-      model,
-      system: systemPrompt,
-      messages: mensagens,
-      max_tokens: opts.maxTokens || 3000,
-      temperature: opts.temperature ?? 0,
-    },
-    opts.timeoutMs
-  );
+  const headers = { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' };
+  const body = {
+    model,
+    system: systemPrompt,
+    messages: mensagens,
+    max_tokens: opts.maxTokens || 3000,
+    temperature: opts.temperature ?? 0,
+  };
+  // Streaming (fallback do gpt-5.4 na geração do chat): mesmo rascunho da OpenAI.
+  if (typeof opts.aoReceberTexto === 'function') {
+    const r = await _httpPostStream(cfg.hostname, cfg.path, headers, { ...body, stream: true }, opts.timeoutMs, opts.aoReceberTexto, FORMATO_STREAM.anthropic);
+    return { texto: _normalizarTexto(r.content, 'Anthropic'), usage: r.usage || {}, truncado: r.finishReason === 'max_tokens' };
+  }
+
+  const parsed = await _httpPost(cfg.hostname, cfg.path, headers, body, opts.timeoutMs);
   const content = Array.isArray(parsed.content) ? parsed.content.map(c => c.text || '').join('\n') : parsed.content?.[0]?.text;
   return { texto: _normalizarTexto(content, 'Anthropic'), usage: parsed.usage || {}, truncado: parsed.stop_reason === 'max_tokens' };
 }
@@ -383,6 +519,8 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, imagens = [], opts 
       tentados += 1;
       const inicioTentativa = Date.now();
       const extraTentativa = { tokensPromptEstimados: ultimoTokensPrompt, ...(preparo ? { preparo } : {}) };
+      // Nova tentativa (retry ou outro provider): o rascunho da anterior some.
+      if (typeof opts.aoReceberTexto === 'function') { try { opts.aoReceberTexto(''); } catch (_) {} }
       try {
         const resultado = await chamarProvedor(provedor, keys[provedor], systemPrompt, promptTentativa, imagensTentativa, {
           ...opts, conversa: conversaTentativa, model: modeloDoProvedor,

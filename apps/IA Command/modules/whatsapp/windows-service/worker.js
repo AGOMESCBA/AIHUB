@@ -65,9 +65,6 @@ log('info', `Canal: ${canal.nome} (auth: ${canal.auth_client_id})`);
 const svc = new IACService();
 
 // ── Bridge de eventos → processo principal (via HTTP) ─────────────────────────
-// iac-qr só é enviado ao hub quando o frontend solicitar explicitamente (get-qr ou reconnect)
-let _ultimoQr = null;
-
 const EVENTOS_BRIDGE = ['iac-log', 'iac-status', 'iac-msg', 'iac-intent'];
 for (const evento of EVENTOS_BRIDGE) {
   svc.on(evento, (payload) => _enfileirar(evento, payload));
@@ -75,7 +72,6 @@ for (const evento of EVENTOS_BRIDGE) {
 
 // Envia o QR automaticamente assim que gerado — payload com channelId para o frontend saber a origem
 svc.on('iac-qr', (url) => {
-  _ultimoQr = url;
   _enfileirar('iac-qr', { channelId: IAC_CHANNEL_ID, url });
   _enfileirar('iac-log', { tipo: 'warning', msg: 'QR Code gerado — escaneie com o WhatsApp.' });
 });
@@ -186,7 +182,6 @@ const server = http.createServer((req, res) => {
 
           res.writeHead(200);
           res.end(JSON.stringify({ ok: true, status: 'starting' }));
-          _ultimoQr = null;
           log('info', 'Iniciar solicitado — conectando com a sessão salva...');
           await _iniciar();
         } else if (cmd === 'clear-buffer') {
@@ -194,27 +189,16 @@ const server = http.createServer((req, res) => {
           res.writeHead(200);
           res.end(JSON.stringify({ ok: true }));
         } else if (cmd === 'get-qr') {
-          if (_ultimoQr) {
-            // Já tem QR gerado — envia direto
-            res.writeHead(200);
-            res.end(JSON.stringify({ ok: true, hasQr: true }));
-            _enfileirar('iac-qr', { channelId: IAC_CHANNEL_ID, url: _ultimoQr });
-          } else if (svc.getStatus() !== 'starting') {
-            // WhatsApp não está iniciando — inicia agora sem checar sessão para gerar QR
-            res.writeHead(200);
-            res.end(JSON.stringify({ ok: true, hasQr: false, iniciando: true }));
-            log('info', 'QR solicitado — iniciando WhatsApp para gerar QR Code...');
-            _iniciarParaQr();
-          } else {
-            res.writeHead(200);
-            res.end(JSON.stringify({ ok: true, hasQr: false }));
-            log('info', 'QR solicitado — WhatsApp já está iniciando, aguarde...');
-          }
+          // Consulta sem iniciar/reiniciar o cliente. A imagem tambem vai na
+          // resposta HTTP para recuperar entregas perdidas pelo Socket.IO.
+          const status = svc.getStatus();
+          const qr = status === 'starting' ? svc.getQr() : null;
+          res.writeHead(200);
+          res.end(JSON.stringify({ ok: true, hasQr: !!qr, qr, status }));
         } else if (cmd === 'reconnect') {
           res.writeHead(200);
           res.end(JSON.stringify({ ok: true }));
           log('info', 'Desconectando sessão atual e gerando novo QR Code...');
-          _ultimoQr = null;
           try { await svc.disconnectSession(); } catch (_) {}
           // Remove sessão principal e quaisquer cópias em quarentena (session-iac_3, session-iac_3-quarantine-*)
           const authEntries = await fs.promises.readdir(AUTH_BASE).catch(() => []);
