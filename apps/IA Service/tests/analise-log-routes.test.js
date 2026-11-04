@@ -83,6 +83,23 @@ function post(prefixo, body, headers = {}) {
   return fetch(`${base}${prefixo}/radar/logs/analisar`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
 }
 
+test('exporta PDF nos dois acessos, sem consultar anexos, e exige sessão e dados válidos', async () => {
+  const n = chamadas.length;
+  for (const prefixo of ['/api/ia-service', '/api/ia-service-externo']) {
+    const exportar = (dados, headers = {}) => fetch(`${base}${prefixo}/radar/logs/relatorio.pdf`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(dados) });
+    const dados = { nome: 'error.log', erros: [{ id: 'erro-1', titulo: 'Erro de workflow', solucoes: 'Conferir o identificador.' }] };
+    const res = await exportar(dados);
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /application\/pdf/);
+    assert.equal(res.headers.get('cache-control'), 'no-store');
+    assert.match(res.headers.get('content-disposition'), /analise-log.pdf/);
+    assert.equal(Buffer.from(await res.arrayBuffer()).subarray(0, 5).toString(), '%PDF-');
+    assert.equal((await exportar({})).status, 400);
+    assert.equal((await exportar(dados, { 'x-usuario': 'ausente' })).status, 401);
+  }
+  assert.equal(chamadas.length, n);
+});
+
 test('lista anexos locais com aviso quando SoftExpert falha nos dois namespaces', async () => {
   for (const prefixo of ['/api/ia-service', '/api/ia-service-externo']) {
     const res = await fetch(`${base}${prefixo}/radar/logs?chamadoId=chamado-A`);

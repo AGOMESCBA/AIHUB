@@ -7,6 +7,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const { localizarErros } = require('../backend/services/analise-log-service');
+const { gerarPdf } = require('../backend/services/analise-log-pdf-service');
+const pdfParse = require('pdf-parse');
 
 test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado e telas móveis', { timeout: 90000 }, async () => {
   const root = path.resolve(__dirname, '../frontend/j2a');
@@ -28,6 +30,11 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
       res.end(fs.readFileSync(path.resolve(root, '../radar.html'))); return;
     }
     if (url.pathname.startsWith('/api/')) {
+      if (url.pathname.endsWith('/radar/logs/relatorio.pdf')) {
+        let body = ''; req.on('data', c => { body += c; });
+        req.on('end', async () => { res.setHeader('Content-Type', 'application/pdf'); res.end(await gerarPdf(JSON.parse(body))); });
+        return;
+      }
       res.setHeader('Content-Type', 'application/json');
       if (url.pathname.includes('/radar/logs')) requestsLogs.push(url.pathname + url.search);
       else if (req.method === 'POST' && /\/(?:abrir-atendimento|iniciar-analise|mensagens|investigar)$/.test(url.pathname)) postsChat.push(url.pathname);
@@ -107,11 +114,12 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     assert.ok(analisar.x > abas.x + abas.width + 10, 'ação Analisar log separada das origens');
     assert.ok(cabecalho.height < 150, 'cabeçalho compacto');
     assert.equal(await page.locator('.logs-source').evaluate(el => el.open), true, 'seleção do arquivo começa aberta');
-    assert.equal(await page.locator('.logs-source-recolher').isVisible(), true);
-    await page.locator('.logs-source-toggle').click();
+    assert.doesNotMatch(await page.locator('.logs-section-head').textContent(), /Expandir|Recolher/);
+    assert.equal(await page.locator('.logs-section-head').evaluate(el => getComputedStyle(el).listStyleType), 'disclosure-open', 'usa a mesma seta nativa dos demais quadros');
+    await page.locator('.logs-section-head').click();
     assert.equal(await page.locator('#logs-analisar').isVisible(), false, 'permite recolher a seleção do arquivo');
-    assert.equal(await page.locator('.logs-source-expandir').isVisible(), true);
-    await page.locator('.logs-source-toggle').click();
+    assert.equal(await page.locator('.logs-section-head').evaluate(el => getComputedStyle(el).listStyleType), 'disclosure-closed');
+    await page.locator('.logs-section-head').click();
     assert.equal(await page.locator('#logs-analisar').isVisible(), true);
     await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
     await page.screenshot({ path: path.resolve(__dirname, '../../../tmp/analise-logs-entrada-referencia.png'), animations: 'disabled' });
@@ -161,9 +169,13 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     const downloadPromise = page.waitForEvent('download');
     await page.locator('#logs-baixar').click();
     const download = await downloadPromise;
-    assert.match(fs.readFileSync(await download.path(), 'utf8'), /Evidência.*trecho limitado/);
-    assert.doesNotMatch(fs.readFileSync(await download.path(), 'utf8'), /O que foi observado|Onde começar|Próximos passos/);
-    assert.doesNotMatch(fs.readFileSync(await download.path(), 'utf8'), /Evento de contexto|Service Stopped|A varredura percorreu|Cada grupo mostra um trecho/);
+    assert.equal(download.suggestedFilename(), 'analise-log.pdf');
+    fs.copyFileSync(await download.path(), path.resolve(__dirname, '../../../tmp/analise-logs-download.pdf'));
+    const pdf = await pdfParse(Uint8Array.from(fs.readFileSync(await download.path())), { version: 'v2.0.550' });
+    assert.match(pdf.text, /Erro #1/);
+    assert.match(pdf.text, /Possíveis soluções/);
+    assert.match(pdf.text, /Encaminhar ao desenvolvedor/);
+    assert.doesNotMatch(pdf.text, /Evidência|Como validar|O que falta confirmar|Causa provável|O que foi observado|Onde começar|Próximos passos|Evento de contexto|Service Stopped|linhas lidas|ocorrências/);
     const chamadasAntesHistorico = requestsLogs.filter(p => p.includes('/avulso')).length;
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('[data-ticket-id="A"]').first().waitFor(); await abrirLogs();
@@ -176,7 +188,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     assert.doesNotMatch(await page.locator('#logs-ajuda').textContent(), /Arquivo pronto/);
     assert.equal(await page.locator('.logs-source').evaluate(el => el.open), false, 'abrir análise salva recolhe a seleção do arquivo');
     assert.equal(await page.locator('#logs-modo-avulso').isVisible(), false);
-    await page.locator('.logs-source-toggle').click();
+    await page.locator('.logs-section-head').click();
     assert.equal(await page.locator('.logs-source').evaluate(el => el.open), true, 'permite reabrir a seleção depois do histórico');
     await page.locator('#logs-modo-avulso').click();
     const envioAntes = await page.locator('#logs-drop').boundingBox();

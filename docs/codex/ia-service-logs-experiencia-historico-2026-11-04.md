@@ -4,7 +4,7 @@ Implementação local em 04/11/2026, sem publicação. O usuário autorizou expl
 
 ## Revisão de espaço e descoberta das soluções
 
-O quadro “Comece pelo arquivo” possui controle visível “Recolher/Expandir”, começa aberto na entrada e é recolhido automaticamente ao abrir uma análise do histórico. Pode ser expandido novamente para selecionar o original ou iniciar outra análise.
+O quadro “Comece pelo arquivo” usa a seta nativa à esquerda, seguindo o padrão dos demais blocos, sem botão “Expandir/Recolher”. Começa aberto na entrada e é recolhido automaticamente ao abrir uma análise do histórico. Pode ser expandido novamente pelo cabeçalho para selecionar o original ou iniciar outra análise.
 
 Simplificação final solicitada: remover também o quadro “Diagnóstico e possíveis soluções” e o atalho “Ver possíveis soluções”. Os diagnósticos e as soluções permanecem nos cartões dos respectivos erros, com recolhimento e filtro de analisados. Os avisos de falha continuam no status da análise e no cartão de acompanhamento.
 
@@ -76,3 +76,13 @@ Falha de gravação não descarta o resultado: a tela avisa e oferece o download
 Evidências em `tmp/`: `analise-logs-historico-validacao.txt`, `analise-logs-migracao-final.txt`, `analise-logs-historico-origem-final.txt`, `analise-logs-ia-objetiva-final.txt`, `log-real-objetivo.json` e capturas `analise-logs-novo-*.png`.
 
 Validação das melhorias de acompanhamento e exclusão: 42 testes de serviço, rotas, histórico, concorrência e navegador. Inclui desktop e 320/390 px, uso do campo de mensagem durante a análise, detalhes sem modal, conclusão sem perder foco, origem correta após trocar de chamado, seleção e cancelamento/confirmação de exclusão, exclusão atômica entre empresas e proteção contra recriação por atualização tardia. Evidências: `tmp/logs-melhorias-validacao-final.txt` e `tmp/analise-logs-monitor-*.png`.
+
+## Exportação objetiva em PDF
+
+O botão **Baixar PDF** exporta somente os erros exibidos e suas possíveis soluções, preservando a numeração original dos grupos. A busca por palavra e o filtro **Somente analisados pela IA** também se aplicam ao download. Sem erros correspondentes, o download fica desabilitado. Grupos sem diagnóstico recebem uma indicação explícita de que ainda não há soluções geradas pela IA.
+
+O documento A4 usa identificação do arquivo/chamado, títulos de erros, ações numeradas, margens e paginação. Métricas, famílias de mensagens, plano de investigação, explicação, causa provável, validação, informações faltantes, evidências e contexto técnico não são incluídos no PDF. Esses ajustes de exportação não alteram o diagnóstico existente na tela ou no histórico.
+
+O endpoint autenticado `POST /radar/logs/relatorio.pdf`, nos acessos interno e externo, recebe apenas nome, número do chamado e os grupos selecionados (id, título e soluções). Valida quantidade e tamanho, reaplica o filtro de credenciais e gera o PDF em memória com o PDFKit já instalado. Não consulta anexos, não grava arquivos/banco e não chama IA. A troca de relatório ou empresa impede baixar uma resposta antiga; o botão indica a geração e bloqueia cliques repetidos.
+
+Validação final: 21 testes aprovados de exportação, rotas e navegador. Inclui extração do texto e das coordenadas de documentos de uma e várias páginas, limites de entrada, ocultação de credenciais, autenticação nos dois acessos, download real no navegador, recuperação após falha, bloqueio de download tardio após trocar de empresa e filtros combinados em um relatório de 30 erros. Evidência: `tmp/analise-logs-pdf-final.txt`. Prévia renderizada e conferida em `tmp/analise-log-exemplo.png`; PDF de exemplo em `tmp/analise-log-exemplo.pdf`.

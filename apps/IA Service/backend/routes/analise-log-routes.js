@@ -10,6 +10,7 @@ const anexoRepo = require('../repositories/anexo-repository');
 const armazenamento = require('../services/armazenamento-anexos');
 const softExpert = require('../services/anexos-softexpert-service');
 const historicoRepo = require('../repositories/analise-log-repository');
+const pdfService = require('../services/analise-log-pdf-service');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: analise.MAX_BYTES, files: 1, fields: 0 } });
 const ativos = new Set();
@@ -44,6 +45,15 @@ module.exports = function registrar(app, prefixo) {
   // prefixo /radar também recebe a rotina svc-radar no acesso interno.
   const base = `${prefixo}/radar/logs`;
   app.use(base, (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+  app.post(`${base}/relatorio.pdf`, async (req, res) => {
+    try {
+      identidade(req);
+      const pdf = await pdfService.gerarPdf(req.body);
+      res.set('Content-Type', 'application/pdf');
+      res.set('Content-Disposition', 'attachment; filename="analise-log.pdf"');
+      res.send(pdf);
+    } catch (err) { falha(res, err); }
+  });
   app.get(`${base}/historico`, (req, res) => {
     try {
       if (req.query.chamadoId) contexto(req.svcEmpresaId, req.query.chamadoId);

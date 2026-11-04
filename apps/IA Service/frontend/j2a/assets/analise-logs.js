@@ -72,7 +72,7 @@ class AnaliseLogs {
         <section id="logs-historico-area" class="logs-history" hidden><div class="logs-list-heading"><div><h3>Análises salvas</h3><p>Últimas 50 análises da empresa. Reabra sem chamar a IA novamente.</p></div></div><div id="logs-historico-acoes" class="logs-history-actions" hidden><label><input type="checkbox" id="logs-historico-todas"> Selecionar todas as exibidas</label><button type="button" id="logs-historico-excluir" disabled>Excluir selecionadas</button></div><p id="logs-historico-status" role="status" aria-live="polite"></p><div id="logs-historico-lista" aria-live="polite"></div></section>
         <div class="logs-workspace">
           <details class="logs-source" aria-label="Escolha do arquivo" open>
-            <summary class="logs-section-head"><span class="logs-step-number">01</span><span class="logs-source-title"><b>Comece pelo arquivo</b><small>Escolha a origem do log que deseja investigar.</small></span><span class="logs-format">.log / .log.txt</span><span class="logs-source-toggle"><span class="logs-source-recolher">Recolher</span><span class="logs-source-expandir">Expandir</span></span></summary>
+            <summary class="logs-section-head"><span class="logs-section-head-content"><span class="logs-step-number">01</span><span class="logs-source-title"><b>Comece pelo arquivo</b><small>Escolha a origem do log que deseja investigar.</small></span><span class="logs-format">.log / .log.txt</span></span></summary>
             <div class="logs-source-actions"><div class="logs-source-tabs" role="group" aria-label="Origem do log">
               <button type="button" id="logs-modo-chamado" aria-pressed="true">${this.icone('arquivo')}<span>Logs do atendimento</span></button>
               <button type="button" id="logs-modo-avulso" aria-pressed="false">${this.icone('upload')}<span>Anexar log avulso</span></button>
@@ -91,7 +91,7 @@ class AnaliseLogs {
         </div>
         <div class="logs-feedback"><p id="logs-status" role="status" aria-live="polite"></p><button type="button" id="logs-ver-progresso" hidden>Ver andamento</button></div>
         <section id="logs-resultados-area" hidden>
-          <div class="logs-results-header"><div><span class="logs-eyebrow">02 · RESULTADO DA ANÁLISE</span><h2>O que o log está dizendo</h2></div><button type="button" id="logs-baixar" hidden>Baixar relatório</button></div>
+          <div class="logs-results-header"><div><span class="logs-eyebrow">02 · RESULTADO DA ANÁLISE</span><h2>O que o log está dizendo</h2></div><button type="button" id="logs-baixar" title="Baixar os erros exibidos e suas possíveis soluções em PDF" hidden>Baixar PDF</button></div>
           <div class="logs-search"><label for="logs-busca">${this.icone('busca')}<span class="logs-sr-only">Buscar palavra, mensagem ou rotina</span></label><input type="search" id="logs-busca" maxlength="100" placeholder="Buscar palavra, mensagem, campo ou rotina…"><button type="button" id="logs-buscar-arquivo">Buscar no arquivo completo</button></div>
           <div class="logs-filter-row"><label><input type="checkbox" id="logs-somente-analisados"> Somente analisados pela IA</label><span id="logs-filtro-status" role="status" aria-live="polite"></span></div>
           <p id="logs-filtro-vazio" class="logs-filter-empty" role="status" hidden></p>
@@ -419,6 +419,7 @@ class AnaliseLogs {
     this.el('lista').append(estado);
   }
   limparResultado() {
+    this.pdfController?.abort();
     this.reaberta = false;
     this.buscaController?.abort(); this.buscando = false;
     this.root.classList.remove('tem-resultado');
@@ -622,6 +623,7 @@ class AnaliseLogs {
       card.hidden = (somenteAnalisados && card.dataset.analisado !== 'true') || (!!termo && !card.dataset.busca.includes(termo)); if (!card.hidden) visiveis++;
     });
     this.el('filtro-status').textContent = `${visiveis} de ${total} erro(s) exibido(s) · ${analisados} analisado(s)`;
+    this.el('baixar').disabled = !!this.exportando || !visiveis;
     this.el('filtro-vazio').hidden = visiveis > 0 || !total;
     this.el('filtro-vazio').textContent = somenteAnalisados && !analisados ? 'Nenhum erro deste relatório possui diagnóstico por IA ainda. Desmarque o filtro para escolher um erro e analisá-lo.' : 'Nenhum erro corresponde aos filtros. Altere a busca ou desmarque “Somente analisados pela IA”.';
     this.el('busca-status').textContent = termo ? `${visiveis} de ${this.relatorio?.grupos.length || 0} grupos correspondem à busca. Use “Buscar no arquivo completo” para localizar também outros trechos do log.` : '';
@@ -664,22 +666,34 @@ class AnaliseLogs {
       if (this.buscaController === controller) { this.buscando = false; this.el('buscar-arquivo').disabled = this.ocupado; }
     }
   }
-  baixar() {
-    if (!this.relatorio) return;
-    const r = this.relatorio;
-    const partes = [`Análise de Logs — ${r.arquivo.nome}`, r.origem?.tipo === 'avulso' ? 'Análise avulsa' : `Chamado #${r.origem?.numero}`,
-      `${r.cobertura.linhasLidas} linhas lidas; ${r.cobertura.ocorrencias} ocorrências.`];
-    for (const familia of r.familias || []) partes.push(`${familia.titulo}: ${familia.quantidade} ocorrência(s).`);
-    for (const g of r.grupos) {
-      partes.push(`\n${g.id}: ${g.titulo}`, `${g.quantidade} ocorrência(s); linhas: ${g.linhas.join(', ')}`);
-      if (g.analise) for (const [campo, titulo] of [['explicacao', 'O que aconteceu'], ['causaProvavel', 'Causa provável'], ['solucoes', 'Possíveis soluções'], ['validacao', 'Como validar'], ['informacoesFaltantes', 'O que falta confirmar']]) partes.push(`${titulo}: ${g.analise[campo]}`);
-      else partes.push('Sem diagnóstico por IA.');
-      partes.push('Evidência (trecho limitado):', ...[...(g.contextoAnterior || []), ...g.evidencia].map(l => `${l.linha}: ${l.texto}${l.truncada ? ' […]' : ''}`));
+  async baixar() {
+    if (!this.relatorio || this.exportando) return;
+    const r = this.relatorio; const empresa = this.opcoes.contexto().empresa;
+    const visiveis = new Set([...this.root.querySelectorAll('[data-log-card]:not([hidden])')].map(c => c.dataset.logCard));
+    const erros = r.grupos.filter(g => visiveis.has(g.id)).map(g => ({ id: g.id, titulo: g.titulo, solucoes: g.analise?.solucoes || '' }));
+    if (!erros.length) return;
+    const controller = new AbortController(); this.pdfController = controller;
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    this.exportando = true; this.el('baixar').disabled = true; this.el('baixar').textContent = 'Gerando PDF…';
+    try {
+      const resposta = await fetch(this.opcoes.url('/radar/logs/relatorio.pdf'), {
+        method: 'POST', headers: { ...this.opcoes.headers(), 'Content-Type': 'application/json' }, signal: controller.signal,
+        body: JSON.stringify({ nome: r.arquivo.nome, numero: r.origem?.tipo !== 'avulso' && r.origem?.numero ? String(r.origem.numero) : null, erros }),
+      });
+      if (!resposta.ok) throw new Error((await resposta.json().catch(() => ({}))).error || 'Falha ao gerar PDF.');
+      if (!resposta.headers.get('Content-Type')?.includes('application/pdf')) throw new Error('O servidor não retornou um PDF. Entre novamente no sistema e tente baixar.');
+      const blob = await resposta.blob();
+      if (controller.signal.aborted || this.relatorio !== r || this.opcoes.contexto().empresa !== empresa) return;
+      const url = URL.createObjectURL(blob);
+      const a = this.node('a'); a.href = url; a.download = 'analise-log.pdf'; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      if (this.relatorio === r && this.opcoes.contexto().empresa === empresa) this.el('busca-status').textContent = err.name === 'AbortError' ? 'O download foi interrompido. Tente novamente.' : `Não foi possível baixar: ${err.message}`;
+    } finally {
+      clearTimeout(timeout); this.exportando = false;
+      this.el('baixar').textContent = 'Baixar PDF';
+      this.el('baixar').disabled = !this.root.querySelector('[data-log-card]:not([hidden])');
     }
-    const blob = new Blob([partes.join('\n\n')], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = this.node('a'); a.href = url; a.download = 'analise-log.txt'; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 }
 

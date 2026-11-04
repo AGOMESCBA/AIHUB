@@ -48,11 +48,8 @@
 .logs-hero-icon svg { width:25px; height:25px; }
 .logs-workspace { display:grid; grid-template-columns:minmax(0,1fr); gap:20px; align-items:start; }
 .logs-source { min-width:0; background:var(--logs-panel); border:1px solid var(--logs-line); border-radius:10px; box-shadow:0 3px 14px rgba(0,0,0,.04); overflow:hidden; }
-.logs-tela summary.logs-section-head { display:flex; align-items:center; gap:10px; padding:12px 16px; }
-.logs-source-toggle { display:inline-flex; align-items:center; gap:6px; flex:none; padding:6px 10px; border:1px solid var(--logs-line); border-radius:7px; font-size:11px; font-weight:600; color:var(--logs-text); background:var(--logs-soft); }
-.logs-source-toggle::after { content:'▴'; color:var(--logs-muted); }
-.logs-source:not([open]) > summary .logs-source-toggle::after { content:'▾'; }
-.logs-source[open] > summary .logs-source-expandir, .logs-source:not([open]) > summary .logs-source-recolher { display:none; }
+.logs-tela summary.logs-section-head { display:list-item; list-style-position:inside; padding:12px 16px; }
+.logs-section-head-content { display:inline-flex; align-items:center; gap:10px; vertical-align:middle; width:calc(100% - 18px); }
 .logs-source-title { flex:1; min-width:0; }
 .logs-source-title b { display:block; font-size:16px; font-weight:700; }
 .logs-source-title small { display:block; font-size:12px; color:var(--logs-muted); margin-top:2px; }
@@ -205,7 +202,7 @@
 @media(max-width:600px) {
   .logs-hero-tools { flex-direction:column-reverse; align-items:flex-end; gap:8px; } .logs-hero-tools button { font-size:10px; padding:6px; max-width:100px; }
   .logs-tela { padding:12px; } .logs-hero { margin-bottom:12px; gap:10px; padding:12px; } .logs-hero h2 { font-size:21px; letter-spacing:-.7px; } .logs-hero p { font-size:11px; } .logs-hero-icon { display:none; }
-  .logs-tela summary.logs-section-head { padding:12px; gap:9px; } .logs-source-title b { font-size:14px; } .logs-source-title small { font-size:11px; } .logs-format { display:none; }
+  .logs-tela summary.logs-section-head { padding:12px; } .logs-section-head-content { gap:9px; } .logs-source-title b { font-size:14px; } .logs-source-title small { font-size:11px; } .logs-format { display:none; }
   .logs-source-actions { flex-wrap:wrap; gap:8px; padding:0 12px 12px; } .logs-source-actions > .logs-primario { width:100%; } .logs-source-tabs { flex:1 1 100%; gap:2px; } .logs-source-tabs button { font-size:11px; padding:9px 5px; gap:5px; } .logs-source-tabs svg { width:15px; height:15px; }
   .logs-source-body { padding:0 14px 16px; } .logs-drop { padding:20px 12px; }
   .logs-source-footer { padding:8px 12px; }
