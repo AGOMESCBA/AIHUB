@@ -133,8 +133,31 @@ test('IDs desconhecidos e respostas incompletas não viram diagnósticos', async
     client: { chamarIA: async () => ({ texto: JSON.stringify({ analises: [{ id: 'erro-999' }, { id: 'erro-1', explicacao: 'não basta' }] }) }) },
   });
   assert.equal(r.ia.gruposAnalisados, 0);
+  assert.equal(r.ia.indisponivel, true);
+  assert.equal(r.ia.falha.codigo, 'DIAGNOSTICO_AUSENTE');
   assert.equal(r.grupos[0].analise, undefined);
   assert.ok(r.avisos.some(a => /não retornou/.test(a)));
+});
+
+test('falha da IA fornece motivo útil sem expor erro técnico, chave ou payload', async () => {
+  const casos = [
+    [Object.assign(new Error('SEGREDO-DO-PROVEDOR'), { _semChave: true }), 'SEM_CONFIGURACAO'],
+    [Object.assign(new Error('SEGREDO-DO-PROVEDOR'), { _cotaEsgotada: true }), 'COTA_ESGOTADA'],
+    [Object.assign(new Error('SEGREDO-DO-PROVEDOR'), { _semJanelaSuficiente: true }), 'CONTEXTO_EXCEDIDO'],
+    [new Error('Timeout: SEGREDO-DO-PROVEDOR'), 'TEMPO_ESGOTADO'],
+    [new Error('401 invalid_api_key SEGREDO-DO-PROVEDOR'), 'CREDENCIAL_INVALIDA'],
+    [new Error('SEGREDO-DO-PROVEDOR'), 'FALHA_PROVEDOR'],
+  ];
+  for (const [erroIA, codigo] of casos) {
+    const r = await analisarBuffer(7, buffer(incidente()), 'x.log', {
+      config: { resolverKeysEOrdem: () => ({ keys: {}, cfg: {} }) },
+      client: { chamarIA: async () => { throw erroIA; } },
+    });
+    assert.equal(r.ia.indisponivel, true); assert.equal(r.ia.falha.codigo, codigo);
+    assert.ok(r.ia.falha.mensagem.length > 20);
+    assert.doesNotMatch(JSON.stringify(r), /SEGREDO-DO-PROVEDOR|invalid_api_key/);
+    assert.equal(r.grupos[0].analise, undefined);
+  }
 });
 
 test('permite analisar individualmente grupo além dos oito iniciais', async () => {

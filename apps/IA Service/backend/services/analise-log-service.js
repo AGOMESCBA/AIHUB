@@ -174,6 +174,26 @@ Produza também uma visão geral útil ao usuário, considerando o inventário c
 Seja objetivo e não repita a mesma explicação entre campos. Não escreva parágrafos longos nem repita rótulos como Fato e Hipótese no texto. Para cada incidente: explicacao em até 2 frases curtas (45 palavras); causaProvavel em 1 frase (30 palavras), indicando incerteza quando necessário; solucoes com até 3 ações curtas separadas por quebra de linha, com responsável apenas quando ajudar; validacao em 1 frase; informacoesFaltantes com no máximo 2 verificações essenciais. Na visaoGeral, cada campo tem até 2 frases curtas. Deixe números de linha, pilha, datas de fontes e caminhos técnicos para as evidências, sem reproduzi-los extensamente no diagnóstico.
 Responda apenas JSON no formato {"visaoGeral":{"observado":"...","atencao":"...","proximosPassos":"..."},"analises":[{"id":"erro-1","explicacao":"...","causaProvavel":"...","solucoes":"...","validacao":"...","informacoesFaltantes":"..."}]}. Todos os campos finais são textos. Seja específico e conciso por incidente.`;
 
+function motivoFalhaIA(err) {
+  const causas = {
+    SEM_CONFIGURACAO: 'Nenhum provedor de IA está configurado para esta empresa. Solicite a configuração ao administrador.',
+    COTA_ESGOTADA: 'O provedor de IA informou falta de cota ou crédito. Solicite a verificação ao administrador.',
+    CONTEXTO_EXCEDIDO: 'O volume de evidências excedeu a capacidade do provedor. Tente analisar um erro individualmente.',
+    TEMPO_ESGOTADO: 'O provedor de IA não respondeu no tempo disponível. Tente analisar um erro individualmente.',
+    CREDENCIAL_INVALIDA: 'O provedor recusou a autenticação. Solicite a revisão da configuração de IA da empresa.',
+    RESPOSTA_INCOMPLETA: 'A resposta da IA veio incompleta. Tente analisar um erro individualmente.',
+    RESPOSTA_INVALIDA: 'A IA respondeu fora do formato esperado. Tente analisar um erro individualmente.',
+    FALHA_PROVEDOR: 'Não foi possível obter o diagnóstico do provedor de IA. Tente novamente; se persistir, solicite a verificação ao administrador.',
+  };
+  // Mensagens técnicas servem apenas para classificar. Nunca devolva payload,
+  // credencial ou conteúdo bruto do erro do provedor ao usuário ou ao log.
+  const texto = [err?.message, ...(Array.isArray(err?._tentativas) ? err._tentativas.map(t => t.erro) : [])].filter(Boolean).join(' ');
+  const codigo = err?._semChave ? 'SEM_CONFIGURACAO' : err?._cotaEsgotada ? 'COTA_ESGOTADA' : err?._semJanelaSuficiente ? 'CONTEXTO_EXCEDIDO' :
+    causas[err?.codigoIA] ? err.codigoIA : /401|invalid_api_key|authentication|unauthorized/i.test(texto) ? 'CREDENCIAL_INVALIDA' :
+    /timeout|timed out|tempo.*(?:esgotad|excedid)|AbortError/i.test(texto) ? 'TEMPO_ESGOTADO' : 'FALHA_PROVEDOR';
+  return { codigo, mensagem: causas[codigo] };
+}
+
 async function analisarBuffer(empresaId, buffer, nome, dependencias = {}, grupoId = null) {
   dependencias.onProgress?.('varredura');
   const relatorio = localizarErros(buffer, nome);
@@ -196,9 +216,11 @@ async function analisarBuffer(empresaId, buffer, nome, dependencias = {}, grupoI
     const resposta = await client.chamarIA(keys, cfg, SYSTEM, JSON.stringify({ incidentes: evidencias, contextoArquivo: relatorio.contextoArquivo,
       inventario: relatorio.grupos.map(g => ({ id: g.id, tipo: g.tipo, titulo: g.titulo, quantidade: g.quantidade })), familias: relatorio.familias }), [],
       { json: true, maxTokens: 5000, totalTimeoutMs: 75000, timeoutMs: 35000, maxProviderRounds: 1 });
-    if (resposta.truncado) throw erro('Resposta de IA incompleta.', 502);
-    const parsed = JSON.parse(String(resposta.texto || '').replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, ''));
-    if (!Array.isArray(parsed.analises)) throw erro('Resposta de IA fora do formato esperado.', 502);
+    if (resposta.truncado) throw Object.assign(erro('Resposta de IA incompleta.', 502), { codigoIA: 'RESPOSTA_INCOMPLETA' });
+    let parsed;
+    try { parsed = JSON.parse(String(resposta.texto || '').replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '')); }
+    catch (_) { throw Object.assign(erro('Resposta de IA fora do formato esperado.', 502), { codigoIA: 'RESPOSTA_INVALIDA' }); }
+    if (!Array.isArray(parsed?.analises)) throw Object.assign(erro('Resposta de IA fora do formato esperado.', 502), { codigoIA: 'RESPOSTA_INVALIDA' });
     const camposVisao = ['observado', 'atencao', 'proximosPassos'];
     if (camposVisao.every(c => typeof parsed.visaoGeral?.[c] === 'string' && parsed.visaoGeral[c].trim())) {
       relatorio.visaoGeral = Object.fromEntries(camposVisao.map(c => [c, redigirTexto(parsed.visaoGeral[c]).slice(0, 2500)]));
@@ -212,10 +234,16 @@ async function analisarBuffer(empresaId, buffer, nome, dependencias = {}, grupoI
       grupo.analise = Object.fromEntries(campos.map(c => [c, redigirTexto(a[c]).slice(0, 4000)]));
     }
     relatorio.ia = { provider: resposta.provider, model: resposta.model, gruposAnalisados: ids.size };
+    if (!ids.size) {
+      relatorio.ia.indisponivel = true;
+      relatorio.ia.falha = { codigo: 'DIAGNOSTICO_AUSENTE', mensagem: 'A IA não retornou diagnósticos válidos. Tente analisar um erro individualmente.' };
+    }
     if (ids.size < selecionados.length) relatorio.avisos.push('A IA não retornou uma análise válida para todos os grupos solicitados. Consulte os grupos identificados como sem diagnóstico.');
-  } catch (_) {
-    relatorio.avisos.push('Não foi possível concluir a análise por IA. As evidências da varredura estão disponíveis; tente analisar novamente ou verifique a configuração de IA.');
-    relatorio.ia = { gruposAnalisados: 0, indisponivel: true };
+  } catch (err) {
+    const falha = motivoFalhaIA(err);
+    relatorio.avisos.push(falha.mensagem);
+    relatorio.ia = { gruposAnalisados: 0, indisponivel: true, falha };
+    console.warn(`[IA Service][Análise de logs] empresa=${Number(empresaId)} falha=${falha.codigo}`);
   }
   dependencias.onProgress?.('relatorio', { iaIndisponivel: !!relatorio.ia?.indisponivel });
   return relatorio;

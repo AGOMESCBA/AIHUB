@@ -15,6 +15,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
   let modoLista = 'normal';
   let resolverLista;
   let historicoSalvo = null;
+  let falhaIA = false;
   const postsChat = [];
   const requestsLogs = [];
   const exclusoes = [];
@@ -62,6 +63,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
           data.grupos[0].analise = { explicacao: 'Falha de variável.', causaProvavel: 'Verificar o fonte.', solucoes: 'Encaminhar ao desenvolvedor.', validacao: 'Repetir em homologação.', informacoesFaltantes: 'Fonte da rotina.' };
           data.ia = { gruposAnalisados: 1 };
         }
+        if (falhaIA) { delete data.visaoGeral; data.ia = { gruposAnalisados: 0, indisponivel: true, falha: { codigo: 'TEMPO_ESGOTADO', mensagem: 'O provedor de IA não respondeu no tempo disponível. Tente analisar um erro individualmente.' } }; }
         if (url.searchParams.has('busca')) data = { termo: url.searchParams.get('busca'), total: 1, limite: 50, resultados: [{ linha: 301, evidencia: [{ linha: 301, texto: 'CTEST encontrado fora do trecho inicial' }] }] };
         else {
           data.historico = { id: 'hist-1', salvo: true, atualizadoEm: '2026-11-04T12:00:00Z', bytesHistorico: 900 };
@@ -91,13 +93,18 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     await page.locator('[data-ticket-id="A"]').first().waitFor();
     await abrirLogs();
     assert.equal(await page.locator('.topbar-actions > [data-panel-tab="logs"]:first-child + .ci-botao').count(), 1, 'análise aparece primeiro, seguida de Mensagens');
-    assert.equal(await page.locator('.logs-shortcut-text').textContent(), 'ANALISE DE ERROR.LOG');
+    assert.equal(await page.locator('.logs-shortcut-text').textContent(), 'Analise de Error.log');
     assert.equal(await page.locator('#panel-logs').isVisible(), true);
     assert.match(await page.locator('#logs-contexto').textContent(), /Nenhum chamado/);
     const cabecalho = await page.locator('.logs-hero').boundingBox();
     const entrada = await page.locator('.logs-source').boundingBox();
     assert.ok(Math.abs(cabecalho.width - entrada.width) < 1, 'entrada ocupa a largura do cabeçalho, conforme referência');
     assert.equal(await page.locator('.logs-guide').count(), 0, 'sem painel lateral de orientações');
+    const abas = await page.locator('.logs-source-tabs').boundingBox();
+    const analisar = await page.locator('#logs-analisar').boundingBox();
+    assert.ok(Math.abs(abas.y + abas.height / 2 - analisar.y - analisar.height / 2) < 1, 'origens e análise na mesma linha');
+    assert.ok(analisar.x > abas.x + abas.width + 10, 'ação Analisar log separada das origens');
+    assert.ok(cabecalho.height < 150, 'cabeçalho compacto');
     await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
     await page.screenshot({ path: path.resolve(__dirname, '../../../tmp/analise-logs-entrada-referencia.png'), animations: 'disabled' });
     await page.locator('#logs-modo-avulso').click();
@@ -110,6 +117,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     await page.locator('#logs-arquivo').setInputFiles({ name: 'avulso.log.txt', mimeType: 'text/plain', buffer: Buffer.from('THREAD ERROR\nFalha de teste') });
     await page.locator('#logs-analisar').click();
     await page.locator('#logs-resultado h3').first().waitFor();
+    await page.getByRole('heading', { name: 'As possíveis soluções ainda não foram geradas', exact: true }).waitFor();
     assert.match(await page.locator('#logs-resultado').textContent(), /Análise avulsa/);
     await page.locator('#logs-busca').fill('texto inexistente');
     assert.equal(await page.locator('[data-log-card]:visible').count(), 0);
@@ -121,6 +129,9 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     await page.locator('#logs-busca').fill('');
     await page.getByRole('button', { name: 'Analisar este erro', exact: true }).click();
     await page.getByText('Falha de variável.', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Ver possíveis soluções', exact: true }).click();
+    assert.equal(await page.locator('.logs-diagnostico.solucoes h4').textContent(), 'Possíveis soluções');
+    assert.match(await page.locator('.logs-diagnostico.solucoes').textContent(), /Encaminhar ao desenvolvedor/);
     assert.ok(requestsLogs.some(p => /avulso\?grupoId=erro-1/.test(p)));
     await page.screenshot({ path: path.resolve(__dirname, '../../../tmp/analise-logs-novo-resultado.png'), animations: 'disabled' });
     assert.equal(postsChat.length, 0, 'avulso não inicia chamado nem envia mensagem');
@@ -136,6 +147,10 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     await page.getByText('Análise recuperada do histórico. Nenhuma nova chamada à IA foi feita.', { exact: true }).waitFor();
     assert.equal(requestsLogs.filter(p => p.includes('/avulso')).length, chamadasAntesHistorico);
     assert.match(await page.locator('#logs-resultado').textContent(), /Salvo no histórico/);
+    assert.equal(await page.locator('#logs-analisar').isDisabled(), true, 'histórico avulso sem original não habilita nova análise');
+    assert.doesNotMatch(await page.locator('#logs-ajuda').textContent(), /Arquivo pronto/);
+    await page.locator('#logs-modo-avulso').click();
+    const envioAntes = await page.locator('#logs-drop').boundingBox();
     await page.locator('#logs-historico').click();
     await page.locator('.logs-history-item').first().waitFor();
     assert.equal(await page.locator('#logs-historico-fechar').count(), 0, 'não há botão Fechar separado');
@@ -143,6 +158,8 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     await page.locator('#logs-historico').click();
     assert.equal(await page.locator('#logs-historico-area').isVisible(), false);
     assert.equal(await page.locator('#logs-historico').getAttribute('aria-expanded'), 'false');
+    const envioDepois = await page.locator('#logs-drop').boundingBox();
+    assert.ok(Math.abs(envioAntes.height - envioDepois.height) < 1, 'abrir e fechar histórico preserva o formato do envio');
     await page.locator('#logs-historico').click();
     await page.locator('.logs-history-item').first().waitFor();
     await page.locator('#logs-historico-todas').check();
@@ -244,6 +261,12 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     assert.match(await page.locator('#logs-resultado').textContent(), /Análise avulsa/);
     await page.screenshot({ path: path.resolve(__dirname, '../../../tmp/analise-logs-radar-desktop.png') });
     await page.locator('#logs-monitor-fechar').click();
+    falhaIA = true;
+    await page.locator('#logs-analisar').click();
+    await page.getByText('Leitura concluída com aviso', { exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'As possíveis soluções ainda não foram geradas', exact: true }).waitFor();
+    assert.match(await page.locator('.logs-solutions-summary').textContent(), /não respondeu no tempo disponível/);
+    assert.equal(await page.getByRole('button', { name: 'Ver possíveis soluções', exact: true }).count(), 0, 'falha não é apresentada como diagnóstico concluído');
     assert.deepEqual(errors, []);
   } finally {
     resolverLista?.();

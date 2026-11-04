@@ -65,17 +65,17 @@ class AnaliseLogs {
     this.root.innerHTML = `
       <div class="logs-shell">
         <header class="logs-hero">
-          <div><span class="logs-eyebrow">DIAGNÓSTICO PROTHEUS</span><h2>Do log ao próximo passo.</h2><p>Encontre o que importa, entenda os erros e saiba por onde começar.</p><div class="logs-hero-tags"><span>Erros agrupados</span><span>Evidências do arquivo</span><span>Próximos passos</span></div></div>
+          <div><span class="logs-eyebrow">DIAGNÓSTICO PROTHEUS</span><h2>Do log ao próximo passo.</h2><p>Encontre os erros, as possíveis causas e soluções.</p></div>
           <div class="logs-hero-tools"><button type="button" id="logs-historico" aria-expanded="false" aria-controls="logs-historico-area">Histórico de análises</button><span class="logs-hero-icon">${this.icone('brilho')}</span></div>
         </header>
         <section id="logs-historico-area" class="logs-history" hidden><div class="logs-list-heading"><div><h3>Análises salvas</h3><p>Últimas 50 análises da empresa. Reabra sem chamar a IA novamente.</p></div></div><div id="logs-historico-acoes" class="logs-history-actions" hidden><label><input type="checkbox" id="logs-historico-todas"> Selecionar todas as exibidas</label><button type="button" id="logs-historico-excluir" disabled>Excluir selecionadas</button></div><p id="logs-historico-status" role="status" aria-live="polite"></p><div id="logs-historico-lista" aria-live="polite"></div></section>
         <div class="logs-workspace">
           <section class="logs-source" aria-label="Escolha do arquivo">
             <div class="logs-section-head"><span class="logs-step-number">01</span><div><h3>Comece pelo arquivo</h3><p>Escolha a origem do log que deseja investigar.</p></div><span class="logs-format">.log / .log.txt</span></div>
-            <div class="logs-source-tabs" role="group" aria-label="Origem do log">
+            <div class="logs-source-actions"><div class="logs-source-tabs" role="group" aria-label="Origem do log">
               <button type="button" id="logs-modo-chamado" aria-pressed="true">${this.icone('arquivo')}<span>Logs do atendimento</span></button>
               <button type="button" id="logs-modo-avulso" aria-pressed="false">${this.icone('upload')}<span>Anexar log avulso</span></button>
-            </div>
+            </div><button type="button" id="logs-analisar" class="logs-primario">${this.icone('brilho')}<span>Analisar log</span></button></div>
             <div id="logs-origem-chamado" class="logs-source-body">
               <div class="logs-list-heading"><p id="logs-contexto">Selecione um chamado para consultar os anexos.</p><button type="button" id="logs-atualizar" class="logs-text-button">Atualizar</button></div>
               <div id="logs-lista" class="logs-lista" aria-live="polite"></div>
@@ -85,7 +85,7 @@ class AnaliseLogs {
               <div class="logs-drop" id="logs-drop"><span class="logs-drop-icon">${this.icone('upload')}</span><h4>Seu arquivo, uma leitura mais clara.</h4><p>Arraste o log até aqui ou selecione no computador.</p><button type="button" id="logs-escolher">Selecionar arquivo</button><span class="logs-file-name" id="logs-nome-arquivo">Nenhum arquivo selecionado</span><small>.log ou .log.txt · até 20 MB</small></div>
               <p class="logs-source-note">Análise independente: não cria chamado nem vincula o arquivo ao atendimento aberto.</p>
             </div>
-            <footer class="logs-source-footer"><span id="logs-ajuda">Escolha um arquivo para continuar.</span><button type="button" id="logs-analisar" class="logs-primario">${this.icone('brilho')}<span>Analisar log</span></button></footer>
+            <footer class="logs-source-footer"><span id="logs-ajuda">Escolha um arquivo para continuar.</span></footer>
           </section>
         </div>
         <div class="logs-feedback"><p id="logs-status" role="status" aria-live="polite"></p><button type="button" id="logs-ver-progresso" hidden>Ver andamento</button></div>
@@ -138,7 +138,7 @@ class AnaliseLogs {
     if (resultado) this.el('monitor-arquivo').textContent = `${resultado.origem?.numero ? 'Chamado #' + resultado.origem.numero + ' · ' : ''}${resultado.arquivo.nome}`;
     this.el('monitor').dataset.estado = erro ? 'erro' : aviso ? 'aviso' : 'concluido';
     this.el('monitor-titulo').textContent = erro ? 'Não foi possível concluir' : aviso ? 'Leitura concluída com aviso' : 'Análise concluída';
-    this.el('monitor-status').textContent = erro || (resultado.historico?.salvo === false ? 'O resultado não foi salvo. Abra e baixe o relatório.' : resultado.ia?.indisponivel ? 'A IA não concluiu o diagnóstico. Consulte as evidências localizadas.' : 'Seu diagnóstico está pronto para consulta.');
+    this.el('monitor-status').textContent = erro || (resultado.historico?.salvo === false ? 'O resultado não foi salvo. Abra e baixe o relatório.' : resultado.ia?.indisponivel ? resultado.ia.falha?.mensagem || 'A IA não concluiu o diagnóstico. Consulte as evidências localizadas.' : 'Seu diagnóstico está pronto para consulta.');
     this.el('monitor-detalhes').hidden = true;
     this.el('monitor-resultado').hidden = !resultado;
     this.el('monitor-fechar').hidden = false;
@@ -152,7 +152,7 @@ class AnaliseLogs {
     this.versaoAnalise++;
     this.limparResultado(); this.relatorio = resultado; this.fonteAnalise = fonte;
     this.renderizar(resultado);
-    this.status('Resultado do arquivo analisado. Confira a identificação do chamado no relatório.', 'sucesso');
+    this.status(resultado.ia?.indisponivel ? resultado.ia.falha?.mensagem || 'A IA não concluiu o diagnóstico. Consulte as evidências localizadas.' : 'Resultado do arquivo analisado. Confira a identificação do chamado no relatório.', resultado.ia?.indisponivel ? 'aviso' : 'sucesso');
     this.el('resultados-area').scrollIntoView({ behavior: 'smooth', block: 'start' });
     this.monitor.hidden = true;
   }
@@ -183,7 +183,7 @@ class AnaliseLogs {
       ? arquivo && /\.log(?:\.txt)?$/i.test(arquivo.name) && arquivo.size > 0 && arquivo.size <= 20 * 1024 * 1024
       : !this.carregando && !!this.el('lista').querySelector('input:checked:not(:disabled)');
     this.el('analisar').disabled = this.ocupado || !pronto;
-    this.el('ajuda').textContent = this.ocupado ? 'Sua análise está em andamento.' : pronto ? 'Arquivo pronto para análise.' : this.carregando ? 'Aguarde a consulta dos anexos.' : 'Escolha um arquivo para continuar.';
+    this.el('ajuda').textContent = this.ocupado ? 'Sua análise está em andamento.' : pronto ? 'Arquivo pronto para análise.' : this.carregando ? 'Aguarde a consulta dos anexos.' : this.reaberta && this.relatorio?.origem?.tipo === 'avulso' && !arquivo ? 'Relatório salvo aberto. Selecione o original para uma nova análise ou pesquisa no arquivo completo.' : 'Escolha um arquivo para continuar.';
   }
   setModo(modo) {
     if (this.ocupado) return;
@@ -279,6 +279,7 @@ class AnaliseLogs {
       if (r.origem?.tipo !== 'avulso') this.fonteAnalise = { modo: 'chamado', caminho: '/radar/logs/analisar', opts: { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chamadoId: r.origem.chamadoId, tipo: r.origem.tipo, arquivoId: r.origem.arquivoId }) } };
       else { this.el('arquivo').value = ''; this.el('nome-arquivo').textContent = 'Selecione o original somente se quiser buscar no arquivo completo.'; }
       this.renderizar(r); this.fecharHistorico();
+      this.atualizarBotao();
       this.status('Análise recuperada do histórico. Nenhuma nova chamada à IA foi feita.', 'sucesso');
       this.el('resultados-area').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (err) { if (chave === this.chave() && versao === this.versaoAnalise) this.status(`Não foi possível reabrir a análise: ${err.message}`, 'erro'); }
@@ -516,7 +517,7 @@ class AnaliseLogs {
       this.concluirMonitor(resultado, fonte);
       if (modo === 'avulso' || chave === this.chave()) {
         this.relatorio = resultado; this.renderizar(resultado);
-        this.status(resultado.historico?.salvo === false ? 'Análise concluída, mas não foi salva. Baixe o relatório para preservar o resultado.' : resultado.ia?.indisponivel ? 'Leitura concluída. A IA está indisponível; as evidências podem ser consultadas abaixo.' : 'Análise concluída. Seu diagnóstico está pronto abaixo.', resultado.historico?.salvo === false || resultado.ia?.indisponivel ? 'aviso' : 'sucesso');
+        this.status(resultado.historico?.salvo === false ? 'Análise concluída, mas não foi salva. Baixe o relatório para preservar o resultado.' : resultado.ia?.indisponivel ? resultado.ia.falha?.mensagem || 'Leitura concluída. A IA está indisponível; as evidências podem ser consultadas abaixo.' : 'Análise concluída. Seu diagnóstico está pronto abaixo.', resultado.historico?.salvo === false || resultado.ia?.indisponivel ? 'aviso' : 'sucesso');
       } else {
         this.limparResultado();
         this.status('A análise do chamado anterior terminou. Use “Ver resultado” no aviso para consultá-la.', 'sucesso');
@@ -543,6 +544,22 @@ class AnaliseLogs {
       const metrica = this.node('div'); metrica.append(this.node('strong', valor), this.node('span', label)); numeros.append(metrica);
     }
     resumo.append(numeros, this.node('p', 'Ocorrências repetidas não são necessariamente causas diferentes. Confira o contexto antes de decidir uma ação.', 'logs-muted'));
+    if (r.grupos.length) {
+      const comDiagnostico = r.grupos.filter(g => g.analise?.solucoes?.trim()).length;
+      const diagnostico = this.node('section', null, 'logs-solutions-summary');
+      diagnostico.dataset.estado = comDiagnostico ? 'disponivel' : 'pendente';
+      diagnostico.append(this.node('h3', comDiagnostico ? 'Diagnóstico e possíveis soluções' : 'As possíveis soluções ainda não foram geradas'));
+      diagnostico.append(this.node('p', comDiagnostico ? `${comDiagnostico} de ${r.grupos.length} grupo(s) com diagnóstico. Consulte as possíveis soluções destacadas em cada erro.` : r.ia?.falha?.mensagem || (r.ia?.indisponivel ? 'A leitura do arquivo terminou, mas a IA não concluiu o diagnóstico. Abaixo estão as evidências, sem soluções geradas.' : 'A IA não retornou um diagnóstico válido para estes grupos.')));
+      if (comDiagnostico) {
+        const ver = this.node('button', 'Ver possíveis soluções'); ver.type = 'button';
+        ver.addEventListener('click', () => {
+          const alvo = this.el('resultado').querySelector('.logs-diagnostico.solucoes');
+          if (alvo) { alvo.scrollIntoView({ behavior: 'smooth', block: 'center' }); alvo.focus({ preventScroll: true }); }
+        });
+        diagnostico.append(ver);
+      } else diagnostico.append(this.node('p', this.fonteAnalise ? 'Use “Analisar este erro” para tentar gerar o diagnóstico e as soluções de uma ocorrência.' : 'Para tentar novamente, acesse o anexo do chamado ou selecione o arquivo avulso original.'));
+      resumo.append(diagnostico);
+    }
     if (r.visaoGeral) {
       const visao = this.node('section', null, 'logs-overview');
       visao.append(this.node('span', 'PLANO DE INVESTIGAÇÃO', 'logs-eyebrow'));
@@ -576,8 +593,9 @@ class AnaliseLogs {
       card.append(cabecalho, this.node('h3', grupo.titulo));
       if (grupo.analise) {
         const conteudo = this.node('div', null, 'logs-diagnostico-grid');
-        for (const [campo, titulo] of [['explicacao', 'O que aconteceu'], ['causaProvavel', 'Causa provável'], ['solucoes', 'O que fazer agora']]) {
+        for (const [campo, titulo] of [['explicacao', 'O que aconteceu'], ['causaProvavel', 'Causa provável'], ['solucoes', 'Possíveis soluções']]) {
           const bloco = this.node('section', null, `logs-diagnostico ${campo}`);
+          if (campo === 'solucoes') bloco.tabIndex = -1;
           bloco.append(this.node('h4', titulo), this.node('p', grupo.analise[campo])); conteudo.append(bloco);
         }
         card.append(conteudo);

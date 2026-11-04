@@ -2,6 +2,15 @@
 
 Implementação local em 04/11/2026, sem publicação. O usuário autorizou explicitamente o histórico persistente nesta sessão.
 
+## Revisão de espaço e descoberta das soluções
+
+- Entrada compacta: cabeçalho menor, origens agrupadas à esquerda e “Analisar log” separado à direita na mesma linha em desktop. O envio de arquivo usa o formato horizontal desde o início, sem depender de resultado aberto ou de alternância do histórico. Em celular, os controles se reorganizam para caber na tela.
+- Atalho passa a “Analise de Error.log”, conforme solicitado, antes de Mensagens.
+- “Possíveis soluções” passa a ser o título explícito das ações de cada diagnóstico. Um resumo acima dos erros informa quantos grupos têm diagnóstico e oferece acesso direto às soluções, sem duplicar seu conteúdo no histórico.
+- Quando não há diagnóstico válido, a interface informa que as soluções ainda não foram geradas. Erros da IA recebem classificação segura (configuração, cota, contexto, tempo, autenticação, resposta incompleta/inválida ou falha genérica), sem devolver a mensagem bruta do provedor. O log operacional registra apenas empresa e código da falha. Não foi realizada nova chamada real à IA nem confirmada a causa específica do aviso observado em produção.
+- Resposta com zero diagnósticos válidos é identificada como indisponível, preservando as evidências. Reabrir avulso sem original recalcula o estado do botão, evitando indicação incorreta de arquivo pronto.
+- Validação: 43 testes aprovados de varredura, IA simulada, histórico, rotas, isolamento, concorrência e navegador. A regressão visual verifica alinhamento das ações, acesso às soluções, falha de IA explícita e estabilidade do envio ao abrir/fechar histórico. Evidências em `tmp/analise-logs-compacta-solucoes-validacao.txt` e capturas `analise-logs-novo-*.png`.
+
 ## Auditoria final e uso simultâneo
 
 - Regra confirmada pelo usuário: histórico de chamados e avulsos compartilhado com a equipe da mesma empresa, sob as permissões existentes do IA Service. Não foi criada uma regra de propriedade privada por usuário.
