@@ -13,8 +13,6 @@
   background:radial-gradient(ellipse at 95% 0%, color-mix(in srgb, #3b82f6 6%, transparent), transparent 55%);
 }
 #panel-logs .logs-tela { --logs-text:var(--text); --logs-muted:var(--muted); --logs-line:var(--line); --logs-panel:var(--panel); --logs-soft:var(--panel-2); }
-.logs-validation h4 { font-size:12px; margin:12px 0 4px; }
-.logs-validation p { font-size:12px; white-space:pre-wrap; }
 .case-view.modo-logs > .case-header, .case-view.modo-logs > .case-description, .case-view.modo-logs > .routine-title { display:none; }
 .case-view.modo-logs, .radar-layout.mobile-more .case-view.modo-logs { grid-template-rows:minmax(0,1fr); }
 .case-view.modo-logs > #panel-logs { grid-row:1; }
@@ -113,6 +111,16 @@
 .logs-file-summary { border:1px solid var(--logs-line); border-radius:8px; padding:10px 14px; background:var(--logs-panel); }
 .logs-file-summary > summary h3 { display:inline; font-size:12px; color:var(--logs-muted); overflow-wrap:anywhere; }
 .logs-file-summary > p { font-size:12px; margin-top:8px; }
+.logs-summary-counts { margin-left:8px; font-size:12px; font-weight:650; color:var(--logs-text); white-space:nowrap; }
+.logs-filter-row label.logs-ordem { gap:6px; margin-left:auto; color:var(--logs-muted); }
+.logs-ordem select { font:12px 'Segoe UI',system-ui,sans-serif; padding:5px 8px; border:1px solid var(--logs-line); border-radius:6px; background:var(--logs-panel); color:var(--logs-text); cursor:pointer; }
+.logs-ordem select:focus-visible { outline:3px solid #60a5fa; outline-offset:2px; }
+.logs-acoes { margin:0; padding-left:18px; font-size:13px; line-height:1.7; color:var(--logs-muted); }
+.logs-acoes li + li { margin-top:4px; }
+.logs-diagnostico.validacao, .logs-diagnostico.informacoesFaltantes { padding:15px 18px; border:1px solid var(--logs-line); border-radius:7px; }
+.logs-diagnostico.informacoesFaltantes { border-color:color-mix(in srgb,#d6a256 45%,var(--logs-line)); background:color-mix(in srgb,#d6a256 7%,var(--logs-panel)); }
+.logs-diagnostico.informacoesFaltantes h4 { color:#d6a256; }
+.logs-filter-status { margin:6px 0 !important; font-size:12px; }
 .logs-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:13px 0; }
 .logs-metrics > div { padding:16px; border:1px solid var(--logs-line); border-radius:10px; background:var(--logs-panel); }
 .logs-metrics strong { display:block; font-size:26px; line-height:1.25; letter-spacing:-.7px; overflow-wrap:anywhere; }
@@ -124,13 +132,46 @@
 .logs-error-index { font:700 12px 'Cascadia Code',monospace; color:#649cf3; }
 .logs-count { background:var(--logs-soft); border:1px solid var(--logs-line); padding:3px 8px; border-radius:5px; font-size:10px; color:var(--logs-muted); }
 .logs-analysis-label { margin-left:auto; color:var(--logs-muted); font-size:10px; }
-.logs-cartao > h3 { font:600 13px/1.7 'Cascadia Code',monospace; background:var(--logs-soft); border-radius:7px; padding:12px 14px; margin-bottom:16px; }
+.logs-cartao-titulo { display:block; font:600 13px/1.7 'Cascadia Code',monospace; background:var(--logs-soft); border-radius:7px; padding:12px 14px; margin-bottom:16px; }
 .logs-diagnostico-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px 24px; margin:20px 0; }
 .logs-diagnostico h4 { font-size:11px; text-transform:uppercase; letter-spacing:.6px; margin-bottom:6px; color:#6a9ff2; }
 .logs-diagnostico p { font-size:13px; line-height:1.7; white-space:pre-wrap; }
 .logs-diagnostico.solucoes { grid-column:1 / -1; border-left:3px solid #3b82f6; background:var(--logs-tint); border-radius:0 7px 7px 0; padding:15px 18px; }
-.logs-cartao > p { font-size:12px; margin-bottom:12px; }
-.logs-cartao > details { border-top:1px solid var(--logs-line); padding-top:10px; color:var(--logs-muted); margin-top:15px; }
+.logs-cartao-corpo > p { font-size:12px; margin-bottom:12px; }
+.logs-cartao-corpo > details { border-top:1px solid var(--logs-line); padding-top:10px; color:var(--logs-muted); margin-top:15px; }
+/* Navegação dos grupos: lista compacta (um aberto por vez) e, em área larga,
+   dois painéis. A seleção usa só .selecionado; [hidden] segue sendo o filtro. */
+.logs-tela button.logs-cartao-topo { display:block; width:100%; padding:0; border:0; border-radius:0; background:transparent; color:inherit; text-align:left; font:inherit; }
+.logs-tela button.logs-cartao-topo:hover:not(:disabled) { background:transparent; }
+.logs-parada { color:#d6a256; font-size:10px; }
+.logs-indice { display:none; }
+.logs-cartao:not(.selecionado) { margin:8px 0; padding:12px 16px; }
+.logs-cartao:not(.selecionado) > .logs-cartao-corpo { display:none; }
+.logs-cartao:not(.selecionado) .logs-error-header { margin-bottom:8px; }
+.logs-cartao:not(.selecionado) .logs-cartao-titulo { margin:0; padding:8px 12px; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.logs-cartao:not(.selecionado):hover { border-color:color-mix(in srgb,#3b82f6 45%,var(--logs-line)); }
+.logs-cartao.selecionado { border-color:color-mix(in srgb,#3b82f6 45%,var(--logs-line)); }
+#logs-resultados-area { container:logs-resultado / inline-size; }
+@container logs-resultado (min-width:1100px) {
+  .logs-navegacao { display:grid; grid-template-columns:minmax(280px,340px) minmax(0,1fr); gap:16px; align-items:start; }
+  /* Coluna esquerda: busca, filtros, lista e contador, acompanhando a rolagem. */
+  .logs-lateral { position:sticky; top:0; display:flex; flex-direction:column; max-height:calc(100dvh - 110px); padding:12px; border:1px solid var(--logs-line); border-radius:10px; background:var(--logs-panel); }
+  .logs-lateral .logs-search { flex-wrap:wrap; gap:6px; padding:6px 8px 8px 10px; }
+  .logs-lateral .logs-search input { width:calc(100% - 30px); flex:1 1 auto; }
+  .logs-lateral .logs-search button { width:100%; }
+  .logs-lateral .logs-filter-row { margin:10px 0 8px; }
+  .logs-indice { display:flex; flex:1 1 auto; min-height:0; flex-direction:column; gap:6px; overflow:auto; padding:2px 4px 2px 2px; }
+  .logs-filter-status { margin-top:8px !important; padding-top:8px; border-top:1px solid var(--logs-line); }
+  .logs-principal .logs-search-status:empty { display:none; }
+  .logs-cartoes > .logs-cartao:not(.selecionado) { display:none; }
+  .logs-cartoes > .logs-cartao { margin:0; }
+  .logs-tela button.logs-cartao-topo { cursor:default; }
+}
+.logs-tela button.logs-indice-item { display:block; width:100%; flex:none; text-align:left; padding:10px 12px; border-radius:8px; }
+.logs-tela button.logs-indice-item[aria-current=true] { border-color:#3b82f6; background:var(--logs-tint); box-shadow:inset 3px 0 0 #3b82f6; }
+.logs-indice-titulo { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin:3px 0 5px; font:600 12px/1.45 'Cascadia Code',monospace; overflow-wrap:anywhere; }
+.logs-indice-meta { display:flex; flex-wrap:wrap; gap:4px 10px; font-size:10.5px; font-weight:400; color:var(--logs-muted); }
+.logs-indice-ia { color:#22a87a; }
 .logs-tela pre { max-height:350px; overflow:auto; background:var(--logs-soft); color:var(--logs-text); padding:14px; border:1px solid var(--logs-line); border-radius:7px; font:11px/1.8 'Cascadia Code',monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
 .logs-search-hit { border:1px solid var(--logs-line); border-radius:8px; padding:12px; margin:10px 0; background:var(--logs-panel); }
 .logs-search-hit mark { background:#fef08a; color:#713f12; border-radius:2px; }
@@ -206,7 +247,7 @@
   .logs-results-header { align-items:flex-start; gap:10px; } .logs-results-header h2 { font-size:18px; } .logs-results-header button { font-size:10px; padding:8px; }
   .logs-search { flex-wrap:wrap; gap:5px; padding:8px 10px; } .logs-search button { width:100%; } .logs-search label { width:20px; } .logs-search input { width:calc(100% - 30px); font-size:12px; }
   .logs-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; } .logs-metrics > div { padding:12px; } .logs-metrics strong { font-size:23px; }
-  .logs-diagnostico-grid { grid-template-columns:minmax(0,1fr); } .logs-cartao { padding:15px; } .logs-analysis-label, .logs-count { font-size:9px; } .logs-cartao > h3 { font-size:11px; padding:10px; }
+  .logs-diagnostico-grid { grid-template-columns:minmax(0,1fr); } .logs-cartao { padding:15px; } .logs-analysis-label, .logs-count { font-size:9px; } .logs-cartao-titulo { font-size:11px; padding:10px; }
   .logs-dialog { padding:24px 16px 18px; } .logs-dialog h2 { font-size:21px; } .logs-step-state { font-size:8px; } .logs-progress-steps li { gap:8px; padding:12px 4px; } .logs-progress-steps small { max-width:160px; font-size:9px; } .logs-progress-steps b { font-size:11px; } .logs-dialog-bottom button { padding:8px 10px; font-size:11px; }
 }
 @media(prefers-reduced-motion:reduce) { .logs-tela *, .logs-tela *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; } }

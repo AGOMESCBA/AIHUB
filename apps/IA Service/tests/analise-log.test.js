@@ -36,8 +36,8 @@ test('conta warnings explícitos separados dos erros, inclusive repetições e c
     '[INFO] A documentação menciona warning sem registrar um aviso\n' +
     '[WARNING] Revisar configuração\nERROR: Falha de conexão'), 'error.log');
   assert.equal(r.cobertura.warnings, 6);
-  assert.equal(r.cobertura.ocorrencias, 1, 'a mensagem dentro do bloco THREAD ERROR continua sendo evidência do incidente');
-  assert.equal(r.grupos.length, 1);
+  assert.equal(r.cobertura.ocorrencias, 2, 'o ERROR posterior é um registro independente, não continuação do THREAD ERROR');
+  assert.equal(r.grupos.length, 2);
 });
 
 test('arquivo só com warnings não gera erros e varre avisos além do limite de grupos', () => {
@@ -202,6 +202,7 @@ test('permite analisar individualmente grupo além dos oito iniciais', async () 
 
 test('análise inicial distribui exemplos entre famílias e recebe inventário e visão geral', async () => {
   const texto = Array.from({ length: 12 }, (_, i) => `[INFO]Msg...:[Erro ao cancelar o Workflow: WF.${i}/2026 | Não encontrado]\n`).join('') +
+    '[ERROR][SERVER] Falha ao conectar no DbAccess\n' +
     '[ERROR][SERVER] deleting server, TESTE\n' + incidente('Application Server is Shutting Down. on TESTE(TESTE.PRX)');
   const etapas = []; let payload;
   const r = await analisarBuffer(1, buffer(texto), 'x.log', {
@@ -215,10 +216,36 @@ test('análise inicial distribui exemplos entre famílias e recebe inventário e
   assert.deepEqual(etapas, ['varredura', 'ia', 'relatorio']);
   assert.equal(payload.incidentes.length, 8);
   assert.ok(payload.incidentes.some(g => g.evidencia.some(l => /Shutting Down/.test(l.texto))));
-  assert.ok(payload.incidentes.some(g => g.evidencia.some(l => /\[ERROR\]\[SERVER\]/.test(l.texto))));
-  assert.equal(payload.inventario.length, 14);
+  assert.ok(payload.incidentes.some(g => g.evidencia.some(l => /\[ERROR\]\[SERVER\] Falha ao conectar/.test(l.texto))), 'mensagem do servidor fora da parada mantém sua vaga');
+  assert.ok(!payload.incidentes.some(g => g.evidencia.some(l => /deleting server/.test(l.texto))), 'parada ocupa uma única vaga');
+  assert.equal(r.grupos.find(g => /deleting server/.test(g.titulo)).tipo, 'encerramento');
+  assert.equal(payload.inventario.length, 15);
   assert.equal(r.visaoGeral.atencao, 'Verificar a parada.');
-  assert.equal(r.familias.reduce((s, f) => s + f.quantidade, 0), 14);
+  assert.equal(r.familias.reduce((s, f) => s + f.quantidade, 0), 15);
+});
+
+test('encerramento do servidor é consequência: ocupa uma vaga da IA e só preenche vagas que sobrarem', async () => {
+  const encerramento = rotina => incidente(`Application Server is Shutting Down. on ${rotina}(${rotina}.PRW) 14/08/2026 17:28:01`);
+  const analisarPrompt = async texto => {
+    let payload;
+    await analisarBuffer(1, buffer(texto), 'x.log', {
+      config: { resolverKeysEOrdem: () => ({ keys: {}, cfg: {} }) },
+      client: { chamarIA: async (_k, _c, _s, user) => { payload = JSON.parse(user); return { texto: '{"analises":[]}' }; } },
+    });
+    return payload.incidentes.map(i => i.evidencia.map(l => l.texto).join(' '));
+  };
+  const parada = ['FWBOSCH', 'FWPULSE', 'CHANGEQ', 'ISACENTO', 'SETERR', 'DATAINI'];
+  const competindo = Array.from({ length: 8 }, (_, i) => `[INFO]Msg...:[Erro ao cancelar o Workflow: WF.${i}/2026 | Não encontrado]\n`).join('') +
+    incidente() + parada.map(encerramento).join('') + encerramento('FWBOSCH') + encerramento('FWBOSCH');
+  const enviados = await analisarPrompt(competindo);
+  assert.equal(enviados.length, 8);
+  const paradas = enviados.filter(t => /Shutting Down/.test(t));
+  assert.equal(paradas.length, 1, 'uma vaga explica a parada; as demais vão para erros reais');
+  assert.match(paradas[0], /FWBOSCH/, 'a vaga fica com o encerramento mais frequente');
+  assert.ok(enviados.some(t => /Variable does not exist/.test(t)), 'erro técnico real não perde a vaga para a parada');
+  const r = localizarErros(buffer(competindo), 'x.log');
+  assert.equal(r.grupos.filter(g => g.tipo === 'encerramento').length, 6, 'encerramentos continuam listados e contados');
+  assert.equal((await analisarPrompt(parada.slice(0, 3).map(encerramento).join(''))).length, 3, 'sem concorrência, encerramentos usam as vagas livres');
 });
 
 test('busca percorre o arquivo inteiro, ignora acentos e trata termo como texto literal', () => {

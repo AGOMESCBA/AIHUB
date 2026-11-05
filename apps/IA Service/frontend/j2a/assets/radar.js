@@ -2543,10 +2543,10 @@
       $('case-view').hidden = panel !== 'risk' && panel !== 'logs';
       $('empty-state').hidden = panel === 'risk' || panel === 'logs';
     }
-    // No Radar a Fila tambem recolhe (o Resumo ja recolhe acima), para a grade
-    // usar a largura toda. Nao grava preferencia: ao sair, volta ao que o
-    // usuario deixou salvo.
-    $('radar-layout').classList.toggle('queue-collapsed', panel === 'risk' || filaRecolhidaSalva());
+    // No Radar e na Analise de Logs a Fila tambem recolhe, para a tela usar a
+    // largura toda (logs so dependem do chamado ja selecionado). Nao grava
+    // preferencia: ao sair, volta ao que o usuario deixou salvo.
+    $('radar-layout').classList.toggle('queue-collapsed', panel === 'risk' || panel === 'logs' || filaRecolhidaSalva());
     if (panel === 'risk' && $('retorno-btn')?.getAttribute('aria-expanded') === 'true') retornoPanel?.close();
     // Registrar retorno exige chamado aberto: some do menu ⋯ no Radar.
     if ($('retorno-btn')) $('retorno-btn').hidden = panel === 'risk';

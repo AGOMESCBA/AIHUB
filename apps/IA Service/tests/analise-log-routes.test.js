@@ -32,7 +32,7 @@ const stubs = {
     deps.onProgress?.('varredura');
     if (bloquear) await new Promise(resolve => { liberar = resolve; filaLiberar.push(resolve); });
     deps.onProgress?.('relatorio', { semErros: true });
-    return analiseReal.localizarErros(conteudo, nome);
+    return analiseReal.localizarErros(conteudo, nome, deps.relatorioAnterior);
   } },
   '../repositories/chamado-repository': { getChamado: (empresa, id) => Number(empresa) === 1 && id === 'chamado-A' ? { id, numero: '123', sistemaOrigem: 'softexpert' } : null },
   '../repositories/atendimento-repository': { getAtendimentoPorReferencia: () => ({ id: 'at-A' }) },

@@ -2,7 +2,7 @@
 
 const SENSITIVE_QUERY_KEYS = new Set([
   'token', 'access_token', 'api_key', 'apikey', 'key', 'senha', 'password',
-  'secret', 'session', 'sessionid', 'sid', 'auth', 'authorization', 'cookie',
+  'secret', 'client_secret', 'refresh_token', 'private_key', 'session', 'sessionid', 'sid', 'auth', 'authorization', 'cookie',
 ]);
 
 // CPF/CNPJ usam o mesmo padrao de technical-research-service.js:sanitizarConsultaExterna
@@ -10,9 +10,20 @@ const SENSITIVE_QUERY_KEYS = new Set([
 // o formato da frase; na pesquisa externa remove para nao poluir a query de busca).
 function redigirTexto(texto) {
   return String(texto || '')
+    .replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi, trecho => {
+      try {
+        const u = new URL(trecho);
+        if (u.username) u.username = '[REDACTED]';
+        if (u.password) u.password = '[REDACTED]';
+        for (const k of [...u.searchParams.keys()]) if (SENSITIVE_QUERY_KEYS.has(k.toLowerCase())) u.searchParams.set(k, '[REDACTED]');
+        return u.toString();
+      } catch (_) { return trecho.replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi, '$1[REDACTED]@'); }
+    })
+    .replace(/\b(Authorization\s*["']?\s*:\s*["']?\s*(?:Basic|Bearer))\s+[^\s"',;\r\n]+/gi, '$1 [REDACTED]')
     .replace(/\b(Authorization\s*:\s*Bearer)\s+[A-Za-z0-9._~+/=-]+/gi, '$1 [REDACTED]')
     .replace(/\b(Bearer)\s+[A-Za-z0-9._~+/=-]{4,}/gi, '$1 [REDACTED]')
-    .replace(/\b(api[_-]?key|token|senha|password|secret|session(?:[_-]?(?:id|token))?|sid)(\s*[:=]\s*)["']?[^"'\s&;]{4,}/gi, '$1$2[REDACTED]')
+    .replace(/\b((?:x[-_])?api[_-]?key|(?:access[_-]|refresh[_-])?token|senha|password|(?:client[_-])?secret|private[_-]?key|authorization|cookie|session(?:[_-]?(?:id|token))?|sid)(["']?\s*[:=]\s*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\[REDACTED(?::[A-Z]+)?\]|[^\s&;,}\]]+)/gi, (_m, chave, separador, valor) => `${chave}${separador}${/^["']/.test(valor) ? valor[0] + '[REDACTED]' + valor[0] : '[REDACTED]'}`)
+    .replace(/\b(cookie\s*["']\s*:\s*)["'][^\r\n]*?["']/gi, '$1"[REDACTED]"')
     .replace(/\b(cookie\s*:\s*)[^\r\n]+/gi, '$1[REDACTED]')
     .replace(/\b\d{2}\.?\d{3}\.?\d{3}\/\d{4}-?\d{2}\b/g, '[REDACTED:CNPJ]')
     .replace(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g, '[REDACTED:CPF]')

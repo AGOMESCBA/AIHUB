@@ -129,3 +129,43 @@ test('quatro erros distantes entre 30 permanecem na mesma análise após reabrir
   assert.equal(repo.listar(7).length, 1);
   assert.equal(repo.obter(8, historico.id), null);
 });
+
+test('assinatura preserva diagnóstico após trocar posição e impede reutilização indevida de ID', () => {
+  const d = dados(); d.resultado.grupos[0].analise = { explicacao: 'Preservar diagnóstico' };
+  const salvo = repo.salvar(20, d);
+  const reposicionado = dados(); reposicionado.resultado.grupos[0].id = 'erro-30';
+  repo.salvar(20, { ...reposicionado, historicoId: salvo.id });
+  assert.equal(repo.obter(20, salvo.id).resultado.grupos[0].analise.explicacao, 'Preservar diagnóstico');
+  const diferente = dados(); diferente.resultado.grupos[0].assinatura = 'outra-assinatura';
+  assert.throws(() => repo.salvar(20, { ...diferente, historicoId: salvo.id }), /não preserva/);
+  assert.equal(repo.obter(20, salvo.id).resultado.grupos[0].id, 'erro-30');
+});
+
+test('histórico legado reabre sem migração; atualização de versão não sobrescreve diagnóstico', () => {
+  const legado = dados(); delete legado.resultado.parserVersao;
+  for (const g of legado.resultado.grupos) delete g.assinatura;
+  legado.resultado.grupos[0].analise = { explicacao: 'Diagnóstico legado' };
+  const salvo = repo.salvar(21, legado);
+  const novo = dados();
+  assert.throws(() => repo.salvar(21, { ...novo, historicoId: salvo.id }), /versão do agrupamento/);
+  const reaberto = repo.obter(21, salvo.id);
+  assert.equal(reaberto.resultado.grupos[0].analise.explicacao, 'Diagnóstico legado');
+  const complemento = localizarErros(Buffer.from('informação normal\n'.repeat(60000) + 'THREAD ERROR\nVariable does not exist CTEST on U_TESTE(TESTE.PRW)\n'), 'error.log', reaberto.resultado);
+  complemento.origem = { tipo: 'avulso' };
+  repo.salvar(21, { resultado: complemento, hashArquivo: legado.hashArquivo, historicoId: salvo.id });
+  assert.equal(repo.obter(21, salvo.id).resultado.grupos[0].analise.explicacao, 'Diagnóstico legado');
+  assert.equal(complemento.grupos[0].legadoReconhecido, true);
+});
+
+test('oculta credenciais sintéticas no JSON comprimido e na leitura de histórico antigo', () => {
+  const zlib = require('node:zlib');
+  const segredo = 'CREDENCIAL_SINTETICA_TESTE';
+  const d = dados(); d.resultado.grupos[0].evidencia.push({ linha: 999, texto: `{"password":"${segredo}"}` });
+  const salvo = repo.salvar(22, d);
+  let blob = db.prepare('SELECT resultado_gzip FROM analises_logs WHERE id = ?').get(salvo.id).resultado_gzip;
+  assert.equal(zlib.gunzipSync(blob).toString().includes(segredo), false);
+  // Simula conteúdo já gravado pela versão anterior, sem modificar banco real.
+  blob = zlib.gzipSync(Buffer.from(JSON.stringify(d.resultado)));
+  db.prepare('UPDATE analises_logs SET resultado_gzip = ? WHERE id = ?').run(blob, salvo.id);
+  assert.equal(JSON.stringify(repo.obter(22, salvo.id)).includes(segredo), false);
+});

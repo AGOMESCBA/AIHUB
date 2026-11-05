@@ -2,11 +2,13 @@
 const crypto = require('node:crypto');
 const zlib = require('node:zlib');
 const { getDB } = require('../database');
+const { mesmoGrupo } = require('../services/analise-log-identidade');
+const { redigirTexto, redigirValor } = require('../services/redaction-service');
 const MAX_RESULTADO = 8 * 1024 * 1024;
 
 function metadados(row) {
   if (!row) return null;
-  return { id: row.id, chamadoId: row.chamado_id, numero: row.numero_chamado, nome: row.nome_arquivo, tipo: row.origem_tipo,
+  return { id: row.id, chamadoId: row.chamado_id, numero: row.numero_chamado, nome: redigirTexto(row.nome_arquivo), tipo: row.origem_tipo,
     ocorrencias: row.ocorrencias, grupos: row.grupos, criadoEm: row.criado_em, atualizadoEm: row.atualizado_em,
     bytesHistorico: row.bytes_resultado,
     autor: row.criador_id ? { tipo: row.criador_tipo, id: row.criador_id } : null,
@@ -16,7 +18,7 @@ function obter(empresaId, id) {
   const row = getDB().prepare('SELECT * FROM analises_logs WHERE empresa_id = ? AND id = ?').get(Number(empresaId), String(id));
   if (!row) return null;
   return { ...metadados(row), hashArquivo: row.hash_arquivo,
-    resultado: JSON.parse(zlib.gunzipSync(row.resultado_gzip, { maxOutputLength: MAX_RESULTADO }).toString('utf8')) };
+    resultado: redigirValor(JSON.parse(zlib.gunzipSync(row.resultado_gzip, { maxOutputLength: MAX_RESULTADO }).toString('utf8'))) };
 }
 function listar(empresaId, { chamadoId = null, avulsos = false } = {}) {
   const filtro = chamadoId ? ' AND chamado_id = ?' : avulsos ? " AND origem_tipo = 'avulso'" : '';
@@ -34,11 +36,13 @@ function salvar(empresaId, { resultado, hashArquivo, historicoId = null, autor =
       if (!anterior) throw Object.assign(new Error('Análise não encontrada nesta empresa.'), { status: 404 });
       if (anterior.hashArquivo !== hashArquivo) throw Object.assign(new Error('O arquivo é diferente do utilizado nesta análise. Inicie uma nova análise.'), { status: 409 });
       if (['tipo', 'chamadoId', 'arquivoId'].some(c => String(anterior.resultado.origem?.[c] || '') !== String(resultado.origem?.[c] || ''))) throw Object.assign(new Error('A origem difere da análise salva.'), { status: 409 });
-      for (const g of resultado.grupos) if (!g.analise) g.analise = anterior.resultado.grupos.find(a => a.id === g.id)?.analise;
+      if ((resultado.parserVersao || 1) !== (anterior.resultado.parserVersao || 1)) throw Object.assign(new Error('A versão do agrupamento difere da análise salva. Inicie uma nova análise.'), { status: 409 });
+      if (anterior.resultado.grupos.some(a => a.analise && !resultado.grupos.some(g => mesmoGrupo(g, a, resultado.parserVersao || 1, anterior.resultado.parserVersao || 1)))) throw Object.assign(new Error('A nova leitura não preserva todos os diagnósticos anteriores. Inicie uma nova análise.'), { status: 409 });
+      for (const g of resultado.grupos) if (!g.analise) g.analise = anterior.resultado.grupos.find(a => mesmoGrupo(g, a, resultado.parserVersao || 1, anterior.resultado.parserVersao || 1))?.analise;
       if (anterior.resultado.visaoGeral) resultado.visaoGeral = anterior.resultado.visaoGeral;
       resultado.ia = { ...resultado.ia, gruposAnalisados: resultado.grupos.filter(g => g.analise).length };
     }
-    const copia = { ...resultado }; delete copia.historico;
+    const copia = redigirValor({ ...resultado }); delete copia.historico;
     const texto = JSON.stringify(copia);
     if (Buffer.byteLength(texto) > MAX_RESULTADO) throw new Error('Relatório excede o tamanho máximo do histórico.');
     const comprimido = zlib.gzipSync(Buffer.from(texto));

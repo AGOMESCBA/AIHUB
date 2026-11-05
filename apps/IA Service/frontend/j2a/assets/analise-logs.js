@@ -37,6 +37,11 @@ class AnaliseLogs {
     this.el('ver-progresso').addEventListener('click', () => this.expandirProgresso());
     this.el('busca').addEventListener('input', () => this.filtrar());
     this.el('somente-analisados').addEventListener('change', () => this.filtrar());
+    this.el('ordem').addEventListener('change', () => this.ordenar());
+    // Ao alargar a área sem grupo aberto, o painel direito não pode ficar vazio.
+    new ResizeObserver(() => {
+      if (this.relatorio && !this.selecionado && this.modoDuplo()) this.selecionar(this.root.querySelector('[data-log-card]:not([hidden])')?.dataset.logCard || null);
+    }).observe(this.el('resultados-area'));
     this.el('buscar-arquivo').addEventListener('click', () => this.buscarArquivo());
     this.el('busca').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); this.buscarArquivo(); } });
     this.el('lista').addEventListener('change', () => this.atualizarBotao());
@@ -92,11 +97,20 @@ class AnaliseLogs {
         <div class="logs-feedback"><p id="logs-status" role="status" aria-live="polite"></p><button type="button" id="logs-ver-progresso" hidden>Ver andamento</button></div>
         <section id="logs-resultados-area" hidden>
           <div class="logs-results-header"><div><span class="logs-eyebrow">02 · RESULTADO DA ANÁLISE</span><h2>O que o log está dizendo</h2></div><button type="button" id="logs-baixar" title="Baixar os erros exibidos e suas possíveis soluções em PDF" hidden>Baixar PDF</button></div>
-          <div class="logs-search"><label for="logs-busca">${this.icone('busca')}<span class="logs-sr-only">Buscar palavra, mensagem ou rotina</span></label><input type="search" id="logs-busca" maxlength="100" placeholder="Buscar palavra, mensagem, campo ou rotina…"><button type="button" id="logs-buscar-arquivo">Buscar no arquivo completo</button></div>
-          <div class="logs-filter-row"><label><input type="checkbox" id="logs-somente-analisados"> Somente analisados pela IA</label><span id="logs-filtro-status" role="status" aria-live="polite"></span></div>
-          <p id="logs-filtro-vazio" class="logs-filter-empty" role="status" hidden></p>
-          <p id="logs-busca-status" class="logs-search-status" role="status" aria-live="polite"></p><div id="logs-busca-arquivo"></div>
           <div id="logs-resultado"></div>
+          <div class="logs-navegacao">
+            <aside class="logs-lateral" aria-label="Grupos de erros">
+              <div class="logs-search"><label for="logs-busca">${this.icone('busca')}<span class="logs-sr-only">Buscar palavra, mensagem ou rotina</span></label><input type="search" id="logs-busca" maxlength="100" placeholder="Buscar palavra, mensagem, campo ou rotina…"><button type="button" id="logs-buscar-arquivo">Buscar no arquivo completo</button></div>
+              <div class="logs-filter-row"><label><input type="checkbox" id="logs-somente-analisados"> Somente analisados pela IA</label><label class="logs-ordem">Ordenar <select id="logs-ordem"><option value="relevancia">Mais relevantes</option><option value="arquivo">Ordem no arquivo</option></select></label></div>
+              <p id="logs-filtro-vazio" class="logs-filter-empty" role="status" hidden></p>
+              <nav id="logs-indice" class="logs-indice" aria-label="Lista de grupos"></nav>
+              <p id="logs-filtro-status" class="logs-filter-status" role="status" aria-live="polite"></p>
+            </aside>
+            <div class="logs-principal">
+              <p id="logs-busca-status" class="logs-search-status" role="status" aria-live="polite"></p><div id="logs-busca-arquivo"></div>
+              <div id="logs-cartoes" class="logs-cartoes"></div>
+            </div>
+          </div>
         </section>
       </div>
       <dialog id="logs-splash" class="logs-dialog" aria-labelledby="logs-splash-titulo" aria-describedby="logs-splash-descricao">
@@ -156,6 +170,7 @@ class AnaliseLogs {
     this.limparResultado(); this.relatorio = resultado; this.fonteAnalise = fonte;
     this.renderizar(resultado);
     this.status(resultado.ia?.indisponivel ? resultado.ia.falha?.mensagem || 'A IA não concluiu o diagnóstico. Consulte as evidências localizadas.' : 'Resultado do arquivo analisado. Confira a identificação do chamado no relatório.', resultado.ia?.indisponivel ? 'aviso' : 'sucesso');
+    this.avisarCobertura(resultado);
     this.el('resultados-area').scrollIntoView({ behavior: 'smooth', block: 'start' });
     this.monitor.hidden = true;
   }
@@ -285,6 +300,7 @@ class AnaliseLogs {
       this.root.querySelector('.logs-source').open = false;
       this.atualizarBotao();
       this.status('Análise recuperada do histórico. Nenhuma nova chamada à IA foi feita.', 'sucesso');
+      this.avisarCobertura(r);
       this.el('resultados-area').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (err) { if (chave === this.chave() && versao === this.versaoAnalise) this.status(`Não foi possível reabrir a análise: ${err.message}`, 'erro'); }
   }
@@ -425,7 +441,8 @@ class AnaliseLogs {
     this.root.classList.remove('tem-resultado');
     this.relatorio = null;
     this.fonteAnalise = null;
-    this.el('resultado').replaceChildren();
+    this.selecionado = null; this.selecaoIniciada = false;
+    this.el('resultado').replaceChildren(); this.el('indice').replaceChildren(); this.el('cartoes').replaceChildren();
     this.el('baixar').hidden = true;
     this.el('resultados-area').hidden = true;
     this.el('busca').value = ''; this.el('busca-arquivo').replaceChildren(); this.el('busca-status').textContent = '';
@@ -513,7 +530,9 @@ class AnaliseLogs {
         mesmaFonte = ['chamadoId', 'arquivoId', 'tipo'].every(c => String(atual[c]) === String(previa[c]));
       }
     }
-    const anterior = grupoId || mesmaFonte ? this.relatorio : null;
+    // Complementos individuais mantêm o contrato antigo. O botão principal
+    // cria uma análise atualizada separada quando o histórico é legado.
+    const anterior = grupoId || (mesmaFonte && (this.relatorio?.parserVersao || 1) >= 2) ? this.relatorio : null;
     if (!grupoId && anterior?.historico?.id) caminho += `?historicoId=${encodeURIComponent(anterior.historico.id)}`;
     if (!grupoId) {
       if (!anterior) this.limparResultado();
@@ -528,7 +547,11 @@ class AnaliseLogs {
         onProgress: e => { if (versao === this.versaoAnalise && empresa === this.opcoes.contexto().empresa) this.progresso(e); } });
       if (versao !== this.versaoAnalise || empresa !== this.opcoes.contexto().empresa) return;
       if (anterior) {
-        for (const g of resultado.grupos) if (!g.analise) g.analise = anterior.grupos.find(a => a.id === g.id)?.analise;
+        for (const g of resultado.grupos) if (!g.analise) g.analise = anterior.grupos.find(a => {
+          if ((resultado.parserVersao || 1) !== (anterior.parserVersao || 1)) return false;
+          if (g.assinatura && a.assinatura) return g.assinatura === a.assinatura;
+          return (resultado.parserVersao || 1) === 1 && a.id === g.id && a.titulo === g.titulo && a.rotina === g.rotina && a.linhas?.[0] === g.linhas?.[0];
+        })?.analise;
         resultado.ia = { ...resultado.ia, gruposAnalisados: resultado.grupos.filter(g => g.analise).length };
         if (anterior.visaoGeral) resultado.visaoGeral = anterior.visaoGeral;
       }
@@ -536,6 +559,9 @@ class AnaliseLogs {
       if (modo === 'avulso' || chave === this.chave()) {
         this.relatorio = resultado; this.renderizar(resultado);
         this.status(resultado.historico?.salvo === false ? 'Análise concluída, mas não foi salva. Baixe o relatório para preservar o resultado.' : resultado.ia?.indisponivel ? resultado.ia.falha?.mensagem || 'Leitura concluída. A IA está indisponível; as evidências podem ser consultadas abaixo.' : 'Análise concluída. Seu diagnóstico está pronto abaixo.', resultado.historico?.salvo === false || resultado.ia?.indisponivel ? 'aviso' : 'sucesso');
+        this.avisarCobertura(resultado);
+        // Com a ordenação por relevância o grupo recém-analisado muda de lugar.
+        if (grupoId && this.root.querySelector(`[data-log-card="${CSS.escape(grupoId)}"]:not([hidden])`)) this.selecionar(grupoId, true);
       } else {
         this.limparResultado();
         this.status('A análise do chamado anterior terminou. Use “Ver resultado” no aviso para consultá-la.', 'sucesso');
@@ -550,6 +576,10 @@ class AnaliseLogs {
       if (versao === this.versaoAnalise) this.setOcupado(false);
     }
   }
+  avisarCobertura(r) {
+    if (r.cobertura?.ocorrenciasNaoRetidas) this.status(`${this.el('status').textContent} Há ${r.cobertura.ocorrenciasNaoRetidas} ocorrência(s) contada(s), mas não detalhada(s), pelo limite de 100 grupos.`, 'aviso');
+    if ((r.parserVersao || 1) === 1) this.status(`${this.el('status').textContent} Agrupamento antigo preservado. Use “Analisar log” para criar uma análise atualizada sem apagar esta.`, 'aviso');
+  }
   renderizar(r) {
     this.root.classList.add('tem-resultado');
     this.el('resultados-area').hidden = false;
@@ -557,11 +587,13 @@ class AnaliseLogs {
     const resumo = this.node('section', null, 'logs-resumo');
     const estatisticas = this.node('details', null, 'logs-file-summary');
     const tituloArquivo = this.node('summary');
+    const warningsContabilizados = Number.isInteger(r.cobertura.warnings) && r.cobertura.warnings >= 0;
     tituloArquivo.append(this.node('h3', `${r.origem?.tipo === 'avulso' ? 'Análise avulsa' : `Chamado #${r.origem?.numero}`} · ${r.arquivo.nome} — Resumo do arquivo`));
+    // Indicadores seguem recolhidos; os totais ficam legíveis no próprio título.
+    tituloArquivo.append(this.node('span', `${Number(r.cobertura.ocorrencias).toLocaleString('pt-BR')} erro(s) · ${r.grupos.length.toLocaleString('pt-BR')} grupo(s)${warningsContabilizados ? ` · ${r.cobertura.warnings.toLocaleString('pt-BR')} warning(s)` : ''}`, 'logs-summary-counts'));
     estatisticas.append(tituloArquivo);
     if (r.historico?.salvo) estatisticas.append(this.node('p', `Salvo no histórico · ${new Date(r.historico.atualizadoEm).toLocaleString('pt-BR')} · ${(r.historico.bytesHistorico / 1024).toFixed(1)} KB. O arquivo original não é armazenado no histórico.`, 'logs-muted'));
     const numeros = this.node('div', null, 'logs-metrics');
-    const warningsContabilizados = Number.isInteger(r.cobertura.warnings) && r.cobertura.warnings >= 0;
     for (const [valor, label] of [[Number(r.cobertura.ocorrencias).toLocaleString('pt-BR'), 'Erros identificados'], [warningsContabilizados ? r.cobertura.warnings.toLocaleString('pt-BR') : 'Não contabilizado', 'Warnings identificados'], [r.grupos.length.toLocaleString('pt-BR'), 'Grupos de mensagens semelhantes']]) {
       const metrica = this.node('div'); metrica.append(this.node('strong', valor), this.node('span', label)); numeros.append(metrica);
     }
@@ -571,44 +603,107 @@ class AnaliseLogs {
     resumo.append(estatisticas);
     if (!r.grupos.length) resumo.append(this.node('p', 'Nenhum erro foi reconhecido pelos padrões examinados. Isso não confirma que o ambiente está livre de problemas.'));
     container.append(resumo);
+    // Índice + cartões: o CSS decide se viram dois painéis (área larga) ou
+    // lista compacta com um grupo aberto por vez. O filtro continua usando
+    // [hidden]; a seleção usa só a classe .selecionado.
+    const indice = this.el('indice'); indice.replaceChildren();
+    const cartoes = this.el('cartoes'); cartoes.replaceChildren();
     for (const grupo of r.grupos) {
       const card = this.node('article', null, 'logs-cartao');
       card.dataset.logCard = grupo.id; card.dataset.busca = this.normalizar(JSON.stringify(grupo)); card.dataset.analisado = String(!!grupo.analise);
-      const cabecalho = this.node('div', null, 'logs-error-header');
-      cabecalho.append(this.node('span', grupo.id.replace('erro-', '#'), 'logs-error-index'), this.node('span', `${grupo.quantidade} ocorrência(s)`, 'logs-count'), this.node('span', grupo.analise ? 'Analisado pela IA' : 'Evidência localizada', 'logs-analysis-label'));
-      card.append(cabecalho, this.node('h3', grupo.titulo));
+      card.dataset.gravidade = String(grupo.gravidade || 0); card.dataset.quantidade = String(grupo.quantidade || 0); card.dataset.linha = String(grupo.linhas?.[0] || 0);
+      // Mesma regra de tipoOcorrencia (backend); o título cobre históricos salvos antes dela.
+      const parada = grupo.tipo === 'encerramento' || /Application Server is Shutting Down|deleting (?:thread pool|server)\b/i.test(grupo.titulo || '');
+      card.dataset.encerramento = String(parada);
+      const numero = grupo.id.replace('erro-', '#'); const corpoId = `logs-corpo-${grupo.id}`;
+      const topo = this.node('button', null, 'logs-cartao-topo'); topo.type = 'button'; topo.setAttribute('aria-controls', corpoId);
+      const cabecalho = this.node('span', null, 'logs-error-header');
+      cabecalho.append(this.node('span', numero, 'logs-error-index'), this.node('span', `${grupo.quantidade} ocorrência(s)`, 'logs-count'));
+      if (parada) cabecalho.append(this.node('span', 'Parada do servidor', 'logs-parada'));
+      cabecalho.append(this.node('span', grupo.analise ? 'Analisado pela IA' : 'Evidência localizada', 'logs-analysis-label'));
+      topo.append(cabecalho, this.node('span', grupo.titulo, 'logs-cartao-titulo'));
+      topo.addEventListener('click', () => this.selecionar(this.selecionado === grupo.id && !this.modoDuplo() ? null : grupo.id, true));
+      const corpo = this.node('div', null, 'logs-cartao-corpo'); corpo.id = corpoId;
+      card.append(topo, corpo);
+      const item = this.node('button', null, 'logs-indice-item'); item.type = 'button'; item.dataset.logIndice = grupo.id;
+      const meta = this.node('span', null, 'logs-indice-meta');
+      meta.append(this.node('span', `${grupo.quantidade} ocorrência(s)`));
+      if (grupo.analise) meta.append(this.node('span', 'Analisado pela IA', 'logs-indice-ia'));
+      if (parada) meta.append(this.node('span', 'Parada do servidor', 'logs-parada'));
+      item.append(this.node('span', numero, 'logs-error-index'), this.node('span', grupo.titulo, 'logs-indice-titulo'), meta);
+      item.addEventListener('click', () => this.selecionar(grupo.id, true));
+      indice.append(item);
       if (grupo.analise) {
         const informacoes = this.node('details', null, 'logs-informacoes-analise');
         informacoes.open = true;
         informacoes.append(this.node('summary', 'Informações da análise'));
         const conteudo = this.node('div', null, 'logs-diagnostico-grid');
-        for (const [campo, titulo] of [['explicacao', 'O que aconteceu'], ['causaProvavel', 'Causa provável'], ['solucoes', 'Possíveis soluções']]) {
+        // Validação e pendências ficam visíveis: fazem parte do próximo passo.
+        for (const [campo, titulo] of [['explicacao', 'O que aconteceu'], ['causaProvavel', 'Causa provável'], ['solucoes', 'Possíveis soluções'], ['validacao', 'Como validar'], ['informacoesFaltantes', 'O que falta confirmar']]) {
+          if (!grupo.analise[campo]) continue;
           const bloco = this.node('section', null, `logs-diagnostico ${campo}`);
           if (campo === 'solucoes') bloco.tabIndex = -1;
-          bloco.append(this.node('h4', titulo), this.node('p', grupo.analise[campo])); conteudo.append(bloco);
+          bloco.append(this.node('h4', titulo), this.textoDiagnostico(grupo.analise[campo], campo === 'solucoes' || campo === 'informacoesFaltantes')); conteudo.append(bloco);
         }
-        informacoes.append(conteudo); card.append(informacoes);
-        const validacao = this.node('details', null, 'logs-validation'); validacao.append(this.node('summary', 'Como validar e o que falta confirmar'));
-        for (const [campo, titulo] of [['validacao', 'Como validar'], ['informacoesFaltantes', 'O que falta confirmar']]) {
-          validacao.append(this.node('h4', titulo), this.node('p', grupo.analise[campo]));
-        }
-        card.append(validacao);
+        informacoes.append(conteudo); corpo.append(informacoes);
       } else {
-        card.append(this.node('p', 'Sem diagnóstico por IA para este grupo. As evidências abaixo mostram o que foi localizado no arquivo.'));
+        corpo.append(this.node('p', 'Sem diagnóstico por IA para este grupo. As evidências abaixo mostram o que foi localizado no arquivo.'));
         const botao = this.node('button', 'Analisar este erro'); botao.type = 'button';
         botao.dataset.logGrupo = grupo.id; botao.disabled = this.ocupado || !this.fonteAnalise;
         if (!this.fonteAnalise) botao.title = 'Selecione o arquivo original para analisar este erro.';
         botao.addEventListener('click', () => this.analisar(grupo.id));
-        card.append(botao);
+        corpo.append(botao);
       }
       const detalhe = this.node('details'); detalhe.append(this.node('summary', 'Ver evidência e linhas do log (trecho limitado)'));
       detalhe.append(this.node('p', `Linhas do log: ${grupo.linhas.join(', ')}${grupo.quantidade > grupo.linhas.length ? ' (lista limitada)' : ''}`));
       if (grupo.rotina) detalhe.append(this.node('p', `Referência técnica: ${grupo.rotina}`));
       detalhe.append(this.node('pre', [...(grupo.contextoAnterior || []), ...grupo.evidencia].map(l => `${l.linha}: ${l.texto}${l.truncada ? ' […]' : ''}`).join('\n')));
-      card.append(detalhe); container.append(card);
+      if (grupo.pilha?.length) detalhe.append(this.node('pre', 'Call Stack' + (grupo.pilhaLimitada ? ' (lista limitada)' : '') + '\n' + grupo.pilha.map(f => `${f.linhaLog}: ${f.funcao}(${f.fonte})${f.linha == null ? '' : ` · linha ${f.linha}`}`).join('\n')));
+      corpo.append(detalhe); cartoes.append(card);
     }
     this.el('baixar').hidden = false;
+    this.ordenar();
     this.filtrar();
+  }
+  // O prompt pede ações separadas por quebra de linha: só a apresentação muda;
+  // o texto da IA é preservado (sem quebras, segue como parágrafo).
+  textoDiagnostico(texto, emLista) {
+    const itens = emLista ? String(texto ?? '').split(/\r?\n/).map(l => l.trim()).filter(Boolean) : [];
+    if (itens.length < 2) return this.node('p', texto);
+    const lista = this.node('ul', null, 'logs-acoes');
+    for (const item of itens) lista.append(this.node('li', item.replace(/^(?:[-•*]|\d+[.)])\s+/, '')));
+    return lista;
+  }
+  // Reordena os cartões existentes, sem recriar: preserva o que está aberto.
+  ordenar() {
+    const cartoes = [...this.root.querySelectorAll('[data-log-card]')];
+    const n = (c, campo) => Number(c.dataset[campo]) || 0;
+    const porArquivo = (a, b) => n(a, 'linha') - n(b, 'linha');
+    // Mesma relevância do servidor: fatais no topo; encerramento do servidor
+    // (consequência da parada) depois dos demais.
+    const sim = (c, campo) => c.dataset[campo] === 'true';
+    cartoes.sort(this.el('ordem').value === 'arquivo' ? porArquivo : (a, b) =>
+      sim(b, 'analisado') - sim(a, 'analisado') || (n(b, 'gravidade') === 3) - (n(a, 'gravidade') === 3) || sim(a, 'encerramento') - sim(b, 'encerramento') ||
+      n(b, 'gravidade') - n(a, 'gravidade') || n(b, 'quantidade') - n(a, 'quantidade') || porArquivo(a, b));
+    if (!cartoes.length) return;
+    this.el('cartoes').append(...cartoes);
+    this.el('indice').append(...cartoes.map(c => this.itemIndice(c.dataset.logCard)));
+  }
+  itemIndice(id) { return this.el('indice')?.querySelector(`[data-log-indice="${CSS.escape(id)}"]`); }
+  // Dois painéis só quando o índice está visível (área larga, ver CSS).
+  modoDuplo() { const indice = this.el('indice'); return !!indice && getComputedStyle(indice).display !== 'none'; }
+  selecionar(id, rolar = false) {
+    this.selecionado = id;
+    this.root.querySelectorAll('[data-log-card]').forEach(card => {
+      const ativo = card.dataset.logCard === id;
+      card.classList.toggle('selecionado', ativo);
+      card.querySelector('.logs-cartao-topo').setAttribute('aria-expanded', String(ativo));
+      this.itemIndice(card.dataset.logCard)?.setAttribute('aria-current', String(ativo));
+    });
+    const card = id && this.root.querySelector(`[data-log-card="${CSS.escape(id)}"]`);
+    if (!rolar || !card) return;
+    if (this.modoDuplo()) { this.itemIndice(id)?.scrollIntoView({ block: 'nearest' }); this.el('cartoes').scrollIntoView({ block: 'nearest' }); }
+    else card.scrollIntoView({ block: 'nearest' });
   }
   normalizar(texto) { return String(texto).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR'); }
   filtrar() {
@@ -619,7 +714,13 @@ class AnaliseLogs {
     this.root.querySelectorAll('[data-log-card]').forEach(card => {
       total++; if (card.dataset.analisado === 'true') analisados++;
       card.hidden = (somenteAnalisados && card.dataset.analisado !== 'true') || (!!termo && !card.dataset.busca.includes(termo)); if (!card.hidden) visiveis++;
+      const item = this.itemIndice(card.dataset.logCard); if (item) item.hidden = card.hidden;
     });
+    // O grupo aberto sumiu pelo filtro (ou nenhum aberto ainda): abre o primeiro exibido.
+    const atual = this.selecionado && this.root.querySelector(`[data-log-card="${CSS.escape(this.selecionado)}"]:not([hidden])`);
+    if (!atual && (this.selecionado || !this.selecaoIniciada || this.modoDuplo())) this.selecionar(this.root.querySelector('[data-log-card]:not([hidden])')?.dataset.logCard || null);
+    else this.selecionar(this.selecionado);
+    this.selecaoIniciada = true;
     this.el('filtro-status').textContent = `${visiveis} de ${total} erro(s) exibido(s) · ${analisados} analisado(s)`;
     this.el('baixar').disabled = !!this.exportando || !visiveis;
     this.el('filtro-vazio').hidden = visiveis > 0 || !total;
@@ -667,8 +768,9 @@ class AnaliseLogs {
   async baixar() {
     if (!this.relatorio || this.exportando) return;
     const r = this.relatorio; const empresa = this.opcoes.contexto().empresa;
-    const visiveis = new Set([...this.root.querySelectorAll('[data-log-card]:not([hidden])')].map(c => c.dataset.logCard));
-    const erros = r.grupos.filter(g => visiveis.has(g.id)).map(g => ({ id: g.id, titulo: g.titulo, solucoes: g.analise?.solucoes || '' }));
+    // Mesma seleção e mesma ordem exibidas na tela.
+    const erros = [...this.root.querySelectorAll('[data-log-card]:not([hidden])')].map(c => r.grupos.find(g => g.id === c.dataset.logCard)).filter(Boolean)
+      .map(g => ({ id: g.id, titulo: g.titulo, solucoes: g.analise?.solucoes || '' }));
     if (!erros.length) return;
     const controller = new AbortController(); this.pdfController = controller;
     const timeout = setTimeout(() => controller.abort(), 20000);

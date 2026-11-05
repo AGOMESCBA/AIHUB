@@ -68,7 +68,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
         data = structuredClone({ ...relatorio, origem: { tipo: 'avulso' } });
         data.visaoGeral = { observado: 'Foi localizada uma referência a variável não existente.', atencao: 'Confirmar o contexto da rotina antes de alterar o código.', proximosPassos: 'Analista: encaminhar as evidências ao desenvolvedor.\nEquipe técnica: revisar a variável e validar em homologação.' };
         if (url.searchParams.get('grupoId')) {
-          data.grupos[0].analise = { explicacao: 'Falha de variável.', causaProvavel: 'Verificar o fonte.', solucoes: 'Encaminhar ao desenvolvedor.', validacao: 'Repetir em homologação.', informacoesFaltantes: 'Fonte da rotina.' };
+          data.grupos[0].analise = { explicacao: 'Falha de variável.', causaProvavel: 'Verificar o fonte.', solucoes: 'Encaminhar ao desenvolvedor.\n- Revisar a variável em homologação.', validacao: 'Repetir em homologação.', informacoesFaltantes: 'Fonte da rotina.' };
           data.ia = { gruposAnalisados: 1 };
         }
         if (falhaIA) { delete data.visaoGeral; data.ia = { gruposAnalisados: 0, indisponivel: true, falha: { codigo: 'TEMPO_ESGOTADO', mensagem: 'O provedor de IA não respondeu no tempo disponível. Tente analisar um erro individualmente.' } }; }
@@ -94,6 +94,11 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
       if (!await page.locator('[data-panel-tab="logs"]').isVisible()) await page.locator('.more-menu > summary').click();
       await page.locator('[data-panel-tab="logs"]').click();
     };
+    // Na aba de logs a fila fica recolhida; trocar de chamado passa pela barra lateral.
+    const abrirChamado = async id => {
+      if (await page.locator('#queue-reopen-rail').isVisible()) await page.locator('#queue-reopen-rail').click();
+      await page.locator(`[data-ticket-id="${id}"]`).first().click();
+    };
     const errors = [];
     page.on('pageerror', err => errors.push(err.message));
     await page.addInitScript(() => localStorage.setItem('svc_token_externo', 'token-teste'));
@@ -103,6 +108,8 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     assert.equal(await page.locator('.topbar-actions > [data-panel-tab="logs"]:first-child + .ci-botao').count(), 1, 'análise aparece primeiro, seguida de Mensagens');
     assert.equal(await page.locator('.logs-shortcut-text').textContent(), 'Analise de Error.log');
     assert.equal(await page.locator('#panel-logs').isVisible(), true);
+    assert.equal(await page.locator('#queue-panel').isVisible(), false, 'logs usam a largura toda: fila recolhe');
+    assert.equal(await page.locator('#queue-reopen-rail').isVisible(), true, 'fila continua acessível pela barra lateral');
     assert.match(await page.locator('#logs-contexto').textContent(), /Nenhum chamado/);
     const cabecalho = await page.locator('.logs-hero').boundingBox();
     const entrada = await page.locator('.logs-source').boundingBox();
@@ -142,6 +149,10 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     assert.match(await page.locator('.logs-file-summary').textContent(), /10 erros em 1 grupo/);
     assert.doesNotMatch(await page.locator('.logs-file-summary').textContent(), /grupos avaliados pela IA|linhas percorridas/);
     assert.equal(await page.locator('.logs-family-list').count(), 0);
+    const evidencia = page.locator('.logs-cartao-corpo > details').last();
+    await evidencia.locator('summary').click();
+    assert.match(await evidencia.textContent(), /Call Stack[\s\S]*U_TESTE\(TESTE.PRW\).*linha 42/);
+    await evidencia.locator('summary').click();
     await page.locator('.logs-file-summary > summary').click();
     assert.equal(await page.locator('.logs-overview').count(), 0, 'plano de investigação removido mesmo quando existe no histórico');
     assert.equal(await page.getByText('Cobertura e limites desta análise', { exact: true }).count(), 0);
@@ -168,6 +179,12 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     assert.equal(await page.getByRole('button', { name: 'Ver possíveis soluções', exact: true }).count(), 0, 'atalho adicional removido');
     assert.equal(await page.locator('.logs-diagnostico.solucoes h4').textContent(), 'Possíveis soluções');
     assert.match(await page.locator('.logs-diagnostico.solucoes').textContent(), /Encaminhar ao desenvolvedor/);
+    assert.deepEqual(await page.locator('.logs-diagnostico.solucoes li').allTextContents(), ['Encaminhar ao desenvolvedor.', 'Revisar a variável em homologação.'], 'ações em lista, sem alterar o texto da IA');
+    assert.equal(await page.locator('.logs-diagnostico.validacao p, .logs-diagnostico.informacoesFaltantes p').count(), 2, 'texto de uma linha continua como parágrafo');
+    assert.equal(await page.locator('.logs-diagnostico.informacoesFaltantes').isVisible(), true, 'o que falta confirmar fica visível, sem abrir bloco');
+    assert.equal(await page.locator('.logs-lateral #logs-busca').isVisible(), true, 'busca fica na coluna dos grupos');
+    assert.equal(await page.locator('.logs-lateral #logs-filtro-status').isVisible(), true, 'contador fica na coluna dos grupos');
+    assert.match(await page.locator('.logs-summary-counts').textContent(), /1 erro\(s\) · 1 grupo\(s\) · 1 warning\(s\)/, 'totais legíveis com indicadores recolhidos');
     assert.ok(requestsLogs.some(p => /avulso\?grupoId=erro-1/.test(p)));
     await page.screenshot({ path: path.resolve(__dirname, '../../../tmp/analise-logs-novo-resultado.png'), animations: 'disabled' });
     assert.equal(postsChat.length, 0, 'avulso não inicia chamado nem envia mensagem');
@@ -183,11 +200,13 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     assert.doesNotMatch(pdf.text, /Evidência|Como validar|O que falta confirmar|Causa provável|O que foi observado|Onde começar|Próximos passos|Evento de contexto|Service Stopped|linhas lidas|ocorrências/);
     const chamadasAntesHistorico = requestsLogs.filter(p => p.includes('/avulso')).length;
     delete historicoSalvo.cobertura.warnings; // Relatório criado antes da contagem de warnings.
+    delete historicoSalvo.parserVersao;
+    for (const g of historicoSalvo.grupos) delete g.assinatura;
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('[data-ticket-id="A"]').first().waitFor(); await abrirLogs();
     await page.locator('#logs-historico').click();
     await page.locator('.logs-history-item').first().click();
-    await page.getByText('Análise recuperada do histórico. Nenhuma nova chamada à IA foi feita.', { exact: true }).waitFor();
+    await page.locator('#logs-status').filter({ hasText: 'Análise recuperada do histórico. Nenhuma nova chamada à IA foi feita.' }).waitFor();
     assert.equal(requestsLogs.filter(p => p.includes('/avulso')).length, chamadasAntesHistorico);
     assert.match(await page.locator('#logs-resultado').textContent(), /Salvo no histórico/);
     assert.equal(await page.locator('.logs-metrics strong').nth(1).textContent(), 'Não contabilizado');
@@ -223,7 +242,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     assert.equal(await page.locator('.logs-history-item').count(), 0);
     await page.locator('#logs-historico').click();
 
-    await page.locator('[data-ticket-id="A"]').first().click();
+    await abrirChamado('A');
     await abrirLogs();
     await page.locator('#logs-modo-chamado').click();
     await page.locator('.logs-item').filter({ hasText: 'error-A.log' }).waitFor();
@@ -245,7 +264,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     await page.locator('#logs-analisar').evaluate(b => { b.click(); b.click(); });
     assert.equal(requestsLogs.filter(p => p.includes('/radar/logs/analisar')).length, 1, 'cliques repetidos não reenviam análise');
     await page.screenshot({ path: path.resolve(__dirname, '../../../tmp/analise-logs-novo-splash.png'), animations: 'disabled' });
-    await page.locator('[data-ticket-id="B"]').first().click();
+    await abrirChamado('B');
     assert.equal(await page.locator('#logs-splash').isVisible(), true, 'troca de chamado funciona mesmo com detalhes abertos');
     await page.locator('#logs-continuar').click();
     assert.equal(await page.locator('#logs-analisar').isDisabled(), true);

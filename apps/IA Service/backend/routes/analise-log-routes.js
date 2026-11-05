@@ -116,6 +116,7 @@ module.exports = function registrar(app, prefixo) {
       }
       const arquivo = await carregar();
       const historicoId = req.query.historicoId || null;
+      let relatorioAnterior = null;
       const hashArquivo = crypto.createHash('sha256').update(arquivo.buffer).digest('hex');
       if (historicoId) {
         const anterior = historicoRepo.obter(req.svcEmpresaId, historicoId);
@@ -123,6 +124,7 @@ module.exports = function registrar(app, prefixo) {
         if (anterior.hashArquivo !== hashArquivo) throw Object.assign(new Error('Selecione o mesmo arquivo usado na análise salva.'), { status: 409 });
         const origemAnterior = anterior.resultado.origem;
         if (['tipo', 'chamadoId', 'arquivoId'].some(c => String(origemAnterior?.[c] || '') !== String(arquivo.origem?.[c] || ''))) throw Object.assign(new Error('A origem do arquivo difere da análise salva.'), { status: 409 });
+        relatorioAnterior = anterior.resultado;
       }
       if (req.query.busca != null) {
         const busca = analise.buscarNoLog(arquivo.buffer, arquivo.nome, req.query.busca);
@@ -133,7 +135,7 @@ module.exports = function registrar(app, prefixo) {
       const grupoId = req.query.grupoId || null;
       if (grupoId && (typeof grupoId !== 'string' || !/^erro-(?:[1-9]\d?|100)$/.test(grupoId))) throw Object.assign(new Error('Grupo de erro inválido.'), { status: 400 });
       const resultado = await analise.analisarBuffer(req.svcEmpresaId, arquivo.buffer, arquivo.nome,
-        streaming ? { onProgress: (etapa, detalhes = {}) => enviar({ tipo: 'progresso', etapa, ...detalhes }) } : {}, grupoId);
+        { relatorioAnterior, ...(streaming ? { onProgress: (etapa, detalhes = {}) => enviar({ tipo: 'progresso', etapa, ...detalhes }) } : {}) }, grupoId);
       const relatorio = { ...resultado, origem: arquivo.origem };
       try {
         relatorio.historico = historicoRepo.salvar(req.svcEmpresaId, { resultado: relatorio, hashArquivo, historicoId, autor });
