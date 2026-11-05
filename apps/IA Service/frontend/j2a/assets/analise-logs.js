@@ -561,16 +561,14 @@ class AnaliseLogs {
     estatisticas.append(tituloArquivo);
     if (r.historico?.salvo) estatisticas.append(this.node('p', `Salvo no histórico · ${new Date(r.historico.atualizadoEm).toLocaleString('pt-BR')} · ${(r.historico.bytesHistorico / 1024).toFixed(1)} KB. O arquivo original não é armazenado no histórico.`, 'logs-muted'));
     const numeros = this.node('div', null, 'logs-metrics');
-    for (const [valor, label] of [[r.cobertura.ocorrencias, 'ocorrências no arquivo'], [r.grupos.length, 'grupos de mensagens'], [r.ia?.gruposAnalisados || 0, 'grupos avaliados pela IA'], [Number(r.cobertura.linhasLidas).toLocaleString('pt-BR'), 'linhas percorridas']]) {
+    const warningsContabilizados = Number.isInteger(r.cobertura.warnings) && r.cobertura.warnings >= 0;
+    for (const [valor, label] of [[Number(r.cobertura.ocorrencias).toLocaleString('pt-BR'), 'Erros identificados'], [warningsContabilizados ? r.cobertura.warnings.toLocaleString('pt-BR') : 'Não contabilizado', 'Warnings identificados'], [r.grupos.length.toLocaleString('pt-BR'), 'Grupos de mensagens semelhantes']]) {
       const metrica = this.node('div'); metrica.append(this.node('strong', valor), this.node('span', label)); numeros.append(metrica);
     }
-    estatisticas.append(numeros, this.node('p', 'Ocorrências repetidas não são necessariamente causas diferentes. Confira o contexto antes de decidir uma ação.', 'logs-muted'));
+    estatisticas.append(numeros, this.node('p', 'Totais de ocorrências identificadas, incluindo repetições.', 'logs-muted'));
+    estatisticas.append(this.node('p', 'Uma mensagem repetida 10 vezes conta como 10 erros em 1 grupo. Cada grupo reúne mensagens semelhantes para análise; grupos diferentes podem ter a mesma causa.', 'logs-muted'));
+    if (!warningsContabilizados) estatisticas.append(this.node('p', 'Este histórico foi salvo sem a contagem de warnings. Analise novamente o arquivo original para contabilizá-los.', 'logs-muted'));
     resumo.append(estatisticas);
-    const familias = this.node('div', null, 'logs-family-list');
-    for (const familia of r.familias || []) {
-      const item = this.node('span', null, 'logs-family'); item.append(this.node('b', familia.quantidade), this.node('span', familia.titulo)); familias.append(item);
-    }
-    estatisticas.append(familias);
     if (!r.grupos.length) resumo.append(this.node('p', 'Nenhum erro foi reconhecido pelos padrões examinados. Isso não confirma que o ambiente está livre de problemas.'));
     container.append(resumo);
     for (const grupo of r.grupos) {

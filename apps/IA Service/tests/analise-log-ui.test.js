@@ -21,7 +21,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
   const postsChat = [];
   const requestsLogs = [];
   const exclusoes = [];
-  const relatorio = localizarErros(Buffer.from('THREAD ERROR\nVariable does not exist CTEST on U_TESTE(TESTE.PRW) line 42\n'), 'error.log');
+  const relatorio = localizarErros(Buffer.from('THREAD ERROR\nVariable does not exist CTEST on U_TESTE(TESTE.PRW) line 42\n[WARN] Conexão lenta\n'), 'error.log');
   relatorio.contextoArquivo = [{ evidencia: [{ linha: 300, texto: '[INFO] Service Stopped.' }] }];
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
@@ -137,6 +137,11 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     assert.equal(await page.locator('.logs-metrics').isVisible(), false);
     await page.locator('.logs-file-summary > summary').click();
     assert.equal(await page.locator('.logs-metrics').isVisible(), true, 'permite consultar os indicadores');
+    assert.deepEqual(await page.locator('.logs-metrics > div span').allTextContents(), ['Erros identificados', 'Warnings identificados', 'Grupos de mensagens semelhantes']);
+    assert.deepEqual(await page.locator('.logs-metrics strong').allTextContents(), ['1', '1', '1']);
+    assert.match(await page.locator('.logs-file-summary').textContent(), /10 erros em 1 grupo/);
+    assert.doesNotMatch(await page.locator('.logs-file-summary').textContent(), /grupos avaliados pela IA|linhas percorridas/);
+    assert.equal(await page.locator('.logs-family-list').count(), 0);
     await page.locator('.logs-file-summary > summary').click();
     assert.equal(await page.locator('.logs-overview').count(), 0, 'plano de investigação removido mesmo quando existe no histórico');
     assert.equal(await page.getByText('Cobertura e limites desta análise', { exact: true }).count(), 0);
@@ -177,6 +182,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     assert.match(pdf.text, /Encaminhar ao desenvolvedor/);
     assert.doesNotMatch(pdf.text, /Evidência|Como validar|O que falta confirmar|Causa provável|O que foi observado|Onde começar|Próximos passos|Evento de contexto|Service Stopped|linhas lidas|ocorrências/);
     const chamadasAntesHistorico = requestsLogs.filter(p => p.includes('/avulso')).length;
+    delete historicoSalvo.cobertura.warnings; // Relatório criado antes da contagem de warnings.
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('[data-ticket-id="A"]').first().waitFor(); await abrirLogs();
     await page.locator('#logs-historico').click();
@@ -184,6 +190,8 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     await page.getByText('Análise recuperada do histórico. Nenhuma nova chamada à IA foi feita.', { exact: true }).waitFor();
     assert.equal(requestsLogs.filter(p => p.includes('/avulso')).length, chamadasAntesHistorico);
     assert.match(await page.locator('#logs-resultado').textContent(), /Salvo no histórico/);
+    assert.equal(await page.locator('.logs-metrics strong').nth(1).textContent(), 'Não contabilizado');
+    assert.match(await page.locator('.logs-file-summary').textContent(), /Analise novamente o arquivo original/);
     assert.equal(await page.locator('#logs-analisar').isDisabled(), true, 'histórico avulso sem original não habilita nova análise');
     assert.doesNotMatch(await page.locator('#logs-ajuda').textContent(), /Arquivo pronto/);
     assert.equal(await page.locator('.logs-source').evaluate(el => el.open), false, 'abrir análise salva recolhe a seleção do arquivo');

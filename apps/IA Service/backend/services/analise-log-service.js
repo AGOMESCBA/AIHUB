@@ -9,6 +9,7 @@ const MAX_GRUPOS = 100;
 const MAX_GRUPOS_IA = 8;
 const MAX_OCORRENCIAS = 40;
 const MARCADOR = /\bTHREAD ERROR\b|\bFATAL(?:\s+ERROR)?\b|\[(?:ERROR|ERRO)\s*\]|\b(?:ERROR|ERRO)(?:\s*[:\[]|\s+\d)|\berro\s+(?:ao|na|no|em|de)\b|\b(?:exception|access violation|stack overflow|variable does not exist|type mismatch|invalid field name|argument error|array out of bounds|deadlock victim)\b/i;
+const MARCADOR_WARNING = /\[\s*(?:WARN|WARNING)\s*\]|\b(?:WARN|WARNING)\s*[:\-]/i;
 const EVENTO_CONTEXTO = /Application Server Service Stopped|Application Server.*in shutdown|Application SHUTDOWN in progress|Stopping all HTTP servers|Notified finalization/i;
 
 function ehNomeLog(nome) { return /\.log(?:\.txt)?$/i.test(String(nome || '')); }
@@ -106,21 +107,26 @@ function localizarErros(buffer, nome) {
   const linhas = texto.split(/\r\n|\n|\r/);
   const mapa = new Map();
   let ocorrencias = 0;
+  let warnings = 0;
   let ocorrenciasNaoRetidas = 0;
   let fimBloco = -1;
   const contextoArquivo = [];
   for (let i = 0; i < linhas.length; i++) {
+    // Contar avisos no arquivo inteiro, inclusive dentro dos trechos de
+    // contexto, sem promovê-los a erro por palavras presentes na mensagem.
+    const warning = MARCADOR_WARNING.test(linhas[i]);
+    if (warning) warnings++;
     if (contextoArquivo.length < 20 && EVENTO_CONTEXTO.test(linhas[i])) {
       const inicio = Math.max(0, i - 2);
       contextoArquivo.push({ linha: i + 1, evidencia: linhas.slice(inicio, i + 1).map((l, n) => ({ linha: inicio + n + 1, texto: redigirTexto(l).slice(0, 500) })) });
     }
     const thread = /\bTHREAD ERROR\b/i.test(linhas[i]);
-    if (!thread && (i <= fimBloco || !MARCADOR.test(linhas[i]))) continue;
+    if (warning || (!thread && (i <= fimBloco || !MARCADOR.test(linhas[i])))) continue;
     let fim = Math.min(linhas.length - 1, i + (thread ? 35 : 12));
     for (let j = i + 1; j <= fim; j++) {
       if (/\bTHREAD ERROR\b/i.test(linhas[j])) { fim = j - 1; break; }
       // Fora de THREAD ERROR, cada nova mensagem de erro é um incidente.
-      if (!thread && MARCADOR.test(linhas[j])) { fim = j - 1; break; }
+      if (!thread && !MARCADOR_WARNING.test(linhas[j]) && MARCADOR.test(linhas[j])) { fim = j - 1; break; }
     }
     fimBloco = fim;
     const bloco = linhas.slice(i, fim + 1);
@@ -148,7 +154,7 @@ function localizarErros(buffer, nome) {
   }
   return {
     arquivo: { nome, tamanho: buffer.length, encoding },
-    cobertura: { linhasLidas: linhas.length, varreduraCompleta: true, ocorrencias, ocorrenciasNaoRetidas,
+    cobertura: { linhasLidas: linhas.length, varreduraCompleta: true, ocorrencias, warnings, ocorrenciasNaoRetidas,
       limiteGrupos: MAX_GRUPOS, limiteLocalizacoes: MAX_OCORRENCIAS, limiteGruposIA: MAX_GRUPOS_IA },
     grupos: [...mapa.values()],
     familias: Object.entries(TIPOS).map(([tipo, titulo]) => {

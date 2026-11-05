@@ -29,6 +29,29 @@ test('incidentes genéricos consecutivos permanecem separados', () => {
   assert.equal(r.grupos.length, 2);
 });
 
+test('conta warnings explícitos separados dos erros, inclusive repetições e contexto de THREAD ERROR', () => {
+  const r = localizarErros(buffer('[WARN ][SERVER] Erro ao abrir conexão; nova tentativa\n' +
+    '[WARNING] Revisar configuração\nWARN: Conexão lenta\nWARNING - Conexão lenta\n' +
+    incidente() + '[WARNING] Aviso dentro do contexto do erro\n' +
+    '[INFO] A documentação menciona warning sem registrar um aviso\n' +
+    '[WARNING] Revisar configuração\nERROR: Falha de conexão'), 'error.log');
+  assert.equal(r.cobertura.warnings, 6);
+  assert.equal(r.cobertura.ocorrencias, 1, 'a mensagem dentro do bloco THREAD ERROR continua sendo evidência do incidente');
+  assert.equal(r.grupos.length, 1);
+});
+
+test('arquivo só com warnings não gera erros e varre avisos além do limite de grupos', () => {
+  const avisos = '[WARN] Erro ao processar; operação será repetida\n'.repeat(130);
+  const r = localizarErros(buffer(avisos), 'warnings.log');
+  assert.equal(r.cobertura.warnings, 130);
+  assert.equal(r.cobertura.ocorrencias, 0);
+  assert.equal(r.grupos.length, 0);
+  const misto = localizarErros(buffer(Array.from({ length: 110 }, (_, i) => incidente(`Erro específico ${i}`)).join('') + avisos), 'misto.log');
+  assert.equal(misto.cobertura.warnings, 130);
+  assert.equal(misto.cobertura.ocorrencias, 110);
+  assert.equal(misto.grupos.length, 100);
+});
+
 test('aceita .log.txt e reconhece falha de negócio dentro de INFO e erros SERVER', () => {
   const texto = '2026-10-28T14:16:44.649000-04:00 123|\r\n' +
     '----------U_TESTE(80)----------\r\n' +

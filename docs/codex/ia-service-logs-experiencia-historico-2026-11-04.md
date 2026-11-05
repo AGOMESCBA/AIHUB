@@ -86,3 +86,13 @@ O documento A4 usa identificação do arquivo/chamado, títulos de erros, açõe
 O endpoint autenticado `POST /radar/logs/relatorio.pdf`, nos acessos interno e externo, recebe apenas nome, número do chamado e os grupos selecionados (id, título e soluções). Valida quantidade e tamanho, reaplica o filtro de credenciais e gera o PDF em memória com o PDFKit já instalado. Não consulta anexos, não grava arquivos/banco e não chama IA. A troca de relatório ou empresa impede baixar uma resposta antiga; o botão indica a geração e bloqueia cliques repetidos.
 
 Validação final: 21 testes aprovados de exportação, rotas e navegador. Inclui extração do texto e das coordenadas de documentos de uma e várias páginas, limites de entrada, ocultação de credenciais, autenticação nos dois acessos, download real no navegador, recuperação após falha, bloqueio de download tardio após trocar de empresa e filtros combinados em um relatório de 30 erros. Evidência: `tmp/analise-logs-pdf-final.txt`. Prévia renderizada e conferida em `tmp/analise-log-exemplo.png`; PDF de exemplo em `tmp/analise-log-exemplo.pdf`.
+
+## Resumo com erros, warnings e agrupamento — 05/11/2026
+
+O resumo recolhível passa a mostrar três indicadores: **Erros identificados**, **Warnings identificados** e **Grupos de mensagens semelhantes**. Retirados os cards de grupos avaliados pela IA e linhas percorridas e o desdobramento por famílias. Uma explicação distingue ocorrências de grupos: uma mensagem repetida dez vezes conta como dez erros em um grupo; grupos diferentes não comprovam causas diferentes.
+
+O scanner conta registros com marcadores explícitos `[WARN]`, `[WARNING]` (incluindo espaços), `WARN:` e `WARNING -` no arquivo inteiro, inclusive em contextos e após atingir o limite de grupos. Um registro marcado como warning não vira erro por conter palavras como “erro ao”. A contagem fica em `cobertura.warnings`, preservada pelo mecanismo JSON/gzip existente, sem migração de tabelas. Os grupos e diagnósticos continuam sendo dos erros reconhecidos; esta mudança não cria análise de warnings.
+
+Históricos antigos não contêm o total de warnings: mostram **Não contabilizado** e orientam analisar novamente o original. Não é inferido um zero a partir das evidências limitadas. O PDF permanece restrito aos erros e soluções, sem métricas.
+
+Validação: 21 testes aprovados de scanner e navegador (J2A/radar anterior, desktop e celular), incluindo warnings repetidos, arquivo somente com warnings, avisos no contexto de THREAD ERROR, limites de grupos, indicadores novos e histórico antigo. Evidência: `tmp/analise-logs-resumo-warnings.txt`.
