@@ -152,8 +152,9 @@
 .logs-cartao:not(.selecionado):hover { border-color:color-mix(in srgb,#3b82f6 45%,var(--logs-line)); }
 .logs-cartao.selecionado { border-color:color-mix(in srgb,#3b82f6 45%,var(--logs-line)); }
 #logs-resultados-area { container:logs-resultado / inline-size; }
-@container logs-resultado (min-width:1100px) {
-  .logs-navegacao { display:grid; grid-template-columns:minmax(280px,340px) minmax(0,1fr); gap:16px; align-items:start; }
+/* 860px: os dois painéis se mantêm com a fila de chamados aberta (e zoom de 125%). */
+@container logs-resultado (min-width:860px) {
+  .logs-navegacao { display:grid; grid-template-columns:minmax(240px,320px) minmax(0,1fr); gap:16px; align-items:start; }
   /* Coluna esquerda: busca, filtros, lista e contador, acompanhando a rolagem. */
   .logs-lateral { position:sticky; top:0; display:flex; flex-direction:column; max-height:calc(100dvh - 110px); padding:12px; border:1px solid var(--logs-line); border-radius:10px; background:var(--logs-panel); }
   .logs-lateral .logs-search { flex-wrap:wrap; gap:6px; padding:6px 8px 8px 10px; }

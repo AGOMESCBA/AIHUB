@@ -216,6 +216,7 @@ function motivoFalhaIA(err) {
     COTA_ESGOTADA: 'O provedor de IA informou falta de cota ou crédito. Solicite a verificação ao administrador.',
     CONTEXTO_EXCEDIDO: 'O volume de evidências excedeu a capacidade do provedor. Tente analisar um erro individualmente.',
     TEMPO_ESGOTADO: 'O provedor de IA não respondeu no tempo disponível. Tente analisar um erro individualmente.',
+    CONEXAO_INTERROMPIDA: 'A conexão com o provedor de IA foi interrompida durante a resposta. Tente novamente ou analise um erro individualmente.',
     CREDENCIAL_INVALIDA: 'O provedor recusou a autenticação. Solicite a revisão da configuração de IA da empresa.',
     RESPOSTA_INCOMPLETA: 'A resposta da IA veio incompleta. Tente analisar um erro individualmente.',
     RESPOSTA_INVALIDA: 'A IA respondeu fora do formato esperado. Tente analisar um erro individualmente.',
@@ -226,8 +227,20 @@ function motivoFalhaIA(err) {
   const texto = [err?.message, ...(Array.isArray(err?._tentativas) ? err._tentativas.map(t => t.erro) : [])].filter(Boolean).join(' ');
   const codigo = err?._semChave ? 'SEM_CONFIGURACAO' : err?._cotaEsgotada ? 'COTA_ESGOTADA' : err?._semJanelaSuficiente ? 'CONTEXTO_EXCEDIDO' :
     causas[err?.codigoIA] ? err.codigoIA : /401|invalid_api_key|authentication|unauthorized/i.test(texto) ? 'CREDENCIAL_INVALIDA' :
+    /ECONNRESET|socket hang up|EPIPE|streaming (?:interrompida|encerrada antes do fim)/i.test(texto) ? 'CONEXAO_INTERROMPIDA' :
     /timeout|timed out|tempo.*(?:esgotad|excedid)|AbortError/i.test(texto) ? 'TEMPO_ESGOTADO' : 'FALHA_PROVEDOR';
   return { codigo, mensagem: causas[codigo] };
+}
+
+// Para o log do servidor: só rótulos técnicos fixos e tempos, nunca o texto
+// bruto do provedor (pode conter payload). Ex.: quedas de ~11 s em produção.
+function diagnosticoFalhaIA(err) {
+  const tentativas = Array.isArray(err?._tentativas) ? err._tentativas : [];
+  const texto = [err?.message, ...tentativas.map(t => t.erro)].filter(Boolean).join(' ');
+  const rotulo = texto.match(/ECONNRESET|ETIMEDOUT|ECONNREFUSED|ENOTFOUND|EPIPE|socket hang up|streaming (?:interrompida|encerrada antes do fim)|Timeout de \d+s/i)?.[0]
+    || texto.match(/(?:HTTP|status)\D{0,3}[45]\d\d/i)?.[0] || 'desconhecido';
+  const tempos = tentativas.map(t => t.latenciaMs).filter(Number.isFinite);
+  return `tecnico=${rotulo.replace(/\s+/g, '_')} tentativas=${tentativas.length} ms=${tempos.join('/') || '?'}`;
 }
 
 async function analisarBuffer(empresaId, buffer, nome, dependencias = {}, grupoId = null) {
@@ -259,7 +272,10 @@ async function analisarBuffer(empresaId, buffer, nome, dependencias = {}, grupoI
     });
     const resposta = await client.chamarIA(keys, cfg, SYSTEM, JSON.stringify({ incidentes: evidencias, contextoArquivo: relatorio.contextoArquivo,
       inventario: relatorio.grupos.map(g => ({ id: g.id, tipo: g.tipo, titulo: g.titulo, quantidade: g.quantidade })), familias: relatorio.familias }), [],
-      { json: true, maxTokens: 5000, totalTimeoutMs: 75000, timeoutMs: 35000, maxProviderRounds: 1 });
+      // Streaming: a resposta chega aos poucos; a chamada inteira caía no
+      // corte de ~11 s da rede de produção. Com gpt-5.4 os 8 diagnósticos
+      // passam de 35 s (teste real 2026-11-05): prazo sobe para 70 s.
+      { json: true, streamJson: true, aoReceberTexto: () => {}, maxTokens: 5000, totalTimeoutMs: 75000, timeoutMs: 70000, maxProviderRounds: 1 });
     if (resposta.truncado) throw Object.assign(erro('Resposta de IA incompleta.', 502), { codigoIA: 'RESPOSTA_INCOMPLETA' });
     let parsed;
     try { parsed = JSON.parse(String(resposta.texto || '').replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '')); }
@@ -287,7 +303,7 @@ async function analisarBuffer(empresaId, buffer, nome, dependencias = {}, grupoI
     const falha = motivoFalhaIA(err);
     relatorio.avisos.push(falha.mensagem);
     relatorio.ia = { gruposAnalisados: 0, indisponivel: true, falha };
-    console.warn(`[IA Service][Análise de logs] empresa=${Number(empresaId)} falha=${falha.codigo}`);
+    console.warn(`[IA Service][Análise de logs] empresa=${Number(empresaId)} falha=${falha.codigo} ${diagnosticoFalhaIA(err)}`);
   }
   dependencias.onProgress?.('relatorio', { iaIndisponivel: !!relatorio.ia?.indisponivel });
   return relatorio;

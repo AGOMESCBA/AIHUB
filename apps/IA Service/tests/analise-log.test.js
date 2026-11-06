@@ -183,6 +183,25 @@ test('falha da IA fornece motivo útil sem expor erro técnico, chave ou payload
   }
 });
 
+test('queda de conexão (~11 s em produção): motivo próprio, streaming pedido e log só com rótulo técnico', async () => {
+  const avisos = []; const warnOriginal = console.warn; console.warn = m => avisos.push(String(m));
+  let opcoes;
+  try {
+    const queda = Object.assign(new Error('Todos os provedores falharam SEGREDO-DO-PROVEDOR'), { _tentativas: [{ erro: 'read ECONNRESET SEGREDO-DO-PROVEDOR', latenciaMs: 11234 }] });
+    const r = await analisarBuffer(7, buffer(incidente()), 'x.log', {
+      config: { resolverKeysEOrdem: () => ({ keys: {}, cfg: {} }) },
+      client: { chamarIA: async (_k, _c, _s, _u, _i, opts) => { opcoes = opts; throw queda; } },
+    });
+    assert.equal(r.ia.falha.codigo, 'CONEXAO_INTERROMPIDA');
+    assert.match(r.ia.falha.mensagem, /interrompida/);
+    assert.doesNotMatch(JSON.stringify(r), /SEGREDO-DO-PROVEDOR|ECONNRESET/);
+  } finally { console.warn = warnOriginal; }
+  assert.equal(opcoes.json, true); assert.equal(opcoes.streamJson, true); assert.equal(typeof opcoes.aoReceberTexto, 'function');
+  const linha = avisos.find(a => a.includes('[Análise de logs]'));
+  assert.match(linha, /falha=CONEXAO_INTERROMPIDA tecnico=ECONNRESET tentativas=1 ms=11234/);
+  assert.doesNotMatch(linha, /SEGREDO-DO-PROVEDOR/, 'log nunca leva texto bruto do provedor');
+});
+
 test('permite analisar individualmente grupo além dos oito iniciais', async () => {
   let prompt;
   const conteudo = buffer(Array.from({ length: 10 }, (_, i) => incidente(`Erro distinto ${i}`)).join(''));

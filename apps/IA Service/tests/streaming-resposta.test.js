@@ -71,6 +71,17 @@ test('finish_reason=length continua marcando resposta truncada', async () => {
   assert.equal(r.truncado, true);
 });
 
+test('JSON em streaming só com streamJson (análise de logs); JSON sem ele segue sem streaming', async () => {
+  const json = '{"analises":[]}';
+  const chamadas = mock([{ sse: [delta(json.slice(0, 6)), delta(json.slice(6)), fim()] }, { json: { choices: [{ message: { content: json }, finish_reason: 'stop' }], usage: {} } }]);
+  const r = await aiProviderClient.chamarIA(KEYS, CFG, 'sys', 'p', [], { json: true, streamJson: true, aoReceberTexto: () => {} });
+  assert.equal(r.texto, json);
+  assert.equal(chamadas[0].body.stream, true);
+  assert.deepEqual(chamadas[0].body.response_format, { type: 'json_object' });
+  await aiProviderClient.chamarIA(KEYS, CFG, 'sys', 'p', [], { json: true, aoReceberTexto: () => {} });
+  assert.equal(chamadas[1].body.stream, undefined, 'JSON com rascunho, sem streamJson: comportamento anterior');
+});
+
 test('sem callback: chamada normal, sem streaming (demais usos não mudam)', async () => {
   const chamadas = mock([{ json: { choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }], usage: {} } }]);
   const r = await aiProviderClient.chamarIA(KEYS, CFG, 'sys', 'p', []);

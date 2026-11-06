@@ -191,9 +191,20 @@ class AnaliseLogs {
       const body = new FormData(); body.append('arquivo', arquivo);
       this.fonteAnalise = { modo: 'avulso', caminho: '/radar/logs/avulso', opts: { method: 'POST', body } };
       this.root.querySelectorAll('[data-log-grupo]').forEach(b => { b.disabled = false; });
+      this.root.querySelectorAll('.logs-pede-original').forEach(p => p.remove());
+      const pendente = this.grupoPendente; this.grupoPendente = null;
+      if (pendente && /\.log(?:\.txt)?$/i.test(arquivo.name)) { this.analisar(pendente); return; }
     }
     if (arquivo && !/\.log(?:\.txt)?$/i.test(arquivo.name)) this.status('Escolha um arquivo .log ou .log.txt.', 'erro');
     else this.status('');
+  }
+  pedirOriginal(grupoId) {
+    if (this.ocupado || this.relatorio?.origem?.tipo !== 'avulso') return;
+    this.grupoPendente = grupoId;
+    this.root.querySelector('.logs-source').open = true;
+    if (this.modo !== 'avulso') this.setModo('avulso');
+    this.status('Selecione o mesmo arquivo usado nesta análise salva. O erro será analisado em seguida.');
+    this.el('arquivo').click();
   }
   atualizarBotao() {
     const arquivo = this.el('arquivo').files[0];
@@ -436,7 +447,7 @@ class AnaliseLogs {
   }
   limparResultado() {
     this.pdfController?.abort();
-    this.reaberta = false;
+    this.reaberta = false; this.grupoPendente = null;
     this.buscaController?.abort(); this.buscando = false;
     this.root.classList.remove('tem-resultado');
     this.relatorio = null;
@@ -649,10 +660,11 @@ class AnaliseLogs {
       } else {
         corpo.append(this.node('p', 'Sem diagnóstico por IA para este grupo. As evidências abaixo mostram o que foi localizado no arquivo.'));
         const botao = this.node('button', 'Analisar este erro'); botao.type = 'button';
-        botao.dataset.logGrupo = grupo.id; botao.disabled = this.ocupado || !this.fonteAnalise;
-        if (!this.fonteAnalise) botao.title = 'Selecione o arquivo original para analisar este erro.';
-        botao.addEventListener('click', () => this.analisar(grupo.id));
+        botao.dataset.logGrupo = grupo.id; botao.disabled = this.ocupado;
+        botao.addEventListener('click', () => this.fonteAnalise ? this.analisar(grupo.id) : this.pedirOriginal(grupo.id));
         corpo.append(botao);
+        // Análise avulsa salva não guarda o arquivo: o clique pede o original e já analisa.
+        if (!this.fonteAnalise) corpo.append(this.node('p', 'Ao clicar, selecione o mesmo arquivo usado nesta análise salva.', 'logs-muted logs-pede-original'));
       }
       const detalhe = this.node('details'); detalhe.append(this.node('summary', 'Ver evidência e linhas do log (trecho limitado)'));
       detalhe.append(this.node('p', `Linhas do log: ${grupo.linhas.join(', ')}${grupo.quantidade > grupo.linhas.length ? ' (lista limitada)' : ''}`));

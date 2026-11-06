@@ -118,7 +118,7 @@ test('30 erros: acumula quatro diagnósticos, filtra por análise e busca, e pre
     assert.deepEqual(await page.locator('[data-log-indice]:visible').evaluateAll(b => b.map(i => i.dataset.logIndice)), ['erro-30'], 'índice segue o filtro');
     await page.locator('#logs-busca').fill('');
     // Área estreita: lista compacta, um grupo aberto por vez.
-    await page.setViewportSize({ width: 900, height: 900 });
+    await page.setViewportSize({ width: 800, height: 900 });
     assert.equal(await page.locator('#logs-indice').isVisible(), false);
     assert.equal(await page.locator('[data-log-card]:visible').count(), 30);
     assert.equal(await page.locator('.logs-cartao-corpo:visible').count(), 1);
@@ -131,6 +131,11 @@ test('30 erros: acumula quatro diagnósticos, filtra por análise e busca, e pre
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.locator('[data-log-card]:visible').first().waitFor();
     assert.equal(await page.locator('[data-log-card]:visible').count(), 1, 'ao voltar para área larga, um grupo é exibido');
+    // Área próxima à da fila de chamados aberta com zoom de 125%: ainda em dois painéis.
+    await page.setViewportSize({ width: 960, height: 900 });
+    assert.ok((await page.locator('#logs-resultados-area').boundingBox()).width < 1100);
+    assert.equal(await page.locator('#logs-indice').isVisible(), true, 'lista lateral mantida em área intermediária');
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.evaluate(() => { window.legadoPreservado = window.logsTeste.relatorio; window.logsTeste.relatorio.parserVersao = 1; });
     await page.locator('#logs-analisar').click();
     assert.doesNotMatch(await page.evaluate(() => window.pedidosLogs.at(-1)), /historicoId=/, 'reanalisar legado pelo botão principal cria resultado separado');

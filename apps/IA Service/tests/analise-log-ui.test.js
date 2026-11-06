@@ -201,7 +201,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     const chamadasAntesHistorico = requestsLogs.filter(p => p.includes('/avulso')).length;
     delete historicoSalvo.cobertura.warnings; // Relatório criado antes da contagem de warnings.
     delete historicoSalvo.parserVersao;
-    for (const g of historicoSalvo.grupos) delete g.assinatura;
+    for (const g of historicoSalvo.grupos) { delete g.assinatura; delete g.analise; } // Grupo salvo sem diagnóstico.
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('[data-ticket-id="A"]').first().waitFor(); await abrirLogs();
     await page.locator('#logs-historico').click();
@@ -217,6 +217,17 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
     assert.equal(await page.locator('#logs-modo-avulso').isVisible(), false);
     await page.locator('.logs-section-head').click();
     assert.equal(await page.locator('.logs-source').evaluate(el => el.open), true, 'permite reabrir a seleção depois do histórico');
+    const reanalisar = page.getByRole('button', { name: 'Analisar este erro', exact: true });
+    assert.equal(await reanalisar.isDisabled(), false, 'grupo salvo sem diagnóstico pode ser analisado de novo');
+    assert.equal(await page.locator('.logs-pede-original').isVisible(), true, 'explica que o original será pedido');
+    await page.locator('#logs-arquivo').evaluate(input => { input.click = () => { window.pediuArquivo = true; }; });
+    await reanalisar.click();
+    assert.equal(await page.evaluate(() => window.pediuArquivo), true, 'o clique abre a seleção do arquivo');
+    await page.locator('#logs-arquivo').setInputFiles({ name: 'avulso.log.txt', mimeType: 'text/plain', buffer: Buffer.from('THREAD ERROR\nFalha de teste') });
+    await page.getByText('Falha de variável.', { exact: true }).waitFor();
+    assert.ok(requestsLogs.some(p => /avulso\?grupoId=erro-1&historicoId=hist-1/.test(p)), 'reanálise usa o histórico aberto');
+    assert.equal(await page.locator('.logs-pede-original').count(), 0);
+    await page.locator('#logs-monitor-fechar').click(); // Aviso de conclusão sobrepõe os botões do topo.
     await page.locator('#logs-modo-avulso').click();
     const envioAntes = await page.locator('#logs-drop').boundingBox();
     await page.locator('#logs-historico').click();

@@ -290,7 +290,9 @@ async function _chamarOpenAICompatUmaVez(cfg, apiKey, systemPrompt, userPrompt, 
 
   // Streaming só na OpenAI (entre os openai_compat; o Claude tem o seu) e só
   // para quem pediu o rascunho (geração da resposta do chat). Demais: igual.
-  if (typeof opts.aoReceberTexto === 'function' && cfg.hostname === 'api.openai.com' && !opts.json) {
+  // `streamJson`: resposta JSON em streaming, para chamadas longas que caem
+  // no corte de ~11 s da rede de produção (análise de logs).
+  if (typeof opts.aoReceberTexto === 'function' && cfg.hostname === 'api.openai.com' && (!opts.json || opts.streamJson)) {
     body.stream = true;
     body.stream_options = { include_usage: true };
     const r = await _httpPostStream(cfg.hostname, cfg.path, { Authorization: `Bearer ${apiKey}` }, body, opts.timeoutMs, opts.aoReceberTexto, FORMATO_STREAM.openai);
