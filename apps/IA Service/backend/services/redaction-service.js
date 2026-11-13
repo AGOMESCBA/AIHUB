@@ -5,6 +5,12 @@ const SENSITIVE_QUERY_KEYS = new Set([
   'secret', 'client_secret', 'refresh_token', 'private_key', 'session', 'sessionid', 'sid', 'auth', 'authorization', 'cookie',
 ]);
 
+// Contagens de uso devolvidas pelo provider de IA: o nome contém "token", mas o
+// valor é só um número. Liberadas por lista explícita e somente com valor
+// numérico (autorização do usuário, 2026-11-12); qualquer outro campo com
+// "token" no nome continua mascarado.
+const CONTAGENS_USO_LIBERADAS = new Set(['prompt_tokens', 'completion_tokens', 'total_tokens']);
+
 // CPF/CNPJ usam o mesmo padrao de technical-research-service.js:sanitizarConsultaExterna
 // (mantido em dois lugares deliberadamente: aqui mascara para [REDACTED] preservando
 // o formato da frase; na pesquisa externa remove para nao poluir a query de busca).
@@ -55,7 +61,9 @@ function redigirValor(valor) {
     const out = {};
     for (const [k, v] of Object.entries(valor)) {
       const key = k.toLowerCase();
-      if (SENSITIVE_QUERY_KEYS.has(key) || /authorization|cookie|password|senha|secret|token|api[_-]?key/i.test(k)) {
+      if (CONTAGENS_USO_LIBERADAS.has(k) && typeof v === 'number' && Number.isFinite(v)) {
+        out[k] = v;
+      } else if (SENSITIVE_QUERY_KEYS.has(key) || /authorization|cookie|password|senha|secret|token|api[_-]?key/i.test(k)) {
         out[k] = '[REDACTED]';
       } else {
         out[k] = redigirValor(v);

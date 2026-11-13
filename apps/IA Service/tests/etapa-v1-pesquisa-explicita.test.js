@@ -175,6 +175,8 @@ async function testarForcarPesquisaVenceSemanticaDesfavoravel() {
       fonte: 'Serper/Google',
       consulta: 'rateio',
     }],
+    // Consultas escritas pela IA de consultas (simulada), 2026-11-13.
+    gerarConsultasIA: async () => ({ consultas: ['rateio nota fiscal protheus'] }),
     abrirResultados: async (resultados) => resultados.slice(0, 1).map(r => ({
       titulo: r.titulo,
       url: r.url,

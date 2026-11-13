@@ -73,6 +73,41 @@ function _codigoPorId(estado, itemId) {
   return [...estado.fatos, ...estado.hipoteses, ...estado.testes, ...estado.resultados].find(i => i.id === itemId)?.codigo || null;
 }
 
+// Contexto reduzido do turno para o dossiê (experimental, desligado por
+// padrão: IA_SERVICE_DOSSIE_CONTEXTO_REDUZIDO=1). O manifesto completo do
+// Context Engine (orçamento, scores, quadro investigativo, plano rastreável)
+// e o objeto inteiro da pesquisa (histórico de consultas, ranking) eram ~80%
+// do prompt de atualização e são auditoria da resposta principal. O dossiê
+// precisa dos identificadores do que foi usado (proveniência validada em
+// _validarAlvo) e das páginas lidas; estado, mensagem e resposta ficam iguais.
+function _manifestoParaDossie(manifesto) {
+  if (!manifesto || typeof manifesto !== 'object') return manifesto ?? null;
+  const ref = i => ({ tipo: i.tipo, id: i.id, nome: i.nome || null });
+  return {
+    selecionados: (manifesto.selecionados || []).map(ref),
+    omitidos: (manifesto.omitidos || []).map(i => ({ ...ref(i), status: i.status || null, motivo: i.motivo || null })),
+    pendenciaConsolidada: manifesto.pendenciaConsolidada ?? null,
+  };
+}
+
+function _pesquisaParaDossie(pesquisa) {
+  if (!pesquisa || typeof pesquisa !== 'object') return pesquisa ?? null;
+  const plano = pesquisa.plano || {};
+  return {
+    devePesquisar: plano.devePesquisar ?? null,
+    motivo: plano.motivo ?? null,
+    lacuna: plano.lacunaInvestigativa?.tipo || null,
+    consultasExecutadas: (pesquisa.consultasExecutadas || []).map(c => (typeof c === 'string' ? c : c?.consulta)).filter(Boolean),
+    paginasLidas: (pesquisa.paginasLidas || [])
+      .filter(p => ['lida', 'reutilizada'].includes(p.status))
+      .map(p => ({ url: p.url, titulo: p.titulo || p.tituloArtigo || null, fonte: p.fonte || null, status: p.status, trecho: p.trecho || null })),
+  };
+}
+
+function _contextoReduzidoAtivo() {
+  return process.env.IA_SERVICE_DOSSIE_CONTEXTO_REDUZIDO === '1';
+}
+
 function _montarPrompt({ estado, mensagemUsuario, respostaAssistente, contextoResumo, manifesto, pesquisa, referencias }) {
   return JSON.stringify(redigirValor({
     tarefa: 'Proponha apenas mudancas de estado tecnico realmente sustentadas pelo turno atual.',
@@ -441,8 +476,8 @@ async function atualizarAposTurno(empresaId, atendimentoId, dados = {}, opcoes =
         mensagemUsuario: dados.mensagemUsuario,
         respostaAssistente: dados.respostaAssistente,
         contextoResumo: dados.contextoResumo,
-        manifesto: dados.manifesto,
-        pesquisa: dados.pesquisa,
+        manifesto: _contextoReduzidoAtivo() ? _manifestoParaDossie(dados.manifesto) : dados.manifesto,
+        pesquisa: _contextoReduzidoAtivo() ? _pesquisaParaDossie(dados.pesquisa) : dados.pesquisa,
         referencias: dados.referencias,
       });
       resultadoIa = await aiProviderClient.chamarIA(keys, cfg, SYSTEM_PROMPT, prompt, [], {
@@ -536,6 +571,9 @@ module.exports = {
   ACOES,
   atualizarAposTurno,
   _parseJson,
+  _montarPrompt,
+  _manifestoParaDossie,
+  _pesquisaParaDossie,
   _normalizarProposta,
   _validarAlteracao,
 };

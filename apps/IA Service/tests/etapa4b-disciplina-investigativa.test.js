@@ -67,6 +67,14 @@ async function testarCasos4B() {
   assert.strictEqual(byId['4b-missing-critical-evidence'].metricas.inventou_informacao, false);
   assert.strictEqual(byId['4b-external-gap-needed'].metricas.deixou_de_pesquisar_quando_necessario, false);
   assert.strictEqual(byId['4b-environment-gap'].metricas.pesquisou_sem_necessidade, false);
+  // Neste contexto a lacuna sai TESTE e a 4B não veta: o plano decide
+  // pesquisar e quem nega é a IA de interpretação (correção B, 2026-11-12).
+  const [pesqGap] = byId['4b-environment-gap'].pesquisas;
+  assert.deepStrictEqual(pesqGap.semantica, { zona: 'plano_pesquisaria_sem_evidencia_clara', tipoMudanca: 'informacao_insuficiente' }, 'decisão: consultou a IA de interpretação');
+  assert.strictEqual(pesqGap.devePesquisar, false, 'execução: não pesquisou');
+  assert.strictEqual(pesqGap.consultas.length, 0, 'execução: nenhuma consulta');
+  assert.match(pesqGap.motivo, /semantica nao justificou pesquisa externa: informacao_insuficiente/, 'auditoria: motivo da decisão executada');
+  assert.strictEqual(pesqGap.decisaoPlanejada?.devePesquisar, true, 'auditoria: decisão planejada registrada');
   assert.strictEqual(byId['4b-contradiction'].status, 'inconclusivo_correto');
   assert.ok(!JSON.stringify(byId['4b-safe-test'].testes).includes('derrubar a fila produtiva'));
 }

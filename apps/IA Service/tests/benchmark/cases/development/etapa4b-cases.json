@@ -78,7 +78,8 @@
       "type": ["4b", "ambiente"],
       "domains": ["API"],
       "context": "Falha sem detalhe técnico suficiente.",
-      "turns": [{ "role": "user", "content": "A API falhou no cliente, mas ainda não temos status HTTP nem log do horário." }],
+      "turns": [{ "role": "user", "content": "A API falhou no cliente, mas ainda não temos status HTTP nem log do horário.",
+        "semantica": { "haMudancaInvestigativa": false, "tipoMudanca": "informacao_insuficiente", "haEvidenciaNova": false, "relevanciaParaPesquisa": "nenhuma", "justificativa": "sem status HTTP nem log: falta evidencia do ambiente, nao ha o que pesquisar", "pedidoInvestigacaoAnalista": "nao" } }],
       "artifacts": [],
       "golden": {
         "outcome": "inconclusive",

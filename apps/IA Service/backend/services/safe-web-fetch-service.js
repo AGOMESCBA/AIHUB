@@ -182,6 +182,11 @@ async function fetchTextoSeguro(url, opts = {}, _redirects = []) {
           });
         });
       } catch (err) {
+        // Resposta recusada (HTTP >= 400, Content-Type) sem ler o corpo: sem
+        // destruir, o socket ficava preso até o servidor fechar (Fase 1,
+        // 2026-11-12: 6 conexões abertas com a TDN em
+        // etapa-v1-pesquisa-web-motor, que não encerrava).
+        res.destroy();
         if (!finalizado) {
           finalizado = true;
           clearTimeout(prazo);

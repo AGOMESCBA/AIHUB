@@ -1,14 +1,22 @@
 'use strict';
-const { test } = require('node:test');
+const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const { gerarPdf } = require('../backend/services/analise-log-pdf-service');
 
+// O navegador abre fora do prazo do teste: na suíte completa este é o primeiro
+// teste com Chromium, e a abertura a frio estourou os 30 s uma vez (Fase 1,
+// 2026-11-12; isolado leva ~3 s). Cada passo tem 10 s para que uma trava real
+// aponte o passo, em vez de só "test timed out".
+let browser;
+before(async () => { browser = await chromium.launch({ headless: true }); }, { timeout: 120000 });
+after(async () => { await browser?.close(); });
+
 test('30 erros: acumula quatro diagnósticos, filtra por análise e busca, e preserva ao reanalisar o mesmo arquivo', { timeout: 30000 }, async () => {
-  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  page.setDefaultTimeout(10000);
   try {
-    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     const exportacoes = [];
     await page.exposeFunction('exportarPdfTeste', async dados => { exportacoes.push(dados); return (await gerarPdf(dados)).toString('base64'); });
     await page.setContent('<div id="panel-logs"><div class="logs-tela"></div></div>');
@@ -169,5 +177,5 @@ test('30 erros: acumula quatro diagnósticos, filtra por análise e busca, e pre
       await window.exportacaoPendente;
     });
     assert.equal(downloadsTardios, 0, 'não baixa relatório antigo depois da troca de empresa');
-  } finally { await browser.close(); }
+  } finally { await page.close(); }
 });

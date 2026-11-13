@@ -1337,7 +1337,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       limite: 5,
       textoContexto: [textoPrintsPesquisa, texto, ...historico.filter(m => m.papel !== 'assistant').slice(-4).map(m => m.conteudo)].filter(Boolean).join('\n'),
     }) : [];
-    const pesquisa = await technicalResearchService.pesquisar({
+    const ctxPesquisa = {
       empresaId,
       atendimentoId,
       chamado,
@@ -1372,8 +1372,16 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       // estruturada, só pelo Quality Gate léxico). Habilitado via env var
       // para permitir desligar rapidamente se um efeito colateral aparecer
       // em produção sem precisar de novo deploy.
-      disciplina4B: process.env.IA_SERVICE_DISCIPLINA_4B !== '0',
-    }, {
+      // A flag liga só os VETOS da 4B (pesquisa negada por lacuna
+      // "evidência do ambiente"/"contradição" ou por suficiência); a
+      // classificação da lacuna é calculada e auditada com ela ligada ou não.
+      // Desligada por padrão desde 2026-11-12 (experimental, pendente de
+      // confirmação): no replay de validação o veto bloqueou 7 pesquisas que
+      // leram fontes aplicáveis e as orientações pioraram (fase1-andamento.md).
+      // Reverter sem deploy: IA_SERVICE_DISCIPLINA_4B=1.
+      disciplina4B: process.env.IA_SERVICE_DISCIPLINA_4B === '1',
+    };
+    const optsPesquisa = {
       // Pesquisa Web sem contratar Serper/Bing por .env (decisão do usuário,
       // 2026-10): reutiliza a infraestrutura de providers de IA já
       // configurada na Platform (Serper com credencial própria, Gemini/
@@ -1386,7 +1394,15 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       // IA_SERVICE_CENTRAL_TOTVS=0 desliga sem novo deploy.
       centralTotvs: process.env.IA_SERVICE_CENTRAL_TOTVS !== '0',
       progresso: progressoTurno.reporter(empresaId, atendimentoId),
-    });
+    };
+    let pesquisa = await technicalResearchService.pesquisar(ctxPesquisa, optsPesquisa);
+    // Ciclo investigativo (2026-11-13): depois da primeira rodada, a IA avalia
+    // as fontes e decide se aprofunda com novas consultas (até
+    // MAX_RODADAS_APROFUNDAMENTO), responde ou pede evidência do ambiente.
+    // IA_SERVICE_CICLO_INVESTIGATIVO=0 volta ao comportamento anterior.
+    if (process.env.IA_SERVICE_CICLO_INVESTIGATIVO !== '0') {
+      pesquisa = await _medir(temposEtapasMs, 'cicloInvestigativo', technicalResearchService.aprofundarPesquisa(ctxPesquisa, pesquisa, optsPesquisa));
+    }
     if (decisaoPesquisaExterna) {
       // Trilha: motivo de pesquisar OU dispensar a pesquisa externa.
       pesquisa.decisaoPendenciaExterna = {

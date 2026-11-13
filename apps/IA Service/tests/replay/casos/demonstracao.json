@@ -1,0 +1,56 @@
+{
+  "versao": 1,
+  "descricao": "Casos de demonstração do ciclo investigativo conduzido pela IA (2026-11-13). Não entram na linha de base (desenvolvimento/validação). MV_CRDATRS é um parâmetro fictício: o modelo não o conhece de antemão, então só uma segunda pesquisa, decidida a partir da primeira fonte lida, chega à explicação.",
+  "casos": [
+    {
+      "id": "c01-ciclo-credito-por-atraso",
+      "titulo": "Pedido bloqueado por crédito com cliente risco A e limite disponível",
+      "categorias": ["ciclo_investigativo"],
+      "produto": "Protheus",
+      "abertura": "Na liberação de pedidos (MATA440) o pedido 012345 do cliente 000123 fica com 'Bloqueio de crédito por risco'. Outros clientes liberam normalmente.",
+      "fontes": [
+        {
+          "id": "F1",
+          "titulo": "MATA440 - Bloqueio de crédito por risco na liberação de pedidos",
+          "url": "https://tdn.totvs.com/replay/mata440-bloqueio-credito-risco",
+          "oficial": true,
+          "aplicavel": "POTENCIAL",
+          "palavras": ["bloqueio de credito", "credito por risco", "mata440", "liberacao de pedido", "liberacao de credito"],
+          "conteudo": "Na liberação de pedidos (MATA440) o bloqueio 'por risco' é avaliado pela classificação de risco do cliente (A1_RISCO). Risco E sempre bloqueia. Riscos B, C e D bloqueiam quando há títulos em atraso acima dos dias definidos em MV_RISCOB, MV_RISCOC e MV_RISCOD. Risco A libera direto pelo limite de crédito, EXCETO quando o parâmetro MV_CRDATRS estiver habilitado: nesse caso a regra de atraso também vale para risco A. Consulte a documentação do parâmetro MV_CRDATRS."
+        },
+        {
+          "id": "F2",
+          "titulo": "MV_CRDATRS - Bloqueio de crédito por títulos vencidos para qualquer risco",
+          "url": "https://tdn.totvs.com/replay/mv-crdatrs",
+          "oficial": true,
+          "aplicavel": "APLICAVEL",
+          "palavras": ["mv_crdatrs"],
+          "conteudo": "MV_CRDATRS = .T. faz a liberação de crédito bloquear o pedido quando o cliente tem títulos vencidos em aberto no contas a receber (SE1), independentemente do limite disponível e da classificação de risco, inclusive risco A. O bloqueio aparece como 'Bloqueio de crédito por risco'. Verifique os títulos vencidos do cliente na Posição Financeira do Cliente (FINC010) e o conteúdo de MV_CRDATRS. Com .F., o risco A segue somente o limite de crédito."
+        },
+        {
+          "id": "F3",
+          "titulo": "Limite de crédito do cliente (A1_LC) e vencimento do limite (A1_VENCLC)",
+          "url": "https://tdn.totvs.com/replay/limite-credito-cliente",
+          "oficial": true,
+          "aplicavel": "RELACIONADO",
+          "palavras": ["limite de credito", "a1_lc", "vencimento do limite", "a1_venclc"],
+          "conteudo": "A1_LC define o limite de crédito do cliente e A1_VENCLC a data de vencimento desse limite. Limite insuficiente ou vencido bloqueia o pedido por crédito na liberação."
+        }
+      ],
+      "turnos": [
+        {
+          "tipo": "mensagem",
+          "texto": "O pedido 012345 do cliente 000123 continua bloqueado na liberação com 'Bloqueio de crédito por risco'. O cliente é risco A no cadastro, tem limite de crédito disponível e o vencimento do limite é só em 2027. O que está causando o bloqueio?",
+          "esperado": {
+            "acao": ["INVESTIGAR", "RESPONDER"],
+            "pontosEssenciais": [
+              "Aponta o parâmetro MV_CRDATRS (bloqueio por títulos vencidos inclusive para risco A) como causa a verificar, já que risco, limite e vencimento do limite foram descartados",
+              "Orienta conferir os títulos vencidos em aberto do cliente (SE1 / posição financeira) e o conteúdo de MV_CRDATRS"
+            ],
+            "proibido": ["afirmar que o cliente é risco E", "atribuir o bloqueio ao limite de crédito ou ao vencimento do limite"]
+          }
+        }
+      ]
+    }
+  ]
+}

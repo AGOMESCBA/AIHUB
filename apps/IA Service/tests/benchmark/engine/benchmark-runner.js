@@ -320,6 +320,11 @@ async function _pesquisarOffline(caso, empresaId, atendimento, texto, dossieOper
     fonte: 'OfflineFixture',
     consulta: 'offline',
   }));
+  let semanticaSemFixture = false;
+  // Quem escreve as consultas externas é a IA de consultas (o backend não
+  // monta mais consulta com palavras livres do relato, 2026-11-13). Offline,
+  // a IA é simulada pelo título técnico do caso, escrito pelo autor do caso.
+  const consultaSimulada = String(caso.title || '').split(/\s+/).slice(0, 8).join(' ');
   const pesquisa = await technicalResearchService.pesquisar({
     empresaId,
     atendimentoId: atendimento.id,
@@ -330,6 +335,7 @@ async function _pesquisarOffline(caso, empresaId, atendimento, texto, dossieOper
   }, {
     buscarSerper: async () => docs,
     buscarBing: async () => [],
+    gerarConsultasIA: async () => ({ consultas: consultaSimulada ? [consultaSimulada] : [] }),
     abrirResultados: async (resultados) => resultados.slice(0, 2).map(r => ({
       titulo: r.titulo,
       url: r.url,
@@ -340,21 +346,28 @@ async function _pesquisarOffline(caso, empresaId, atendimento, texto, dossieOper
       rankingScore: r.rankingScore,
       rankingMotivos: r.rankingMotivos,
     })),
-    interpretarSemantico: async () => ({
-      resultado: {
-        haMudancaInvestigativa: true,
-        tipoMudanca: 'evidencia_nova',
-        haEvidenciaNova: true,
-        relevanciaParaPesquisa: 'media',
-        justificativa: 'benchmark offline: mensagem substantiva para planejamento',
-        referenciasEstado: [],
-        confiancaQualitativa: 'media',
-      },
-      provider: 'offline-benchmark',
-      model: 'deterministic-semantic-fixture',
-      tokens: 64,
-    }),
+    // Julgamento da IA de interpretação para ESTE turno, declarado no caso
+    // (turns[].semantica). O benchmark mede como o backend executa e audita a
+    // decisão da IA; não pode simular "evidência nova relevante" para toda
+    // mensagem — isso escondia o defeito do atalho sem_evidencia_clara
+    // (replay 2026-11-12). Turno sem fixture que chegue aqui falha o caso.
+    interpretarSemantico: async () => {
+      const turno = (caso.turns || []).find(t => t.content === texto);
+      if (!turno?.semantica) {
+        semanticaSemFixture = true;
+        throw new Error('fixture semantica ausente');
+      }
+      return {
+        resultado: { referenciasEstado: [], confiancaQualitativa: 'media', ...turno.semantica },
+        provider: 'offline-benchmark',
+        model: 'deterministic-semantic-fixture',
+        tokens: 64,
+      };
+    },
   });
+  if (semanticaSemFixture) {
+    throw new Error(`Caso ${caso.id}: o turno "${String(texto).slice(0, 60)}" chegou à interpretação semântica sem "semantica" declarada no caso.`);
+  }
   return pesquisa;
 }
 
@@ -476,6 +489,10 @@ async function runCasePost4B(caso, { empresaId = 47001, caseIndex = 0 } = {}) {
       devePesquisar: pesquisa.plano?.devePesquisar,
       motivo: pesquisa.plano?.motivo,
       lacuna: pesquisa.plano?.lacunaInvestigativa || null,
+      semantica: pesquisa.plano?.interpretacaoSemantica?.executada
+        ? { zona: pesquisa.plano.interpretacaoSemantica.zona, tipoMudanca: pesquisa.plano.interpretacaoSemantica.resultado?.tipoMudanca || null }
+        : null,
+      decisaoPlanejada: pesquisa.plano?.decisaoPlanejada || null,
       consultas: pesquisa.consultasExecutadas || [],
       paginasLidas: (pesquisa.paginasLidas || []).map(p => ({ url: p.url, status: p.status })),
     });

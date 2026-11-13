@@ -77,6 +77,9 @@ async function comFluxoSimulado({ respostas, semantica = interpretacao() }, fn) 
     return old.pesquisar(ctx, {
       ...opts,
       buscarSerper: async () => { reg.buscas++; return []; },
+      // As consultas externas são da IA de consultas (o backend não monta
+      // consulta com palavras livres do relato desde 2026-11-13).
+      gerarConsultasIA: async () => ({ consultas: ['SIGAFAT documento de saida erro'] }),
       interpretarSemantico: async ({ ctx: c }) => {
         reg.semanticaCtx.push(c);
         return { resultado: typeof semantica === 'function' ? semantica(c) : semantica, provider: 'fixture', model: 'fixture', tokens: 10 };
@@ -270,7 +273,9 @@ teste('turno automatico nao ganha a garantia do pedido humano (dedup preservado)
   const at = criarAtendimento();
   const dossie = dossieContextService.montarMemoriaOperacional({ empresaId: EMPRESA, atendimentoId: at.id, mensagemAtual: PEDIDO_TURNO_2, orcamentoEntrada: 16000 });
   const ctx = { empresaId: EMPRESA, atendimentoId: at.id, atendimento: at, texto: PEDIDO_TURNO_2, dossieOperacional: dossie };
-  const opts = { buscarSerper: async () => [], interpretarSemantico: async () => ({ resultado: interpretacao({ pedido: true }) }) };
+  const opts = { buscarSerper: async () => [], interpretarSemantico: async () => ({ resultado: interpretacao({ pedido: true }) }),
+    // Consultas da IA de consultas (simulada): é o que o turno 1 executa e o histórico deduplica.
+    gerarConsultasIA: async () => ({ consultas: ['portal ERR-PRZ-01 prazo excedido'] }) };
   // Turno 1 ja executou as mesmas consultas: o historico passa a deduplicar.
   const anterior = await technicalResearchService.pesquisar({ ...ctx, forcarPesquisa: true }, opts);
   execucaoRepo.salvarExecucao(EMPRESA, { atendimentoId: at.id, status: 'concluido', pesquisa: anterior });

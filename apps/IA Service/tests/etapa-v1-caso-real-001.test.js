@@ -140,6 +140,9 @@ async function testarPesquisaRealOcorreQuandoDisponivel() {
       consulta: 'q',
     }],
     buscarBing: async () => [],
+    // Consultas escritas pela IA de consultas (simulada): o backend não monta
+    // mais consulta com palavras livres do relato (2026-11-13).
+    gerarConsultasIA: async () => ({ consultas: ['documentacao tecnica controlada protheus'] }),
     abrirResultados: async (resultados) => resultados.slice(0, 1).map(r => ({
       titulo: r.titulo, url: r.url, status: 'lida', trecho: 'trecho real lido', consulta: r.consulta, rankingScore: r.rankingScore,
     })),

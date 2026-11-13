@@ -24,6 +24,9 @@ test('consultas da IA vão na frente, com produto, e a Central recebe todas', as
 test('saída inválida da IA é filtrada; falha mantém as consultas atuais', async () => {
   assert.deepEqual(svc._validarConsultasIA({ consultas: ['site:tdn.totvs.com SIGAGCT alçada', 'x', 'uma consulta longa demais com muitos termos que nao serve para busca alguma', '"GPE geração DIRF"'] }), ['SIGAGCT alçada', 'GPE geração DIRF']);
   assert.deepEqual(svc._validarConsultasIA('lixo'), []);
+  // Falha da IA de consultas: o backend não monta consulta com palavras livres
+  // do relato (2026-11-13). Sem sinal técnico estruturado, não pesquisa e diz
+  // por quê; com rotina citada, vale a consulta de contingência.
   let serper = null;
   const r = await svc.pesquisar(ctx, { ...base,
     gerarConsultasIA: async () => { throw new Error('timeout'); },
@@ -31,7 +34,17 @@ test('saída inválida da IA é filtrada; falha mantém as consultas atuais', as
     buscarCentralTotvs: async () => [],
   });
   assert.ok(r.plano.consultasIA.erro);
-  assert.ok(serper.length > 0 && !serper.some(q => /SIGAGCT alçada/.test(q)));
+  assert.equal(serper, null, 'nenhuma busca externa sem consulta técnica');
+  assert.equal(r.plano.semConsultaTecnica, true);
+  assert.equal(r.modo, 'nao_pesquisado');
+  assert.match(svc.formatarContextoParaPrompt(r), /nao houve consulta tecnica disponivel/);
+  const comRotina = await svc.pesquisar({ ...ctx, mensagens: [{ conteudo: `${ctx.mensagens[0].conteudo} Ocorre na CNTA300.` }] }, { ...base,
+    gerarConsultasIA: async () => { throw new Error('timeout'); },
+    buscarSerper: async (q) => { serper = q; return []; },
+    buscarCentralTotvs: async () => [],
+  });
+  assert.equal(comRotina.plano.devePesquisar, true, comRotina.plano.motivo);
+  assert.deepEqual(serper, ['TOTVS Protheus CNTA300']);
 });
 
 test('sem pedido explícito (consultasPorIA) não chama a IA', async () => {

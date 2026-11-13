@@ -10,7 +10,14 @@ const path = require('path');
 const database = require('../backend/database');
 const atendimentoRepo = require('../backend/repositories/atendimento-repository');
 const dossieContextService = require('../backend/services/dossie-context-service');
-const pesquisaService = require('../backend/services/technical-research-service');
+const pesquisaServiceReal = require('../backend/services/technical-research-service');
+
+// Os cenários tratam de provedores de busca, não da leitura de páginas: sem
+// esta simulação, cada resultado fictício (tdn.totvs.com/x...) era aberto na
+// internet real e o processo não encerrava (Fase 1, 2026-11-12).
+const pesquisaService = {
+  pesquisar: (ctx, opts = {}) => pesquisaServiceReal.pesquisar(ctx, { abrirResultados: async () => [], ...opts }),
+};
 
 function dbTmp() {
   return path.join(os.tmpdir(), `ia-service-pesquisa-web-motor-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);

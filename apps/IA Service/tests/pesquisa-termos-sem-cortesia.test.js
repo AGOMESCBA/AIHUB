@@ -15,15 +15,19 @@ const mensagens = [
   `${titulo}\n\nTransferência.`,
 ].map(conteudo => ({ conteudo }));
 
-test('consulta externa não usa cortesia, mensagem de transferência nem o objetivo interno', () => {
+// Desde 2026-11-13 o backend não monta consulta com palavras livres do relato:
+// sem sinal técnico estruturado (aqui só "DIRF" em texto livre) não há
+// consulta do backend, e cortesia, transferência e nomes (como "Fulana de
+// Tal") não têm como chegar ao buscador por esse caminho. As consultas
+// externas são escritas pela IA de consultas.
+test('consulta externa do backend não usa cortesia, mensagem de transferência, nome nem o objetivo interno', () => {
   const plano = planejarPesquisa({ chamado: { produto: 'Protheus', titulo }, mensagens, texto: 'Pesquise uma solucao para este chamado.' });
-  assert.ok(plano.consultas.length > 0);
   for (const consulta of plano.consultas) {
-    assert.match(consulta, /dirf/);
-    for (const ruido of ['tarde', 'nivel', 'prezado', 'atenciosamente', 'agradecemos', 'transferencia', 'levantar', 'referencia']) {
-      assert.ok(!new RegExp(`\\b${ruido}\\b`).test(consulta), `"${ruido}" em: ${consulta}`);
+    for (const ruido of ['tarde', 'nivel', 'prezado', 'atenciosamente', 'agradecemos', 'transferencia', 'levantar', 'referencia', 'fulana']) {
+      assert.ok(!new RegExp(`\\b${ruido}\\b`, 'i').test(consulta), `"${ruido}" em: ${consulta}`);
     }
   }
+  assert.deepEqual(plano.consultas, []);
 });
 
 test('prompt principal trata print como tela, não como causa, e pede passos concretos', () => {
