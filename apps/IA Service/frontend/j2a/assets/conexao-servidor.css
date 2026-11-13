@@ -1,0 +1,34 @@
+/* Mesmas medidas, ícones e hierarquia do aviso do Monitor de Acessos.
+   Fallbacks atendem também Radar, login e manual, que usam outros tokens. */
+.svc-conn { display:none;align-items:flex-start;gap:12px;background:var(--bg-card,var(--panel,#191e2a));border:1px solid var(--error,var(--danger,#ff6970));border-left-width:4px;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;box-sizing:border-box;flex:none;max-width:100%; }
+.svc-conn.mostrar { display:flex; }
+.svc-conn.ok { border-color:var(--success,var(--ok,#35c779)); }
+.svc-conn .conn-ic { flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--error,var(--danger,#ff6970));background:rgba(239,68,68,.12); }
+.svc-conn.ok .conn-ic { color:var(--success,var(--ok,#35c779));background:rgba(34,197,94,.12); }
+.svc-conn .conn-corpo { flex:1;min-width:0; }
+.svc-conn .conn-titulo { font-size:14px;font-weight:700;color:var(--text-hi,var(--text,#e9edef));line-height:1.6; }
+.svc-conn .conn-texto { font-size:13px;color:var(--text-md,var(--muted,#aebac1));margin-top:2px;line-height:1.5;overflow-wrap:anywhere; }
+.svc-conn .conn-tec { font-size:11.5px;color:var(--text-lo,var(--muted,#8696a0));margin-top:4px;overflow-wrap:anywhere; }
+.svc-conn .conn-acoes { display:flex;gap:8px;flex:none;align-self:center; }
+.svc-conn .conn-retry { display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;padding:7px 14px;border:1px solid var(--border,var(--line,#2a3040));border-radius:7px;background:var(--bg-hover,var(--panel-3,#242938));color:var(--text-md,var(--muted,#aebac1));font:500 13px/1.6 'Segoe UI',system-ui,sans-serif;cursor:pointer; }
+.svc-conn .conn-retry:hover { border-color:var(--border-hi,var(--line,#3b4357)); }
+.svc-conn .conn-retry:focus-visible { outline:2px solid var(--accent,var(--brand,#3b82f6));outline-offset:2px; }
+.svc-conn .conn-retry:disabled { opacity:.6;cursor:wait; }
+.svc-conn [hidden] { display:none !important; }
+.svc-sem-conexao :is(.page-content,#app) :is(.card,.table-card,.data-table-wrap,.radar-shell,.radar-layout) { opacity:.55;filter:grayscale(.35);transition:opacity .2s; }
+/* Layouts de altura fixa precisam reservar espaço para a faixa. */
+.radar-content:has(> .svc-conn.mostrar) { flex-direction:column; }
+.radar-content > .svc-conn { margin:14px; }
+.radar-content:has(> .svc-conn.mostrar) > .radar-shell { flex:1;min-height:0;height:auto; }
+.app-shell > .svc-conn { margin:14px;max-height:40dvh;overflow:auto; }
+.app-shell:has(> .svc-conn.mostrar) { display:flex;flex-direction:column;height:100dvh;min-height:0; }
+.app-shell:has(> .svc-conn.mostrar) > :is(.radar-screen,.access-screen) { flex:1;min-height:0;height:auto;overflow:auto; }
+.main > .svc-conn { margin:14px; }
+main.shell:has(> .svc-conn.mostrar) { grid-template-rows:auto 1fr; }
+main.shell > .svc-conn { grid-column:1 / -1;margin:14px; }
+@media (max-width:600px) {
+  .svc-conn { flex-wrap:wrap; }
+  .svc-conn .conn-acoes { width:100%; }
+  .svc-conn .conn-retry { flex:1;justify-content:center; }
+}
+@media print { .svc-conn { display:none !important; } }
