@@ -76,6 +76,21 @@ try {
   assert.strictEqual(h.telas_visitadas, 2, 'Radar J2A + Chat');
   assert.strictEqual(h.chamados, '036001');
 
+  // Sem corte em 30: todos os chamados validados ficam no login, sem duplicar.
+  const numeros = ['036001'];
+  for (let i = 0; i < 120; i += 1) {
+    const numero = String(40000 + i);
+    const { chamado: adicional } = chamadoRepo.upsertChamado(EMPRESA, {
+      fonteId: fonte.id, sistemaOrigem: 'softexpert', oidOrigem: `OID-HIST-VOLUME-${i}`, numero, titulo: 'Volume de acessos',
+    });
+    numeros.push(numero);
+    presencaService.registrarSinal({ empresaId: EMPRESA, origem: 'chat', sessaoRef: sessao.sessaoId, consultorId: consultor.id, tela: 'Chat', chamadoId: adicional.id });
+  }
+  presencaService.registrarSinal({ empresaId: EMPRESA, origem: 'chat', sessaoRef: sessao.sessaoId, tela: 'Chat', chamadoId: chamado.id });
+  assert.deepStrictEqual(linha(sessao.sessaoId).chamados.split(','), numeros, 'guarda 121 chamados únicos');
+  assert.deepStrictEqual(presencaService.listarMonitor(EMPRESA).sessoes.find(s => s.id === `chat:${sessao.sessaoId}`).chamados, numeros);
+  assert.deepStrictEqual(historico.listarHistorico(EMPRESA, periodoAmplo()).acessos.find(a => a.id === h.id).chamados, numeros);
+
   // 3. Limpar o Monitor apaga a presença mas NÃO o histórico; marca o motivo.
   presencaService.limparMonitor(EMPRESA, Date.now(), 7);
   h = linha(sessao.sessaoId);

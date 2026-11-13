@@ -24,7 +24,6 @@ const consultorRepo = require('../repositories/consultor-repository');
 const consultorService = require('./consultor-service');
 const usuariosDb = require('../../../IAHUB/backend/usuarios/database');
 
-const MAX_CHAMADOS_POR_ACESSO = 30;
 const MAX_LINHAS_LISTA = 5000;
 const AUSENTE_ATE_MS = 15 * 60 * 1000;
 const INTERNO_ENCERRADO_APOS_MS = 8 * 60 * 60 * 1000;
@@ -120,7 +119,7 @@ function registrarSinal({ empresaId, origem, sessaoRef, consultorId = null, usua
     let chamados = atual.chamados || null;
     if (chamadoNumero) {
       const lista = chamados ? chamados.split(',') : [];
-      if (!lista.includes(String(chamadoNumero)) && lista.length < MAX_CHAMADOS_POR_ACESSO) lista.push(String(chamadoNumero));
+      if (!lista.includes(String(chamadoNumero))) lista.push(String(chamadoNumero));
       chamados = lista.join(',') || null;
     }
     db.prepare(`

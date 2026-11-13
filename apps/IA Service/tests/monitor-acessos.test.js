@@ -134,6 +134,15 @@ try {
   assert.ok(semSinal, 'sessão sem sinal deve aparecer com aviso');
   assert.strictEqual(semSinal.situacao, 'inativo');
   assert.strictEqual(painel.sessoes.find(s => s.origem === 'interno').tela, 'Base Histórica');
+  const chatComSinal = painel.sessoes.find(s => s.id === `chat:${sessaoChat}`);
+  assert.strictEqual(chatComSinal.chamadoNumero, null, 'voltou à fila, sem chamado atual');
+  assert.deepStrictEqual(chatComSinal.chamados, ['035988'], 'chamado acessado permanece mesmo após sair da trilha curta');
+  assert.deepStrictEqual(semSinal.chamados, [], 'sessão sem atividade não herda chamados de outra sessão');
+  assert.deepStrictEqual(painel.sessoes.find(s => s.origem === 'interno').chamados, [], 'sessão interna não herda chamados do chat');
+  assert.ok(painel.sessoes.every(s => !s.chamados.includes('777777')), 'chamado rejeitado de outra empresa não entra na lista');
+  presencaService.registrarSinal({ empresaId: EMPRESA, origem: 'interno', sessaoRef: presencaService.hashSessaoInterna('sid-teste'), tela: 'Radar', chamadoId: chamado.id });
+  presencaService.registrarSinal({ empresaId: EMPRESA, origem: 'interno', sessaoRef: presencaService.hashSessaoInterna('sid-teste'), tela: 'Base Histórica' });
+  assert.deepStrictEqual(presencaService.listarMonitor(EMPRESA).sessoes.find(s => s.origem === 'interno').chamados, ['035988'], 'interno também mantém a lista ao trocar de tela');
   assert.strictEqual(painel.resumo.total, 3);
   assert.strictEqual(painel.resumo.online + painel.resumo.ausente + painel.resumo.inativo, 3);
 

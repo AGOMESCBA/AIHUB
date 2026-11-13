@@ -319,9 +319,11 @@ function listarMonitor(empresaId, agoraMs = Date.now()) {
 
   const sessoesChat = db.prepare(`
     SELECT s.id AS sessao_id, s.consultor_id, s.criado_em, s.ultimo_acesso_em, s.expira_em,
-           p.id AS presenca_id, p.ultimo_sinal_em, p.saiu_em, p.segundos_ativos, p.tela, p.acao, p.chamado_id, p.chamado_numero
+           p.id AS presenca_id, p.ultimo_sinal_em, p.saiu_em, p.segundos_ativos, p.tela, p.acao, p.chamado_id, p.chamado_numero,
+           h.chamados
       FROM svc_sessoes_externas s
       LEFT JOIN svc_presenca p ON p.empresa_id = s.empresa_id AND p.origem = 'chat' AND p.sessao_ref = s.id
+      LEFT JOIN svc_acessos_historico h ON h.empresa_id = s.empresa_id AND h.origem = 'chat' AND h.sessao_ref = s.id
      WHERE s.empresa_id = ? AND s.expira_em > ?
   `).all(Number(empresaId), agoraIso);
 
@@ -344,12 +346,15 @@ function listarMonitor(empresaId, agoraMs = Date.now()) {
       acao: saiu ? 'Fechou a tela (login ainda válido)' : (s.acao || (s.presenca_id ? null : 'Aguardando o primeiro sinal da tela')),
       chamadoId: s.chamado_id || null,
       chamadoNumero: s.chamado_numero || null,
+      chamados: [...new Set([...(s.chamados ? s.chamados.split(',') : []), s.chamado_numero].filter(Boolean))],
       eventos: _eventos(db, s.presenca_id),
     });
   }
 
   const internos = db.prepare(`
-    SELECT * FROM svc_presenca WHERE empresa_id = ? AND origem = 'interno' AND ultimo_sinal_em > ?
+    SELECT p.*, h.chamados FROM svc_presenca p
+      LEFT JOIN svc_acessos_historico h ON h.empresa_id = p.empresa_id AND h.origem = p.origem AND h.sessao_ref = p.sessao_ref
+     WHERE p.empresa_id = ? AND p.origem = 'interno' AND p.ultimo_sinal_em > ?
   `).all(Number(empresaId), new Date(agoraMs - INTERNO_VISIVEL_ATE_MS).toISOString());
 
   for (const p of internos) {
@@ -370,6 +375,7 @@ function listarMonitor(empresaId, agoraMs = Date.now()) {
       acao: _saiuDaTela(p) ? 'Fechou a tela' : p.acao,
       chamadoId: p.chamado_id || null,
       chamadoNumero: p.chamado_numero || null,
+      chamados: [...new Set([...(p.chamados ? p.chamados.split(',') : []), p.chamado_numero].filter(Boolean))],
       eventos: _eventos(db, p.id),
     });
   }

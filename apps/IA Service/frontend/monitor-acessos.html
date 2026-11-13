@@ -111,6 +111,9 @@
     .tela span { font-size:12px;color:var(--text-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px; }
     .link-chamado { font:inherit;font-size:12px;font-weight:600;color:var(--accent);background:none;border:none;padding:0;cursor:pointer;text-align:left; }
     .link-chamado:hover { text-decoration:underline; }
+    .chamados-acessados { display:flex;flex-wrap:wrap;align-content:start;gap:6px;max-height:240px;overflow:auto;padding:4px 0; }
+    .chamados-acessados .badge { font-variant-numeric:tabular-nums;overflow-wrap:anywhere;white-space:normal; }
+    .chamados-resumo { display:flex;flex-direction:column;align-items:flex-start;gap:4px; }
     .barra { height:6px;border-radius:3px;background:var(--border);overflow:hidden;width:90px;display:flex;margin-top:3px; }
     .barra i { display:block;height:100%;background:var(--accent); }
     .vazio { padding:40px 16px;text-align:center;color:var(--text-md);font-size:13px; }
@@ -205,6 +208,13 @@
        e os itens só de celular ficam ocultos. */
     .cel { display:contents; }
     #btn-mais, .td-msg { display:none; }
+    @media (max-width:900px) {
+      .main, .page-content { min-height:0; }
+      .page-content { -webkit-overflow-scrolling:touch; }
+      /* Nas abas, o shell libera a altura da página. Esta área deixa de ser
+         um scroller: não pode capturar o gesto nem bloquear a rolagem do body. */
+      body:has(#_mdi-emp-bar) .page-content { overflow:visible;overscroll-behavior:auto; }
+    }
     @media (max-width:760px) {
       .page-head { margin-bottom:8px; }
       .page-kicker, .page-subtitle { display:none; }
@@ -391,8 +401,8 @@
             </div>
             <div class="tabela-wrap">
               <table class="mon-table">
-                <thead><tr><th>Usuário</th><th>Situação</th><th>Origem</th><th>Entrou</th><th>Último sinal</th><th>Tempo de tela</th><th>O que está fazendo</th></tr></thead>
-                <tbody id="tbody"><tr><td colspan="7"><div class="vazio">Carregando sessões...</div></td></tr></tbody>
+                <thead><tr><th>Usuário</th><th>Situação</th><th>Origem</th><th>Entrou</th><th>Último sinal</th><th>Tempo de tela</th><th>O que está fazendo</th><th title="Chamados registrados durante os logins ainda válidos desta pessoa.">Chamados acessados</th></tr></thead>
+                <tbody id="tbody"><tr><td colspan="8"><div class="vazio">Carregando sessões...</div></td></tr></tbody>
               </table>
             </div>
           </section>
@@ -654,6 +664,7 @@
         id,
         sessoes: lista,
         eventos,
+        chamados: [...new Set(lista.flatMap((s) => s.chamados || []))],
         segundosAtivos: lista.reduce((n, s) => n + (s.segundosAtivos || 0), 0),
         inicioEm: lista.map((s) => s.inicioEm).filter(Boolean).sort()[0] || principal.inicioEm,
       };
@@ -668,7 +679,7 @@
       if (st.filtroSit === 'ativos' && s.situacao === 'inativo') return false;
       if (st.filtroSit !== 'todos' && st.filtroSit !== 'ativos' && s.situacao !== st.filtroSit) return false;
       if (st.filtroOrig !== 'todos' && s.origem !== st.filtroOrig) return false;
-      if (q && !`${s.nome} ${s.telefone || ''} ${s.chamadoNumero || ''} ${s.tela || ''} ${s.acao || ''}`.toLowerCase().includes(q)) return false;
+      if (q && !`${s.nome} ${s.telefone || ''} ${s.chamadoNumero || ''} ${(s.chamados || []).join(' ')} ${s.tela || ''} ${s.acao || ''}`.toLowerCase().includes(q)) return false;
       return true;
     });
   }
@@ -689,8 +700,13 @@
       <td data-rot="Tempo de tela"><div class="cel"><div class="num">${dur(s.segundosAtivos)} <span class="sub">de ${dur(logadoSeg)}</span></div>
         <div class="barra" title="${Math.round(pct)}% do tempo logado com a tela em uso"><i style="width:${pct}%"></i></div></div></td>
       <td data-rot="Fazendo"><div class="cel"><div class="tela"><b>${esc(s.tela || '-')}</b>${s.acao ? `<span>${esc(s.acao)}</span>` : ''}${chamado}</div></div></td>
+      <td data-rot="Chamados acessados"><div class="chamados-resumo">${s.chamados.length ? `<b>${s.chamados.length} chamado(s)</b><button type="button" class="link-chamado" data-ver-chamados>Ver todos</button>` : '<span class="sub">Nenhum registrado</span>'}</div></td>
       <td class="td-msg">${chat.ok && s.origem === 'chat' ? `<button type="button" class="btn btn-ghost" data-msg="${esc(s.id.replace(/^chat:/, ''))}">Enviar mensagem</button>` : ''}</td>
     </tr>`;
+  }
+
+  function listaChamados(chamados) {
+    return chamados.length ? `<div class="chamados-acessados">${chamados.map((n) => `<span class="badge badge-blue">#${esc(n)}</span>`).join('')}</div>` : '<span class="sub">Nenhum chamado registrado neste acesso.</span>';
   }
 
   function render(mudaram = []) {
@@ -710,7 +726,7 @@
       + (offOcultos ? ` · ${offOcultos} Off Line oculto${offOcultos === 1 ? '' : 's'} (${$('resumo').hidden ? 'expanda o resumo e clique em Off Line para ver' : 'clique no card Off Line para ver'})` : '');
     $('tbody').innerHTML = vis.length
       ? vis.map((s) => linha(s, mudaram.includes(s.id))).join('')
-      : `<tr><td colspan="7"><div class="vazio">${!d.pessoas.length ? 'Ninguém conectado nesta empresa agora.' : st.filtroSit === 'ativos' ? 'Ninguém On Line agora. Quem está Off Line aparece ao clicar no card Off Line.' : 'Nenhum usuário com esses filtros.'}</div></td></tr>`;
+      : `<tr><td colspan="8"><div class="vazio">${!d.pessoas.length ? 'Ninguém conectado nesta empresa agora.' : st.filtroSit === 'ativos' ? 'Ninguém On Line agora. Quem está Off Line aparece ao clicar no card Off Line.' : 'Nenhum usuário com esses filtros.'}</div></td></tr>`;
     renderGaveta();
   }
 
@@ -775,6 +791,8 @@
         const sx = SIT[x.situacao] || SIT.inativo;
         return `<li><span class="badge ${sx.badge}">${sx.rotulo}</span>Entrou ${dataHora(x.inicioEm)} · último sinal ${ha(x.ultimoSinalEm)} · ${dur(x.segundosAtivos)} de tela<br><span class="sub">${esc(x.tela || '-')}${x.acao ? ' · ' + esc(x.acao) : ''}</span></li>`;
       }).join('')}</ul></div>` : ''}
+      <div class="gv-sec" id="gv-chamados"><div class="gv-titulo">Chamados acessados (${s.chamados.length})</div>
+        <p class="sub">Durante os logins ainda válidos. O acesso não comprova alteração no chamado.</p>${listaChamados(s.chamados)}</div>
       ${blocoChamado}
       ${blocoMensagem(s)}
       ${blocoAcesso(s)}
@@ -1098,6 +1116,12 @@
     const tr = e.target.closest('tr[data-id]');
     if (!tr) return;
     selecionar(tr.dataset.id);
+    if (e.target.closest('[data-ver-chamados]')) {
+      st.ampliada = !telaEstreita.matches;
+      renderGaveta();
+      const painel = $('gaveta');
+      painel.scrollTop += $('gv-chamados').getBoundingClientRect().top - painel.getBoundingClientRect().top - painel.querySelector('.gv-head').offsetHeight;
+    }
     const btn = e.target.closest('[data-chamado]');
     if (btn) carregarChamado(btn.dataset.chamado);
   });

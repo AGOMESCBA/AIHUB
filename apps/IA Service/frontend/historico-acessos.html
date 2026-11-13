@@ -86,6 +86,12 @@
     .num { font-variant-numeric:tabular-nums;white-space:nowrap; }
     .mono { font-family:'Cascadia Code','Fira Code','Courier New',monospace;font-size:11.5px;white-space:nowrap; }
     .badge { white-space:nowrap; }
+    .chamados-resumo { display:flex;flex-direction:column;align-items:flex-start;gap:4px; }
+    .ver-chamados { font:inherit;font-size:12px;color:var(--accent);border:0;background:none;padding:0;cursor:pointer;text-decoration:underline; }
+    .chamados-dialog { width:min(560px,calc(100vw - 32px));max-height:80vh;margin:auto;box-sizing:border-box;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);color:var(--text-hi);padding:20px; }
+    .chamados-dialog::backdrop { background:rgba(15,23,42,.48); }
+    .chamados-lista { display:flex;flex-wrap:wrap;align-content:start;gap:8px;overflow:auto;max-height:45vh;margin-top:12px; }
+    .chamados-lista .badge { white-space:normal;overflow-wrap:anywhere; }
     .badge-neutro { background:var(--bg-hover);color:var(--text-md); }
     .badge-falha { background:rgba(220,38,38,.12);color:#dc2626; }
     .uso { display:flex;align-items:center;gap:6px; }
@@ -107,6 +113,11 @@
     .btn-perigo:disabled { opacity:.6;cursor:wait; }
 
     @media (max-width:900px) {
+      .main, .page-content { min-height:0; }
+      .page-content { -webkit-overflow-scrolling:touch; }
+      /* Nas abas, o shell usa a rolagem do documento. Não prender o gesto
+         numa área intermediária que cresce com a lista de acessos. */
+      body:has(#_mdi-emp-bar) .page-content { overflow:visible;overscroll-behavior:auto; }
       .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
       .group-target-row { align-items:stretch;flex-direction:column; }
       .modos .dica { flex:1 1 100%;margin-left:0;padding:0 4px 8px; }
@@ -290,6 +301,13 @@
 </div>
 
 <script src="/js/auth.js"></script>
+<dialog id="chamados-dialog" class="chamados-dialog" aria-labelledby="chamados-titulo">
+  <form method="dialog"><div class="modal-head"><strong id="chamados-titulo">Chamados acessados</strong><button class="modal-close" aria-label="Fechar">×</button></div></form>
+  <p id="chamados-contexto"></p>
+  <p class="kpi-foot">Números registrados durante este login. O acesso não comprova alteração no chamado.</p>
+  <input id="chamados-busca" class="form-control" type="search" placeholder="Buscar chamado nesta lista..." aria-label="Buscar chamado nesta lista">
+  <div id="chamados-lista" class="chamados-lista"></div>
+</dialog>
 <script src="/app/ia-service/js/mobile-viewport.js"></script>
 <script src="/app/ia-service/js/sidebar.js"></script>
 <script>
@@ -356,8 +374,8 @@
       { k: 'tela', rot: 'Tempo de tela', w: 115, val: (a) => dur(a.segundosAtivos), ord: (a) => a.segundosAtivos, html: (a) => `<span class="num forte">${dur(a.segundosAtivos)}</span>` },
       { k: 'uso', rot: 'Uso ativo', w: 110, val: (a) => { const u = usoPct(a); return u === null ? '-' : `${u}%`; }, ord: (a) => usoPct(a) ?? -1,
         html: (a) => { const u = usoPct(a); return u === null ? '<span>-</span>' : `<div class="uso" title="Tempo de tela ÷ tempo logado"><span class="num">${u}%</span><span class="medidor"><i style="width:${u}%"></i></span></div>`; } },
-      { k: 'chamados', rot: 'Chamados', w: 150, val: (a) => a.chamados.join(', '), ord: (a) => a.chamados.length, filtro: 'texto',
-        html: (a) => a.chamados.length ? `<span class="num" title="${esc(a.chamados.join(', '))}"><b>${a.chamados.length}</b> · ${esc(a.chamados.join(', '))}</span>` : '<span>-</span>' },
+      { k: 'chamados', rot: 'Chamados acessados', w: 175, val: (a) => a.chamados.join(', '), ord: (a) => a.chamados.length, filtro: 'texto',
+        html: (a) => a.chamados.length ? `<div class="chamados-resumo"><b>${a.chamados.length} chamado(s)</b><button type="button" class="ver-chamados" data-acesso-chamados="${esc(a.id)}">Ver todos</button></div>` : '<span>-</span>' },
       { k: 'situacao', rot: 'Situação', w: 178, grp: 'situacao', val: (a) => a.situacaoRotulo, chave: (a) => a.situacao, filtro: { opcoes: Object.fromEntries(Object.entries(SITUACAO).map(([k, v]) => [k, v.rot])) },
         html: (a) => `<span class="badge ${SITUACAO[a.situacao]?.cls || 'badge-neutro'}" title="${esc(a.situacaoRotulo)}">${esc(a.situacaoRotulo)}</span>` },
       { k: 'dispositivo', rot: 'IP / navegador', w: 155, grp: 'ip', val: (a) => `${a.ip || '-'} · ${navegador(a.navegador)}`, ord: (a) => a.ip || '', filtro: 'texto',
@@ -740,6 +758,24 @@
   }
 
   // ── Eventos ─────────────────────────────────────────────────────────────────
+  let chamadosAbertos = [];
+  function renderChamados() {
+    const busca = $('chamados-busca').value.trim().toLowerCase().replace(/^#/, '');
+    const lista = chamadosAbertos.filter((n) => String(n).toLowerCase().includes(busca));
+    $('chamados-lista').innerHTML = lista.length ? lista.map((n) => `<span class="badge badge-blue">#${esc(n)}</span>`).join('') : '<span>Nenhum chamado encontrado.</span>';
+  }
+  document.addEventListener('click', (e) => {
+    const botao = e.target.closest('[data-acesso-chamados]');
+    if (!botao) return;
+    const acesso = st.dados.acessos.find((a) => String(a.id) === botao.dataset.acessoChamados);
+    if (!acesso) return;
+    chamadosAbertos = acesso.chamados;
+    $('chamados-contexto').textContent = `${acesso.nome} · entrada em ${fmtDataHora(acesso.entrouEm)} · ${chamadosAbertos.length} chamado(s)`;
+    $('chamados-busca').value = '';
+    renderChamados();
+    $('chamados-dialog').showModal();
+  });
+  $('chamados-busca').addEventListener('input', renderChamados);
   $('toggle-resumo').addEventListener('click', () => { st.painelResumo = !st.painelResumo; salvarEstado(); renderPainelFiltros(); ajustarAltura(); });
   $('toggle-grupo').addEventListener('click', () => { st.painelGrupo = !st.painelGrupo; salvarEstado(); renderPainelGrupo(); ajustarAltura(); });
   $('btn-mais').addEventListener('click', () => {
