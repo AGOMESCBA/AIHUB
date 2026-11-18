@@ -119,7 +119,7 @@
       } catch (_) { return url; }
     };
     const link = (url, rotulo) => `<a class="link-curto" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(url)}">${escapeHtml(rotulo)}</a>`;
-    return bruto.split('\n').map((linha) => {
+    const linhaHtml = (linha) => {
       const f = linha.match(RE_FONTE);
       if (f) return `- ${link(f[2], f[1].trim())}${escapeHtml(f[3] || '')}`;
       let html = '';
@@ -130,7 +130,32 @@
         pos = m.index + url.length;
       }
       return html + escapeHtml(linha.slice(pos));
-    }).join('\n');
+    };
+    // Lista sem marcador (pedido do usuário, 2026-11-18, #036996): o prompt separa
+    // parágrafos com linha em branco, então várias linhas seguidas no mesmo bloco são
+    // itens. Vira lista quando há 2+ itens só de texto; linha de URL, "e" solto ou item
+    // que já tem marcador ("1.", "-") deixa o bloco como está.
+    const RE_FECHAMENTO = /^\s*(isso|esse|essa|esses|essas|este|esta|com isso|assim|dessa forma|desse modo|com esse|com essa)\b/i;
+    const ehItemTexto = (l) => l.trim() && !/^\s*(https?:\/\/\S+|e|ou)\s*$/i.test(l) && !/^\s*([-•*]|\d+[.)])\s/.test(l);
+    const linhas = bruto.split('\n');
+    const saida = [];
+    for (let i = 0; i < linhas.length;) {
+      if (!linhas[i].trim()) { saida.push(linhaHtml(linhas[i])); i++; continue; }
+      let fim = i;
+      while (fim + 1 < linhas.length && linhas[fim + 1].trim()) fim++;
+      let itens = linhas.slice(i + 1, fim + 1);
+      // A lista termina na linha em branco; uma frase de fechamento colada no bloco
+      // ("Isso serve para...") fica fora da lista, como parágrafo normal.
+      const fechamento = itens.length >= 3 && RE_FECHAMENTO.test(itens[itens.length - 1]) ? itens[itens.length - 1] : null;
+      if (fechamento) itens = itens.slice(0, -1);
+      if (itens.length >= 2 && itens.every(ehItemTexto)) {
+        saida.push(linhaHtml(linhas[i]) + itens.map((l) => `<span class="item-lista">${linhaHtml(l.trim())}</span>`).join('') + (fechamento ? `<span class="fim-lista">${linhaHtml(fechamento)}</span>` : ''));
+      } else {
+        for (let k = i; k <= fim; k++) saida.push(linhaHtml(linhas[k]));
+      }
+      i = fim + 1;
+    }
+    return saida.join('\n');
   }
 
   function text(value, fallback = '-') {

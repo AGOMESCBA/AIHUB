@@ -1807,3 +1807,6 @@ body.col-resizing { cursor: col-resize; user-select: none; }
 @keyframes envio-dot { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
 @media (prefers-reduced-motion: reduce) { .envio-dots i { animation: none; opacity: .6; } }
 .message-text a.link-curto { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; }
+.message-text .item-lista { display: block; position: relative; padding-left: 18px; margin: 6px 0 0; }
+.message-text .item-lista::before { content: "•"; position: absolute; left: 4px; }
+.message-text .fim-lista { display: block; margin-top: 8px; }
