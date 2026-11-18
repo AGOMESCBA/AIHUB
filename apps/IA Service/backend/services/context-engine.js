@@ -9,6 +9,11 @@ const { redigirValor } = require('./redaction-service');
 const planoRespostaRastreavel = require('./plano-resposta-rastreavel-service');
 const conhecimentoIntegracaoContabil = require('./conhecimento-integracao-contabil');
 
+// Imagens antigas do chamado (não enviadas neste turno nem citadas pelo nome) por
+// chamada: era 2. Maior chamado da amostra de out-nov/2026 tinha 5; o teto só protege
+// chamados com dezenas de fotos (~1.200 tokens cada).
+const LIMITE_IMAGENS_DO_CASO = 10;
+
 const STOPWORDS = new Set([
   'para', 'com', 'sem', 'que', 'por', 'uma', 'das', 'dos', 'nas', 'nos',
   'este', 'esta', 'isso', 'mais', 'quando', 'onde', 'como', 'nao', 'não',
@@ -1181,6 +1186,12 @@ function montarContextoInvestigacao({
     });
   }
 
+  // Todo anexo do chamado é evidência do caso (decisão do usuário, 2026-11-18: não
+  // deixar de enviar evidência para economizar). Achado real (#036974): os 24 termos
+  // de pontuação se esgotam na pergunta e nos rótulos do cabeçalho, e o anexo ficava
+  // com score 0 e era omitido. Simulação com 99 chamados de out-nov/2026 no chat: a
+  // regra anterior omitia 172 de 184 anexos, incluindo todas as imagens. O score agora
+  // só ordena; quem corta é o orçamento de tokens (com motivo registrado no manifesto).
   for (const anexo of todosAnexos) {
     const atual = idsTurno.has(anexo.id);
     const forcado = idsForcados.has(anexo.id);
@@ -1189,9 +1200,12 @@ function montarContextoInvestigacao({
     const referenciaImagem = !anexosComoContexto && _pareceReferenciaImagem(mensagemAtual);
     const referenciaVisualImplicita = !anexosComoContexto && _pareceReferenciaVisualImplicita(mensagemAtual);
     const precisaImagem = isImagem && (atual || nomeCitado || referenciaImagem || referenciaVisualImplicita);
-    const conteudo = anexo.conteudoExtraido || '';
+    // Word só com prints (sem texto) segue o caminho visual do PDF em vez de ser descartado.
+    const docxSoImagens = !anexo.conteudoExtraido && permitirImagens && pdfVisual.ehDocx(anexo);
+    const conteudo = anexo.conteudoExtraido || (docxSoImagens ? '[Word sem texto extraivel: o conteudo segue como imagem]' : '');
     const anexoCodigoCustomizacao = !!anexo.eCodigo || /\.(prw|tlpp|prx|aph|ch)$/i.test(anexo.nomeOriginal || '');
     const score = (forcado ? 120 : 0)
+      + 12 // evidência do caso: passa do corte de relevância (10) mesmo sem termo em comum
       + (atual ? 100 : 0)
       + (nomeCitado ? 80 : 0)
       + (precisaImagem ? 50 : 0)
@@ -1210,10 +1224,11 @@ function montarContextoInvestigacao({
         tokens: tokenBudget.estimarTokensImagem(),
         texto: `[Imagem: ${anexo.nomeOriginal}]`,
         ref: anexo,
-        enviarImagem: permitirImagens && (forcado || precisaImagem || atual),
+        enviarImagem: permitirImagens,
         atual,
         nomeCitado,
         referenciaVisualImplicita: referenciaVisualImplicita && !referenciaImagem && !nomeCitado && !atual,
+        visualObrigatorio: forcado || atual || nomeCitado || precisaImagem,
       });
       continue;
     }
@@ -1235,10 +1250,11 @@ function montarContextoInvestigacao({
 
     const preparado = _prepararConteudoAnexo(anexo, _ehDocumentoTextual(anexo, conteudo) ? termosDocumento : termos);
     const ehPdf = anexo.linguagemDetectada === 'pdf' || anexo.mimeType === 'application/pdf' || /\.pdf$/i.test(anexo.nomeOriginal || '');
-    const enviarPdfVisual = permitirImagens && ehPdf && pdfVisual.detectarNecessidadeVisualPdf({ conteudoExtraido: conteudo, pergunta: mensagemAtual, nomeOriginal: anexo.nomeOriginal });
-    const paginasPdfSelecionadas = enviarPdfVisual
-      ? pdfVisual.selecionarPaginasPdf({ conteudoExtraido: conteudo, pergunta: mensagemAtual })
-      : [];
+    const ehWord = pdfVisual.ehDocx(anexo);
+    const enviarPdfVisual = permitirImagens && (ehPdf || ehWord) && pdfVisual.detectarNecessidadeVisualPdf({ conteudoExtraido: conteudo, pergunta: mensagemAtual, nomeOriginal: anexo.nomeOriginal });
+    const paginasPdfSelecionadas = !enviarPdfVisual ? []
+      : ehWord ? Array.from({ length: pdfVisual.MAX_IMAGENS_DOCX }, (_, i) => i + 1)
+        : pdfVisual.selecionarPaginasPdf({ conteudoExtraido: conteudo, pergunta: mensagemAtual });
     candidatos.push({
       tipo: 'anexo',
       id: anexo.id,
@@ -1260,6 +1276,7 @@ function montarContextoInvestigacao({
       documentoReduzivel: _ehDocumentoTextual(anexo, conteudo) || (!!anexo.eCodigo && !preparado.parcial),
       termosPreparo: termosDocumento,
       custoVisualTokens: enviarPdfVisual ? paginasPdfSelecionadas.length * tokenBudget.estimarTokensImagem() : 0,
+      visualObrigatorio: forcado || atual || nomeCitado,
     });
   }
 
@@ -1310,12 +1327,12 @@ function montarContextoInvestigacao({
   const imagensCandidatas = selecionados.filter(c => c.tipo === 'imagem' && c.enviarImagem);
   const imagensSelecionadas = [
     ...imagensCandidatas.filter(c => c.atual || c.nomeCitado),
-    ...imagensCandidatas.filter(c => !c.atual && !c.nomeCitado).slice(0, 2),
+    ...imagensCandidatas.filter(c => !c.atual && !c.nomeCitado).slice(0, LIMITE_IMAGENS_DO_CASO),
   ];
   const imagensSelecionadasIds = new Set(imagensSelecionadas.map(c => c.id));
   for (const img of imagensCandidatas) {
     if (!imagensSelecionadasIds.has(img.id)) {
-      omitidos.push({ tipo: img.tipo, id: img.id, nome: img.ref?.nomeOriginal, status: 'DISPONIVEL_NAO_ENVIADA', motivo: 'limite de imagens historicas implicitas por chamada', score: img.score, tokensEstimados: img.tokens });
+      omitidos.push({ tipo: img.tipo, id: img.id, nome: img.ref?.nomeOriginal, status: 'DISPONIVEL_NAO_ENVIADA', motivo: `limite de ${LIMITE_IMAGENS_DO_CASO} imagens antigas por chamada`, score: img.score, tokensEstimados: img.tokens });
     }
   }
   const selecionadosEfetivos = selecionados.filter(c => c.tipo !== 'imagem' || imagensSelecionadasIds.has(c.id));
@@ -1480,6 +1497,9 @@ function montarContextoInvestigacao({
     conversa,
     imagensSelecionadas: imagensSelecionadas.map(c => c.ref),
     pdfsVisuaisSelecionados: pdfsVisuaisSelecionados.map(c => ({ anexo: c.ref, paginas: c.paginasPdfSelecionadas })),
+    // Evidência visual que só entra pela regra "evidência primeiro" (2026-11-18): se não
+    // carregar, não interrompe o turno (o PDF segue como texto); fica registrada e avisada.
+    visuaisComplementaresIds: [...imagensSelecionadas, ...pdfsVisuaisSelecionados].filter(c => !c.visualObrigatorio).map(c => c.id),
     manifesto,
     contextoResumo: {
       tokensEstimadosPrompt: usados,

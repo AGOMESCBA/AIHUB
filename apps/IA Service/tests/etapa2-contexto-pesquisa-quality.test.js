@@ -126,7 +126,11 @@ async function main() {
     assert.ok(contexto.userPrompt.includes('Stack trace'), 'stack trace do meio do log deve entrar');
     assert.ok(!contexto.userPrompt.includes('linha de ruido 1\n2026-10-02 INFO linha de ruido 2'), 'log grande não deve ser enviado como começo/fim bruto completo');
     assert.ok(contexto.imagensSelecionadas.some(a => a.id === imagem.id), 'imagem histórica referenciada deve ser reenviada');
-    assert.ok(contexto.manifesto.omitidos.length > 0, 'manifesto deve registrar evidências omitidas por orçamento/relevância');
+    // Regra "evidência primeiro" (2026-11-18): anexo do chamado não é mais omitido por
+    // relevância; cabendo no orçamento, todos vão (antes este teste exigia omissões).
+    const nomesSelecionados = new Set(contexto.manifesto.selecionados.map(e => e.nome));
+    assert.ok(Array.from({ length: 10 }, (_, i) => `anexo-${i}.txt`).every(n => nomesSelecionados.has(n)), 'todo anexo do chamado deve ir para a IA quando cabe no orçamento');
+    assert.ok(!contexto.manifesto.omitidos.some(o => /baixa relevancia/.test(o.motivo || '') && o.tipo !== 'mensagem'), 'anexo não pode ser omitido por baixa relevância');
     assert.ok(contexto.manifesto.selecionados.some(e => e.id === logAntigo.id && e.status === 'PARCIALMENTE_ANALISADA'), 'log grande deve ser marcado como parcial');
 
     const contextoAnexosSincronizados = contextEngine.montarContextoInvestigacao({

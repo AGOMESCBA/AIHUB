@@ -9,7 +9,8 @@
 // mesmo texto que o chat recebe ao fim do turno, lido só pela mesma empresa
 // (chave empresaId+atendimentoId), nunca gravado, apagado no fim do turno.
 const TTL_MS = 10 * 60 * 1000;
-const MAX_ETAPAS = 12;
+// 20 (era 12): cabem as linhas de anexos lidos (até 9) sem perder as etapas da pesquisa.
+const MAX_ETAPAS = 20;
 const MAX_RASCUNHO = 30000;
 const progresso = new Map();
 

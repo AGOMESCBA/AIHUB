@@ -26,7 +26,18 @@ function detectarNecessidadeVisualPdf({ conteudoExtraido, pergunta = '', nomeOri
   // e forcaria rasterizacao visual mesmo com texto extraido de sobra.
   const pedeVisual = /\b(print|screenshot|imagem|tela|visual|grafico|gr[aá]fico|diagrama|scan|escanead)\b/i.test(`${perguntaTexto} ${nomeOriginal}`);
   const extracaoFalhou = /\[PDF detectado\]|nao foi possivel extrair texto|parser principal nao conseguiu/i.test(texto);
-  return poucoTexto || pedeVisual || extracaoFalhou;
+  // O próprio PDF remete aos prints ("como na imagem abaixo") e tem pouco texto além disso:
+  // a evidência está nas imagens. Sem isso, o print com os campos do erro nunca chegava à
+  // IA se o analista não escrevesse "print/imagem" na pergunta (achado real, #036974,
+  // 2026-11-18). PDF longo continua só texto: lá a imagem é complementar.
+  const textoUtil = texto
+    .replace(/\[[^\]]+\]/g, '')
+    .replace(/^\s*(Paginas|Páginas|Pages?)\s*:.*$/gim, '')
+    .replace(/^\s*Observacao\s*:.*$/gim, '')
+    .trim();
+  const textoRemeteImagem = textoUtil.length <= 1500
+    && /\b(imagem|imagens|prints?|screenshots?|telas?|figuras?)\s+(abaixo|acima|a seguir|anexa|anexad[ao]|seguinte)\b|\b(conforme|como|vide|ver|veja|segue)\s+(n?[ao]s?\s+)?(imagem|imagens|prints?|screenshots?|telas?|figuras?)\b/i.test(textoUtil);
+  return poucoTexto || pedeVisual || extracaoFalhou || textoRemeteImagem;
 }
 
 function selecionarPaginasPdf({ conteudoExtraido, pergunta = '', maxPaginas = LIMITES.maxPaginas } = {}) {
@@ -112,9 +123,46 @@ async function rasterizarPdfPaginas(buffer, paginas = [1], opts = {}) {
   }
 }
 
+// Word com prints colados (achado real, simulação out-nov/2026: 8 .docx sem texto
+// algum — "TELA DO PAINEL CONSIG.docx", "Transmissao nf 020104.docx" — nunca chegavam
+// à IA). O .docx é um zip: as imagens ficam em word/media/, na ordem em que foram
+// inseridas. Formatos que a IA não lê (emf/wmf) ficam de fora.
+const MAX_IMAGENS_DOCX = 6;
+const MIME_IMAGEM_DOCX = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+
+function ehDocx(anexo = {}) {
+  return /\.docx$/i.test(anexo.nomeOriginal || '') || /wordprocessingml/i.test(anexo.mimeType || '');
+}
+
+async function extrairImagensDocx(buffer, paginas = [1]) {
+  try {
+    const zip = await require('jszip').loadAsync(buffer);
+    const midias = Object.keys(zip.files)
+      .filter(n => /^word\/media\//i.test(n) && MIME_IMAGEM_DOCX[(n.split('.').pop() || '').toLowerCase()])
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const imagens = [];
+    for (const [i, nome] of midias.slice(0, Math.min(paginas.length, MAX_IMAGENS_DOCX)).entries()) {
+      const bytes = await zip.file(nome).async('nodebuffer');
+      imagens.push({ pagina: i + 1, mimeType: MIME_IMAGEM_DOCX[nome.split('.').pop().toLowerCase()], base64: bytes.toString('base64'), bytes: bytes.length, origem: 'docx_imagem' });
+    }
+    return { imagens, erro: null };
+  } catch (err) {
+    return { imagens: [], erro: `Nao foi possivel abrir o Word: ${err.message}` };
+  }
+}
+
+// Ponto único dos laços de carga visual: PDF é rasterizado; Word tem as imagens extraídas.
+function imagensDoDocumentoVisual(buffer, anexo, paginas = [1]) {
+  return ehDocx(anexo) ? extrairImagensDocx(buffer, paginas) : rasterizarPdfPaginas(buffer, paginas);
+}
+
 module.exports = {
   LIMITES,
+  MAX_IMAGENS_DOCX,
   detectarNecessidadeVisualPdf,
   selecionarPaginasPdf,
   rasterizarPdfPaginas,
+  ehDocx,
+  extrairImagensDocx,
+  imagensDoDocumentoVisual,
 };

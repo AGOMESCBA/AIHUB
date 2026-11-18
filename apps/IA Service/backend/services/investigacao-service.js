@@ -647,6 +647,39 @@ function _removerIdsInternosTexto(texto) {
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '[UUID_INTERNO_REMOVIDO]');
 }
 
+// Evidência visual que só entrou pela regra "evidência primeiro" (imagem antiga do
+// chamado, Word com prints, PDF visual implícito) não pode derrubar um turno que antes
+// funcionava: se não carregar, sai do envio visual (o PDF segue como texto), fica no
+// manifesto e é avisada no andamento e na resposta. Evidência do turno, citada ou
+// forçada continua interrompendo (decisão de 2026-10: nunca análise capenga em silêncio).
+function _falhaVisualComplementar(contexto, anexo, erro) {
+  if (!anexo?.id || !(contexto?.visuaisComplementaresIds || []).includes(anexo.id)) return false;
+  const nome = anexo.nomeOriginal || anexo.id;
+  if (contexto.manifesto) {
+    (contexto.manifesto.omitidos ||= []).push({ tipo: 'anexo', id: anexo.id, nome, status: 'DISPONIVEL_NAO_ENVIADA', motivo: `nao foi possivel carregar como imagem: ${erro}` });
+  }
+  (contexto.falhasVisuaisComplementares ||= []).push(nome);
+  return true;
+}
+
+// Oscilação de disco/rede ou do navegador que converte o PDF não é erro definitivo
+// (pedido do usuário, 2026-11-18): cada arquivo tem 3 tentativas, com pausa curta,
+// antes de ser dado como não lido.
+const TENTATIVAS_LEITURA_VISUAL = 3;
+const PAUSAS_LEITURA_VISUAL_MS = [500, 1500];
+async function _comTentativas(ler) {
+  let ultimoErro;
+  for (let tentativa = 1; tentativa <= TENTATIVAS_LEITURA_VISUAL; tentativa++) {
+    try {
+      return await ler();
+    } catch (err) {
+      ultimoErro = err;
+      if (tentativa < TENTATIVAS_LEITURA_VISUAL) await new Promise(r => setTimeout(r, PAUSAS_LEITURA_VISUAL_MS[tentativa - 1] || 1500));
+    }
+  }
+  throw new Error(`${ultimoErro?.message || 'falha desconhecida'} (após ${TENTATIVAS_LEITURA_VISUAL} tentativas)`);
+}
+
 async function _carregarPayloadVisual(contexto) {
   const fs = require('fs');
   const path = require('path');
@@ -657,31 +690,35 @@ async function _carregarPayloadVisual(contexto) {
 
   for (const anexo of contexto.imagensSelecionadas || []) {
     try {
-      const caminhoAbsoluto = path.join(armazenamento.ANEXOS_DIR, anexo.caminhoRelativo);
-      const buffer = fs.readFileSync(caminhoAbsoluto);
-      if (!buffer.length || (anexo.tamanho && buffer.length !== anexo.tamanho)) {
-        throw new Error(`Arquivo lido com tamanho inconsistente (esperado ${anexo.tamanho ?? '?'} bytes, lido ${buffer.length} bytes).`);
-      }
+      const buffer = await _comTentativas(() => {
+        const lido = fs.readFileSync(path.join(armazenamento.ANEXOS_DIR, anexo.caminhoRelativo));
+        if (!lido.length || (anexo.tamanho && lido.length !== anexo.tamanho)) {
+          throw new Error(`Arquivo lido com tamanho inconsistente (esperado ${anexo.tamanho ?? '?'} bytes, lido ${lido.length} bytes).`);
+        }
+        return lido;
+      });
       imagens.push({ mimeType: anexo.mimeType, base64: buffer.toString('base64'), origem: 'imagem', anexoId: anexo.id });
     } catch (err) {
-      console.error('[IA Service] Falha ao ler anexo de imagem para anÃ¡lise:', anexo.id, anexo.nomeOriginal, err.message);
-      falhasImagem.push(anexo.nomeOriginal || anexo.id);
+      console.error('[IA Service] Falha ao ler anexo de imagem para análise:', anexo.id, anexo.nomeOriginal, err.message);
+      if (!_falhaVisualComplementar(contexto, anexo, err.message)) falhasImagem.push(anexo.nomeOriginal || anexo.id);
     }
   }
 
   for (const item of contexto.pdfsVisuaisSelecionados || []) {
     const anexo = item.anexo;
     try {
-      const caminhoAbsoluto = path.join(armazenamento.ANEXOS_DIR, anexo.caminhoRelativo);
-      const buffer = fs.readFileSync(caminhoAbsoluto);
-      const raster = await pdfVisualService.rasterizarPdfPaginas(buffer, item.paginas || [1]);
-      if (raster.erro) throw new Error(raster.erro);
+      const raster = await _comTentativas(async () => {
+        const buffer = fs.readFileSync(path.join(armazenamento.ANEXOS_DIR, anexo.caminhoRelativo));
+        const r = await pdfVisualService.imagensDoDocumentoVisual(buffer, anexo, item.paginas || [1]);
+        if (r.erro) throw new Error(r.erro);
+        return r;
+      });
       for (const img of raster.imagens) {
         imagens.push({ mimeType: img.mimeType, base64: img.base64, origem: 'pdf', anexoId: anexo.id, pagina: img.pagina });
       }
     } catch (err) {
-      console.error('[IA Service] Falha ao rasterizar PDF para anÃ¡lise visual:', anexo.id, anexo.nomeOriginal, err.message);
-      falhasPdfVisual.push({ nome: anexo.nomeOriginal || anexo.id, erro: err.message });
+      console.error('[IA Service] Falha ao converter documento para análise visual:', anexo.id, anexo.nomeOriginal, err.message);
+      if (!_falhaVisualComplementar(contexto, anexo, err.message)) falhasPdfVisual.push({ nome: anexo.nomeOriginal || anexo.id, erro: err.message });
     }
   }
 
@@ -1068,6 +1105,22 @@ function _medir(tempos, etapa, promessa) {
   return Promise.resolve(promessa).finally(() => { tempos[etapa] = Date.now() - inicio; });
 }
 
+// Andamento: uma linha por anexo, dizendo como foi lido pela IA ou por que ficou
+// de fora (pedido do usuário, 2026-11-18 — o analista vê o que está sendo lido
+// e percebe na hora um anexo que não chegou à IA, como no #036974).
+const MAX_ANEXOS_NO_ANDAMENTO = 8;
+function _registrarAnexosNoAndamento(empresaId, atendimentoId, manifesto) {
+  const lidos = (manifesto?.selecionados || []).filter(s => s.tipo === 'anexo' || s.tipo === 'imagem');
+  const foraDaIA = (manifesto?.omitidos || []).filter(o => o.tipo === 'anexo' || o.tipo === 'imagem');
+  const linhas = [
+    ...lidos.map(s => `📎 ${s.nome || 'anexo'} — ${s.tipo === 'imagem' || s.statusEnvio === 'ENVIADA_COMO_IMAGEM' ? 'lido como imagem' : 'lido como texto'}`),
+    ...foraDaIA.map(o => `⚠️ ${o.nome || 'anexo'} — não enviado à IA (${o.motivo || 'sem motivo informado'})`),
+  ];
+  const visiveis = linhas.slice(0, MAX_ANEXOS_NO_ANDAMENTO);
+  if (linhas.length > visiveis.length) visiveis.push(`… e mais ${linhas.length - visiveis.length} anexo(s)`);
+  for (const linha of visiveis) progressoTurno.registrar(empresaId, atendimentoId, linha, { concluida: true });
+}
+
 // Todo turno confere os anexos do chamado antes de montar o contexto. Com o
 // Agente Local travado, a análise segue no tempo máximo, e a IA e o analista
 // são avisados do que não foi verificado.
@@ -1201,6 +1254,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   }
 
   // Arquivo copiado agora é evidência nova: entra como anexo deste turno.
+  if (atendimento.referenciaExterna) progressoTurno.registrar(empresaId, atendimentoId, 'Conferindo os anexos do chamado no SoftExpert');
   const garantiaAnexos = await _medir(temposEtapasMs, 'conferenciaAnexos', _garantirAnexosDoChamado(empresaId, atendimento));
   for (const copiado of garantiaAnexos?.copiados || []) {
     if (copiado?.id && !anexosDoTurno.some(a => a.id === copiado.id)) anexosDoTurno.push(copiado);
@@ -1249,7 +1303,9 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     }
   }
 
-  progressoTurno.registrar(empresaId, atendimentoId, 'Lendo o histórico, os anexos e o dossiê do chamado');
+  progressoTurno.registrar(empresaId, atendimentoId, todosAnexosDoAtendimento.length
+    ? `Lendo o histórico, o dossiê e ${todosAnexosDoAtendimento.length} anexo(s): ${todosAnexosDoAtendimento.map(a => a.nomeOriginal).filter(Boolean).join(', ')}`
+    : 'Lendo o histórico e o dossiê do chamado');
   let pesquisaTecnicaTexto = '';
   let pesquisaTecnica = null;
   let relacionados = [];
@@ -1476,6 +1532,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     permitirImagens: true,
   });
   let userPrompt = contexto.userPrompt;
+  _registrarAnexosNoAndamento(empresaId, atendimentoId, contexto.manifesto);
 
   // Carrega as imagens do turno do disco. Decisão explícita do usuário,
   // 2026-10: imagem anexada NUNCA pode ser ignorada silenciosamente — antes,
@@ -1487,45 +1544,10 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   // ANTES de chamar a IA — nunca gera uma resposta fingindo análise
   // completa. O analista vê o erro e tenta de novo, em vez de confiar
   // silenciosamente numa análise capenga.
-  const imagens = [];
-  const falhasImagem = [];
-  for (const anexo of contexto.imagensSelecionadas) {
-    const fs = require('fs');
-    const path = require('path');
-    const armazenamento = require('./armazenamento-anexos');
-    try {
-      const caminhoAbsoluto = path.join(armazenamento.ANEXOS_DIR, anexo.caminhoRelativo);
-      const buffer = fs.readFileSync(caminhoAbsoluto);
-      if (!buffer.length || (anexo.tamanho && buffer.length !== anexo.tamanho)) {
-        throw new Error(`Arquivo lido com tamanho inconsistente (esperado ${anexo.tamanho ?? '?'} bytes, lido ${buffer.length} bytes).`);
-      }
-      imagens.push({ mimeType: anexo.mimeType, base64: buffer.toString('base64'), origem: 'imagem', anexoId: anexo.id });
-    } catch (err) {
-      console.error('[IA Service] Falha ao ler anexo de imagem para análise:', anexo.id, anexo.nomeOriginal, err.message);
-      falhasImagem.push(anexo.nomeOriginal || anexo.id);
-    }
-  }
-  const falhasPdfVisual = [];
-  for (const item of contexto.pdfsVisuaisSelecionados || []) {
-    const fs = require('fs');
-    const path = require('path');
-    const armazenamento = require('./armazenamento-anexos');
-    const anexo = item.anexo;
-    try {
-      const caminhoAbsoluto = path.join(armazenamento.ANEXOS_DIR, anexo.caminhoRelativo);
-      const buffer = fs.readFileSync(caminhoAbsoluto);
-      const raster = await pdfVisualService.rasterizarPdfPaginas(buffer, item.paginas || [1]);
-      if (raster.erro) throw new Error(raster.erro);
-      for (const img of raster.imagens) {
-        imagens.push({ mimeType: img.mimeType, base64: img.base64, origem: 'pdf', anexoId: anexo.id, pagina: img.pagina });
-      }
-    } catch (err) {
-      console.error('[IA Service] Falha ao rasterizar PDF para análise visual:', anexo.id, anexo.nomeOriginal, err.message);
-      falhasPdfVisual.push({ nome: anexo.nomeOriginal || anexo.id, erro: err.message });
-    }
-  }
-  if (falhasPdfVisual.length > 0) {
-    contexto.manifesto.pdfVisualFalhas = falhasPdfVisual.map(f => ({ nome: f.nome, erro: f.erro }));
+  // Mesmo carregador do preparador por candidato (3 tentativas por arquivo; ver _carregarPayloadVisual).
+  const { imagens, falhasImagem, falhasPdfVisual } = await _carregarPayloadVisual(contexto);
+  for (const nome of contexto.falhasVisuaisComplementares || []) {
+    progressoTurno.registrar(empresaId, atendimentoId, `⚠️ ${nome} — não foi possível ler como imagem (segue sem a parte visual)`, { concluida: true });
   }
   if (falhasImagem.length > 0 || falhasPdfVisual.length > 0) {
     const falhas = [
@@ -1820,7 +1842,10 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   }
 
   mensagemAssistente.fontesCorrigidos = geracaoFontes.fontes;
-  mensagemAssistente.avisosFonteCorrigido = avisoAnexos ? [avisoAnexos, ...geracaoFontes.avisos] : geracaoFontes.avisos;
+  const avisoVisuais = contexto.falhasVisuaisComplementares?.length
+    ? `Não foi possível ler como imagem: ${contexto.falhasVisuaisComplementares.join(', ')}. A análise seguiu sem a parte visual desse(s) anexo(s); se forem importantes, reenvie e pesquise de novo.`
+    : null;
+  mensagemAssistente.avisosFonteCorrigido = [avisoAnexos, avisoVisuais, ...geracaoFontes.avisos].filter(Boolean);
   mensagemAssistente.avaliacoesFonteCorrigido = geracaoFontes.avaliacoes;
   if (mensagemAssistente.avisosFonteCorrigido.length || geracaoFontes.avaliacoes.length) {
     const persistida = mensagemRepo.atualizarAvisosFonteCorrigido(empresaId, mensagemAssistente.id, mensagemAssistente.avisosFonteCorrigido, geracaoFontes.avaliacoes);
@@ -1918,4 +1943,6 @@ module.exports = {
   _gerarFontesCorrigidos,
   _statusFinalQualityGate,
   _statusFinalExecucao,
+  _carregarPayloadVisual,
+  _falhaVisualComplementar,
 };

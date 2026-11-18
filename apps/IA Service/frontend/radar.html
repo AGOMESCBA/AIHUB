@@ -357,6 +357,10 @@
 
     .typing-row .bubble { display:flex; align-items:center; gap:6px; color:var(--wa-text-tertiary); font-size:13px; }
     .typing-row.rascunho-row .bubble { display:block; color:var(--wa-text); font-size:13.5px; }
+    .typing-row.etapas-row .bubble { display:block; }
+    .typing-etapas { display:grid; gap:3px; margin-top:6px; }
+    .typing-etapa { color:var(--wa-text); font-size:12px; line-height:1.4; overflow-wrap:anywhere; }
+    .typing-etapa.ok { color:var(--wa-text-tertiary); }
     .rascunho-tag { display:flex; align-items:center; gap:6px; margin-top:6px; color:var(--wa-text-tertiary); font-size:11.5px; font-style:italic; white-space:normal; }
     .typing-dot { width:6px; height:6px; border-radius:50%; background:var(--wa-text-tertiary); animation:pulse 1.2s infinite ease-in-out; }
     @keyframes pulse { 0%,100%{opacity:.3} 50%{opacity:1} }
@@ -2352,6 +2356,7 @@
       const row = document.createElement('div');
       row.className = 'row in typing-row';
       row.id = 'typing-row';
+      row.dataset.mensagem = mensagem;
       row.innerHTML = `<div class="bubble"><span class="typing-dot"></span> ${escapeHtml(mensagem)}</div>`;
       chatBody.appendChild(row);
       chatBody.scrollTop = chatBody.scrollHeight;
@@ -2370,9 +2375,21 @@
         try {
           const p = await api(`/atendimentos/${atendimentoIdDoTurno}/progresso${qs ? '?' + qs : ''}`);
           const rascunho = typeof p?.rascunho === 'string' ? p.rascunho : '';
-          if (!rascunho || atendimentoIdDoTurno !== atendimentoAtualId || !atendimentosEmProcessamento.has(atendimentoIdDoTurno)) return;
+          if (atendimentoIdDoTurno !== atendimentoAtualId || !atendimentosEmProcessamento.has(atendimentoIdDoTurno)) return;
           const chatBody = document.getElementById('chat-body');
           let row = document.getElementById('typing-row');
+          // Antes do rascunho, mostra as etapas (inclusive cada anexo lido), como o J2A.
+          const etapas = Array.isArray(p?.etapas) ? p.etapas : [];
+          if (!rascunho) {
+            const assinaturaEtapas = JSON.stringify(etapas);
+            if (!etapas.length || !row || row.classList.contains('rascunho-row') || assinaturaEtapas === ultimo) return;
+            ultimo = assinaturaEtapas;
+            const pertoDoFimEtapas = chatBody.scrollHeight - chatBody.scrollTop - chatBody.clientHeight < 80;
+            row.classList.add('etapas-row');
+            row.innerHTML = `<div class="bubble"><div class="rascunho-tag" style="margin-top:0"><span class="typing-dot"></span> ${escapeHtml(row.dataset.mensagem || 'Analisando…')}</div><div class="typing-etapas">${etapas.map(e => `<div class="typing-etapa${e.concluida ? ' ok' : ''}">${e.concluida ? '✓' : '⏳'} ${escapeHtml(e.texto)}</div>`).join('')}</div></div>`;
+            if (pertoDoFimEtapas) chatBody.scrollTop = chatBody.scrollHeight;
+            return;
+          }
           if (row?.classList.contains('rascunho-row') && rascunho === ultimo) return;
           ultimo = rascunho;
           const pertoDoFim = chatBody.scrollHeight - chatBody.scrollTop - chatBody.clientHeight < 80;
