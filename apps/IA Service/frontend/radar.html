@@ -355,6 +355,7 @@
     .bubble-rodape { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,.08); font-size:11px; color:var(--wa-text-tertiary); }
     .bubble-rodape button { border:none; background:none; color:var(--wa-accent); font-weight:700; font-size:11px; cursor:pointer; padding:0; }
 
+    .bubble a.link-curto { color:#53bdeb; text-decoration:underline; text-underline-offset:2px; }
     .typing-row .bubble { display:flex; align-items:center; gap:6px; color:var(--wa-text-tertiary); font-size:13px; }
     .typing-row.rascunho-row .bubble { display:block; color:var(--wa-text); font-size:13.5px; }
     .typing-row.etapas-row .bubble { display:block; }
@@ -855,6 +856,40 @@
     function escapeHtml(s) {
       return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
     }
+    // Links curtos (2026-11-18): mesma função do J2A (j2a/assets/radar.js). A URL longa
+    // vira link clicável com o título do artigo; abre em nova aba. Só apresentação.
+    function textoComLinksCurtos(texto) {
+      const bruto = String(texto ?? '');
+      const chave = (url) => { try { return decodeURI(url); } catch (_) { return url; } };
+      const RE_FONTE = /^- (.+?) — (https?:\/\/\S+?)( — .*)?$/;
+      const titulos = new Map();
+      for (const linha of bruto.split('\n')) {
+        const f = linha.match(RE_FONTE);
+        if (f) titulos.set(chave(f[2]), f[1].trim());
+      }
+      const tituloDe = (url) => {
+        if (titulos.has(chave(url))) return titulos.get(chave(url));
+        try {
+          const u = new URL(url);
+          const ultimo = decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || '');
+          const base = ultimo.replace(/^\d+-/, '').replace(/[-_]+/g, ' ').trim() || u.hostname;
+          return base.length > 70 ? `${base.slice(0, 67).trimEnd()}…` : base;
+        } catch (_) { return url; }
+      };
+      const link = (url, rotulo) => `<a class="link-curto" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(url)}">${escapeHtml(rotulo)}</a>`;
+      return bruto.split('\n').map((linha) => {
+        const f = linha.match(RE_FONTE);
+        if (f) return `- ${link(f[2], f[1].trim())}${escapeHtml(f[3] || '')}`;
+        let html = '';
+        let pos = 0;
+        for (const m of linha.matchAll(/https?:\/\/[^\s<>"'`)\]]+/g)) {
+          const url = m[0].replace(/[.,;:!?]+$/, '');
+          html += escapeHtml(linha.slice(pos, m.index)) + link(url, tituloDe(url));
+          pos = m.index + url.length;
+        }
+        return html + escapeHtml(linha.slice(pos));
+      }).join('\n');
+    }
     function formatarTamanho(bytes) {
       const n = Number(bytes);
       if (!n) return '';
@@ -877,8 +912,47 @@
       if (modoExterno && (r.status === 401 || r.status === 403)) {
         showSessaoExternaInvalida(body.error || 'Sessao externa invalida ou expirada.');
       }
-      if (!r.ok) throw new Error(body.error || `Erro ${r.status}`);
+      if (!r.ok) {
+        const erro = new Error(body.error || `Erro ${r.status}`);
+        erro.status = r.status;
+        throw erro;
+      }
       return body;
+    }
+
+    // Queda de conexão durante a pesquisa não é falha da pesquisa: o servidor segue
+    // trabalhando e grava a resposta (achado real, #036996, 2026-11-18). Mesma regra do
+    // J2A: acompanha o andamento até surgir resposta nova da IA ou o servidor confirmar
+    // que o turno acabou sem ela. Nunca reenvia a pergunta.
+    const ESPERA_MAX_APOS_QUEDA_MS = 10 * 60 * 1000;
+    function quedaDeConexao(err) {
+      return !err?.status || [502, 503, 504].includes(err.status);
+    }
+    async function contarRespostasIA(atendimentoId, sufixo) {
+      try {
+        const msgs = await api(`/atendimentos/${atendimentoId}/mensagens${sufixo}`);
+        return Array.isArray(msgs) ? msgs.filter(m => m.papel === 'assistant').length : null;
+      } catch (_) { return null; }
+    }
+    async function aguardarRespostaAposQueda(atendimentoId, sufixo, respostasAntes) {
+      const limite = Date.now() + ESPERA_MAX_APOS_QUEDA_MS;
+      let semAndamento = 0;
+      while (Date.now() < limite) {
+        await new Promise(r => setTimeout(r, 3000));
+        let etapas;
+        try {
+          const p = await api(`/atendimentos/${atendimentoId}/progresso${sufixo}`);
+          etapas = Array.isArray(p?.etapas) ? p.etapas : [];
+        } catch (_) { continue; }
+        const pronta = etapas.some(e => String(e?.texto ?? e).startsWith('Resposta pronta'));
+        if (!pronta && etapas.length) { semAndamento = 0; continue; }
+        if (!pronta && ++semAndamento < 2) continue;
+        const agora = await contarRespostasIA(atendimentoId, sufixo);
+        if (agora != null && respostasAntes != null && agora > respostasAntes) return true;
+        if (agora != null && respostasAntes == null && pronta) return true;
+        if (!pronta && agora != null) return false;
+      }
+      return false;
     }
     function empresaIdAtual() {
       if (modoExterno) return 'externo'; // placeholder não-vazio — empresa real já resolvida pelo token no backend
@@ -2079,7 +2153,7 @@
     function renderizarTextoComCodigo(texto) {
       const partes = String(texto ?? '').split(/```[^\n`]*\n?/);
       return partes.map((parte, i) => {
-        const escapado = escapeHtml(parte);
+        const escapado = i % 2 === 1 ? escapeHtml(parte) : textoComLinksCurtos(parte);
         return i % 2 === 1 ? `<pre><code>${escapado}</code></pre>` : escapado;
       }).join('');
     }
@@ -2599,9 +2673,14 @@
       _atualizarIndicadorProcessamento(atendimentoIdDoTurno, _pareceSolicitarPesquisa(texto) ? 'Analista IA Service está pesquisando…' : undefined);
 
       const pararRascunho = acompanharRascunho(atendimentoIdDoTurno, empresaId);
+      const qsTurno = qsEmpresa(empresaId);
+      const sufixoTurno = qsTurno ? '?' + qsTurno : '';
+      let enviouPergunta = false;
+      let respostasAntes = null;
       try {
-        const qs = qsEmpresa(empresaId);
-        const resposta = await api(`/atendimentos/${atendimentoIdDoTurno}/investigar${qs ? '?' + qs : ''}`, {
+        respostasAntes = await contarRespostasIA(atendimentoIdDoTurno, sufixoTurno);
+        enviouPergunta = true;
+        const resposta = await api(`/atendimentos/${atendimentoIdDoTurno}/investigar${sufixoTurno}`, {
           method: 'POST',
           body: JSON.stringify({ texto, anexoIds: anexosDoTurno.map(a => a.id), origemAcao: 'texto_livre' }),
         });
@@ -2617,6 +2696,16 @@
         // próxima vez que o analista reabrir esse atendimento — não há nada
         // para "entregar" na tela agora.
       } catch (err) {
+        if (enviouPergunta && quedaDeConexao(err) && await aguardarRespostaAposQueda(atendimentoIdDoTurno, sufixoTurno, respostasAntes)) {
+          pararRascunho();
+          atendimentosEmProcessamento.delete(atendimentoIdDoTurno);
+          if (atendimentoIdDoTurno === atendimentoAtualId) {
+            hideTyping();
+            enviando = false;
+            await carregarMensagens(atendimentoIdDoTurno);
+          }
+          return;
+        }
         pararRascunho();
         atendimentosEmProcessamento.delete(atendimentoIdDoTurno);
         if (atendimentoIdDoTurno === atendimentoAtualId) {
@@ -2649,9 +2738,11 @@
       if (btn && atendimentoIdDoTurno === atendimentoAtualId) btn.disabled = true;
 
       const pararRascunho = acompanharRascunho(atendimentoIdDoTurno, empresaId);
+      const qs = qsEmpresa(empresaId);
+      const sufixo = qs ? '?' + qs : '';
+      let enviouPergunta = false;
+      let respostasAntes = null;
       try {
-        const qs = qsEmpresa(empresaId);
-        const sufixo = qs ? '?' + qs : '';
         try {
           const syncAnexos = await api(`/radar/chamados/${chamadoIdDoTurno}/anexos-softexpert/sincronizar${sufixo}`, {
             method: 'POST',
@@ -2668,6 +2759,8 @@
         const anexosAtuais = await api(`/atendimentos/${atendimentoIdDoTurno}/anexos${sufixo}`);
         const anexoIds = (anexosAtuais || []).map(a => a.id);
         if (atendimentoIdDoTurno === atendimentoAtualId) anexosAtendimentoCache = anexosAtuais || [];
+        respostasAntes = await contarRespostasIA(atendimentoIdDoTurno, sufixo);
+        enviouPergunta = true;
         const resposta = await api(`/atendimentos/${atendimentoIdDoTurno}/investigar${sufixo}`, {
           method: 'POST',
           body: JSON.stringify({ texto: TEXTO_PESQUISAR_SOLUCOES, anexoIds, anexosComoContexto: true, forcarPesquisa: true, origemAcao: 'botao_pesquisar' }),
@@ -2680,6 +2773,15 @@
           addBubble({ id: resposta.id, direcao: 'in', texto: resposta.conteudo, diagnostico: resposta.diagnostico, nivelConfianca: resposta.nivelConfianca, perguntaContexto: TEXTO_PESQUISAR_SOLUCOES, criadoEm: resposta.criadoEm, papel: 'assistant', fontesCorrigidos: resposta.fontesCorrigidos, avisosFonteCorrigido: resposta.avisosFonteCorrigido, respostaOperacional: resposta.respostaOperacional });
         }
       } catch (err) {
+        if (enviouPergunta && quedaDeConexao(err) && await aguardarRespostaAposQueda(atendimentoIdDoTurno, sufixo, respostasAntes)) {
+          atendimentosEmProcessamento.delete(atendimentoIdDoTurno);
+          if (atendimentoIdDoTurno === atendimentoAtualId) {
+            hideTyping();
+            enviando = false;
+            await carregarMensagens(atendimentoIdDoTurno);
+          }
+          return;
+        }
         atendimentosEmProcessamento.delete(atendimentoIdDoTurno);
         if (atendimentoIdDoTurno === atendimentoAtualId) {
           hideTyping();

@@ -1806,3 +1806,4 @@ body.col-resizing { cursor: col-resize; user-select: none; }
 .envio-dots i:nth-child(3) { animation-delay: .3s; }
 @keyframes envio-dot { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
 @media (prefers-reduced-motion: reduce) { .envio-dots i { animation: none; opacity: .6; } }
+.message-text a.link-curto { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; }

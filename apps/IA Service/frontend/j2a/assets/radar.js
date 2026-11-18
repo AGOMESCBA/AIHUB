@@ -96,6 +96,43 @@
     }[c]));
   }
 
+  // Links curtos (pedido do usuário, 2026-11-18): a URL longa vira link clicável com o
+  // título do artigo — da lista "Fontes consultadas" da própria mensagem ou do endereço.
+  // Só apresentação: o texto gravado e o "copiar" continuam com a URL completa.
+  // Mesma função em radar.html (tela interna).
+  function textoComLinksCurtos(texto) {
+    const bruto = String(texto ?? '');
+    const chave = (url) => { try { return decodeURI(url); } catch (_) { return url; } };
+    const RE_FONTE = /^- (.+?) — (https?:\/\/\S+?)( — .*)?$/;
+    const titulos = new Map();
+    for (const linha of bruto.split('\n')) {
+      const f = linha.match(RE_FONTE);
+      if (f) titulos.set(chave(f[2]), f[1].trim());
+    }
+    const tituloDe = (url) => {
+      if (titulos.has(chave(url))) return titulos.get(chave(url));
+      try {
+        const u = new URL(url);
+        const ultimo = decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || '');
+        const base = ultimo.replace(/^\d+-/, '').replace(/[-_]+/g, ' ').trim() || u.hostname;
+        return base.length > 70 ? `${base.slice(0, 67).trimEnd()}…` : base;
+      } catch (_) { return url; }
+    };
+    const link = (url, rotulo) => `<a class="link-curto" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(url)}">${escapeHtml(rotulo)}</a>`;
+    return bruto.split('\n').map((linha) => {
+      const f = linha.match(RE_FONTE);
+      if (f) return `- ${link(f[2], f[1].trim())}${escapeHtml(f[3] || '')}`;
+      let html = '';
+      let pos = 0;
+      for (const m of linha.matchAll(/https?:\/\/[^\s<>"'`)\]]+/g)) {
+        const url = m[0].replace(/[.,;:!?]+$/, '');
+        html += escapeHtml(linha.slice(pos, m.index)) + link(url, tituloDe(url));
+        pos = m.index + url.length;
+      }
+      return html + escapeHtml(linha.slice(pos));
+    }).join('\n');
+  }
+
   function text(value, fallback = '-') {
     const s = String(value ?? '').trim();
     return s || fallback;
@@ -230,11 +267,54 @@
       state.token = '';
       showAccess('Sessao expirada. Entre novamente.');
     }
-    if (!res.ok) throw new Error(body.error || `Erro ${res.status}`);
+    if (!res.ok) {
+      const erro = new Error(body.error || `Erro ${res.status}`);
+      erro.status = res.status;
+      throw erro;
+    }
     return body;
   }
 
   const ext = (path) => `/api/ia-service-externo${path}`;
+
+  // Queda de conexão durante a pesquisa (proxy, Wi-Fi, VPN) não é falha da pesquisa:
+  // o servidor segue trabalhando e grava a resposta (achado real, #036996, 2026-11-18:
+  // a tela desistiu e a resposta apareceu depois). Erro com código HTTP de aplicação
+  // (validação, permissão, falha da IA) continua sendo falha na hora.
+  const ESPERA_MAX_APOS_QUEDA_MS = 10 * 60 * 1000;
+  function quedaDeConexao(err) {
+    return !err?.status || [502, 503, 504].includes(err.status);
+  }
+
+  async function contarRespostasIA(atendimentoId) {
+    try {
+      const msgs = await request(ext(`/atendimentos/${encodeURIComponent(atendimentoId)}/mensagens`));
+      return Array.isArray(msgs) ? msgs.filter((m) => m.papel === 'assistant').length : null;
+    } catch (_) { return null; }
+  }
+
+  // Acompanha o andamento no servidor até surgir uma resposta nova da IA (true) ou o
+  // servidor confirmar que o turno acabou sem ela (false). Nunca reenvia a pergunta.
+  async function aguardarRespostaAposQueda(atendimentoId, respostasAntes) {
+    const limite = Date.now() + ESPERA_MAX_APOS_QUEDA_MS;
+    let semAndamento = 0;
+    while (Date.now() < limite) {
+      await new Promise((r) => setTimeout(r, 3000));
+      let etapas;
+      try {
+        const p = await request(ext(`/atendimentos/${encodeURIComponent(atendimentoId)}/progresso`));
+        etapas = Array.isArray(p?.etapas) ? p.etapas : [];
+      } catch (_) { continue; } // servidor ainda inalcançável: segue esperando
+      const pronta = etapas.some((e) => String(e?.texto ?? e).startsWith(ETAPA_RESPOSTA_PRONTA));
+      if (!pronta && etapas.length) { semAndamento = 0; continue; }
+      if (!pronta && ++semAndamento < 2) continue;
+      const agora = await contarRespostasIA(atendimentoId);
+      if (agora != null && respostasAntes != null && agora > respostasAntes) return true;
+      if (agora != null && respostasAntes == null && pronta) return true;
+      if (!pronta && agora != null) return false; // turno encerrado no servidor sem resposta nova
+    }
+    return false;
+  }
 
   function applyTheme(value) {
     const theme = value || localStorage.getItem(THEME_KEY) || 'system';
@@ -1249,7 +1329,7 @@
             ${menuHtml}
             <div class="message-head"><strong>${escapeHtml(messageRole(m))}</strong><span>${escapeHtml(formatDateTime(messageTimestamp(m)))}</span></div>
             ${attachmentsHtml}
-            <div class="message-text">${escapeHtml(messageText(m))}</div>
+            <div class="message-text">${textoComLinksCurtos(messageText(m))}</div>
             ${avisosFonteHtml}
             ${acoesHtml}
             ${estadoEnvio}
@@ -1550,12 +1630,9 @@
     showChatStatus('Pesquisando e analisando o chamado com a IA...', atendimentoId);
     const pararProgresso = acompanharProgresso(atendimentoId, 'Pesquisando e analisando o chamado com a IA...');
     let concluiu = false;
-    try {
-      const anexoIds = await uploadPendingFiles(atendimentoId);
-      await request(ext(`/atendimentos/${encodeURIComponent(atendimentoId)}/investigar`), {
-        method: 'POST',
-        body: JSON.stringify({ texto: textoEnviado, anexoIds, anexosComoContexto: anexoIds.length > 0, origemAcao: 'texto_livre' }),
-      });
+    let enviouPergunta = false;
+    let respostasAntes = null;
+    const concluirEnvio = async () => {
       removerPendente(atendimentoId, pendente._chave);
       if (atendimentoId === state.atendimentoId) {
         state.pendingFiles = [];
@@ -1565,7 +1642,21 @@
         renderAllCaseData();
       }
       concluiu = true;
+    };
+    try {
+      const anexoIds = await uploadPendingFiles(atendimentoId);
+      respostasAntes = await contarRespostasIA(atendimentoId);
+      enviouPergunta = true;
+      await request(ext(`/atendimentos/${encodeURIComponent(atendimentoId)}/investigar`), {
+        method: 'POST',
+        body: JSON.stringify({ texto: textoEnviado, anexoIds, anexosComoContexto: anexoIds.length > 0, origemAcao: 'texto_livre' }),
+      });
+      await concluirEnvio();
     } catch (err) {
+      if (enviouPergunta && quedaDeConexao(err) && await aguardarRespostaAposQueda(atendimentoId, respostasAntes)) {
+        await concluirEnvio();
+        return;
+      }
       pendente._pendente = false;
       pendente._falhou = true;
       pendente._erro = err.message;
@@ -1625,6 +1716,17 @@
     showChatStatus('Pesquisando no histórico completo do chamado...', atendimentoId);
     const pararProgresso = acompanharProgresso(atendimentoId, 'Pesquisando no histórico completo do chamado...');
     let concluiu = false;
+    let enviouPergunta = false;
+    let respostasAntes = null;
+    const ticketId = state.selected.id;
+    const concluirPesquisa = async () => {
+      if (atendimentoId === state.atendimentoId) {
+        state.trilhaExpandida = new Set();
+        await Promise.allSettled([loadMessages(), loadResearch(ticketId), loadDossier(), loadInvestigations(), loadTrilha()]);
+        renderAllCaseData();
+      }
+      concluiu = true;
+    };
     try {
       const copia = await request(ext(`/radar/chamados/${encodeURIComponent(state.selected.id)}/anexos-softexpert/sincronizar`), {
         method: 'POST',
@@ -1635,6 +1737,8 @@
       await loadLocalAttachments();
       renderAvisoAnexos();
       const anexoIds = state.localAttachments.map((a) => a.id).filter(Boolean);
+      respostasAntes = await contarRespostasIA(atendimentoId);
+      enviouPergunta = true;
       await request(ext(`/atendimentos/${encodeURIComponent(atendimentoId)}/investigar`), {
         method: 'POST',
         body: JSON.stringify({
@@ -1645,11 +1749,12 @@
           origemAcao: 'botao_pesquisar',
         }),
       });
-      state.trilhaExpandida = new Set();
-      await Promise.allSettled([loadMessages(), loadResearch(state.selected.id), loadDossier(), loadInvestigations(), loadTrilha()]);
-      renderAllCaseData();
-      concluiu = true;
+      await concluirPesquisa();
     } catch (err) {
+      if (enviouPergunta && quedaDeConexao(err) && await aguardarRespostaAposQueda(atendimentoId, respostasAntes)) {
+        await concluirPesquisa();
+        return;
+      }
       toast(`Nao foi possivel pesquisar solucoes: ${err.message}`);
     } finally {
       pararProgresso();

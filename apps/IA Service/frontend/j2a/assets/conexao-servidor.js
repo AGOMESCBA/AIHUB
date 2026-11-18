@@ -138,6 +138,10 @@
     const doModulo = /^\/api\/(ia-service(?:-externo|-publico)?(?:\/|$)|version$)/.test(url.pathname);
     if (url.origin !== location.origin || (!inicial && !doModulo)) return originalFetch(input, options);
     const metodo = (options?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    // A pesquisa da IA é um pedido longo: se a conexão dele cair, a tela acompanha o
+    // andamento no servidor e decide sozinha (2026-11-18, #036996). Queda real do
+    // servidor continua detectada pelas leituras (andamento, /api/version).
+    if (metodo === 'POST' && /\/investigar$/.test(url.pathname)) return originalFetch(input, options);
     // Downloads e operações longas mantêm seus prazos explícitos e não são repetidos.
     const leitura = metodo === 'GET' && !/download|relatorio\.pdf|anexos-softexpert/.test(url.pathname);
     if (!leitura) return consultar(input, options, false);
