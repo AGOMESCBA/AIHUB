@@ -3102,6 +3102,12 @@ class IACWhatsAppService extends EventEmitter {
     const apresentacao = responseFormatter.montarApresentacaoResposta(respostaTexto, resultado, intent, { sugerirComparacao: false });
     const partes = [];
     if (pergunta) partes.push(`❓ *Pergunta:* ${pergunta}`);
+    // Periodo usado na consulta, logo abaixo da pergunta (pedido do usuario, 18/11/2026).
+    // Informativo: se falhar ou nao houver periodo confiavel, o cabecalho fica como antes.
+    try {
+      const linhaPeriodo = responseFormatter.linhaPeriodoConsulta(resultado, intent);
+      if (linhaPeriodo && partes.length) partes[partes.length - 1] += `\n${linhaPeriodo}`;
+    } catch (_) {}
 
     let corpo = respostaTexto;
     if (apresentacao?.resumo) {

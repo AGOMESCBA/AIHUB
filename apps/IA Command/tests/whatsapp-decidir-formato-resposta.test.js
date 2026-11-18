@@ -98,6 +98,30 @@ async function rodar() {
     assert(decisao.texto.includes('Leitura rapida'), 'cabecalho deve incluir o resumo/leitura rapida');
   }
 
+  // 4a. Periodo informativo logo abaixo da pergunta: 1 dia, intervalo, comparativo e ausente
+  {
+    const rows = [{ cliente: 'A', faturamento: 1000 }, { cliente: 'B', faturamento: 2000 }];
+    const intent = { _mensagemOriginal: 'faturamento por cliente filial 010104' };
+    const dia = await ServiceProto._decidirFormatoResposta.call(fakeSelf,
+      { tipo: 'sucesso_ai_sql', rows, periodo: { dataInicio: '20261114', dataFim: '20261114' } },
+      intent, 'Fake resposta da IA', { empresaId: EMPRESA_TESTE, sender: SENDER_TESTE + '_per1' });
+    assert(dia.texto.includes('❓ *Pergunta:* faturamento por cliente filial 010104\n🗓️ *Período:* 14/11/2026'), 'periodo de 1 dia deve vir logo abaixo da pergunta');
+
+    const intervalo = await ServiceProto._decidirFormatoResposta.call(fakeSelf,
+      { tipo: 'sucesso_ai_sql', rows, periodo: { dataInicio: '20261101', dataFim: '20261118' } },
+      intent, 'Fake resposta da IA', { empresaId: EMPRESA_TESTE, sender: SENDER_TESTE + '_per2' });
+    assert(intervalo.texto.includes('🗓️ *Período:* 01/11/2026 a 18/11/2026'), 'intervalo deve mostrar inicio e fim');
+
+    const comparativo = await ServiceProto._decidirFormatoResposta.call(fakeSelf,
+      { tipo: 'sucesso_ai_sql', rows, periodo: { dataInicio: '20261101', dataFim: '20251130', periodos_comparativos: [{}, {}] } },
+      intent, 'Fake resposta da IA', { empresaId: EMPRESA_TESTE, sender: SENDER_TESTE + '_per3' });
+    assert(!comparativo.texto.includes('Período:'), 'comparativo com 2 periodos nao deve mostrar a linha');
+
+    const semPeriodo = await ServiceProto._decidirFormatoResposta.call(fakeSelf,
+      { tipo: 'sucesso_ai_sql', rows }, intent, 'Fake resposta da IA', { empresaId: EMPRESA_TESTE, sender: SENDER_TESTE + '_per4' });
+    assert(!semPeriodo.texto.includes('Período:'), 'sem periodo a resposta fica como antes');
+  }
+
   // 4b. ANTI-DUPLICACAO: quando o texto de entrada ja vem passado por
   // humanizarResposta/textoApresentacao (fluxo real via _formatarRespostaResultado), o
   // resumo/leitura-rapida ja esta embutido no FINAL desse texto — o cabecalho novo nao pode

@@ -1136,6 +1136,23 @@ function _sugestaoComparacaoHumana(resultado, intent, opts) {
   return 'Posso comparar com o periodo anterior. Se preferir, peca "comparar com o mesmo periodo do ano passado".';
 }
 
+// Linha informativa do periodo efetivamente usado na consulta (ex: "🗓️ Periodo: 14/11/2026"),
+// para o usuario saber a data assumida quando nao informou periodo na pergunta.
+// Puramente informativa: qualquer duvida (sem periodo, datas invalidas, comparativo com
+// mais de um periodo — ver bug 08/09/2026 em montarApresentacaoResposta) retorna '' e a
+// resposta segue exatamente como antes.
+function linhaPeriodoConsulta(resultado, intent) {
+  const periodo = resultado?.periodo || intent?._periodoCanonicoResolvido || intent?.periodo;
+  if (!periodo || typeof periodo !== 'object') return '';
+  if (String(periodo.tipo || '').includes('comparacao')) return '';
+  if (Array.isArray(periodo.periodos_comparativos) && periodo.periodos_comparativos.length > 1) return '';
+  const ini = String(periodo.dataInicio || periodo.data_inicio || '');
+  const fim = String(periodo.dataFim || periodo.data_fim || '');
+  if (!/^\d{8}$/.test(ini) || !/^\d{8}$/.test(fim) || ini > fim) return '';
+  const texto = ini === fim ? _fmtData(ini) : `${_fmtData(ini)} a ${_fmtData(fim)}`;
+  return `🗓️ *Período:* ${texto}`;
+}
+
 function montarApresentacaoResposta(texto, resultado, intent, opts = {}) {
   if (typeof texto !== 'string' || !texto.trim()) return null;
   const rows = Array.isArray(resultado?.rows) ? resultado.rows : [];
@@ -1443,7 +1460,7 @@ function detectarDimensaoCategorica(firstRow) {
 }
 
 module.exports = {
-  formatar, formatarAiSqlLocal, montarApresentacaoResposta, textoApresentacao,
+  formatar, formatarAiSqlLocal, montarApresentacaoResposta, textoApresentacao, linhaPeriodoConsulta,
   normalizarAgrupamentosPais, _extrairMes, _extrairAno, detectarDimensaoCategorica,
   rodapeFiltroSeguranca,
   // Usados tambem por modules/whatsapp/whatsapp-attachment-builder.js (geracao de PDF/Excel) —
