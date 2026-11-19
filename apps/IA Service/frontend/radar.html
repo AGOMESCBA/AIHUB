@@ -379,6 +379,12 @@
     .composer-row textarea::placeholder { color:var(--wa-text-tertiary); }
     .composer-btn { width:40px; height:40px; border-radius:10px; border:1px solid var(--wa-border); background:var(--wa-panel); color:var(--wa-text-secondary); cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
     .composer-btn.enviar { background:var(--wa-accent); border-color:var(--wa-accent); color:#04140f; }
+    .composer-btn.pesquisar { background:var(--wa-accent); border-color:var(--wa-accent); }
+    .composer-btn.pesquisar:disabled { opacity:.45; cursor:not-allowed; }
+    /* Chamado sem resposta da Jade: brilho curto nos botões de pesquisa ao abrir. */
+    .chat-header-pesquisar.destaque, .composer-btn.pesquisar.destaque { animation:pesquisar-destaque 1.5s ease-in-out 4; }
+    @keyframes pesquisar-destaque { 0%, 100% { box-shadow:0 0 0 0 rgba(0,217,163,0); } 50% { box-shadow:0 0 0 6px rgba(0,217,163,.3), 0 0 14px rgba(0,217,163,.5); } }
+    @media (prefers-reduced-motion: reduce) { .chat-header-pesquisar.destaque, .composer-btn.pesquisar.destaque { animation:none; box-shadow:0 0 0 3px rgba(0,217,163,.45); } }
     .composer-hint { font-size:11px; color:var(--wa-text-tertiary); margin-top:5px; }
 
     .pesquisa-tabs { flex:none; display:flex; gap:4px; padding:8px 12px; border-bottom:1px solid var(--wa-border); background:rgba(0,0,0,.12); }
@@ -647,8 +653,10 @@
                 <div class="composer-row">
                   <input type="file" id="anexo-input" multiple style="display:none" accept=".txt,.log,.xml,.json,.sql,.csv,.docx,.xlsx,.pptx,.prw,.tlpp,.ch,.js,.mjs,.cjs,.ts,.jsx,.tsx,.py,.cs,.java,.php,.html,.css,.vue,.go,.rb,.kt,.sh,.ps1,.png,.jpg,.jpeg,.webp,.pdf">
                   <button class="composer-btn" type="button" title="Anexar arquivo" onclick="document.getElementById('anexo-input').click()">📎</button>
+                  <!-- Mesma pesquisa do botão do topo, ao alcance de quem está digitando (2026-11-19). -->
+                  <button class="composer-btn pesquisar" id="composer-pesquisar" type="button" aria-label="Pesquisar o chamado com a Jade" onclick="pesquisarSolucoes()">🔎</button>
                   <button class="retorno-button" id="retorno-btn" type="button">Retorno</button>
-                  <textarea id="composer-texto" placeholder="Descreva o problema, cole a mensagem de erro, ou responda à investigação..."></textarea>
+                  <textarea id="composer-texto" placeholder="Descreva o problema, cole a mensagem de erro, responda à Jade ou use 🔎 para ela pesquisar o chamado..."></textarea>
                   <button class="composer-btn enviar" type="button" title="Enviar" onclick="enviarMensagem()">➤</button>
                 </div>
                 <div class="composer-hint">Ctrl+Enter para enviar · anexe prints, logs e fonte relacionados ao problema</div>
@@ -2565,6 +2573,7 @@
           });
           if (direcao === 'out') perguntaAnterior = m.conteudo;
         }
+        if (aindaEhOAtual) destacarPesquisarSeNuncaPesquisado(atendimentoId, temRespostaIa);
         return temRespostaIa;
       } catch (err) {
         showError('Não foi possível carregar as mensagens: ' + err.message);
@@ -2666,8 +2675,35 @@
       if (atendimentoIdDoTurno !== atendimentoAtualId) return;
       enviando = atendimentosEmProcessamento.has(atendimentoAtualId);
       if (enviando) showTyping(mensagemTyping); else hideTyping();
-      const btnPesquisar = document.getElementById('chat-header-pesquisar');
-      if (btnPesquisar) btnPesquisar.disabled = enviando;
+      botoesPesquisar().forEach(b => { b.disabled = enviando; });
+      atualizarDicaPesquisar();
+    }
+
+    // Pesquisar existe no topo e no campo de mensagem (2026-11-19: quem digita não
+    // via o do topo). Os dois são o mesmo botão: estado e dica juntos, para nunca
+    // disparar duas pesquisas seguidas.
+    function botoesPesquisar() {
+      return ['chat-header-pesquisar', 'composer-pesquisar'].map(id => document.getElementById(id)).filter(Boolean);
+    }
+
+    function atualizarDicaPesquisar() {
+      const ocupado = !!atendimentoAtualId && atendimentosEmProcessamento.has(atendimentoAtualId);
+      const comTexto = !!document.getElementById('composer-texto')?.value.trim();
+      const dica = ocupado ? 'A Jade já está pesquisando este chamado...'
+        : comTexto ? 'Pesquisar o chamado com a Jade. A pesquisa não usa o que você escreveu: para a Jade considerar, use Enviar ➤'
+          : 'Pesquisar o chamado com a Jade: ela lê o histórico e os anexos e busca a solução, sem precisar digitar';
+      botoesPesquisar().forEach(b => { b.title = dica; });
+    }
+
+    // Chamado ainda sem resposta da Jade: as lupas brilham alguns segundos ao abrir,
+    // uma vez por chamado (sem piscar o tempo todo).
+    let destaquePesquisarFeito = null;
+    function destacarPesquisarSeNuncaPesquisado(atendimentoId, temRespostaIa) {
+      if (destaquePesquisarFeito === atendimentoId || atendimentosEmProcessamento.has(atendimentoId)) return;
+      destaquePesquisarFeito = atendimentoId;
+      if (temRespostaIa) return;
+      botoesPesquisar().forEach(b => b.classList.add('destaque'));
+      setTimeout(() => botoesPesquisar().forEach(b => b.classList.remove('destaque')), 6000);
     }
 
     // Aproximação cosmética do detector real (technical-research-service.js
@@ -2758,12 +2794,12 @@
       const empresaId = empresaIdAtual();
       const atendimentoIdDoTurno = atendimentoAtualId;
       const chamadoIdDoTurno = chamadoSelecionadoId;
-      const btn = document.getElementById('chat-header-pesquisar');
+
 
       addBubble({ direcao: 'out', texto: TEXTO_PESQUISAR_SOLUCOES, criadoEm: new Date().toISOString(), papel: 'user' });
       atendimentosEmProcessamento.add(atendimentoIdDoTurno);
       _atualizarIndicadorProcessamento(atendimentoIdDoTurno, 'A Jade está pesquisando…');
-      if (btn && atendimentoIdDoTurno === atendimentoAtualId) btn.disabled = true;
+      if (atendimentoIdDoTurno === atendimentoAtualId) botoesPesquisar().forEach(b => { b.disabled = true; });
 
       const pararRascunho = acompanharRascunho(atendimentoIdDoTurno, empresaId);
       const qs = qsEmpresa(empresaId);
@@ -2818,10 +2854,12 @@
         }
       } finally {
         pararRascunho();
-        if (btn && atendimentoIdDoTurno === atendimentoAtualId) btn.disabled = false;
+        if (atendimentoIdDoTurno === atendimentoAtualId) { botoesPesquisar().forEach(b => { b.disabled = false; }); atualizarDicaPesquisar(); }
       }
     }
 
+    document.getElementById('composer-texto').addEventListener('input', atualizarDicaPesquisar);
+    atualizarDicaPesquisar();
     document.getElementById('composer-texto').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && e.ctrlKey) {
         e.preventDefault();

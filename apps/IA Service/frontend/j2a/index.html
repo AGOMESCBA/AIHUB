@@ -280,6 +280,8 @@
               <form id="composer" class="composer">
                 <label class="attach-button" for="file-input" title="Anexar arquivo">📎</label>
                 <input id="file-input" type="file" multiple hidden>
+                <!-- Mesma pesquisa do 🔎 do topo, ao alcance de quem está digitando (2026-11-19). -->
+                <button id="composer-research-btn" class="icon-only" type="button" aria-label="Pesquisar o chamado com a Jade"><span class="loader" aria-hidden="true"></span><span class="icon-label" aria-hidden="true">🔎</span></button>
                 <div class="composer-main">
                   <div id="pending-files" class="pending-files"></div>
                   <textarea id="message-input" rows="1" placeholder="Digite sua mensagem..." aria-label="Mensagem para a Jade"></textarea>

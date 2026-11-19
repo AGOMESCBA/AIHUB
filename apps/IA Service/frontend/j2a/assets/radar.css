@@ -1169,14 +1169,14 @@ button.loading .loader { display: block; }
 .message-source-warnings p + p { margin-top: 4px; }
 .composer {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  grid-template-columns: 40px 40px minmax(0, 1fr) 40px;
   align-items: end;
   gap: 8px;
   padding: 10px 16px;
   border-top: 1px solid var(--line);
 }
 /* Anexar e Enviar: circulos fixos, nunca esticam com a altura da mensagem. */
-.composer > .attach-button, .composer > #send-btn { box-sizing: border-box; width: 40px; height: 40px; padding: 0; }
+.composer > .attach-button, .composer > #send-btn, .composer > #composer-research-btn { box-sizing: border-box; width: 40px; height: 40px; padding: 0; }
 .attach-button {
   cursor: pointer;
   display: grid;
@@ -1642,8 +1642,10 @@ body.col-resizing { cursor: col-resize; user-select: none; }
   .composer { padding: 10px 12px; }
   .composer textarea { max-height: clamp(40px, calc(var(--chat-vh, 100dvh) * .18), 120px); }
   .pending-files { overflow-wrap: anywhere; max-height: 60px; overflow-y: auto; }
-  .composer > .attach-button, .composer > #send-btn { width: 44px; height: 44px; }
-  .composer { grid-template-columns: 44px minmax(0, 1fr) 44px; }
+  .composer > .attach-button, .composer > #send-btn, .composer > #composer-research-btn { width: 44px; height: 44px; }
+  .composer { grid-template-columns: 44px 44px minmax(0, 1fr) 44px; }
+  /* Celular: a pesquisa fica só no campo de mensagem. */
+  #research-btn { display: none !important; }
   .risk-toolbar { grid-template-columns: 1fr; }
   .risk-layout, .risk-layout.consultants-collapsed { grid-template-columns: 1fr; min-height: 360px; }
   .risk-layout.consultants-collapsed .risk-consultants-head { flex-direction: row; justify-content: space-between; padding: 9px 12px; }
@@ -1810,3 +1812,19 @@ body.col-resizing { cursor: col-resize; user-select: none; }
 .message-text .item-lista { display: block; position: relative; padding-left: 18px; margin: 6px 0 0; }
 .message-text .item-lista::before { content: "•"; position: absolute; left: 4px; }
 .message-text .fim-lista { display: block; margin-top: 8px; }
+
+/* Pesquisar no campo de mensagem (2026-11-19): mesma cor do Enviar, spinner
+   claro como o do topo (setBusy só alterna .loading em botões icon-only). */
+#composer-research-btn { position: relative; }
+#composer-research-btn .loader { width: 16px; height: 16px; border-color: rgba(255, 255, 255, .3); border-top-color: #fff; position: absolute; top: 50%; left: 50%; margin: -8px 0 0 -8px; }
+#composer-research-btn.loading .icon-label { visibility: hidden; }
+#composer-research-btn:disabled { opacity: .5; cursor: not-allowed; }
+/* Chamado sem resposta da Jade: brilho curto nas lupas ao abrir. */
+#research-btn.destaque, #composer-research-btn.destaque { animation: pesquisar-destaque 1.5s ease-in-out 4; }
+@keyframes pesquisar-destaque {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 107, 214, 0); }
+  50% { box-shadow: 0 0 0 6px rgba(0, 107, 214, .35), 0 0 14px rgba(0, 107, 214, .55); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #research-btn.destaque, #composer-research-btn.destaque { animation: none; box-shadow: 0 0 0 3px rgba(0, 107, 214, .45); }
+}

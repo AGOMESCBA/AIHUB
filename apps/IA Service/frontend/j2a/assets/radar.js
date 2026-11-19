@@ -782,9 +782,9 @@
     const composer = $('composer');
     if (composer) composer.classList.toggle('somente-leitura', ro);
     const msg = $('message-input');
-    if (msg) msg.placeholder = ro ? 'Chamado encerrado: somente consulta.' : 'Digite sua mensagem...';
-    const pesquisar = $('research-btn');
-    if (pesquisar) { pesquisar.disabled = ro || pesquisar.disabled; pesquisar.title = ro ? 'Chamado encerrado: pesquisa indisponivel' : 'Pesquisar Soluções'; }
+    if (msg) msg.placeholder = ro ? 'Chamado encerrado: somente consulta.' : placeholderMensagem();
+    botoesPesquisar().forEach((pesquisar) => { pesquisar.disabled = ro || pesquisar.disabled; });
+    atualizarDicaPesquisar();
     const aviso = $('case-readonly-banner');
     if (aviso) aviso.hidden = !ro;
   }
@@ -795,9 +795,42 @@
     if (el) el.textContent = ticket?.numero ? `#${ticket.numero} · Fila` : 'Fila de chamados';
   }
 
+  // Pesquisar existe no topo e no campo de mensagem (2026-11-19: quem digita não
+  // via o do topo). Os dois são o mesmo botão: estado, dica e trava juntos, para
+  // nunca disparar duas pesquisas seguidas.
+  function botoesPesquisar() {
+    return [$('research-btn'), $('composer-research-btn')].filter(Boolean);
+  }
+
+  function placeholderMensagem() {
+    return window.matchMedia('(max-width: 900px)').matches ? 'Digite ou toque em 🔎' : 'Digite sua mensagem ou use 🔎 para a Jade pesquisar';
+  }
+
+  function atualizarDicaPesquisar() {
+    const ocupado = !!state.atendimentoId && state.processing.has(state.atendimentoId);
+    const comTexto = !!$('message-input')?.value.trim();
+    const dica = state.somenteLeitura ? 'Chamado encerrado: pesquisa indisponível'
+      : ocupado ? 'A Jade já está pesquisando este chamado...'
+        : comTexto ? 'Pesquisar o chamado com a Jade. A pesquisa não usa o que você escreveu: para a Jade considerar, use Enviar ➤'
+          : 'Pesquisar o chamado com a Jade: ela lê o histórico e os anexos e busca a solução, sem precisar digitar';
+    botoesPesquisar().forEach((b) => { b.title = dica; });
+  }
+
+  // Chamado ainda sem resposta da Jade: as lupas brilham alguns segundos ao abrir,
+  // uma vez por chamado (sem piscar o tempo todo).
+  function destacarPesquisarSeNuncaPesquisado() {
+    const id = state.atendimentoId;
+    if (!id || state.somenteLeitura || state.processing.has(id) || state.destaquePesquisarFeito === id) return;
+    state.destaquePesquisarFeito = id;
+    if ((state.messages || []).some((m) => m.papel === 'assistant')) return;
+    botoesPesquisar().forEach((b) => b.classList.add('destaque'));
+    setTimeout(() => botoesPesquisar().forEach((b) => b.classList.remove('destaque')), 6000);
+  }
+
   function syncBotoesAcao() {
     const ocupado = !!state.atendimentoId && state.processing.has(state.atendimentoId);
-    setBusy($('research-btn'), ocupado);
+    botoesPesquisar().forEach((b) => setBusy(b, ocupado));
+    atualizarDicaPesquisar();
     // Envio: animação da seta "voando" no lugar do texto "Enviando" (que não
     // cabia no botão de 40px).
     const enviar = $('send-btn');
@@ -1009,6 +1042,7 @@
     if (!state.atendimentoId) return;
     state.messages = await request(ext(`/atendimentos/${encodeURIComponent(state.atendimentoId)}/mensagens`));
     renderMessages();
+    destacarPesquisarSeNuncaPesquisado();
   }
 
   async function loadLocalAttachments() {
@@ -3033,8 +3067,12 @@
       $('toggle-header-btn').title = collapsed ? 'Mostrar detalhes do chamado' : 'Ocultar detalhes do chamado';
     });
     $('research-btn').addEventListener('click', researchSolutions);
+    $('composer-research-btn').addEventListener('click', researchSolutions);
     $('composer').addEventListener('submit', sendMessage);
     $('message-input').addEventListener('input', ajustarAlturaMensagem);
+    $('message-input').addEventListener('input', atualizarDicaPesquisar);
+    $('message-input').placeholder = placeholderMensagem();
+    atualizarDicaPesquisar();
     window.addEventListener('resize', ajustarAlturaMensagem);
     window.addEventListener('iaservice:viewportchange', ajustarAlturaMensagem);
     $('file-input').addEventListener('change', (event) => {
