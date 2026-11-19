@@ -27,6 +27,9 @@ const MIME_PERMITIDOS = new Set([
   // Word e Excel modernos (2026-10-21): texto extraído em extracao-conteudo.js.
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  // PowerPoint moderno (2026-11-19, #036982: prints do erro em .pptx eram recusados
+  // na cópia do SoftExpert). Sem macro: .pptm continua fora.
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ]);
 
 // Executáveis e binários continuam proibidos. Scripts textuais (.js, .sh,

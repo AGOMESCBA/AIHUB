@@ -766,7 +766,7 @@ function _ehDocumentoTextual(anexo, conteudo) {
   const nome = anexo.nomeOriginal || '';
   const mime = String(anexo.mimeType || '').toLowerCase();
   if (LINGUAGENS_NAO_DOCUMENTO.has(ling) || /\.log$/i.test(nome)) return false;
-  if (ling === 'pdf' || /pdf|msword|wordprocessingml|opendocument|rtf/.test(mime) || /\.(pdf|docx?|odt|rtf|md)$/i.test(nome)) return true;
+  if (ling === 'pdf' || /pdf|msword|wordprocessingml|presentationml|opendocument|rtf/.test(mime) || /\.(pdf|docx?|pptx|odt|rtf|md)$/i.test(nome)) return true;
   if ((mime === 'text/plain' || /\.txt$/i.test(nome)) && !ling) return !_pareceLog(conteudo);
   return false;
 }
@@ -1200,9 +1200,9 @@ function montarContextoInvestigacao({
     const referenciaImagem = !anexosComoContexto && _pareceReferenciaImagem(mensagemAtual);
     const referenciaVisualImplicita = !anexosComoContexto && _pareceReferenciaVisualImplicita(mensagemAtual);
     const precisaImagem = isImagem && (atual || nomeCitado || referenciaImagem || referenciaVisualImplicita);
-    // Word só com prints (sem texto) segue o caminho visual do PDF em vez de ser descartado.
-    const docxSoImagens = !anexo.conteudoExtraido && permitirImagens && pdfVisual.ehDocx(anexo);
-    const conteudo = anexo.conteudoExtraido || (docxSoImagens ? '[Word sem texto extraivel: o conteudo segue como imagem]' : '');
+    // Word/PowerPoint só com prints (sem texto) segue o caminho visual do PDF em vez de ser descartado.
+    const docxSoImagens = !anexo.conteudoExtraido && permitirImagens && pdfVisual.ehOfficeComImagens(anexo);
+    const conteudo = anexo.conteudoExtraido || (docxSoImagens ? `[${pdfVisual.ehPptx(anexo) ? 'PowerPoint' : 'Word'} sem texto extraivel: o conteudo segue como imagem]` : '');
     const anexoCodigoCustomizacao = !!anexo.eCodigo || /\.(prw|tlpp|prx|aph|ch)$/i.test(anexo.nomeOriginal || '');
     const score = (forcado ? 120 : 0)
       + 12 // evidência do caso: passa do corte de relevância (10) mesmo sem termo em comum
@@ -1250,8 +1250,10 @@ function montarContextoInvestigacao({
 
     const preparado = _prepararConteudoAnexo(anexo, _ehDocumentoTextual(anexo, conteudo) ? termosDocumento : termos);
     const ehPdf = anexo.linguagemDetectada === 'pdf' || anexo.mimeType === 'application/pdf' || /\.pdf$/i.test(anexo.nomeOriginal || '');
-    const ehWord = pdfVisual.ehDocx(anexo);
-    const enviarPdfVisual = permitirImagens && (ehPdf || ehWord) && pdfVisual.detectarNecessidadeVisualPdf({ conteudoExtraido: conteudo, pergunta: mensagemAtual, nomeOriginal: anexo.nomeOriginal });
+    const ehWord = pdfVisual.ehOfficeComImagens(anexo);
+    // Apresentação em chamado é visual por natureza: os prints sempre seguem, mesmo com título/texto no slide.
+    const enviarPdfVisual = permitirImagens && (ehPdf || ehWord)
+      && (pdfVisual.ehPptx(anexo) || pdfVisual.detectarNecessidadeVisualPdf({ conteudoExtraido: conteudo, pergunta: mensagemAtual, nomeOriginal: anexo.nomeOriginal }));
     const paginasPdfSelecionadas = !enviarPdfVisual ? []
       : ehWord ? Array.from({ length: pdfVisual.MAX_IMAGENS_DOCX }, (_, i) => i + 1)
         : pdfVisual.selecionarPaginasPdf({ conteudoExtraido: conteudo, pergunta: mensagemAtual });

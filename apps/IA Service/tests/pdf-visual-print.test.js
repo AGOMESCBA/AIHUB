@@ -44,3 +44,31 @@ test('Word só com prints: extrai as imagens de word/media na ordem e ignora for
   assert.equal(ehDocx({ nomeOriginal: 'Tela.DOCX' }), true);
   assert.equal((await imagensDoDocumentoVisual(buffer, { nomeOriginal: 'tela.docx' }, [1])).imagens.length, 1);
 });
+
+test('PowerPoint com prints (#036982): imagens na ordem dos slides e texto dos slides extraído', async () => {
+  const { imagensDoDocumentoVisual, ehPptx } = require('../backend/services/pdf-visual-service');
+  const { extrairConteudo } = require('../backend/services/extracao-conteudo');
+  const JSZip = require('jszip');
+  const zip = new JSZip();
+  const rels = alvo => `<Relationships><Relationship Id="rId2" Target="../media/${alvo}"/></Relationships>`;
+  zip.file('ppt/slides/slide1.xml', '<p:sld><a:p><a:r><a:t>Erro &amp; NOTITSEL</a:t></a:r></a:p></p:sld>');
+  zip.file('ppt/slides/slide2.xml', '<p:sld/>');
+  zip.file('ppt/slides/_rels/slide1.xml.rels', rels('image9.png'));
+  zip.file('ppt/slides/_rels/slide2.xml.rels', rels('image1.png'));
+  zip.file('ppt/media/image1.png', Buffer.from('slide-2'));
+  zip.file('ppt/media/image9.png', Buffer.from('slide-1'));
+  zip.file('ppt/media/image5.wmf', Buffer.from('wmf'));
+  const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+  assert.equal(ehPptx({ nomeOriginal: 'Erro 01.PPTX' }), true);
+  const r = await imagensDoDocumentoVisual(buffer, { nomeOriginal: 'Erro 01.pptx' }, [1, 2, 3, 4, 5, 6]);
+  assert.equal(r.erro, null);
+  assert.deepEqual(r.imagens.map(i => Buffer.from(i.base64, 'base64').toString()), ['slide-1', 'slide-2']);
+  const ext = await extrairConteudo({ buffer, nomeOriginal: 'Erro 01.pptx', mimeDeclarado: null });
+  assert.equal(ext.linguagemDetectada, 'pptx');
+  assert.match(ext.conteudoExtraido, /## Slide 1\nErro & NOTITSEL/);
+  const soPrint = new JSZip();
+  soPrint.file('ppt/slides/slide1.xml', '<p:sld/>');
+  soPrint.file('ppt/media/image1.png', Buffer.from('print'));
+  const vazio = await extrairConteudo({ buffer: await soPrint.generateAsync({ type: 'nodebuffer' }), nomeOriginal: 'NotitSEl.pptx', mimeDeclarado: null });
+  assert.equal(vazio.conteudoExtraido, null, 'slide só com print não gera texto: segue como imagem');
+});

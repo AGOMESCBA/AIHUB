@@ -212,6 +212,30 @@ async function _extrairDocx(buffer) {
   }
 }
 
+// PowerPoint (.pptx), achado real #036982 (2026-11-19): texto dos slides na ordem;
+// os prints seguem como imagem pelo pdf-visual-service. Só print, sem texto: vazio.
+const MIME_PPTX = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+
+async function _extrairPptx(buffer) {
+  try {
+    const zip = await require('jszip').loadAsync(buffer);
+    const slides = Object.keys(zip.files).filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const textos = [];
+    for (const [i, nome] of slides.entries()) {
+      const xml = await zip.file(nome).async('string');
+      const texto = _decodificarXml(xml
+        .replace(/<a:br\/>|<\/a:p>/g, '\n')
+        .replace(/<[^>]+>/g, ''))
+        .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+      if (texto) textos.push(`## Slide ${i + 1}\n${texto}`);
+    }
+    const texto = _limitarExtracaoPersistida(textos.join('\n\n'));
+    return texto ? `[PowerPoint extraido textualmente]\nObservacao: imagens dos slides seguem para a IA como imagem; o arquivo original permanece preservado.\n\n${texto}` : '';
+  } catch (_) {
+    return '';
+  }
+}
+
 async function _extrairXlsx(buffer) {
   try {
     const ExcelJS = require('exceljs');
@@ -243,6 +267,10 @@ async function extrairConteudo({ buffer, nomeOriginal, mimeDeclarado }) {
     const ehDocx = ext === '.docx';
     const conteudoExtraido = ehDocx ? await _extrairDocx(buffer) : await _extrairXlsx(buffer);
     return { mimeReal: ehDocx ? MIME_DOCX : MIME_XLSX, ehTexto: !!conteudoExtraido, ehImagem: false, conteudoExtraido: conteudoExtraido || null, linguagemDetectada: ehDocx ? 'docx' : 'xlsx', encodingDetectado: null, eCodigo: false };
+  }
+  if (_ehZip(buffer) && ext === '.pptx') {
+    const conteudoExtraido = await _extrairPptx(buffer);
+    return { mimeReal: MIME_PPTX, ehTexto: !!conteudoExtraido, ehImagem: false, conteudoExtraido: conteudoExtraido || null, linguagemDetectada: 'pptx', encodingDetectado: null, eCodigo: false };
   }
   const mimeReal = _detectarMimeReal(buffer, mimeDeclarado, nomeOriginal);
 

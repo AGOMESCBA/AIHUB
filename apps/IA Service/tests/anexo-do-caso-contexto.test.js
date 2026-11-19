@@ -108,6 +108,17 @@ try {
     const semImagens = montar(at, PERGUNTA_GENERICA, { permitirImagens: false });
     assert.ok(omitido(semImagens, 'Transmissao nf 020104.docx'), 'sem permissao de imagem, Word sem texto segue como antes (nao suportado)');
   }
+  {
+    // #036982: "Erro 01.pptx" com um slide so com o print do erro (MIME generico, como chega do SoftExpert).
+    const at = criarAtendimento();
+    anexar(at, 'Erro 01.pptx', '', { mimeType: 'application/octet-stream', linguagem: null });
+    anexar(at, 'Passos.pptx', '[PowerPoint extraido textualmente]\n\n## Slide 1\nCompensação PA x NF com erro NOTITSEL', { mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', linguagem: 'pptx' });
+    const ctx = montar(at, PERGUNTA_GENERICA, { permitirImagens: true });
+    for (const nome of ['Erro 01.pptx', 'Passos.pptx']) {
+      const s = ctx.manifesto.selecionados.find(x => x.nome === nome);
+      assert.ok(s && s.statusEnvio === 'ENVIADA_COMO_IMAGEM', `${nome}: PowerPoint deve levar os prints, com ou sem texto no slide`);
+    }
+  }
   console.log('anexo-do-caso-contexto.test.js: ok (selecao)');
 } catch (err) {
   limparEDesligar();

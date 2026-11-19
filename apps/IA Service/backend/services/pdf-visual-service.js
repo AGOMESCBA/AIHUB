@@ -134,25 +134,57 @@ function ehDocx(anexo = {}) {
   return /\.docx$/i.test(anexo.nomeOriginal || '') || /wordprocessingml/i.test(anexo.mimeType || '');
 }
 
-async function extrairImagensDocx(buffer, paginas = [1]) {
+// PowerPoint com prints (achado real, #036982, 2026-11-19: "Erro 01.pptx" e
+// "NotitSEl.pptx", um slide só com o print do erro, nunca chegavam à IA e ela
+// pediu ao cliente o print que ele já tinha mandado). Mesmo zip do Word, com as
+// imagens em ppt/media/.
+function ehPptx(anexo = {}) {
+  return /\.pptx$/i.test(anexo.nomeOriginal || '') || /presentationml/i.test(anexo.mimeType || '');
+}
+
+function ehOfficeComImagens(anexo = {}) {
+  return ehDocx(anexo) || ehPptx(anexo);
+}
+
+// No PowerPoint a ordem que importa é a dos slides: imagens de cada slide pelos
+// relacionamentos do slide; o que sobrar entra no fim, por nome.
+async function _midiasPptxNaOrdem(zip, midias) {
+  const slides = Object.keys(zip.files)
+    .filter(n => /^ppt\/slides\/_rels\/slide\d+\.xml\.rels$/i.test(n))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const ordem = [];
+  for (const rels of slides) {
+    const xml = await zip.file(rels).async('string');
+    for (const [, alvo] of xml.matchAll(/Target="(?:\.\.\/)?(media\/[^"]+)"/gi)) {
+      const nome = `ppt/${alvo}`;
+      if (midias.includes(nome) && !ordem.includes(nome)) ordem.push(nome);
+    }
+  }
+  return [...ordem, ...midias.filter(n => !ordem.includes(n))];
+}
+
+async function extrairImagensDocx(buffer, paginas = [1], { pptx = false } = {}) {
   try {
     const zip = await require('jszip').loadAsync(buffer);
-    const midias = Object.keys(zip.files)
-      .filter(n => /^word\/media\//i.test(n) && MIME_IMAGEM_DOCX[(n.split('.').pop() || '').toLowerCase()])
+    const pasta = pptx ? /^ppt\/media\//i : /^word\/media\//i;
+    let midias = Object.keys(zip.files)
+      .filter(n => pasta.test(n) && MIME_IMAGEM_DOCX[(n.split('.').pop() || '').toLowerCase()])
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    if (pptx) midias = await _midiasPptxNaOrdem(zip, midias);
     const imagens = [];
     for (const [i, nome] of midias.slice(0, Math.min(paginas.length, MAX_IMAGENS_DOCX)).entries()) {
       const bytes = await zip.file(nome).async('nodebuffer');
-      imagens.push({ pagina: i + 1, mimeType: MIME_IMAGEM_DOCX[nome.split('.').pop().toLowerCase()], base64: bytes.toString('base64'), bytes: bytes.length, origem: 'docx_imagem' });
+      imagens.push({ pagina: i + 1, mimeType: MIME_IMAGEM_DOCX[nome.split('.').pop().toLowerCase()], base64: bytes.toString('base64'), bytes: bytes.length, origem: pptx ? 'pptx_imagem' : 'docx_imagem' });
     }
     return { imagens, erro: null };
   } catch (err) {
-    return { imagens: [], erro: `Nao foi possivel abrir o Word: ${err.message}` };
+    return { imagens: [], erro: `Nao foi possivel abrir o ${pptx ? 'PowerPoint' : 'Word'}: ${err.message}` };
   }
 }
 
-// Ponto único dos laços de carga visual: PDF é rasterizado; Word tem as imagens extraídas.
+// Ponto único dos laços de carga visual: PDF é rasterizado; Word e PowerPoint têm as imagens extraídas.
 function imagensDoDocumentoVisual(buffer, anexo, paginas = [1]) {
+  if (ehPptx(anexo)) return extrairImagensDocx(buffer, paginas, { pptx: true });
   return ehDocx(anexo) ? extrairImagensDocx(buffer, paginas) : rasterizarPdfPaginas(buffer, paginas);
 }
 
@@ -163,6 +195,8 @@ module.exports = {
   selecionarPaginasPdf,
   rasterizarPdfPaginas,
   ehDocx,
+  ehPptx,
+  ehOfficeComImagens,
   extrairImagensDocx,
   imagensDoDocumentoVisual,
 };

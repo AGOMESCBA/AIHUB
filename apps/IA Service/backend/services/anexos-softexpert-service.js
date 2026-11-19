@@ -28,6 +28,7 @@ function _mimeTypePorExtensao(extensao) {
     xml: 'application/xml', json: 'application/json',
     xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     zip: 'application/zip',
   };
   return MAPA[ext] || 'application/octet-stream';
