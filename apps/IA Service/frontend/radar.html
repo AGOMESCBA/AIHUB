@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Radar de Chamados - IA Service</title>
+  <title>Radar de Chamados - J2iA</title>
   <link rel="stylesheet" href="/css/iahub.css">
   <style>
     :root { --accent:#1d4ed8; --accent-light:#3b82f6; --accent-glow:rgba(29,78,216,.1); }
@@ -520,7 +520,7 @@
   <nav class="sidebar" id="sidebar">
     <div class="sidebar-logo" onclick="window.toggleSidebar?.()">
       <div class="logo-icon">⚡</div>
-      <span class="logo-text">IA Service</span>
+      <span class="logo-text">J2iA</span>
     </div>
     <div class="sidebar-nav"></div>
     <div class="sidebar-footer"></div>
@@ -531,7 +531,7 @@
       <button class="topbar-menu-btn" onclick="window.toggleSidebar?.()" title="Menu">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
-      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Service ›</span> Radar de Chamados</span>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">J2iA ›</span> Radar de Chamados</span>
     </div>
 
     <div class="page-content radar-content">
@@ -1013,7 +1013,7 @@
       } catch (_) { return String(iso); }
     }
     function rotuloPapelMensagem(papel, direcao) {
-      if (papel === 'assistant') return 'IA';
+      if (papel === 'assistant') return 'Jade';
       if (papel === 'customer') return 'Cliente';
       if (papel === 'system') return 'Sistema';
       return 'Atendente';
@@ -2589,7 +2589,7 @@
     // porque o polling daquele chamado já tinha esgotado as tentativas
     // lendo o atendimento errado.
     async function aguardarPreAnalise({ maxTentativas = 20, intervaloMs = 1500, atendimentoId = atendimentoAtualId } = {}) {
-      showTyping('Analista IA Service está analisando o chamado…');
+      showTyping('A Jade está analisando o chamado…');
       for (let tentativa = 0; tentativa < maxTentativas; tentativa++) {
         if (atendimentoId !== atendimentoAtualId) { hideTyping(); return; } // analista já saiu deste chamado — para de ocupar o indicador "Analisando…" de quem está vendo agora
         const temResposta = await carregarMensagens(atendimentoId);
@@ -2698,7 +2698,7 @@
       anexosPendentes = [];
       renderizarAnexosPendentes();
       atendimentosEmProcessamento.add(atendimentoIdDoTurno);
-      _atualizarIndicadorProcessamento(atendimentoIdDoTurno, _pareceSolicitarPesquisa(texto) ? 'Analista IA Service está pesquisando…' : undefined);
+      _atualizarIndicadorProcessamento(atendimentoIdDoTurno, _pareceSolicitarPesquisa(texto) ? 'A Jade está pesquisando…' : undefined);
 
       const pararRascunho = acompanharRascunho(atendimentoIdDoTurno, empresaId);
       const qsTurno = qsEmpresa(empresaId);
@@ -2762,7 +2762,7 @@
 
       addBubble({ direcao: 'out', texto: TEXTO_PESQUISAR_SOLUCOES, criadoEm: new Date().toISOString(), papel: 'user' });
       atendimentosEmProcessamento.add(atendimentoIdDoTurno);
-      _atualizarIndicadorProcessamento(atendimentoIdDoTurno, 'Analista IA Service está pesquisando…');
+      _atualizarIndicadorProcessamento(atendimentoIdDoTurno, 'A Jade está pesquisando…');
       if (btn && atendimentoIdDoTurno === atendimentoAtualId) btn.disabled = true;
 
       const pararRascunho = acompanharRascunho(atendimentoIdDoTurno, empresaId);

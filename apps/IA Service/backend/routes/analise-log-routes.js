@@ -78,7 +78,7 @@ module.exports = function registrar(app, prefixo) {
       const { chamado, atendimento } = contexto(req.svcEmpresaId, req.query.chamadoId);
       const locais = atendimento ? anexoRepo.listarAnexos(req.svcEmpresaId, atendimento.id) : [];
       const arquivos = locais.filter(a => analise.ehNomeLog(a.nomeOriginal)).map(a => ({
-        id: a.id, nome: a.nomeOriginal, origem: a.origemSistema === 'softexpert' ? 'Cópia do SoftExpert' : 'Chat IA Service',
+        id: a.id, nome: a.nomeOriginal, origem: a.origemSistema === 'softexpert' ? 'Cópia do SoftExpert' : 'Chat J2iA',
         tipo: 'chat', data: a.criadoEm, tamanho: a.tamanho, disponivel: !a.arquivoRemovidoEm,
       }));
       const avisos = [];

@@ -1126,7 +1126,7 @@
 
   function messageRole(m) {
     const autor = text(m.origemAutor, '').trim();
-    if (m.papel === 'assistant') return 'IA Service';
+    if (m.papel === 'assistant') return 'Jade';
     if (m.papel === 'customer') return autor ? `Cliente - ${autor}` : 'Cliente';
     if (m.papel === 'system') return 'Sistema';
     const base = 'Atendente';

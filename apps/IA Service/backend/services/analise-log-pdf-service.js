@@ -26,7 +26,7 @@ function validar(dados) {
 async function gerarPdf(dados) {
   const relatorio = validar(dados);
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 48, bufferPages: true, info: { Title: 'Erros e possíveis soluções', Author: 'IA Service' } });
+    const doc = new PDFDocument({ size: 'A4', margin: 48, bufferPages: true, info: { Title: 'Erros e possíveis soluções', Author: 'J2iA' } });
     const partes = [];
     doc.on('data', parte => partes.push(parte));
     doc.on('error', reject);

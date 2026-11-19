@@ -59,7 +59,7 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
       if (url.pathname.endsWith('/mensagens') || url.pathname.endsWith('/anexos')) data = [];
       if (url.pathname.endsWith('/radar/logs')) {
         const id = url.searchParams.get('chamadoId');
-        data = { chamadoId: id, numero: id === 'A' ? '123' : '456', arquivos: [{ id: `anexo-${id}`, nome: `error-${id}.log`, tipo: 'chat', origem: 'Chat IA Service', disponivel: true }], avisos: [] };
+        data = { chamadoId: id, numero: id === 'A' ? '123' : '456', arquivos: [{ id: `anexo-${id}`, nome: `error-${id}.log`, tipo: 'chat', origem: 'Chat J2iA', disponivel: true }], avisos: [] };
         if (modoLista === 'vazio') data.arquivos = [];
         if (modoLista === 'erro') { res.statusCode = 503; data = { error: 'Falha de consulta simulada.' }; }
         if (modoLista === 'lento') { resolverLista = () => { if (!res.destroyed) res.end(JSON.stringify(data)); }; return; }

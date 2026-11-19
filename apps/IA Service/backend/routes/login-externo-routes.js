@@ -57,7 +57,7 @@ async function _enviarCodigoViaWhatsApp({ empresaId, numero, codigo }) {
   if (!secret) throw new Error('Envio de código não configurado (SVC_WHATSAPP_OTP_SECRET ausente).');
 
   const texto = [
-    '🔐 IA Service - acesso ao chat',
+    '🔐 J2iA - acesso ao chat',
     `Use o código da próxima mensagem para entrar. Expira em 5 min.`,
   ].join('\n');
 

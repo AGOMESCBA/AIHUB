@@ -255,7 +255,7 @@ function bloquearDesconectados(req, res, next) {
     return req.session.destroy(() => res.status(401).json({ error: 'Sua sessão foi encerrada pelo administrador.', desconectado: 'iahub' }));
   }
   if (caminho === '/api/ia-service/presenca') presencaService.consumirDesconexao(req.sessionID);
-  return res.status(403).json({ error: 'Você foi desconectado do IA Service pelo administrador.', desconectado: 'ia-service' });
+  return res.status(403).json({ error: 'Você foi desconectado da J2iA pelo administrador.', desconectado: 'ia-service' });
 }
 
 module.exports = { registrarInterno, registrarExterno, bloquearDesconectados, ROTINA };
