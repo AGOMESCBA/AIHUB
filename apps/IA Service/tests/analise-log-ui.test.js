@@ -61,7 +61,8 @@ test('aba real J2A: avulso sem chamado, seleção automática, troca de chamado 
         const id = url.searchParams.get('chamadoId');
         data = { chamadoId: id, numero: id === 'A' ? '123' : '456', arquivos: [{ id: `anexo-${id}`, nome: `error-${id}.log`, tipo: 'chat', origem: 'Chat J2iA', disponivel: true }], avisos: [] };
         if (modoLista === 'vazio') data.arquivos = [];
-        if (modoLista === 'erro') { res.statusCode = 503; data = { error: 'Falha de consulta simulada.' }; }
+        // 4xx: o 5xx é repetido sozinho pelo aviso de conexão (conexao-servidor.js) e não chega à tela.
+        if (modoLista === 'erro') { res.statusCode = 404; data = { error: 'Chamado não encontrado.' }; }
         if (modoLista === 'lento') { resolverLista = () => { if (!res.destroyed) res.end(JSON.stringify(data)); }; return; }
       }
       if (url.pathname.endsWith('/radar/logs/avulso')) {

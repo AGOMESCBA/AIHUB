@@ -30,7 +30,7 @@ let browser;
 before(async () => { browser = await playwright.chromium.launch({ headless: true }); });
 after(async () => { await browser?.close(); });
 
-async function abrir({ soft = SOFT, locais = LOCAIS, falhaSoft = false, falhaArquivo = false, falhaMensagens = 0, atrasoSoft = null, atrasoArquivo = null, viewport = { width: 1440, height: 900 } } = {}) {
+async function abrir({ soft = SOFT, locais = LOCAIS, falhaSoft = false, falhaArquivo = false, falhaMensagens = 0, statusFalhaMensagens = 500, atrasoSoft = null, atrasoArquivo = null, viewport = { width: 1440, height: 900 } } = {}) {
   const context = await browser.newContext({ viewport, acceptDownloads: true });
   const page = await context.newPage();
   const errors = [], requests = [];
@@ -62,7 +62,7 @@ async function abrir({ soft = SOFT, locais = LOCAIS, falhaSoft = false, falhaArq
       if (url.pathname.endsWith('/risco-sla')) data = { consultores: [], chamados: [ticket] };
       if (url.pathname.endsWith('/abrir-atendimento')) data = { atendimentoId: 'a1', chamado: ticket };
       if (url.pathname.endsWith('/atendimentos/a1/mensagens')) {
-        if (falhaMensagens > 0) { falhaMensagens -= 1; return route.fulfill({ status: 500, json: { error: 'Servidor indisponível' } }); }
+        if (falhaMensagens > 0) { falhaMensagens -= 1; return route.fulfill({ status: statusFalhaMensagens, json: { error: 'Servidor indisponível' } }); }
         data = MENSAGENS;
       }
       if (url.pathname.endsWith('/atendimentos/a1/anexos')) data = locais;
@@ -315,8 +315,19 @@ test('download mostra indicador e ignora novos cliques até terminar', async () 
   } finally { await context.close(); }
 });
 
-test('falha ao carregar a conversa oferece tentar de novo', async () => {
+// Desde o aviso comum de conexão (conexao-servidor.js, 2026-11-13), leitura com
+// erro 5xx é repetida sozinha: a conversa volta sem clique. "Tentar de novo"
+// fica para o erro que chega à tela (4xx).
+test('queda do servidor ao carregar a conversa: tela se recupera sozinha', async () => {
   const { page, context } = await abrir({ falhaMensagens: 1 });
+  try {
+    await cartao(page, 'Posicionamento de Edson').waitFor({ timeout: 20000 });
+    assert.equal(await page.locator('[data-tentar-abrir]').count(), 0);
+  } finally { await context.close(); }
+});
+
+test('falha ao carregar a conversa oferece tentar de novo', async () => {
+  const { page, context } = await abrir({ falhaMensagens: 1, statusFalhaMensagens: 400 });
   try {
     const tentar = page.locator('[data-tentar-abrir]');
     await tentar.waitFor();
