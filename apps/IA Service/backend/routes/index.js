@@ -742,9 +742,9 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
 
   app.put('/api/ia-service/base-historica/fontes/:id/jade-pa', async (req, res) => {
     try {
-      const { ativo, modo, devolucaoAtiva, intervaloMinutos, limiteDiario, usuarioSoftexpert, somenteChamados } = req.body || {};
+      const { ativo, modo, devolucaoAtiva, intervaloMinutos, limiteDiario, processamentosSimultaneos, usuarioSoftexpert, somenteChamados } = req.body || {};
       res.json(await jadePaService.salvarConfig(req.svcEmpresaId, req.params.id, {
-        ativo, modo, devolucaoAtiva, intervaloMinutos, limiteDiario, usuarioSoftexpert, somenteChamados,
+        ativo, modo, devolucaoAtiva, intervaloMinutos, limiteDiario, processamentosSimultaneos, usuarioSoftexpert, somenteChamados,
       }));
     } catch (err) {
       _handleErro(res, err);

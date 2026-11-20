@@ -27,10 +27,12 @@ const clienteRepo = require('../repositories/cliente-repository');
 
 const TICK_MS = 60 * 1000;
 const PRIMEIRA_EXECUCAO_MS = 90 * 1000;
-// Teto de um ciclo: 3 chamados com pesquisa completa cabem com folga. Trava
-// mais velha que isso é de um processo que caiu e é retomada.
+// O ciclo trata todos os elegíveis (pedido do usuário, 2026-11-19) e renova a
+// trava a cada chamado; trava vencida (sem renovação há 20 min) é de um processo
+// que caiu e é retomada.
 const TRAVA_MS = 20 * 60 * 1000;
-const MAX_POR_CICLO = 3;
+// Teto de segurança da consulta de elegíveis no SoftExpert, não um limite de vazão.
+const MAX_ELEGIVEIS = 500;
 const MAX_TENTATIVAS = 3;
 const MAX_TEXTO_CLIENTE = 6000;
 // Texto gerado há mais tempo que o SLA do Primeiro Atendimento não é mais
@@ -42,7 +44,7 @@ const NOMES_GENERICOS = new Set(['seta', 'bom jesus', 'porto seco', 'caieira', '
 
 // Mesma regra de status da view ITSM_CHAMADOS: RESPONSAVEL IS NULL = "Pendente".
 const SQL_ELEGIVEIS = `
-  SELECT TOP 50 W.IDPROCESS AS NUM, MIN(S.DHENABLED) AS ENTROU_PA
+  SELECT TOP ${MAX_ELEGIVEIS} W.IDPROCESS AS NUM, MIN(S.DHENABLED) AS ENTROU_PA
   FROM WFPROCESS W
   INNER JOIN WFSTRUCT S ON S.IDPROCESS = W.IDOBJECT AND S.IDSTRUCT = 'ATV-02' AND S.FGSTATUS = 2
   WHERE W.FGSTATUS = 1
@@ -128,7 +130,7 @@ function _erro(status, message) { return Object.assign(new Error(message), { sta
 async function listarElegiveisNaOrigem(empresaId, fonteId, { numero } = {}) {
   const sql = SQL_ELEGIVEIS.replace('{{FILTRO}}', numero ? 'AND W.IDPROCESS = @numero' : '');
   const rows = await agenteLocalService.executarSelectNaFonte(empresaId, fonteId, {
-    sql, params: numero ? { numero: String(numero) } : {}, limit: 50,
+    sql, params: numero ? { numero: String(numero) } : {}, limit: MAX_ELEGIVEIS,
   });
   return rows.map(r => String(r.NUM));
 }
@@ -471,6 +473,15 @@ async function enviarExecucao(cfg, fonte, exec) {
   }
 }
 
+/** Roda `fn` em cada item com no máximo `limite` ao mesmo tempo. */
+async function _emParalelo(itens, limite, fn) {
+  let proximo = 0;
+  const trabalhador = async () => {
+    while (proximo < itens.length) await fn(itens[proximo++]);
+  };
+  await Promise.all(Array.from({ length: Math.min(Math.max(1, limite), itens.length) }, trabalhador));
+}
+
 async function _rodarCiclo(empresaId, fonteId) {
   const resumo = { inicio: new Date().toISOString(), elegiveis: 0, novos: 0, limiteAtingido: false, processados: [], erros: [] };
   try {
@@ -479,7 +490,7 @@ async function _rodarCiclo(empresaId, fonteId) {
     if (!fonte?.ativo) throw new Error('Fonte inativa ou excluída.');
     // Lista de chamados permitidos preenchida (teste em produção): todo o resto é ignorado.
     const permitido = (numero) => !cfg.somenteChamados.length || cfg.somenteChamados.includes(String(numero));
-    // Com lista, consulta cada chamado direto: a lista geral traz só os 50 mais antigos.
+    // Com lista, consulta cada chamado direto, sem depender da ordem da lista geral.
     const elegiveis = cfg.somenteChamados.length
       ? (await Promise.all(cfg.somenteChamados.map(n => listarElegiveisNaOrigem(empresaId, fonteId, { numero: n })))).flat()
       : await listarElegiveisNaOrigem(empresaId, fonteId);
@@ -489,30 +500,45 @@ async function _rodarCiclo(empresaId, fonteId) {
     inicioDia.setHours(0, 0, 0, 0);
     let usadosHoje = repo.contarDetectadosDesde(empresaId, inicioDia.toISOString());
     for (const numero of elegiveis) {
-      if (usadosHoje >= cfg.limiteDiario) { resumo.limiteAtingido = true; break; }
+      if (cfg.limiteDiario > 0 && usadosHoje >= cfg.limiteDiario) { resumo.limiteAtingido = true; break; }
       if (repo.registrarDetectado(empresaId, fonteId, numero)) { resumo.novos++; usadosHoje++; }
     }
     // Desligado no meio do ciclo: para antes do próximo chamado.
     const aindaLigada = () => repo.getConfig(empresaId, fonteId).ativo;
-    for (const exec of repo.listarParaGerar(empresaId, fonteId, { limite: MAX_POR_CICLO, gerandoParadoMs: TRAVA_MS }).filter(e => permitido(e.numeroChamado))) {
-      if (!aindaLigada()) break;
+    // Envio ao SoftExpert só no modo Publicar; em Simulação, "pronto" espera.
+    const publicar = cfg.modo === 'publicar';
+    if (publicar) resumo.enviados = [];
+    const enviar = async (exec) => {
+      repo.renovarTrava(empresaId, fonteId, TRAVA_MS);
+      const r = await enviarExecucao(cfg, fonte, exec);
+      if (r) resumo.enviados.push({ numero: exec.numeroChamado, estado: r.estado });
+    };
+    // Falha de um chamado não derruba os outros que estão em paralelo.
+    const isolado = (fn) => async (exec) => {
+      if (!aindaLigada()) return;
+      try { await fn(exec); } catch (err) { resumo.erros.push(`${exec.numeroChamado}: ${err.message}`); }
+    };
+    const paralelo = cfg.processamentosSimultaneos;
+    // Primeiro o que ficou pendente de envio de ciclos anteriores.
+    if (publicar) {
+      await _emParalelo(repo.listarParaEnviar(empresaId, fonteId).filter(e => permitido(e.numeroChamado)), paralelo, isolado(enviar));
+    }
+    // Todos os chamados na fila; cada retorno vai ao SoftExpert assim que fica pronto.
+    const fila = repo.listarParaGerar(empresaId, fonteId, { gerandoParadoMs: TRAVA_MS }).filter(e => permitido(e.numeroChamado));
+    await _emParalelo(fila, paralelo, isolado(async (exec) => {
+      repo.renovarTrava(empresaId, fonteId, TRAVA_MS);
       const r = await processarExecucao(cfg, fonte, exec);
       if (r) resumo.processados.push({ numero: exec.numeroChamado, estado: r.estado });
-    }
-    // Envio ao SoftExpert só no modo Publicar; em Simulação, "pronto" espera.
-    if (cfg.modo === 'publicar') {
-      resumo.enviados = [];
-      for (const exec of repo.listarParaEnviar(empresaId, fonteId, { limite: 10 }).filter(e => permitido(e.numeroChamado))) {
-        if (!aindaLigada()) break;
-        const r = await enviarExecucao(cfg, fonte, exec);
-        if (r) resumo.enviados.push({ numero: exec.numeroChamado, estado: r.estado });
-      }
-    }
+      if (publicar && r?.estado === 'pronto' && aindaLigada()) await enviar(r);
+    }));
   } catch (err) {
     resumo.erros.push(err.message);
     console.error(`[IA Service] Jade PA: ciclo da empresa ${empresaId} falhou:`, err.message);
   } finally {
     resumo.fim = new Date().toISOString();
+    resumo.duracaoMs = Date.parse(resumo.fim) - Date.parse(resumo.inicio);
+    // Leitura mais longa que o intervalo: a próxima já está atrasada (aviso na tela).
+    try { resumo.encavalou = resumo.duracaoMs > repo.getConfig(empresaId, fonteId).intervaloMinutos * 60000; } catch { /* aviso apenas */ }
     repo.liberarCiclo(empresaId, fonteId, resumo);
   }
   return resumo;

@@ -1465,6 +1465,35 @@ const MIGRATIONS = [
       ALTER TABLE jade_pa_config ADD COLUMN somente_chamados TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 62,
+    descricao: 'Jade no Primeiro Atendimento: limite diário passa a aceitar 0 = sem limite e até 1.000.000 (pedido do usuário, 2026-11-19; antes 1 a 200) e processamentos simultâneos por leitura (1 a 10, padrão 3). SQLite não altera CHECK, então recria jade_pa_config preservando todas as linhas.',
+    sql: `
+      CREATE TABLE jade_pa_config_novo (
+        empresa_id INTEGER NOT NULL,
+        fonte_id TEXT NOT NULL REFERENCES fontes_historicas(id) ON DELETE CASCADE,
+        ativo INTEGER NOT NULL DEFAULT 0 CHECK (ativo IN (0, 1)),
+        modo TEXT NOT NULL DEFAULT 'simulacao' CHECK (modo IN ('simulacao', 'publicar')),
+        devolucao_ativa INTEGER NOT NULL DEFAULT 0 CHECK (devolucao_ativa IN (0, 1)),
+        intervalo_minutos INTEGER NOT NULL DEFAULT 5 CHECK (intervalo_minutos BETWEEN 1 AND 60),
+        limite_diario INTEGER NOT NULL DEFAULT 30 CHECK (limite_diario BETWEEN 0 AND 1000000),
+        ciclo_trava_ate TEXT,
+        ultimo_ciclo_em TEXT,
+        ultimo_ciclo_resumo TEXT,
+        atualizado_em TEXT NOT NULL,
+        usuario_softexpert TEXT DEFAULT NULL,
+        somente_chamados TEXT DEFAULT NULL,
+        processamentos_simultaneos INTEGER NOT NULL DEFAULT 3 CHECK (processamentos_simultaneos BETWEEN 1 AND 10),
+        PRIMARY KEY (empresa_id, fonte_id)
+      );
+      INSERT INTO jade_pa_config_novo (empresa_id, fonte_id, ativo, modo, devolucao_ativa, intervalo_minutos, limite_diario,
+          ciclo_trava_ate, ultimo_ciclo_em, ultimo_ciclo_resumo, atualizado_em, usuario_softexpert, somente_chamados)
+        SELECT empresa_id, fonte_id, ativo, modo, devolucao_ativa, intervalo_minutos, limite_diario,
+          ciclo_trava_ate, ultimo_ciclo_em, ultimo_ciclo_resumo, atualizado_em, usuario_softexpert, somente_chamados FROM jade_pa_config;
+      DROP TABLE jade_pa_config;
+      ALTER TABLE jade_pa_config_novo RENAME TO jade_pa_config;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

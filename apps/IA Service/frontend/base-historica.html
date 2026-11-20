@@ -78,6 +78,25 @@
     .importacao-feedback { display:none; border:1px solid var(--border); border-radius:8px; background:var(--bg-base); padding:10px 12px; margin:0 0 12px; color:var(--text-md); font-size:12.5px; }
     .importacao-feedback strong { color:var(--text-hi); }
     .importacao-feedback .warn { color:var(--warning-text); font-weight:800; }
+    .jade-topo { display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; }
+    .jade-fonte-campo { flex:0 1 320px; }
+    .jade-estado { display:flex; gap:6px; padding-bottom:8px; }
+    .jade-topo-acoes { display:flex; gap:8px; margin-left:auto; }
+    .jade-pill { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; padding:3px 10px; border-radius:20px; background:var(--bg-hover); color:var(--text-md); }
+    .jade-pill.on { background:color-mix(in srgb, var(--success) 18%, transparent); color:var(--success-text); }
+    .jade-pill.sim { background:color-mix(in srgb, var(--warning) 18%, transparent); color:var(--warning-text); }
+    .jade-pill.pub { background:var(--accent-glow); color:var(--accent); }
+    .jade-intro { font-size:12.5px; color:var(--text-lo); margin:10px 0 14px; }
+    .jade-grupos { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; }
+    .jade-grupo { border:1px solid var(--border); border-radius:8px; background:var(--bg-base); padding:12px 14px; display:flex; flex-direction:column; gap:12px; }
+    .jade-grupo h3 { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--accent); margin:0; }
+    .jade-grupo .form-field { min-width:0; flex:none; }
+    .jade-id-fonte { margin-top:auto; word-break:break-all; }
+    .jade-rodape { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:14px; }
+    .jade-ciclo { font-size:12.5px; color:var(--text-md); display:flex; flex-wrap:wrap; gap:6px 14px; }
+    .jade-ciclo strong { color:var(--text-hi); }
+    .jade-ciclo .warn { color:var(--warning-text); font-weight:800; }
+    @media (max-width:640px) { .jade-topo-acoes { margin-left:0; } .jade-rodape .btn { width:100%; } }
     .grid-table tbody tr.importacao-destaque td { background:#eff6ff; box-shadow:inset 3px 0 0 var(--accent); }
 
     @media (max-width: 900px) {
@@ -146,47 +165,83 @@
       </div>
 
       <div id="tab-jade-pa" class="tab-panel">
-        <div class="form-hint" style="margin-bottom:12px">
-          A Jade lê os chamados no Primeiro Atendimento que ainda não tiveram triagem (sem responsável e sem posicionamento), faz a análise técnica no chat da J2iA e escreve o primeiro retorno ao cliente — uma única vez por chamado.
-          Em <strong>Simulação</strong> nada é enviado ao SoftExpert. Em <strong>Publicar</strong>, o retorno é gravado na grade do chamado e, se a devolução estiver ligada, o chamado volta para o cliente quando faltar informação.
-        </div>
-        <div class="form-row">
-          <div class="form-field" style="max-width:320px"><label>Fonte</label><select id="jade-fonte" class="form-control" onchange="carregarJadePa()"></select></div>
-          <div class="form-field" style="max-width:160px">
-            <label>Situação</label>
-            <select id="jade-ativo" class="form-control"><option value="0">Desligada</option><option value="1">Ligada</option></select>
+        <div class="jade-topo">
+          <div class="form-field jade-fonte-campo"><label>Fonte SoftExpert</label><select id="jade-fonte" class="form-control" onchange="carregarJadePa()"></select></div>
+          <div class="jade-estado">
+            <span id="jade-pill-ativo" class="jade-pill">—</span>
+            <span id="jade-pill-modo" class="jade-pill">—</span>
           </div>
-          <div class="form-field" style="max-width:240px">
-            <label>Modo</label>
-            <select id="jade-modo" class="form-control">
-              <option value="simulacao">Simulação (não envia)</option>
-              <option value="publicar">Publicar no SoftExpert</option>
-            </select>
-          </div>
-          <div class="form-field" style="max-width:220px">
-            <label>Devolver ao cliente</label>
-            <select id="jade-devolucao" class="form-control"><option value="0">Não (sempre responde)</option><option value="1">Sim, quando faltar informação</option></select>
-          </div>
-          <div class="form-field" style="max-width:150px"><label>Intervalo (min)</label><input type="number" id="jade-intervalo" class="form-control" min="1" max="60" step="1"></div>
-          <div class="form-field" style="max-width:150px"><label>Limite por dia</label><input type="number" id="jade-limite" class="form-control" min="1" max="200" step="1"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-field" style="max-width:240px">
-            <label>Usuário da Jade no SoftExpert (CDUSER)</label>
-            <input type="text" id="jade-usuario" class="form-control" inputmode="numeric" placeholder="ex.: 995">
-          </div>
-          <div class="form-field">
-            <label>Somente estes chamados (teste)</label>
-            <input type="text" id="jade-somente" class="form-control" placeholder="vazio = todos; ex.: 037100, 037101">
-            <div class="form-hint">Preenchida, a Jade ignora qualquer outro chamado, mesmo no Primeiro Atendimento. Esvazie para liberar todos.</div>
+          <div class="jade-topo-acoes">
+            <button class="btn btn-ghost btn-icon" type="button" id="btn-jade-executar" onclick="executarJadePa()">Executar agora</button>
+            <button class="btn btn-ghost btn-icon" type="button" onclick="carregarJadePa()">Atualizar</button>
           </div>
         </div>
-        <div class="form-row">
-          <button class="btn btn-primary" type="button" id="btn-jade-salvar" onclick="salvarJadePa()">Salvar</button>
-          <button class="btn btn-ghost btn-icon" type="button" id="btn-jade-executar" onclick="executarJadePa()">Executar agora</button>
-          <button class="btn btn-ghost btn-icon" type="button" onclick="carregarJadePa()">Atualizar tela</button>
+        <p class="jade-intro">
+          A Jade analisa, uma única vez, cada chamado do Primeiro Atendimento sem responsável e sem posicionamento, e escreve o primeiro retorno ao cliente.
+        </p>
+
+        <div class="jade-grupos">
+          <section class="jade-grupo">
+            <h3>Funcionamento</h3>
+            <div class="form-field">
+              <label>Situação</label>
+              <select id="jade-ativo" class="form-control"><option value="0">Desligada</option><option value="1">Ligada</option></select>
+              <div class="form-hint">Desligue a qualquer momento para parar a Jade.</div>
+            </div>
+            <div class="form-field">
+              <label>Modo</label>
+              <select id="jade-modo" class="form-control">
+                <option value="simulacao">Simulação</option>
+                <option value="publicar">Publicar no SoftExpert</option>
+              </select>
+              <div class="form-hint">Simulação gera o retorno só aqui, sem gravar no SoftExpert.</div>
+            </div>
+            <div class="form-field">
+              <label>Devolver ao cliente</label>
+              <select id="jade-devolucao" class="form-control"><option value="1">Sim, se faltar informação</option><option value="0">Não, sempre responde</option></select>
+              <div class="form-hint">Quando falta informação, pede ao cliente e devolve a atividade.</div>
+            </div>
+          </section>
+
+          <section class="jade-grupo">
+            <h3>Ritmo</h3>
+            <div class="form-field">
+              <label>Intervalo entre leituras (minutos)</label>
+              <input type="number" id="jade-intervalo" class="form-control" min="1" max="60" step="1">
+              <div class="form-hint">De quanto em quanto tempo a Jade procura chamados novos.</div>
+            </div>
+            <div class="form-field">
+              <label>Limite de chamados por dia</label>
+              <input type="number" id="jade-limite" class="form-control" min="0" max="1000000" step="1">
+              <div class="form-hint">Máximo de chamados novos analisados no dia (zera à meia-noite); 0 = sem limite. Os excedentes ficam para a triagem.</div>
+            </div>
+            <div class="form-field">
+              <label>Chamados analisados ao mesmo tempo</label>
+              <input type="number" id="jade-paralelo" class="form-control" min="1" max="10" step="1">
+              <div class="form-hint">Cada leitura trata todos os chamados da fila, este tanto de cada vez (1 a 10). Aumente se a leitura passar do intervalo.</div>
+            </div>
+          </section>
+
+          <section class="jade-grupo">
+            <h3>Integração e teste</h3>
+            <div class="form-field">
+              <label>Usuário da Jade no SoftExpert (CDUSER)</label>
+              <input type="text" id="jade-usuario" class="form-control" inputmode="numeric" placeholder="ex.: 995">
+            </div>
+            <div class="form-field">
+              <label>Somente estes chamados</label>
+              <input type="text" id="jade-somente" class="form-control" placeholder="vazio = todos · ex.: 037100, 037101">
+              <div class="form-hint">Preenchido, a Jade só atua nesses chamados. Esvazie para liberar todos.</div>
+            </div>
+            <div class="form-hint jade-id-fonte">ID da fonte: <code id="jade-fonte-id">—</code></div>
+          </section>
         </div>
-        <div id="jade-ciclo" class="form-hint" style="margin-bottom:10px"></div>
+
+        <div class="jade-rodape">
+          <div id="jade-ciclo" class="jade-ciclo"></div>
+          <button class="btn btn-primary" type="button" id="btn-jade-salvar" onclick="salvarJadePa()">Salvar configuração</button>
+        </div>
+
         <div class="table-card">
           <div class="table-wrap">
             <table class="grid-table">
@@ -598,18 +653,35 @@
       document.getElementById('jade-devolucao').value = config.devolucaoAtiva ? '1' : '0';
       document.getElementById('jade-intervalo').value = config.intervaloMinutos;
       document.getElementById('jade-limite').value = config.limiteDiario;
+      document.getElementById('jade-paralelo').value = config.processamentosSimultaneos;
       document.getElementById('jade-usuario').value = config.usuarioSoftexpert || '';
       document.getElementById('jade-somente').value = (config.somenteChamados || []).join(', ');
+      const pillAtivo = document.getElementById('jade-pill-ativo');
+      pillAtivo.textContent = config.ativo ? 'Ligada' : 'Desligada';
+      pillAtivo.className = 'jade-pill' + (config.ativo ? ' on' : '');
+      const pillModo = document.getElementById('jade-pill-modo');
+      pillModo.textContent = config.modo === 'publicar' ? 'Publicando' : 'Simulação';
+      pillModo.className = 'jade-pill ' + (config.modo === 'publicar' ? 'pub' : 'sim');
+      document.getElementById('jade-fonte-id').textContent = fonteId;
       const r = config.ultimoCicloResumo;
-      document.getElementById('jade-ciclo').innerHTML = config.ultimoCicloEm
-        ? `Última leitura: ${escapeHtml(formatarDataHora(config.ultimoCicloEm))}` +
-          (r ? ` · ${r.elegiveis ?? 0} chamado(s) elegível(is) no SoftExpert · ${r.novos ?? 0} novo(s) · ${(r.processados || []).length} processado(s)` : '') +
-          (r?.enviados ? ` · ${r.enviados.length} enviado(s) ao SoftExpert` : '') +
-          (r?.somenteChamados ? ` · <span class="warn">só os chamados ${escapeHtml(r.somenteChamados.join(', '))}</span>` : '') +
-          (r?.limiteAtingido ? ' · <span class="warn">limite diário atingido</span>' : '') +
-          ((r?.erros || []).length ? ` · <span class="warn">${escapeHtml(r.erros.join('; '))}</span>` : '')
-        : (config.ativo ? 'Ligada — a primeira leitura acontece em instantes.' : 'Desligada.');
-      document.getElementById('jade-ciclo').innerHTML += `<br>ID desta fonte (o mesmo do contrato de escrita): <code>${escapeHtml(fonteId)}</code>`;
+      const itens = [];
+      if (config.ultimoCicloEm) {
+        itens.push(`<span>Última leitura <strong>${escapeHtml(formatarDataHora(config.ultimoCicloEm))}</strong></span>`);
+        if (r) {
+          itens.push(`<span><strong>${r.elegiveis ?? 0}</strong> elegível(is)</span>`);
+          itens.push(`<span><strong>${r.novos ?? 0}</strong> novo(s)</span>`);
+          itens.push(`<span><strong>${(r.processados || []).length}</strong> analisado(s)</span>`);
+          if (r.enviados) itens.push(`<span><strong>${r.enviados.length}</strong> enviado(s) ao SoftExpert</span>`);
+          if (r.duracaoMs != null) itens.push(`<span>Duração <strong>${Math.max(1, Math.round(r.duracaoMs / 60000))} min</strong></span>`);
+          if (r.encavalou) itens.push('<span class="warn">A leitura passou do intervalo: aumente o intervalo ou os chamados ao mesmo tempo</span>');
+          if (r.somenteChamados) itens.push(`<span class="warn">Só os chamados ${escapeHtml(r.somenteChamados.join(', '))}</span>`);
+          if (r.limiteAtingido) itens.push('<span class="warn">Limite diário atingido</span>');
+          if ((r.erros || []).length) itens.push(`<span class="warn">${escapeHtml(r.erros.join('; '))}</span>`);
+        }
+      } else {
+        itens.push(`<span>${config.ativo ? 'A primeira leitura acontece em instantes.' : 'Nenhuma leitura feita ainda.'}</span>`);
+      }
+      document.getElementById('jade-ciclo').innerHTML = itens.join('');
       tbody.innerHTML = execucoes.length ? execucoes.map(e => `
         <tr>
           <td><strong>${escapeHtml(e.numeroChamado)}</strong></td>
@@ -643,6 +715,7 @@
           devolucaoAtiva: document.getElementById('jade-devolucao').value === '1',
           intervaloMinutos: Number(document.getElementById('jade-intervalo').value),
           limiteDiario: Number(document.getElementById('jade-limite').value),
+          processamentosSimultaneos: Number(document.getElementById('jade-paralelo').value),
           usuarioSoftexpert: document.getElementById('jade-usuario').value.trim(),
           somenteChamados: document.getElementById('jade-somente').value,
         }),

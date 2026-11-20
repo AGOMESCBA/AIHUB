@@ -4,7 +4,7 @@
 const crypto = require('crypto');
 const { getDB } = require('../database');
 
-const PADRAO = { ativo: false, modo: 'simulacao', devolucaoAtiva: false, intervaloMinutos: 5, limiteDiario: 30, usuarioSoftexpert: null, somenteChamados: [] };
+const PADRAO = { ativo: false, modo: 'simulacao', devolucaoAtiva: false, intervaloMinutos: 5, limiteDiario: 30, processamentosSimultaneos: 3, usuarioSoftexpert: null, somenteChamados: [] };
 
 function _listaChamados(valor) {
   const lista = (Array.isArray(valor) ? valor : String(valor ?? '').split(/[\s,;]+/)).map(v => String(v).trim()).filter(Boolean);
@@ -19,6 +19,7 @@ function _config(row, empresaId, fonteId) {
   return {
     empresaId: row.empresa_id, fonteId: row.fonte_id, ativo: row.ativo === 1, modo: row.modo,
     devolucaoAtiva: row.devolucao_ativa === 1, intervaloMinutos: row.intervalo_minutos, limiteDiario: row.limite_diario,
+    processamentosSimultaneos: row.processamentos_simultaneos ?? PADRAO.processamentosSimultaneos,
     usuarioSoftexpert: row.usuario_softexpert ?? null, somenteChamados: _listaChamados(row.somente_chamados), cicloTravaAte: row.ciclo_trava_ate, ultimoCicloEm: row.ultimo_ciclo_em, ultimoCicloResumo: resumo, atualizadoEm: row.atualizado_em,
   };
 }
@@ -41,7 +42,8 @@ function salvarConfig(empresaId, fonteId, dados) {
     modo: dados.modo === undefined ? atual.modo : dados.modo,
     devolucaoAtiva: dados.devolucaoAtiva === undefined ? atual.devolucaoAtiva : dados.devolucaoAtiva === true,
     intervaloMinutos: dados.intervaloMinutos === undefined ? atual.intervaloMinutos : _inteiro(dados.intervaloMinutos, 1, 60, 'Intervalo de leitura'),
-    limiteDiario: dados.limiteDiario === undefined ? atual.limiteDiario : _inteiro(dados.limiteDiario, 1, 200, 'Limite diário'),
+    limiteDiario: dados.limiteDiario === undefined ? atual.limiteDiario : _inteiro(dados.limiteDiario, 0, 1000000, 'Limite diário'),
+    processamentosSimultaneos: dados.processamentosSimultaneos === undefined ? atual.processamentosSimultaneos : _inteiro(dados.processamentosSimultaneos, 1, 10, 'Processamentos simultâneos'),
     usuarioSoftexpert: dados.usuarioSoftexpert === undefined ? atual.usuarioSoftexpert : (String(dados.usuarioSoftexpert ?? '').trim() || null),
     somenteChamados: dados.somenteChamados === undefined ? atual.somenteChamados : _listaChamados(dados.somenteChamados),
   };
@@ -50,12 +52,13 @@ function salvarConfig(empresaId, fonteId, dados) {
   if (novo.somenteChamados.length > 20 || novo.somenteChamados.some(n => !/^\d{1,10}$/.test(n))) {
     throw Object.assign(new Error('Chamados permitidos: informe até 20 números, separados por vírgula.'), { status: 400 });
   }
-  getDB().prepare(`INSERT INTO jade_pa_config (empresa_id, fonte_id, ativo, modo, devolucao_ativa, intervalo_minutos, limite_diario, usuario_softexpert, somente_chamados, atualizado_em)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  getDB().prepare(`INSERT INTO jade_pa_config (empresa_id, fonte_id, ativo, modo, devolucao_ativa, intervalo_minutos, limite_diario, processamentos_simultaneos, usuario_softexpert, somente_chamados, atualizado_em)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (empresa_id, fonte_id) DO UPDATE SET ativo = excluded.ativo, modo = excluded.modo, devolucao_ativa = excluded.devolucao_ativa,
-      intervalo_minutos = excluded.intervalo_minutos, limite_diario = excluded.limite_diario, usuario_softexpert = excluded.usuario_softexpert,
+      intervalo_minutos = excluded.intervalo_minutos, limite_diario = excluded.limite_diario,
+      processamentos_simultaneos = excluded.processamentos_simultaneos, usuario_softexpert = excluded.usuario_softexpert,
       somente_chamados = excluded.somente_chamados, atualizado_em = excluded.atualizado_em`)
-    .run(Number(empresaId), fonteId, novo.ativo ? 1 : 0, novo.modo, novo.devolucaoAtiva ? 1 : 0, novo.intervaloMinutos, novo.limiteDiario,
+    .run(Number(empresaId), fonteId, novo.ativo ? 1 : 0, novo.modo, novo.devolucaoAtiva ? 1 : 0, novo.intervaloMinutos, novo.limiteDiario, novo.processamentosSimultaneos,
       novo.usuarioSoftexpert, novo.somenteChamados.length ? novo.somenteChamados.join(',') : null, new Date().toISOString());
   return getConfig(empresaId, fonteId);
 }
@@ -80,6 +83,12 @@ function tentarTravarCiclo(empresaId, fonteId, { travaMs, forcar = false, agora 
       AND (ultimo_ciclo_em IS NULL OR ultimo_ciclo_em <= ?)`)
     .run(new Date(agora.getTime() + travaMs).toISOString(), Number(empresaId), fonteId, agoraIso, limiteIntervalo);
   return r.changes === 1;
+}
+
+/** Estende a trava do ciclo em andamento (chamada a cada chamado tratado). */
+function renovarTrava(empresaId, fonteId, travaMs) {
+  getDB().prepare('UPDATE jade_pa_config SET ciclo_trava_ate = ? WHERE empresa_id = ? AND fonte_id = ? AND ciclo_trava_ate IS NOT NULL')
+    .run(new Date(Date.now() + travaMs).toISOString(), Number(empresaId), fonteId);
 }
 
 function liberarCiclo(empresaId, fonteId, resumo) {
@@ -112,7 +121,7 @@ function contarDetectadosDesde(empresaId, desdeIso) {
 }
 
 /** Pendentes de geração, mais antigos primeiro; "gerando" parado há mais de `gerandoParadoMs` volta à fila. */
-function listarParaGerar(empresaId, fonteId, { limite, gerandoParadoMs }) {
+function listarParaGerar(empresaId, fonteId, { limite = -1, gerandoParadoMs }) {
   const parado = new Date(Date.now() - gerandoParadoMs).toISOString();
   return getDB().prepare(`SELECT * FROM jade_pa_execucoes WHERE empresa_id = ? AND fonte_id = ?
       AND (estado = 'detectado' OR (estado = 'gerando' AND atualizado_em < ?))
@@ -127,7 +136,7 @@ function marcarGerando(id, estadoAnterior, atualizadoAnterior) {
 }
 
 /** Prontos para enviar e envios/devoluções ainda não confirmados, mais antigos primeiro. */
-function listarParaEnviar(empresaId, fonteId, { limite }) {
+function listarParaEnviar(empresaId, fonteId, { limite = -1 } = {}) {
   return getDB().prepare(`SELECT * FROM jade_pa_execucoes WHERE empresa_id = ? AND fonte_id = ?
       AND estado IN ('pronto', 'publicando', 'devolvendo')
     ORDER BY detectado_em LIMIT ?`).all(Number(empresaId), fonteId, limite).map(_execucao);
@@ -183,7 +192,7 @@ function listarExecucoes(empresaId, { limite = 100 } = {}) {
 }
 
 module.exports = {
-  PADRAO, getConfig, salvarConfig, listarConfigsAtivas, tentarTravarCiclo, liberarCiclo,
+  PADRAO, getConfig, salvarConfig, listarConfigsAtivas, tentarTravarCiclo, renovarTrava, liberarCiclo,
   registrarDetectado, contarDetectadosDesde, listarParaGerar, marcarGerando, listarParaEnviar, contarTentativa, devolverTentativaGeracao,
   atualizar, getExecucao, listarExecucoes,
 };

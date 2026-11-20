@@ -54,9 +54,14 @@ stub('../backend/services/radar-service', {
 });
 stub('../backend/services/anexos-softexpert-service', { async sincronizarAnexosParaAtendimento() { return []; } });
 const turnos = [];
+const simultaneos = { agora: 0, maximo: 0 };
 stub('../backend/services/investigacao-service', {
   async processarTurno(empresaId, atendimentoId, opts) {
     turnos.push({ atendimentoId, opts });
+    simultaneos.agora++;
+    simultaneos.maximo = Math.max(simultaneos.maximo, simultaneos.agora);
+    await new Promise(r => setTimeout(r, 15));
+    simultaneos.agora--;
     return { id: `msg-${atendimentoId}`, papel: 'assistant', conteudo: 'Análise técnica: verificar parâmetro MV_XYZ.', diagnostico: {} };
   },
 });
@@ -190,6 +195,32 @@ test('limite diário', async () => {
   const resumo = await jade.executarCiclo(EMPRESA, fonte.id);
   assert.equal(resumo.novos, 1);
   assert.equal(resumo.limiteAtingido, true);
+});
+
+test('uma leitura trata todos os chamados da fila, no máximo N ao mesmo tempo', async () => {
+  await ligar({ processamentosSimultaneos: 2, limiteDiario: 0 });
+  const numeros = ['037220', '037221', '037222', '037223', '037224'];
+  numeros.forEach(n => chamadoNaOrigem(n));
+  respostasIA = numeros.map(() => RESPOSTA_OK);
+  simultaneos.maximo = 0;
+  const resumo = await jade.executarCiclo(EMPRESA, fonte.id);
+  assert.equal(resumo.processados.length, 5);
+  assert.equal(simultaneos.maximo, 2);
+  assert.equal(typeof resumo.duracaoMs, 'number');
+  assert.equal(resumo.encavalou, false);
+  assert.throws(() => repo.salvarConfig(EMPRESA, fonte.id, { processamentosSimultaneos: 11 }));
+});
+
+test('limite diário 0 = sem limite; acima de 1.000.000 é recusado', async () => {
+  await ligar({ limiteDiario: 0 });
+  chamadoNaOrigem('037210');
+  chamadoNaOrigem('037211');
+  respostasIA = [RESPOSTA_OK, RESPOSTA_OK];
+  const resumo = await jade.executarCiclo(EMPRESA, fonte.id);
+  assert.equal(resumo.novos, 2);
+  assert.ok(!resumo.limiteAtingido);
+  assert.equal(repo.salvarConfig(EMPRESA, fonte.id, { limiteDiario: 1000000 }).limiteDiario, 1000000);
+  assert.throws(() => repo.salvarConfig(EMPRESA, fonte.id, { limiteDiario: 1000001 }));
 });
 
 test('lista de chamados permitidos: só o chamado de teste é tratado e enviado', async () => {
