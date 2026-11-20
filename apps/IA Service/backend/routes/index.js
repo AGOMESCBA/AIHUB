@@ -728,7 +728,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
-  // ── Jade no Primeiro Atendimento (configuração por fonte) ────────────────
+  // ── Jaade no Primeiro Atendimento (configuração por fonte) ────────────────
   app.get('/api/ia-service/base-historica/fontes/:id/jade-pa', (req, res) => {
     try {
       res.json(jadePaService.getPainel(req.svcEmpresaId, req.params.id));

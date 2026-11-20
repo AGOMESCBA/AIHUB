@@ -1,4 +1,4 @@
-// Jade no Primeiro Atendimento: configuração por fonte e registro de cada
+// Jaade no Primeiro Atendimento: configuração por fonte e registro de cada
 // chamado tratado. O registro é a garantia de "uma ação por chamado" — nunca
 // é apagado por limpezas do chat nem pela exclusão da fonte.
 const crypto = require('crypto');
@@ -59,7 +59,7 @@ function salvarConfig(empresaId, fonteId, dados) {
     gruposAvisoSucesso: dados.gruposAvisoSucesso === undefined ? atual.gruposAvisoSucesso : _listaGrupos(dados.gruposAvisoSucesso),
   };
   if (!MODOS.includes(novo.modo)) throw Object.assign(new Error('Modo inválido.'), { status: 400 });
-  if (novo.usuarioSoftexpert && !/^\d{1,10}$/.test(novo.usuarioSoftexpert)) throw Object.assign(new Error('Código do usuário da Jade inválido (use o CDUSER numérico).'), { status: 400 });
+  if (novo.usuarioSoftexpert && !/^\d{1,10}$/.test(novo.usuarioSoftexpert)) throw Object.assign(new Error('Código do usuário da Jaade inválido (use o CDUSER numérico).'), { status: 400 });
   if (novo.somenteChamados.length > 20 || novo.somenteChamados.some(n => !/^\d{1,10}$/.test(n))) {
     throw Object.assign(new Error('Chamados permitidos: informe até 20 números, separados por vírgula.'), { status: 400 });
   }
@@ -215,7 +215,7 @@ function loteEmAndamento(empresaId, fonteId) {
  * ou pelo momento do registro/detecção quando não há lote — ou tudo
  * (de/ate nulos). O registro do chamado sem registro restante também sai
  * (decisão do usuário, 2026-11-20): a trava contra repetir passa a ser o
- * SoftExpert — a Jade só pega chamado sem posicionamento na grade, então quem
+ * SoftExpert — a Jaade só pega chamado sem posicionamento na grade, então quem
  * já recebeu retorno não volta; quem não recebeu (simulado, descartado,
  * falha) volta a ser analisado. Sem exceção ("limpar tudo é tudo", usuário):
  * um "devolvendo" apagado fica com o retorno na grade e segue na triagem.
@@ -269,7 +269,7 @@ function _execucao(row) {
   };
 }
 
-/** Registra o chamado detectado. Devolve false se a Jade já o registrou antes (qualquer estado). */
+/** Registra o chamado detectado. Devolve false se a Jaade já o registrou antes (qualquer estado). */
 /** Registra o chamado na fila; devolve o id novo, ou null se ele já existia. */
 function registrarDetectado(empresaId, fonteId, numeroChamado) {
   const agora = new Date().toISOString();

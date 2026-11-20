@@ -395,7 +395,7 @@ if ($hadDb -and !(Test-Path -LiteralPath $dbPath)) {
     throw "ERRO CRITICO: banco SQLite existia antes da atualizacao e nao foi encontrado depois. Verifique o backup antes de iniciar."
 }
 
-# Contrato de escrita no SoftExpert (Jade no Primeiro Atendimento).
+# Contrato de escrita no SoftExpert (Jaade no Primeiro Atendimento).
 # Cria a pasta data se faltar e instala o contrato SO na primeira vez: um
 # arquivo ja existente no servidor nunca e sobrescrito. O token nao vem no
 # pacote: fica somente no .env (SVC_SOFTEXPERT_TOKEN_JADE).
@@ -421,7 +421,7 @@ if (Test-Path -LiteralPath $envPath) {
     }
     if ($envTexto -notmatch '(?m)^\s*SVC_SOFTEXPERT_TOKEN_JADE\s*=\s*\S') {
         Write-Host "      ATENCAO: falta SVC_SOFTEXPERT_TOKEN_JADE no .env (mesmo token SoftExpert do IA Recruit)." -ForegroundColor Yellow
-        Write-Host "      Sem ele a Jade so funciona em Simulacao. Inclua a linha e reinicie o servico." -ForegroundColor Yellow
+        Write-Host "      Sem ele a Jaade so funciona em Simulacao. Inclua a linha e reinicie o servico." -ForegroundColor Yellow
     }
 } else {
     Write-Host "      .env nao encontrado: configure SVC_SOFTEXPERT_RETORNO_CONFIG e SVC_SOFTEXPERT_TOKEN_JADE manualmente." -ForegroundColor Yellow

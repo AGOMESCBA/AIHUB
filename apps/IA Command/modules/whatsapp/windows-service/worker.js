@@ -316,7 +316,7 @@ const server = http.createServer((req, res) => {
   }
 
   // Registro no histórico do canal vindo do processo principal (ex.: passos do
-  // aviso da Jade no PA), para aparecer na tela WhatsApp Services como o resto.
+  // aviso da Jaade no PA), para aparecer na tela WhatsApp Services como o resto.
   if (req.method === 'POST' && req.url === '/log') {
     let body = '';
     req.setEncoding?.('utf8'); req.on('data', d => { body += d; });

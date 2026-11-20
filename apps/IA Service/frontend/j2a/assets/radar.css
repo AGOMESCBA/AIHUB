@@ -1819,7 +1819,7 @@ body.col-resizing { cursor: col-resize; user-select: none; }
 #composer-research-btn .loader { width: 16px; height: 16px; border-color: rgba(255, 255, 255, .3); border-top-color: #fff; position: absolute; top: 50%; left: 50%; margin: -8px 0 0 -8px; }
 #composer-research-btn.loading .icon-label { visibility: hidden; }
 #composer-research-btn:disabled { opacity: .5; cursor: not-allowed; }
-/* Chamado sem resposta da Jade: brilho curto nas lupas ao abrir. */
+/* Chamado sem resposta da Jaade: brilho curto nas lupas ao abrir. */
 #research-btn.destaque, #composer-research-btn.destaque { animation: pesquisar-destaque 1.5s ease-in-out 4; }
 @keyframes pesquisar-destaque {
   0%, 100% { box-shadow: 0 0 0 0 rgba(0, 107, 214, 0); }

@@ -7,7 +7,7 @@ const SOAP = 'http://schemas.xmlsoap.org/soap/envelope/';
 const WORKFLOW = 'urn:workflow';
 const MAX_RESPONSE_BYTES = 1024 * 1024;
 const OPERACOES = { newChildEntityRecord: { ns: WORKFLOW, ws: 'wf_ws.php' }, editChildEntityRecord: { ns: WORKFLOW, ws: 'wf_ws.php' }, editEntityRecord: { ns: WORKFLOW, ws: 'wf_ws.php' }, newComment: { ns: WORKFLOW, ws: 'wf_ws.php' }, newTableRecord: { ns: 'urn:form', ws: 'fm_ws.php' }, getWorkflow: { ns: WORKFLOW, ws: 'wf_ws.php', leitura: true }, getTableRecord: { ns: 'urn:form', ws: 'fm_ws.php', leitura: true }, executeActivity: { ns: WORKFLOW, ws: 'wf_ws.php' } };
-// Única movimentação de workflow permitida (Jade no Primeiro Atendimento):
+// Única movimentação de workflow permitida (Jaade no Primeiro Atendimento):
 // executar a ATV-02 pela ação 1 "Retornar para cliente" → ATV-06.
 const MOVIMENTACAO_PERMITIDA = { activityId: 'ATV-02', actionSequence: '1' };
 

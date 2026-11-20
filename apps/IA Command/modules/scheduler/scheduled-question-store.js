@@ -490,7 +490,7 @@ function listarNumerosAutorizados(empresaId) {
 
 // Cadastro de Grupos: todo numero com Acesso na empresa (o grupo serve a
 // varios usos). Quem recebe e decidido no envio, pela regra de cada uso:
-// agendamento usa listarNumerosAutorizados; aviso da Jade, todo membro com Acesso.
+// agendamento usa listarNumerosAutorizados; aviso da Jaade, todo membro com Acesso.
 function listarNumerosDaEmpresa(empresaId) {
   return getDB().prepare(`
     SELECT id, nome, numero, observacoes, modulo_financeiro, modulo_compras,

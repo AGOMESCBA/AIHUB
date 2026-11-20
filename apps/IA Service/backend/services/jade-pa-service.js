@@ -1,4 +1,4 @@
-// Jade no Primeiro Atendimento (pedido do usuário, 2026-11-19).
+// Jaade no Primeiro Atendimento (pedido do usuário, 2026-11-19).
 //
 // A cada intervalo configurado, lê no SoftExpert os chamados parados no
 // Primeiro Atendimento (ATV-02) que ainda não tiveram triagem — sem
@@ -61,7 +61,7 @@ const SQL_ELEGIVEIS = `
 `;
 
 // Situação atual do chamado na origem: atividades ativas, responsável e
-// posicionamentos (os da Jade são marcados com TEXTO4 = 'IA SERVICE').
+// posicionamentos (os da Jaade são marcados com TEXTO4 = 'IA SERVICE').
 // Posicionamento pelo vínculo com o chamado (FK) ou pela coluna CHAMADO —
 // não está comprovado que a inclusão pela API preenche CHAMADO.
 const DO_CHAMADO = `(G.CHAMADO = W.IDPROCESS OR G.OIDABCA7HP6S55J0LV IN (SELECT D3.OID FROM DYNITSM D3 WHERE D3.IDPROCESS = W.IDPROCESS))`;
@@ -86,7 +86,7 @@ const ATIVIDADE_CLIENTE = 'ATV-06';
 
 const TEXTO_ANALISE_PA = 'Este chamado acabou de ser aberto pelo cliente e está no Primeiro Atendimento (triagem), sem nenhum posicionamento ainda. Faça uma pré-análise inicial com base no texto do chamado e nos anexos sincronizados, quando existirem: identifique o problema relatado, hipóteses prováveis de causa, possíveis soluções que o próprio cliente consiga testar e quais informações ou evidências ainda faltam para avançar. Deixe claro no nível de confiança que esta é uma análise preliminar, sem confirmação humana.';
 
-const SYSTEM_PROMPT_CLIENTE = `Você é a Jade, atendente de IA do suporte. Você escreve o PRIMEIRO retorno ao CLIENTE que abriu o chamado, como um analista experiente orientando o cliente a RESOLVER o problema: resposta simples, com conteúdo técnico. O texto vai para o portal do cliente: fale COM ele ("você", "sua equipe", "nos envie", "verifique"), nunca SOBRE ele ("peça ao cliente", "o cliente informou", "do lado do cliente").
+const SYSTEM_PROMPT_CLIENTE = `Você é a Jaade, atendente de IA do suporte. Você escreve o PRIMEIRO retorno ao CLIENTE que abriu o chamado, como um analista experiente orientando o cliente a RESOLVER o problema: resposta simples, com conteúdo técnico. O texto vai para o portal do cliente: fale COM ele ("você", "sua equipe", "nos envie", "verifique"), nunca SOBRE ele ("peça ao cliente", "o cliente informou", "do lado do cliente").
 
 Responda SOMENTE com um JSON válido, sem nada antes ou depois:
 {"decisao": "responder" | "devolver", "motivo": "frase curta, uso interno, explicando a decisão", "texto": "texto ao cliente"}
@@ -96,13 +96,13 @@ Como decidir:
 - "devolver": SOMENTE quando realmente não há o que pesquisar — sem anexo ou evidência E descrição vaga, sem rotina/tela identificada e sem mensagem de erro. Na dúvida, escolha "responder".
 
 Como escrever — o campo do SoftExpert é TEXTO PURO: nada de markdown (#, **, crases, tabelas):
-1. Comece exatamente com: "Olá! Em breve seu chamado será direcionado a um atendente. Enquanto isso, segue abaixo uma análise preliminar feita pela atendente de IA Jade."
+1. Comece exatamente com: "Olá! Em breve seu chamado será direcionado a um atendente. Enquanto isso, segue abaixo uma análise preliminar feita pela atendente de IA Jaade."
 2. Diagnóstico curto (2 a 4 frases): o que a mensagem, o relato e os anexos indicam e a causa mais provável, citando os fatos concretos do chamado (rotina, mensagem, valores, datas).
 3. O centro do texto é COMO RESOLVER: o passo a passo técnico que um analista passaria para o cliente corrigir ou contornar sozinho — rotina e caminho de menu, parâmetro, campo, cadastro ou configuração a conferir, o que ajustar e como confirmar que resolveu. Se houver mais de uma causa possível, uma verificação objetiva para cada, da mais provável para a menos provável. Itens numerados ("1.", "2.") em linhas próprias.
 4. Só depois, e só se realmente faltar algo, peça o mínimo necessário para avançar caso os passos não resolvam, específico para ESTE chamado (prefira um recorte pequeno e comparável a "envie tudo"). Pode fazer uma pergunta direta quando ela acelerar a análise.
 5. Ao devolver, explique de forma cordial por que ainda não dá para analisar e liste o que ele precisa enviar.
 6. Títulos em MAIÚSCULAS numa linha própria são opcionais: use só se ajudarem a organizar um texto mais longo.
-7. Termine com "Ficamos no aguardo do seu retorno." e, na última linha, "Jade, atendente de IA".
+7. Termine com "Ficamos no aguardo do seu retorno." e, na última linha, "Jaade, atendente de IA".
 
 Regras:
 - Português do Brasil; tom de analista: cordial, seguro e direto, frases curtas, sem rodeios, sem repetir a mesma ideia e sem jargão interno do suporte.
@@ -146,7 +146,7 @@ async function _importarChamado(empresaId, fonteId, numero) {
 // real #037059, 2026-11-20).
 async function _obterAnaliseTecnica(empresaId, atendimentoId, anexos) {
   if (!turnoLockService.tentarAdquirir(empresaId, atendimentoId)) {
-    throw Object.assign(new Error('O chat deste chamado está em uso; a Jade tenta de novo no próximo ciclo.'), { adiar: true });
+    throw Object.assign(new Error('O chat deste chamado está em uso; a Jaade tenta de novo no próximo ciclo.'), { adiar: true });
   }
   try {
     const mensagem = await _investigacao().processarTurno(empresaId, atendimentoId, {
@@ -182,7 +182,7 @@ function fontesDaAnalise(empresaId, atendimentoId, mensagemId) {
       }
     }
   } catch (err) {
-    console.error('[IA Service] Jade PA: fontes da pesquisa indisponíveis:', err.message);
+    console.error('[IA Service] Jaade PA: fontes da pesquisa indisponíveis:', err.message);
   }
   return [...fontes.values()].slice(0, MAX_FONTES);
 }
@@ -314,7 +314,7 @@ async function gerarTextoCliente(empresaId, dados) {
 }
 
 // Trilha de auditoria (tela "fluxo" do chamado). Falha ao registrar nunca
-// interrompe o trabalho da Jade.
+// interrompe o trabalho da Jaade.
 // Lote da leitura em curso: chega a cada registro sem passar por todas as funções.
 const _loteAtual = new AsyncLocalStorage();
 
@@ -322,7 +322,7 @@ function _evento(exec, etapa, situacao, resumo, detalhes = null) {
   try {
     repo.registrarEvento(exec.id, exec.empresaId, { etapa, situacao, resumo, detalhes, loteId: _loteAtual.getStore()?.loteId ?? null });
   } catch (err) {
-    console.error(`[IA Service] Jade PA: auditoria do chamado ${exec.numeroChamado || exec.id}:`, err.message);
+    console.error(`[IA Service] Jaade PA: auditoria do chamado ${exec.numeroChamado || exec.id}:`, err.message);
   }
 }
 
@@ -352,9 +352,9 @@ async function processarExecucao(cfg, fonte, exec) {
   // Etapa em curso: o erro vai para a atividade do fluxo onde aconteceu.
   let etapa = 'deteccao';
   const descartar = () => {
-    _evento(exec, etapa, 'aviso', 'Descartado: a triagem atuou no chamado antes da Jade (responsável definido ou posicionamento registrado).');
+    _evento(exec, etapa, 'aviso', 'Descartado: a triagem atuou no chamado antes da Jaade (responsável definido ou posicionamento registrado).');
     return repo.atualizar(exec.id, {
-      estado: 'descartado', motivo: 'A triagem atuou no chamado antes da Jade (responsável definido ou posicionamento registrado).',
+      estado: 'descartado', motivo: 'A triagem atuou no chamado antes da Jaade (responsável definido ou posicionamento registrado).',
       motivoCodigo: 'triagem_atuou',
     });
   };
@@ -373,7 +373,7 @@ async function processarExecucao(cfg, fonte, exec) {
     let falhaAnexos = null;
     await anexosSoftExpertService.sincronizarAnexosParaAtendimento(empresaId, chamado.id, atendimento.id).catch((err) => {
       falhaAnexos = err.message;
-      console.error(`[IA Service] Jade PA: cópia de anexos falhou (chamado ${chamado.numero}):`, err.message);
+      console.error(`[IA Service] Jaade PA: cópia de anexos falhou (chamado ${chamado.numero}):`, err.message);
     });
     const anexos = anexoRepo.listarAnexos(empresaId, atendimento.id);
     const arquivos = anexos.map(a => a.nomeOriginal || a.nome || 'arquivo');
@@ -412,7 +412,7 @@ async function processarExecucao(cfg, fonte, exec) {
     const esgotou = tentativa >= MAX_TENTATIVAS;
     _evento(exec, etapa, 'erro', `${rotuloTentativa} falhou: ${err.message}${esgotou ? ' — tentativas esgotadas, chamado deixado para a triagem.' : ' — nova tentativa no próximo ciclo.'}`,
       { recusas: err.recusas?.length ? err.recusas : undefined, erroTecnico: _erroTecnico(err, { etapa }) });
-    console.error(`[IA Service] Jade PA: chamado ${exec.numeroChamado}, tentativa ${tentativa}:`, err.message);
+    console.error(`[IA Service] Jaade PA: chamado ${exec.numeroChamado}, tentativa ${tentativa}:`, err.message);
     return repo.atualizar(exec.id, { estado: esgotou ? 'falha' : 'detectado', ultimoErro: err.message, alerta: esgotou });
   }
 }
@@ -439,7 +439,7 @@ function _triagemAtuou(s) {
 }
 
 async function _usuarioJade(empresaId, fonteId, cdUser) {
-  if (!cdUser) throw new Error('Informe o código do usuário da Jade no SoftExpert.');
+  if (!cdUser) throw new Error('Informe o código do usuário da Jaade no SoftExpert.');
   const [u] = await agenteLocalService.executarSelectNaFonte(empresaId, fonteId, { sql: SQL_USUARIO_JADE, params: { cdUser: String(cdUser) }, limit: 2 });
   if (!u) throw new Error(`Usuário ${cdUser} não encontrado no SoftExpert.`);
   if (String(u.FGUSERENABLED) !== '1') throw new Error(`Usuário ${cdUser} está desabilitado no SoftExpert.`);
@@ -447,11 +447,11 @@ async function _usuarioJade(empresaId, fonteId, cdUser) {
   return { codigo: String(u.CDUSER), nome: String(u.NMUSER).trim(), matricula: String(u.IDUSER).trim() };
 }
 
-// Mesmo contrato de escrita dos analistas: a Jade precisa estar autorizada
+// Mesmo contrato de escrita dos analistas: a Jaade precisa estar autorizada
 // em autoria.analistas do arquivo SVC_SOFTEXPERT_RETORNO_CONFIG.
 function _contratoEscrita(empresaId, fonteId, cdUser) {
   const config = retornoConfig.resolver({ empresaId, fonteId, consultor: { idSoftexpert: String(cdUser) } });
-  if (!config.disponivel) throw new Error(`Escrita no SoftExpert indisponível para a Jade (usuário ${cdUser}): ${config.motivo}`);
+  if (!config.disponivel) throw new Error(`Escrita no SoftExpert indisponível para a Jaade (usuário ${cdUser}): ${config.motivo}`);
   const { contrato } = config;
   if (contrato.mainEntityId.toLowerCase() !== 'itsm' || contrato.childRelationshipId.toLowerCase() !== 'relagridregistr') {
     throw new Error('O contrato de escrita não aponta para a grade de posicionamentos do ITSM.');
@@ -512,14 +512,14 @@ async function _publicar(cfg, fonte, exec) {
   const s = await situacaoNaOrigem(empresaId, fonte.id, exec.numeroChamado);
   if (s?.posicionamentosJade > 0) {
     // Envio anterior confirmado na origem (inclusive um "não confirmado" que tinha entrado).
-    _evento(exec, 'envio', 'ok', 'Conferido no SoftExpert: o posicionamento da Jade está na grade do chamado.');
+    _evento(exec, 'envio', 'ok', 'Conferido no SoftExpert: o posicionamento da Jaade está na grade do chamado.');
     const publicado = repo.atualizar(exec.id, { estado: 'publicado', publicadoEm: exec.publicadoEm || new Date().toISOString(), ultimoErro: null, alerta: false });
     return exec.decisao === 'devolver' ? repo.atualizar(publicado.id, { estado: 'devolvendo' }) : publicado;
   }
   if (exec.tentativasPublicacao >= MAX_TENTATIVAS) return _falhaDefinitiva(exec, 'O SoftExpert não confirmou o posicionamento após 3 tentativas.', 'envio');
   if (_triagemAtuou(s)) {
-    _evento(exec, 'envio', 'aviso', 'Descartado: a triagem atuou no chamado antes do envio da Jade. Nada foi gravado.');
-    return repo.atualizar(exec.id, { estado: 'descartado', motivo: 'A triagem atuou no chamado antes do envio da Jade.', motivoCodigo: 'triagem_atuou', alerta: false });
+    _evento(exec, 'envio', 'aviso', 'Descartado: a triagem atuou no chamado antes do envio da Jaade. Nada foi gravado.');
+    return repo.atualizar(exec.id, { estado: 'descartado', motivo: 'A triagem atuou no chamado antes do envio da Jaade.', motivoCodigo: 'triagem_atuou', alerta: false });
   }
   if (exec.estado === 'pronto' && Date.now() - Date.parse(exec.geradoEm || 0) > MAX_IDADE_ENVIO_MS) {
     _evento(exec, 'envio', 'aviso', 'Descartado: texto gerado há mais de 4 horas, não enviado para não chegar desatualizado ao cliente.');
@@ -560,7 +560,7 @@ async function _devolver(cfg, fonte, exec) {
       _evento(exec, 'devolucao', 'ok', 'Conferido no SoftExpert: o chamado está com o cliente (Retorno do Usuário).');
       return repo.atualizar(exec.id, { estado: 'devolvido', devolvidoEm: new Date().toISOString(), ultimoErro: null, alerta: false });
     }
-    // Saiu do PA para outro lugar: se a Jade tentou devolver, alguém precisa olhar.
+    // Saiu do PA para outro lugar: se a Jaade tentou devolver, alguém precisa olhar.
     const ultimoErro = `O chamado saiu do Primeiro Atendimento para ${[...s.ativas].join(', ') || 'outra etapa'}, não para o cliente.`;
     _evento(exec, 'devolucao', exec.tentativasDevolucao > 0 ? 'erro' : 'aviso', ultimoErro);
     return repo.atualizar(exec.id, { estado: 'publicado', alerta: exec.tentativasDevolucao > 0, ultimoErro });
@@ -605,7 +605,7 @@ const NOMES_ATIVIDADE = { 'ATV-02': 'Primeiro Atendimento', [ATIVIDADE_CLIENTE]:
 
 /**
  * Última atividade do fluxo de auditoria: onde o chamado ficou no SoftExpert
- * depois da Jade. Respondido = segue no Primeiro Atendimento para a triagem;
+ * depois da Jaade. Respondido = segue no Primeiro Atendimento para a triagem;
  * devolvido = avançou para o Retorno do Usuário. Só registra, nunca falha.
  */
 async function _registrarSituacaoFinal(cfg, fonte, exec) {
@@ -639,7 +639,7 @@ async function enviarExecucao(cfg, fonte, exec) {
     return final;
   } catch (err) {
     // Falha antes de falar com o SoftExpert (consulta, usuário, contrato): não conta tentativa, mas avisa.
-    console.error(`[IA Service] Jade PA: envio do chamado ${exec.numeroChamado}:`, err.message);
+    console.error(`[IA Service] Jaade PA: envio do chamado ${exec.numeroChamado}:`, err.message);
     _evento(exec, repo.getExecucao(exec.id)?.estado === 'devolvendo' ? 'devolucao' : 'envio', 'erro',
       `Não foi possível falar com o SoftExpert: ${err.message} (não conta como tentativa).`, { erroTecnico: _erroTecnico(err) });
     return repo.atualizar(exec.id, { ultimoErro: err.message, alerta: true });
@@ -657,7 +657,7 @@ async function _emParalelo(itens, limite, fn) {
 
 async function _rodarCiclo(empresaId, fonteId, origem = 'agendado') {
   let loteId = null;
-  try { loteId = repo.criarLote(empresaId, fonteId, origem); } catch (err) { console.error('[IA Service] Jade PA: lote não criado:', err.message); }
+  try { loteId = repo.criarLote(empresaId, fonteId, origem); } catch (err) { console.error('[IA Service] Jaade PA: lote não criado:', err.message); }
   return _loteAtual.run({ loteId }, () => _executarLote(empresaId, fonteId, loteId, origem));
 }
 
@@ -719,14 +719,14 @@ async function _executarLote(empresaId, fonteId, loteId, origem) {
     }));
   } catch (err) {
     resumo.erros.push(err.message);
-    console.error(`[IA Service] Jade PA: ciclo da empresa ${empresaId} falhou:`, err.message);
+    console.error(`[IA Service] Jaade PA: ciclo da empresa ${empresaId} falhou:`, err.message);
   } finally {
     resumo.fim = new Date().toISOString();
     resumo.duracaoMs = Date.parse(resumo.fim) - Date.parse(resumo.inicio);
     // Leitura mais longa que o intervalo: a próxima já está atrasada (aviso na tela).
     try { resumo.encavalou = resumo.duracaoMs > repo.getConfig(empresaId, fonteId).intervaloMinutos * 60000; } catch { /* aviso apenas */ }
     if (loteId) {
-      try { resumo.loteGravado = repo.finalizarLote(loteId, resumo, { manter: origem === 'manual' }); } catch (err) { console.error('[IA Service] Jade PA: lote não finalizado:', err.message); }
+      try { resumo.loteGravado = repo.finalizarLote(loteId, resumo, { manter: origem === 'manual' }); } catch (err) { console.error('[IA Service] Jaade PA: lote não finalizado:', err.message); }
     }
     repo.liberarCiclo(empresaId, fonteId, resumo, { avulsa: origem === 'manual' });
   }
@@ -735,7 +735,7 @@ async function _executarLote(empresaId, fonteId, loteId, origem) {
   try {
     repo.anexarAvisosAoResumo(empresaId, fonteId, resumo.loteGravado ? loteId : null, resumo.avisos);
   } catch (err) {
-    console.error('[IA Service] Jade PA: resultado do aviso não gravado no lote:', err.message);
+    console.error('[IA Service] Jaade PA: resultado do aviso não gravado no lote:', err.message);
   }
   return resumo;
 }
@@ -753,8 +753,8 @@ async function executarCiclo(empresaId, fonteId, { forcar = false } = {}) {
  */
 function executarAgora(empresaId, fonteId) {
   const cfg = repo.getConfig(empresaId, fonteId);
-  if (!cfg.atualizadoEm) throw _erro(409, 'Salve a configuração da Jade antes de executar.');
-  if (!repo.tentarTravarCiclo(empresaId, fonteId, { travaMs: TRAVA_MS, avulsa: true })) throw _erro(409, 'Já existe uma leitura da Jade em execução.');
+  if (!cfg.atualizadoEm) throw _erro(409, 'Salve a configuração da Jaade antes de executar.');
+  if (!repo.tentarTravarCiclo(empresaId, fonteId, { travaMs: TRAVA_MS, avulsa: true })) throw _erro(409, 'Já existe uma leitura da Jaade em execução.');
   _rodarCiclo(empresaId, fonteId, 'manual').catch(() => {});
   return { iniciado: true, loteId: repo.loteEmAndamento(empresaId, fonteId)?.id ?? null };
 }
@@ -762,7 +762,7 @@ function executarAgora(empresaId, fonteId) {
 function _fonteSoftExpert(empresaId, fonteId) {
   const fonte = agenteRepo.getFonte(empresaId, fonteId);
   if (!fonte) throw _erro(404, 'Fonte não encontrada.');
-  if (fonte.sistemaOrigem !== 'softexpert') throw _erro(400, 'A Jade no Primeiro Atendimento só funciona com fonte do SoftExpert.');
+  if (fonte.sistemaOrigem !== 'softexpert') throw _erro(400, 'A Jaade no Primeiro Atendimento só funciona com fonte do SoftExpert.');
   return fonte;
 }
 
@@ -776,7 +776,7 @@ async function salvarConfig(empresaId, fonteId, dados = {}) {
   const atual = repo.getConfig(empresaId, fonteId);
   const modo = dados.modo ?? atual.modo;
   const usuario = dados.usuarioSoftexpert === undefined ? atual.usuarioSoftexpert : (String(dados.usuarioSoftexpert ?? '').trim() || null);
-  // Publicar só com o usuário da Jade ativo no SoftExpert e autorizado no contrato de escrita.
+  // Publicar só com o usuário da Jaade ativo no SoftExpert e autorizado no contrato de escrita.
   if (modo === 'publicar') {
     try {
       const jade = await _usuarioJade(empresaId, fonteId, usuario);
@@ -812,12 +812,12 @@ function getPainel(empresaId, fonteId) {
 
 /**
  * Botão "Limpar logs": apaga lotes e auditoria do IA Service (período ou tudo).
- * Nunca toca no SoftExpert e nunca apaga o registro que impede a Jade de agir
+ * Nunca toca no SoftExpert e nunca apaga o registro que impede a Jaade de agir
  * de novo no mesmo chamado. Bloqueado durante uma leitura.
  */
 function limparLogs(empresaId, fonteId, { de = null, ate = null, tudo = false } = {}) {
   _fonteSoftExpert(empresaId, fonteId);
-  if (repo.loteEmAndamento(empresaId, fonteId)) throw _erro(409, 'Há uma leitura da Jade em execução. Aguarde terminar para limpar os logs.');
+  if (repo.loteEmAndamento(empresaId, fonteId)) throw _erro(409, 'Há uma leitura da Jaade em execução. Aguarde terminar para limpar os logs.');
   if (tudo) return repo.limparLogs(empresaId, fonteId);
   const deMs = Date.parse(de);
   const ateMs = Date.parse(ate);
@@ -830,7 +830,7 @@ function limparLogs(empresaId, fonteId, { de = null, ate = null, tudo = false } 
 function getAuditoria(empresaId, fonteId, execucaoId) {
   _fonteSoftExpert(empresaId, fonteId);
   const execucao = repo.getExecucao(execucaoId);
-  if (!execucao || execucao.empresaId !== Number(empresaId) || execucao.fonteId !== fonteId) throw _erro(404, 'Registro da Jade não encontrado.');
+  if (!execucao || execucao.empresaId !== Number(empresaId) || execucao.fonteId !== fonteId) throw _erro(404, 'Registro da Jaade não encontrado.');
   return { execucao, eventos: repo.listarEventos(empresaId, execucaoId) };
 }
 
@@ -844,7 +844,7 @@ function _tick() {
   try {
     configs = repo.listarConfigsAtivas();
   } catch (err) {
-    console.error('[IA Service] Jade PA: leitura do agendamento falhou:', err.message);
+    console.error('[IA Service] Jaade PA: leitura do agendamento falhou:', err.message);
     return [];
   }
   const disparados = [];
@@ -854,7 +854,7 @@ function _tick() {
     _ciclosEmAndamento.add(chave);
     disparados.push(Promise.resolve()
       .then(() => executarCiclo(cfg.empresaId, cfg.fonteId))
-      .catch(err => console.error(`[IA Service] Jade PA: falha no agendamento (empresa ${cfg.empresaId}):`, err.message))
+      .catch(err => console.error(`[IA Service] Jaade PA: falha no agendamento (empresa ${cfg.empresaId}):`, err.message))
       .finally(() => _ciclosEmAndamento.delete(chave)));
   }
   return disparados;

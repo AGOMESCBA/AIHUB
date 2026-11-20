@@ -803,20 +803,20 @@
   }
 
   function placeholderMensagem() {
-    return window.matchMedia('(max-width: 900px)').matches ? 'Digite ou toque em 🔎' : 'Digite sua mensagem ou use 🔎 para a Jade pesquisar';
+    return window.matchMedia('(max-width: 900px)').matches ? 'Digite ou toque em 🔎' : 'Digite sua mensagem ou use 🔎 para a Jaade pesquisar';
   }
 
   function atualizarDicaPesquisar() {
     const ocupado = !!state.atendimentoId && state.processing.has(state.atendimentoId);
     const comTexto = !!$('message-input')?.value.trim();
     const dica = state.somenteLeitura ? 'Chamado encerrado: pesquisa indisponível'
-      : ocupado ? 'A Jade já está pesquisando este chamado...'
-        : comTexto ? 'Pesquisar o chamado com a Jade. A pesquisa não usa o que você escreveu: para a Jade considerar, use Enviar ➤'
-          : 'Pesquisar o chamado com a Jade: ela lê o histórico e os anexos e busca a solução, sem precisar digitar';
+      : ocupado ? 'A Jaade já está pesquisando este chamado...'
+        : comTexto ? 'Pesquisar o chamado com a Jaade. A pesquisa não usa o que você escreveu: para a Jaade considerar, use Enviar ➤'
+          : 'Pesquisar o chamado com a Jaade: ela lê o histórico e os anexos e busca a solução, sem precisar digitar';
     botoesPesquisar().forEach((b) => { b.title = dica; });
   }
 
-  // Chamado ainda sem resposta da Jade: as lupas brilham alguns segundos ao abrir,
+  // Chamado ainda sem resposta da Jaade: as lupas brilham alguns segundos ao abrir,
   // uma vez por chamado (sem piscar o tempo todo).
   function destacarPesquisarSeNuncaPesquisado() {
     const id = state.atendimentoId;
@@ -1160,7 +1160,7 @@
 
   function messageRole(m) {
     const autor = text(m.origemAutor, '').trim();
-    if (m.papel === 'assistant') return 'Jade';
+    if (m.papel === 'assistant') return 'Jaade';
     if (m.papel === 'customer') return autor ? `Cliente - ${autor}` : 'Cliente';
     if (m.papel === 'system') return 'Sistema';
     const base = 'Atendente';

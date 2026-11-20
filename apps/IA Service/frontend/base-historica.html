@@ -78,7 +78,7 @@
     .importacao-feedback { display:none; border:1px solid var(--border); border-radius:8px; background:var(--bg-base); padding:10px 12px; margin:0 0 12px; color:var(--text-md); font-size:12.5px; }
     .importacao-feedback strong { color:var(--text-hi); }
     .importacao-feedback .warn { color:var(--warning-text); font-weight:800; }
-    /* Jade: barra de controle e grade agrupada (padrão Histórico de Acessos) */
+    /* Jaade: barra de controle e grade agrupada (padrão Histórico de Acessos) */
     .jade-barra { position:sticky; top:0; z-index:6; box-shadow:var(--shadow-sm); display:flex; justify-content:space-between; align-items:center; gap:10px 12px; flex-wrap:wrap; padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg-base); margin-bottom:12px; }
     .jade-barra-esq, .jade-barra-dir { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .jade-barra-nome { font-size:15px; font-weight:800; color:var(--text-hi); margin-right:4px; }
@@ -311,14 +311,14 @@
           <div class="head-title">Base Histórica</div>
           <div class="head-subtitle">Fontes de dados externas e importação de atendimentos históricos.</div>
         </div>
-        <div class="jade-relogio parado" id="jade-relogio" hidden title="Contagem até a próxima leitura da Jade (horário do servidor)">
+        <div class="jade-relogio parado" id="jade-relogio" hidden title="Contagem até a próxima leitura da Jaade (horário do servidor)">
           <svg class="jr-anel" viewBox="0 0 64 64" aria-hidden="true">
             <circle class="jr-trilho" cx="32" cy="32" r="28"></circle>
             <circle class="jr-arco" id="jade-relogio-arco" cx="32" cy="32" r="28" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"></circle>
             <g class="jr-ponteiro"><line x1="32" y1="32" x2="32" y2="17"></line><line x1="32" y1="32" x2="41" y2="32"></line><circle cx="32" cy="32" r="2.5"></circle></g>
           </svg>
           <div class="jr-texto">
-            <div class="jr-rotulo" id="jade-relogio-rotulo">Jade · próxima leitura</div>
+            <div class="jr-rotulo" id="jade-relogio-rotulo">Jaade · próxima leitura</div>
             <div class="jr-tempo" id="jade-relogio-tempo">--:--</div>
             <div class="jr-sub" id="jade-relogio-sub"></div>
           </div>
@@ -331,16 +331,16 @@
       <div class="tabs" role="tablist">
         <button class="tab-btn active" data-tab="tab-fontes" type="button">Fontes Históricas</button>
         <button class="tab-btn" data-tab="tab-importacoes" type="button">Importações</button>
-        <button class="tab-btn" data-tab="tab-jade-pa" type="button">Jade · Primeiro Atendimento</button>
+        <button class="tab-btn" data-tab="tab-jade-pa" type="button">Jaade · Primeiro Atendimento</button>
       </div>
 
       <div id="tab-jade-pa" class="tab-panel">
-        <section class="jade-barra" aria-label="Controle da Jade">
+        <section class="jade-barra" aria-label="Controle da Jaade">
           <div class="jade-barra-esq">
             <button type="button" class="jade-params-seta" id="jade-params-toggle" onclick="alternarParametrosJade()" aria-expanded="true" aria-controls="jade-parametros" title="Ocultar parâmetros" aria-label="Ocultar parâmetros">
               <svg class="jade-seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </button>
-            <span class="jade-barra-nome">Jade</span>
+            <span class="jade-barra-nome">Jaade</span>
             <span id="jade-pill-ativo" class="jade-pill">—</span>
             <span id="jade-pill-modo" class="jade-pill">—</span>
           </div>
@@ -358,12 +358,12 @@
               <svg id="jade-job-icone" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M9 2h6"/></svg>
               <span id="jade-job-rotulo">Iniciar job</span>
             </button>
-            <button class="btn btn-icon jade-btn-limpar" type="button" onclick="abrirLimparJade()" title="Apaga lotes e auditoria da Jade no IA Service (o SoftExpert não é alterado)">Limpar logs</button>
+            <button class="btn btn-icon jade-btn-limpar" type="button" onclick="abrirLimparJade()" title="Apaga lotes e auditoria da Jaade no IA Service (o SoftExpert não é alterado)">Limpar logs</button>
           </div>
         </section>
 
-        <section class="jade-parametros" id="jade-parametros" aria-label="Parâmetros da Jade">
-          <p class="jade-intro">A Jade analisa, uma única vez, cada chamado do Primeiro Atendimento sem responsável e sem posicionamento, e escreve o primeiro retorno ao cliente.</p>
+        <section class="jade-parametros" id="jade-parametros" aria-label="Parâmetros da Jaade">
+          <p class="jade-intro">A Jaade analisa, uma única vez, cada chamado do Primeiro Atendimento sem responsável e sem posicionamento, e escreve o primeiro retorno ao cliente.</p>
         <div class="jade-grupos" id="jade-grupos">
           <section class="jade-grupo" data-grupo="funcionamento">
             <h3><button type="button" class="jade-grupo-toggle" onclick="alternarGrupoJade('funcionamento')" aria-expanded="true"><svg class="jade-grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span>Funcionamento</span></button></h3>
@@ -389,7 +389,7 @@
             <div class="form-field">
               <label>Intervalo entre leituras (minutos)</label>
               <input type="number" id="jade-intervalo" class="form-control" min="1" max="60" step="1">
-              <div class="form-hint">De quanto em quanto tempo a Jade procura chamados novos.</div>
+              <div class="form-hint">De quanto em quanto tempo a Jaade procura chamados novos.</div>
             </div>
             <div class="form-field">
               <label>Limite de chamados por dia</label>
@@ -408,13 +408,13 @@
             <div class="jade-grupo-resumo" id="jade-resumo-integracao"></div>
             <div class="form-field"><label>Fonte SoftExpert</label><select id="jade-fonte" class="form-control" onchange="carregarJadePa()"></select></div>
             <div class="form-field">
-              <label>Usuário da Jade no SoftExpert (CDUSER)</label>
+              <label>Usuário da Jaade no SoftExpert (CDUSER)</label>
               <input type="text" id="jade-usuario" class="form-control" inputmode="numeric" placeholder="ex.: 995">
             </div>
             <div class="form-field">
               <label>Somente estes chamados</label>
               <input type="text" id="jade-somente" class="form-control" placeholder="vazio = todos · ex.: 037100, 037101">
-              <div class="form-hint">Preenchido, a Jade só atua nesses chamados. Esvazie para liberar todos.</div>
+              <div class="form-hint">Preenchido, a Jaade só atua nesses chamados. Esvazie para liberar todos.</div>
             </div>
           </section>
 
@@ -423,10 +423,10 @@
             <div class="jade-grupo-resumo" id="jade-resumo-avisos"></div>
             <div class="form-field">
               <div class="jade-aviso-lista">
-                <div class="jade-aviso-cab"><span>Grupo</span><span title="Retorno não gravado, ou gravado sem devolver ao cliente">Sem PA</span><span title="PA gravado pela Jade">Com PA</span></div>
+                <div class="jade-aviso-cab"><span>Grupo</span><span title="Retorno não gravado, ou gravado sem devolver ao cliente">Sem PA</span><span title="PA gravado pela Jaade">Com PA</span></div>
                 <div id="jade-grupos-aviso"></div>
               </div>
-              <div class="form-hint"><b>Sem PA</b>: retorno não gravado no SoftExpert, ou gravado sem devolver ao cliente (precisam de ação). <b>Com PA</b>: PA gravado pela Jade. Uma mensagem de cada por leitura. Em Simulação também envia, marcada "🧪 SIMULAÇÃO" (nada é gravado no SoftExpert). Grupos cadastrados no IA Command.</div>
+              <div class="form-hint"><b>Sem PA</b>: retorno não gravado no SoftExpert, ou gravado sem devolver ao cliente (precisam de ação). <b>Com PA</b>: PA gravado pela Jaade. Uma mensagem de cada por leitura. Em Simulação também envia, marcada "🧪 SIMULAÇÃO" (nada é gravado no SoftExpert). Grupos cadastrados no IA Command.</div>
             </div>
             <div><button type="button" class="btn btn-ghost" onclick="carregarGruposAvisoJade()">Atualizar grupos</button></div>
           </section>
@@ -440,7 +440,7 @@
         <div class="table-card">
           <div class="jade-grade-topo">
             <div>
-              <div class="jade-grade-titulo">Chamados tratados pela Jade</div>
+              <div class="jade-grade-titulo">Chamados tratados pela Jaade</div>
               <div id="jade-ciclo" class="jade-ciclo"></div>
             </div>
             <div class="jade-grade-dica"><span id="jade-atualizado"></span> Clique num chamado para ver a auditoria</div>
@@ -465,11 +465,11 @@
         <div class="jade-modal-fundo" id="jade-limpar" onclick="if (event.target === this) fecharLimparJade()">
           <div class="jade-dlg" role="dialog" aria-modal="true" aria-labelledby="jade-limpar-titulo">
             <div class="jade-modal-topo">
-              <div class="jade-modal-titulo" id="jade-limpar-titulo">Limpar logs da Jade</div>
+              <div class="jade-modal-titulo" id="jade-limpar-titulo">Limpar logs da Jaade</div>
               <button class="jade-modal-fechar" type="button" onclick="fecharLimparJade()" aria-label="Fechar">&times;</button>
             </div>
             <div class="jade-dlg-corpo">
-              <p class="jade-dlg-texto">Apaga os <b>lotes</b> e a <b>auditoria</b> da Jade guardados no IA Service. <b>Nada é apagado nem alterado no SoftExpert</b>: os posicionamentos gravados e as atividades dos chamados continuam como estão.</p>
+              <p class="jade-dlg-texto">Apaga os <b>lotes</b> e a <b>auditoria</b> da Jaade guardados no IA Service. <b>Nada é apagado nem alterado no SoftExpert</b>: os posicionamentos gravados e as atividades dos chamados continuam como estão.</p>
               <div class="jade-dlg-opcoes" role="radiogroup" aria-label="O que limpar">
                 <label><input type="radio" name="jade-limpar-escopo" value="periodo" checked onchange="escopoLimparJade()"> Por período</label>
                 <label><input type="radio" name="jade-limpar-escopo" value="tudo" onchange="escopoLimparJade()"> Tudo</label>
@@ -479,7 +479,7 @@
                 <div class="form-field"><label for="jade-limpar-ate">Até</label><input class="form-control" id="jade-limpar-ate" type="date"></div>
               </div>
               <div class="form-field"><label for="jade-limpar-motivo">Motivo (opcional, fica na auditoria)</label><input class="form-control" id="jade-limpar-motivo" type="text" maxlength="120"></div>
-              <div class="jade-dlg-aviso">Não pode ser desfeito. Os chamados do período são <b>liberados</b>: os que ainda estão no Primeiro Atendimento <b>sem posicionamento</b> no SoftExpert (simulados, descartados, com falha) voltam a ser analisados pela Jade na próxima leitura. Os que já receberam retorno da Jade no SoftExpert não voltam. A limpeza fica registrada na auditoria com o seu usuário.</div>
+              <div class="jade-dlg-aviso">Não pode ser desfeito. Os chamados do período são <b>liberados</b>: os que ainda estão no Primeiro Atendimento <b>sem posicionamento</b> no SoftExpert (simulados, descartados, com falha) voltam a ser analisados pela Jaade na próxima leitura. Os que já receberam retorno da Jaade no SoftExpert não voltam. A limpeza fica registrada na auditoria com o seu usuário.</div>
             </div>
             <div class="jade-dlg-acoes">
               <button class="btn btn-ghost" type="button" onclick="fecharLimparJade()">Cancelar</button>
@@ -492,7 +492,7 @@
           <div class="jade-modal" role="dialog" aria-modal="true" aria-labelledby="jade-modal-titulo">
             <div class="jade-modal-topo">
               <div>
-                <div class="jade-modal-kicker">Auditoria da Jade · Primeiro Atendimento</div>
+                <div class="jade-modal-kicker">Auditoria da Jaade · Primeiro Atendimento</div>
                 <div class="jade-modal-titulo" id="jade-modal-titulo">Chamado</div>
                 <div class="jade-modal-sub" id="jade-modal-sub"></div>
               </div>
@@ -882,7 +882,7 @@
     preencherFontesJade(fontes);
   }
 
-  // ── Jade no Primeiro Atendimento ──────────────────────────────────────────
+  // ── Jaade no Primeiro Atendimento ──────────────────────────────────────────
   const JADE_ESTADOS = {
     detectado: 'Na fila', gerando: 'Gerando', simulado: 'Simulado', pronto: 'Pronto p/ enviar', publicando: 'Enviando',
     publicado: 'Enviado', devolvendo: 'Devolvendo', devolvido: 'Devolvido', descartado: 'Descartado', falha: 'Falha',
@@ -994,7 +994,7 @@
       sub.textContent = sb;
       arco.setAttribute('stroke-dashoffset', String(100 - Math.max(0, Math.min(100, progresso))));
     };
-    if (!jadePainel) return estado('parado', 'Jade · próxima leitura', '--:--', 'carregando…', 0);
+    if (!jadePainel) return estado('parado', 'Jaade · próxima leitura', '--:--', 'carregando…', 0);
     const { config, loteEmAndamento } = jadePainel;
     const modo = config.modo === 'publicar' ? 'Publicando' : 'Simulação';
     const agora = Date.now() + jadeDifRelogio;
@@ -1008,9 +1008,9 @@
     const proximo = config.proximoCicloEm ? Date.parse(config.proximoCicloEm)
       : config.ultimoCicloEm ? Date.parse(config.ultimoCicloEm) + intervaloMs : agora;
     const falta = proximo - agora;
-    if (falta <= 0) return estado('iniciando', 'Jade · próxima leitura', '00:00', 'iniciando a leitura…', 100);
+    if (falta <= 0) return estado('iniciando', 'Jaade · próxima leitura', '00:00', 'iniciando a leitura…', 100);
     // O anel enche conforme o intervalo passa.
-    return estado(falta <= 30000 ? 'urgente' : '', 'Jade · próxima leitura', _mmss(falta),
+    return estado(falta <= 30000 ? 'urgente' : '', 'Jaade · próxima leitura', _mmss(falta),
       `a cada ${config.intervaloMinutos} min · ${modo}`, ((intervaloMs - falta) / intervaloMs) * 100);
   }
 
@@ -1166,7 +1166,7 @@
         html += lote.chamados.length
           ? lote.chamados.map(c => _linhaChamadoJade(c.execucao, { situacao: c.situacao, texto: c.ultimoRegistro })).join('')
           : `<tr class="jade-filho"><td colspan="6"><div class="empty-state">${r.elegiveis
-            ? 'A leitura encontrou chamados elegíveis, mas todos já tinham sido tratados pela Jade (ela age uma única vez por chamado).'
+            ? 'A leitura encontrou chamados elegíveis, mas todos já tinham sido tratados pela Jaade (ela age uma única vez por chamado).'
             : 'A leitura não encontrou chamados no Primeiro Atendimento sem triagem.'}</div></td></tr>`;
       }
     }
@@ -1177,7 +1177,7 @@
           <span class="group-resumo">${semLote.length} chamado(s)</span></td></tr>`;
       if (aberto) html += semLote.map(ex => _linhaChamadoJade(ex, { situacao: ex.ultimoErro ? 'erro' : 'info', texto: ex.ultimoErro || ex.motivo })).join('');
     }
-    tbody.innerHTML = html || '<tr><td colspan="6"><div class="empty-state">Nenhum chamado tratado pela Jade ainda.</div></td></tr>';
+    tbody.innerHTML = html || '<tr><td colspan="6"><div class="empty-state">Nenhum chamado tratado pela Jaade ainda.</div></td></tr>';
   }
 
   function _nomesGruposAvisoJade(tipo) {
@@ -1230,15 +1230,15 @@
 
   // ── Auditoria: fluxo do chamado (padrão workflow) ──────────────────────────
   const JADE_ETAPAS = [
-    { id: 'deteccao', rotulo: 'Detecção no SoftExpert', desc: 'A Jade encontra o chamado no Primeiro Atendimento sem responsável e sem posicionamento, e confere de novo antes de cada tentativa.' },
+    { id: 'deteccao', rotulo: 'Detecção no SoftExpert', desc: 'A Jaade encontra o chamado no Primeiro Atendimento sem responsável e sem posicionamento, e confere de novo antes de cada tentativa.' },
     { id: 'importacao', rotulo: 'Importação do chamado', desc: 'Dados do chamado trazidos do SoftExpert para a base do IA Service.' },
     { id: 'anexos', rotulo: 'Anexos', desc: 'Arquivos do chamado copiados e entregues à IA.' },
     { id: 'analise', rotulo: 'Análise técnica', desc: 'Pesquisa da IA para o ANALISTA, gravada no chat da J2iA do chamado. Este texto NÃO vai ao cliente; é a base do retorno ao cliente.' },
     { id: 'retorno', rotulo: 'Retorno ao cliente', desc: 'Texto que vai ao CLIENTE (gravado na grade do SoftExpert no modo Publicar), a decisão (responder ou devolver) e as versões recusadas pela verificação.' },
     { id: 'envio', rotulo: 'Gravação no SoftExpert', desc: 'Posicionamento gravado na grade do chamado: campos enviados e resposta do SoftExpert.' },
     { id: 'devolucao', rotulo: 'Devolução ao cliente', desc: 'Movimentação do chamado para o cliente (ATV-02, ação 1 → Retorno do Usuário).' },
-    { id: 'situacao', rotulo: 'Atividade no SoftExpert', desc: 'Conferência final no SoftExpert: em que atividade o chamado ficou depois da Jade (respondido segue no Primeiro Atendimento; devolvido avança para o Retorno do Usuário).' },
-    { id: 'aviso', rotulo: 'Aviso por WhatsApp', desc: 'Mensagem do fim da leitura aos grupos escolhidos: chamados sem PA ou com PA pela Jade. Recebe todo membro dos grupos com acesso à empresa. Em Simulação sai marcada como teste. Não aparece sem grupo escolhido ou quando a triagem atendeu antes.' },
+    { id: 'situacao', rotulo: 'Atividade no SoftExpert', desc: 'Conferência final no SoftExpert: em que atividade o chamado ficou depois da Jaade (respondido segue no Primeiro Atendimento; devolvido avança para o Retorno do Usuário).' },
+    { id: 'aviso', rotulo: 'Aviso por WhatsApp', desc: 'Mensagem do fim da leitura aos grupos escolhidos: chamados sem PA ou com PA pela Jaade. Recebe todo membro dos grupos com acesso à empresa. Em Simulação sai marcada como teste. Não aparece sem grupo escolhido ou quando a triagem atendeu antes.' },
   ];
   const JADE_ICONE = { ok: '✓', aviso: '!', erro: '✕', info: 'i', pendente: '' };
   const JADE_SITUACAO = { ok: 'Concluída', aviso: 'Com aviso', erro: 'Com erro', info: 'Informativa', pendente: 'Não executada' };
@@ -1251,7 +1251,7 @@
   const JADE_ROTULOS = {
     titulo: 'Título', assunto: 'Assunto', modulo: 'Módulo', tipo: 'Tipo', decisao: 'Decisão', motivo: 'Motivo', modelo: 'Modelo de IA',
     usuario: 'Usuário no SoftExpert', atividade: 'Atividade', acao: 'Ação', destino: 'Destino',
-    atividadeAtual: 'Atividade atual', atividadeEsperada: 'Atividade esperada', posicionamentoJade: 'Posicionamento da Jade', responsavel: 'Responsável',
+    atividadeAtual: 'Atividade atual', atividadeEsperada: 'Atividade esperada', posicionamentoJade: 'Posicionamento da Jaade', responsavel: 'Responsável',
     mensagem: 'Mensagem', tipo: 'Tipo', etapa: 'Etapa', operacao: 'Operação', code: 'Código', status: 'Status',
     codigoTransporte: 'Código de transporte', resultadoIndeterminado: 'Resultado indeterminado',
     enviados: 'Números que receberam', total: 'Números nos grupos', falhas: 'Falhas no envio',
@@ -1480,8 +1480,8 @@
     if (!tudo && de > ate) { alert('A data inicial é maior que a final.'); return; }
     const fmt = (dia) => dia.split('-').reverse().join('/');
     const pergunta = tudo
-      ? 'Limpar TODOS os logs da Jade (lotes e auditoria) desta fonte? O SoftExpert não é alterado.'
-      : `Limpar os logs da Jade de ${fmt(de)} a ${fmt(ate)}? O SoftExpert não é alterado.`;
+      ? 'Limpar TODOS os logs da Jaade (lotes e auditoria) desta fonte? O SoftExpert não é alterado.'
+      : `Limpar os logs da Jaade de ${fmt(de)} a ${fmt(ate)}? O SoftExpert não é alterado.`;
     if (!confirm(pergunta)) return;
     const btn = document.getElementById('btn-jade-limpar-ok');
     btn.disabled = true;
@@ -1498,7 +1498,7 @@
       });
       fecharLimparJade();
       setTimeout(hideInfo, 8000);
-      showInfo(`Logs da Jade limpos: ${r.lotesRemovidos} lote(s), ${r.registrosRemovidos} registro(s) de auditoria, ${r.chamadosLiberados ?? 0} chamado(s) liberado(s). Nada foi alterado no SoftExpert.`);
+      showInfo(`Logs da Jaade limpos: ${r.lotesRemovidos} lote(s), ${r.registrosRemovidos} registro(s) de auditoria, ${r.chamadosLiberados ?? 0} chamado(s) liberado(s). Nada foi alterado no SoftExpert.`);
       await carregarJadePa({ manterFormulario: true });
     } catch (err) {
       alert('Não foi possível limpar os logs: ' + err.message);
@@ -1530,7 +1530,7 @@
             : {}),
         }),
       });
-      showInfo('Configuração da Jade salva.');
+      showInfo('Configuração da Jaade salva.');
       setTimeout(hideInfo, 5000);
       await carregarJadePa();
     } catch (err) {
@@ -1588,7 +1588,7 @@
         const partes = [`${r.elegiveis ?? 0} elegível(is)`, `${r.novos ?? 0} novo(s)`, `${(r.processados || []).length} analisado(s)`];
         if (r.enviados) partes.push(`${r.enviados.length} enviado(s) ao SoftExpert`);
         const explica = !r.novos && !(r.processados || []).length && !(r.enviados || []).length
-          ? (r.elegiveis ? ' Os chamados encontrados já tinham sido tratados pela Jade (ela age uma única vez por chamado).' : ' Nenhum chamado no Primeiro Atendimento sem triagem.')
+          ? (r.elegiveis ? ' Os chamados encontrados já tinham sido tratados pela Jaade (ela age uma única vez por chamado).' : ' Nenhum chamado no Primeiro Atendimento sem triagem.')
           : '';
         const erros = (r.erros || []).length ? ` Erros: ${r.erros.join('; ')}` : '';
         showInfo(`Leitura concluída${loteId ? ` (Lote #${loteId})` : ''}: ${partes.join(', ')}.${explica}${erros}`);

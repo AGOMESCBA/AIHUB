@@ -381,7 +381,7 @@
     .composer-btn.enviar { background:var(--wa-accent); border-color:var(--wa-accent); color:#04140f; }
     .composer-btn.pesquisar { background:var(--wa-accent); border-color:var(--wa-accent); }
     .composer-btn.pesquisar:disabled { opacity:.45; cursor:not-allowed; }
-    /* Chamado sem resposta da Jade: brilho curto nos botões de pesquisa ao abrir. */
+    /* Chamado sem resposta da Jaade: brilho curto nos botões de pesquisa ao abrir. */
     .chat-header-pesquisar.destaque, .composer-btn.pesquisar.destaque { animation:pesquisar-destaque 1.5s ease-in-out 4; }
     @keyframes pesquisar-destaque { 0%, 100% { box-shadow:0 0 0 0 rgba(0,217,163,0); } 50% { box-shadow:0 0 0 6px rgba(0,217,163,.3), 0 0 14px rgba(0,217,163,.5); } }
     @media (prefers-reduced-motion: reduce) { .chat-header-pesquisar.destaque, .composer-btn.pesquisar.destaque { animation:none; box-shadow:0 0 0 3px rgba(0,217,163,.45); } }
@@ -654,9 +654,9 @@
                   <input type="file" id="anexo-input" multiple style="display:none" accept=".txt,.log,.xml,.json,.sql,.csv,.docx,.xlsx,.pptx,.prw,.tlpp,.ch,.js,.mjs,.cjs,.ts,.jsx,.tsx,.py,.cs,.java,.php,.html,.css,.vue,.go,.rb,.kt,.sh,.ps1,.png,.jpg,.jpeg,.webp,.pdf">
                   <button class="composer-btn" type="button" title="Anexar arquivo" onclick="document.getElementById('anexo-input').click()">📎</button>
                   <!-- Mesma pesquisa do botão do topo, ao alcance de quem está digitando (2026-11-19). -->
-                  <button class="composer-btn pesquisar" id="composer-pesquisar" type="button" aria-label="Pesquisar o chamado com a Jade" onclick="pesquisarSolucoes()">🔎</button>
+                  <button class="composer-btn pesquisar" id="composer-pesquisar" type="button" aria-label="Pesquisar o chamado com a Jaade" onclick="pesquisarSolucoes()">🔎</button>
                   <button class="retorno-button" id="retorno-btn" type="button">Retorno</button>
-                  <textarea id="composer-texto" placeholder="Descreva o problema, cole a mensagem de erro, responda à Jade ou use 🔎 para ela pesquisar o chamado..."></textarea>
+                  <textarea id="composer-texto" placeholder="Descreva o problema, cole a mensagem de erro, responda à Jaade ou use 🔎 para ela pesquisar o chamado..."></textarea>
                   <button class="composer-btn enviar" type="button" title="Enviar" onclick="enviarMensagem()">➤</button>
                 </div>
                 <div class="composer-hint">Ctrl+Enter para enviar · anexe prints, logs e fonte relacionados ao problema</div>
@@ -1021,7 +1021,7 @@
       } catch (_) { return String(iso); }
     }
     function rotuloPapelMensagem(papel, direcao) {
-      if (papel === 'assistant') return 'Jade';
+      if (papel === 'assistant') return 'Jaade';
       if (papel === 'customer') return 'Cliente';
       if (papel === 'system') return 'Sistema';
       return 'Atendente';
@@ -2598,7 +2598,7 @@
     // porque o polling daquele chamado já tinha esgotado as tentativas
     // lendo o atendimento errado.
     async function aguardarPreAnalise({ maxTentativas = 20, intervaloMs = 1500, atendimentoId = atendimentoAtualId } = {}) {
-      showTyping('A Jade está analisando o chamado…');
+      showTyping('A Jaade está analisando o chamado…');
       for (let tentativa = 0; tentativa < maxTentativas; tentativa++) {
         if (atendimentoId !== atendimentoAtualId) { hideTyping(); return; } // analista já saiu deste chamado — para de ocupar o indicador "Analisando…" de quem está vendo agora
         const temResposta = await carregarMensagens(atendimentoId);
@@ -2689,13 +2689,13 @@
     function atualizarDicaPesquisar() {
       const ocupado = !!atendimentoAtualId && atendimentosEmProcessamento.has(atendimentoAtualId);
       const comTexto = !!document.getElementById('composer-texto')?.value.trim();
-      const dica = ocupado ? 'A Jade já está pesquisando este chamado...'
-        : comTexto ? 'Pesquisar o chamado com a Jade. A pesquisa não usa o que você escreveu: para a Jade considerar, use Enviar ➤'
-          : 'Pesquisar o chamado com a Jade: ela lê o histórico e os anexos e busca a solução, sem precisar digitar';
+      const dica = ocupado ? 'A Jaade já está pesquisando este chamado...'
+        : comTexto ? 'Pesquisar o chamado com a Jaade. A pesquisa não usa o que você escreveu: para a Jaade considerar, use Enviar ➤'
+          : 'Pesquisar o chamado com a Jaade: ela lê o histórico e os anexos e busca a solução, sem precisar digitar';
       botoesPesquisar().forEach(b => { b.title = dica; });
     }
 
-    // Chamado ainda sem resposta da Jade: as lupas brilham alguns segundos ao abrir,
+    // Chamado ainda sem resposta da Jaade: as lupas brilham alguns segundos ao abrir,
     // uma vez por chamado (sem piscar o tempo todo).
     let destaquePesquisarFeito = null;
     function destacarPesquisarSeNuncaPesquisado(atendimentoId, temRespostaIa) {
@@ -2734,7 +2734,7 @@
       anexosPendentes = [];
       renderizarAnexosPendentes();
       atendimentosEmProcessamento.add(atendimentoIdDoTurno);
-      _atualizarIndicadorProcessamento(atendimentoIdDoTurno, _pareceSolicitarPesquisa(texto) ? 'A Jade está pesquisando…' : undefined);
+      _atualizarIndicadorProcessamento(atendimentoIdDoTurno, _pareceSolicitarPesquisa(texto) ? 'A Jaade está pesquisando…' : undefined);
 
       const pararRascunho = acompanharRascunho(atendimentoIdDoTurno, empresaId);
       const qsTurno = qsEmpresa(empresaId);
@@ -2798,7 +2798,7 @@
 
       addBubble({ direcao: 'out', texto: TEXTO_PESQUISAR_SOLUCOES, criadoEm: new Date().toISOString(), papel: 'user' });
       atendimentosEmProcessamento.add(atendimentoIdDoTurno);
-      _atualizarIndicadorProcessamento(atendimentoIdDoTurno, 'A Jade está pesquisando…');
+      _atualizarIndicadorProcessamento(atendimentoIdDoTurno, 'A Jaade está pesquisando…');
       if (atendimentoIdDoTurno === atendimentoAtualId) botoesPesquisar().forEach(b => { b.disabled = true; });
 
       const pararRascunho = acompanharRascunho(atendimentoIdDoTurno, empresaId);

@@ -131,11 +131,11 @@ function canal(id, porta) {
         { recipientGroups, enviarTextoFn, registrarFn, formatarContatoFn }
       );
       assert.deepStrictEqual(registros, [
-        ['info', '📣 Jade PA · aviso de chamados COM PA (lote #7): enviando aos grupos Líderes, Triagem (3 número(s)).'],
-        ['success', '✅ Jade PA · aviso de chamados COM PA (lote #7) → contato 0001'],
-        ['error', '❌ Jade PA · aviso de chamados COM PA (lote #7) → contato 0002: Numero nao autorizado para esta empresa.'],
+        ['info', '📣 Jaade IA · aviso de PA respondido (lote #7): enviando aos grupos Líderes, Triagem (3 número(s)).'],
+        ['success', '✅ Jaade IA · aviso de PA respondido (lote #7) → contato 0001'],
+        ['error', '❌ Jaade IA · aviso de PA respondido (lote #7) → contato 0002: Numero nao autorizado para esta empresa.'],
         // contato 0004 já foi registrado pelo worker (registrado: true): sem linha repetida.
-        ['warning', '⚠️ Jade PA · aviso de chamados COM PA (lote #7): entregue a 2 de 3 número(s).'],
+        ['warning', '⚠️ Jaade IA · aviso de PA respondido (lote #7): entregue a 2 de 3 número(s).'],
       ]);
 
       assert.deepStrictEqual(pedidos, [{ empresaId: 5, grupoIds: ['g1', 'g2'] }]);

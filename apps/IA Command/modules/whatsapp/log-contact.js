@@ -41,6 +41,9 @@ const acoesEnvio = new Map([
   ['chatweb_encaminhamento', 'IA Command: resposta do Chat Web encaminhada'],
   ['iaservice_aviso_acesso', 'IA Service: aviso de acesso ao chat enviado'],
   ['iaservice_codigo_acesso', 'IA Service: código de acesso ao chat enviado'],
+  ['iaservice_jade_pa_falha', 'Jaade IA: aviso de PA não respondido enviado'],
+  ['iaservice_jade_pa_sucesso', 'Jaade IA: aviso de PA respondido enviado'],
+  ['iaservice_jade_pa_resumo', 'Jaade IA: aviso de PA enviado'],
   ['servico_externo', 'Mensagem de serviço externo enviada'],
 ]);
 

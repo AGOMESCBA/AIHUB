@@ -1,14 +1,14 @@
-// Aviso por WhatsApp ao fim de cada lote da Jade no Primeiro Atendimento
+// Aviso por WhatsApp ao fim de cada lote da Jaade no Primeiro Atendimento
 // (pedido do usuário, 2026-11-20). Duas mensagens, cada uma para os grupos
 // escolhidos na tela: os chamados que ficaram SEM PA (alguém precisa agir) e
-// os que tiveram PA PELA JADE. O que a triagem atendeu antes da Jade não entra.
+// os que tiveram PA PELA JADE. O que a triagem atendeu antes da Jaade não entra.
 //
-// Regra (resultado no SoftExpert, não a intenção da Jade):
+// Regra (resultado no SoftExpert, não a intenção da Jaade):
 //   - retorno não gravado na grade → falha (inclui texto vencido > 4h);
 //   - retorno gravado, mas a devolução ao cliente não chegou ao Retorno do
 //     Usuário → falha (o chamado ficou parado no meio do caminho);
 //   - retorno gravado (segue no PA) ou gravado e devolvido → sucesso;
-//   - triagem assumiu antes da devolução → sucesso (o PA foi da Jade).
+//   - triagem assumiu antes da devolução → sucesso (o PA foi da Jaade).
 // Modo Simulação envia igual, marcado "🧪 SIMULAÇÃO": a regra é só não integrar
 // com o SoftExpert (pedido do usuário, 2026-11-20, para testar o WhatsApp).
 //
@@ -62,7 +62,7 @@ async function _registrarNoMonitor(empresaId, tipo, mensagem) {
   try {
     await _iaCommand('/api/ia-command/whatsapp/registrar-servico-externo', { corpo: { empresaId: Number(empresaId), tipo, mensagem } });
   } catch (err) {
-    console.warn('[IA Service] Jade PA: registro no monitor do WhatsApp falhou:', err.message);
+    console.warn('[IA Service] Jaade PA: registro no monitor do WhatsApp falhou:', err.message);
   }
 }
 
@@ -84,17 +84,29 @@ function _limitar(texto, max) {
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
-function _detalhe(exec, tipo) {
-  if (tipo === 'sucesso') {
-    if (exec.estado === 'simulado') return exec.decisao === 'devolver' ? 'pediria informação ao cliente' : 'responderia';
-    if (exec.estado === 'devolvido') return 'devolvido ao cliente';
-    return exec.decisao === 'devolver' ? 'pedido de informação gravado' : 'respondido';
-  }
+/**
+ * PA gravado na grade, mas a devolução não levou o chamado ao cliente: o
+ * retorno da Jaade existe, mas o cliente não foi acionado. Frase fixa
+ * combinada com o usuário (2026-11-20); o detalhe fica na auditoria.
+ */
+function _devolucaoNaoChegou(exec) {
+  if (exec.decisao !== 'devolver' || !exec.publicadoEm) return null;
+  if (!(exec.estado === 'falha' || (exec.estado === 'publicado' && exec.alerta))) return null;
+  return 'PA gravado, mas NÃO transferido p/ o cliente.';
+}
+
+// Motivo curto do PA não respondido (é o que a triagem precisa para agir).
+function _motivo(exec) {
+  const devolucao = _devolucaoNaoChegou(exec);
+  if (devolucao) return devolucao;
   if (exec.estado === 'descartado') return 'texto vencido (mais de 4h), não enviado';
   return _limitar(String(exec.ultimoErro || exec.motivo || 'falha sem detalhe').replace(/\s*Chamado deixado para a triagem\.?$/, ''), 140);
 }
 
-/** Linha do chamado: "• #037118 · Protheus - Cliente Z — respondido". */
+/**
+ * Linha do chamado: "• #037118 · Protheus - Cliente Z". O resultado está no
+ * cabeçalho da seção; só o PA não respondido leva o motivo no fim.
+ */
 function linhaDoChamado(empresaId, exec, tipo) {
   let produto = null;
   let cliente = null;
@@ -104,28 +116,55 @@ function linhaDoChamado(empresaId, exec, tipo) {
     const c = chamado?.clienteId ? clienteRepo.getClientePorId(empresaId, chamado.clienteId) : null;
     cliente = c?.nomeFantasia || c?.nome || null;
   } catch (_) { /* a linha sai mesmo sem os dados do chamado */ }
-  return `• #${exec.numeroChamado} · ${produto || 'Produto não informado'} - ${cliente || 'Cliente não identificado'} — ${_detalhe(exec, tipo)}`;
+  const base = `• #${exec.numeroChamado} · ${produto || 'Produto não informado'} - ${cliente || 'Cliente não identificado'}`;
+  return tipo === 'falha' ? `${base} — ${_motivo(exec)}` : base;
 }
 
-function montarMensagem(empresaId, tipo, execs, { simulacao = false } = {}) {
+// "Jaade" (J-2A-de, de J2A) é o nome da assistente, não erro de digitação.
+function _secao(empresaId, tipo, execs) {
   const linhas = execs.slice(0, MAX_LINHAS).map(e => linhaDoChamado(empresaId, e, tipo));
-  if (execs.length > MAX_LINHAS) linhas.push(`… e mais ${execs.length - MAX_LINHAS} chamado(s). Veja na tela da Jade no PA.`);
-  const titulo = tipo === 'falha'
-    ? `⚠️ Jade PA — ${execs.length} chamado(s) sem Primeiro Atendimento`
-    : `✅ Jade PA — ${execs.length} chamado(s) com Primeiro Atendimento`;
+  if (execs.length > MAX_LINHAS) linhas.push(`… e mais ${execs.length - MAX_LINHAS} chamado(s). Veja na tela da Jaade no PA.`);
   return [
-    simulacao ? `🧪 SIMULAÇÃO — ${titulo}` : titulo,
+    tipo === 'falha'
+      ? `⚠️ Jaade IA - ${execs.length} Chamado(s) - PA Não Respondido`
+      : `✅ Jaade IA - ${execs.length} Chamado(s) - PA Respondido`,
     ...linhas,
     ...(tipo === 'falha' ? ['Precisam de atendimento da triagem.'] : []),
-    ...(simulacao ? ['Simulação: nada foi gravado no SoftExpert.'] : []),
   ].join('\n');
+}
+
+/** Uma mensagem com as seções pedidas (não respondido primeiro), separadas por linha em branco. */
+function montarMensagem(empresaId, { falha = [], sucesso = [] }, { simulacao = false } = {}) {
+  const secoes = [];
+  if (falha.length) secoes.push(_secao(empresaId, 'falha', falha));
+  if (sucesso.length) secoes.push(_secao(empresaId, 'sucesso', sucesso));
+  return [
+    ...(simulacao ? ['🧪 SIMULAÇÃO'] : []),
+    secoes.join('\n\n'),
+    ...(simulacao ? ['', 'Simulação: nada foi gravado no SoftExpert.'] : []),
+  ].join('\n');
+}
+
+/**
+ * Destinos do lote: grupo marcado nas duas colunas recebe UMA mensagem com as
+ * duas seções; marcado numa só, recebe só a seção dela.
+ */
+function _destinos(cfg, execs) {
+  const gF = execs.falha.length ? cfg.gruposAvisoFalha : [];
+  const gS = execs.sucesso.length ? cfg.gruposAvisoSucesso : [];
+  const ambos = gF.filter(g => gS.includes(g));
+  return [
+    { grupos: ambos, tipos: ['falha', 'sucesso'] },
+    { grupos: gF.filter(g => !ambos.includes(g)), tipos: ['falha'] },
+    { grupos: gS.filter(g => !ambos.includes(g)), tipos: ['sucesso'] },
+  ].filter(d => d.grupos.length);
 }
 
 function _registrar(exec, loteId, situacao, resumo, detalhes = null) {
   try {
     repo.registrarEvento(exec.id, exec.empresaId, { etapa: 'aviso', situacao, resumo, detalhes, loteId });
   } catch (err) {
-    console.error('[IA Service] Jade PA: registro do aviso falhou:', err.message);
+    console.error('[IA Service] Jaade PA: registro do aviso falhou:', err.message);
   }
 }
 
@@ -151,7 +190,7 @@ async function avisarLote(empresaId, fonteId, { loteId = null } = {}) {
     cfg = repo.getConfig(empresaId, fonteId);
     pendentes = repo.listarParaAvisar(empresaId, fonteId);
   } catch (err) {
-    console.error('[IA Service] Jade PA: leitura dos avisos falhou:', err.message);
+    console.error('[IA Service] Jaade PA: leitura dos avisos falhou:', err.message);
     anotar('erro', `WhatsApp: falha ao preparar o aviso (${err.message}).`);
     return resultado;
   }
@@ -175,50 +214,69 @@ async function avisarLote(empresaId, fonteId, { loteId = null } = {}) {
   const ref = loteId ? ` (lote #${loteId}${simulacao ? ' · simulação' : ''})` : (simulacao ? ' (simulação)' : '');
   for (const tipo of ['falha', 'sucesso']) {
     if (semGrupo[tipo]) {
-      anotar('aviso', `WhatsApp (${tipo === 'falha' ? 'sem PA' : 'com PA'}): ${semGrupo[tipo]} chamado(s) sem aviso, nenhum grupo escolhido.`);
-      await _registrarNoMonitor(empresaId, 'warning', `⚠️ Jade PA${ref}: ${semGrupo[tipo]} chamado(s) ${tipo === 'falha' ? 'SEM PA' : 'COM PA'} sem aviso; nenhum grupo escolhido na tela da Jade.`);
+      const nomeTipo = tipo === 'falha' ? 'PA não respondido' : 'PA respondido';
+      anotar('aviso', `WhatsApp (${nomeTipo}): ${semGrupo[tipo]} chamado(s) sem aviso, nenhum grupo escolhido.`);
+      await _registrarNoMonitor(empresaId, 'warning', `⚠️ Jaade IA${ref}: ${semGrupo[tipo]} chamado(s) com ${nomeTipo} sem aviso; nenhum grupo escolhido na tela da Jaade.`);
     }
   }
   if (!porTipo.falha.length && !porTipo.sucesso.length && !semGrupo.falha && !semGrupo.sucesso) {
     anotar('info', 'WhatsApp: nenhum chamado concluído para avisar nesta leitura.');
   }
 
+  const execs = {};
   for (const tipo of ['falha', 'sucesso']) {
     const reservados = new Set(repo.reservarAviso(porTipo[tipo].map(e => e.id)));
-    const execs = porTipo[tipo].filter(e => reservados.has(e.id));
-    if (!execs.length) continue;
-    const grupos = tipo === 'falha' ? cfg.gruposAvisoFalha : cfg.gruposAvisoSucesso;
-    const nome = `${tipo === 'falha' ? 'chamados sem PA' : 'chamados com PA'}${simulacao ? ', simulação' : ''}`;
+    execs[tipo] = porTipo[tipo].filter(e => reservados.has(e.id));
+  }
+  // Uma mensagem por destino (grupo nas duas colunas = as duas seções juntas).
+  const envios = [];
+  for (const destino of _destinos(cfg, execs)) {
+    const secoes = Object.fromEntries(destino.tipos.map(t => [t, execs[t]]));
+    const finalidade = destino.tipos.length === 2 ? 'resumo' : destino.tipos[0];
     let envio = null;
     let erro = null;
     try {
-      envio = await _enviarParaGrupos(empresaId, grupos, montarMensagem(empresaId, tipo, execs, { simulacao }), tipo, loteId, simulacao);
+      envio = await _enviarParaGrupos(empresaId, destino.grupos, montarMensagem(empresaId, secoes, { simulacao }), finalidade, loteId, simulacao);
     } catch (err) {
       erro = err.message;
     }
-    if (erro || (envio.total > 0 && envio.enviados === 0)) {
-      repo.liberarAviso(execs.map(e => e.id));
-      const motivo = erro || (envio.falhas || []).map(f => f.erro).filter(Boolean)[0] || 'nenhum número recebeu';
-      console.warn(`[IA Service] Jade PA: aviso de ${nome} não enviado (${motivo}); nova tentativa na próxima leitura.`);
+    const entregue = !erro && !(envio.total > 0 && envio.enviados === 0);
+    envios.push({ ...destino, envio, entregue, motivo: erro || (envio?.falhas || []).map(f => f.erro).filter(Boolean)[0] || 'nenhum número recebeu' });
+  }
+
+  for (const tipo of ['falha', 'sucesso']) {
+    if (!execs[tipo].length) continue;
+    const nome = `${tipo === 'falha' ? 'PA não respondido' : 'PA respondido'}${simulacao ? ', simulação' : ''}`;
+    const doTipo = envios.filter(e => e.tipos.includes(tipo));
+    const entregues = doTipo.filter(e => e.entregue);
+    if (!entregues.length) {
+      // Nenhum destino recebeu: volta para a próxima leitura tentar de novo.
+      repo.liberarAviso(execs[tipo].map(e => e.id));
+      const motivo = doTipo[0]?.motivo || 'nenhum número recebeu';
+      console.warn(`[IA Service] Jaade PA: aviso de ${nome} não enviado (${motivo}); nova tentativa na próxima leitura.`);
       anotar('erro', `WhatsApp (${nome}): não enviado, ${motivo}. Nova tentativa na próxima leitura.`);
       // Registra só na primeira tentativa, para a auditoria não repetir a cada leitura.
-      for (const exec of execs) {
+      for (const exec of execs[tipo]) {
         if (!repo.listarEventos(empresaId, exec.id).some(e => e.etapa === 'aviso')) {
           _registrar(exec, loteId, 'erro', `Aviso por WhatsApp (${nome}) não enviado: ${motivo}. Nova tentativa a cada leitura.`, { tipo: nome });
         }
       }
       continue;
     }
-    resultado[tipo] = execs.length;
-    const situacao = envio.total === 0 || envio.falhas?.length ? 'aviso' : 'ok';
-    const resumo = envio.total === 0
+    resultado[tipo] = execs[tipo].length;
+    const enviados = entregues.reduce((s, e) => s + e.envio.enviados, 0);
+    const total = entregues.reduce((s, e) => s + e.envio.total, 0);
+    const falhas = entregues.flatMap(e => e.envio.falhas || []);
+    const parcial = entregues.length < doTipo.length;
+    const situacao = total === 0 || falhas.length || parcial ? 'aviso' : 'ok';
+    const resumo = total === 0
       ? `Aviso por WhatsApp (${nome}) não enviado: os grupos escolhidos não têm números com acesso à empresa.`
-      : `Aviso por WhatsApp (${nome}) enviado a ${envio.enviados} de ${envio.total} número(s).`;
-    const detalhes = { tipo: nome, enviados: envio.enviados, total: envio.total, ...(envio.falhas?.length ? { falhas: envio.falhas.map(f => `${f.nome || 'sem nome'}: ${f.erro}`).join('; ') } : {}) };
-    for (const exec of execs) _registrar(exec, loteId, situacao, resumo, detalhes);
-    anotar(situacao, envio.total === 0
+      : `Aviso por WhatsApp (${nome}) enviado a ${enviados} de ${total} número(s).${parcial ? ' Parte dos grupos não recebeu.' : ''}`;
+    const detalhes = { tipo: nome, enviados, total, ...(falhas.length ? { falhas: falhas.map(f => `${f.nome || 'sem nome'}: ${f.erro}`).join('; ') } : {}) };
+    for (const exec of execs[tipo]) _registrar(exec, loteId, situacao, resumo, detalhes);
+    anotar(situacao, total === 0
       ? `WhatsApp (${nome}): não enviado, os grupos não têm números com acesso à empresa.`
-      : `WhatsApp (${nome}): ${execs.length} chamado(s) avisado(s), entregue a ${envio.enviados} de ${envio.total} número(s).`);
+      : `WhatsApp (${nome}): ${execs[tipo].length} chamado(s) avisado(s), entregue a ${enviados} de ${total} número(s).${parcial ? ' Parte dos grupos não recebeu.' : ''}`);
   }
   return resultado;
 }

@@ -203,8 +203,9 @@ async function registrarNoCanal(empresaId, tipo, msg, deps = {}) {
 
 // Nome do envio a grupos no histórico do canal (só descrições conhecidas).
 const ROTULOS_GRUPO = {
-  iaservice_jade_pa_falha: 'Jade PA · aviso de chamados SEM PA',
-  iaservice_jade_pa_sucesso: 'Jade PA · aviso de chamados COM PA',
+  iaservice_jade_pa_falha: 'Jaade IA · aviso de PA não respondido',
+  iaservice_jade_pa_sucesso: 'Jaade IA · aviso de PA respondido',
+  iaservice_jade_pa_resumo: 'Jaade IA · aviso de PA respondido e não respondido',
 };
 
 /**
@@ -315,7 +316,7 @@ function registrarRotaServicoExterno(app) {
     }
   });
 
-  // Passo de outro app que não chega a enviar (ex.: Jade em Simulação, sem
+  // Passo de outro app que não chega a enviar (ex.: Jaade em Simulação, sem
   // grupo escolhido) registrado no histórico do canal da empresa.
   app.post('/api/ia-command/whatsapp/registrar-servico-externo', async (req, res) => {
     const auth = segredoAutorizado(req);

@@ -622,7 +622,7 @@ require('./apps/IA Service/backend/routes/externo-routes')(app);
 require('./apps/IA Service/backend/services/chat-interno-realtime').iniciar(io, { sessionMiddleware });
 // Limpeza diária de anexos de chamados encerrados (só simula, salvo SVC_LIMPEZA_ANEXOS_MODO=apagar).
 require('./apps/IA Service/backend/services/limpeza-anexos-encerrados-service').iniciarAgendamento();
-// Jade no Primeiro Atendimento: só roda nas fontes em que foi ligada (Base Histórica → Jade).
+// Jaade no Primeiro Atendimento: só roda nas fontes em que foi ligada (Base Histórica → Jaade).
 require('./apps/IA Service/backend/services/jade-pa-service').iniciarAgendamento();
 
 // ── Master Crypto AI ─────────────────────────────────────────────────────────
