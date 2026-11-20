@@ -133,31 +133,16 @@ function _secao(empresaId, tipo, execs) {
   ].join('\n');
 }
 
-/** Uma mensagem com as seções pedidas (não respondido primeiro), separadas por linha em branco. */
-function montarMensagem(empresaId, { falha = [], sucesso = [] }, { simulacao = false } = {}) {
-  const secoes = [];
-  if (falha.length) secoes.push(_secao(empresaId, 'falha', falha));
-  if (sucesso.length) secoes.push(_secao(empresaId, 'sucesso', sucesso));
+/**
+ * Uma mensagem por seção (PA Não Respondido / PA Respondido), cada uma aos
+ * grupos da sua coluna: falha de uma não trava nem repete a outra.
+ */
+function montarMensagem(empresaId, tipo, execs, { simulacao = false } = {}) {
   return [
     ...(simulacao ? ['🧪 SIMULAÇÃO'] : []),
-    secoes.join('\n\n'),
+    _secao(empresaId, tipo, execs),
     ...(simulacao ? ['', 'Simulação: nada foi gravado no SoftExpert.'] : []),
   ].join('\n');
-}
-
-/**
- * Destinos do lote: grupo marcado nas duas colunas recebe UMA mensagem com as
- * duas seções; marcado numa só, recebe só a seção dela.
- */
-function _destinos(cfg, execs) {
-  const gF = execs.falha.length ? cfg.gruposAvisoFalha : [];
-  const gS = execs.sucesso.length ? cfg.gruposAvisoSucesso : [];
-  const ambos = gF.filter(g => gS.includes(g));
-  return [
-    { grupos: ambos, tipos: ['falha', 'sucesso'] },
-    { grupos: gF.filter(g => !ambos.includes(g)), tipos: ['falha'] },
-    { grupos: gS.filter(g => !ambos.includes(g)), tipos: ['sucesso'] },
-  ].filter(d => d.grupos.length);
 }
 
 function _registrar(exec, loteId, situacao, resumo, detalhes = null) {
@@ -223,60 +208,44 @@ async function avisarLote(empresaId, fonteId, { loteId = null } = {}) {
     anotar('info', 'WhatsApp: nenhum chamado concluído para avisar nesta leitura.');
   }
 
-  const execs = {};
+  // Uma mensagem por seção, aos grupos da sua coluna; cada uma tenta de novo sozinha.
   for (const tipo of ['falha', 'sucesso']) {
     const reservados = new Set(repo.reservarAviso(porTipo[tipo].map(e => e.id)));
-    execs[tipo] = porTipo[tipo].filter(e => reservados.has(e.id));
-  }
-  // Uma mensagem por destino (grupo nas duas colunas = as duas seções juntas).
-  const envios = [];
-  for (const destino of _destinos(cfg, execs)) {
-    const secoes = Object.fromEntries(destino.tipos.map(t => [t, execs[t]]));
-    const finalidade = destino.tipos.length === 2 ? 'resumo' : destino.tipos[0];
+    const execs = porTipo[tipo].filter(e => reservados.has(e.id));
+    if (!execs.length) continue;
+    const grupos = tipo === 'falha' ? cfg.gruposAvisoFalha : cfg.gruposAvisoSucesso;
+    const nome = `${tipo === 'falha' ? 'PA não respondido' : 'PA respondido'}${simulacao ? ', simulação' : ''}`;
     let envio = null;
     let erro = null;
     try {
-      envio = await _enviarParaGrupos(empresaId, destino.grupos, montarMensagem(empresaId, secoes, { simulacao }), finalidade, loteId, simulacao);
+      envio = await _enviarParaGrupos(empresaId, grupos, montarMensagem(empresaId, tipo, execs, { simulacao }), tipo, loteId, simulacao);
     } catch (err) {
       erro = err.message;
     }
-    const entregue = !erro && !(envio.total > 0 && envio.enviados === 0);
-    envios.push({ ...destino, envio, entregue, motivo: erro || (envio?.falhas || []).map(f => f.erro).filter(Boolean)[0] || 'nenhum número recebeu' });
-  }
-
-  for (const tipo of ['falha', 'sucesso']) {
-    if (!execs[tipo].length) continue;
-    const nome = `${tipo === 'falha' ? 'PA não respondido' : 'PA respondido'}${simulacao ? ', simulação' : ''}`;
-    const doTipo = envios.filter(e => e.tipos.includes(tipo));
-    const entregues = doTipo.filter(e => e.entregue);
-    if (!entregues.length) {
-      // Nenhum destino recebeu: volta para a próxima leitura tentar de novo.
-      repo.liberarAviso(execs[tipo].map(e => e.id));
-      const motivo = doTipo[0]?.motivo || 'nenhum número recebeu';
+    if (erro || (envio.total > 0 && envio.enviados === 0)) {
+      // Ninguém recebeu: volta para a próxima leitura tentar de novo.
+      repo.liberarAviso(execs.map(e => e.id));
+      const motivo = erro || (envio.falhas || []).map(f => f.erro).filter(Boolean)[0] || 'nenhum número recebeu';
       console.warn(`[IA Service] Jaade PA: aviso de ${nome} não enviado (${motivo}); nova tentativa na próxima leitura.`);
       anotar('erro', `WhatsApp (${nome}): não enviado, ${motivo}. Nova tentativa na próxima leitura.`);
       // Registra só na primeira tentativa, para a auditoria não repetir a cada leitura.
-      for (const exec of execs[tipo]) {
+      for (const exec of execs) {
         if (!repo.listarEventos(empresaId, exec.id).some(e => e.etapa === 'aviso')) {
           _registrar(exec, loteId, 'erro', `Aviso por WhatsApp (${nome}) não enviado: ${motivo}. Nova tentativa a cada leitura.`, { tipo: nome });
         }
       }
       continue;
     }
-    resultado[tipo] = execs[tipo].length;
-    const enviados = entregues.reduce((s, e) => s + e.envio.enviados, 0);
-    const total = entregues.reduce((s, e) => s + e.envio.total, 0);
-    const falhas = entregues.flatMap(e => e.envio.falhas || []);
-    const parcial = entregues.length < doTipo.length;
-    const situacao = total === 0 || falhas.length || parcial ? 'aviso' : 'ok';
-    const resumo = total === 0
+    resultado[tipo] = execs.length;
+    const situacao = envio.total === 0 || envio.falhas?.length ? 'aviso' : 'ok';
+    const resumo = envio.total === 0
       ? `Aviso por WhatsApp (${nome}) não enviado: os grupos escolhidos não têm números com acesso à empresa.`
-      : `Aviso por WhatsApp (${nome}) enviado a ${enviados} de ${total} número(s).${parcial ? ' Parte dos grupos não recebeu.' : ''}`;
-    const detalhes = { tipo: nome, enviados, total, ...(falhas.length ? { falhas: falhas.map(f => `${f.nome || 'sem nome'}: ${f.erro}`).join('; ') } : {}) };
-    for (const exec of execs[tipo]) _registrar(exec, loteId, situacao, resumo, detalhes);
-    anotar(situacao, total === 0
+      : `Aviso por WhatsApp (${nome}) enviado a ${envio.enviados} de ${envio.total} número(s).`;
+    const detalhes = { tipo: nome, enviados: envio.enviados, total: envio.total, ...(envio.falhas?.length ? { falhas: envio.falhas.map(f => `${f.nome || 'sem nome'}: ${f.erro}`).join('; ') } : {}) };
+    for (const exec of execs) _registrar(exec, loteId, situacao, resumo, detalhes);
+    anotar(situacao, envio.total === 0
       ? `WhatsApp (${nome}): não enviado, os grupos não têm números com acesso à empresa.`
-      : `WhatsApp (${nome}): ${execs[tipo].length} chamado(s) avisado(s), entregue a ${enviados} de ${total} número(s).${parcial ? ' Parte dos grupos não recebeu.' : ''}`);
+      : `WhatsApp (${nome}): ${execs.length} chamado(s) avisado(s), entregue a ${envio.enviados} de ${envio.total} número(s).`);
   }
   return resultado;
 }

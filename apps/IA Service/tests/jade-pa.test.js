@@ -777,7 +777,7 @@ test('aviso WhatsApp: sem PA vai ao grupo de falha; WhatsApp fora tenta de novo 
   assert.match(ev[0].resumo, /WhatsApp nao esta conectado/);
 });
 
-test('aviso WhatsApp: grupo nas duas colunas recebe UMA mensagem com as duas seções; grupo de uma coluna só a dele', async () => {
+test('aviso WhatsApp: uma mensagem por seção, cada uma à sua coluna; falha de uma não trava nem repete a outra', async () => {
   // g-ambos marcado nas duas; g-triagem só em não respondido; g-coord só em respondido.
   await ligar({ modo: 'publicar', usuarioSoftexpert: '995', gruposAvisoFalha: ['g-ambos', 'g-triagem'], gruposAvisoSucesso: ['g-ambos', 'g-coord'] });
   chamadoNaOrigem('039001');
@@ -799,21 +799,35 @@ test('aviso WhatsApp: grupo nas duas colunas recebe UMA mensagem com as duas se�
     soapReal.enviarOperacao = enviarOriginal;
   }
 
-  // Os dois resultados na MESMA leitura: g-ambos recebe uma mensagem com as duas seções.
-  whats.length = 0;
-  const s = await aviso.avisarLote(EMPRESA, fonte.id, {});
-  assert.equal(s.mensagens.length, 1, 'nada pendente: só a nota de leitura vazia');
-  const enviosAntes = whats.length;
-  const [a, b] = execs();
+  // Os dois resultados na MESMA leitura: duas mensagens separadas, cada uma à sua coluna
+  // (g-ambos recebe as duas). Só a de PA Não Respondido falha: ela volta sozinha.
   getDB().prepare('UPDATE jade_pa_execucoes SET aviso_whatsapp_em = NULL').run();
+  whats.length = 0;
+  const fetchOriginal = global.fetch;
+  global.fetch = async (url, opts = {}) => (JSON.parse(opts.body || '{}').finalidadeEnvio === 'iaservice_jade_pa_falha'
+    ? { ok: false, status: 500, json: async () => ({ error: 'WhatsApp nao esta conectado' }) }
+    : fetchOriginal(url, opts));
+  try {
+    const r = await aviso.avisarLote(EMPRESA, fonte.id, {});
+    assert.equal(r.situacao, 'erro');
+    assert.equal(r.sucesso, 1);
+    assert.equal(r.falha, 0);
+  } finally {
+    global.fetch = fetchOriginal;
+  }
+  assert.equal(whats.length, 1, 'só a de PA Respondido chegou ao IA Command');
+  assert.deepEqual(whats[0].corpo.grupoIds, ['g-ambos', 'g-coord']);
+  assert.equal(whats[0].corpo.finalidadeEnvio, 'iaservice_jade_pa_sucesso');
+  const porNumero = Object.fromEntries(execs().map(e => [e.numeroChamado, e.avisoWhatsappEm]));
+  assert.ok(porNumero['039001'], 'respondido: avisado');
+  assert.equal(porNumero['039002'], null, 'não respondido: volta para a próxima leitura');
+
+  // Próxima leitura: só a de PA Não Respondido sai; a de Respondido não se repete.
   await aviso.avisarLote(EMPRESA, fonte.id, {});
-  assert.equal(whats.length - enviosAntes, 3);
-  const combinado = whats.find(w => w.corpo.grupoIds.join(',') === 'g-ambos');
-  assert.equal(combinado.corpo.finalidadeEnvio, 'iaservice_jade_pa_resumo');
-  assert.match(combinado.corpo.texto, /^⚠️ Jaade IA - 1 Chamado\(s\) - PA Não Respondido\n• #039002[^\n]*\nPrecisam de atendimento da triagem\.\n\n✅ Jaade IA - 1 Chamado\(s\) - PA Respondido\n• #039001 · Produto não informado - Cliente não identificado$/);
-  assert.deepEqual(whats.find(w => w.corpo.grupoIds.join(',') === 'g-triagem').corpo.finalidadeEnvio, 'iaservice_jade_pa_falha');
-  assert.deepEqual(whats.find(w => w.corpo.grupoIds.join(',') === 'g-coord').corpo.finalidadeEnvio, 'iaservice_jade_pa_sucesso');
-  assert.ok(a && b);
+  assert.equal(whats.length, 2);
+  assert.deepEqual(whats[1].corpo.grupoIds, ['g-ambos', 'g-triagem']);
+  assert.equal(whats[1].corpo.finalidadeEnvio, 'iaservice_jade_pa_falha');
+  assert.match(whats[1].corpo.texto, /^⚠️ Jaade IA - 1 Chamado\(s\) - PA Não Respondido\n• #039002[^\n]*\nPrecisam de atendimento da triagem\.$/);
 });
 
 test('aviso WhatsApp: simulação envia marcada como teste; sem grupo escolhido não manda o histórico depois; grupo inválido é recusado', async () => {
