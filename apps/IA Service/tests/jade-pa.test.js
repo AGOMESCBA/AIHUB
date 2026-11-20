@@ -952,12 +952,16 @@ test('responder: na revisão 89+ (ação 6 no PA) manda o e-mail ao cliente e o 
   } finally {
     soapReal.enviarOperacao = enviarOriginal;
   }
+  // Recusada (teste real 037067: -20 regra de salvar formulário): cliente não avisado = alerta,
+  // e o WhatsApp leva o chamado em "PA Não Respondido".
   const e602 = execs().find(e => e.numeroChamado === '038602');
   assert.equal(e602.estado, 'publicado');
-  assert.equal(e602.alerta, false);
+  assert.equal(e602.alerta, true);
   const ev602 = jade.getAuditoria(EMPRESA, fonte.id, e602.id).eventos.find(e => e.etapa === 'notificacao');
-  assert.equal(ev602.situacao, 'aviso');
+  assert.equal(ev602.situacao, 'erro');
   assert.match(ev602.resumo, /recusou a ação.*sem permissão/);
+  assert.equal(aviso.classificar(e602), 'falha');
+  assert.match(aviso.linhaDoChamado(EMPRESA, e602, 'falha'), / — PA gravado, mas e-mail NÃO enviado p\/ o cliente\.$/);
   const antes = envios.length;
   await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
   assert.equal(envios.length, antes, 'nada é reenviado');

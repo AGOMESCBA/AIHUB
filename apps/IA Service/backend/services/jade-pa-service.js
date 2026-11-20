@@ -580,11 +580,16 @@ async function _publicar(cfg, fonte, exec) {
  * ticket" ao cliente e volta ao Primeiro Atendimento (pedido do usuário,
  * 2026-11-20). Confere a ação no próprio chamado (cada instância guarda as
  * ações da sua revisão): sem ela, só a grade, como antes. Uma tentativa só —
- * repetir mandaria o e-mail duas vezes; falha no e-mail é do SoftExpert.
- * Nunca muda o estado do chamado na Jaade nem lança.
+ * repetir mandaria o e-mail duas vezes. Ação 6 recusada ou não confirmada =
+ * o cliente não foi avisado: fica com alerta e o WhatsApp avisa em "PA Não
+ * Respondido" (teste real 037067, recusa -20 do SoftExpert). Nunca lança.
  */
 async function _notificarCliente(cfg, fonte, exec, { jade, config }) {
   const { empresaId } = cfg;
+  const naoAvisado = (motivo, resumo, detalhes) => {
+    _evento(exec, 'notificacao', 'erro', resumo, detalhes);
+    repo.atualizar(exec.id, { alerta: true, ultimoErro: `E-mail ao cliente não enviado: ${motivo}` });
+  };
   try {
     const [acao] = await agenteLocalService.executarSelectNaFonte(empresaId, fonte.id, { sql: SQL_ACAO_EMAIL, params: { numero: String(exec.numeroChamado) }, limit: 2 });
     if (!acao) {
@@ -598,12 +603,12 @@ async function _notificarCliente(cfg, fonte, exec, { jade, config }) {
       const xml = soapClient.montarNotificacaoPrimeiroAtendimento({ workflowId: exec.numeroChamado, userId: jade.matricula });
       resposta = await soapClient.enviarOperacao({ ...config.transporte, xml, operacao: 'executeActivity' });
     } catch (err) {
-      _evento(exec, 'notificacao', 'aviso', `A ação "${nomeAcao}" (e-mail ao cliente) não foi confirmada pelo SoftExpert (${err.message}). Não é repetida, para o cliente não receber o e-mail duas vezes.`,
+      naoAvisado('ação não confirmada pelo SoftExpert.', `A ação "${nomeAcao}" (e-mail ao cliente) não foi confirmada pelo SoftExpert (${err.message}). Não é repetida, para o cliente não receber o e-mail duas vezes.`,
         { ...movimento, resposta: _respostaSe({ httpStatus: err.httpStatus, Detail: err.codigoTransporte }), erroTecnico: _erroTecnico(err, { operacao: 'executeActivity' }) });
       return;
     }
     if (resposta.Status !== 'SUCCESS' || resposta.Code !== '1') {
-      _evento(exec, 'notificacao', 'aviso', `O SoftExpert recusou a ação "${nomeAcao}" (e-mail ao cliente) — ${resposta.Detail || resposta.Code}. O retorno continua na grade.`,
+      naoAvisado(`o SoftExpert recusou a ação — ${resposta.Detail || resposta.Code}`, `O SoftExpert recusou a ação "${nomeAcao}" (e-mail ao cliente) — ${resposta.Detail || resposta.Code}. O retorno continua na grade.`,
         { ...movimento, resposta: _respostaSe(resposta), erroTecnico: { mensagem: resposta.Detail || 'Recusa sem detalhe', operacao: 'executeActivity', status: resposta.Status, code: resposta.Code } });
       return;
     }
@@ -617,7 +622,7 @@ async function _notificarCliente(cfg, fonte, exec, { jade, config }) {
         { ...movimento, resposta: _respostaSe(resposta) });
     }
   } catch (err) {
-    _evento(exec, 'notificacao', 'aviso', `E-mail ao cliente não enviado: ${err.message}. O retorno continua na grade.`);
+    naoAvisado(err.message, `E-mail ao cliente não enviado: ${err.message}. O retorno continua na grade.`);
   }
 }
 

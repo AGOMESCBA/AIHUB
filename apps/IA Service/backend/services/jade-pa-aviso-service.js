@@ -90,7 +90,9 @@ function _limitar(texto, max) {
  * combinada com o usuário (2026-11-20); o detalhe fica na auditoria.
  */
 function _devolucaoNaoChegou(exec) {
-  if (exec.decisao !== 'devolver' || !exec.publicadoEm) return null;
+  if (!exec.publicadoEm) return null;
+  // Responder (revisão 89+): a ação 6 que manda o e-mail ao cliente foi recusada.
+  if (exec.decisao !== 'devolver') return exec.estado === 'publicado' && exec.alerta ? 'PA gravado, mas e-mail NÃO enviado p/ o cliente.' : null;
   if (!(exec.estado === 'falha' || (exec.estado === 'publicado' && exec.alerta))) return null;
   return 'PA gravado, mas NÃO transferido p/ o cliente.';
 }
