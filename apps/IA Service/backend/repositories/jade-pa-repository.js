@@ -109,11 +109,29 @@ function _execucao(row) {
 }
 
 /** Registra o chamado detectado. Devolve false se a Jade já o registrou antes (qualquer estado). */
+/** Registra o chamado na fila; devolve o id novo, ou null se ele já existia. */
 function registrarDetectado(empresaId, fonteId, numeroChamado) {
   const agora = new Date().toISOString();
+  const id = crypto.randomUUID();
   const r = getDB().prepare(`INSERT OR IGNORE INTO jade_pa_execucoes (id, empresa_id, fonte_id, numero_chamado, estado, detectado_em, atualizado_em)
-    VALUES (?, ?, ?, ?, 'detectado', ?, ?)`).run(crypto.randomUUID(), Number(empresaId), fonteId, String(numeroChamado), agora, agora);
-  return r.changes === 1;
+    VALUES (?, ?, ?, ?, 'detectado', ?, ?)`).run(id, Number(empresaId), fonteId, String(numeroChamado), agora, agora);
+  return r.changes === 1 ? id : null;
+}
+
+/** Trilha de auditoria: uma linha por etapa/tentativa, na ordem em que aconteceu. */
+function registrarEvento(execucaoId, empresaId, { etapa, situacao, resumo, detalhes = null }) {
+  getDB().prepare(`INSERT INTO jade_pa_eventos (execucao_id, empresa_id, etapa, situacao, resumo, detalhes, momento)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`).run(execucaoId, Number(empresaId), etapa, situacao, String(resumo),
+    detalhes ? JSON.stringify(detalhes) : null, new Date().toISOString());
+}
+
+function listarEventos(empresaId, execucaoId) {
+  return getDB().prepare('SELECT * FROM jade_pa_eventos WHERE empresa_id = ? AND execucao_id = ? ORDER BY id').all(Number(empresaId), execucaoId)
+    .map((r) => {
+      let detalhes = null;
+      try { detalhes = r.detalhes ? JSON.parse(r.detalhes) : null; } catch (_) { detalhes = null; }
+      return { id: r.id, etapa: r.etapa, situacao: r.situacao, resumo: r.resumo, detalhes, momento: r.momento };
+    });
 }
 
 function contarDetectadosDesde(empresaId, desdeIso) {
@@ -193,6 +211,6 @@ function listarExecucoes(empresaId, { limite = 100 } = {}) {
 
 module.exports = {
   PADRAO, getConfig, salvarConfig, listarConfigsAtivas, tentarTravarCiclo, renovarTrava, liberarCiclo,
-  registrarDetectado, contarDetectadosDesde, listarParaGerar, marcarGerando, listarParaEnviar, contarTentativa, devolverTentativaGeracao,
+  registrarDetectado, registrarEvento, listarEventos, contarDetectadosDesde, listarParaGerar, marcarGerando, listarParaEnviar, contarTentativa, devolverTentativaGeracao,
   atualizar, getExecucao, listarExecucoes,
 };

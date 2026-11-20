@@ -97,6 +97,81 @@
     .jade-ciclo strong { color:var(--text-hi); }
     .jade-ciclo .warn { color:var(--warning-text); font-weight:800; }
     @media (max-width:640px) { .jade-topo-acoes { margin-left:0; } .jade-rodape .btn { width:100%; } }
+    #jade-tbody tr.jade-linha { cursor:pointer; }
+    .jade-ultimo { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .jade-ultimo.erro { color:var(--error-text); }
+    /* Auditoria: janela sobre a grade, fluxo no padrão de workflow */
+    .jade-modal-fundo { position:fixed; inset:0; z-index:400; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; padding:16px; }
+    .jade-modal-fundo.aberto { display:flex; }
+    .jade-modal { width:min(1280px, 100%); height:min(92vh, 100%); background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-md); display:flex; flex-direction:column; overflow:hidden; }
+    .jade-modal-topo { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:16px 20px; border-bottom:1px solid var(--border); }
+    .jade-modal-kicker { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--accent); }
+    .jade-modal-titulo { font-size:19px; font-weight:800; color:var(--text-hi); margin-top:2px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .jade-modal-sub { font-size:12.5px; color:var(--text-lo); margin-top:4px; }
+    .jade-modal-acoes { display:flex; gap:8px; align-items:center; }
+    .jade-modal-fechar { width:34px; height:34px; border:none; background:none; color:var(--text-lo); font-size:24px; line-height:1; cursor:pointer; border-radius:6px; }
+    .jade-modal-fechar:hover { background:var(--bg-hover); color:var(--text-hi); }
+    .jade-fluxo-legenda { display:flex; gap:14px; flex-wrap:wrap; align-items:center; padding:10px 20px 0; font-size:11.5px; color:var(--text-lo); }
+    .jade-fluxo-legenda span { display:inline-flex; align-items:center; gap:5px; }
+    .jade-fluxo-dica { margin-left:auto; }
+    .jf-dot { width:10px; height:10px; border-radius:50%; display:inline-block; border:2px solid var(--border-hi); }
+    .jf-dot.ok { background:var(--success); border-color:var(--success); }
+    .jf-dot.aviso { background:var(--warning); border-color:var(--warning); }
+    .jf-dot.erro { background:var(--error); border-color:var(--error); }
+    .jf-dot.info { background:var(--accent); border-color:var(--accent); }
+    .jade-fluxo { display:flex; align-items:center; gap:0; overflow-x:auto; padding:18px 20px 20px; border-bottom:1px solid var(--border); flex-shrink:0; }
+    .jf-evento { width:34px; height:34px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; color:var(--text-lo); border:2px solid var(--border-hi); background:var(--bg-base); }
+    .jf-evento.fim { border-width:4px; }
+    .jf-evento.ok { border-color:var(--success); color:var(--success-text); }
+    .jf-evento.aviso { border-color:var(--warning); color:var(--warning-text); }
+    .jf-evento.erro { border-color:var(--error); color:var(--error-text); }
+    .jf-evento.andamento { border-color:var(--accent); color:var(--accent); }
+    .jf-seta { flex:1 0 22px; min-width:22px; height:2px; background:var(--border-hi); position:relative; }
+    .jf-seta::after { content:''; position:absolute; right:-1px; top:-4px; border:5px solid transparent; border-left:7px solid var(--border-hi); border-right:0; }
+    .jf-seta.feita { background:var(--text-lo); }
+    .jf-seta.feita::after { border-left-color:var(--text-lo); }
+    .jf-no { flex-shrink:0; width:132px; min-height:74px; border:2px solid var(--border-hi); border-radius:10px; background:var(--bg-base); padding:8px 10px; text-align:left; cursor:pointer; display:flex; flex-direction:column; gap:3px; color:var(--text-md); font:inherit; position:relative; }
+    .jf-no:hover { border-color:var(--accent); }
+    .jf-no .jf-rotulo { font-size:12px; font-weight:800; color:var(--text-hi); line-height:1.25; }
+    .jf-no .jf-meta { font-size:11px; color:var(--text-lo); }
+    .jf-no .jf-icone { position:absolute; top:-9px; right:-9px; width:20px; height:20px; border-radius:50%; font-size:11px; font-weight:900; display:flex; align-items:center; justify-content:center; color:#fff; background:var(--border-hi); }
+    .jf-no.ok { border-color:var(--success); background:color-mix(in srgb, var(--success) 9%, var(--bg-base)); }
+    .jf-no.ok .jf-icone { background:var(--success); }
+    .jf-no.aviso { border-color:var(--warning); background:color-mix(in srgb, var(--warning) 10%, var(--bg-base)); }
+    .jf-no.aviso .jf-icone { background:var(--warning); }
+    .jf-no.erro { border-color:var(--error); background:color-mix(in srgb, var(--error) 10%, var(--bg-base)); }
+    .jf-no.erro .jf-icone { background:var(--error); }
+    .jf-no.info { border-color:var(--accent); background:var(--accent-glow); }
+    .jf-no.info .jf-icone { background:var(--accent); }
+    .jf-no.pendente { border-style:dashed; opacity:.65; }
+    .jf-no.selecionado { box-shadow:0 0 0 3px var(--accent-glow), 0 0 0 1px var(--accent); }
+    .jade-detalhe { flex:1; overflow-y:auto; padding:18px 20px 24px; }
+    .jd-titulo { font-size:15px; font-weight:800; color:var(--text-hi); margin-bottom:4px; }
+    .jd-desc { font-size:12.5px; color:var(--text-lo); margin-bottom:14px; }
+    .jd-evento { border:1px solid var(--border); border-left:4px solid var(--border-hi); border-radius:8px; background:var(--bg-base); padding:12px 14px; margin-bottom:10px; }
+    .jd-evento.ok { border-left-color:var(--success); }
+    .jd-evento.aviso { border-left-color:var(--warning); }
+    .jd-evento.erro { border-left-color:var(--error); }
+    .jd-evento.info { border-left-color:var(--accent); }
+    .jd-cab { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+    .jd-hora { font-size:11.5px; color:var(--text-lo); font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .jd-resumo { font-size:13px; color:var(--text-hi); font-weight:600; line-height:1.45; }
+    .jd-bloco { margin-top:10px; }
+    .jd-bloco-titulo { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--text-lo); margin-bottom:5px; }
+    .jd-kv { display:grid; grid-template-columns:minmax(120px, 210px) 1fr; gap:4px 14px; font-size:12.5px; }
+    .jd-kv dt { color:var(--text-lo); }
+    .jd-kv dd { margin:0; color:var(--text-md); word-break:break-word; }
+    .jd-texto { white-space:pre-wrap; font-size:13px; line-height:1.55; color:var(--text-md); background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px 12px; max-height:420px; overflow:auto; }
+    .jd-lista { margin:0; padding-left:18px; font-size:12.5px; color:var(--text-md); }
+    .jd-chips { display:flex; flex-wrap:wrap; gap:6px; }
+    .jd-chip { font-size:11.5px; background:var(--bg-hover); border-radius:20px; padding:2px 10px; color:var(--text-md); }
+    .jd-vazio { font-size:13px; color:var(--text-lo); padding:6px 0; }
+    @media (max-width:640px) {
+      .jade-modal-fundo { padding:0; }
+      .jade-modal { height:100%; border-radius:0; }
+      .jade-fluxo-dica { margin-left:0; }
+      .jd-kv { grid-template-columns:1fr; }
+    }
     .grid-table tbody tr.importacao-destaque td { background:#eff6ff; box-shadow:inset 3px 0 0 var(--accent); }
 
     @media (max-width: 900px) {
@@ -249,13 +324,38 @@
                 <tr>
                   <th style="width:90px">Chamado</th>
                   <th style="width:150px">Detectado em</th>
-                  <th style="width:120px">Estado</th>
-                  <th style="width:110px">Decisão</th>
-                  <th>Retorno ao cliente / motivo</th>
+                  <th style="width:140px">Estado</th>
+                  <th style="width:150px">Decisão</th>
+                  <th>Último registro</th>
+                  <th style="width:110px"></th>
                 </tr>
               </thead>
-              <tbody id="jade-tbody"><tr><td colspan="5"><div class="empty-state">Selecione a fonte.</div></td></tr></tbody>
+              <tbody id="jade-tbody"><tr><td colspan="6"><div class="empty-state">Selecione a fonte.</div></td></tr></tbody>
             </table>
+          </div>
+        </div>
+
+        <div class="jade-modal-fundo" id="jade-modal" onclick="if (event.target === this) fecharAuditoriaJade()">
+          <div class="jade-modal" role="dialog" aria-modal="true" aria-labelledby="jade-modal-titulo">
+            <div class="jade-modal-topo">
+              <div>
+                <div class="jade-modal-kicker">Auditoria da Jade · Primeiro Atendimento</div>
+                <div class="jade-modal-titulo" id="jade-modal-titulo">Chamado</div>
+                <div class="jade-modal-sub" id="jade-modal-sub"></div>
+              </div>
+              <div class="jade-modal-acoes">
+                <button class="btn btn-ghost" type="button" onclick="recarregarAuditoriaJade()">Atualizar</button>
+                <button class="jade-modal-fechar" type="button" onclick="fecharAuditoriaJade()" aria-label="Fechar">&times;</button>
+              </div>
+            </div>
+            <div class="jade-fluxo-legenda">
+              <span><i class="jf-dot ok"></i>Concluída</span><span><i class="jf-dot aviso"></i>Com aviso</span>
+              <span><i class="jf-dot erro"></i>Com erro</span><span><i class="jf-dot info"></i>Informativa</span>
+              <span><i class="jf-dot pendente"></i>Não executada</span>
+              <span class="jade-fluxo-dica">Clique numa atividade para ver o que aconteceu e o que foi gravado.</span>
+            </div>
+            <div class="jade-fluxo" id="jade-fluxo"></div>
+            <div class="jade-detalhe" id="jade-detalhe"></div>
           </div>
         </div>
       </div>
@@ -683,22 +783,195 @@
       }
       document.getElementById('jade-ciclo').innerHTML = itens.join('');
       tbody.innerHTML = execucoes.length ? execucoes.map(e => `
-        <tr>
+        <tr class="jade-linha" onclick="abrirAuditoriaJade('${escapeHtml(e.id)}')" title="Abrir a auditoria do chamado">
           <td><strong>${escapeHtml(e.numeroChamado)}</strong></td>
           <td>${escapeHtml(formatarDataHora(e.detectadoEm))}</td>
           <td><span class="status-badge ${JADE_CLASSE[e.estado] || ''}">${escapeHtml(JADE_ESTADOS[e.estado] || e.estado)}</span>${e.alerta ? ' <span class="warn" title="Precisa da triagem">⚠</span>' : ''}</td>
           <td>${e.decisao === 'devolver' ? 'Devolver ao cliente' : e.decisao === 'responder' ? 'Responder' : '—'}</td>
-          <td>
-            ${e.motivo ? `<div class="form-hint">${escapeHtml(e.motivo)}</div>` : ''}
-            ${e.ultimoErro ? `<div class="warn">${escapeHtml(e.ultimoErro)}</div>` : ''}
-            <div class="form-hint">Tentativas — geração ${e.tentativasGeracao}/3 · envio ${e.tentativasPublicacao}/3 · devolução ${e.tentativasDevolucao}/3</div>
-            ${e.textoCliente ? `<details><summary>Ver retorno ao cliente</summary><div style="white-space:pre-wrap;margin-top:6px">${escapeHtml(e.textoCliente)}</div></details>` : ''}
-          </td>
+          <td><div class="jade-ultimo ${e.ultimoErro ? 'erro' : ''}">${escapeHtml(e.ultimoErro || e.motivo || '—')}</div></td>
+          <td><button class="btn btn-ghost" type="button">Auditoria</button></td>
         </tr>`).join('')
-        : '<tr><td colspan="5"><div class="empty-state">Nenhum chamado tratado pela Jade ainda.</div></td></tr>';
+        : '<tr><td colspan="6"><div class="empty-state">Nenhum chamado tratado pela Jade ainda.</div></td></tr>';
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">${escapeHtml(err.message)}</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">${escapeHtml(err.message)}</div></td></tr>`;
     }
+  }
+
+  // ── Auditoria: fluxo do chamado (padrão workflow) ──────────────────────────
+  const JADE_ETAPAS = [
+    { id: 'deteccao', rotulo: 'Detecção no SoftExpert', desc: 'A Jade encontra o chamado no Primeiro Atendimento sem responsável e sem posicionamento, e confere de novo antes de cada tentativa.' },
+    { id: 'importacao', rotulo: 'Importação do chamado', desc: 'Dados do chamado trazidos do SoftExpert para a base do IA Service.' },
+    { id: 'anexos', rotulo: 'Anexos', desc: 'Arquivos do chamado copiados e entregues à IA.' },
+    { id: 'analise', rotulo: 'Análise técnica', desc: 'Pesquisa da IA, gravada no chat da J2iA do chamado.' },
+    { id: 'retorno', rotulo: 'Retorno ao cliente', desc: 'Texto escrito para o cliente, a decisão (responder ou devolver) e as versões recusadas pela verificação.' },
+    { id: 'envio', rotulo: 'Gravação no SoftExpert', desc: 'Posicionamento gravado na grade do chamado: campos enviados e resposta do SoftExpert.' },
+    { id: 'devolucao', rotulo: 'Devolução ao cliente', desc: 'Movimentação do chamado para o cliente (ATV-02, ação 1 → Retorno do Usuário).' },
+  ];
+  const JADE_ICONE = { ok: '✓', aviso: '!', erro: '✕', info: 'i', pendente: '' };
+  const JADE_SITUACAO = { ok: 'Concluída', aviso: 'Com aviso', erro: 'Com erro', info: 'Informativa', pendente: 'Não executada' };
+  const JADE_CAMPOS = {
+    descricao: 'Descrição (texto ao cliente)', assunto: 'Assunto', situacaochamado: 'Situação do chamado', tipoposicioname: 'Tipo de posicionamento',
+    aguardanretorno: 'Aguardando retorno', horaini: 'Hora início', horafim: 'Hora fim', horaint: 'Intervalo', horainiconv: 'Hora início (decimal)',
+    horafimconv: 'Hora fim (decimal)', horaintconv: 'Intervalo (decimal)', horatotalnum: 'Total de horas', cduserana: 'Analista (CDUSER)',
+    analistaj2a: 'Analista (nome)', texto4: 'Marca de origem', chamado: 'Chamado',
+  };
+  const JADE_ROTULOS = {
+    titulo: 'Título', assunto: 'Assunto', modulo: 'Módulo', tipo: 'Tipo', decisao: 'Decisão', motivo: 'Motivo', modelo: 'Modelo de IA',
+    usuario: 'Usuário no SoftExpert', atividade: 'Atividade', acao: 'Ação', destino: 'Destino',
+    Status: 'Status', Code: 'Código', Detail: 'Detalhe', RecordID: 'Registro', RecordKey: 'Chave', httpStatus: 'HTTP',
+  };
+  let jadeAuditoria = null;
+  let jadeEtapaSel = null;
+
+  async function abrirAuditoriaJade(execucaoId) {
+    jadeAuditoria = { execucaoId };
+    jadeEtapaSel = null;
+    const modal = document.getElementById('jade-modal');
+    // Fora da aba: a janela não depende do painel estar visível nem do seu empilhamento.
+    if (modal.parentElement !== document.body) document.body.appendChild(modal);
+    modal.classList.add('aberto');
+    document.body.style.overflow = 'hidden';
+    await recarregarAuditoriaJade();
+  }
+
+  function fecharAuditoriaJade() {
+    document.getElementById('jade-modal').classList.remove('aberto');
+    document.body.style.overflow = '';
+    jadeAuditoria = null;
+  }
+
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && jadeAuditoria) fecharAuditoriaJade(); });
+
+  async function recarregarAuditoriaJade() {
+    if (!jadeAuditoria) return;
+    const fonteId = document.getElementById('jade-fonte').value;
+    const fluxo = document.getElementById('jade-fluxo');
+    try {
+      const dados = await api(`/api/ia-service/base-historica/fontes/${fonteId}/jade-pa/execucoes/${encodeURIComponent(jadeAuditoria.execucaoId)}?empresa_id=${empresaIdAtual()}`);
+      jadeAuditoria = { execucaoId: jadeAuditoria.execucaoId, ...dados };
+      desenharAuditoriaJade();
+    } catch (err) {
+      fluxo.innerHTML = '';
+      document.getElementById('jade-detalhe').innerHTML = `<div class="jd-vazio">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  function _situacaoEtapa(eventos) {
+    if (!eventos.length) return 'pendente';
+    const decisivos = eventos.filter(e => e.situacao !== 'info');
+    return (decisivos.length ? decisivos[decisivos.length - 1] : eventos[eventos.length - 1]).situacao;
+  }
+
+  function _resultadoJade(ex) {
+    if (['simulado', 'publicado', 'devolvido'].includes(ex.estado)) return 'ok';
+    if (ex.estado === 'descartado') return 'aviso';
+    if (ex.estado === 'falha') return 'erro';
+    return 'andamento';
+  }
+
+  function desenharAuditoriaJade() {
+    const { execucao: ex, eventos } = jadeAuditoria;
+    document.getElementById('jade-modal-titulo').innerHTML = `Chamado ${escapeHtml(ex.numeroChamado)}
+      <span class="status-badge ${JADE_CLASSE[ex.estado] || ''}">${escapeHtml(JADE_ESTADOS[ex.estado] || ex.estado)}</span>
+      ${ex.alerta ? '<span class="warn" title="Precisa da triagem">⚠ precisa da triagem</span>' : ''}`;
+    document.getElementById('jade-modal-sub').textContent = [
+      `Detectado em ${formatarDataHora(ex.detectadoEm)}`,
+      ex.decisao ? `Decisão: ${ex.decisao === 'devolver' ? 'devolver ao cliente' : 'responder'}` : null,
+      `Tentativas: geração ${ex.tentativasGeracao}/3 · envio ${ex.tentativasPublicacao}/3 · devolução ${ex.tentativasDevolucao}/3`,
+    ].filter(Boolean).join('  ·  ');
+
+    const porEtapa = Object.fromEntries(JADE_ETAPAS.map(et => [et.id, eventos.filter(e => e.etapa === et.id)]));
+    // Devolução só entra no fluxo quando a decisão foi devolver (ou houve registro dela).
+    const etapas = JADE_ETAPAS.filter(et => et.id !== 'devolucao' || ex.decisao === 'devolver' || porEtapa.devolucao.length);
+    if (!jadeEtapaSel || !etapas.some(et => et.id === jadeEtapaSel)) {
+      const comErro = [...etapas].reverse().find(et => _situacaoEtapa(porEtapa[et.id]) === 'erro');
+      const ultima = [...etapas].reverse().find(et => porEtapa[et.id].length);
+      jadeEtapaSel = (comErro || ultima || etapas[0]).id;
+    }
+    const resultado = _resultadoJade(ex);
+    let html = `<div class="jf-evento ok" title="Início">Início</div>`;
+    for (const et of etapas) {
+      const evs = porEtapa[et.id];
+      const sit = _situacaoEtapa(evs);
+      const ultimo = evs[evs.length - 1];
+      const tentativas = evs.filter(e => e.situacao === 'erro').length;
+      html += `<div class="jf-seta ${evs.length ? 'feita' : ''}"></div>
+        <button type="button" class="jf-no ${sit} ${et.id === jadeEtapaSel ? 'selecionado' : ''}" onclick="selecionarEtapaJade('${et.id}')" title="${escapeHtml(JADE_SITUACAO[sit])}">
+          ${sit !== 'pendente' ? `<span class="jf-icone">${JADE_ICONE[sit]}</span>` : ''}
+          <span class="jf-rotulo">${escapeHtml(et.rotulo)}</span>
+          <span class="jf-meta">${ultimo ? escapeHtml(formatarDataHora(ultimo.momento).split(/,?\s+/).pop()) : 'não executada'}</span>
+          ${tentativas ? `<span class="jf-meta">${tentativas} erro(s) registrado(s)</span>` : ''}
+        </button>`;
+    }
+    html += `<div class="jf-seta ${resultado !== 'andamento' ? 'feita' : ''}"></div>
+      <div class="jf-evento fim ${resultado}" title="${escapeHtml(JADE_ESTADOS[ex.estado] || ex.estado)}">Fim</div>`;
+    document.getElementById('jade-fluxo').innerHTML = html;
+    // Tela estreita: o fluxo rola na horizontal; mantém a atividade escolhida à vista.
+    document.querySelector('#jade-fluxo .jf-no.selecionado')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    desenharDetalheJade(etapas, porEtapa);
+  }
+
+  function selecionarEtapaJade(id) {
+    jadeEtapaSel = id;
+    desenharAuditoriaJade();
+  }
+
+  function _kv(pares) {
+    const linhas = pares.filter(([, v]) => v !== undefined && v !== null && v !== '');
+    if (!linhas.length) return '';
+    return `<dl class="jd-kv">${linhas.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(String(v))}</dd>`).join('')}</dl>`;
+  }
+
+  function _bloco(titulo, conteudo) {
+    return conteudo ? `<div class="jd-bloco"><div class="jd-bloco-titulo">${escapeHtml(titulo)}</div>${conteudo}</div>` : '';
+  }
+
+  function _detalhesJade(d) {
+    if (!d) return '';
+    const usados = new Set();
+    const pegar = (k) => { usados.add(k); return d[k]; };
+    let html = '';
+    html += _kv(['titulo', 'assunto', 'modulo', 'tipo', 'decisao', 'motivo', 'modelo', 'usuario', 'atividade', 'acao', 'destino']
+      .map(k => [JADE_ROTULOS[k], pegar(k)]));
+    if (pegar('recusas')) html += _bloco('Versões recusadas pela verificação', `<ul class="jd-lista">${d.recusas.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>`);
+    if (pegar('arquivos')) html += _bloco('Arquivos', `<div class="jd-chips">${d.arquivos.map(a => `<span class="jd-chip">${escapeHtml(a)}</span>`).join('')}</div>`);
+    if (pegar('descricao')) html += _bloco('Descrição do cliente', `<div class="jd-texto">${escapeHtml(d.descricao)}</div>`);
+    if (pegar('texto')) html += _bloco('Texto ao cliente', `<div class="jd-texto">${escapeHtml(d.texto)}</div>`);
+    if (pegar('analise')) html += _bloco('Análise técnica (chat da J2iA)', `<div class="jd-texto">${escapeHtml(d.analise)}</div>`);
+    if (pegar('campos')) {
+      const campos = Object.entries(d.campos);
+      const texto = campos.find(([k]) => k.toLowerCase() === 'descricao');
+      html += _bloco('Campos gravados na grade do chamado', _kv(campos.filter(([k]) => k.toLowerCase() !== 'descricao')
+        .map(([k, v]) => [JADE_CAMPOS[k.toLowerCase()] || k.toUpperCase(), v])));
+      if (texto) html += _bloco(JADE_CAMPOS.descricao, `<div class="jd-texto">${escapeHtml(texto[1])}</div>`);
+    }
+    if (pegar('resposta')) html += _bloco('Resposta do SoftExpert', _kv(Object.entries(d.resposta).map(([k, v]) => [JADE_ROTULOS[k] || k, v])) || '<div class="jd-vazio">Sem resposta.</div>');
+    const resto = Object.entries(d).filter(([k]) => !usados.has(k));
+    if (resto.length) html += _kv(resto.map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : v]));
+    return html;
+  }
+
+  function desenharDetalheJade(etapas, porEtapa) {
+    const { execucao: ex, eventos } = jadeAuditoria;
+    const et = etapas.find(x => x.id === jadeEtapaSel);
+    const evs = porEtapa[et.id];
+    let html = `<div class="jd-titulo">${escapeHtml(et.rotulo)} · ${escapeHtml(JADE_SITUACAO[_situacaoEtapa(evs)])}</div>
+      <div class="jd-desc">${escapeHtml(et.desc)}</div>`;
+    if (!eventos.length) {
+      // Chamados tratados antes da auditoria existir: só o estado final.
+      html += `<div class="jd-evento info"><div class="jd-resumo">Chamado tratado antes da auditoria por etapas. Abaixo, o que ficou registrado.</div>
+        ${_kv([['Estado', JADE_ESTADOS[ex.estado] || ex.estado], ['Motivo', ex.motivo], ['Último erro', ex.ultimoErro]])}
+        ${ex.textoCliente ? _bloco('Texto ao cliente', `<div class="jd-texto">${escapeHtml(ex.textoCliente)}</div>`) : ''}</div>`;
+    } else if (!evs.length) {
+      html += '<div class="jd-vazio">Esta atividade ainda não foi executada para este chamado.</div>';
+    } else {
+      html += evs.map(e => `
+        <div class="jd-evento ${e.situacao}">
+          <div class="jd-cab"><span class="jd-hora">${escapeHtml(formatarDataHora(e.momento))}</span><span class="jd-resumo">${escapeHtml(e.resumo)}</span></div>
+          ${_detalhesJade(e.detalhes)}
+        </div>`).join('');
+    }
+    document.getElementById('jade-detalhe').innerHTML = html;
   }
 
   async function salvarJadePa() {

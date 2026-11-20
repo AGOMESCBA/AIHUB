@@ -740,6 +740,14 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
+  app.get('/api/ia-service/base-historica/fontes/:id/jade-pa/execucoes/:execucaoId', (req, res) => {
+    try {
+      res.json(jadePaService.getAuditoria(req.svcEmpresaId, req.params.id, req.params.execucaoId));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   app.put('/api/ia-service/base-historica/fontes/:id/jade-pa', async (req, res) => {
     try {
       const { ativo, modo, devolucaoAtiva, intervaloMinutos, limiteDiario, processamentosSimultaneos, usuarioSoftexpert, somenteChamados } = req.body || {};

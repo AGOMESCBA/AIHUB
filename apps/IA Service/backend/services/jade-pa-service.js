@@ -152,7 +152,7 @@ async function _importarChamado(empresaId, fonteId, numero) {
 async function _obterAnaliseTecnica(empresaId, atendimentoId, anexos) {
   const mensagens = mensagemRepo.listarMensagens(empresaId, atendimentoId, { limite: 500 });
   const existente = [...mensagens].reverse().find(m => m.papel === 'assistant' && !m.diagnostico?.erroInfraestrutura);
-  if (existente) return existente;
+  if (existente) return { ...existente, reaproveitada: true };
   if (!turnoLockService.tentarAdquirir(empresaId, atendimentoId)) {
     throw Object.assign(new Error('O chat deste chamado está em uso; a Jade tenta de novo no próximo ciclo.'), { adiar: true });
   }
@@ -259,58 +259,118 @@ async function gerarTextoCliente(empresaId, dados) {
   let entrada = _montarEntrada(dados);
   const outrosClientes = nomesDeOutrosClientes(empresaId, dados.chamado.clienteId);
   let ultimoProblema = 'resposta da IA sem o formato esperado';
+  // Versões recusadas vão para a auditoria (motivo de cada uma).
+  const recusas = [];
   for (let tentativa = 1; tentativa <= 2; tentativa++) {
     const resultado = await aiProviderClient.chamarIA(keys, cfg, SYSTEM_PROMPT_CLIENTE, entrada, [], { maxTokens: 2000, timeoutMs: 90000 });
     const json = resultado.truncado ? null : _extrairJson(resultado.texto);
     const texto = normalizarTextoSoftExpert(json?.texto);
     if (!json || !['responder', 'devolver'].includes(json.decisao) || !texto) {
-      ultimoProblema = 'resposta da IA sem o formato esperado';
+      ultimoProblema = resultado.truncado ? 'resposta da IA cortada' : 'resposta da IA sem o formato esperado';
+      recusas.push(`Versão ${tentativa}: ${ultimoProblema}`);
       continue;
     }
-    if (texto.length > MAX_TEXTO_CLIENTE) { ultimoProblema = 'texto ao cliente longo demais'; continue; }
+    if (texto.length > MAX_TEXTO_CLIENTE) {
+      ultimoProblema = 'texto ao cliente longo demais';
+      recusas.push(`Versão ${tentativa}: ${ultimoProblema}`);
+      continue;
+    }
     const problemas = verificarVazamento(texto, dados.chamado.numero, outrosClientes);
     if (problemas.length) {
       ultimoProblema = `texto ao cliente ${problemas.join(', ')}`;
+      recusas.push(`Versão ${tentativa}: ${ultimoProblema}`);
       entrada = `${_montarEntrada(dados)}\n\nATENÇÃO: a versão anterior foi recusada porque ${problemas.join(', ')}. Reescreva sem isso.`;
       continue;
     }
-    return { decisao: json.decisao, motivo: _limitar(json.motivo, 500), texto, provider: resultado.provider, model: resultado.model };
+    return { decisao: json.decisao, motivo: _limitar(json.motivo, 500), texto, provider: resultado.provider, model: resultado.model, recusas };
   }
-  throw new Error(`Texto ao cliente recusado: ${ultimoProblema}.`);
+  throw Object.assign(new Error(`Texto ao cliente recusado: ${ultimoProblema}.`), { recusas });
+}
+
+// Trilha de auditoria (tela "fluxo" do chamado). Falha ao registrar nunca
+// interrompe o trabalho da Jade.
+function _evento(exec, etapa, situacao, resumo, detalhes = null) {
+  try {
+    repo.registrarEvento(exec.id, exec.empresaId, { etapa, situacao, resumo, detalhes });
+  } catch (err) {
+    console.error(`[IA Service] Jade PA: auditoria do chamado ${exec.numeroChamado || exec.id}:`, err.message);
+  }
+}
+
+// Só o que interessa da resposta do SoftExpert (nunca o envelope).
+function _respostaSe(resposta) {
+  const r = {};
+  for (const k of ['Status', 'Code', 'Detail', 'RecordID', 'RecordKey', 'httpStatus']) if (resposta?.[k] !== undefined && resposta[k] !== '') r[k] = resposta[k];
+  return r;
 }
 
 async function processarExecucao(cfg, fonte, exec) {
   const { empresaId } = cfg;
   if (!repo.marcarGerando(exec.id, exec.estado, exec.atualizadoEm)) return null;
   const tentativa = exec.tentativasGeracao + 1;
-  const descartar = () => repo.atualizar(exec.id, {
-    estado: 'descartado', motivo: 'A triagem atuou no chamado antes da Jade (responsável definido ou posicionamento registrado).',
-  });
+  const rotuloTentativa = `Tentativa ${tentativa}/${MAX_TENTATIVAS}`;
+  // Etapa em curso: o erro vai para a atividade do fluxo onde aconteceu.
+  let etapa = 'deteccao';
+  const descartar = () => {
+    _evento(exec, etapa, 'aviso', 'Descartado: a triagem atuou no chamado antes da Jade (responsável definido ou posicionamento registrado).');
+    return repo.atualizar(exec.id, {
+      estado: 'descartado', motivo: 'A triagem atuou no chamado antes da Jade (responsável definido ou posicionamento registrado).',
+    });
+  };
   try {
     if (!(await _aindaElegivel(empresaId, fonte.id, exec.numeroChamado))) return descartar();
+    _evento(exec, 'deteccao', 'info', `${rotuloTentativa}: conferido no SoftExpert — segue no Primeiro Atendimento, sem responsável e sem posicionamento.`);
+    etapa = 'importacao';
     const chamado = await _importarChamado(empresaId, fonte.id, exec.numeroChamado);
     const { atendimento } = radarService.iniciarAnalise(empresaId, chamado.id, { preAnaliseAutomatica: false });
     repo.atualizar(exec.id, { chamadoId: chamado.id, atendimentoId: atendimento.id });
+    _evento(exec, 'importacao', 'ok', `Chamado importado do SoftExpert: ${chamado.titulo || chamado.assunto || 'sem título'}`, {
+      titulo: chamado.titulo, assunto: chamado.assunto, modulo: chamado.modulo, tipo: chamado.tipoChamadoFinal || chamado.tipoChamado,
+      descricao: _limitar(chamado.descricao, 4000),
+    });
+    etapa = 'anexos';
+    let falhaAnexos = null;
     await anexosSoftExpertService.sincronizarAnexosParaAtendimento(empresaId, chamado.id, atendimento.id).catch((err) => {
+      falhaAnexos = err.message;
       console.error(`[IA Service] Jade PA: cópia de anexos falhou (chamado ${chamado.numero}):`, err.message);
     });
     const anexos = anexoRepo.listarAnexos(empresaId, atendimento.id);
+    const arquivos = anexos.map(a => a.nomeOriginal || a.nome || 'arquivo');
+    _evento(exec, 'anexos', falhaAnexos ? 'aviso' : 'ok',
+      falhaAnexos ? `A cópia dos anexos falhou; a análise segue com ${anexos.length} arquivo(s): ${falhaAnexos}`
+        : anexos.length ? `${anexos.length} anexo(s) entregue(s) à IA` : 'O chamado não tem anexos',
+      arquivos.length ? { arquivos } : null);
+    etapa = 'analise';
+    const inicioAnalise = Date.now();
     const analise = await _obterAnaliseTecnica(empresaId, atendimento.id, anexos);
+    _evento(exec, 'analise', 'ok', analise.reaproveitada
+      ? 'Análise técnica que já estava no chat da J2iA foi reaproveitada'
+      : `Análise técnica feita em ${Math.round((Date.now() - inicioAnalise) / 1000)} s e gravada no chat da J2iA`,
+    { analise: _limitar(analise.conteudo, 8000) });
+    etapa = 'retorno';
     const gerado = await gerarTextoCliente(empresaId, { chamado, anexos, analise });
     // Devolução desligada: o pedido de informação vai como resposta (o chamado fica no PA).
     const devolver = gerado.decisao === 'devolver' && cfg.devolucaoAtiva;
     const motivo = gerado.decisao === 'devolver' && !cfg.devolucaoAtiva ? `${gerado.motivo} (devolução desligada: fica como resposta)` : gerado.motivo;
+    _evento(exec, 'retorno', gerado.recusas.length ? 'aviso' : 'ok',
+      `Retorno ao cliente escrito — decisão: ${devolver ? 'devolver ao cliente' : 'responder'}${gerado.recusas.length ? ` (${gerado.recusas.length} versão(ões) recusada(s) antes)` : ''}`,
+      { decisao: devolver ? 'Devolver ao cliente' : 'Responder', motivo, modelo: [gerado.provider, gerado.model].filter(Boolean).join(' · '),
+        recusas: gerado.recusas.length ? gerado.recusas : undefined, texto: gerado.texto });
     if (!(await _aindaElegivel(empresaId, fonte.id, exec.numeroChamado))) return descartar();
+    if (cfg.modo !== 'publicar') _evento(exec, 'envio', 'info', 'Modo Simulação: o retorno não foi enviado ao SoftExpert.');
     return repo.atualizar(exec.id, {
       estado: cfg.modo === 'publicar' ? 'pronto' : 'simulado', decisao: devolver ? 'devolver' : 'responder', motivo,
       textoCliente: gerado.texto, mensagemAnaliseId: analise?.id ?? null, geradoEm: new Date().toISOString(), ultimoErro: null, alerta: false,
     });
   } catch (err) {
     if (err.adiar) {
+      _evento(exec, etapa, 'aviso', `Adiado para o próximo ciclo: ${err.message}`);
       repo.devolverTentativaGeracao(exec.id);
       return repo.atualizar(exec.id, { estado: 'detectado', ultimoErro: err.message });
     }
     const esgotou = tentativa >= MAX_TENTATIVAS;
+    _evento(exec, etapa, 'erro', `${rotuloTentativa} falhou: ${err.message}${esgotou ? ' — tentativas esgotadas, chamado deixado para a triagem.' : ' — nova tentativa no próximo ciclo.'}`,
+      err.recusas?.length ? { recusas: err.recusas } : null);
     console.error(`[IA Service] Jade PA: chamado ${exec.numeroChamado}, tentativa ${tentativa}:`, err.message);
     return repo.atualizar(exec.id, { estado: esgotou ? 'falha' : 'detectado', ultimoErro: err.message, alerta: esgotou });
   }
@@ -387,7 +447,8 @@ function montarAtributosPosicionamento({ contrato, chamado, jade, texto, instant
   return atributos;
 }
 
-function _falhaDefinitiva(exec, motivo) {
+function _falhaDefinitiva(exec, motivo, etapa) {
+  _evento(exec, etapa, 'erro', `${motivo} Chamado deixado para a triagem.`);
   return repo.atualizar(exec.id, { estado: 'falha', ultimoErro: `${motivo} Chamado deixado para a triagem.`, alerta: true });
 }
 
@@ -396,16 +457,20 @@ async function _publicar(cfg, fonte, exec) {
   const s = await situacaoNaOrigem(empresaId, fonte.id, exec.numeroChamado);
   if (s?.posicionamentosJade > 0) {
     // Envio anterior confirmado na origem (inclusive um "não confirmado" que tinha entrado).
+    _evento(exec, 'envio', 'ok', 'Conferido no SoftExpert: o posicionamento da Jade está na grade do chamado.');
     const publicado = repo.atualizar(exec.id, { estado: 'publicado', publicadoEm: exec.publicadoEm || new Date().toISOString(), ultimoErro: null, alerta: false });
     return exec.decisao === 'devolver' ? repo.atualizar(publicado.id, { estado: 'devolvendo' }) : publicado;
   }
-  if (exec.tentativasPublicacao >= MAX_TENTATIVAS) return _falhaDefinitiva(exec, 'O SoftExpert não confirmou o posicionamento após 3 tentativas.');
+  if (exec.tentativasPublicacao >= MAX_TENTATIVAS) return _falhaDefinitiva(exec, 'O SoftExpert não confirmou o posicionamento após 3 tentativas.', 'envio');
   if (_triagemAtuou(s)) {
+    _evento(exec, 'envio', 'aviso', 'Descartado: a triagem atuou no chamado antes do envio da Jade. Nada foi gravado.');
     return repo.atualizar(exec.id, { estado: 'descartado', motivo: 'A triagem atuou no chamado antes do envio da Jade.', alerta: false });
   }
   if (exec.estado === 'pronto' && Date.now() - Date.parse(exec.geradoEm || 0) > MAX_IDADE_ENVIO_MS) {
+    _evento(exec, 'envio', 'aviso', 'Descartado: texto gerado há mais de 4 horas, não enviado para não chegar desatualizado ao cliente.');
     return repo.atualizar(exec.id, { estado: 'descartado', motivo: 'Texto gerado há mais de 4 horas; não foi enviado para não chegar desatualizado ao cliente.', alerta: false });
   }
+  const tentativaEnvio = `Tentativa ${exec.tentativasPublicacao + 1}/${MAX_TENTATIVAS}`;
   const chamado = chamadoRepo.getChamadoPorNumero(empresaId, exec.numeroChamado, 'softexpert');
   if (!chamado) throw new Error('Chamado não encontrado na base local.');
   const jade = await _usuarioJade(empresaId, fonte.id, cfg.usuarioSoftexpert);
@@ -413,15 +478,20 @@ async function _publicar(cfg, fonte, exec) {
   const atributos = montarAtributosPosicionamento({ contrato: config.contrato, chamado, jade, texto: exec.textoCliente });
   const xml = soapClient.montarInclusaoGrid({ workflowId: exec.numeroChamado, mainEntityId: config.contrato.mainEntityId, childRelationshipId: config.contrato.childRelationshipId, campos: atributos });
   if (!repo.contarTentativa(exec.id, 'publicacao', 'publicando', { estadoAnterior: exec.estado, tentativasAnteriores: exec.tentativasPublicacao })) return null;
+  const gravado = { usuario: `${jade.nome} (CDUSER ${jade.codigo}, matrícula ${jade.matricula})`, campos: atributos };
   let resposta;
   try {
     resposta = await soapClient.enviarOperacao({ ...config.transporte, xml, operacao: 'newChildEntityRecord' });
-  } catch (_) {
+  } catch (err) {
+    _evento(exec, 'envio', 'erro', `${tentativaEnvio}: o SoftExpert não confirmou a gravação (${err.message}). Será conferido no próximo ciclo antes de qualquer reenvio.`,
+      { ...gravado, resposta: _respostaSe({ httpStatus: err.httpStatus, Detail: err.codigoTransporte }) });
     return repo.atualizar(exec.id, { ultimoErro: 'Envio do posicionamento não confirmado; será conferido no próximo ciclo antes de qualquer reenvio.' });
   }
   if (resposta.Status !== 'SUCCESS' || resposta.Code !== '1') {
+    _evento(exec, 'envio', 'erro', `${tentativaEnvio}: o SoftExpert recusou o posicionamento — ${resposta.Detail || resposta.Code}`, { ...gravado, resposta: _respostaSe(resposta) });
     return repo.atualizar(exec.id, { ultimoErro: `O SoftExpert recusou o posicionamento: ${resposta.Detail || resposta.Code}` });
   }
+  _evento(exec, 'envio', 'ok', 'Posicionamento gravado na grade do chamado no SoftExpert', { ...gravado, resposta: _respostaSe(resposta) });
   const publicado = repo.atualizar(exec.id, { estado: 'publicado', publicadoEm: new Date().toISOString(), ultimoErro: null, alerta: false });
   return exec.decisao === 'devolver' ? repo.atualizar(publicado.id, { estado: 'devolvendo' }) : publicado;
 }
@@ -430,36 +500,48 @@ async function _devolver(cfg, fonte, exec) {
   const { empresaId } = cfg;
   const s = await situacaoNaOrigem(empresaId, fonte.id, exec.numeroChamado);
   if (s && !s.ativas.has('ATV-02')) {
-    if (s.ativas.has(ATIVIDADE_CLIENTE)) return repo.atualizar(exec.id, { estado: 'devolvido', devolvidoEm: new Date().toISOString(), ultimoErro: null, alerta: false });
+    if (s.ativas.has(ATIVIDADE_CLIENTE)) {
+      _evento(exec, 'devolucao', 'ok', 'Conferido no SoftExpert: o chamado está com o cliente (Retorno do Usuário).');
+      return repo.atualizar(exec.id, { estado: 'devolvido', devolvidoEm: new Date().toISOString(), ultimoErro: null, alerta: false });
+    }
     // Saiu do PA para outro lugar: se a Jade tentou devolver, alguém precisa olhar.
-    return repo.atualizar(exec.id, {
-      estado: 'publicado', alerta: exec.tentativasDevolucao > 0,
-      ultimoErro: `O chamado saiu do Primeiro Atendimento para ${[...s.ativas].join(', ') || 'outra etapa'}, não para o cliente.`,
-    });
+    const ultimoErro = `O chamado saiu do Primeiro Atendimento para ${[...s.ativas].join(', ') || 'outra etapa'}, não para o cliente.`;
+    _evento(exec, 'devolucao', exec.tentativasDevolucao > 0 ? 'erro' : 'aviso', ultimoErro);
+    return repo.atualizar(exec.id, { estado: 'publicado', alerta: exec.tentativasDevolucao > 0, ultimoErro });
   }
-  const cancelar = (motivo) => repo.atualizar(exec.id, { estado: 'publicado', motivo: `${exec.motivo || ''} (${motivo})`.trim(), alerta: false });
+  const cancelar = (motivo) => {
+    _evento(exec, 'devolucao', 'aviso', `Devolução não feita: ${motivo}.`);
+    return repo.atualizar(exec.id, { estado: 'publicado', motivo: `${exec.motivo || ''} (${motivo})`.trim(), alerta: false });
+  };
   if (!cfg.devolucaoAtiva) return cancelar('devolução desligada antes do envio; o pedido ficou como resposta');
   if (!s || !s.aberto || s.comResponsavel || s.posicionamentosOutros > 0) return cancelar('devolução cancelada: a triagem atuou no chamado');
-  if (exec.tentativasDevolucao >= MAX_TENTATIVAS) return _falhaDefinitiva(exec, 'O SoftExpert não confirmou a devolução ao cliente após 3 tentativas; o pedido de informação já está na grade.');
+  if (exec.tentativasDevolucao >= MAX_TENTATIVAS) return _falhaDefinitiva(exec, 'O SoftExpert não confirmou a devolução ao cliente após 3 tentativas; o pedido de informação já está na grade.', 'devolucao');
+  const tentativaDev = `Tentativa ${exec.tentativasDevolucao + 1}/${MAX_TENTATIVAS}`;
   const jade = await _usuarioJade(empresaId, fonte.id, cfg.usuarioSoftexpert);
   const config = _contratoEscrita(empresaId, fonte.id, jade.codigo);
   const xml = soapClient.montarDevolucaoPrimeiroAtendimento({ workflowId: exec.numeroChamado, userId: jade.matricula });
   if (!repo.contarTentativa(exec.id, 'devolucao', 'devolvendo', { estadoAnterior: exec.estado, tentativasAnteriores: exec.tentativasDevolucao })) return null;
+  const movimento = { usuario: `${jade.nome} (matrícula ${jade.matricula})`, atividade: 'ATV-02 Primeiro Atendimento', acao: '1 — Retornar para cliente', destino: `${ATIVIDADE_CLIENTE} Retorno do Usuário` };
   let resposta;
   try {
     resposta = await soapClient.enviarOperacao({ ...config.transporte, xml, operacao: 'executeActivity' });
-  } catch (_) {
+  } catch (err) {
+    _evento(exec, 'devolucao', 'erro', `${tentativaDev}: o SoftExpert não confirmou a devolução (${err.message}). Será conferida no próximo ciclo.`,
+      { ...movimento, resposta: _respostaSe({ httpStatus: err.httpStatus, Detail: err.codigoTransporte }) });
     return repo.atualizar(exec.id, { ultimoErro: 'Devolução não confirmada; será conferida no próximo ciclo antes de qualquer nova tentativa.' });
   }
   if (resposta.Status !== 'SUCCESS' || resposta.Code !== '1') {
+    _evento(exec, 'devolucao', 'erro', `${tentativaDev}: o SoftExpert recusou a devolução — ${resposta.Detail || resposta.Code}`, { ...movimento, resposta: _respostaSe(resposta) });
     return repo.atualizar(exec.id, { ultimoErro: `O SoftExpert recusou a devolução: ${resposta.Detail || resposta.Code}` });
   }
   const depois = await situacaoNaOrigem(empresaId, fonte.id, exec.numeroChamado);
-  if (depois?.ativas.has(ATIVIDADE_CLIENTE)) return repo.atualizar(exec.id, { estado: 'devolvido', devolvidoEm: new Date().toISOString(), ultimoErro: null, alerta: false });
-  return repo.atualizar(exec.id, {
-    estado: 'publicado', alerta: true,
-    ultimoErro: `A devolução foi aceita, mas o chamado está em ${[...(depois?.ativas || [])].join(', ') || 'etapa desconhecida'}, não em ${ATIVIDADE_CLIENTE}.`,
-  });
+  if (depois?.ativas.has(ATIVIDADE_CLIENTE)) {
+    _evento(exec, 'devolucao', 'ok', 'Chamado devolvido ao cliente — agora em Retorno do Usuário', { ...movimento, resposta: _respostaSe(resposta) });
+    return repo.atualizar(exec.id, { estado: 'devolvido', devolvidoEm: new Date().toISOString(), ultimoErro: null, alerta: false });
+  }
+  const ultimoErro = `A devolução foi aceita, mas o chamado está em ${[...(depois?.ativas || [])].join(', ') || 'etapa desconhecida'}, não em ${ATIVIDADE_CLIENTE}.`;
+  _evento(exec, 'devolucao', 'erro', ultimoErro, { ...movimento, resposta: _respostaSe(resposta) });
+  return repo.atualizar(exec.id, { estado: 'publicado', alerta: true, ultimoErro });
 }
 
 async function enviarExecucao(cfg, fonte, exec) {
@@ -469,6 +551,8 @@ async function enviarExecucao(cfg, fonte, exec) {
   } catch (err) {
     // Falha antes de falar com o SoftExpert (consulta, usuário, contrato): não conta tentativa, mas avisa.
     console.error(`[IA Service] Jade PA: envio do chamado ${exec.numeroChamado}:`, err.message);
+    _evento(exec, repo.getExecucao(exec.id)?.estado === 'devolvendo' ? 'devolucao' : 'envio', 'erro',
+      `Não foi possível falar com o SoftExpert: ${err.message} (não conta como tentativa).`);
     return repo.atualizar(exec.id, { ultimoErro: err.message, alerta: true });
   }
 }
@@ -501,7 +585,13 @@ async function _rodarCiclo(empresaId, fonteId) {
     let usadosHoje = repo.contarDetectadosDesde(empresaId, inicioDia.toISOString());
     for (const numero of elegiveis) {
       if (cfg.limiteDiario > 0 && usadosHoje >= cfg.limiteDiario) { resumo.limiteAtingido = true; break; }
-      if (repo.registrarDetectado(empresaId, fonteId, numero)) { resumo.novos++; usadosHoje++; }
+      const id = repo.registrarDetectado(empresaId, fonteId, numero);
+      if (id) {
+        resumo.novos++;
+        usadosHoje++;
+        _evento({ id, empresaId, numeroChamado: numero }, 'deteccao', 'ok',
+          'Detectado no SoftExpert: Primeiro Atendimento, sem responsável e sem posicionamento.');
+      }
     }
     // Desligado no meio do ciclo: para antes do próximo chamado.
     const aindaLigada = () => repo.getConfig(empresaId, fonteId).ativo;
@@ -592,6 +682,14 @@ function listarExecucoes(empresaId, opts) {
   return repo.listarExecucoes(empresaId, opts);
 }
 
+/** Execução + trilha de auditoria (fluxo do chamado na tela). */
+function getAuditoria(empresaId, fonteId, execucaoId) {
+  _fonteSoftExpert(empresaId, fonteId);
+  const execucao = repo.getExecucao(execucaoId);
+  if (!execucao || execucao.empresaId !== Number(empresaId) || execucao.fonteId !== fonteId) throw _erro(404, 'Registro da Jade não encontrado.');
+  return { execucao, eventos: repo.listarEventos(empresaId, execucaoId) };
+}
+
 let _tickEmAndamento = false;
 async function _tick() {
   if (_tickEmAndamento) return;
@@ -619,5 +717,5 @@ function iniciarAgendamento() {
 module.exports = {
   iniciarAgendamento, executarCiclo, executarAgora, processarExecucao, gerarTextoCliente, verificarVazamento,
   normalizarTextoSoftExpert, montarAtributosPosicionamento, enviarExecucao, situacaoNaOrigem, nomesDeOutrosClientes,
-  listarElegiveisNaOrigem, getConfig, salvarConfig, listarExecucoes, SQL_ELEGIVEIS, MAX_TENTATIVAS,
+  listarElegiveisNaOrigem, getConfig, salvarConfig, listarExecucoes, getAuditoria, SQL_ELEGIVEIS, MAX_TENTATIVAS,
 };

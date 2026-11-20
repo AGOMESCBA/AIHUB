@@ -364,6 +364,45 @@ test('devolver: grava o pedido, executa só ATV-02 ação 1 com a matrícula da 
   assert.match(mov, /<urn:ActivityID>ATV-02<\/urn:ActivityID><urn:ActionSequence>1<\/urn:ActionSequence><urn:UserID>10677535000155<\/urn:UserID>/);
 });
 
+test('auditoria: fluxo completo registra cada etapa e o que foi gravado, sem token', async () => {
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995', devolucaoAtiva: true });
+  chamadoNaOrigem('038150');
+  respostasIA = [DEVOLVER];
+  await jade.executarCiclo(EMPRESA, fonte.id);
+  const exec = execs()[0];
+  const { execucao, eventos } = jade.getAuditoria(EMPRESA, fonte.id, exec.id);
+  assert.equal(execucao.numeroChamado, '038150');
+  for (const etapa of ['deteccao', 'importacao', 'anexos', 'analise', 'retorno', 'envio', 'devolucao']) {
+    assert.ok(eventos.some(e => e.etapa === etapa && e.situacao === 'ok'), `etapa ${etapa} concluída`);
+  }
+  const envio = eventos.find(e => e.etapa === 'envio' && e.situacao === 'ok');
+  assert.equal(envio.detalhes.campos.texto4, 'IA SERVICE');
+  assert.equal(envio.detalhes.resposta.Status, 'SUCCESS');
+  assert.ok(eventos.find(e => e.etapa === 'retorno').detalhes.texto);
+  assert.match(eventos.find(e => e.etapa === 'devolucao' && e.situacao === 'ok').detalhes.acao, /Retornar para cliente/);
+  assert.ok(!JSON.stringify(eventos).match(/token|Bearer|soapenv/i));
+  assert.throws(() => jade.getAuditoria(EMPRESA + 1, fonte.id, exec.id));
+});
+
+test('auditoria: recusa do SoftExpert e falha da IA ficam como erro na etapa certa', async () => {
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995' });
+  chamadoNaOrigem('038160');
+  respostasIA = [RESPOSTA_OK];
+  comportamentoEnvio = 'recusa';
+  await jade.executarCiclo(EMPRESA, fonte.id);
+  chamadoNaOrigem('038161');
+  respostasIA = [];
+  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  const porNumero = Object.fromEntries(execs().map(e => [e.numeroChamado, e]));
+  const recusado = jade.getAuditoria(EMPRESA, fonte.id, porNumero['038160'].id).eventos.find(e => e.etapa === 'envio');
+  assert.equal(recusado.situacao, 'erro');
+  assert.match(recusado.resumo, /Tentativa 1\/3: o SoftExpert recusou/);
+  assert.ok(recusado.detalhes.campos);
+  const semIa = jade.getAuditoria(EMPRESA, fonte.id, porNumero['038161'].id).eventos.find(e => e.etapa === 'retorno');
+  assert.equal(semIa.situacao, 'erro');
+  assert.match(semIa.resumo, /IA sem resposta programada/);
+});
+
 test('devolver: triagem atuou depois do posicionamento → devolução cancelada', async () => {
   await ligar({ modo: 'publicar', usuarioSoftexpert: '995', devolucaoAtiva: true });
   chamadoNaOrigem('038200');

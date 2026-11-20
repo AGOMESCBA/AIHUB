@@ -1494,6 +1494,23 @@ const MIGRATIONS = [
       ALTER TABLE jade_pa_config_novo RENAME TO jade_pa_config;
     `,
   },
+  {
+    version: 63,
+    descricao: 'Jade no Primeiro Atendimento: trilha de auditoria por chamado (pedido do usuário, 2026-11-20) — cada etapa (detecção, importação, anexos, análise, retorno, gravação na grade, devolução) com sucesso, aviso ou erro e o que foi gravado no SoftExpert. Nunca guarda token nem envelope SOAP. Sem limpeza automática, como jade_pa_execucoes.',
+    sql: `
+      CREATE TABLE jade_pa_eventos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        execucao_id TEXT NOT NULL REFERENCES jade_pa_execucoes(id) ON DELETE CASCADE,
+        empresa_id INTEGER NOT NULL,
+        etapa TEXT NOT NULL,
+        situacao TEXT NOT NULL CHECK (situacao IN ('ok', 'info', 'aviso', 'erro')),
+        resumo TEXT NOT NULL,
+        detalhes TEXT,
+        momento TEXT NOT NULL
+      );
+      CREATE INDEX idx_jade_pa_eventos_exec ON jade_pa_eventos (execucao_id, id);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;
