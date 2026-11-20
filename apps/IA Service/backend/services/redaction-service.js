@@ -9,7 +9,14 @@ const SENSITIVE_QUERY_KEYS = new Set([
 // valor é só um número. Liberadas por lista explícita e somente com valor
 // numérico (autorização do usuário, 2026-11-12); qualquer outro campo com
 // "token" no nome continua mascarado.
-const CONTAGENS_USO_LIBERADAS = new Set(['prompt_tokens', 'completion_tokens', 'total_tokens']);
+// cached_tokens e os contadores do Claude medem o cache de prompt (2026-11-19).
+const CONTAGENS_USO_LIBERADAS = new Set([
+  'prompt_tokens', 'completion_tokens', 'total_tokens', 'cached_tokens',
+  'input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens',
+]);
+// Objetos de detalhe do usage: percorridos (cada contagem dentro deles segue a
+// regra acima) em vez de mascarados inteiros por terem "token" no nome.
+const DETALHES_USO_PERCORRIDOS = new Set(['prompt_tokens_details', 'completion_tokens_details']);
 
 // CPF/CNPJ usam o mesmo padrao de technical-research-service.js:sanitizarConsultaExterna
 // (mantido em dois lugares deliberadamente: aqui mascara para [REDACTED] preservando
@@ -63,6 +70,8 @@ function redigirValor(valor) {
       const key = k.toLowerCase();
       if (CONTAGENS_USO_LIBERADAS.has(k) && typeof v === 'number' && Number.isFinite(v)) {
         out[k] = v;
+      } else if (DETALHES_USO_PERCORRIDOS.has(k) && v && typeof v === 'object' && !Array.isArray(v)) {
+        out[k] = redigirValor(v);
       } else if (SENSITIVE_QUERY_KEYS.has(key) || /authorization|cookie|password|senha|secret|token|api[_-]?key/i.test(k)) {
         out[k] = '[REDACTED]';
       } else {

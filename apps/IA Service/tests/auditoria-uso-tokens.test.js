@@ -18,6 +18,12 @@ function testarContagensLiberadas() {
   const usage = { prompt_tokens: 6351, completion_tokens: 812, total_tokens: 7163 };
   assert.deepStrictEqual(redigirValor(usage), usage);
   assert.deepStrictEqual(redigirValor({ uso: { usage } }), { uso: { usage } });
+  // Cache de prompt (2026-11-19): o detalhe é percorrido e só a contagem
+  // numérica liberada passa; o restante dentro dele segue a regra geral.
+  const comCache = { prompt_tokens: 9000, prompt_tokens_details: { cached_tokens: 7680, audio_tokens: SEGREDO } };
+  assert.deepStrictEqual(redigirValor(comCache), { prompt_tokens: 9000, prompt_tokens_details: { cached_tokens: 7680, audio_tokens: '[REDACTED]' } });
+  const claude = { input_tokens: 500, output_tokens: 80, cache_read_input_tokens: 4000, cache_creation_input_tokens: 0 };
+  assert.deepStrictEqual(redigirValor(claude), claude);
 }
 
 function testarSegredosContinuamMascarados() {
@@ -44,7 +50,9 @@ function testarSegredosContinuamMascarados() {
     completion_tokens: '812',
     // Fora da lista: variação de caixa e outros campos de uso.
     Prompt_Tokens: 10,
-    prompt_tokens_details: { cached_tokens: 5 },
+    // Detalhe do usage só é percorrido quando é objeto; em texto, mascarado.
+    prompt_tokens_details: SEGREDO,
+    completion_tokens_details: { cached_tokens: '5', refresh_token: SEGREDO },
     tokensEstimadosPrompt: 100,
     aninhado: [{ headers: { Authorization: `Bearer ${SEGREDO}`, 'x-api-key': SEGREDO } }],
     texto: `Authorization: Bearer ${SEGREDO} token=${SEGREDO} api_key=${SEGREDO}`,
@@ -77,7 +85,7 @@ function testarPersistenciaNaAuditoria() {
     assert.strictEqual(exec.usage.prompt_tokens, 1200);
     assert.strictEqual(exec.usage.completion_tokens, 300);
     assert.strictEqual(exec.usage.total_tokens, 1500);
-    assert.strictEqual(exec.usage.prompt_tokens_details, '[REDACTED]');
+    assert.strictEqual(exec.usage.prompt_tokens_details.cached_tokens, 1024);
     assert.ok(!JSON.stringify(exec).includes(SEGREDO));
   } finally {
     database.fecharDB();
@@ -98,6 +106,17 @@ function testarCusto() {
   assert.strictEqual(custoIa.estimarCusto({ provider: 'openai', model: 'gpt-4o', usage }, tabela).motivo, 'sem_preco');
   assert.strictEqual(custoIa.estimarCusto({ provider: 'openai', model: 'gpt-4o-mini', usage }, tabela).motivo, 'modelo_sem_preco');
   assert.strictEqual(custoIa.estimarCusto({ provider: 'claude', model: 'gpt-5.4', usage }, tabela).motivo, 'modelo_sem_preco');
+  // Cache de prompt (2026-11-19): a parte cacheada sai do preço cheio e entra
+  // pelo preço entradaCache; sem esse preço, custo null em vez de valor errado.
+  const tabelaCache = { moeda: 'USD', modelos: { openai: { 'gpt-5.4': { entrada: 2, entradaCache: 0.2, saida: 10 } } } };
+  const usageCache = { prompt_tokens: 1000000, completion_tokens: 100000, prompt_tokens_details: { cached_tokens: 600000 } };
+  const comCache = custoIa.estimarCusto({ provider: 'openai', model: 'gpt-5.4', usage: usageCache }, tabelaCache);
+  assert.strictEqual(Number(comCache.custo.toFixed(6)), 1.92, '400k cheio (0,8) + 600k cache (0,12) + saída (1)');
+  assert.strictEqual(comCache.tokensEntradaCache, 600000);
+  const semPrecoCache = custoIa.estimarCusto({ provider: 'openai', model: 'gpt-5.4', usage: usageCache }, tabela);
+  assert.strictEqual(semPrecoCache.custo, null);
+  assert.strictEqual(semPrecoCache.motivo, 'sem_preco_cache');
+  assert.strictEqual(custoIa.estimarCusto({ provider: 'openai', model: 'gpt-5.4', usage: { ...usage, prompt_tokens_details: { cached_tokens: 0 } } }, tabela).custo, 3, 'cache zerado: preço cheio');
   const semUso = custoIa.estimarCusto({ provider: 'openai', model: 'gpt-5.4', usage: { prompt_tokens: '[REDACTED]' } }, tabela);
   assert.strictEqual(semUso.custo, null);
   assert.strictEqual(semUso.motivo, 'sem_contagem_de_tokens');

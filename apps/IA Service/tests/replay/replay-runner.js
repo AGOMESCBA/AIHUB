@@ -317,6 +317,7 @@ async function executarTurno({ caso, turno, indice, atendimento, registroIA, reg
     chamadasIA: chamadasIA.map(c => ({
       finalidade: c.finalidade, ok: c.ok, model: c.model || null, latenciaMs: c.latenciaMs,
       tokensEntrada: c.usage?.prompt_tokens ?? null, tokensSaida: c.usage?.completion_tokens ?? null,
+      tokensEntradaCache: c.usage?.prompt_tokens_details?.cached_tokens ?? null,
       custo: c.custo?.custo ?? null, motivoSemCusto: c.custo?.motivo || null, truncado: !!c.truncado, erro: c.erro || null,
     })),
     _textosEnviados: chamadasIA.map(c => c.textoEnviado),

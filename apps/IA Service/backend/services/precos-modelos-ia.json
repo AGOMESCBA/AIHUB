@@ -1,9 +1,13 @@
 {
-  "_comentario": "Preço em USD por 1 milhão de tokens, por provider e modelo. Valor null = preço não informado: o custo sai como null (sem_preco) e os tokens continuam medidos. Modelo casa pelo nome exato ou pela versão datada dele (ex.: gpt-5.4-2026-03-05); gpt-4o-mini não herda o preço do gpt-4o.",
+  "_comentario": "Preço em USD por 1 milhão de tokens, por provider e modelo. Valor null = preço não informado: o custo sai como null (sem_preco) e os tokens continuam medidos. Modelo casa pelo nome exato ou pela versão datada dele (ex.: gpt-5.4-2026-03-05); gpt-4o-mini não herda o preço do gpt-4o. entradaCache = preço da parte da entrada que veio do cache de prompt (prompt_tokens_details.cached_tokens); null com tokens de cache = custo null (sem_preco_cache).",
   "moeda": "USD",
   "modelos": {
     "openai": {
-      "gpt-5.4": { "entrada": null, "saida": null }
+      "gpt-5.4": {
+        "entrada": null,
+        "entradaCache": null,
+        "saida": null
+      }
     }
   }
 }
