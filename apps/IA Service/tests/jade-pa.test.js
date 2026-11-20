@@ -38,6 +38,11 @@ stub('../backend/services/agente-local-service', {
     if (sql.includes('FROM ADUSER')) {
       return params.cdUser === '995' ? [{ CDUSER: 995, NMUSER: 'Jaade', IDUSER: '10677535000155', FGUSERENABLED: origem.usuarioAtivo ? 1 : 0 }] : [];
     }
+    // Ação 6 do PA (e-mail ao cliente): só chamados da revisão 89 em diante.
+    if (sql.includes('WFSTRUCTACTION')) {
+      const c = origem.chamados.get(params.numero);
+      return c?.acao6 ? [{ NRORDER: 6, NMACTION: 'Enviar retorno da Jaade ao cliente' }] : [];
+    }
     if (sql.includes('LEFT JOIN WFSTRUCT')) {
       const c = origem.chamados.get(params.numero);
       if (!c) return [];
@@ -107,7 +112,8 @@ soapReal.enviarOperacao = async ({ xml, operacao }) => {
   const c = origem.chamados.get(numero);
   if (comportamentoEnvio === 'recusa') return { Status: 'FAILURE', Code: '0', Detail: 'campo obrigatório' };
   if (operacao === 'newChildEntityRecord') c.posJade++;
-  if (operacao === 'executeActivity') c.ativas = ['ATV-06'];
+  // Ação 1 leva ao cliente (ATV-06); ação 6 manda o e-mail e volta ao PA (ATV-02).
+  if (operacao === 'executeActivity') c.ativas = /<urn:ActionSequence>6</.test(xml) ? ['ATV-02'] : ['ATV-06'];
   if (comportamentoEnvio === 'cai_depois_de_gravar') throw Object.assign(new Error('timeout'), { resultadoIndeterminado: true });
   return { Status: 'SUCCESS', Code: '1' };
 };
@@ -899,16 +905,62 @@ test('reserva de envio é atômica: registro lido desatualizado não envia', () 
   assert.equal(repo.contarTentativa(exec.id, 'publicacao', 'publicando', { estadoAnterior: 'publicando', tentativasAnteriores: 1 }), null);
 });
 
-test('transporte: só a movimentação ATV-02 / ação 1 passa pela validação', async () => {
+test('transporte: só as movimentações ATV-02 / ação 1 e ação 6 passam pela validação', async () => {
   const ok = soapReal.montarDevolucaoPrimeiroAtendimento({ workflowId: '038300', userId: '1' });
+  const email = soapReal.montarNotificacaoPrimeiroAtendimento({ workflowId: '038300', userId: '1' });
+  assert.match(email, /<urn:ActivityID>ATV-02<\/urn:ActivityID><urn:ActionSequence>6<\/urn:ActionSequence>/);
   const outra = ok.replace('<urn:ActivityID>ATV-02</urn:ActivityID>', '<urn:ActivityID>ATV-03</urn:ActivityID>');
   const outraAcao = ok.replace('<urn:ActionSequence>1</urn:ActionSequence>', '<urn:ActionSequence>3</urn:ActionSequence>');
+  const acao6OutraAtividade = email.replace('<urn:ActivityID>ATV-02</urn:ActivityID>', '<urn:ActivityID>ATV-04</urn:ActivityID>');
   // enviarOperacao real valida o envelope antes de qualquer rede.
-  for (const xml of [outra, outraAcao]) {
+  for (const xml of [outra, outraAcao, acao6OutraAtividade]) {
     await assert.rejects(enviarReal({ xml }), /Movimentação de workflow não permitida/);
   }
-  // O envelope permitido passa da validação e só falha no transporte (host inexistente).
-  await assert.rejects(enviarReal({ xml: ok }), (err) => !/Movimentação/.test(err.message));
+  // Os envelopes permitidos passam da validação e só falham no transporte (host inexistente).
+  for (const xml of [ok, email]) await assert.rejects(enviarReal({ xml }), (err) => !/Movimentação/.test(err.message));
+});
+
+test('responder: na revisão 89+ (ação 6 no PA) manda o e-mail ao cliente e o chamado segue na triagem; sem a ação, só a grade', async () => {
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995' });
+  chamadoNaOrigem('038600', { acao6: true });
+  chamadoNaOrigem('038601');
+  respostasIA = [RESPOSTA_OK, RESPOSTA_OK];
+  await jade.executarCiclo(EMPRESA, fonte.id);
+  const por = Object.fromEntries(execs().map(e => [e.numeroChamado, e]));
+  // Revisão 89+: grava na grade e executa ATV-02 / ação 6 com a matrícula da Jaade.
+  const mov = envios.filter(e => e.operacao === 'executeActivity');
+  assert.equal(mov.length, 1);
+  assert.match(mov[0].xml, /<urn:WorkflowID>038600<\/urn:WorkflowID><urn:ActivityID>ATV-02<\/urn:ActivityID><urn:ActionSequence>6<\/urn:ActionSequence><urn:UserID>10677535000155</);
+  assert.equal(por['038600'].estado, 'publicado');
+  assert.deepEqual(origem.chamados.get('038600').ativas, ['ATV-02'], 'segue no Primeiro Atendimento');
+  const ev600 = jade.getAuditoria(EMPRESA, fonte.id, por['038600'].id).eventos.find(e => e.etapa === 'notificacao');
+  assert.equal(ev600.situacao, 'ok');
+  assert.match(ev600.resumo, /Enviar retorno da Jaade ao cliente.*voltou ao Primeiro Atendimento/);
+  // Revisão anterior: só a grade, sem movimentar.
+  assert.equal(por['038601'].estado, 'publicado');
+  const ev601 = jade.getAuditoria(EMPRESA, fonte.id, por['038601'].id).eventos.find(e => e.etapa === 'notificacao');
+  assert.equal(ev601.situacao, 'info');
+  assert.match(ev601.resumo, /sem a ação 6/);
+
+  // Recusa da ação 6: não repete (evita e-mail duplicado) e o chamado continua publicado.
+  chamadoNaOrigem('038602', { acao6: true });
+  respostasIA = [RESPOSTA_OK];
+  const enviarOriginal = soapReal.enviarOperacao;
+  soapReal.enviarOperacao = async (args) => (args.operacao === 'executeActivity' ? { Status: 'FAILURE', Code: '-9', Detail: 'sem permissão' } : enviarOriginal(args));
+  try {
+    await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  } finally {
+    soapReal.enviarOperacao = enviarOriginal;
+  }
+  const e602 = execs().find(e => e.numeroChamado === '038602');
+  assert.equal(e602.estado, 'publicado');
+  assert.equal(e602.alerta, false);
+  const ev602 = jade.getAuditoria(EMPRESA, fonte.id, e602.id).eventos.find(e => e.etapa === 'notificacao');
+  assert.equal(ev602.situacao, 'aviso');
+  assert.match(ev602.resumo, /recusou a ação.*sem permissão/);
+  const antes = envios.length;
+  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  assert.equal(envios.length, antes, 'nada é reenviado');
 });
 
 // Cliente SOAP recarregado sem o stub de envio, para validar o envelope real.

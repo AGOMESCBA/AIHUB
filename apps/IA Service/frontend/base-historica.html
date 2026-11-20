@@ -1236,6 +1236,7 @@
     { id: 'analise', rotulo: 'Análise técnica', desc: 'Pesquisa da IA para o ANALISTA, gravada no chat da J2iA do chamado. Este texto NÃO vai ao cliente; é a base do retorno ao cliente.' },
     { id: 'retorno', rotulo: 'Retorno ao cliente', desc: 'Texto que vai ao CLIENTE (gravado na grade do SoftExpert no modo Publicar), a decisão (responder ou devolver) e as versões recusadas pela verificação.' },
     { id: 'envio', rotulo: 'Gravação no SoftExpert', desc: 'Posicionamento gravado na grade do chamado: campos enviados e resposta do SoftExpert.' },
+    { id: 'notificacao', rotulo: 'E-mail ao cliente', desc: 'Ação 6 do Primeiro Atendimento (revisão 89 do fluxo em diante): o SoftExpert envia o e-mail "Retorno do ticket" ao cliente e o chamado volta à triagem. Em chamados de revisão anterior o retorno fica só na grade.' },
     { id: 'devolucao', rotulo: 'Devolução ao cliente', desc: 'Movimentação do chamado para o cliente (ATV-02, ação 1 → Retorno do Usuário).' },
     { id: 'situacao', rotulo: 'Atividade no SoftExpert', desc: 'Conferência final no SoftExpert: em que atividade o chamado ficou depois da Jaade (respondido segue no Primeiro Atendimento; devolvido avança para o Retorno do Usuário).' },
     { id: 'aviso', rotulo: 'Aviso por WhatsApp', desc: 'Mensagem do fim da leitura aos grupos escolhidos: chamados sem PA ou com PA pela Jaade. Recebe todo membro dos grupos com acesso à empresa. Em Simulação sai marcada como teste. Não aparece sem grupo escolhido ou quando a triagem atendeu antes.' },
@@ -1346,7 +1347,9 @@
 
     const porEtapa = Object.fromEntries(JADE_ETAPAS.map(et => [et.id, eventos.filter(e => e.etapa === et.id)]));
     // Devolução só entra no fluxo quando a decisão foi devolver (ou houve registro dela).
-    const etapas = JADE_ETAPAS.filter(et => et.id !== 'devolucao' || ex.decisao === 'devolver' || porEtapa.devolucao.length);
+    // E-mail ao cliente só no "responder"; devolução só no "devolver" (ou quando houver registro).
+    const etapas = JADE_ETAPAS.filter(et => (et.id !== 'devolucao' || ex.decisao === 'devolver' || porEtapa.devolucao.length)
+      && (et.id !== 'notificacao' || ex.decisao !== 'devolver' || porEtapa.notificacao.length));
     if (!jadeEtapaSel || !etapas.some(et => et.id === jadeEtapaSel)) {
       const comErro = [...etapas].reverse().find(et => _situacaoEtapa(porEtapa[et.id]) === 'erro');
       const ultima = [...etapas].reverse().find(et => porEtapa[et.id].length);

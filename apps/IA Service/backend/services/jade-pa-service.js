@@ -81,6 +81,16 @@ const SQL_SITUACAO = `
 
 const SQL_USUARIO_JADE = 'SELECT CDUSER, NMUSER, IDUSER, FGUSERENABLED FROM ADUSER WHERE CDUSER = @cdUser';
 
+// Ação 6 do Primeiro Atendimento ativo DESTE chamado (e-mail ao cliente; só da
+// revisão 89 do ITSM-02 em diante). Cada instância guarda as ações da sua revisão.
+const SQL_ACAO_EMAIL = `
+  SELECT TOP 1 A.NRORDER, A.NMACTION
+  FROM WFPROCESS W
+  INNER JOIN WFSTRUCT S ON S.IDPROCESS = W.IDOBJECT AND S.IDSTRUCT = 'ATV-02' AND S.FGSTATUS = 2
+  INNER JOIN WFSTRUCTACTION A ON A.IDACTIVITY = S.IDOBJECT AND A.NRORDER = 6
+  WHERE W.IDPROCESS = @numero
+`;
+
 const MARCA_JADE = 'IA SERVICE';
 const ATIVIDADE_CLIENTE = 'ATV-06';
 
@@ -514,7 +524,17 @@ async function _publicar(cfg, fonte, exec) {
     // Envio anterior confirmado na origem (inclusive um "não confirmado" que tinha entrado).
     _evento(exec, 'envio', 'ok', 'Conferido no SoftExpert: o posicionamento da Jaade está na grade do chamado.');
     const publicado = repo.atualizar(exec.id, { estado: 'publicado', publicadoEm: exec.publicadoEm || new Date().toISOString(), ultimoErro: null, alerta: false });
-    return exec.decisao === 'devolver' ? repo.atualizar(publicado.id, { estado: 'devolvendo' }) : publicado;
+    if (exec.decisao === 'devolver') return repo.atualizar(publicado.id, { estado: 'devolvendo' });
+    // Gravação confirmada só agora (o envio anterior caiu antes do e-mail): o e-mail sai aqui.
+    if (!exec.publicadoEm) {
+      try {
+        const jade = await _usuarioJade(empresaId, fonte.id, cfg.usuarioSoftexpert);
+        await _notificarCliente(cfg, fonte, publicado, { jade, config: _contratoEscrita(empresaId, fonte.id, jade.codigo) });
+      } catch (err) {
+        _evento(publicado, 'notificacao', 'aviso', `E-mail ao cliente não enviado: ${err.message}. O retorno continua na grade.`);
+      }
+    }
+    return publicado;
   }
   if (exec.tentativasPublicacao >= MAX_TENTATIVAS) return _falhaDefinitiva(exec, 'O SoftExpert não confirmou o posicionamento após 3 tentativas.', 'envio');
   if (_triagemAtuou(s)) {
@@ -549,7 +569,56 @@ async function _publicar(cfg, fonte, exec) {
   }
   _evento(exec, 'envio', 'ok', 'Posicionamento gravado na grade do chamado no SoftExpert', { ...gravado, resposta: _respostaSe(resposta) });
   const publicado = repo.atualizar(exec.id, { estado: 'publicado', publicadoEm: new Date().toISOString(), ultimoErro: null, alerta: false });
-  return exec.decisao === 'devolver' ? repo.atualizar(publicado.id, { estado: 'devolvendo' }) : publicado;
+  if (exec.decisao === 'devolver') return repo.atualizar(publicado.id, { estado: 'devolvendo' });
+  await _notificarCliente(cfg, fonte, publicado, { jade, config });
+  return publicado;
+}
+
+/**
+ * Responder: o retorno fica na grade e o chamado SEGUE na triagem. Na revisão
+ * 89 em diante do ITSM-02 o PA tem a ação 6, que envia o e-mail "Retorno do
+ * ticket" ao cliente e volta ao Primeiro Atendimento (pedido do usuário,
+ * 2026-11-20). Confere a ação no próprio chamado (cada instância guarda as
+ * ações da sua revisão): sem ela, só a grade, como antes. Uma tentativa só —
+ * repetir mandaria o e-mail duas vezes; falha no e-mail é do SoftExpert.
+ * Nunca muda o estado do chamado na Jaade nem lança.
+ */
+async function _notificarCliente(cfg, fonte, exec, { jade, config }) {
+  const { empresaId } = cfg;
+  try {
+    const [acao] = await agenteLocalService.executarSelectNaFonte(empresaId, fonte.id, { sql: SQL_ACAO_EMAIL, params: { numero: String(exec.numeroChamado) }, limit: 2 });
+    if (!acao) {
+      _evento(exec, 'notificacao', 'info', 'E-mail ao cliente não enviado: o chamado é de uma revisão do fluxo sem a ação 6 (anterior à 89). O retorno fica só na grade.');
+      return;
+    }
+    const nomeAcao = String(acao.NMACTION || '').trim() || 'ação 6';
+    const movimento = { usuario: `${jade.nome} (matrícula ${jade.matricula})`, atividade: 'ATV-02 Primeiro Atendimento', acao: `6 — ${nomeAcao}` };
+    let resposta;
+    try {
+      const xml = soapClient.montarNotificacaoPrimeiroAtendimento({ workflowId: exec.numeroChamado, userId: jade.matricula });
+      resposta = await soapClient.enviarOperacao({ ...config.transporte, xml, operacao: 'executeActivity' });
+    } catch (err) {
+      _evento(exec, 'notificacao', 'aviso', `A ação "${nomeAcao}" (e-mail ao cliente) não foi confirmada pelo SoftExpert (${err.message}). Não é repetida, para o cliente não receber o e-mail duas vezes.`,
+        { ...movimento, resposta: _respostaSe({ httpStatus: err.httpStatus, Detail: err.codigoTransporte }), erroTecnico: _erroTecnico(err, { operacao: 'executeActivity' }) });
+      return;
+    }
+    if (resposta.Status !== 'SUCCESS' || resposta.Code !== '1') {
+      _evento(exec, 'notificacao', 'aviso', `O SoftExpert recusou a ação "${nomeAcao}" (e-mail ao cliente) — ${resposta.Detail || resposta.Code}. O retorno continua na grade.`,
+        { ...movimento, resposta: _respostaSe(resposta), erroTecnico: { mensagem: resposta.Detail || 'Recusa sem detalhe', operacao: 'executeActivity', status: resposta.Status, code: resposta.Code } });
+      return;
+    }
+    const depois = await situacaoNaOrigem(empresaId, fonte.id, exec.numeroChamado);
+    const ativas = [...(depois?.ativas || [])];
+    if (depois?.ativas.has('ATV-02')) {
+      _evento(exec, 'notificacao', 'ok', `Ação "${nomeAcao}" executada: o SoftExpert envia o e-mail "Retorno do ticket" ao cliente e o chamado voltou ao Primeiro Atendimento.`,
+        { ...movimento, resposta: _respostaSe(resposta) });
+    } else {
+      _evento(exec, 'notificacao', 'aviso', `Ação "${nomeAcao}" executada, mas o chamado está em ${ativas.join(', ') || 'etapa desconhecida'}, não no Primeiro Atendimento.`,
+        { ...movimento, resposta: _respostaSe(resposta) });
+    }
+  } catch (err) {
+    _evento(exec, 'notificacao', 'aviso', `E-mail ao cliente não enviado: ${err.message}. O retorno continua na grade.`);
+  }
 }
 
 async function _devolver(cfg, fonte, exec) {
