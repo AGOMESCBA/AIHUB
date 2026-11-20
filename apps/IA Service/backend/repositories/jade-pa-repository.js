@@ -240,6 +240,10 @@ function limparLogs(empresaId, fonteId, { deIso = null, ateIso = null } = {}) {
         AND (id IN (SELECT value FROM json_each(@tocados)) OR ${noPeriodo('detectado_em')})`;
     const q = { ...p, tocados: JSON.stringify(tocados) };
     const chamadosLiberados = db.prepare(`DELETE FROM jade_pa_execucoes WHERE ${semRegistro}`).run(q).changes;
+    // Contadores da "Última leitura" saem junto quando ela está no período limpo.
+    // A data fica: o relógio do job ainda a usa para a próxima leitura.
+    db.prepare(`UPDATE jade_pa_config SET ultimo_ciclo_resumo = NULL
+      WHERE empresa_id = @emp AND fonte_id = @fonte AND ${tudo ? '1 = 1' : 'ultimo_ciclo_em >= @de AND ultimo_ciclo_em <= @ate'}`).run(p);
     return { lotesRemovidos, registrosRemovidos, chamadosLiberados };
   })();
 }

@@ -41,7 +41,8 @@ stub('../backend/services/agente-local-service', {
     if (sql.includes('LEFT JOIN WFSTRUCT')) {
       const c = origem.chamados.get(params.numero);
       if (!c) return [];
-      const base = { PROC_STATUS: c.aberto ? 1 : 2, COM_RESP: c.comResp ? 1 : 0, POS_JADE: c.posJade, POS_OUTROS: c.posOutros };
+      const base = { PROC_STATUS: c.aberto ? 1 : 2, COM_RESP: c.comResp ? 1 : 0, POS_JADE: c.posJade, POS_OUTROS: c.posOutros,
+        CAB_EMPRESA: 'APROSOJA', CAB_COLABORADOR: 'kelvyn.ramos@aprosoja.com.br', CAB_ASSUNTO: 'API de solicitacao de compras' };
       return (c.ativas.length ? c.ativas : [null]).map(a => ({ ...base, ATIVA: a }));
     }
     const lista = [...origem.chamados].filter(([, c]) => elegivel(c)).map(([n]) => n);
@@ -278,13 +279,17 @@ test('limpar logs: período apaga lotes, auditoria e libera o chamado sem retorn
   const exec = execs().find(e => e.numeroChamado === '037160');
   const enviosAntes = envios.length;
 
-  // Período que não cobre o lote: nada muda.
+  // Período que não cobre o lote: nada muda (nem os contadores da última leitura).
   const fora = jade.limparLogs(EMPRESA, fonte.id, { de: '2020-01-01T00:00:00.000Z', ate: '2020-01-02T00:00:00.000Z' });
   assert.deepEqual(fora, { lotesRemovidos: 0, registrosRemovidos: 0, chamadosLiberados: 0 });
+  assert.ok(jade.getConfig(EMPRESA, fonte.id).ultimoCicloResumo);
 
   const hoje = new Date();
   const r = jade.limparLogs(EMPRESA, fonte.id, { de: new Date(hoje.getTime() - 3600000).toISOString(), ate: new Date(hoje.getTime() + 3600000).toISOString() });
   assert.equal(r.lotesRemovidos, 1);
+  // Contadores da "Última leitura" saem junto; a data fica para o relógio do job.
+  assert.equal(jade.getConfig(EMPRESA, fonte.id).ultimoCicloResumo, null);
+  assert.ok(jade.getConfig(EMPRESA, fonte.id).ultimoCicloEm);
   assert.ok(r.registrosRemovidos > 0);
   assert.equal(r.chamadosLiberados, 1);
   const painel = jade.getPainel(EMPRESA, fonte.id);
@@ -312,6 +317,7 @@ test('limpar logs: tudo; bloqueado durante uma leitura', async () => {
   repo.liberarCiclo(EMPRESA, fonte.id, {});
   const r = jade.limparLogs(EMPRESA, fonte.id, { tudo: true });
   assert.ok(r.lotesRemovidos >= 1);
+  assert.equal(jade.getConfig(EMPRESA, fonte.id).ultimoCicloResumo, null);
   const painel = jade.getPainel(EMPRESA, fonte.id);
   assert.equal(painel.lotes.length, 0);
   assert.equal(painel.semLote.length, 0);
@@ -503,6 +509,16 @@ test('publicar: grava na grade como Jade, com a marca IA SERVICE, zero horas e o
     assert.ok(xml.includes(`<urn:EntityAttributeID>${id}</urn:EntityAttributeID><urn:EntityAttributeValue>${valor}</urn:EntityAttributeValue>`), `${id}=${valor}`);
   }
   assert.match(xml, /<urn:EntityAttributeID>horaini<\/urn:EntityAttributeID><urn:EntityAttributeValue>\d\d:(00|30)</);
+  // Campos que a tela do SoftExpert preenche sozinha: chamado (IDPROCESS) e data/hora da integração.
+  assert.ok(xml.includes('<urn:EntityAttributeID>chamado</urn:EntityAttributeID><urn:EntityAttributeValue>037700</urn:EntityAttributeValue>'));
+  const agora = new Date(exec.publicadoEm);
+  const p2 = (n) => String(n).padStart(2, '0');
+  assert.ok(xml.includes(`<urn:EntityAttributeID>dataatual</urn:EntityAttributeID><urn:EntityAttributeValue>${agora.getFullYear()}-${p2(agora.getMonth() + 1)}-${p2(agora.getDate())}</urn:EntityAttributeValue>`));
+  assert.match(xml, /<urn:EntityAttributeID>horaatual<\/urn:EntityAttributeID><urn:EntityAttributeValue>([01]\d|2[0-3]):[0-5]\d<\/urn:EntityAttributeValue>/);
+  // Cabeçalho do chamado (DYNITSM DP / NMSOLICITANTE / TEXTO31), como a tela copia.
+  for (const [id, valor] of [['empresa', 'APROSOJA'], ['colabcliente', 'kelvyn.ramos@aprosoja.com.br'], ['assunto', 'API de solicitacao de compras']]) {
+    assert.ok(xml.includes(`<urn:EntityAttributeID>${id}</urn:EntityAttributeID><urn:EntityAttributeValue>${valor}</urn:EntityAttributeValue>`), `${id}=${valor}`);
+  }
   assert.ok(xml.includes('Olá &quot;cliente&quot;.'));
   assert.ok(!xml.includes('motivoapontamen'));
   const situacao = jade.getAuditoria(EMPRESA, fonte.id, exec.id).eventos.find(e => e.etapa === 'situacao');

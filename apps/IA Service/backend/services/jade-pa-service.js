@@ -70,6 +70,9 @@ const SQL_SITUACAO = `
     (SELECT COUNT(*) FROM DYNITSM D WHERE D.IDPROCESS = W.IDPROCESS AND D.RESPONSAVEL IS NOT NULL) AS COM_RESP,
     (SELECT COUNT(*) FROM DYNITSMGRIDREGISTR G WHERE ${DO_CHAMADO} AND G.TEXTO4 = 'IA SERVICE') AS POS_JADE,
     (SELECT COUNT(*) FROM DYNITSMGRIDREGISTR G WHERE ${DO_CHAMADO} AND (G.TEXTO4 IS NULL OR G.TEXTO4 <> 'IA SERVICE')) AS POS_OUTROS,
+    (SELECT TOP 1 D.DP FROM DYNITSM D WHERE D.IDPROCESS = W.IDPROCESS) AS CAB_EMPRESA,
+    (SELECT TOP 1 D.NMSOLICITANTE FROM DYNITSM D WHERE D.IDPROCESS = W.IDPROCESS) AS CAB_COLABORADOR,
+    (SELECT TOP 1 D.TEXTO31 FROM DYNITSM D WHERE D.IDPROCESS = W.IDPROCESS) AS CAB_ASSUNTO,
     S.IDSTRUCT AS ATIVA
   FROM WFPROCESS W
   LEFT JOIN WFSTRUCT S ON S.IDPROCESS = W.IDOBJECT AND S.FGSTATUS = 2
@@ -426,6 +429,8 @@ async function situacaoNaOrigem(empresaId, fonteId, numero) {
     posicionamentosJade: Number(r.POS_JADE) || 0,
     posicionamentosOutros: Number(r.POS_OUTROS) || 0,
     ativas: new Set(rows.map(x => x.ATIVA).filter(Boolean).map(String)),
+    // Cabeçalho do chamado (DYNITSM) que o formulário copia para a grade.
+    cabecalho: { empresa: r.CAB_EMPRESA ?? null, colaborador: r.CAB_COLABORADOR ?? null, assunto: r.CAB_ASSUNTO ?? null },
   };
 }
 
@@ -460,11 +465,10 @@ function _horaMeiaHora(data) {
 }
 
 /** Atributos da grade: os campos fechados com o usuário (2026-11-19) e zero horas apontadas. */
-function montarAtributosPosicionamento({ contrato, chamado, jade, texto, instante = new Date() }) {
+function montarAtributosPosicionamento({ contrato, chamado, jade, texto, cabecalho = {}, instante = new Date() }) {
   const hora = _horaMeiaHora(instante);
   const desejados = {
     DESCRICAO: texto,
-    ASSUNTO: 'Análise preliminar - Jade',
     SITUACAOCHAMADO: 'Primeiro Atendimento',
     TIPOPOSICIONAME: 'N',
     AGUARDANRETORNO: 'RETORNO - ATENDENTE',
@@ -478,10 +482,23 @@ function montarAtributosPosicionamento({ contrato, chamado, jade, texto, instant
   const atributos = retornoConfig.mapearCampos(campos, contrato, {
     chamado: { numero: chamado.numero, oidOrigem: chamado.oidOrigem }, consultor: { idSoftexpert: jade.codigo }, instante: instante.toISOString(),
   });
-  for (const id of Object.keys(atributos)) if (['cduserana', 'analistaj2a', 'texto4'].includes(id.toLowerCase())) delete atributos[id];
+  const PREENCHIDOS = ['cduserana', 'analistaj2a', 'texto4', 'chamado', 'dataatual', 'horaatual', 'empresa', 'colabcliente', 'assunto'];
+  for (const id of Object.keys(atributos)) if (PREENCHIDOS.includes(id.toLowerCase())) delete atributos[id];
   atributos.cduserana = jade.codigo;
   atributos.analistaj2a = jade.nome;
   atributos.texto4 = MARCA_JADE;
+  // Campos que o formulário preenche sozinho quando o registro é feito pela tela
+  // (vinham vazios pela API, chamado 037058; conferido contra registros do Edson):
+  // CHAMADO = IDPROCESS; Data e Hora = momento da integração, no fuso do
+  // servidor como HORAINI (API wf_ws: data YYYY-MM-DD, hora HH:MM); Empresa,
+  // Colaborador e Assunto = cabeçalho do chamado (DYNITSM DP, NMSOLICITANTE, TEXTO31).
+  const p2 = (n) => String(n).padStart(2, '0');
+  atributos.chamado = String(chamado.numero);
+  atributos.dataatual = `${instante.getFullYear()}-${p2(instante.getMonth() + 1)}-${p2(instante.getDate())}`;
+  atributos.horaatual = `${p2(instante.getHours())}:${p2(instante.getMinutes())}`;
+  for (const [id, valor] of [['empresa', cabecalho.empresa], ['colabcliente', cabecalho.colaborador], ['assunto', cabecalho.assunto]]) {
+    if (String(valor ?? '').trim()) atributos[id] = String(valor).trim();
+  }
   return atributos;
 }
 
@@ -513,7 +530,7 @@ async function _publicar(cfg, fonte, exec) {
   if (!chamado) throw new Error('Chamado não encontrado na base local.');
   const jade = await _usuarioJade(empresaId, fonte.id, cfg.usuarioSoftexpert);
   const config = _contratoEscrita(empresaId, fonte.id, jade.codigo);
-  const atributos = montarAtributosPosicionamento({ contrato: config.contrato, chamado, jade, texto: exec.textoCliente });
+  const atributos = montarAtributosPosicionamento({ contrato: config.contrato, chamado, jade, texto: exec.textoCliente, cabecalho: s?.cabecalho });
   const xml = soapClient.montarInclusaoGrid({ workflowId: exec.numeroChamado, mainEntityId: config.contrato.mainEntityId, childRelationshipId: config.contrato.childRelationshipId, campos: atributos });
   if (!repo.contarTentativa(exec.id, 'publicacao', 'publicando', { estadoAnterior: exec.estado, tentativasAnteriores: exec.tentativasPublicacao })) return null;
   const gravado = { usuario: `${jade.nome} (CDUSER ${jade.codigo}, matrícula ${jade.matricula})`, campos: atributos };
