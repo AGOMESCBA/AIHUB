@@ -163,9 +163,40 @@ function loteEmAndamento(empresaId, fonteId) {
   return l ? { id: l.id, inicio: l.inicio, origem: l.origem } : { id: null, inicio: null, origem: null };
 }
 
+/**
+ * Limpa os logs do job (lotes e auditoria) de um período — por início do lote,
+ * ou pelo momento do registro/detecção quando não há lote — ou tudo
+ * (de/ate nulos). O registro do chamado fica: é a garantia de "uma ação por
+ * chamado"; só sai da grade (logs_limpos_em) quando não lhe sobra registro.
+ */
+function limparLogs(empresaId, fonteId, { deIso = null, ateIso = null } = {}) {
+  const db = getDB();
+  const emp = Number(empresaId);
+  const tudo = !deIso && !ateIso;
+  const noPeriodo = (col) => (tudo ? '1 = 1' : `${col} >= @de AND ${col} <= @ate`);
+  const p = { emp, fonte: fonteId, de: deIso, ate: ateIso, agora: new Date().toISOString() };
+  return db.transaction(() => {
+    const lotes = db.prepare(`SELECT id FROM jade_pa_lotes WHERE empresa_id = @emp AND fonte_id = @fonte AND ${noPeriodo('inicio')}`).all(p).map(r => r.id);
+    const loteIn = lotes.length ? `e.lote_id IN (${lotes.join(', ')})` : '0 = 1';
+    const alvo = `FROM jade_pa_eventos e JOIN jade_pa_execucoes x ON x.id = e.execucao_id
+      WHERE x.empresa_id = @emp AND x.fonte_id = @fonte AND (${loteIn} OR (e.lote_id IS NULL AND ${noPeriodo('e.momento')}))`;
+    const tocados = db.prepare(`SELECT DISTINCT e.execucao_id AS id ${alvo}`).all(p).map(r => r.id);
+    const registrosRemovidos = db.prepare(`DELETE FROM jade_pa_eventos WHERE id IN (SELECT e.id ${alvo})`).run(p).changes;
+    const lotesRemovidos = lotes.length ? db.prepare(`DELETE FROM jade_pa_lotes WHERE id IN (${lotes.join(', ')})`).run().changes : 0;
+    // Sai da grade: o que perdeu registros agora, ou (sem registro nenhum) foi detectado no período.
+    const chamadosOcultos = db.prepare(`UPDATE jade_pa_execucoes SET logs_limpos_em = @agora
+      WHERE empresa_id = @emp AND fonte_id = @fonte AND logs_limpos_em IS NULL
+        AND NOT EXISTS (SELECT 1 FROM jade_pa_eventos e WHERE e.execucao_id = jade_pa_execucoes.id)
+        AND (id IN (SELECT value FROM json_each(@tocados)) OR ${noPeriodo('detectado_em')})`)
+      .run({ ...p, tocados: JSON.stringify(tocados) }).changes;
+    return { lotesRemovidos, registrosRemovidos, chamadosOcultos };
+  })();
+}
+
 /** Chamados tratados antes dos lotes existirem (nenhum registro com lote). */
 function listarExecucoesSemLote(empresaId, fonteId, { limite = 100 } = {}) {
   return getDB().prepare(`SELECT x.* FROM jade_pa_execucoes x WHERE x.empresa_id = ? AND x.fonte_id = ?
+      AND x.logs_limpos_em IS NULL
       AND NOT EXISTS (SELECT 1 FROM jade_pa_eventos e WHERE e.execucao_id = x.id AND e.lote_id IS NOT NULL)
     ORDER BY x.detectado_em DESC LIMIT ?`).all(Number(empresaId), fonteId, limite).map(_execucao);
 }
@@ -284,7 +315,7 @@ function listarExecucoes(empresaId, { limite = 100 } = {}) {
 }
 
 module.exports = {
-  PADRAO, getConfig, salvarConfig, listarConfigsAtivas, tentarTravarCiclo, renovarTrava, liberarCiclo, criarLote, finalizarLote, listarLotes, loteEmAndamento, listarExecucoesSemLote,
+  PADRAO, getConfig, salvarConfig, listarConfigsAtivas, tentarTravarCiclo, renovarTrava, liberarCiclo, criarLote, finalizarLote, listarLotes, loteEmAndamento, listarExecucoesSemLote, limparLogs,
   registrarDetectado, registrarEvento, listarEventos, contarDetectadosDesde, listarParaGerar, marcarGerando, listarParaEnviar, contarTentativa, devolverTentativaGeracao,
   atualizar, getExecucao, listarExecucoes,
 };

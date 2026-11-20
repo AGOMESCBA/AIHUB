@@ -123,6 +123,7 @@ const RESPOSTA_OK = { decisao: 'responder', motivo: 'há descrição e rotina', 
 const DEVOLVER = { decisao: 'devolver', motivo: 'sem anexo e descrição vaga', texto: 'Olá! Para analisarmos, envie o print da tela.\nJade, assistente virtual' };
 
 beforeEach(() => {
+  getDB().prepare('DELETE FROM jade_pa_lotes').run();
   getDB().prepare('DELETE FROM jade_pa_execucoes').run();
   getDB().prepare('DELETE FROM jade_pa_config').run();
   origem.chamados = new Map();
@@ -208,6 +209,54 @@ test('lotes: leitura que tratou chamado vira lote numerado; leitura vazia não �
   assert.equal(vazio.origem, 'manual');
   assert.equal(vazio.loteGravado, false);
   assert.ok(!jade.getPainel(EMPRESA, fonte.id).lotes.some(l => l.id === vazio.loteId));
+});
+
+test('limpar logs: período apaga só lotes/auditoria do período; o chamado segue protegido e o SoftExpert não é chamado', async () => {
+  await ligar();
+  chamadoNaOrigem('037160');
+  respostasIA = [RESPOSTA_OK];
+  const r1 = await jade.executarCiclo(EMPRESA, fonte.id);
+  const exec = execs().find(e => e.numeroChamado === '037160');
+  const enviosAntes = envios.length;
+
+  // Período que não cobre o lote: nada muda.
+  const fora = jade.limparLogs(EMPRESA, fonte.id, { de: '2020-01-01T00:00:00.000Z', ate: '2020-01-02T00:00:00.000Z' });
+  assert.deepEqual(fora, { lotesRemovidos: 0, registrosRemovidos: 0, chamadosOcultos: 0 });
+
+  const hoje = new Date();
+  const r = jade.limparLogs(EMPRESA, fonte.id, { de: new Date(hoje.getTime() - 3600000).toISOString(), ate: new Date(hoje.getTime() + 3600000).toISOString() });
+  assert.equal(r.lotesRemovidos, 1);
+  assert.ok(r.registrosRemovidos > 0);
+  assert.equal(r.chamadosOcultos, 1);
+  const painel = jade.getPainel(EMPRESA, fonte.id);
+  assert.ok(!painel.lotes.some(l => l.id === r1.loteId));
+  assert.ok(!painel.semLote.some(e => e.id === exec.id));
+  assert.equal(jade.getAuditoria(EMPRESA, fonte.id, exec.id).eventos.length, 0);
+  // Registro do chamado mantido: a Jade não age de novo.
+  assert.equal(repo.getExecucao(exec.id).estado, 'simulado');
+  const de = await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  assert.equal(de.novos, 0);
+  assert.equal(envios.length, enviosAntes);
+
+  assert.throws(() => jade.limparLogs(EMPRESA, fonte.id, { de: 'x', ate: 'y' }), { status: 400 });
+  assert.throws(() => jade.limparLogs(EMPRESA, fonte.id, { de: '2026-02-01T00:00:00Z', ate: '2026-01-01T00:00:00Z' }), { status: 400 });
+});
+
+test('limpar logs: tudo; bloqueado durante uma leitura', async () => {
+  await ligar();
+  chamadoNaOrigem('037170');
+  respostasIA = [RESPOSTA_OK];
+  await jade.executarCiclo(EMPRESA, fonte.id);
+  repo.tentarTravarCiclo(EMPRESA, fonte.id, { travaMs: 60000, forcar: true });
+  repo.criarLote(EMPRESA, fonte.id, 'manual');
+  assert.throws(() => jade.limparLogs(EMPRESA, fonte.id, { tudo: true }), { status: 409 });
+  repo.liberarCiclo(EMPRESA, fonte.id, {});
+  const r = jade.limparLogs(EMPRESA, fonte.id, { tudo: true });
+  assert.ok(r.lotesRemovidos >= 1);
+  const painel = jade.getPainel(EMPRESA, fonte.id);
+  assert.equal(painel.lotes.length, 0);
+  assert.equal(painel.semLote.length, 0);
+  assert.ok(execs().some(e => e.numeroChamado === '037170'));
 });
 
 test('contador: ligar agenda para já; após a leitura agenda +intervalo; mudar o intervalo recomeça a contagem', async () => {

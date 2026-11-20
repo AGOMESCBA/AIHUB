@@ -1531,6 +1531,13 @@ const MIGRATIONS = [
       CREATE INDEX idx_jade_pa_eventos_lote ON jade_pa_eventos (lote_id, execucao_id);
     `,
   },
+  {
+    version: 65,
+    descricao: 'Jade no Primeiro Atendimento: limpeza dos logs do job por período ou tudo (pedido do usuário, 2026-11-20). Apaga lotes e auditoria; o registro do chamado (jade_pa_execucoes) fica, porque é ele que impede a Jade de agir duas vezes — logs_limpos_em só o tira da grade.',
+    sql: `
+      ALTER TABLE jade_pa_execucoes ADD COLUMN logs_limpos_em TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

@@ -753,6 +753,22 @@ function getPainel(empresaId, fonteId) {
   };
 }
 
+/**
+ * Botão "Limpar logs": apaga lotes e auditoria do IA Service (período ou tudo).
+ * Nunca toca no SoftExpert e nunca apaga o registro que impede a Jade de agir
+ * de novo no mesmo chamado. Bloqueado durante uma leitura.
+ */
+function limparLogs(empresaId, fonteId, { de = null, ate = null, tudo = false } = {}) {
+  _fonteSoftExpert(empresaId, fonteId);
+  if (repo.loteEmAndamento(empresaId, fonteId)) throw _erro(409, 'Há uma leitura da Jade em execução. Aguarde terminar para limpar os logs.');
+  if (tudo) return repo.limparLogs(empresaId, fonteId);
+  const deMs = Date.parse(de);
+  const ateMs = Date.parse(ate);
+  if (!Number.isFinite(deMs) || !Number.isFinite(ateMs)) throw _erro(400, 'Período inválido: informe a data inicial e a final.');
+  if (deMs > ateMs) throw _erro(400, 'Período inválido: a data inicial é maior que a final.');
+  return repo.limparLogs(empresaId, fonteId, { deIso: new Date(deMs).toISOString(), ateIso: new Date(ateMs).toISOString() });
+}
+
 /** Execução + trilha de auditoria (fluxo do chamado na tela). */
 function getAuditoria(empresaId, fonteId, execucaoId) {
   _fonteSoftExpert(empresaId, fonteId);
@@ -788,5 +804,5 @@ function iniciarAgendamento() {
 module.exports = {
   iniciarAgendamento, executarCiclo, executarAgora, processarExecucao, gerarTextoCliente, verificarVazamento,
   normalizarTextoSoftExpert, montarAtributosPosicionamento, enviarExecucao, situacaoNaOrigem, nomesDeOutrosClientes,
-  listarElegiveisNaOrigem, getConfig, salvarConfig, listarExecucoes, getAuditoria, getPainel, SQL_ELEGIVEIS, MAX_TENTATIVAS,
+  listarElegiveisNaOrigem, getConfig, salvarConfig, listarExecucoes, getAuditoria, getPainel, limparLogs, SQL_ELEGIVEIS, MAX_TENTATIVAS,
 };

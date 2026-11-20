@@ -745,6 +745,22 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
+  // Limpeza dos logs do job (lotes e auditoria), sempre auditada como a do
+  // Histórico de Acessos. Só o banco do IA Service; o SoftExpert não é tocado.
+  app.delete('/api/ia-service/base-historica/fontes/:id/jade-pa/logs', (req, res) => {
+    try {
+      const { de, ate, tudo, motivo } = req.body || {};
+      const resultado = jadePaService.limparLogs(req.svcEmpresaId, req.params.id, { de, ate, tudo: tudo === true });
+      require('../services/presenca-service').registrarAuditoria({
+        empresaId: req.svcEmpresaId, acao: 'jade_pa_limpar_logs', alvo: req.params.id, usuarioId: Number(req.session?.user_id) || null,
+        motivo, detalhe: { tudo: tudo === true, de: tudo === true ? null : de, ate: tudo === true ? null : ate, ...resultado },
+      });
+      res.json(resultado);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
   app.put('/api/ia-service/base-historica/fontes/:id/jade-pa', async (req, res) => {
     try {
       const { ativo, modo, devolucaoAtiva, intervaloMinutos, limiteDiario, processamentosSimultaneos, usuarioSoftexpert, somenteChamados } = req.body || {};
