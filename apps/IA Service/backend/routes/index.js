@@ -28,6 +28,7 @@ const radarService = require('../services/radar-service');
 const anexosSoftExpertService = require('../services/anexos-softexpert-service');
 const technicalResearchService = require('../services/technical-research-service');
 const radarRefreshService = require('../services/radar-refresh-service');
+const jadePaService = require('../services/jade-pa-service');
 const investigacaoExecucaoRepo = require('../repositories/investigacao-execucao-repository');
 const investigacaoDossieService = require('../services/investigacao-dossie-service');
 const trilhaInvestigacaoService = require('../services/trilha-investigacao-service');
@@ -722,6 +723,38 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
       const fonte = agenteLocalService.atualizarFonte(req.svcEmpresaId, req.params.id, { nome, connectionKey, ativo });
       if (!fonte) return res.status(404).json({ error: 'Fonte não encontrada.' });
       res.json(fonte);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // ── Jade no Primeiro Atendimento (configuração por fonte) ────────────────
+  app.get('/api/ia-service/base-historica/fontes/:id/jade-pa', (req, res) => {
+    try {
+      res.json({
+        config: jadePaService.getConfig(req.svcEmpresaId, req.params.id),
+        execucoes: jadePaService.listarExecucoes(req.svcEmpresaId, { limite: req.query.limite }),
+      });
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.put('/api/ia-service/base-historica/fontes/:id/jade-pa', async (req, res) => {
+    try {
+      const { ativo, modo, devolucaoAtiva, intervaloMinutos, limiteDiario, usuarioSoftexpert, somenteChamados } = req.body || {};
+      res.json(await jadePaService.salvarConfig(req.svcEmpresaId, req.params.id, {
+        ativo, modo, devolucaoAtiva, intervaloMinutos, limiteDiario, usuarioSoftexpert, somenteChamados,
+      }));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  app.post('/api/ia-service/base-historica/fontes/:id/jade-pa/executar', (req, res) => {
+    try {
+      jadePaService.getConfig(req.svcEmpresaId, req.params.id);
+      res.status(202).json(jadePaService.executarAgora(req.svcEmpresaId, req.params.id));
     } catch (err) {
       _handleErro(res, err);
     }

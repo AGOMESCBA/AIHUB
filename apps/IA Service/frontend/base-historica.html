@@ -142,6 +142,67 @@
       <div class="tabs" role="tablist">
         <button class="tab-btn active" data-tab="tab-fontes" type="button">Fontes Históricas</button>
         <button class="tab-btn" data-tab="tab-importacoes" type="button">Importações</button>
+        <button class="tab-btn" data-tab="tab-jade-pa" type="button">Jade · Primeiro Atendimento</button>
+      </div>
+
+      <div id="tab-jade-pa" class="tab-panel">
+        <div class="form-hint" style="margin-bottom:12px">
+          A Jade lê os chamados no Primeiro Atendimento que ainda não tiveram triagem (sem responsável e sem posicionamento), faz a análise técnica no chat da J2iA e escreve o primeiro retorno ao cliente — uma única vez por chamado.
+          Em <strong>Simulação</strong> nada é enviado ao SoftExpert. Em <strong>Publicar</strong>, o retorno é gravado na grade do chamado e, se a devolução estiver ligada, o chamado volta para o cliente quando faltar informação.
+        </div>
+        <div class="form-row">
+          <div class="form-field" style="max-width:320px"><label>Fonte</label><select id="jade-fonte" class="form-control" onchange="carregarJadePa()"></select></div>
+          <div class="form-field" style="max-width:160px">
+            <label>Situação</label>
+            <select id="jade-ativo" class="form-control"><option value="0">Desligada</option><option value="1">Ligada</option></select>
+          </div>
+          <div class="form-field" style="max-width:240px">
+            <label>Modo</label>
+            <select id="jade-modo" class="form-control">
+              <option value="simulacao">Simulação (não envia)</option>
+              <option value="publicar">Publicar no SoftExpert</option>
+            </select>
+          </div>
+          <div class="form-field" style="max-width:220px">
+            <label>Devolver ao cliente</label>
+            <select id="jade-devolucao" class="form-control"><option value="0">Não (sempre responde)</option><option value="1">Sim, quando faltar informação</option></select>
+          </div>
+          <div class="form-field" style="max-width:150px"><label>Intervalo (min)</label><input type="number" id="jade-intervalo" class="form-control" min="1" max="60" step="1"></div>
+          <div class="form-field" style="max-width:150px"><label>Limite por dia</label><input type="number" id="jade-limite" class="form-control" min="1" max="200" step="1"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-field" style="max-width:240px">
+            <label>Usuário da Jade no SoftExpert (CDUSER)</label>
+            <input type="text" id="jade-usuario" class="form-control" inputmode="numeric" placeholder="ex.: 995">
+          </div>
+          <div class="form-field">
+            <label>Somente estes chamados (teste)</label>
+            <input type="text" id="jade-somente" class="form-control" placeholder="vazio = todos; ex.: 037100, 037101">
+            <div class="form-hint">Preenchida, a Jade ignora qualquer outro chamado, mesmo no Primeiro Atendimento. Esvazie para liberar todos.</div>
+          </div>
+        </div>
+        <div class="form-row">
+          <button class="btn btn-primary" type="button" id="btn-jade-salvar" onclick="salvarJadePa()">Salvar</button>
+          <button class="btn btn-ghost btn-icon" type="button" id="btn-jade-executar" onclick="executarJadePa()">Executar agora</button>
+          <button class="btn btn-ghost btn-icon" type="button" onclick="carregarJadePa()">Atualizar tela</button>
+        </div>
+        <div id="jade-ciclo" class="form-hint" style="margin-bottom:10px"></div>
+        <div class="table-card">
+          <div class="table-wrap">
+            <table class="grid-table">
+              <thead>
+                <tr>
+                  <th style="width:90px">Chamado</th>
+                  <th style="width:150px">Detectado em</th>
+                  <th style="width:120px">Estado</th>
+                  <th style="width:110px">Decisão</th>
+                  <th>Retorno ao cliente / motivo</th>
+                </tr>
+              </thead>
+              <tbody id="jade-tbody"><tr><td colspan="5"><div class="empty-state">Selecione a fonte.</div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <div id="tab-fontes" class="tab-panel active">
@@ -505,6 +566,107 @@
       btn.addEventListener('click', () => excluirFonte(btn.dataset.id, btn.dataset.nome));
     });
     select.innerHTML = fontes.map(f => `<option value="${f.id}">${escapeHtml(f.nome)} (${escapeHtml(f.connectionKey || 'sem rota')})</option>`).join('');
+    preencherFontesJade(fontes);
+  }
+
+  // ── Jade no Primeiro Atendimento ──────────────────────────────────────────
+  const JADE_ESTADOS = {
+    detectado: 'Na fila', gerando: 'Gerando', simulado: 'Simulado', pronto: 'Pronto p/ enviar', publicando: 'Enviando',
+    publicado: 'Enviado', devolvendo: 'Devolvendo', devolvido: 'Devolvido', descartado: 'Descartado', falha: 'Falha',
+  };
+  const JADE_CLASSE = { simulado: 'concluido', publicado: 'concluido', devolvido: 'concluido', detectado: 'pendente', gerando: 'executando', falha: 'falhou' };
+
+  function preencherFontesJade(fontes) {
+    const sel = document.getElementById('jade-fonte');
+    const atual = sel.value;
+    const softexpert = fontes.filter(f => f.sistemaOrigem === 'softexpert');
+    sel.innerHTML = softexpert.length
+      ? softexpert.map(f => `<option value="${f.id}">${escapeHtml(f.nome)}</option>`).join('')
+      : '<option value="">Nenhuma fonte do SoftExpert</option>';
+    if (atual && softexpert.some(f => f.id === atual)) sel.value = atual;
+    carregarJadePa();
+  }
+
+  async function carregarJadePa() {
+    const fonteId = document.getElementById('jade-fonte').value;
+    const tbody = document.getElementById('jade-tbody');
+    if (!fonteId) { tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state">Cadastre uma fonte do SoftExpert.</div></td></tr>'; return; }
+    try {
+      const { config, execucoes } = await api(`/api/ia-service/base-historica/fontes/${fonteId}/jade-pa?empresa_id=${empresaIdAtual()}`);
+      document.getElementById('jade-ativo').value = config.ativo ? '1' : '0';
+      document.getElementById('jade-modo').value = config.modo;
+      document.getElementById('jade-devolucao').value = config.devolucaoAtiva ? '1' : '0';
+      document.getElementById('jade-intervalo').value = config.intervaloMinutos;
+      document.getElementById('jade-limite').value = config.limiteDiario;
+      document.getElementById('jade-usuario').value = config.usuarioSoftexpert || '';
+      document.getElementById('jade-somente').value = (config.somenteChamados || []).join(', ');
+      const r = config.ultimoCicloResumo;
+      document.getElementById('jade-ciclo').innerHTML = config.ultimoCicloEm
+        ? `Última leitura: ${escapeHtml(formatarDataHora(config.ultimoCicloEm))}` +
+          (r ? ` · ${r.elegiveis ?? 0} chamado(s) elegível(is) no SoftExpert · ${r.novos ?? 0} novo(s) · ${(r.processados || []).length} processado(s)` : '') +
+          (r?.enviados ? ` · ${r.enviados.length} enviado(s) ao SoftExpert` : '') +
+          (r?.somenteChamados ? ` · <span class="warn">só os chamados ${escapeHtml(r.somenteChamados.join(', '))}</span>` : '') +
+          (r?.limiteAtingido ? ' · <span class="warn">limite diário atingido</span>' : '') +
+          ((r?.erros || []).length ? ` · <span class="warn">${escapeHtml(r.erros.join('; '))}</span>` : '')
+        : (config.ativo ? 'Ligada — a primeira leitura acontece em instantes.' : 'Desligada.');
+      document.getElementById('jade-ciclo').innerHTML += `<br>ID desta fonte (o mesmo do contrato de escrita): <code>${escapeHtml(fonteId)}</code>`;
+      tbody.innerHTML = execucoes.length ? execucoes.map(e => `
+        <tr>
+          <td><strong>${escapeHtml(e.numeroChamado)}</strong></td>
+          <td>${escapeHtml(formatarDataHora(e.detectadoEm))}</td>
+          <td><span class="status-badge ${JADE_CLASSE[e.estado] || ''}">${escapeHtml(JADE_ESTADOS[e.estado] || e.estado)}</span>${e.alerta ? ' <span class="warn" title="Precisa da triagem">⚠</span>' : ''}</td>
+          <td>${e.decisao === 'devolver' ? 'Devolver ao cliente' : e.decisao === 'responder' ? 'Responder' : '—'}</td>
+          <td>
+            ${e.motivo ? `<div class="form-hint">${escapeHtml(e.motivo)}</div>` : ''}
+            ${e.ultimoErro ? `<div class="warn">${escapeHtml(e.ultimoErro)}</div>` : ''}
+            <div class="form-hint">Tentativas — geração ${e.tentativasGeracao}/3 · envio ${e.tentativasPublicacao}/3 · devolução ${e.tentativasDevolucao}/3</div>
+            ${e.textoCliente ? `<details><summary>Ver retorno ao cliente</summary><div style="white-space:pre-wrap;margin-top:6px">${escapeHtml(e.textoCliente)}</div></details>` : ''}
+          </td>
+        </tr>`).join('')
+        : '<tr><td colspan="5"><div class="empty-state">Nenhum chamado tratado pela Jade ainda.</div></td></tr>';
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">${escapeHtml(err.message)}</div></td></tr>`;
+    }
+  }
+
+  async function salvarJadePa() {
+    const fonteId = document.getElementById('jade-fonte').value;
+    if (!fonteId) return;
+    hideError();
+    setButtonLoading('btn-jade-salvar', true, 'Salvando…');
+    try {
+      await api(`/api/ia-service/base-historica/fontes/${fonteId}/jade-pa?empresa_id=${empresaIdAtual()}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          ativo: document.getElementById('jade-ativo').value === '1',
+          modo: document.getElementById('jade-modo').value,
+          devolucaoAtiva: document.getElementById('jade-devolucao').value === '1',
+          intervaloMinutos: Number(document.getElementById('jade-intervalo').value),
+          limiteDiario: Number(document.getElementById('jade-limite').value),
+          usuarioSoftexpert: document.getElementById('jade-usuario').value.trim(),
+          somenteChamados: document.getElementById('jade-somente').value,
+        }),
+      });
+      showInfo('Configuração da Jade salva.');
+      await carregarJadePa();
+    } catch (err) {
+      showError('Não foi possível salvar: ' + err.message);
+    } finally {
+      setButtonLoading('btn-jade-salvar', false);
+    }
+  }
+
+  async function executarJadePa() {
+    const fonteId = document.getElementById('jade-fonte').value;
+    if (!fonteId) return;
+    hideError();
+    try {
+      await api(`/api/ia-service/base-historica/fontes/${fonteId}/jade-pa/executar?empresa_id=${empresaIdAtual()}`, { method: 'POST' });
+      showInfo('Leitura iniciada. A análise de cada chamado leva alguns minutos; use "Atualizar tela" para acompanhar.');
+      setTimeout(carregarJadePa, 3000);
+    } catch (err) {
+      showError(err.message);
+    }
   }
 
   // A fonte aqui é só uma REFERÊNCIA (connection_key) — a conexão real com

@@ -1411,6 +1411,60 @@ const MIGRATIONS = [
       ALTER TABLE analises_logs ADD COLUMN editor_id TEXT;
     `,
   },
+  {
+    version: 60,
+    descricao: 'Jade no Primeiro Atendimento (pedido do usuário, 2026-11-19): configuração por fonte (liga/desliga, modo, intervalo de leitura, limite diário) e registro de cada chamado tratado. O registro é a garantia de "uma ação por chamado" e por isso não cai em cascata com a fonte nem com as limpezas do chat.',
+    sql: `
+      CREATE TABLE jade_pa_config (
+        empresa_id INTEGER NOT NULL,
+        fonte_id TEXT NOT NULL REFERENCES fontes_historicas(id) ON DELETE CASCADE,
+        ativo INTEGER NOT NULL DEFAULT 0 CHECK (ativo IN (0, 1)),
+        modo TEXT NOT NULL DEFAULT 'simulacao' CHECK (modo IN ('simulacao', 'publicar')),
+        devolucao_ativa INTEGER NOT NULL DEFAULT 0 CHECK (devolucao_ativa IN (0, 1)),
+        intervalo_minutos INTEGER NOT NULL DEFAULT 5 CHECK (intervalo_minutos BETWEEN 1 AND 60),
+        limite_diario INTEGER NOT NULL DEFAULT 30 CHECK (limite_diario BETWEEN 1 AND 200),
+        ciclo_trava_ate TEXT,
+        ultimo_ciclo_em TEXT,
+        ultimo_ciclo_resumo TEXT,
+        atualizado_em TEXT NOT NULL,
+        PRIMARY KEY (empresa_id, fonte_id)
+      );
+      CREATE TABLE jade_pa_execucoes (
+        id TEXT PRIMARY KEY,
+        empresa_id INTEGER NOT NULL,
+        fonte_id TEXT NOT NULL,
+        numero_chamado TEXT NOT NULL,
+        chamado_id TEXT,
+        atendimento_id TEXT,
+        mensagem_analise_id TEXT,
+        estado TEXT NOT NULL CHECK (estado IN ('detectado', 'gerando', 'simulado', 'pronto', 'publicando', 'publicado', 'devolvendo', 'devolvido', 'descartado', 'falha')),
+        decisao TEXT CHECK (decisao IN ('responder', 'devolver')),
+        motivo TEXT,
+        texto_cliente TEXT,
+        tentativas_geracao INTEGER NOT NULL DEFAULT 0,
+        tentativas_publicacao INTEGER NOT NULL DEFAULT 0,
+        tentativas_devolucao INTEGER NOT NULL DEFAULT 0,
+        ultimo_erro TEXT,
+        alerta INTEGER NOT NULL DEFAULT 0,
+        detectado_em TEXT NOT NULL,
+        gerado_em TEXT,
+        publicado_em TEXT,
+        devolvido_em TEXT,
+        atualizado_em TEXT NOT NULL,
+        UNIQUE (empresa_id, numero_chamado)
+      );
+      CREATE INDEX idx_jade_pa_exec_estado ON jade_pa_execucoes (empresa_id, estado);
+      CREATE INDEX idx_jade_pa_exec_data ON jade_pa_execucoes (empresa_id, detectado_em DESC);
+    `,
+  },
+  {
+    version: 61,
+    descricao: 'Jade no Primeiro Atendimento, fases 2 e 3: código do usuário da Jade no SoftExpert (ADUSER.CDUSER) usado como analista do posicionamento. Nome e matrícula são lidos do SoftExpert na hora do envio; a credencial fica no contrato de escrita do servidor. Lista opcional de chamados permitidos (teste em produção só no chamado de teste, pedido do usuário em 2026-11-19): preenchida, a Jade ignora todos os outros.',
+    sql: `
+      ALTER TABLE jade_pa_config ADD COLUMN usuario_softexpert TEXT DEFAULT NULL;
+      ALTER TABLE jade_pa_config ADD COLUMN somente_chamados TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

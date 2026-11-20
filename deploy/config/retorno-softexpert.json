@@ -1,0 +1,55 @@
+{
+  "versao": 1,
+  "empresas": [
+    {
+      "empresaId": 1,
+      "fonteId": "1cf6904d-6f08-4ea6-ba75-63036c14f5a5",
+      "origem": "https://j2a.c3isystems.com.br",
+      "envioHabilitado": true,
+      "contratoValidado": true,
+      "evidenciaContrato": "Homologação real no chamado 036807 em 16/10/2026 (docs/codex/softexpert-homologacao-036807.md); IDs em docs/codex/softexpert-itsm-metadados-confirmados.json",
+      "authorizationMode": "jwt",
+      "encoding": "utf8",
+      "mainEntityId": "itsm",
+      "childRelationshipId": "relagridregistr",
+      "campos": {
+        "DESCRICAO": { "id": "descricao", "tipo": "texto", "obrigatorio": true, "maxLength": 100000 },
+        "SITUACAOCHAMADO": { "id": "situacaochamado", "tipo": "texto", "opcoes": [{ "valor": "Primeiro Atendimento", "rotulo": "Primeiro Atendimento" }] },
+        "TIPOPOSICIONAME": { "id": "tipoposicioname", "tipo": "texto", "opcoes": [{ "valor": "N", "rotulo": "N" }] },
+        "AGUARDANRETORNO": { "id": "aguardanretorno", "tipo": "texto", "opcoes": [{ "valor": "RETORNO - ATENDENTE", "rotulo": "Retorno - Atendente" }] },
+        "HORAINI": { "id": "horaini", "tipo": "hora" },
+        "HORAFIM": { "id": "horafim", "tipo": "hora" },
+        "HORAINT": { "id": "horaint", "tipo": "hora" },
+        "HORAINICONV": { "id": "horainiconv", "tipo": "decimal" },
+        "HORAINTCONV": { "id": "horaintconv", "tipo": "decimal" },
+        "HORAFIMCONV": { "id": "horafimconv", "tipo": "decimal" },
+        "HORATOTALNUM": { "id": "horatotalnum", "tipo": "decimal" }
+      },
+      "automaticos": [],
+      "autoria": {
+        "validada": true,
+        "modo": "conta_integracao",
+        "analistas": {
+          "995": { "apiKeyEnv": "SVC_SOFTEXPERT_TOKEN_JADE", "userId": "10677535000155" }
+        }
+      },
+      "anexos": {
+        "habilitado": false,
+        "contratoValidado": false,
+        "armazenamentoValidado": false,
+        "transporte": null,
+        "tableId": null,
+        "relacionamentoId": null,
+        "campoArquivoId": null
+      },
+      "historico": {
+        "modo": "desabilitado",
+        "envioAutomatico": false,
+        "equivalenciaValidada": false,
+        "evidencia": null,
+        "privado": null,
+        "activityId": null
+      }
+    }
+  ]
+}

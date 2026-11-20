@@ -6,7 +6,10 @@ const { SaxesParser } = require('saxes');
 const SOAP = 'http://schemas.xmlsoap.org/soap/envelope/';
 const WORKFLOW = 'urn:workflow';
 const MAX_RESPONSE_BYTES = 1024 * 1024;
-const OPERACOES = { newChildEntityRecord: { ns: WORKFLOW, ws: 'wf_ws.php' }, editChildEntityRecord: { ns: WORKFLOW, ws: 'wf_ws.php' }, editEntityRecord: { ns: WORKFLOW, ws: 'wf_ws.php' }, newComment: { ns: WORKFLOW, ws: 'wf_ws.php' }, newTableRecord: { ns: 'urn:form', ws: 'fm_ws.php' }, getWorkflow: { ns: WORKFLOW, ws: 'wf_ws.php', leitura: true }, getTableRecord: { ns: 'urn:form', ws: 'fm_ws.php', leitura: true } };
+const OPERACOES = { newChildEntityRecord: { ns: WORKFLOW, ws: 'wf_ws.php' }, editChildEntityRecord: { ns: WORKFLOW, ws: 'wf_ws.php' }, editEntityRecord: { ns: WORKFLOW, ws: 'wf_ws.php' }, newComment: { ns: WORKFLOW, ws: 'wf_ws.php' }, newTableRecord: { ns: 'urn:form', ws: 'fm_ws.php' }, getWorkflow: { ns: WORKFLOW, ws: 'wf_ws.php', leitura: true }, getTableRecord: { ns: 'urn:form', ws: 'fm_ws.php', leitura: true }, executeActivity: { ns: WORKFLOW, ws: 'wf_ws.php' } };
+// Única movimentação de workflow permitida (Jade no Primeiro Atendimento):
+// executar a ATV-02 pela ação 1 "Retornar para cliente" → ATV-06.
+const MOVIMENTACAO_PERMITIDA = { activityId: 'ATV-02', actionSequence: '1' };
 
 function autoridadesConfiaveis() {
   if (typeof tls.getCACertificates !== 'function') return undefined;
@@ -36,6 +39,11 @@ function envelope(operacao, body) {
 function montarComentario({ workflowId, texto, activityId, privado }) {
   if (!workflowId || typeof texto !== 'string' || !texto.trim() || typeof privado !== 'boolean') throw new Error('Instância, texto e visibilidade explícita são obrigatórios.');
   return envelope('newComment', `<urn:WorkflowID>${escaparXml(workflowId)}</urn:WorkflowID><urn:ActivityID>${escaparXml(activityId || '')}</urn:ActivityID><urn:Text>${escaparXml(texto)}</urn:Text><urn:Private>${privado ? '1' : '0'}</urn:Private>`);
+}
+
+function montarDevolucaoPrimeiroAtendimento({ workflowId, userId }) {
+  if (![workflowId, userId].every((v) => typeof v === 'string' && v.trim())) throw new Error('Instância e matrícula do executor são obrigatórias.');
+  return envelope('executeActivity', `<urn:WorkflowID>${escaparXml(workflowId)}</urn:WorkflowID><urn:ActivityID>${MOVIMENTACAO_PERMITIDA.activityId}</urn:ActivityID><urn:ActionSequence>${MOVIMENTACAO_PERMITIDA.actionSequence}</urn:ActionSequence><urn:UserID>${escaparXml(userId)}</urn:UserID>`);
 }
 
 function montarInclusaoAnexo({ tableId, relacionamentoId, posicionamentoOid, campoArquivoId, nome, conteudo, userId, contentId }) {
@@ -148,6 +156,12 @@ function validarEnvelopeOperacao(xml, operacao) {
   const stack = [];
   let bodies = 0;
   let chamadas = 0;
+  const movimentacao = {};
+  parser.on('text', (texto) => {
+    if (operacao === 'executeActivity' && stack.length === 4 && ['ActivityID', 'ActionSequence'].includes(stack[3].local)) {
+      movimentacao[stack[3].local] = (movimentacao[stack[3].local] || '') + texto;
+    }
+  });
   parser.on('opentag', (node) => {
     stack.push(node);
     if (stack.length > 20) throw new Error('Envelope de requisição excede profundidade permitida.');
@@ -161,6 +175,9 @@ function validarEnvelopeOperacao(xml, operacao) {
   parser.on('closetag', () => stack.pop());
   parser.write(xml).close();
   if (bodies !== 1 || chamadas !== 1) throw new Error('Requisição deve conter uma única operação SOAP.');
+  if (operacao === 'executeActivity' && (movimentacao.ActivityID?.trim() !== MOVIMENTACAO_PERMITIDA.activityId || movimentacao.ActionSequence?.trim() !== MOVIMENTACAO_PERMITIDA.actionSequence)) {
+    throw new Error('Movimentação de workflow não permitida.');
+  }
 }
 
 async function enviarOperacao({ origem, apiKey, authorizationMode, encoding, xml, anexosSoap = [], timeoutMs = 30000, operacao = 'newChildEntityRecord' }) {
@@ -207,4 +224,4 @@ function enviarConsulta(config) {
   if (!Object.hasOwn(OPERACOES, config.operacao) || !OPERACOES[config.operacao].leitura) return Promise.reject(new Error('Somente operação de leitura permitida nesta consulta.'));
   return enviarOperacao(config);
 }
-module.exports = { escaparXml, montarInclusaoGrid, montarEdicaoGrid, montarEdicaoFormulario, montarInclusaoAnexo, montarComentario, montarCorpoRequisicao, montarConsultaWorkflow, montarConsultaTabela, autoridadesConfiaveis, interpretarResposta, enviarInclusaoGrid, enviarOperacao, enviarConsulta };
+module.exports = { escaparXml, montarInclusaoGrid, montarEdicaoGrid, montarEdicaoFormulario, montarInclusaoAnexo, montarDevolucaoPrimeiroAtendimento, montarComentario, montarCorpoRequisicao, montarConsultaWorkflow, montarConsultaTabela, autoridadesConfiaveis, interpretarResposta, enviarInclusaoGrid, enviarOperacao, enviarConsulta };
