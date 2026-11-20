@@ -9,7 +9,8 @@
 //     Usuário → falha (o chamado ficou parado no meio do caminho);
 //   - retorno gravado (segue no PA) ou gravado e devolvido → sucesso;
 //   - triagem assumiu antes da devolução → sucesso (o PA foi da Jade).
-// Modo Simulação não envia nada: nada foi gravado, seria alarme falso.
+// Modo Simulação envia igual, marcado "🧪 SIMULAÇÃO": a regra é só não integrar
+// com o SoftExpert (pedido do usuário, 2026-11-20, para testar o WhatsApp).
 //
 // Envio pelo IA Command (mesma rota server-to-server do login externo): o
 // cadastro de grupos, os números autorizados e o canal da empresa ficam lá.
@@ -48,10 +49,21 @@ function listarGrupos(empresaId) {
   return _iaCommand(`/api/ia-command/whatsapp/grupos-servico-externo?empresaId=${Number(empresaId)}`);
 }
 
-function _enviarParaGrupos(empresaId, grupoIds, texto, tipo) {
+function _enviarParaGrupos(empresaId, grupoIds, texto, tipo, loteId, simulacao = false) {
+  const referencia = [loteId ? `lote #${loteId}` : null, simulacao ? 'simulação' : null].filter(Boolean).join(' · ');
   return _iaCommand('/api/ia-command/whatsapp/enviar-grupo-servico-externo', {
-    corpo: { empresaId: Number(empresaId), grupoIds, texto, finalidadeEnvio: `iaservice_jade_pa_${tipo}` },
+    corpo: { empresaId: Number(empresaId), grupoIds, texto, finalidadeEnvio: `iaservice_jade_pa_${tipo}`, referencia },
   });
+}
+
+// Passo que não chega a enviar (Simulação, sem grupo) no histórico do canal
+// WhatsApp da empresa (IA Command › WhatsApp Services). Nunca lança.
+async function _registrarNoMonitor(empresaId, tipo, mensagem) {
+  try {
+    await _iaCommand('/api/ia-command/whatsapp/registrar-servico-externo', { corpo: { empresaId: Number(empresaId), tipo, mensagem } });
+  } catch (err) {
+    console.warn('[IA Service] Jade PA: registro no monitor do WhatsApp falhou:', err.message);
+  }
 }
 
 /** 'falha' | 'sucesso' | 'nenhum' (sem aviso) | null (ainda não terminou). */
@@ -61,7 +73,8 @@ function classificar(exec) {
     case 'publicado': return exec.alerta ? 'falha' : 'sucesso';
     case 'falha': return 'falha';
     case 'descartado': return exec.motivoCodigo === 'texto_vencido' ? 'falha' : 'nenhum';
-    case 'simulado': return 'nenhum';
+    // Simulação só não integra com o SoftExpert: o aviso sai igual, marcado como teste.
+    case 'simulado': return 'sucesso';
     default: return null;
   }
 }
@@ -73,6 +86,7 @@ function _limitar(texto, max) {
 
 function _detalhe(exec, tipo) {
   if (tipo === 'sucesso') {
+    if (exec.estado === 'simulado') return exec.decisao === 'devolver' ? 'pediria informação ao cliente' : 'responderia';
     if (exec.estado === 'devolvido') return 'devolvido ao cliente';
     return exec.decisao === 'devolver' ? 'pedido de informação gravado' : 'respondido';
   }
@@ -93,13 +107,18 @@ function linhaDoChamado(empresaId, exec, tipo) {
   return `• #${exec.numeroChamado} · ${produto || 'Produto não informado'} - ${cliente || 'Cliente não identificado'} — ${_detalhe(exec, tipo)}`;
 }
 
-function montarMensagem(empresaId, tipo, execs) {
+function montarMensagem(empresaId, tipo, execs, { simulacao = false } = {}) {
   const linhas = execs.slice(0, MAX_LINHAS).map(e => linhaDoChamado(empresaId, e, tipo));
   if (execs.length > MAX_LINHAS) linhas.push(`… e mais ${execs.length - MAX_LINHAS} chamado(s). Veja na tela da Jade no PA.`);
   const titulo = tipo === 'falha'
     ? `⚠️ Jade PA — ${execs.length} chamado(s) sem Primeiro Atendimento`
     : `✅ Jade PA — ${execs.length} chamado(s) com Primeiro Atendimento`;
-  return [titulo, ...linhas, ...(tipo === 'falha' ? ['Precisam de atendimento da triagem.'] : [])].join('\n');
+  return [
+    simulacao ? `🧪 SIMULAÇÃO — ${titulo}` : titulo,
+    ...linhas,
+    ...(tipo === 'falha' ? ['Precisam de atendimento da triagem.'] : []),
+    ...(simulacao ? ['Simulação: nada foi gravado no SoftExpert.'] : []),
+  ].join('\n');
 }
 
 function _registrar(exec, loteId, situacao, resumo, detalhes = null) {
@@ -115,8 +134,17 @@ function _registrar(exec, loteId, situacao, resumo, detalhes = null) {
  * avisado uma vez (reserva no banco); se a mensagem não chegou a ninguém, o
  * chamado volta para a próxima leitura tentar de novo. Nunca lança.
  */
+// Pior situação entre as mensagens do lote (para destacar na tela).
+const _PESO = { info: 0, ok: 1, aviso: 2, erro: 3 };
+
 async function avisarLote(empresaId, fonteId, { loteId = null } = {}) {
-  const resultado = { falha: 0, sucesso: 0 };
+  // `mensagens`: o que aconteceu com o WhatsApp nesta leitura, sempre dito na
+  // tela (lote e última leitura), inclusive quando nada foi enviado e por quê.
+  const resultado = { falha: 0, sucesso: 0, situacao: 'info', mensagens: [] };
+  const anotar = (situacao, texto) => {
+    resultado.mensagens.push(texto);
+    if (_PESO[situacao] > _PESO[resultado.situacao]) resultado.situacao = situacao;
+  };
   let cfg;
   let pendentes;
   try {
@@ -124,30 +152,47 @@ async function avisarLote(empresaId, fonteId, { loteId = null } = {}) {
     pendentes = repo.listarParaAvisar(empresaId, fonteId);
   } catch (err) {
     console.error('[IA Service] Jade PA: leitura dos avisos falhou:', err.message);
+    anotar('erro', `WhatsApp: falha ao preparar o aviso (${err.message}).`);
     return resultado;
   }
   const porTipo = { falha: [], sucesso: [] };
+  const semGrupo = { falha: 0, sucesso: 0 };
   const semAviso = [];
   for (const exec of pendentes) {
-    const tipo = cfg.modo === 'publicar' ? classificar(exec) : 'nenhum';
+    const tipo = classificar(exec);
     if (tipo === null) continue;
     const grupos = tipo === 'falha' ? cfg.gruposAvisoFalha : tipo === 'sucesso' ? cfg.gruposAvisoSucesso : [];
     // Sem aviso (ou sem grupo escolhido): marca, para não sair depois quando alguém ligar o aviso.
-    if (tipo === 'nenhum' || !grupos.length) semAviso.push(exec.id);
-    else porTipo[tipo].push(exec);
+    if (tipo === 'nenhum' || !grupos.length) {
+      semAviso.push(exec.id);
+      if (tipo !== 'nenhum') semGrupo[tipo]++;
+    } else porTipo[tipo].push(exec);
   }
   if (semAviso.length) repo.reservarAviso(semAviso);
+
+  // Simulação: mesmo aviso, marcado como teste (só não integra com o SoftExpert).
+  const simulacao = cfg.modo !== 'publicar';
+  const ref = loteId ? ` (lote #${loteId}${simulacao ? ' · simulação' : ''})` : (simulacao ? ' (simulação)' : '');
+  for (const tipo of ['falha', 'sucesso']) {
+    if (semGrupo[tipo]) {
+      anotar('aviso', `WhatsApp (${tipo === 'falha' ? 'sem PA' : 'com PA'}): ${semGrupo[tipo]} chamado(s) sem aviso, nenhum grupo escolhido.`);
+      await _registrarNoMonitor(empresaId, 'warning', `⚠️ Jade PA${ref}: ${semGrupo[tipo]} chamado(s) ${tipo === 'falha' ? 'SEM PA' : 'COM PA'} sem aviso; nenhum grupo escolhido na tela da Jade.`);
+    }
+  }
+  if (!porTipo.falha.length && !porTipo.sucesso.length && !semGrupo.falha && !semGrupo.sucesso) {
+    anotar('info', 'WhatsApp: nenhum chamado concluído para avisar nesta leitura.');
+  }
 
   for (const tipo of ['falha', 'sucesso']) {
     const reservados = new Set(repo.reservarAviso(porTipo[tipo].map(e => e.id)));
     const execs = porTipo[tipo].filter(e => reservados.has(e.id));
     if (!execs.length) continue;
     const grupos = tipo === 'falha' ? cfg.gruposAvisoFalha : cfg.gruposAvisoSucesso;
-    const nome = tipo === 'falha' ? 'chamados sem PA' : 'chamados com PA';
+    const nome = `${tipo === 'falha' ? 'chamados sem PA' : 'chamados com PA'}${simulacao ? ', simulação' : ''}`;
     let envio = null;
     let erro = null;
     try {
-      envio = await _enviarParaGrupos(empresaId, grupos, montarMensagem(empresaId, tipo, execs), tipo);
+      envio = await _enviarParaGrupos(empresaId, grupos, montarMensagem(empresaId, tipo, execs, { simulacao }), tipo, loteId, simulacao);
     } catch (err) {
       erro = err.message;
     }
@@ -155,6 +200,7 @@ async function avisarLote(empresaId, fonteId, { loteId = null } = {}) {
       repo.liberarAviso(execs.map(e => e.id));
       const motivo = erro || (envio.falhas || []).map(f => f.erro).filter(Boolean)[0] || 'nenhum número recebeu';
       console.warn(`[IA Service] Jade PA: aviso de ${nome} não enviado (${motivo}); nova tentativa na próxima leitura.`);
+      anotar('erro', `WhatsApp (${nome}): não enviado, ${motivo}. Nova tentativa na próxima leitura.`);
       // Registra só na primeira tentativa, para a auditoria não repetir a cada leitura.
       for (const exec of execs) {
         if (!repo.listarEventos(empresaId, exec.id).some(e => e.etapa === 'aviso')) {
@@ -166,10 +212,13 @@ async function avisarLote(empresaId, fonteId, { loteId = null } = {}) {
     resultado[tipo] = execs.length;
     const situacao = envio.total === 0 || envio.falhas?.length ? 'aviso' : 'ok';
     const resumo = envio.total === 0
-      ? `Aviso por WhatsApp (${nome}) não enviado: os grupos escolhidos não têm números ativos.`
+      ? `Aviso por WhatsApp (${nome}) não enviado: os grupos escolhidos não têm números com acesso à empresa.`
       : `Aviso por WhatsApp (${nome}) enviado a ${envio.enviados} de ${envio.total} número(s).`;
     const detalhes = { tipo: nome, enviados: envio.enviados, total: envio.total, ...(envio.falhas?.length ? { falhas: envio.falhas.map(f => `${f.nome || 'sem nome'}: ${f.erro}`).join('; ') } : {}) };
     for (const exec of execs) _registrar(exec, loteId, situacao, resumo, detalhes);
+    anotar(situacao, envio.total === 0
+      ? `WhatsApp (${nome}): não enviado, os grupos não têm números com acesso à empresa.`
+      : `WhatsApp (${nome}): ${execs.length} chamado(s) avisado(s), entregue a ${envio.enviados} de ${envio.total} número(s).`);
   }
   return resultado;
 }

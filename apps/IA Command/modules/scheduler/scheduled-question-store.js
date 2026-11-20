@@ -488,6 +488,19 @@ function listarNumerosAutorizados(empresaId) {
   return filtrarNumerosElegiveis(rows, empresaId);
 }
 
+// Cadastro de Grupos: todo numero com Acesso na empresa (o grupo serve a
+// varios usos). Quem recebe e decidido no envio, pela regra de cada uso:
+// agendamento usa listarNumerosAutorizados; aviso da Jade, todo membro com Acesso.
+function listarNumerosDaEmpresa(empresaId) {
+  return getDB().prepare(`
+    SELECT id, nome, numero, observacoes, modulo_financeiro, modulo_compras,
+           modulo_faturamento, modulo_comissao, erp_tipo, erp_id
+    FROM whatsapp_allowed_numbers
+    WHERE empresa_id = ? AND ativo = 1
+    ORDER BY nome COLLATE NOCASE ASC, numero ASC
+  `).all(Number(empresaId)).map(row => ({ ...row, numero: normalizarNumero(row.numero) }));
+}
+
 function buscarNumerosAutorizadosPorIds(empresaId, ids = []) {
   const lista = [...new Set((ids || []).map(String).filter(Boolean))];
   if (!lista.length) return [];
@@ -785,6 +798,7 @@ module.exports = {
   atualizarDelivery,
   listarNumerosAutorizados,
   buscarNumerosAutorizadosPorIds,
+  listarNumerosDaEmpresa,
   materializarGruposJob,
   criarJob,
   atualizarJob,

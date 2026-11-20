@@ -6,6 +6,10 @@ const crypto = require('crypto');
 const http = require('http');
 const channels = require('./channel-store');
 const recipientGroups = require('./recipient-group-store');
+const { formatarContatoParaLog } = require('./log-contact');
+
+// Socket.IO do processo principal (para registrar no monitor quando nenhum canal está conectado).
+let _io = null;
 
 let manager;
 function getManager() {
@@ -161,8 +165,9 @@ async function enviarTextoServicoExterno({ empresaId, numero, texto, finalidadeE
   const { canal, svc, workerPort, totalCanais } = await resolverCanalServicoExterno(empresaId, deps);
   if (!canal) throw new Error('Nenhum canal WhatsApp vinculado a esta empresa.');
   if (workerPort) {
+    // O worker registra o envio (e a falha) no histórico do canal.
     await workerJsonFn(workerPort, '/send-direct-message', { empresaId, numero, texto, finalidadeEnvio }, 30000);
-    return { canalId: canal.id };
+    return { canalId: canal.id, registrado: true };
   }
   if (!svc) {
     throw new Error(totalCanais > 1
@@ -170,17 +175,51 @@ async function enviarTextoServicoExterno({ empresaId, numero, texto, finalidadeE
       : 'WhatsApp nao esta conectado para o canal vinculado a esta empresa.');
   }
   await svc.sendMessage(numero, texto);
-  return { canalId: canal.id };
+  return { canalId: canal.id, registrado: false };
 }
 
 /**
- * Mesmo texto para os membros ativos dos grupos (cadastro de Grupos do IA
- * Command). Número em mais de um grupo recebe uma vez. Falha de um número não
- * impede os outros; quem chamou decide pelo total enviado.
+ * Registro no histórico do canal da empresa (tela WhatsApp Services), como o
+ * agendamento faz: canal no processo → svc.log; serviço do Windows → /log do
+ * worker; nenhum conectado → só em tempo real pelo Socket.IO. Nunca lança.
  */
-async function enviarGrupoServicoExterno({ empresaId, grupoIds = [], texto, finalidadeEnvio = 'servico_externo' }, deps = {}) {
+async function registrarNoCanal(empresaId, tipo, msg, deps = {}) {
+  try {
+    const workerJsonFn = deps.workerJsonFn || workerJson;
+    const { canal, svc, workerPort } = await resolverCanalServicoExterno(empresaId, deps);
+    if (svc) return svc.log(msg, tipo);
+    if (workerPort) return await workerJsonFn(workerPort, '/log', { tipo, msg }, 3000);
+    const io = deps.io || _io;
+    if (io && canal?.id) {
+      const entry = { channelId: canal.id, tipo, msg, ts: new Date().toISOString() };
+      let destino = io.to(`channel_${canal.id}`);
+      for (const emp of channels.listarEmpresasDoCanal(canal.id)) destino = destino.to(`emp_${emp.empresa_id}`);
+      destino.emit('iac-log', entry);
+    }
+  } catch (err) {
+    process.stdout.write(`[${new Date().toISOString()}] [WARN] Registro no monitor WhatsApp falhou: ${err.message}\n`);
+  }
+}
+
+// Nome do envio a grupos no histórico do canal (só descrições conhecidas).
+const ROTULOS_GRUPO = {
+  iaservice_jade_pa_falha: 'Jade PA · aviso de chamados SEM PA',
+  iaservice_jade_pa_sucesso: 'Jade PA · aviso de chamados COM PA',
+};
+
+/**
+ * Mesmo texto para os membros ativos dos grupos (cadastro de Grupos do IA
+ * Command): recebe todo membro com Acesso à empresa, sem exigir módulo — quem
+ * entra no grupo é a escolha de quem recebe (decisão do usuário, 2026-11-20).
+ * Número em mais de um grupo recebe uma vez. Falha de um número não impede os
+ * outros; quem chamou decide pelo total enviado.
+ */
+async function enviarGrupoServicoExterno({ empresaId, grupoIds = [], texto, finalidadeEnvio = 'servico_externo', referencia = '' }, deps = {}) {
   const grupos = deps.recipientGroups || recipientGroups;
   const enviarFn = deps.enviarTextoFn || enviarTextoServicoExterno;
+  const registrar = deps.registrarFn || ((tipo, msg) => registrarNoCanal(Number(empresaId), tipo, msg, deps));
+  const contato = deps.formatarContatoFn || ((numero) => formatarContatoParaLog(numero, { empresaId: Number(empresaId) }));
+  const rotulo = `${ROTULOS_GRUPO[finalidadeEnvio] || 'Envio a grupos'}${referencia ? ` (${String(referencia).slice(0, 60)})` : ''}`;
   const vistos = new Set();
   const membros = grupos.listarMembrosAtivosDosGrupos(Number(empresaId), grupoIds).filter((m) => {
     const digitos = String(m.numero || '').replace(/\D/g, '');
@@ -188,16 +227,26 @@ async function enviarGrupoServicoExterno({ empresaId, grupoIds = [], texto, fina
     vistos.add(digitos);
     return true;
   });
+  const nomesGrupos = (grupos.buscarGruposPorIds?.(Number(empresaId), grupoIds) || []).map(g => g.nome).join(', ') || 'grupos indisponíveis';
+  if (!membros.length) {
+    await registrar('warning', `⚠️ ${rotulo}: nenhum número com acesso à empresa nos grupos ${nomesGrupos}; mensagem não enviada.`);
+    return { total: 0, enviados: 0, falhas: [] };
+  }
+  await registrar('info', `📣 ${rotulo}: enviando aos grupos ${nomesGrupos} (${membros.length} número(s)).`);
   const falhas = [];
   let enviados = 0;
   for (const m of membros) {
     try {
-      await enviarFn({ empresaId: Number(empresaId), numero: m.numero, texto, finalidadeEnvio }, deps);
+      const r = await enviarFn({ empresaId: Number(empresaId), numero: m.numero, texto, finalidadeEnvio }, deps);
       enviados++;
+      if (!r?.registrado) await registrar('success', `✅ ${rotulo} → ${contato(m.numero)}`);
     } catch (err) {
       falhas.push({ nome: m.nome || null, erro: err.message });
+      await registrar('error', `❌ ${rotulo} → ${contato(m.numero)}: ${err.message}`);
     }
   }
+  await registrar(enviados === membros.length ? 'success' : enviados ? 'warning' : 'error',
+    `${enviados === membros.length ? '✅' : enviados ? '⚠️' : '❌'} ${rotulo}: entregue a ${enviados} de ${membros.length} número(s).`);
   return { total: membros.length, enviados, falhas };
 }
 
@@ -260,18 +309,35 @@ function registrarRotaServicoExterno(app) {
       return res.status(400).json({ error: 'empresaId, grupoIds e texto sao obrigatorios.' });
     }
     try {
-      res.json({ ok: true, ...(await enviarGrupoServicoExterno({ empresaId, grupoIds, texto, finalidadeEnvio: req.body?.finalidadeEnvio })) });
+      res.json({ ok: true, ...(await enviarGrupoServicoExterno({ empresaId, grupoIds, texto, finalidadeEnvio: req.body?.finalidadeEnvio, referencia: req.body?.referencia })) });
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      res.status(err.statusCode || 500).json({ error: err.message });
     }
+  });
+
+  // Passo de outro app que não chega a enviar (ex.: Jade em Simulação, sem
+  // grupo escolhido) registrado no histórico do canal da empresa.
+  app.post('/api/ia-command/whatsapp/registrar-servico-externo', async (req, res) => {
+    const auth = segredoAutorizado(req);
+    if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+    const empresaId = Number(req.body?.empresaId || 0);
+    const msg = String(req.body?.mensagem || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 500);
+    const tipo = ['info', 'success', 'warning', 'error'].includes(req.body?.tipo) ? req.body.tipo : 'info';
+    if (!empresaId || !msg) return res.status(400).json({ error: 'empresaId e mensagem sao obrigatorios.' });
+    await registrarNoCanal(empresaId, tipo, msg);
+    res.json({ ok: true });
   });
 }
 
-module.exports = registrarRotaServicoExterno;
+module.exports = function registrar(app, { io } = {}) {
+  if (io) _io = io;
+  return registrarRotaServicoExterno(app);
+};
 module.exports._test = {
   resolverCanalServicoExterno,
   enviarTextoServicoExterno,
   enviarGrupoServicoExterno,
+  registrarNoCanal,
   primeiroCanalConectado,
   canaisGlobaisConectados,
   segredoAutorizado,

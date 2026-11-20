@@ -116,8 +116,15 @@ process.env.SVC_WHATSAPP_OTP_SECRET = 'segredo-teste';
 process.env.IA_COMMAND_INTERNAL_URL = 'http://iacommand.teste';
 const whats = [];
 let falharWhats = null;
+const monitor = [];
 global.fetch = async (url, opts = {}) => {
-  whats.push({ url, corpo: opts.body ? JSON.parse(opts.body) : null, segredo: opts.headers?.['x-servico-externo-secret'] });
+  const corpo = opts.body ? JSON.parse(opts.body) : null;
+  // Registro no monitor do canal (passos que não enviam): fica separado dos envios.
+  if (url.endsWith('/registrar-servico-externo')) {
+    monitor.push(corpo);
+    return { ok: true, status: 200, json: async () => ({ ok: true }) };
+  }
+  whats.push({ url, corpo, segredo: opts.headers?.['x-servico-externo-secret'] });
   if (falharWhats) return { ok: false, status: 500, json: async () => ({ error: falharWhats }) };
   return { ok: true, status: 200, json: async () => ({ ok: true, total: 2, enviados: 2, falhas: [] }) };
 };
@@ -149,6 +156,7 @@ beforeEach(() => {
   comportamentoEnvio = 'ok';
   contratoDisponivel = true;
   whats.length = 0;
+  monitor.length = 0;
   falharWhats = null;
 });
 
@@ -672,7 +680,7 @@ test('aviso WhatsApp: regra pelo resultado no SoftExpert', () => {
   assert.equal(c({ estado: 'falha' }), 'falha');
   assert.equal(c({ estado: 'descartado', motivoCodigo: 'texto_vencido' }), 'falha');
   assert.equal(c({ estado: 'descartado', motivoCodigo: 'triagem_atuou' }), 'nenhum');
-  assert.equal(c({ estado: 'simulado' }), 'nenhum');
+  assert.equal(c({ estado: 'simulado' }), 'sucesso', 'simulação avisa igual, marcada como teste');
   for (const estado of ['detectado', 'gerando', 'pronto', 'publicando', 'devolvendo']) assert.equal(c({ estado }), null, estado);
 });
 
@@ -685,12 +693,17 @@ test('aviso WhatsApp: PA pela Jade vai ao grupo de "com PA" uma única vez, com 
     await ligar({ modo: 'publicar', usuarioSoftexpert: '995', gruposAvisoFalha: ['g-triagem'], gruposAvisoSucesso: ['g-coord'] });
     chamadoNaOrigem('037118');
     respostasIA = [RESPOSTA_OK];
-    await jade.executarCiclo(EMPRESA, fonte.id);
+    const resumo = await jade.executarCiclo(EMPRESA, fonte.id);
     assert.equal(execs()[0].estado, 'publicado');
     assert.equal(whats.length, 1);
+    // O resultado do WhatsApp aparece no lote e na última leitura.
+    assert.deepEqual(resumo.avisos.mensagens, ['WhatsApp (chamados com PA): 1 chamado(s) avisado(s), entregue a 2 de 2 número(s).']);
+    assert.deepEqual(jade.getConfig(EMPRESA, fonte.id).ultimoCicloResumo.avisos.mensagens, resumo.avisos.mensagens);
+    assert.deepEqual(repo.listarLotes(EMPRESA, fonte.id)[0].resumo.avisos.mensagens, resumo.avisos.mensagens);
     assert.equal(whats[0].url, 'http://iacommand.teste/api/ia-command/whatsapp/enviar-grupo-servico-externo');
     assert.equal(whats[0].segredo, 'segredo-teste');
     assert.deepEqual(whats[0].corpo.grupoIds, ['g-coord']);
+    assert.match(whats[0].corpo.referencia, /^lote #\d+$/);
     assert.equal(whats[0].corpo.empresaId, EMPRESA);
     assert.equal(whats[0].corpo.texto, '✅ Jade PA — 1 chamado(s) com Primeiro Atendimento\n• #037118 · Protheus - Cliente Z — respondido');
     // Próxima leitura sem novidade: nada é repetido.
@@ -712,10 +725,13 @@ test('aviso WhatsApp: sem PA vai ao grupo de falha; WhatsApp fora tenta de novo 
   comportamentoEnvio = 'recusa';
   falharWhats = 'WhatsApp nao esta conectado';
   // 3 recusas do SoftExpert e a 4ª leitura vira falha; o aviso não sai (WhatsApp fora).
-  for (let i = 0; i < 5; i++) await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  let ultimo;
+  for (let i = 0; i < 5; i++) ultimo = await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
   assert.equal(execs()[0].estado, 'falha');
   assert.equal(execs()[0].avisoWhatsappEm, null);
   assert.equal(whats.length, 2);
+  assert.equal(ultimo.avisos.situacao, 'erro');
+  assert.match(ultimo.avisos.mensagens[0], /chamados sem PA\): não enviado, WhatsApp nao esta conectado\. Nova tentativa/);
   falharWhats = null;
   await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
   await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
@@ -729,27 +745,42 @@ test('aviso WhatsApp: sem PA vai ao grupo de falha; WhatsApp fora tenta de novo 
   assert.match(ev[0].resumo, /WhatsApp nao esta conectado/);
 });
 
-test('aviso WhatsApp: simulação não envia; sem grupo escolhido não manda o histórico depois; grupo inválido é recusado', async () => {
+test('aviso WhatsApp: simulação envia marcada como teste; sem grupo escolhido não manda o histórico depois; grupo inválido é recusado', async () => {
   await assert.rejects(jade.salvarConfig(EMPRESA, fonte.id, { gruposAvisoFalha: ['grupo com espaço'] }), { status: 400 });
   await ligar({ gruposAvisoFalha: ['g'], gruposAvisoSucesso: ['g'] });
   chamadoNaOrigem('038500');
   respostasIA = [RESPOSTA_OK];
-  await jade.executarCiclo(EMPRESA, fonte.id);
+  const simulado = await jade.executarCiclo(EMPRESA, fonte.id);
   assert.equal(execs()[0].estado, 'simulado');
   assert.ok(execs()[0].avisoWhatsappEm);
-  assert.equal(whats.length, 0);
+  // Simulação só não integra com o SoftExpert: o WhatsApp sai, marcado.
+  assert.equal(envios.length, 0);
+  assert.equal(whats.length, 1);
+  assert.equal(whats[0].corpo.texto, '🧪 SIMULAÇÃO — ✅ Jade PA — 1 chamado(s) com Primeiro Atendimento\n'
+    + '• #038500 · Produto não informado - Cliente não identificado — responderia\n'
+    + 'Simulação: nada foi gravado no SoftExpert.');
+  assert.match(whats[0].corpo.referencia, /^lote #\d+ · simulação$/);
+  assert.match(simulado.avisos.mensagens[0], /^WhatsApp \(chamados com PA, simulação\): 1 chamado\(s\) avisado\(s\)/);
+  // Leitura vazia não manda nada nem escreve no monitor.
+  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  assert.equal(whats.length, 1);
+  assert.equal(monitor.length, 0);
 
   await ligar({ modo: 'publicar', usuarioSoftexpert: '995', gruposAvisoFalha: [], gruposAvisoSucesso: [] });
   chamadoNaOrigem('038501');
   respostasIA = [RESPOSTA_OK];
-  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  const semGrupo = await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
   const publicado = execs().find(e => e.numeroChamado === '038501');
   assert.equal(publicado.estado, 'publicado');
   assert.ok(publicado.avisoWhatsappEm);
+  assert.equal(semGrupo.avisos.situacao, 'aviso');
+  assert.deepEqual(semGrupo.avisos.mensagens, ['WhatsApp (com PA): 1 chamado(s) sem aviso, nenhum grupo escolhido.']);
+  assert.equal(monitor.at(-1).tipo, 'warning');
+  assert.match(monitor.at(-1).mensagem, /1 chamado\(s\) COM PA sem aviso; nenhum grupo escolhido/);
   const cfg = await ligar({ modo: 'publicar', usuarioSoftexpert: '995', gruposAvisoSucesso: ['g'] });
   assert.deepEqual(cfg.gruposAvisoSucesso, ['g']);
   await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
-  assert.equal(whats.length, 0);
+  assert.equal(whats.length, 1);
 });
 
 test('chat em uso pelo consultor adia sem gastar tentativa', async () => {

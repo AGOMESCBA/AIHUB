@@ -114,29 +114,44 @@ function canal(id, porta) {
           ];
         },
       };
+      recipientGroups.buscarGruposPorIds = () => [{ nome: 'Líderes' }, { nome: 'Triagem' }];
       const enviadosGrupo = [];
       const enviarTextoFn = async (payload) => {
         if (payload.numero === '5511999990002') throw new Error('Numero nao autorizado para esta empresa.');
         enviadosGrupo.push(payload);
+        return { registrado: payload.numero === '5511999990004' };
       };
+      // Cada passo vai ao histórico do canal (WhatsApp Services).
+      const registros = [];
+      const registrarFn = async (tipo, msg) => { registros.push([tipo, msg]); };
+      const formatarContatoFn = (n) => `contato ${String(n).slice(-4)}`;
 
       const ret = await enviarGrupoServicoExterno(
-        { empresaId: '5', grupoIds: ['g1', 'g2'], texto: 'aviso', finalidadeEnvio: 'iaservice_jade_pa' },
-        { recipientGroups, enviarTextoFn }
+        { empresaId: '5', grupoIds: ['g1', 'g2'], texto: 'aviso', finalidadeEnvio: 'iaservice_jade_pa_sucesso', referencia: 'lote #7' },
+        { recipientGroups, enviarTextoFn, registrarFn, formatarContatoFn }
       );
+      assert.deepStrictEqual(registros, [
+        ['info', '📣 Jade PA · aviso de chamados COM PA (lote #7): enviando aos grupos Líderes, Triagem (3 número(s)).'],
+        ['success', '✅ Jade PA · aviso de chamados COM PA (lote #7) → contato 0001'],
+        ['error', '❌ Jade PA · aviso de chamados COM PA (lote #7) → contato 0002: Numero nao autorizado para esta empresa.'],
+        // contato 0004 já foi registrado pelo worker (registrado: true): sem linha repetida.
+        ['warning', '⚠️ Jade PA · aviso de chamados COM PA (lote #7): entregue a 2 de 3 número(s).'],
+      ]);
 
       assert.deepStrictEqual(pedidos, [{ empresaId: 5, grupoIds: ['g1', 'g2'] }]);
       assert.strictEqual(ret.total, 3);
       assert.strictEqual(ret.enviados, 2);
       assert.deepStrictEqual(ret.falhas, [{ nome: 'Bruno', erro: 'Numero nao autorizado para esta empresa.' }]);
       assert.deepStrictEqual(enviadosGrupo.map(p => p.numero), ['5511999990001', '5511999990004']);
-      assert.ok(enviadosGrupo.every(p => p.empresaId === 5 && p.texto === 'aviso' && p.finalidadeEnvio === 'iaservice_jade_pa'));
+      assert.ok(enviadosGrupo.every(p => p.empresaId === 5 && p.texto === 'aviso' && p.finalidadeEnvio === 'iaservice_jade_pa_sucesso'));
 
       const vazio = await enviarGrupoServicoExterno(
-        { empresaId: 5, grupoIds: ['g9'], texto: 'aviso' },
-        { recipientGroups: { listarMembrosAtivosDosGrupos: () => [] }, enviarTextoFn }
+        { empresaId: 5, grupoIds: ['g9'], texto: 'aviso', finalidadeEnvio: 'iaservice_jade_pa_falha' },
+        { recipientGroups: { listarMembrosAtivosDosGrupos: () => [] }, enviarTextoFn, registrarFn }
       );
       assert.deepStrictEqual(vazio, { total: 0, enviados: 0, falhas: [] });
+      assert.deepStrictEqual(registros.at(-1)[0], 'warning');
+      assert.match(registros.at(-1)[1], /nenhum número com acesso à empresa nos grupos grupos indisponíveis; mensagem não enviada/);
     }
 
     {

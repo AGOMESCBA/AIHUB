@@ -149,6 +149,30 @@ function finalizarLote(loteId, resumo, { manter = false } = {}) {
   return true;
 }
 
+/**
+ * O aviso por WhatsApp roda depois que o lote fecha: junta o resultado dele ao
+ * resumo do lote (se ficou gravado) e ao da última leitura, para a tela mostrar.
+ */
+function anexarAvisosAoResumo(empresaId, fonteId, loteId, avisos) {
+  const juntar = (texto) => {
+    let r = {};
+    try { r = texto ? JSON.parse(texto) : {}; } catch (_) { r = {}; }
+    return JSON.stringify({ ...r, avisos });
+  };
+  const db = getDB();
+  db.transaction(() => {
+    if (loteId) {
+      const lote = db.prepare('SELECT resumo FROM jade_pa_lotes WHERE id = ?').get(loteId);
+      if (lote) db.prepare('UPDATE jade_pa_lotes SET resumo = ? WHERE id = ?').run(juntar(lote.resumo), loteId);
+    }
+    const cfg = db.prepare('SELECT ultimo_ciclo_resumo FROM jade_pa_config WHERE empresa_id = ? AND fonte_id = ?').get(Number(empresaId), fonteId);
+    if (cfg) {
+      db.prepare('UPDATE jade_pa_config SET ultimo_ciclo_resumo = ? WHERE empresa_id = ? AND fonte_id = ?')
+        .run(juntar(cfg.ultimo_ciclo_resumo), Number(empresaId), fonteId);
+    }
+  })();
+}
+
 const _PESO = { erro: 3, aviso: 2, ok: 1, info: 0 };
 
 /** Lotes mais recentes da fonte, cada um com os chamados que tocou e o pior resultado neles. */
@@ -372,5 +396,5 @@ function listarExecucoes(empresaId, { limite = 100 } = {}) {
 module.exports = {
   PADRAO, getConfig, salvarConfig, listarConfigsAtivas, tentarTravarCiclo, renovarTrava, liberarCiclo, criarLote, finalizarLote, listarLotes, loteEmAndamento, listarExecucoesSemLote, limparLogs,
   registrarDetectado, registrarEvento, listarEventos, contarDetectadosDesde, listarParaGerar, marcarGerando, listarParaEnviar, contarTentativa, devolverTentativaGeracao,
-  atualizar, getExecucao, listarExecucoes, listarParaAvisar, reservarAviso, liberarAviso,
+  atualizar, getExecucao, listarExecucoes, listarParaAvisar, reservarAviso, liberarAviso, anexarAvisosAoResumo,
 };

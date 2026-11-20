@@ -297,12 +297,39 @@ const server = http.createServer((req, res) => {
           res.writeHead(403);
           return res.end(JSON.stringify({ erro: 'Numero nao autorizado para esta empresa.' }));
         }
-        await svc.sendMessage(digits, texto);
-        _enfileirar('iac-log', { tipo: 'success', msg: `${formatarAcaoEnvioParaLog(finalidadeEnvio)} -> ${formatarContatoParaLog(digits, { empresaId })}` });
+        try {
+          await svc.sendMessage(digits, texto);
+        } catch (err) {
+          // Falha também fica no histórico do canal (tela WhatsApp Services).
+          svc.log(`❌ ${formatarAcaoEnvioParaLog(finalidadeEnvio)} falhou -> ${formatarContatoParaLog(digits, { empresaId })}: ${err.message}`, 'error');
+          throw err;
+        }
+        svc.log(`${formatarAcaoEnvioParaLog(finalidadeEnvio)} -> ${formatarContatoParaLog(digits, { empresaId })}`, 'success');
         res.writeHead(200);
         res.end(JSON.stringify({ enviado: true }));
       } catch (err) {
         res.writeHead(err.message?.includes('conectado') ? 409 : 500);
+        res.end(JSON.stringify({ erro: err.message }));
+      }
+    });
+    return;
+  }
+
+  // Registro no histórico do canal vindo do processo principal (ex.: passos do
+  // aviso da Jade no PA), para aparecer na tela WhatsApp Services como o resto.
+  if (req.method === 'POST' && req.url === '/log') {
+    let body = '';
+    req.setEncoding?.('utf8'); req.on('data', d => { body += d; });
+    req.on('end', () => {
+      try {
+        const { tipo, msg } = JSON.parse(body || '{}');
+        const texto = String(msg || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 500);
+        if (!texto) { res.writeHead(400); return res.end(JSON.stringify({ erro: 'msg obrigatoria.' })); }
+        svc.log(texto, ['info', 'success', 'warning', 'error'].includes(tipo) ? tipo : 'info');
+        res.writeHead(200);
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err) {
+        res.writeHead(400);
         res.end(JSON.stringify({ erro: err.message }));
       }
     });

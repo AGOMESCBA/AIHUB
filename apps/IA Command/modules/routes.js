@@ -47,7 +47,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, i
   // compartilhado (IAC_WHATSAPP_SERVICO_EXTERNO_SECRET) — ver
   // modules/whatsapp/servico-externo-routes.js. Arquivo isolado, não altera
   // whatsapp/routes.js nem nenhuma rota existente.
-  require('./whatsapp/servico-externo-routes')(app);
+  require('./whatsapp/servico-externo-routes')(app, { io });
 
   app.use('/api/ia-command', requireAuth, requireIaCommand, requireEmpresaContext);
 

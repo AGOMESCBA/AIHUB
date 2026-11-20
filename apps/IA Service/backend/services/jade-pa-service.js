@@ -715,6 +715,11 @@ async function _executarLote(empresaId, fonteId, loteId, origem) {
   }
   // Aviso por WhatsApp depois de fechar a leitura: nunca atrasa nem derruba o lote.
   resumo.avisos = await avisoService.avisarLote(empresaId, fonteId, { loteId: resumo.loteGravado ? loteId : null });
+  try {
+    repo.anexarAvisosAoResumo(empresaId, fonteId, resumo.loteGravado ? loteId : null, resumo.avisos);
+  } catch (err) {
+    console.error('[IA Service] Jade PA: resultado do aviso não gravado no lote:', err.message);
+  }
   return resumo;
 }
 

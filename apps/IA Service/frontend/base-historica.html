@@ -140,13 +140,21 @@
     .jade-ciclo strong { color:var(--text-hi); }
     .jade-ciclo .warn { color:var(--warning-text); font-weight:800; }
     /* Avisos por WhatsApp: lista de grupos marcáveis (padrão do Agendamento do IA Command) */
-    .jade-aviso-lista { display:flex; flex-direction:column; gap:4px; max-height:180px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; background:var(--bg-card); padding:6px; }
-    .jade-aviso-item { display:flex; align-items:flex-start; gap:8px; padding:5px 6px; border-radius:6px; cursor:pointer; font-size:13px; }
+    /* Uma linha por grupo, com uma coluna para cada mensagem (sem PA / com PA). */
+    .jade-aviso-lista { border:1px solid var(--border); border-radius:8px; background:var(--bg-card); overflow:hidden; }
+    .jade-aviso-lista #jade-grupos-aviso { max-height:240px; overflow-y:auto; }
+    .jade-aviso-cab, .jade-aviso-item { display:grid; grid-template-columns:minmax(0,1fr) 54px 54px; align-items:center; gap:6px; padding:5px 10px; }
+    .jade-aviso-cab { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; color:var(--text-lo); background:var(--bg-base); border-bottom:1px solid var(--border); }
+    .jade-aviso-cab span:not(:first-child), .jade-aviso-item input { justify-self:center; }
+    .jade-aviso-item { border-bottom:1px solid var(--border); font-size:13px; }
+    .jade-aviso-item:last-child { border-bottom:none; }
     .jade-aviso-item:hover { background:var(--bg-hover); }
-    .jade-aviso-item input { margin-top:3px; flex-shrink:0; }
-    .jade-aviso-nome { display:block; font-weight:700; color:var(--text-hi); }
-    .jade-aviso-meta { display:block; font-size:11.5px; color:var(--text-lo); }
+    .jade-aviso-item input { width:16px; height:16px; cursor:pointer; margin:0; }
+    .jade-aviso-nome { min-width:0; font-weight:700; color:var(--text-hi); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .jade-aviso-meta { font-weight:400; font-size:11.5px; color:var(--text-lo); }
     .jade-aviso-item.indisponivel .jade-aviso-nome { color:var(--warning-text); }
+    #jade-grupos-aviso > .form-hint { padding:8px 10px; margin:0; }
+    .jade-lote-whats { display:block; margin:3px 0 0 30px; }
     @media (max-width:640px) { .jade-barra-dir { width:100%; } .jade-param-rodape .btn { width:100%; } }
     .jade-seta { display:block; transition:transform .15s; }
     .jade-params-seta { width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border:none; background:none; border-radius:6px; cursor:pointer; color:var(--text-lo); padding:0; }
@@ -414,14 +422,11 @@
             <h3><button type="button" class="jade-grupo-toggle" onclick="alternarGrupoJade('avisos')" aria-expanded="true"><svg class="jade-grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span>Avisos por WhatsApp</span></button></h3>
             <div class="jade-grupo-resumo" id="jade-resumo-avisos"></div>
             <div class="form-field">
-              <label>Chamados sem PA</label>
-              <div id="jade-grupos-falha" class="jade-aviso-lista"></div>
-              <div class="form-hint">Retorno não gravado no SoftExpert, ou gravado sem conseguir devolver ao cliente: precisam de ação.</div>
-            </div>
-            <div class="form-field">
-              <label>Chamados com PA pela Jade</label>
-              <div id="jade-grupos-sucesso" class="jade-aviso-lista"></div>
-              <div class="form-hint">Uma mensagem de cada por leitura, só com os chamados novos. Em Simulação nada é enviado. Os grupos são cadastrados no IA Command (Grupos).</div>
+              <div class="jade-aviso-lista">
+                <div class="jade-aviso-cab"><span>Grupo</span><span title="Retorno não gravado, ou gravado sem devolver ao cliente">Sem PA</span><span title="PA gravado pela Jade">Com PA</span></div>
+                <div id="jade-grupos-aviso"></div>
+              </div>
+              <div class="form-hint"><b>Sem PA</b>: retorno não gravado no SoftExpert, ou gravado sem devolver ao cliente (precisam de ação). <b>Com PA</b>: PA gravado pela Jade. Uma mensagem de cada por leitura. Em Simulação também envia, marcada "🧪 SIMULAÇÃO" (nada é gravado no SoftExpert). Grupos cadastrados no IA Command.</div>
             </div>
             <div><button type="button" class="btn btn-ghost" onclick="carregarGruposAvisoJade()">Atualizar grupos</button></div>
           </section>
@@ -948,26 +953,23 @@
   }
 
   function _desenharGruposAvisoJade() {
-    for (const tipo of ['falha', 'sucesso']) {
-      const el = document.getElementById(`jade-grupos-${tipo}`);
-      if (jadeGruposAviso === null) { el.innerHTML = '<div class="form-hint">Carregando grupos…</div>'; continue; }
-      if (jadeGruposAvisoErro) { el.innerHTML = `<div class="form-hint">${escapeHtml(jadeGruposAvisoErro)}</div>`; continue; }
+    const el = document.getElementById('jade-grupos-aviso');
+    if (jadeGruposAviso === null) el.innerHTML = '<div class="form-hint">Carregando grupos…</div>';
+    else if (jadeGruposAvisoErro) el.innerHTML = `<div class="form-hint">${escapeHtml(jadeGruposAvisoErro)}</div>`;
+    else {
       const conhecidos = new Set(jadeGruposAviso.map(g => String(g.id)));
       // Marcado aqui, mas inativado ou excluído no IA Command: aparece para poder desmarcar.
-      const sumidos = [...jadeAvisoSel[tipo]].filter(id => !conhecidos.has(id));
-      if (!jadeGruposAviso.length && !sumidos.length) {
-        el.innerHTML = '<div class="form-hint">Nenhum grupo ativo. Cadastre em IA Command › Grupos.</div>';
-        continue;
-      }
-      el.innerHTML = jadeGruposAviso.map(g => `
-        <label class="jade-aviso-item">
-          <input type="checkbox" value="${escapeHtml(g.id)}" ${jadeAvisoSel[tipo].has(String(g.id)) ? 'checked' : ''} onchange="marcarGrupoAvisoJade('${tipo}', this)">
-          <span><span class="jade-aviso-nome">${escapeHtml(g.nome)}</span><span class="jade-aviso-meta">${Number(g.membros_count || 0)} membro(s) ativo(s)</span></span>
-        </label>`).join('') + sumidos.map(id => `
-        <label class="jade-aviso-item indisponivel">
-          <input type="checkbox" value="${escapeHtml(id)}" checked onchange="marcarGrupoAvisoJade('${tipo}', this)">
-          <span><span class="jade-aviso-nome">Grupo indisponível</span><span class="jade-aviso-meta">Inativado ou excluído no IA Command; não recebe aviso.</span></span>
-        </label>`).join('');
+      const sumidos = [...new Set([...jadeAvisoSel.falha, ...jadeAvisoSel.sucesso])].filter(id => !conhecidos.has(id));
+      const caixa = (tipo, id, nome) => `<input type="checkbox" value="${escapeHtml(id)}" aria-label="${tipo === 'falha' ? 'Sem PA' : 'Com PA'}: ${escapeHtml(nome)}" ${jadeAvisoSel[tipo].has(String(id)) ? 'checked' : ''} onchange="marcarGrupoAvisoJade('${tipo}', this)">`;
+      const linha = (id, nome, meta, classe = '') => `
+        <div class="jade-aviso-item ${classe}">
+          <span class="jade-aviso-nome" title="${escapeHtml(nome)}">${escapeHtml(nome)} <span class="jade-aviso-meta">· ${meta}</span></span>
+          ${caixa('falha', id, nome)}${caixa('sucesso', id, nome)}
+        </div>`;
+      el.innerHTML = !jadeGruposAviso.length && !sumidos.length
+        ? '<div class="form-hint">Nenhum grupo ativo. Cadastre em IA Command › Grupos.</div>'
+        : jadeGruposAviso.map(g => linha(g.id, g.nome, `${Number(g.membros_count || 0)} membro(s)`)).join('')
+          + sumidos.map(id => linha(id, 'Grupo indisponível', 'inativado ou excluído; não recebe', 'indisponivel')).join('');
     }
     resumirGruposJade();
   }
@@ -1100,11 +1102,20 @@
         if (r.somenteChamados) itens.push(`<span class="warn">Só os chamados ${escapeHtml(r.somenteChamados.join(', '))}</span>`);
         if (r.limiteAtingido) itens.push('<span class="warn">Limite diário atingido</span>');
         if ((r.erros || []).length) itens.push(`<span class="warn">${escapeHtml(r.erros.join('; '))}</span>`);
+        const av = _avisosWhatsJade(r);
+        if (av) itens.push(`<span class="${av.destaque ? 'warn' : ''}">${escapeHtml(av.texto)}</span>`);
       }
     } else {
       itens.push(`<span>${config.ativo ? 'A primeira leitura acontece em instantes.' : 'Nenhuma leitura feita ainda.'}</span>`);
     }
     document.getElementById('jade-ciclo').innerHTML = itens.join('');
+  }
+
+  // O que aconteceu com o WhatsApp na leitura (enviado, sem grupo, Simulação, erro).
+  function _avisosWhatsJade(r) {
+    const a = r?.avisos;
+    if (!a?.mensagens?.length) return null;
+    return { texto: a.mensagens.join(' · '), destaque: a.situacao === 'erro' || a.situacao === 'aviso' };
   }
 
   function _linhaChamadoJade(ex, neste) {
@@ -1146,9 +1157,11 @@
         comErro ? `${comErro} com erro` : null,
         (r.erros || []).length ? `erro na leitura: ${r.erros.join('; ')}` : null,
       ].filter(Boolean);
+      const av = _avisosWhatsJade(r);
       html += `<tr class="jade-lote" onclick="alternarLoteJade('${chave}')">
         <td colspan="6"><button type="button" class="jade-toggle" aria-expanded="${aberto}">${aberto ? '−' : '+'}</button>Lote #${lote.id} · ${escapeHtml(formatarDataHora(lote.inicio))}
-          <span class="group-resumo">${escapeHtml(partes.join(' · '))}</span>${alertas.length ? ` <span class="group-resumo warn">· ${escapeHtml(alertas.join(' · '))}</span>` : ''}</td></tr>`;
+          <span class="group-resumo">${escapeHtml(partes.join(' · '))}</span>${alertas.length ? ` <span class="group-resumo warn">· ${escapeHtml(alertas.join(' · '))}</span>` : ''}
+          ${av ? `<div class="group-resumo jade-lote-whats ${av.destaque ? 'warn' : ''}">${escapeHtml(av.texto)}</div>` : (lote.fim ? '' : '<div class="group-resumo jade-lote-whats">WhatsApp: aguardando o fim da leitura.</div>')}</td></tr>`;
       if (aberto) {
         html += lote.chamados.length
           ? lote.chamados.map(c => _linhaChamadoJade(c.execucao, { situacao: c.situacao, texto: c.ultimoRegistro })).join('')
@@ -1225,7 +1238,7 @@
     { id: 'envio', rotulo: 'Gravação no SoftExpert', desc: 'Posicionamento gravado na grade do chamado: campos enviados e resposta do SoftExpert.' },
     { id: 'devolucao', rotulo: 'Devolução ao cliente', desc: 'Movimentação do chamado para o cliente (ATV-02, ação 1 → Retorno do Usuário).' },
     { id: 'situacao', rotulo: 'Atividade no SoftExpert', desc: 'Conferência final no SoftExpert: em que atividade o chamado ficou depois da Jade (respondido segue no Primeiro Atendimento; devolvido avança para o Retorno do Usuário).' },
-    { id: 'aviso', rotulo: 'Aviso por WhatsApp', desc: 'Mensagem do fim da leitura aos grupos escolhidos: chamados sem PA ou com PA pela Jade.' },
+    { id: 'aviso', rotulo: 'Aviso por WhatsApp', desc: 'Mensagem do fim da leitura aos grupos escolhidos: chamados sem PA ou com PA pela Jade. Recebe todo membro dos grupos com acesso à empresa. Em Simulação sai marcada como teste. Não aparece sem grupo escolhido ou quando a triagem atendeu antes.' },
   ];
   const JADE_ICONE = { ok: '✓', aviso: '!', erro: '✕', info: 'i', pendente: '' };
   const JADE_SITUACAO = { ok: 'Concluída', aviso: 'Com aviso', erro: 'Com erro', info: 'Informativa', pendente: 'Não executada' };

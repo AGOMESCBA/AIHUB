@@ -256,7 +256,7 @@ module.exports = function registrarRotasAgendamento(app, { requireAuth, requireI
 
   app.get('/api/ia-command/admin/grupos-whatsapp/numeros-autorizados', requireAuth, requireIaCommand, canGrupos, handleRoute((req, res) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-    res.json(store.listarNumerosAutorizados(getEmpresaId(req)));
+    res.json(store.listarNumerosDaEmpresa(getEmpresaId(req)));
   }));
 
   app.get('/api/ia-command/admin/grupos-whatsapp/:id', requireAuth, requireIaCommand, canGrupos, handleRoute((req, res) => {
