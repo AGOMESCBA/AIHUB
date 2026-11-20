@@ -18,7 +18,6 @@ const chamadoRepo = require('../repositories/chamado-repository');
 const radarService = require('./radar-service');
 const anexosSoftExpertService = require('./anexos-softexpert-service');
 const anexoRepo = require('../repositories/anexo-repository');
-const mensagemRepo = require('../repositories/mensagem-repository');
 const turnoLockService = require('./turno-lock-service');
 const aiConfigService = require('./ai-config-service');
 const aiProviderClient = require('./ai-provider-client');
@@ -26,6 +25,7 @@ const retornoConfig = require('./retorno-softexpert-config');
 const soapClient = require('./softexpert-soap-client');
 const clienteRepo = require('../repositories/cliente-repository');
 const investigacaoExecucaoRepo = require('../repositories/investigacao-execucao-repository');
+const avisoService = require('./jade-pa-aviso-service');
 
 // Curto para a leitura começar perto da hora do contador da tela (a consulta é só ao banco local).
 const TICK_MS = 15 * 1000;
@@ -137,12 +137,11 @@ async function _importarChamado(empresaId, fonteId, numero) {
   return chamado;
 }
 
-// Reaproveita a análise que já estiver no chat (ex.: consultor abriu antes);
-// senão roda a análise completa, que fica gravada no chat da J2iA.
+// Sempre uma análise nova, com pesquisa na documentação oficial, gravada no
+// chat da J2iA. Não reaproveita a que já estiver no chat: ela pode ser antiga
+// e sem pesquisa, e o retorno ao cliente sairia sem os links oficiais (caso
+// real #037059, 2026-11-20).
 async function _obterAnaliseTecnica(empresaId, atendimentoId, anexos) {
-  const mensagens = mensagemRepo.listarMensagens(empresaId, atendimentoId, { limite: 500 });
-  const existente = [...mensagens].reverse().find(m => m.papel === 'assistant' && !m.diagnostico?.erroInfraestrutura);
-  if (existente) return { ...existente, reaproveitada: true };
   if (!turnoLockService.tentarAdquirir(empresaId, atendimentoId)) {
     throw Object.assign(new Error('O chat deste chamado está em uso; a Jade tenta de novo no próximo ciclo.'), { adiar: true });
   }
@@ -353,6 +352,7 @@ async function processarExecucao(cfg, fonte, exec) {
     _evento(exec, etapa, 'aviso', 'Descartado: a triagem atuou no chamado antes da Jade (responsável definido ou posicionamento registrado).');
     return repo.atualizar(exec.id, {
       estado: 'descartado', motivo: 'A triagem atuou no chamado antes da Jade (responsável definido ou posicionamento registrado).',
+      motivoCodigo: 'triagem_atuou',
     });
   };
   try {
@@ -382,9 +382,8 @@ async function processarExecucao(cfg, fonte, exec) {
     const inicioAnalise = Date.now();
     const analise = await _obterAnaliseTecnica(empresaId, atendimento.id, anexos);
     const fontes = fontesDaAnalise(empresaId, atendimento.id, analise.id);
-    _evento(exec, 'analise', 'ok', analise.reaproveitada
-      ? 'Análise técnica que já estava no chat da J2iA foi reaproveitada'
-      : `Análise técnica feita em ${Math.round((Date.now() - inicioAnalise) / 1000)} s e gravada no chat da J2iA`,
+    _evento(exec, 'analise', 'ok',
+      `Análise técnica com pesquisa feita em ${Math.round((Date.now() - inicioAnalise) / 1000)} s e gravada no chat da J2iA — ${fontes.length ? `${fontes.length} página(s) oficial(is) lida(s)` : 'nenhuma página oficial lida'}`,
     { analise: _limitar(analise.conteudo, 8000), fontesOficiais: fontes.length ? fontes.map(x => `${x.titulo} — ${x.url}`) : undefined });
     etapa = 'retorno';
     const gerado = await gerarTextoCliente(empresaId, { chamado, anexos, analise, fontes });
@@ -503,11 +502,11 @@ async function _publicar(cfg, fonte, exec) {
   if (exec.tentativasPublicacao >= MAX_TENTATIVAS) return _falhaDefinitiva(exec, 'O SoftExpert não confirmou o posicionamento após 3 tentativas.', 'envio');
   if (_triagemAtuou(s)) {
     _evento(exec, 'envio', 'aviso', 'Descartado: a triagem atuou no chamado antes do envio da Jade. Nada foi gravado.');
-    return repo.atualizar(exec.id, { estado: 'descartado', motivo: 'A triagem atuou no chamado antes do envio da Jade.', alerta: false });
+    return repo.atualizar(exec.id, { estado: 'descartado', motivo: 'A triagem atuou no chamado antes do envio da Jade.', motivoCodigo: 'triagem_atuou', alerta: false });
   }
   if (exec.estado === 'pronto' && Date.now() - Date.parse(exec.geradoEm || 0) > MAX_IDADE_ENVIO_MS) {
     _evento(exec, 'envio', 'aviso', 'Descartado: texto gerado há mais de 4 horas, não enviado para não chegar desatualizado ao cliente.');
-    return repo.atualizar(exec.id, { estado: 'descartado', motivo: 'Texto gerado há mais de 4 horas; não foi enviado para não chegar desatualizado ao cliente.', alerta: false });
+    return repo.atualizar(exec.id, { estado: 'descartado', motivo: 'Texto gerado há mais de 4 horas; não foi enviado para não chegar desatualizado ao cliente.', motivoCodigo: 'texto_vencido', alerta: false });
   }
   const tentativaEnvio = `Tentativa ${exec.tentativasPublicacao + 1}/${MAX_TENTATIVAS}`;
   const chamado = chamadoRepo.getChamadoPorNumero(empresaId, exec.numeroChamado, 'softexpert');
@@ -714,6 +713,8 @@ async function _executarLote(empresaId, fonteId, loteId, origem) {
     }
     repo.liberarCiclo(empresaId, fonteId, resumo, { avulsa: origem === 'manual' });
   }
+  // Aviso por WhatsApp depois de fechar a leitura: nunca atrasa nem derruba o lote.
+  resumo.avisos = await avisoService.avisarLote(empresaId, fonteId, { loteId: resumo.loteGravado ? loteId : null });
   return resumo;
 }
 
@@ -765,6 +766,12 @@ async function salvarConfig(empresaId, fonteId, dados = {}) {
   return repo.salvarConfig(empresaId, fonteId, dados);
 }
 
+/** Tela: grupos de WhatsApp do IA Command que podem receber os avisos. */
+function listarGruposAviso(empresaId, fonteId) {
+  _fonteSoftExpert(empresaId, fonteId);
+  return avisoService.listarGrupos(empresaId).catch((err) => { throw _erro(502, `Não foi possível ler os grupos do IA Command: ${err.message}`); });
+}
+
 function listarExecucoes(empresaId, opts) {
   return repo.listarExecucoes(empresaId, opts);
 }
@@ -805,21 +812,30 @@ function getAuditoria(empresaId, fonteId, execucaoId) {
   return { execucao, eventos: repo.listarEventos(empresaId, execucaoId) };
 }
 
-let _tickEmAndamento = false;
-async function _tick() {
-  if (_tickEmAndamento) return;
-  _tickEmAndamento = true;
+// Sistema multiempresa (~20 empresas ao mesmo tempo, pedido do usuário,
+// 2026-11-20): cada empresa roda no seu tempo, sem esperar o lote (nem o aviso
+// por WhatsApp) da outra. O conjunto só evita disparar de novo a mesma fonte
+// neste processo; entre processos quem garante é a trava no banco.
+const _ciclosEmAndamento = new Set();
+function _tick() {
+  let configs;
   try {
-    for (const cfg of repo.listarConfigsAtivas()) {
-      try {
-        await executarCiclo(cfg.empresaId, cfg.fonteId);
-      } catch (err) {
-        console.error(`[IA Service] Jade PA: falha no agendamento (empresa ${cfg.empresaId}):`, err.message);
-      }
-    }
-  } finally {
-    _tickEmAndamento = false;
+    configs = repo.listarConfigsAtivas();
+  } catch (err) {
+    console.error('[IA Service] Jade PA: leitura do agendamento falhou:', err.message);
+    return [];
   }
+  const disparados = [];
+  for (const cfg of configs) {
+    const chave = `${cfg.empresaId}:${cfg.fonteId}`;
+    if (_ciclosEmAndamento.has(chave)) continue;
+    _ciclosEmAndamento.add(chave);
+    disparados.push(Promise.resolve()
+      .then(() => executarCiclo(cfg.empresaId, cfg.fonteId))
+      .catch(err => console.error(`[IA Service] Jade PA: falha no agendamento (empresa ${cfg.empresaId}):`, err.message))
+      .finally(() => _ciclosEmAndamento.delete(chave)));
+  }
+  return disparados;
 }
 
 function iniciarAgendamento() {
@@ -832,5 +848,6 @@ function iniciarAgendamento() {
 module.exports = {
   iniciarAgendamento, executarCiclo, executarAgora, processarExecucao, gerarTextoCliente, verificarVazamento,
   normalizarTextoSoftExpert, montarAtributosPosicionamento, fontesDaAnalise, enviarExecucao, situacaoNaOrigem, nomesDeOutrosClientes,
-  listarElegiveisNaOrigem, getConfig, salvarConfig, listarExecucoes, getAuditoria, getPainel, limparLogs, SQL_ELEGIVEIS, MAX_TENTATIVAS,
+  listarElegiveisNaOrigem, getConfig, salvarConfig, listarGruposAviso, listarExecucoes, getAuditoria, getPainel, limparLogs, SQL_ELEGIVEIS, MAX_TENTATIVAS,
+  _test: { tick: _tick },
 };

@@ -139,6 +139,14 @@
     .jade-ciclo { font-size:12px; color:var(--text-lo); display:flex; flex-wrap:wrap; gap:4px 12px; }
     .jade-ciclo strong { color:var(--text-hi); }
     .jade-ciclo .warn { color:var(--warning-text); font-weight:800; }
+    /* Avisos por WhatsApp: lista de grupos marcáveis (padrão do Agendamento do IA Command) */
+    .jade-aviso-lista { display:flex; flex-direction:column; gap:4px; max-height:180px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; background:var(--bg-card); padding:6px; }
+    .jade-aviso-item { display:flex; align-items:flex-start; gap:8px; padding:5px 6px; border-radius:6px; cursor:pointer; font-size:13px; }
+    .jade-aviso-item:hover { background:var(--bg-hover); }
+    .jade-aviso-item input { margin-top:3px; flex-shrink:0; }
+    .jade-aviso-nome { display:block; font-weight:700; color:var(--text-hi); }
+    .jade-aviso-meta { display:block; font-size:11.5px; color:var(--text-lo); }
+    .jade-aviso-item.indisponivel .jade-aviso-nome { color:var(--warning-text); }
     @media (max-width:640px) { .jade-barra-dir { width:100%; } .jade-param-rodape .btn { width:100%; } }
     .jade-seta { display:block; transition:transform .15s; }
     .jade-params-seta { width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border:none; background:none; border-radius:6px; cursor:pointer; color:var(--text-lo); padding:0; }
@@ -168,7 +176,7 @@
     .jade-dlg-datas .form-field { min-width:0; }
     .jade-dlg-aviso { font-size:12px; line-height:1.5; color:var(--error-text); background:color-mix(in srgb, var(--error) 8%, transparent); border:1px solid color-mix(in srgb, var(--error) 35%, var(--border)); border-radius:6px; padding:9px 11px; }
     .jade-dlg-acoes { display:flex; justify-content:flex-end; gap:8px; padding:12px 20px 16px; border-top:1px solid var(--border); }
-    .jade-modal { width:min(1280px, 100%); height:min(92vh, 100%); background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-md); display:flex; flex-direction:column; overflow:hidden; }
+    .jade-modal { width:min(1680px, 100%); height:100%; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-md); display:flex; flex-direction:column; overflow:hidden; }
     .jade-modal-topo { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:16px 20px; border-bottom:1px solid var(--border); }
     .jade-modal-kicker { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--accent); }
     .jade-modal-titulo { font-size:19px; font-weight:800; color:var(--text-hi); margin-top:2px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
@@ -226,7 +234,7 @@
     .jd-kv { display:grid; grid-template-columns:minmax(120px, 210px) 1fr; gap:4px 14px; font-size:12.5px; }
     .jd-kv dt { color:var(--text-lo); }
     .jd-kv dd { margin:0; color:var(--text-md); word-break:break-word; }
-    .jd-texto { white-space:pre-wrap; font-size:13px; line-height:1.55; color:var(--text-md); background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px 12px; max-height:420px; overflow:auto; }
+    .jd-texto { white-space:pre-wrap; font-size:13px; line-height:1.55; color:var(--text-md); background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px 12px; }
     .jd-lista { margin:0; padding-left:18px; font-size:12.5px; color:var(--text-md); }
     .jd-chips { display:flex; flex-wrap:wrap; gap:6px; }
     .jd-chip { font-size:11.5px; background:var(--bg-hover); border-radius:20px; padding:2px 10px; color:var(--text-md); }
@@ -400,6 +408,22 @@
               <input type="text" id="jade-somente" class="form-control" placeholder="vazio = todos · ex.: 037100, 037101">
               <div class="form-hint">Preenchido, a Jade só atua nesses chamados. Esvazie para liberar todos.</div>
             </div>
+          </section>
+
+          <section class="jade-grupo" data-grupo="avisos">
+            <h3><button type="button" class="jade-grupo-toggle" onclick="alternarGrupoJade('avisos')" aria-expanded="true"><svg class="jade-grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span>Avisos por WhatsApp</span></button></h3>
+            <div class="jade-grupo-resumo" id="jade-resumo-avisos"></div>
+            <div class="form-field">
+              <label>Chamados sem PA</label>
+              <div id="jade-grupos-falha" class="jade-aviso-lista"></div>
+              <div class="form-hint">Retorno não gravado no SoftExpert, ou gravado sem conseguir devolver ao cliente: precisam de ação.</div>
+            </div>
+            <div class="form-field">
+              <label>Chamados com PA pela Jade</label>
+              <div id="jade-grupos-sucesso" class="jade-aviso-lista"></div>
+              <div class="form-hint">Uma mensagem de cada por leitura, só com os chamados novos. Em Simulação nada é enviado. Os grupos são cadastrados no IA Command (Grupos).</div>
+            </div>
+            <div><button type="button" class="btn btn-ghost" onclick="carregarGruposAvisoJade()">Atualizar grupos</button></div>
           </section>
         </div>
 
@@ -898,6 +922,59 @@
     document.getElementById('jade-paralelo').value = config.processamentosSimultaneos;
     document.getElementById('jade-usuario').value = config.usuarioSoftexpert || '';
     document.getElementById('jade-somente').value = (config.somenteChamados || []).join(', ');
+    jadeAvisoSel.falha = new Set((config.gruposAvisoFalha || []).map(String));
+    jadeAvisoSel.sucesso = new Set((config.gruposAvisoSucesso || []).map(String));
+    _desenharGruposAvisoJade();
+  }
+
+  // Avisos por WhatsApp: grupos do IA Command (lidos pelo servidor) e os marcados em cada mensagem.
+  let jadeGruposAviso = null;
+  let jadeGruposAvisoErro = null;
+  const jadeAvisoSel = { falha: new Set(), sucesso: new Set() };
+
+  async function carregarGruposAvisoJade() {
+    const fonteId = document.getElementById('jade-fonte').value;
+    if (!fonteId) return;
+    jadeGruposAviso = null;
+    _desenharGruposAvisoJade();
+    try {
+      jadeGruposAviso = await api(`/api/ia-service/base-historica/fontes/${fonteId}/jade-pa/grupos-whatsapp?empresa_id=${empresaIdAtual()}`);
+      jadeGruposAvisoErro = null;
+    } catch (err) {
+      jadeGruposAviso = [];
+      jadeGruposAvisoErro = err.message;
+    }
+    _desenharGruposAvisoJade();
+  }
+
+  function _desenharGruposAvisoJade() {
+    for (const tipo of ['falha', 'sucesso']) {
+      const el = document.getElementById(`jade-grupos-${tipo}`);
+      if (jadeGruposAviso === null) { el.innerHTML = '<div class="form-hint">Carregando grupos…</div>'; continue; }
+      if (jadeGruposAvisoErro) { el.innerHTML = `<div class="form-hint">${escapeHtml(jadeGruposAvisoErro)}</div>`; continue; }
+      const conhecidos = new Set(jadeGruposAviso.map(g => String(g.id)));
+      // Marcado aqui, mas inativado ou excluído no IA Command: aparece para poder desmarcar.
+      const sumidos = [...jadeAvisoSel[tipo]].filter(id => !conhecidos.has(id));
+      if (!jadeGruposAviso.length && !sumidos.length) {
+        el.innerHTML = '<div class="form-hint">Nenhum grupo ativo. Cadastre em IA Command › Grupos.</div>';
+        continue;
+      }
+      el.innerHTML = jadeGruposAviso.map(g => `
+        <label class="jade-aviso-item">
+          <input type="checkbox" value="${escapeHtml(g.id)}" ${jadeAvisoSel[tipo].has(String(g.id)) ? 'checked' : ''} onchange="marcarGrupoAvisoJade('${tipo}', this)">
+          <span><span class="jade-aviso-nome">${escapeHtml(g.nome)}</span><span class="jade-aviso-meta">${Number(g.membros_count || 0)} membro(s) ativo(s)</span></span>
+        </label>`).join('') + sumidos.map(id => `
+        <label class="jade-aviso-item indisponivel">
+          <input type="checkbox" value="${escapeHtml(id)}" checked onchange="marcarGrupoAvisoJade('${tipo}', this)">
+          <span><span class="jade-aviso-nome">Grupo indisponível</span><span class="jade-aviso-meta">Inativado ou excluído no IA Command; não recebe aviso.</span></span>
+        </label>`).join('');
+    }
+    resumirGruposJade();
+  }
+
+  function marcarGrupoAvisoJade(tipo, el) {
+    if (el.checked) jadeAvisoSel[tipo].add(String(el.value));
+    else jadeAvisoSel[tipo].delete(String(el.value));
     resumirGruposJade();
   }
 
@@ -978,7 +1055,10 @@
       jadePainel = painel;
       jadeDifRelogio = Date.parse(painel.agora) - Date.now();
       const { config } = painel;
-      if (!manterFormulario) _preencherFormularioJade(config);
+      if (!manterFormulario) {
+        _preencherFormularioJade(config);
+        carregarGruposAvisoJade();
+      }
       const pillAtivo = document.getElementById('jade-pill-ativo');
       pillAtivo.textContent = config.ativo ? 'Job iniciado' : 'Job parado';
       const btnJob = document.getElementById('btn-jade-job');
@@ -1087,6 +1167,12 @@
     tbody.innerHTML = html || '<tr><td colspan="6"><div class="empty-state">Nenhum chamado tratado pela Jade ainda.</div></td></tr>';
   }
 
+  function _nomesGruposAvisoJade(tipo) {
+    const ids = [...jadeAvisoSel[tipo]];
+    if (!ids.length) return 'não avisa';
+    return ids.map(id => (jadeGruposAviso || []).find(g => String(g.id) === id)?.nome || 'grupo indisponível').join(', ');
+  }
+
   function resumirGruposJade() {
     const val = (id) => document.getElementById(id);
     const texto = (id) => val(id).options[val(id).selectedIndex]?.text || '';
@@ -1096,6 +1182,7 @@
       funcionamento: [texto('jade-modo'), val('jade-devolucao').value === '1' ? 'Devolve se faltar informação' : 'Não devolve'],
       ritmo: [`A cada ${val('jade-intervalo').value || '—'} min`, limite === 0 ? 'Sem limite diário' : `Até ${limite || '—'} por dia`, `${val('jade-paralelo').value || '—'} ao mesmo tempo`],
       integracao: [texto('jade-fonte'), `CDUSER ${val('jade-usuario').value || '—'}`, somente ? `Só: ${somente}` : 'Todos os chamados'],
+      avisos: [`Sem PA: ${_nomesGruposAvisoJade('falha')}`, `Com PA: ${_nomesGruposAvisoJade('sucesso')}`],
     };
     for (const [id, partes] of Object.entries(resumos)) document.getElementById(`jade-resumo-${id}`).textContent = partes.filter(Boolean).join(' · ');
   }
@@ -1111,7 +1198,7 @@
     grupo.querySelector('.jade-grupo-toggle').setAttribute('aria-expanded', String(!recolhido));
     try { localStorage.setItem(`jade-pa-grupo-${id}`, recolhido ? '1' : '0'); } catch (_) { /* só conveniência */ }
   }
-  for (const id of ['funcionamento', 'ritmo', 'integracao']) {
+  for (const id of ['funcionamento', 'ritmo', 'integracao', 'avisos']) {
     try { if (localStorage.getItem(`jade-pa-grupo-${id}`) === '1') alternarGrupoJade(id, true); } catch (_) { /* só conveniência */ }
   }
 
@@ -1138,6 +1225,7 @@
     { id: 'envio', rotulo: 'Gravação no SoftExpert', desc: 'Posicionamento gravado na grade do chamado: campos enviados e resposta do SoftExpert.' },
     { id: 'devolucao', rotulo: 'Devolução ao cliente', desc: 'Movimentação do chamado para o cliente (ATV-02, ação 1 → Retorno do Usuário).' },
     { id: 'situacao', rotulo: 'Atividade no SoftExpert', desc: 'Conferência final no SoftExpert: em que atividade o chamado ficou depois da Jade (respondido segue no Primeiro Atendimento; devolvido avança para o Retorno do Usuário).' },
+    { id: 'aviso', rotulo: 'Aviso por WhatsApp', desc: 'Mensagem do fim da leitura aos grupos escolhidos: chamados sem PA ou com PA pela Jade.' },
   ];
   const JADE_ICONE = { ok: '✓', aviso: '!', erro: '✕', info: 'i', pendente: '' };
   const JADE_SITUACAO = { ok: 'Concluída', aviso: 'Com aviso', erro: 'Com erro', info: 'Informativa', pendente: 'Não executada' };
@@ -1153,6 +1241,7 @@
     atividadeAtual: 'Atividade atual', atividadeEsperada: 'Atividade esperada', posicionamentoJade: 'Posicionamento da Jade', responsavel: 'Responsável',
     mensagem: 'Mensagem', tipo: 'Tipo', etapa: 'Etapa', operacao: 'Operação', code: 'Código', status: 'Status',
     codigoTransporte: 'Código de transporte', resultadoIndeterminado: 'Resultado indeterminado',
+    enviados: 'Números que receberam', total: 'Números nos grupos', falhas: 'Falhas no envio',
     Status: 'Status', Code: 'Código', Detail: 'Detalhe', RecordID: 'Registro', RecordKey: 'Chave', httpStatus: 'HTTP',
   };
   let jadeAuditoria = null;
@@ -1422,6 +1511,10 @@
           processamentosSimultaneos: Number(document.getElementById('jade-paralelo').value),
           usuarioSoftexpert: document.getElementById('jade-usuario').value.trim(),
           somenteChamados: document.getElementById('jade-somente').value,
+          // Sem a lista de grupos (IA Command fora), mantém os grupos já gravados.
+          ...(jadeGruposAviso && !jadeGruposAvisoErro
+            ? { gruposAvisoFalha: [...jadeAvisoSel.falha], gruposAvisoSucesso: [...jadeAvisoSel.sucesso] }
+            : {}),
         }),
       });
       showInfo('Configuração da Jade salva.');

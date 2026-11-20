@@ -1538,6 +1538,18 @@ const MIGRATIONS = [
       ALTER TABLE jade_pa_execucoes ADD COLUMN logs_limpos_em TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 66,
+    descricao: 'Jade no Primeiro Atendimento: aviso por WhatsApp ao fim de cada lote (pedido do usuário, 2026-11-20) — uma mensagem com os chamados sem PA e outra com os que tiveram PA pela Jade, cada uma para os grupos escolhidos (ids de whatsapp_recipient_groups do IA Command, em JSON; o cadastro fica lá). motivo_codigo separa o descarte "triagem atuou" (sem aviso) do "texto vencido" (sem PA = falha). aviso_whatsapp_em garante um aviso por chamado; o que já terminou antes desta versão fica marcado como avisado, para o primeiro lote não mandar o histórico inteiro.',
+    sql: `
+      ALTER TABLE jade_pa_config ADD COLUMN grupos_aviso_falha TEXT DEFAULT NULL;
+      ALTER TABLE jade_pa_config ADD COLUMN grupos_aviso_sucesso TEXT DEFAULT NULL;
+      ALTER TABLE jade_pa_execucoes ADD COLUMN motivo_codigo TEXT DEFAULT NULL;
+      ALTER TABLE jade_pa_execucoes ADD COLUMN aviso_whatsapp_em TEXT DEFAULT NULL;
+      UPDATE jade_pa_execucoes SET aviso_whatsapp_em = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        WHERE estado IN ('publicado', 'devolvido', 'falha', 'descartado', 'simulado');
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

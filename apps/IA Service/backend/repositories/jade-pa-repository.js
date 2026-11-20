@@ -4,13 +4,20 @@
 const crypto = require('crypto');
 const { getDB } = require('../database');
 
-const PADRAO = { ativo: false, modo: 'simulacao', devolucaoAtiva: false, intervaloMinutos: 5, limiteDiario: 30, processamentosSimultaneos: 3, usuarioSoftexpert: null, somenteChamados: [] };
+const PADRAO = { ativo: false, modo: 'simulacao', devolucaoAtiva: false, intervaloMinutos: 5, limiteDiario: 30, processamentosSimultaneos: 3, usuarioSoftexpert: null, somenteChamados: [], gruposAvisoFalha: [], gruposAvisoSucesso: [] };
 
 function _listaChamados(valor) {
   const lista = (Array.isArray(valor) ? valor : String(valor ?? '').split(/[\s,;]+/)).map(v => String(v).trim()).filter(Boolean);
   return [...new Set(lista)];
 }
 const MODOS = ['simulacao', 'publicar'];
+
+// Ids de grupo do IA Command (whatsapp_recipient_groups), gravados em JSON.
+function _listaGrupos(valor) {
+  let lista = valor;
+  if (typeof valor === 'string') { try { lista = JSON.parse(valor); } catch (_) { lista = []; } }
+  return [...new Set((Array.isArray(lista) ? lista : []).map(v => String(v ?? '').trim()).filter(Boolean))];
+}
 
 function _config(row, empresaId, fonteId) {
   if (!row) return { empresaId: Number(empresaId), fonteId, ...PADRAO, ultimoCicloEm: null, ultimoCicloResumo: null, atualizadoEm: null };
@@ -22,6 +29,7 @@ function _config(row, empresaId, fonteId) {
     processamentosSimultaneos: row.processamentos_simultaneos ?? PADRAO.processamentosSimultaneos,
     usuarioSoftexpert: row.usuario_softexpert ?? null, somenteChamados: _listaChamados(row.somente_chamados), cicloTravaAte: row.ciclo_trava_ate, ultimoCicloEm: row.ultimo_ciclo_em, ultimoCicloResumo: resumo, atualizadoEm: row.atualizado_em,
     proximoCicloEm: row.proximo_ciclo_em ?? null,
+    gruposAvisoFalha: _listaGrupos(row.grupos_aviso_falha), gruposAvisoSucesso: _listaGrupos(row.grupos_aviso_sucesso),
   };
 }
 
@@ -47,20 +55,28 @@ function salvarConfig(empresaId, fonteId, dados) {
     processamentosSimultaneos: dados.processamentosSimultaneos === undefined ? atual.processamentosSimultaneos : _inteiro(dados.processamentosSimultaneos, 1, 10, 'Processamentos simultâneos'),
     usuarioSoftexpert: dados.usuarioSoftexpert === undefined ? atual.usuarioSoftexpert : (String(dados.usuarioSoftexpert ?? '').trim() || null),
     somenteChamados: dados.somenteChamados === undefined ? atual.somenteChamados : _listaChamados(dados.somenteChamados),
+    gruposAvisoFalha: dados.gruposAvisoFalha === undefined ? atual.gruposAvisoFalha : _listaGrupos(dados.gruposAvisoFalha),
+    gruposAvisoSucesso: dados.gruposAvisoSucesso === undefined ? atual.gruposAvisoSucesso : _listaGrupos(dados.gruposAvisoSucesso),
   };
   if (!MODOS.includes(novo.modo)) throw Object.assign(new Error('Modo inválido.'), { status: 400 });
   if (novo.usuarioSoftexpert && !/^\d{1,10}$/.test(novo.usuarioSoftexpert)) throw Object.assign(new Error('Código do usuário da Jade inválido (use o CDUSER numérico).'), { status: 400 });
   if (novo.somenteChamados.length > 20 || novo.somenteChamados.some(n => !/^\d{1,10}$/.test(n))) {
     throw Object.assign(new Error('Chamados permitidos: informe até 20 números, separados por vírgula.'), { status: 400 });
   }
-  getDB().prepare(`INSERT INTO jade_pa_config (empresa_id, fonte_id, ativo, modo, devolucao_ativa, intervalo_minutos, limite_diario, processamentos_simultaneos, usuario_softexpert, somente_chamados, atualizado_em)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  for (const grupos of [novo.gruposAvisoFalha, novo.gruposAvisoSucesso]) {
+    if (grupos.length > 20 || grupos.some(g => !/^[\w-]{1,64}$/.test(g))) throw Object.assign(new Error('Grupos de aviso inválidos.'), { status: 400 });
+  }
+  getDB().prepare(`INSERT INTO jade_pa_config (empresa_id, fonte_id, ativo, modo, devolucao_ativa, intervalo_minutos, limite_diario, processamentos_simultaneos, usuario_softexpert, somente_chamados, grupos_aviso_falha, grupos_aviso_sucesso, atualizado_em)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (empresa_id, fonte_id) DO UPDATE SET ativo = excluded.ativo, modo = excluded.modo, devolucao_ativa = excluded.devolucao_ativa,
       intervalo_minutos = excluded.intervalo_minutos, limite_diario = excluded.limite_diario,
       processamentos_simultaneos = excluded.processamentos_simultaneos, usuario_softexpert = excluded.usuario_softexpert,
-      somente_chamados = excluded.somente_chamados, atualizado_em = excluded.atualizado_em`)
+      somente_chamados = excluded.somente_chamados, grupos_aviso_falha = excluded.grupos_aviso_falha,
+      grupos_aviso_sucesso = excluded.grupos_aviso_sucesso, atualizado_em = excluded.atualizado_em`)
     .run(Number(empresaId), fonteId, novo.ativo ? 1 : 0, novo.modo, novo.devolucaoAtiva ? 1 : 0, novo.intervaloMinutos, novo.limiteDiario, novo.processamentosSimultaneos,
-      novo.usuarioSoftexpert, novo.somenteChamados.length ? novo.somenteChamados.join(',') : null, new Date().toISOString());
+      novo.usuarioSoftexpert, novo.somenteChamados.length ? novo.somenteChamados.join(',') : null,
+      novo.gruposAvisoFalha.length ? JSON.stringify(novo.gruposAvisoFalha) : null,
+      novo.gruposAvisoSucesso.length ? JSON.stringify(novo.gruposAvisoSucesso) : null, new Date().toISOString());
   // Contador da tela: iniciar o job ou mudar o intervalo começa a contagem do intervalo inteiro.
   const agora = Date.now();
   const proximo = (novo.ativo && !atual.ativo) || novo.intervaloMinutos !== atual.intervaloMinutos
@@ -221,6 +237,7 @@ function _execucao(row) {
     tentativasPublicacao: row.tentativas_publicacao, tentativasDevolucao: row.tentativas_devolucao, ultimoErro: row.ultimo_erro,
     alerta: row.alerta === 1, detectadoEm: row.detectado_em, geradoEm: row.gerado_em, publicadoEm: row.publicado_em,
     devolvidoEm: row.devolvido_em, atualizadoEm: row.atualizado_em,
+    motivoCodigo: row.motivo_codigo ?? null, avisoWhatsappEm: row.aviso_whatsapp_em ?? null,
   };
 }
 
@@ -298,7 +315,7 @@ function devolverTentativaGeracao(id) {
 const CAMPOS = {
   estado: 'estado', chamadoId: 'chamado_id', atendimentoId: 'atendimento_id', mensagemAnaliseId: 'mensagem_analise_id',
   decisao: 'decisao', motivo: 'motivo', textoCliente: 'texto_cliente', ultimoErro: 'ultimo_erro', geradoEm: 'gerado_em',
-  publicadoEm: 'publicado_em', devolvidoEm: 'devolvido_em',
+  publicadoEm: 'publicado_em', devolvidoEm: 'devolvido_em', motivoCodigo: 'motivo_codigo',
 };
 
 function atualizar(id, dados) {
@@ -320,6 +337,33 @@ function getExecucao(id) {
   return _execucao(getDB().prepare('SELECT * FROM jade_pa_execucoes WHERE id = ?').get(id));
 }
 
+// Estados em que o chamado não muda mais: é neles que sai o aviso por WhatsApp.
+const ESTADOS_FINAIS = ['publicado', 'devolvido', 'falha', 'descartado', 'simulado'];
+
+/** Chamados que chegaram ao resultado final e ainda não passaram pelo aviso por WhatsApp. */
+function listarParaAvisar(empresaId, fonteId) {
+  return getDB().prepare(`SELECT * FROM jade_pa_execucoes WHERE empresa_id = ? AND fonte_id = ?
+      AND aviso_whatsapp_em IS NULL AND estado IN (${ESTADOS_FINAIS.map(() => '?').join(', ')})
+    ORDER BY atualizado_em, numero_chamado`).all(Number(empresaId), fonteId, ...ESTADOS_FINAIS).map(_execucao);
+}
+
+/**
+ * Reserva o aviso: marca só quem ainda não estava marcado e devolve esses ids.
+ * Duas leituras ao mesmo tempo nunca avisam o mesmo chamado.
+ */
+function reservarAviso(ids) {
+  const db = getDB();
+  const agora = new Date().toISOString();
+  const marcar = db.prepare('UPDATE jade_pa_execucoes SET aviso_whatsapp_em = ? WHERE id = ? AND aviso_whatsapp_em IS NULL');
+  return db.transaction(() => ids.filter(id => marcar.run(agora, id).changes === 1))();
+}
+
+/** O aviso não chegou a ninguém: volta para a próxima leitura tentar de novo. */
+function liberarAviso(ids) {
+  const desmarcar = getDB().prepare('UPDATE jade_pa_execucoes SET aviso_whatsapp_em = NULL WHERE id = ?');
+  getDB().transaction(() => { for (const id of ids) desmarcar.run(id); })();
+}
+
 function listarExecucoes(empresaId, { limite = 100 } = {}) {
   return getDB().prepare('SELECT * FROM jade_pa_execucoes WHERE empresa_id = ? ORDER BY detectado_em DESC LIMIT ?')
     .all(Number(empresaId), Math.min(Number(limite) || 100, 500)).map(_execucao);
@@ -328,5 +372,5 @@ function listarExecucoes(empresaId, { limite = 100 } = {}) {
 module.exports = {
   PADRAO, getConfig, salvarConfig, listarConfigsAtivas, tentarTravarCiclo, renovarTrava, liberarCiclo, criarLote, finalizarLote, listarLotes, loteEmAndamento, listarExecucoesSemLote, limparLogs,
   registrarDetectado, registrarEvento, listarEventos, contarDetectadosDesde, listarParaGerar, marcarGerando, listarParaEnviar, contarTentativa, devolverTentativaGeracao,
-  atualizar, getExecucao, listarExecucoes,
+  atualizar, getExecucao, listarExecucoes, listarParaAvisar, reservarAviso, liberarAviso,
 };

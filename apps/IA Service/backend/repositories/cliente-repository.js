@@ -50,6 +50,12 @@ function getClientePorCnpj(empresaId, cnpj) {
   return _clienteParaDominio(db.prepare(`SELECT * FROM clientes WHERE empresa_id = ? AND cnpj = ?`).get(Number(empresaId), cnpj));
 }
 
+function getClientePorId(empresaId, id) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  if (!id) return null;
+  return _clienteParaDominio(getDB().prepare(`SELECT * FROM clientes WHERE empresa_id = ? AND id = ?`).get(Number(empresaId), id));
+}
+
 function listarClientes(empresaId, filtros = {}) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   const db = getDB();
@@ -197,7 +203,7 @@ function getTecnicoPorId(empresaId, id) {
 }
 
 module.exports = {
-  upsertCliente, getClientePorCnpj, listarClientes, contarClientes,
+  upsertCliente, getClientePorCnpj, getClientePorId, listarClientes, contarClientes,
   upsertUsuarioCliente, getUsuarioClientePorId, contarUsuariosCliente,
   upsertTecnico, contarTecnicos, listarTecnicos, getTecnicoPorOrigem, getTecnicoPorId,
 };

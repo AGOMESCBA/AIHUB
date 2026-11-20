@@ -1,7 +1,7 @@
 const assert = require('assert');
 
 const servicoExternoRoutes = require('../modules/whatsapp/servico-externo-routes');
-const { resolverCanalServicoExterno, enviarTextoServicoExterno, segredoAutorizado } = servicoExternoRoutes._test;
+const { resolverCanalServicoExterno, enviarTextoServicoExterno, enviarGrupoServicoExterno, segredoAutorizado } = servicoExternoRoutes._test;
 
 function managerVazio() {
   return {
@@ -98,6 +98,45 @@ function canal(id, porta) {
         assert.strictEqual(enviados.at(-1).payload.finalidadeEnvio, finalidadeEnvio);
         assert.strictEqual(enviados.at(-1).payload.texto, 'mensagem');
       }
+    }
+
+    {
+      // Envio para grupos: número em dois grupos recebe uma vez; falha de um não para os outros.
+      const pedidos = [];
+      const recipientGroups = {
+        listarMembrosAtivosDosGrupos: (empresaId, grupoIds) => {
+          pedidos.push({ empresaId, grupoIds });
+          return [
+            { id: 'n1', nome: 'Ana', numero: '5511999990001' },
+            { id: 'n2', nome: 'Bruno', numero: '5511999990002' },
+            { id: 'n3', nome: 'Ana (outro grupo)', numero: '+55 11 99999-0001' },
+            { id: 'n4', nome: 'Caio', numero: '5511999990004' },
+          ];
+        },
+      };
+      const enviadosGrupo = [];
+      const enviarTextoFn = async (payload) => {
+        if (payload.numero === '5511999990002') throw new Error('Numero nao autorizado para esta empresa.');
+        enviadosGrupo.push(payload);
+      };
+
+      const ret = await enviarGrupoServicoExterno(
+        { empresaId: '5', grupoIds: ['g1', 'g2'], texto: 'aviso', finalidadeEnvio: 'iaservice_jade_pa' },
+        { recipientGroups, enviarTextoFn }
+      );
+
+      assert.deepStrictEqual(pedidos, [{ empresaId: 5, grupoIds: ['g1', 'g2'] }]);
+      assert.strictEqual(ret.total, 3);
+      assert.strictEqual(ret.enviados, 2);
+      assert.deepStrictEqual(ret.falhas, [{ nome: 'Bruno', erro: 'Numero nao autorizado para esta empresa.' }]);
+      assert.deepStrictEqual(enviadosGrupo.map(p => p.numero), ['5511999990001', '5511999990004']);
+      assert.ok(enviadosGrupo.every(p => p.empresaId === 5 && p.texto === 'aviso' && p.finalidadeEnvio === 'iaservice_jade_pa'));
+
+      const vazio = await enviarGrupoServicoExterno(
+        { empresaId: 5, grupoIds: ['g9'], texto: 'aviso' },
+        { recipientGroups: { listarMembrosAtivosDosGrupos: () => [] }, enviarTextoFn }
+      );
+      assert.deepStrictEqual(vazio, { total: 0, enviados: 0, falhas: [] });
     }
 
     {

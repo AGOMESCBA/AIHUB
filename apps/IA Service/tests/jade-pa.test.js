@@ -24,7 +24,7 @@ function stub(relativo, exports) {
 }
 
 // SoftExpert simulado: situação de cada chamado e usuário da Jade.
-const origem = { chamados: new Map(), usuarioAtivo: true };
+const origem = { chamados: new Map(), usuarioAtivo: true, segurarEmpresa: null };
 function chamadoNaOrigem(numero, dados = {}) {
   origem.chamados.set(numero, { aberto: true, comResp: false, posJade: 0, posOutros: 0, ativas: ['ATV-02'], ...dados });
 }
@@ -33,6 +33,8 @@ function elegivel(c) {
 }
 stub('../backend/services/agente-local-service', {
   async executarSelectNaFonte(_empresaId, _fonteId, { sql, params }) {
+    // SoftExpert lento para uma empresa: segura a leitura dela até soltar.
+    if (origem.segurarEmpresa?.empresaId === _empresaId) await origem.segurarEmpresa.promessa;
     if (sql.includes('FROM ADUSER')) {
       return params.cdUser === '995' ? [{ CDUSER: 995, NMUSER: 'Jade', IDUSER: '10677535000155', FGUSERENABLED: origem.usuarioAtivo ? 1 : 0 }] : [];
     }
@@ -109,6 +111,17 @@ soapReal.enviarOperacao = async ({ xml, operacao }) => {
   return { Status: 'SUCCESS', Code: '1' };
 };
 
+// IA Command simulado: cada aviso por WhatsApp que a Jade mandaria aos grupos.
+process.env.SVC_WHATSAPP_OTP_SECRET = 'segredo-teste';
+process.env.IA_COMMAND_INTERNAL_URL = 'http://iacommand.teste';
+const whats = [];
+let falharWhats = null;
+global.fetch = async (url, opts = {}) => {
+  whats.push({ url, corpo: opts.body ? JSON.parse(opts.body) : null, segredo: opts.headers?.['x-servico-externo-secret'] });
+  if (falharWhats) return { ok: false, status: 500, json: async () => ({ error: falharWhats }) };
+  return { ok: true, status: 200, json: async () => ({ ok: true, total: 2, enviados: 2, falhas: [] }) };
+};
+
 const chamadoRepo = require('../backend/repositories/chamado-repository');
 chamadoRepo.getChamadoPorNumero = (_e, numero) => ({ id: `ch-${numero}`, numero, oidOrigem: `oid-${numero}`, titulo: 'Erro ao gerar pedido', descricao: 'Ao confirmar o pedido aparece erro.' });
 
@@ -116,6 +129,7 @@ const { getDB } = require('../backend/database');
 const agenteRepo = require('../backend/repositories/agente-local-repository');
 const repo = require('../backend/repositories/jade-pa-repository');
 const jade = require('../backend/services/jade-pa-service');
+const aviso = require('../backend/services/jade-pa-aviso-service');
 
 const EMPRESA = 1;
 const fonte = agenteRepo.criarFonte(EMPRESA, { connectionKey: 'se', nome: 'SE ITSM', sistemaOrigem: 'softexpert', adapter: 'softexpert-sqlserver', ativo: true });
@@ -128,11 +142,14 @@ beforeEach(() => {
   getDB().prepare('DELETE FROM jade_pa_config').run();
   origem.chamados = new Map();
   origem.usuarioAtivo = true;
+  origem.segurarEmpresa = null;
   turnos.length = 0;
   envios.length = 0;
   respostasIA = [];
   comportamentoEnvio = 'ok';
   contratoDisponivel = true;
+  whats.length = 0;
+  falharWhats = null;
 });
 
 // Inicia o job e deixa a contagem vencida, para a próxima leitura do teste rodar já.
@@ -194,6 +211,32 @@ test('intervalo e trava entre processos', async () => {
   assert.equal(repo.tentarTravarCiclo(EMPRESA, fonte.id, { travaMs: 60000, forcar: true }), true);
   assert.equal(repo.tentarTravarCiclo(EMPRESA, fonte.id, { travaMs: 60000, forcar: true }), false);
   assert.throws(() => jade.executarAgora(EMPRESA, fonte.id), { status: 409 });
+});
+
+test('agendamento multiempresa: empresa lenta não segura as outras e não é disparada de novo', async () => {
+  const EMPRESA2 = 2;
+  const fonte2 = agenteRepo.criarFonte(EMPRESA2, { connectionKey: 'se2', nome: 'SE ITSM 2', sistemaOrigem: 'softexpert', adapter: 'softexpert-sqlserver', ativo: true });
+  await ligar();
+  await jade.salvarConfig(EMPRESA2, fonte2.id, { ativo: true });
+  getDB().prepare('UPDATE jade_pa_config SET proximo_ciclo_em = ?').run(new Date(0).toISOString());
+  let soltar;
+  origem.segurarEmpresa = { empresaId: EMPRESA, promessa: new Promise(r => { soltar = r; }) };
+
+  const disparados = jade._test.tick();
+  assert.equal(disparados.length, 2);
+  for (let i = 0; i < 100 && !jade.getConfig(EMPRESA2, fonte2.id).ultimoCicloEm; i++) await new Promise(r => setTimeout(r, 10));
+  assert.ok(jade.getConfig(EMPRESA2, fonte2.id).ultimoCicloEm, 'empresa 2 terminou com a empresa 1 presa');
+  assert.equal(jade.getConfig(EMPRESA, fonte.id).ultimoCicloEm, null);
+  // Próxima volta do relógio: só a empresa 2 é conferida, e ela não roda antes do horário.
+  const fim2 = jade.getConfig(EMPRESA2, fonte2.id).ultimoCicloEm;
+  const segunda = jade._test.tick();
+  assert.equal(segunda.length, 1, 'empresa 1 em andamento não é disparada de novo');
+  await Promise.all(segunda);
+  assert.equal(jade.getConfig(EMPRESA2, fonte2.id).ultimoCicloEm, fim2);
+
+  soltar();
+  await Promise.all(disparados);
+  assert.ok(jade.getConfig(EMPRESA, fonte.id).ultimoCicloEm);
 });
 
 test('lotes: leitura que tratou chamado vira lote numerado; leitura vazia não é gravada', async () => {
@@ -616,7 +659,97 @@ test('texto "pronto" há mais de 4 horas não é enviado', async () => {
   await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
   assert.equal(execs()[0].estado, 'descartado');
   assert.match(execs()[0].motivo, /mais de 4 horas/);
+  assert.equal(execs()[0].motivoCodigo, 'texto_vencido');
   assert.equal(envios.length, 0);
+});
+
+test('aviso WhatsApp: regra pelo resultado no SoftExpert', () => {
+  const c = (dados) => aviso.classificar({ alerta: false, ...dados });
+  assert.equal(c({ estado: 'publicado', decisao: 'responder' }), 'sucesso');
+  assert.equal(c({ estado: 'devolvido', decisao: 'devolver' }), 'sucesso');
+  assert.equal(c({ estado: 'publicado', decisao: 'devolver' }), 'sucesso', 'triagem assumiu antes da devolução');
+  assert.equal(c({ estado: 'publicado', decisao: 'devolver', alerta: true }), 'falha', 'gravou, mas não chegou ao Retorno do Usuário');
+  assert.equal(c({ estado: 'falha' }), 'falha');
+  assert.equal(c({ estado: 'descartado', motivoCodigo: 'texto_vencido' }), 'falha');
+  assert.equal(c({ estado: 'descartado', motivoCodigo: 'triagem_atuou' }), 'nenhum');
+  assert.equal(c({ estado: 'simulado' }), 'nenhum');
+  for (const estado of ['detectado', 'gerando', 'pronto', 'publicando', 'devolvendo']) assert.equal(c({ estado }), null, estado);
+});
+
+test('aviso WhatsApp: PA pela Jade vai ao grupo de "com PA" uma única vez, com produto e cliente', async () => {
+  const clienteRepo = require('../backend/repositories/cliente-repository');
+  const { cliente } = clienteRepo.upsertCliente(EMPRESA, { cnpj: '55555555000155', nome: 'CLIENTE Z LTDA', nomeFantasia: 'Cliente Z' });
+  const chamadoOriginal = chamadoRepo.getChamadoPorNumero;
+  chamadoRepo.getChamadoPorNumero = (e, n) => ({ ...chamadoOriginal(e, n), produto: 'Protheus', clienteId: cliente.id });
+  try {
+    await ligar({ modo: 'publicar', usuarioSoftexpert: '995', gruposAvisoFalha: ['g-triagem'], gruposAvisoSucesso: ['g-coord'] });
+    chamadoNaOrigem('037118');
+    respostasIA = [RESPOSTA_OK];
+    await jade.executarCiclo(EMPRESA, fonte.id);
+    assert.equal(execs()[0].estado, 'publicado');
+    assert.equal(whats.length, 1);
+    assert.equal(whats[0].url, 'http://iacommand.teste/api/ia-command/whatsapp/enviar-grupo-servico-externo');
+    assert.equal(whats[0].segredo, 'segredo-teste');
+    assert.deepEqual(whats[0].corpo.grupoIds, ['g-coord']);
+    assert.equal(whats[0].corpo.empresaId, EMPRESA);
+    assert.equal(whats[0].corpo.texto, '✅ Jade PA — 1 chamado(s) com Primeiro Atendimento\n• #037118 · Protheus - Cliente Z — respondido');
+    // Próxima leitura sem novidade: nada é repetido.
+    await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+    assert.equal(whats.length, 1);
+    const ev = jade.getAuditoria(EMPRESA, fonte.id, execs()[0].id).eventos.filter(e => e.etapa === 'aviso');
+    assert.equal(ev.length, 1);
+    assert.equal(ev[0].situacao, 'ok');
+    assert.match(ev[0].resumo, /chamados com PA\) enviado a 2 de 2/);
+  } finally {
+    chamadoRepo.getChamadoPorNumero = chamadoOriginal;
+  }
+});
+
+test('aviso WhatsApp: sem PA vai ao grupo de falha; WhatsApp fora tenta de novo sem repetir a auditoria', async () => {
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995', gruposAvisoFalha: ['g-triagem'], gruposAvisoSucesso: ['g-coord'] });
+  chamadoNaOrigem('037900');
+  respostasIA = [RESPOSTA_OK];
+  comportamentoEnvio = 'recusa';
+  falharWhats = 'WhatsApp nao esta conectado';
+  // 3 recusas do SoftExpert e a 4ª leitura vira falha; o aviso não sai (WhatsApp fora).
+  for (let i = 0; i < 5; i++) await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  assert.equal(execs()[0].estado, 'falha');
+  assert.equal(execs()[0].avisoWhatsappEm, null);
+  assert.equal(whats.length, 2);
+  falharWhats = null;
+  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  assert.equal(whats.length, 3);
+  assert.deepEqual(whats[2].corpo.grupoIds, ['g-triagem']);
+  assert.equal(whats[2].corpo.texto, '⚠️ Jade PA — 1 chamado(s) sem Primeiro Atendimento\n'
+    + '• #037900 · Produto não informado - Cliente não identificado — O SoftExpert não confirmou o posicionamento após 3 tentativas.\n'
+    + 'Precisam de atendimento da triagem.');
+  const ev = jade.getAuditoria(EMPRESA, fonte.id, execs()[0].id).eventos.filter(e => e.etapa === 'aviso');
+  assert.deepEqual(ev.map(e => e.situacao), ['erro', 'ok']);
+  assert.match(ev[0].resumo, /WhatsApp nao esta conectado/);
+});
+
+test('aviso WhatsApp: simulação não envia; sem grupo escolhido não manda o histórico depois; grupo inválido é recusado', async () => {
+  await assert.rejects(jade.salvarConfig(EMPRESA, fonte.id, { gruposAvisoFalha: ['grupo com espaço'] }), { status: 400 });
+  await ligar({ gruposAvisoFalha: ['g'], gruposAvisoSucesso: ['g'] });
+  chamadoNaOrigem('038500');
+  respostasIA = [RESPOSTA_OK];
+  await jade.executarCiclo(EMPRESA, fonte.id);
+  assert.equal(execs()[0].estado, 'simulado');
+  assert.ok(execs()[0].avisoWhatsappEm);
+  assert.equal(whats.length, 0);
+
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995', gruposAvisoFalha: [], gruposAvisoSucesso: [] });
+  chamadoNaOrigem('038501');
+  respostasIA = [RESPOSTA_OK];
+  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  const publicado = execs().find(e => e.numeroChamado === '038501');
+  assert.equal(publicado.estado, 'publicado');
+  assert.ok(publicado.avisoWhatsappEm);
+  const cfg = await ligar({ modo: 'publicar', usuarioSoftexpert: '995', gruposAvisoSucesso: ['g'] });
+  assert.deepEqual(cfg.gruposAvisoSucesso, ['g']);
+  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  assert.equal(whats.length, 0);
 });
 
 test('chat em uso pelo consultor adia sem gastar tentativa', async () => {

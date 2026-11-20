@@ -763,10 +763,24 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
 
   app.put('/api/ia-service/base-historica/fontes/:id/jade-pa', async (req, res) => {
     try {
-      const { ativo, modo, devolucaoAtiva, intervaloMinutos, limiteDiario, processamentosSimultaneos, usuarioSoftexpert, somenteChamados } = req.body || {};
+      const {
+        ativo, modo, devolucaoAtiva, intervaloMinutos, limiteDiario, processamentosSimultaneos, usuarioSoftexpert, somenteChamados,
+        gruposAvisoFalha, gruposAvisoSucesso,
+      } = req.body || {};
       res.json(await jadePaService.salvarConfig(req.svcEmpresaId, req.params.id, {
         ativo, modo, devolucaoAtiva, intervaloMinutos, limiteDiario, processamentosSimultaneos, usuarioSoftexpert, somenteChamados,
+        gruposAvisoFalha, gruposAvisoSucesso,
       }));
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
+
+  // Grupos de WhatsApp (cadastro do IA Command) para os avisos de fim de lote.
+  app.get('/api/ia-service/base-historica/fontes/:id/jade-pa/grupos-whatsapp', async (req, res) => {
+    try {
+      res.set('Cache-Control', 'no-store');
+      res.json(await jadePaService.listarGruposAviso(req.svcEmpresaId, req.params.id));
     } catch (err) {
       _handleErro(res, err);
     }

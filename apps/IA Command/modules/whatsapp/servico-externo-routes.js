@@ -5,6 +5,7 @@
 const crypto = require('crypto');
 const http = require('http');
 const channels = require('./channel-store');
+const recipientGroups = require('./recipient-group-store');
 
 let manager;
 function getManager() {
@@ -172,6 +173,34 @@ async function enviarTextoServicoExterno({ empresaId, numero, texto, finalidadeE
   return { canalId: canal.id };
 }
 
+/**
+ * Mesmo texto para os membros ativos dos grupos (cadastro de Grupos do IA
+ * Command). Número em mais de um grupo recebe uma vez. Falha de um número não
+ * impede os outros; quem chamou decide pelo total enviado.
+ */
+async function enviarGrupoServicoExterno({ empresaId, grupoIds = [], texto, finalidadeEnvio = 'servico_externo' }, deps = {}) {
+  const grupos = deps.recipientGroups || recipientGroups;
+  const enviarFn = deps.enviarTextoFn || enviarTextoServicoExterno;
+  const vistos = new Set();
+  const membros = grupos.listarMembrosAtivosDosGrupos(Number(empresaId), grupoIds).filter((m) => {
+    const digitos = String(m.numero || '').replace(/\D/g, '');
+    if (!digitos || vistos.has(digitos)) return false;
+    vistos.add(digitos);
+    return true;
+  });
+  const falhas = [];
+  let enviados = 0;
+  for (const m of membros) {
+    try {
+      await enviarFn({ empresaId: Number(empresaId), numero: m.numero, texto, finalidadeEnvio }, deps);
+      enviados++;
+    } catch (err) {
+      falhas.push({ nome: m.nome || null, erro: err.message });
+    }
+  }
+  return { total: membros.length, enviados, falhas };
+}
+
 function segredoAutorizado(req) {
   const segredoEsperado = String(
     process.env.IAC_WHATSAPP_SERVICO_EXTERNO_SECRET
@@ -206,12 +235,43 @@ function registrarRotaServicoExterno(app) {
       res.status(500).json({ error: err.message });
     }
   });
+
+  // Grupos ativos da empresa, para outro app escolher os destinatários.
+  app.get('/api/ia-command/whatsapp/grupos-servico-externo', (req, res) => {
+    const auth = segredoAutorizado(req);
+    if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+    const empresaId = Number(req.query?.empresaId || 0);
+    if (!empresaId) return res.status(400).json({ error: 'empresaId e obrigatorio.' });
+    try {
+      res.json(recipientGroups.listarGrupos(empresaId, { somenteAtivos: true })
+        .map(g => ({ id: g.id, nome: g.nome, descricao: g.descricao || null, membros_count: g.membros_count })));
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/ia-command/whatsapp/enviar-grupo-servico-externo', async (req, res) => {
+    const auth = segredoAutorizado(req);
+    if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+    const empresaId = Number(req.body?.empresaId || 0);
+    const grupoIds = Array.isArray(req.body?.grupoIds) ? req.body.grupoIds.map(String).filter(Boolean) : [];
+    const texto = String(req.body?.texto || '').trim();
+    if (!empresaId || !grupoIds.length || !texto) {
+      return res.status(400).json({ error: 'empresaId, grupoIds e texto sao obrigatorios.' });
+    }
+    try {
+      res.json({ ok: true, ...(await enviarGrupoServicoExterno({ empresaId, grupoIds, texto, finalidadeEnvio: req.body?.finalidadeEnvio })) });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 }
 
 module.exports = registrarRotaServicoExterno;
 module.exports._test = {
   resolverCanalServicoExterno,
   enviarTextoServicoExterno,
+  enviarGrupoServicoExterno,
   primeiroCanalConectado,
   canaisGlobaisConectados,
   segredoAutorizado,
