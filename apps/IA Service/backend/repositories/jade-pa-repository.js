@@ -61,10 +61,10 @@ function salvarConfig(empresaId, fonteId, dados) {
       somente_chamados = excluded.somente_chamados, atualizado_em = excluded.atualizado_em`)
     .run(Number(empresaId), fonteId, novo.ativo ? 1 : 0, novo.modo, novo.devolucaoAtiva ? 1 : 0, novo.intervaloMinutos, novo.limiteDiario, novo.processamentosSimultaneos,
       novo.usuarioSoftexpert, novo.somenteChamados.length ? novo.somenteChamados.join(',') : null, new Date().toISOString());
-  // Contador da tela: ligar agenda a leitura para já; mudar o intervalo recomeça a contagem.
+  // Contador da tela: iniciar o job ou mudar o intervalo começa a contagem do intervalo inteiro.
   const agora = Date.now();
-  const proximo = novo.ativo && !atual.ativo ? agora
-    : novo.intervaloMinutos !== atual.intervaloMinutos ? agora + novo.intervaloMinutos * 60000 : null;
+  const proximo = (novo.ativo && !atual.ativo) || novo.intervaloMinutos !== atual.intervaloMinutos
+    ? agora + novo.intervaloMinutos * 60000 : null;
   if (proximo !== null) {
     getDB().prepare('UPDATE jade_pa_config SET proximo_ciclo_em = ? WHERE empresa_id = ? AND fonte_id = ?')
       .run(new Date(proximo).toISOString(), Number(empresaId), fonteId);
@@ -80,18 +80,19 @@ function listarConfigsAtivas() {
  * Trava o ciclo da fonte no BANCO (vale entre processos): só um processo
  * roda o ciclo, e só quando chegou a hora agendada (proximo_ciclo_em; sem
  * agenda, o intervalo desde o último). `forcar` ignora a agenda — botão
- * "Executar agora". Trava vencida (processo caiu no meio) é retomada.
+ * "Executar agora". `avulsa` = leitura única do botão, que roda mesmo com o
+ * job parado. Trava vencida (processo caiu no meio) é retomada.
  */
-function tentarTravarCiclo(empresaId, fonteId, { travaMs, forcar = false, agora = new Date() }) {
+function tentarTravarCiclo(empresaId, fonteId, { travaMs, forcar = false, avulsa = false, agora = new Date() }) {
   const cfg = getConfig(empresaId, fonteId);
   const agoraIso = agora.toISOString();
   const limiteIntervalo = forcar ? agoraIso : new Date(agora.getTime() - cfg.intervaloMinutos * 60000).toISOString();
   const r = getDB().prepare(`UPDATE jade_pa_config SET ciclo_trava_ate = ?
-    WHERE empresa_id = ? AND fonte_id = ? AND ativo = 1
+    WHERE empresa_id = ? AND fonte_id = ? AND (ativo = 1 OR ? = 1)
       AND (ciclo_trava_ate IS NULL OR ciclo_trava_ate < ?)
       AND (? = 1 OR proximo_ciclo_em <= ?
         OR (proximo_ciclo_em IS NULL AND (ultimo_ciclo_em IS NULL OR ultimo_ciclo_em <= ?)))`)
-    .run(new Date(agora.getTime() + travaMs).toISOString(), Number(empresaId), fonteId, agoraIso, forcar ? 1 : 0, agoraIso, limiteIntervalo);
+    .run(new Date(agora.getTime() + travaMs).toISOString(), Number(empresaId), fonteId, avulsa ? 1 : 0, agoraIso, forcar || avulsa ? 1 : 0, agoraIso, limiteIntervalo);
   return r.changes === 1;
 }
 
@@ -101,9 +102,11 @@ function renovarTrava(empresaId, fonteId, travaMs) {
     .run(new Date(Date.now() + travaMs).toISOString(), Number(empresaId), fonteId);
 }
 
-function liberarCiclo(empresaId, fonteId, resumo) {
+/** Libera a trava. A leitura avulsa (Executar agora) não mexe na contagem do job. */
+function liberarCiclo(empresaId, fonteId, resumo, { avulsa = false } = {}) {
   const agora = Date.now();
-  const proximo = new Date(agora + getConfig(empresaId, fonteId).intervaloMinutos * 60000).toISOString();
+  const proximo = avulsa ? getConfig(empresaId, fonteId).proximoCicloEm
+    : new Date(agora + getConfig(empresaId, fonteId).intervaloMinutos * 60000).toISOString();
   getDB().prepare('UPDATE jade_pa_config SET ciclo_trava_ate = NULL, ultimo_ciclo_em = ?, ultimo_ciclo_resumo = ?, proximo_ciclo_em = ? WHERE empresa_id = ? AND fonte_id = ?')
     .run(new Date(agora).toISOString(), JSON.stringify(resumo || {}), proximo, Number(empresaId), fonteId);
 }
@@ -114,10 +117,14 @@ function criarLote(empresaId, fonteId, origem) {
     .run(Number(empresaId), fonteId, origem, new Date().toISOString()).lastInsertRowid);
 }
 
-/** Fecha o lote; leitura sem registro e sem erro não fica gravada (evita centenas de lotes vazios por dia). */
-function finalizarLote(loteId, resumo) {
+/**
+ * Fecha o lote. Leitura agendada sem registro e sem erro não fica gravada
+ * (evita centenas de lotes vazios por dia); a do Executar agora fica sempre,
+ * para quem clicou ver o resultado.
+ */
+function finalizarLote(loteId, resumo, { manter = false } = {}) {
   const temRegistro = getDB().prepare('SELECT 1 FROM jade_pa_eventos WHERE lote_id = ? LIMIT 1').get(loteId);
-  if (!temRegistro && !(resumo?.erros || []).length) {
+  if (!manter && !temRegistro && !(resumo?.erros || []).length) {
     getDB().prepare('DELETE FROM jade_pa_lotes WHERE id = ?').run(loteId);
     return false;
   }
@@ -166,8 +173,12 @@ function loteEmAndamento(empresaId, fonteId) {
 /**
  * Limpa os logs do job (lotes e auditoria) de um período — por início do lote,
  * ou pelo momento do registro/detecção quando não há lote — ou tudo
- * (de/ate nulos). O registro do chamado fica: é a garantia de "uma ação por
- * chamado"; só sai da grade (logs_limpos_em) quando não lhe sobra registro.
+ * (de/ate nulos). O registro do chamado sem registro restante também sai
+ * (decisão do usuário, 2026-11-20): a trava contra repetir passa a ser o
+ * SoftExpert — a Jade só pega chamado sem posicionamento na grade, então quem
+ * já recebeu retorno não volta; quem não recebeu (simulado, descartado,
+ * falha) volta a ser analisado. Sem exceção ("limpar tudo é tudo", usuário):
+ * um "devolvendo" apagado fica com o retorno na grade e segue na triagem.
  */
 function limparLogs(empresaId, fonteId, { deIso = null, ateIso = null } = {}) {
   const db = getDB();
@@ -183,13 +194,13 @@ function limparLogs(empresaId, fonteId, { deIso = null, ateIso = null } = {}) {
     const tocados = db.prepare(`SELECT DISTINCT e.execucao_id AS id ${alvo}`).all(p).map(r => r.id);
     const registrosRemovidos = db.prepare(`DELETE FROM jade_pa_eventos WHERE id IN (SELECT e.id ${alvo})`).run(p).changes;
     const lotesRemovidos = lotes.length ? db.prepare(`DELETE FROM jade_pa_lotes WHERE id IN (${lotes.join(', ')})`).run().changes : 0;
-    // Sai da grade: o que perdeu registros agora, ou (sem registro nenhum) foi detectado no período.
-    const chamadosOcultos = db.prepare(`UPDATE jade_pa_execucoes SET logs_limpos_em = @agora
-      WHERE empresa_id = @emp AND fonte_id = @fonte AND logs_limpos_em IS NULL
+    // Alvo: o que perdeu registros agora, ou (sem registro nenhum) foi detectado no período.
+    const semRegistro = `empresa_id = @emp AND fonte_id = @fonte
         AND NOT EXISTS (SELECT 1 FROM jade_pa_eventos e WHERE e.execucao_id = jade_pa_execucoes.id)
-        AND (id IN (SELECT value FROM json_each(@tocados)) OR ${noPeriodo('detectado_em')})`)
-      .run({ ...p, tocados: JSON.stringify(tocados) }).changes;
-    return { lotesRemovidos, registrosRemovidos, chamadosOcultos };
+        AND (id IN (SELECT value FROM json_each(@tocados)) OR ${noPeriodo('detectado_em')})`;
+    const q = { ...p, tocados: JSON.stringify(tocados) };
+    const chamadosLiberados = db.prepare(`DELETE FROM jade_pa_execucoes WHERE ${semRegistro}`).run(q).changes;
+    return { lotesRemovidos, registrosRemovidos, chamadosLiberados };
   })();
 }
 

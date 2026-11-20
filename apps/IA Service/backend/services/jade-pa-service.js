@@ -650,7 +650,8 @@ async function _executarLote(empresaId, fonteId, loteId, origem) {
       }
     }
     // Desligado no meio do ciclo: para antes do próximo chamado.
-    const aindaLigada = () => repo.getConfig(empresaId, fonteId).ativo;
+    // Na leitura avulsa (Executar agora) o job pode estar parado de propósito.
+    const aindaLigada = () => origem === 'manual' || repo.getConfig(empresaId, fonteId).ativo;
     // Envio ao SoftExpert só no modo Publicar; em Simulação, "pronto" espera.
     const publicar = cfg.modo === 'publicar';
     if (publicar) resumo.enviados = [];
@@ -686,26 +687,30 @@ async function _executarLote(empresaId, fonteId, loteId, origem) {
     // Leitura mais longa que o intervalo: a próxima já está atrasada (aviso na tela).
     try { resumo.encavalou = resumo.duracaoMs > repo.getConfig(empresaId, fonteId).intervaloMinutos * 60000; } catch { /* aviso apenas */ }
     if (loteId) {
-      try { resumo.loteGravado = repo.finalizarLote(loteId, resumo); } catch (err) { console.error('[IA Service] Jade PA: lote não finalizado:', err.message); }
+      try { resumo.loteGravado = repo.finalizarLote(loteId, resumo, { manter: origem === 'manual' }); } catch (err) { console.error('[IA Service] Jade PA: lote não finalizado:', err.message); }
     }
-    repo.liberarCiclo(empresaId, fonteId, resumo);
+    repo.liberarCiclo(empresaId, fonteId, resumo, { avulsa: origem === 'manual' });
   }
   return resumo;
 }
 
-/** Roda o ciclo se o intervalo já passou e nenhum outro processo está rodando. */
+/** Leitura do job (agendador). `forcar` ignora a contagem; a leitura avulsa do botão é executarAgora. */
 async function executarCiclo(empresaId, fonteId, { forcar = false } = {}) {
   if (!repo.tentarTravarCiclo(empresaId, fonteId, { travaMs: TRAVA_MS, forcar })) return null;
-  return _rodarCiclo(empresaId, fonteId, forcar ? 'manual' : 'agendado');
+  return _rodarCiclo(empresaId, fonteId, 'agendado');
 }
 
-/** Botão "Executar agora": não espera o ciclo terminar. */
+/**
+ * Botão "Executar agora": UMA leitura imediata, com o job iniciado ou parado,
+ * sem mexer na contagem do job. Não espera terminar; devolve o lote para a
+ * tela acompanhar.
+ */
 function executarAgora(empresaId, fonteId) {
   const cfg = repo.getConfig(empresaId, fonteId);
-  if (!cfg.ativo) throw _erro(409, 'Ligue a Jade no Primeiro Atendimento antes de executar.');
-  if (!repo.tentarTravarCiclo(empresaId, fonteId, { travaMs: TRAVA_MS, forcar: true })) throw _erro(409, 'Já existe um ciclo em andamento.');
+  if (!cfg.atualizadoEm) throw _erro(409, 'Salve a configuração da Jade antes de executar.');
+  if (!repo.tentarTravarCiclo(empresaId, fonteId, { travaMs: TRAVA_MS, avulsa: true })) throw _erro(409, 'Já existe uma leitura da Jade em execução.');
   _rodarCiclo(empresaId, fonteId, 'manual').catch(() => {});
-  return { iniciado: true };
+  return { iniciado: true, loteId: repo.loteEmAndamento(empresaId, fonteId)?.id ?? null };
 }
 
 function _fonteSoftExpert(empresaId, fonteId) {

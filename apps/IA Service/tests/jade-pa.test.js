@@ -135,8 +135,16 @@ beforeEach(() => {
   contratoDisponivel = true;
 });
 
-function ligar(dados = {}) {
-  return jade.salvarConfig(EMPRESA, fonte.id, { ativo: true, ...dados });
+// Inicia o job e deixa a contagem vencida, para a próxima leitura do teste rodar já.
+async function ligar(dados = {}) {
+  await jade.salvarConfig(EMPRESA, fonte.id, { ativo: true, ...dados });
+  getDB().prepare('UPDATE jade_pa_config SET proximo_ciclo_em = ?').run(new Date(0).toISOString());
+  return jade.getConfig(EMPRESA, fonte.id);
+}
+
+// Executar agora não espera a leitura: aguarda o lote avulso terminar.
+async function aguardarLeitura() {
+  for (let i = 0; i < 200 && repo.loteEmAndamento(EMPRESA, fonte.id); i++) await new Promise(r => setTimeout(r, 10));
 }
 const execs = () => jade.listarExecucoes(EMPRESA);
 
@@ -206,12 +214,12 @@ test('lotes: leitura que tratou chamado vira lote numerado; leitura vazia não �
   assert.equal(painel.loteEmAndamento, null);
 
   const vazio = await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
-  assert.equal(vazio.origem, 'manual');
+  assert.equal(vazio.origem, 'agendado');
   assert.equal(vazio.loteGravado, false);
   assert.ok(!jade.getPainel(EMPRESA, fonte.id).lotes.some(l => l.id === vazio.loteId));
 });
 
-test('limpar logs: período apaga só lotes/auditoria do período; o chamado segue protegido e o SoftExpert não é chamado', async () => {
+test('limpar logs: período apaga lotes, auditoria e libera o chamado sem retorno no SoftExpert; nada é enviado ao SoftExpert', async () => {
   await ligar();
   chamadoNaOrigem('037160');
   respostasIA = [RESPOSTA_OK];
@@ -221,21 +229,21 @@ test('limpar logs: período apaga só lotes/auditoria do período; o chamado seg
 
   // Período que não cobre o lote: nada muda.
   const fora = jade.limparLogs(EMPRESA, fonte.id, { de: '2020-01-01T00:00:00.000Z', ate: '2020-01-02T00:00:00.000Z' });
-  assert.deepEqual(fora, { lotesRemovidos: 0, registrosRemovidos: 0, chamadosOcultos: 0 });
+  assert.deepEqual(fora, { lotesRemovidos: 0, registrosRemovidos: 0, chamadosLiberados: 0 });
 
   const hoje = new Date();
   const r = jade.limparLogs(EMPRESA, fonte.id, { de: new Date(hoje.getTime() - 3600000).toISOString(), ate: new Date(hoje.getTime() + 3600000).toISOString() });
   assert.equal(r.lotesRemovidos, 1);
   assert.ok(r.registrosRemovidos > 0);
-  assert.equal(r.chamadosOcultos, 1);
+  assert.equal(r.chamadosLiberados, 1);
   const painel = jade.getPainel(EMPRESA, fonte.id);
   assert.ok(!painel.lotes.some(l => l.id === r1.loteId));
   assert.ok(!painel.semLote.some(e => e.id === exec.id));
-  assert.equal(jade.getAuditoria(EMPRESA, fonte.id, exec.id).eventos.length, 0);
-  // Registro do chamado mantido: a Jade não age de novo.
-  assert.equal(repo.getExecucao(exec.id).estado, 'simulado');
+  assert.equal(repo.getExecucao(exec.id), null);
+  // Sem posicionamento no SoftExpert (simulação): volta a ser analisado.
+  respostasIA = [RESPOSTA_OK];
   const de = await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
-  assert.equal(de.novos, 0);
+  assert.equal(de.novos, 1);
   assert.equal(envios.length, enviosAntes);
 
   assert.throws(() => jade.limparLogs(EMPRESA, fonte.id, { de: 'x', ate: 'y' }), { status: 400 });
@@ -256,13 +264,36 @@ test('limpar logs: tudo; bloqueado durante uma leitura', async () => {
   const painel = jade.getPainel(EMPRESA, fonte.id);
   assert.equal(painel.lotes.length, 0);
   assert.equal(painel.semLote.length, 0);
-  assert.ok(execs().some(e => e.numeroChamado === '037170'));
+  assert.ok(!execs().some(e => e.numeroChamado === '037170'));
 });
 
-test('contador: ligar agenda para já; após a leitura agenda +intervalo; mudar o intervalo recomeça a contagem', async () => {
+test('limpar tudo apaga tudo (inclusive "devolvendo"); chamado com retorno da Jade no SoftExpert não volta', async () => {
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995' });
+  chamadoNaOrigem('037190');
+  chamadoNaOrigem('037191');
+  respostasIA = [RESPOSTA_OK, RESPOSTA_OK];
+  await jade.executarCiclo(EMPRESA, fonte.id);
+  const devolvendo = execs().find(e => e.numeroChamado === '037191');
+  repo.atualizar(devolvendo.id, { estado: 'devolvendo' });
+  const enviosAntes = envios.length;
+  const r = jade.limparLogs(EMPRESA, fonte.id, { tudo: true });
+  assert.equal(r.chamadosLiberados, 2);
+  assert.equal(execs().length, 0);
+  const painel = jade.getPainel(EMPRESA, fonte.id);
+  assert.equal(painel.lotes.length + painel.semLote.length, 0);
+  // Os dois já têm o posicionamento da Jade na grade: não são elegíveis, não voltam.
+  const depois = await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  assert.equal(depois.novos, 0);
+  assert.equal(execs().length, 0);
+  assert.ok(envios.length >= enviosAntes);
+});
+
+test('contador: iniciar o job conta o intervalo inteiro; após a leitura agenda +intervalo; mudar o intervalo recomeça', async () => {
+  const iniciada = await jade.salvarConfig(EMPRESA, fonte.id, { ativo: true, intervaloMinutos: 5 });
+  assert.ok(Math.abs(Date.parse(iniciada.proximoCicloEm) - (Date.now() + 5 * 60000)) < 2000);
+  assert.equal(await jade.executarCiclo(EMPRESA, fonte.id), null);
+  getDB().prepare('UPDATE jade_pa_config SET proximo_ciclo_em = ?').run(new Date(0).toISOString());
   const antes = Date.now();
-  const ligada = await ligar({ intervaloMinutos: 5 });
-  assert.ok(Date.parse(ligada.proximoCicloEm) <= Date.now());
   await jade.executarCiclo(EMPRESA, fonte.id);
   const depois = jade.getConfig(EMPRESA, fonte.id);
   assert.ok(Date.parse(depois.proximoCicloEm) >= antes + 5 * 60000 - 1000);
@@ -272,6 +303,33 @@ test('contador: ligar agenda para já; após a leitura agenda +intervalo; mudar 
   assert.ok(Math.abs(Date.parse(mudou.proximoCicloEm) - esperado) < 2000);
   const igual = await jade.salvarConfig(EMPRESA, fonte.id, { limiteDiario: 50 });
   assert.equal(igual.proximoCicloEm, mudou.proximoCicloEm);
+});
+
+test('Executar agora: leitura única mesmo com o job parado; lote sempre gravado; não mexe na contagem', async () => {
+  await jade.salvarConfig(EMPRESA, fonte.id, { ativo: false });
+  chamadoNaOrigem('037180');
+  respostasIA = [RESPOSTA_OK];
+  const r = jade.executarAgora(EMPRESA, fonte.id);
+  assert.equal(r.iniciado, true);
+  assert.ok(r.loteId);
+  assert.throws(() => jade.executarAgora(EMPRESA, fonte.id), { status: 409 });
+  await aguardarLeitura();
+  assert.equal(execs().find(e => e.numeroChamado === '037180').estado, 'simulado');
+  const cfg = jade.getConfig(EMPRESA, fonte.id);
+  assert.equal(cfg.ativo, false);
+  assert.equal(cfg.ultimoCicloResumo.origem, 'manual');
+
+  // Nada novo: o lote do botão fica gravado mesmo vazio; a contagem do job não muda.
+  await ligar();
+  const marcado = new Date(Date.now() + 3 * 60000).toISOString();
+  getDB().prepare('UPDATE jade_pa_config SET proximo_ciclo_em = ?').run(marcado);
+  const vazio = jade.executarAgora(EMPRESA, fonte.id);
+  await aguardarLeitura();
+  const lote = jade.getPainel(EMPRESA, fonte.id).lotes.find(l => l.id === vazio.loteId);
+  assert.ok(lote);
+  assert.equal(lote.origem, 'manual');
+  assert.equal(lote.chamados.length, 0);
+  assert.equal(jade.getConfig(EMPRESA, fonte.id).proximoCicloEm, marcado);
 });
 
 test('limite diário', async () => {
