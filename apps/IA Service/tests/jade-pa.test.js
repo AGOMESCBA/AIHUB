@@ -581,6 +581,17 @@ test('devolver: triagem atuou depois do posicionamento → devolução cancelada
   assert.ok(!envios.some(e => e.operacao === 'executeActivity'));
 });
 
+test('texto ao cliente: link só da pesquisa; texto escrito para o analista é recusado', () => {
+  const lido = 'https://centraldeatendimento.totvs.com/hc/pt-br/articles/123-Artigo';
+  assert.deepEqual(jade.verificarVazamento(`Confira o artigo:\n${lido}.`, '037059', [], [lido]), []);
+  assert.match(jade.verificarVazamento('Veja https://tdn.totvs.com/pages/inventado', '037059', [], [lido])[0], /link que não veio da pesquisa/);
+  assert.match(jade.verificarVazamento('Veja https://tdn.totvs.com/x', '037059')[0], /link que não veio da pesquisa/);
+  for (const t of ['Para avançar, peça ao cliente 3 títulos.', 'Você tem alguém do lado do cliente?', 'O cliente informou que o erro começou ontem.']) {
+    assert.match(jade.verificarVazamento(t, '037059')[0], /terceira pessoa/, t);
+  }
+  assert.deepEqual(jade.verificarVazamento('Nos envie 3 títulos e verifique a rotina MATA110.', '037059'), []);
+});
+
 test('nome de outro cliente no texto é recusado; palavra comum e o próprio cliente não', () => {
   const clienteRepo = require('../backend/repositories/cliente-repository');
   const { cliente: proprio } = clienteRepo.upsertCliente(EMPRESA, { cnpj: '11111111000111', nome: 'COOPERGRÃOS' });

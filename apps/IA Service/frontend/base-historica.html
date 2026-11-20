@@ -108,7 +108,7 @@
     .jade-relogio.parado .jr-arco { stroke:transparent; }
     .jade-relogio.urgente .jr-arco { stroke:var(--warning); }
     @media (max-width:640px) { .jade-relogio { min-width:0; width:100%; } .jr-tempo { font-size:28px; } }
-    #btn-jade-atualizar.carregando .jade-giro { animation:jadeGiro .8s linear infinite; }
+    #btn-jade-aud-atualizar.carregando .jade-giro, #btn-jade-atualizar.carregando .jade-giro { animation:jadeGiro .8s linear infinite; }
     @keyframes jadeGiro { to { transform:rotate(360deg); } }
     #jade-tbody tr.jade-lote td { background:var(--bg-base); color:var(--text-hi); font-weight:800; font-size:12px; padding:7px 10px; cursor:pointer; }
     #jade-tbody tr.jade-lote:hover td { background:var(--bg-hover); }
@@ -468,7 +468,10 @@
                 <div class="jade-modal-sub" id="jade-modal-sub"></div>
               </div>
               <div class="jade-modal-acoes">
-                <button class="btn btn-ghost" type="button" onclick="recarregarAuditoriaJade()">Atualizar</button>
+                <button class="btn btn-ghost btn-icon" type="button" id="btn-jade-aud-atualizar" onclick="atualizarAuditoriaJade()">
+                  <svg class="jade-giro" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><polyline points="21 3 21 8 16 8"/></svg>
+                  <span id="jade-aud-atualizar-rotulo">Atualizar</span>
+                </button>
                 <button class="jade-modal-fechar" type="button" onclick="fecharAuditoriaJade()" aria-label="Fechar">&times;</button>
               </div>
             </div>
@@ -1130,8 +1133,8 @@
     { id: 'deteccao', rotulo: 'Detecção no SoftExpert', desc: 'A Jade encontra o chamado no Primeiro Atendimento sem responsável e sem posicionamento, e confere de novo antes de cada tentativa.' },
     { id: 'importacao', rotulo: 'Importação do chamado', desc: 'Dados do chamado trazidos do SoftExpert para a base do IA Service.' },
     { id: 'anexos', rotulo: 'Anexos', desc: 'Arquivos do chamado copiados e entregues à IA.' },
-    { id: 'analise', rotulo: 'Análise técnica', desc: 'Pesquisa da IA, gravada no chat da J2iA do chamado.' },
-    { id: 'retorno', rotulo: 'Retorno ao cliente', desc: 'Texto escrito para o cliente, a decisão (responder ou devolver) e as versões recusadas pela verificação.' },
+    { id: 'analise', rotulo: 'Análise técnica', desc: 'Pesquisa da IA para o ANALISTA, gravada no chat da J2iA do chamado. Este texto NÃO vai ao cliente; é a base do retorno ao cliente.' },
+    { id: 'retorno', rotulo: 'Retorno ao cliente', desc: 'Texto que vai ao CLIENTE (gravado na grade do SoftExpert no modo Publicar), a decisão (responder ou devolver) e as versões recusadas pela verificação.' },
     { id: 'envio', rotulo: 'Gravação no SoftExpert', desc: 'Posicionamento gravado na grade do chamado: campos enviados e resposta do SoftExpert.' },
     { id: 'devolucao', rotulo: 'Devolução ao cliente', desc: 'Movimentação do chamado para o cliente (ATV-02, ação 1 → Retorno do Usuário).' },
     { id: 'situacao', rotulo: 'Atividade no SoftExpert', desc: 'Conferência final no SoftExpert: em que atividade o chamado ficou depois da Jade (respondido segue no Primeiro Atendimento; devolvido avança para o Retorno do Usuário).' },
@@ -1178,6 +1181,24 @@
     else if (jadeAuditoria) fecharAuditoriaJade();
   });
 
+  // Mesmo retorno visível do Atualizar da grade.
+  async function atualizarAuditoriaJade() {
+    const btn = document.getElementById('btn-jade-aud-atualizar');
+    const rotulo = document.getElementById('jade-aud-atualizar-rotulo');
+    btn.disabled = true;
+    btn.classList.add('carregando');
+    rotulo.textContent = 'Atualizando…';
+    const inicio = Date.now();
+    try {
+      await recarregarAuditoriaJade();
+    } finally {
+      await new Promise(r => setTimeout(r, Math.max(0, 450 - (Date.now() - inicio))));
+      btn.disabled = false;
+      btn.classList.remove('carregando');
+      rotulo.textContent = 'Atualizar';
+    }
+  }
+
   async function recarregarAuditoriaJade() {
     if (!jadeAuditoria) return;
     const fonteId = document.getElementById('jade-fonte').value;
@@ -1190,6 +1211,11 @@
       fluxo.innerHTML = '';
       document.getElementById('jade-detalhe').innerHTML = `<div class="jd-vazio">${escapeHtml(err.message)}</div>`;
     }
+  }
+
+  // Em Simulação nada vai ao SoftExpert: a conferência final não acontece.
+  function _naoSeAplicaJade(etapa, ex) {
+    return etapa === 'situacao' && ex.estado === 'simulado';
   }
 
   function _situacaoEtapa(eventos) {
@@ -1235,7 +1261,7 @@
         <button type="button" class="jf-no ${sit} ${et.id === jadeEtapaSel ? 'selecionado' : ''}" onclick="selecionarEtapaJade('${et.id}')" title="${escapeHtml(JADE_SITUACAO[sit])}">
           ${sit !== 'pendente' ? `<span class="jf-icone">${JADE_ICONE[sit]}</span>` : ''}
           <span class="jf-rotulo">${escapeHtml(et.rotulo)}</span>
-          <span class="jf-meta">${ultimo ? escapeHtml(formatarDataHora(ultimo.momento).split(/,?\s+/).pop()) : 'não executada'}</span>
+          <span class="jf-meta">${ultimo ? escapeHtml(formatarDataHora(ultimo.momento).split(/,?\s+/).pop()) : _naoSeAplicaJade(et.id, ex) ? 'não se aplica em Simulação' : 'não executada'}</span>
           ${tentativas ? `<span class="jf-meta">${tentativas} erro(s) registrado(s)</span>` : ''}
         </button>`;
     }
@@ -1277,8 +1303,8 @@
     if (pegar('recusas')) html += _bloco('Versões recusadas pela verificação', `<ul class="jd-lista">${d.recusas.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>`);
     if (pegar('arquivos')) html += _bloco('Arquivos', `<div class="jd-chips">${d.arquivos.map(a => `<span class="jd-chip">${escapeHtml(a)}</span>`).join('')}</div>`);
     if (pegar('descricao')) html += _bloco('Descrição do cliente', `<div class="jd-texto">${escapeHtml(d.descricao)}</div>`);
-    if (pegar('texto')) html += _bloco('Texto ao cliente', `<div class="jd-texto">${escapeHtml(d.texto)}</div>`);
-    if (pegar('analise')) html += _bloco('Análise técnica (chat da J2iA)', `<div class="jd-texto">${escapeHtml(d.analise)}</div>`);
+    if (pegar('texto')) html += _bloco('Texto ao cliente (vai para a grade do SoftExpert)', `<div class="jd-texto">${escapeHtml(d.texto)}</div>`);
+    if (pegar('analise')) html += _bloco('Análise técnica interna — para o analista, não vai ao cliente', `<div class="jd-texto">${escapeHtml(d.analise)}</div>`);
     if (pegar('campos')) {
       const campos = Object.entries(d.campos);
       const texto = campos.find(([k]) => k.toLowerCase() === 'descricao');
@@ -1302,9 +1328,11 @@
       // Chamados tratados antes da auditoria existir: só o estado final.
       html += `<div class="jd-evento info"><div class="jd-resumo">Chamado tratado antes da auditoria por etapas. Abaixo, o que ficou registrado.</div>
         ${_kv([['Estado', JADE_ESTADOS[ex.estado] || ex.estado], ['Motivo', ex.motivo], ['Último erro', ex.ultimoErro]])}
-        ${ex.textoCliente ? _bloco('Texto ao cliente', `<div class="jd-texto">${escapeHtml(ex.textoCliente)}</div>`) : ''}</div>`;
+        ${ex.textoCliente ? _bloco('Texto ao cliente (vai para a grade do SoftExpert)', `<div class="jd-texto">${escapeHtml(ex.textoCliente)}</div>`) : ''}</div>`;
     } else if (!evs.length) {
-      html += '<div class="jd-vazio">Esta atividade ainda não foi executada para este chamado.</div>';
+      html += _naoSeAplicaJade(et.id, ex)
+        ? '<div class="jd-vazio">Não se aplica em Simulação: nada foi gravado no SoftExpert, então não há atividade a conferir lá.</div>'
+        : '<div class="jd-vazio">Esta atividade ainda não foi executada para este chamado.</div>';
     } else {
       html += evs.map(e => `
         <div class="jd-evento ${e.situacao}">

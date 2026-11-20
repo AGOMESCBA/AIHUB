@@ -25,6 +25,7 @@ const aiProviderClient = require('./ai-provider-client');
 const retornoConfig = require('./retorno-softexpert-config');
 const soapClient = require('./softexpert-soap-client');
 const clienteRepo = require('../repositories/cliente-repository');
+const investigacaoExecucaoRepo = require('../repositories/investigacao-execucao-repository');
 
 // Curto para a leitura começar perto da hora do contador da tela (a consulta é só ao banco local).
 const TICK_MS = 15 * 1000;
@@ -82,44 +83,31 @@ const ATIVIDADE_CLIENTE = 'ATV-06';
 
 const TEXTO_ANALISE_PA = 'Este chamado acabou de ser aberto pelo cliente e está no Primeiro Atendimento (triagem), sem nenhum posicionamento ainda. Faça uma pré-análise inicial com base no texto do chamado e nos anexos sincronizados, quando existirem: identifique o problema relatado, hipóteses prováveis de causa, possíveis soluções que o próprio cliente consiga testar e quais informações ou evidências ainda faltam para avançar. Deixe claro no nível de confiança que esta é uma análise preliminar, sem confirmação humana.';
 
-const SYSTEM_PROMPT_CLIENTE = `Você é a Jade, atendente de IA do suporte. Você escreve o PRIMEIRO retorno ao CLIENTE que abriu o chamado. O texto vai para o portal do cliente: escreva para ele, não para o analista.
+const SYSTEM_PROMPT_CLIENTE = `Você é a Jade, atendente de IA do suporte. Você escreve o PRIMEIRO retorno ao CLIENTE que abriu o chamado, como um analista experiente orientando o cliente a RESOLVER o problema: resposta simples, com conteúdo técnico. O texto vai para o portal do cliente: fale COM ele ("você", "sua equipe", "nos envie", "verifique"), nunca SOBRE ele ("peça ao cliente", "o cliente informou", "do lado do cliente").
 
 Responda SOMENTE com um JSON válido, sem nada antes ou depois:
 {"decisao": "responder" | "devolver", "motivo": "frase curta, uso interno, explicando a decisão", "texto": "texto ao cliente"}
 
 Como decidir:
-- "responder": há informação suficiente para orientar. Traga as possíveis causas e soluções que o cliente pode testar, de forma objetiva, em passos simples. Se faltar algo que ajudaria, peça no mesmo texto.
+- "responder": há informação suficiente para orientar. Se faltar algo que ajudaria, peça no mesmo texto.
 - "devolver": SOMENTE quando realmente não há o que pesquisar — sem anexo ou evidência E descrição vaga, sem rotina/tela identificada e sem mensagem de erro. Na dúvida, escolha "responder".
-- Ao pedir informação, seja específico para ESTE chamado (ex.: qual rotina ou tela, passo a passo até o erro, texto exato da mensagem, print da tela, arquivo error.log, data e hora da ocorrência, ambiente). Nunca use uma lista genérica.
 
-Como escrever o texto — o campo do SoftExpert é TEXTO PURO: nada de markdown (#, **, crases, tabelas). Organize como nas respostas do chat, com seções separadas por uma linha em branco, título da seção em MAIÚSCULAS numa linha própria e itens numerados ("1.", "2.") em linhas próprias. Modelo:
+Como escrever — o campo do SoftExpert é TEXTO PURO: nada de markdown (#, **, crases, tabelas):
+1. Comece exatamente com: "Olá! Em breve seu chamado será direcionado a um atendente. Enquanto isso, segue abaixo uma análise preliminar feita pela atendente de IA Jade."
+2. Diagnóstico curto (2 a 4 frases): o que a mensagem, o relato e os anexos indicam e a causa mais provável, citando os fatos concretos do chamado (rotina, mensagem, valores, datas).
+3. O centro do texto é COMO RESOLVER: o passo a passo técnico que um analista passaria para o cliente corrigir ou contornar sozinho — rotina e caminho de menu, parâmetro, campo, cadastro ou configuração a conferir, o que ajustar e como confirmar que resolveu. Se houver mais de uma causa possível, uma verificação objetiva para cada, da mais provável para a menos provável. Itens numerados ("1.", "2.") em linhas próprias.
+4. Só depois, e só se realmente faltar algo, peça o mínimo necessário para avançar caso os passos não resolvam, específico para ESTE chamado (prefira um recorte pequeno e comparável a "envie tudo"). Pode fazer uma pergunta direta quando ela acelerar a análise.
+5. Ao devolver, explique de forma cordial por que ainda não dá para analisar e liste o que ele precisa enviar.
+6. Títulos em MAIÚSCULAS numa linha própria são opcionais: use só se ajudarem a organizar um texto mais longo.
+7. Termine com "Ficamos no aguardo do seu retorno." e, na última linha, "Jade, atendente de IA".
 
-Olá! Em breve seu chamado será direcionado a um atendente. Enquanto isso, segue abaixo uma análise preliminar feita pela atendente de IA Jade.
-
-ANÁLISE PRELIMINAR
-Uma a três frases sobre o que o relato e os anexos indicam.
-
-POSSÍVEIS CAUSAS
-1. ...
-2. ...
-
-O QUE VOCÊ PODE TESTAR
-1. ...
-2. ...
-
-O QUE NOS AJUDA A AVANÇAR
-1. ...
-
-Ficamos no aguardo do seu retorno.
-
-Jade, atendente de IA
-
-Regras do texto:
-- Use só as seções que fizerem sentido; ao devolver, use "PARA ANALISARMOS SEU CHAMADO" com os itens que faltam, no lugar de causas e testes.
-- No máximo 5 itens por seção, cada item com uma ou duas frases.
-- Português do Brasil, tom amigável e profissional.
-- Não invente: use só o que está no chamado, nos anexos e na análise técnica. Não prometa prazo.
-- NUNCA cite números de outros chamados, nomes de outros clientes, empresas, pessoas ou dados internos; não mencione "base histórica", fontes internas, nível de confiança nem a análise técnica em si.
+Regras:
+- Português do Brasil; tom de analista: cordial, seguro e direto, frases curtas, sem rodeios, sem repetir a mesma ideia e sem jargão interno do suporte.
+- Quem lê costuma ser usuário de negócio (financeiro, fiscal, compras), não programador: explique em palavras simples o que for técnico (ex.: "ponto de entrada, que é uma customização feita no sistema"); ao pedir algo técnico (fonte, log, arquivo de integração), diga o que é e quem na equipe dele costuma ter (a TI ou a consultoria responsável pela customização). Mantenha a precisão: nomes de rotinas, campos e mensagens ficam como estão.
+- Não invente: use só o que está no chamado, nos anexos e na análise técnica. Não prometa prazo nem solução garantida.
+- NUNCA cite números de outros chamados, nomes de outros clientes, empresas, pessoas ou dados internos; não mencione "base histórica", fontes internas, nível de confiança, a análise técnica em si nem a classificação interna do chamado (tipo, nível, categoria).
+- Links: quando a entrada trouxer documentação oficial lida pela pesquisa que ajude a resolver (artigo da Central TOTVS, TDN, atualização ou pacote a aplicar), cite o link completo numa linha própria logo após o passo a que se refere. Use SOMENTE os links dessa lista, copiados exatamente; nunca escreva outro endereço. Se a documentação indicar atualização (patch, pacote, expedição) que corrige o problema, oriente a aplicação e recomende aplicar primeiro em ambiente de homologação.
+- Nunca peça senha, token, chave de acesso ou credencial; ao pedir log, requisição ou cabeçalhos de API, peça para ocultar esses dados antes de enviar.
 - No máximo 3000 caracteres.`;
 
 function _investigacao() {
@@ -161,6 +149,9 @@ async function _obterAnaliseTecnica(empresaId, atendimentoId, anexos) {
   try {
     const mensagem = await _investigacao().processarTurno(empresaId, atendimentoId, {
       texto: TEXTO_ANALISE_PA, usuarioId: null, anexoIds: anexos.map(a => a.id).filter(Boolean), automatico: true,
+      // Pesquisa na documentação oficial sempre: o retorno ao cliente só cita
+      // links que a pesquisa realmente leu (pedido do usuário, 2026-11-20).
+      forcarPesquisa: true,
     });
     if (!mensagem || mensagem.diagnostico?.erroInfraestrutura) throw new Error('A análise técnica da IA falhou (provedor indisponível).');
     return mensagem;
@@ -174,7 +165,27 @@ function _limitar(texto, max) {
   return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 
-function _montarEntrada({ chamado, anexos, analise }) {
+const MAX_FONTES = 8;
+
+/** Páginas oficiais (Central TOTVS, TDN…) que a pesquisa da análise realmente leu — as únicas que podem ir ao cliente. */
+function fontesDaAnalise(empresaId, atendimentoId, mensagemId) {
+  const fontes = new Map();
+  try {
+    for (const ex of investigacaoExecucaoRepo.listarPorAtendimento(empresaId, atendimentoId, { limite: 20 })) {
+      if (mensagemId && ex.mensagemId !== mensagemId) continue;
+      for (const p of ex.pesquisa?.paginasLidas || []) {
+        if (p?.oficial && p.status === 'lida' && /^https:\/\/\S+$/.test(p.url || '') && !fontes.has(p.url)) {
+          fontes.set(p.url, { titulo: _limitar(p.titulo, 160), url: p.url });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[IA Service] Jade PA: fontes da pesquisa indisponíveis:', err.message);
+  }
+  return [...fontes.values()].slice(0, MAX_FONTES);
+}
+
+function _montarEntrada({ chamado, anexos, analise, fontes = [] }) {
   const partes = [`Chamado nº ${chamado.numero}`];
   for (const [rotulo, valor] of [['Título', chamado.titulo], ['Assunto', chamado.assunto], ['Breve descrição', chamado.breveDescricao],
     ['Descrição do cliente', chamado.descricao], ['Informações adicionais', chamado.informacoesAdicionais]]) {
@@ -184,6 +195,9 @@ function _montarEntrada({ chamado, anexos, analise }) {
     ? `Anexos enviados pelo cliente (${anexos.length}): ${anexos.map(a => a.nomeOriginal || a.nome || 'arquivo').join(', ')}`
     : 'Anexos enviados pelo cliente: nenhum.');
   partes.push(`Análise técnica interna (NÃO copie referências, números de chamados ou nomes daqui):\n${_limitar(analise?.conteudo, 8000) || '(indisponível)'}`);
+  partes.push(fontes.length
+    ? `Documentação oficial lida pela pesquisa (os ÚNICOS links que podem ir ao cliente, copiados exatamente):\n${fontes.map(x => `- ${x.titulo} — ${x.url}`).join('\n')}`
+    : 'Documentação oficial lida pela pesquisa: nenhuma. Não cite links.');
   return partes.join('\n\n');
 }
 
@@ -241,8 +255,13 @@ function nomesDeOutrosClientes(empresaId, clienteIdProprio) {
 }
 
 /** Trechos que não podem ir ao cliente: número de outro chamado, nome de outro cliente e menções internas. */
-function verificarVazamento(texto, numeroProprio, outrosClientes = []) {
+function verificarVazamento(texto, numeroProprio, outrosClientes = [], linksPermitidos = []) {
   const problemas = [];
+  const permitidos = new Set(linksPermitidos);
+  for (const m of String(texto).matchAll(/https?:\/\/[^\s<>"]+/g)) {
+    const url = m[0].replace(/[.,;:!?)\]]+$/, '');
+    if (!permitidos.has(url)) problemas.push(`cita link que não veio da pesquisa (${url})`);
+  }
   const proprio = String(numeroProprio || '');
   for (const m of String(texto).matchAll(/(?<!\d)0\d{5}(?!\d)/g)) {
     if (m[0] !== proprio) problemas.push(`cita o chamado ${m[0]}`);
@@ -253,6 +272,9 @@ function verificarVazamento(texto, numeroProprio, outrosClientes = []) {
   }
   if (/base hist[oó]rica/i.test(texto)) problemas.push('menciona a base histórica');
   if (/n[ií]vel de confian[cç]a/i.test(texto)) problemas.push('menciona nível de confiança');
+  if (/\b(pe[cç]a|pergunte|solicite|oriente|confirme)\s+(ao|com o)\s+cliente\b|\b(do|pelo) lado do cliente\b|\bo cliente (informou|relatou|enviou|anexou|disse)\b/i.test(texto)) {
+    problemas.push('fala do cliente em terceira pessoa (texto escrito para o analista, não para o cliente)');
+  }
   return [...new Set(problemas)];
 }
 
@@ -277,7 +299,7 @@ async function gerarTextoCliente(empresaId, dados) {
       recusas.push(`Versão ${tentativa}: ${ultimoProblema}`);
       continue;
     }
-    const problemas = verificarVazamento(texto, dados.chamado.numero, outrosClientes);
+    const problemas = verificarVazamento(texto, dados.chamado.numero, outrosClientes, (dados.fontes || []).map(x => x.url));
     if (problemas.length) {
       ultimoProblema = `texto ao cliente ${problemas.join(', ')}`;
       recusas.push(`Versão ${tentativa}: ${ultimoProblema}`);
@@ -359,12 +381,13 @@ async function processarExecucao(cfg, fonte, exec) {
     etapa = 'analise';
     const inicioAnalise = Date.now();
     const analise = await _obterAnaliseTecnica(empresaId, atendimento.id, anexos);
+    const fontes = fontesDaAnalise(empresaId, atendimento.id, analise.id);
     _evento(exec, 'analise', 'ok', analise.reaproveitada
       ? 'Análise técnica que já estava no chat da J2iA foi reaproveitada'
       : `Análise técnica feita em ${Math.round((Date.now() - inicioAnalise) / 1000)} s e gravada no chat da J2iA`,
-    { analise: _limitar(analise.conteudo, 8000) });
+    { analise: _limitar(analise.conteudo, 8000), fontesOficiais: fontes.length ? fontes.map(x => `${x.titulo} — ${x.url}`) : undefined });
     etapa = 'retorno';
-    const gerado = await gerarTextoCliente(empresaId, { chamado, anexos, analise });
+    const gerado = await gerarTextoCliente(empresaId, { chamado, anexos, analise, fontes });
     // Devolução desligada: o pedido de informação vai como resposta (o chamado fica no PA).
     const devolver = gerado.decisao === 'devolver' && cfg.devolucaoAtiva;
     const motivo = gerado.decisao === 'devolver' && !cfg.devolucaoAtiva ? `${gerado.motivo} (devolução desligada: fica como resposta)` : gerado.motivo;
@@ -808,6 +831,6 @@ function iniciarAgendamento() {
 
 module.exports = {
   iniciarAgendamento, executarCiclo, executarAgora, processarExecucao, gerarTextoCliente, verificarVazamento,
-  normalizarTextoSoftExpert, montarAtributosPosicionamento, enviarExecucao, situacaoNaOrigem, nomesDeOutrosClientes,
+  normalizarTextoSoftExpert, montarAtributosPosicionamento, fontesDaAnalise, enviarExecucao, situacaoNaOrigem, nomesDeOutrosClientes,
   listarElegiveisNaOrigem, getConfig, salvarConfig, listarExecucoes, getAuditoria, getPainel, limparLogs, SQL_ELEGIVEIS, MAX_TENTATIVAS,
 };
