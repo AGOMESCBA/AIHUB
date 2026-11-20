@@ -1,0 +1,10 @@
+from pathlib import Path
+R=Path('C:/Apps/ELOGESTAO')
+p=R/'apps/backoffice/src/app/app/contratos/approval-screens.tsx';s=p.read_text(encoding='utf-8');s=s.replace("useColumnFilters('aprovacoes', () => setPage(1))","useColumnFilters('aprovacoes', { q: 'Contrato' }, 'number', () => setPage(1))");p.write_text(s,encoding='utf-8')
+p=R/'apps/api/tests/test_contracts_api.py';s=p.read_text(encoding='utf-8')
+s=s.replace("def policy(a,c,mode='any',self_approval=False):","def policy(a,c,mode='any',self_approval=False,version=None):",1)
+s=s.replace("headers=_h(a,'admA','A',**{'Idempotency-Key':_key()}));assert r.status_code==200,r.text\n    return r.json()","headers=_h(a,'admA','A',**{'Idempotency-Key':_key(),**({'If-Match':f'\\\"v{version}\\\"'} if version is not None else {})}));assert r.status_code==200,r.text\n    return r.json()",1)
+s=s.replace("        policy(a,c);r=command(a,c,'submit','tgtGrant');","        p=policy(a,c);r=command(a,c,'submit','tgtGrant');",1)
+s=s.replace("p=policy(a,c,self_approval=True);","p=policy(a,c,self_approval=True,version=p['version']);",1)
+p.write_text(s,encoding='utf-8')
+p=R/'apps/api/app/routers/me.py';s=p.read_text(encoding='utf-8');lines=s.splitlines();idx=next(i for i,l in enumerate(lines) if l.startswith('    ("ope.aprovacoes",'));approval=lines.pop(idx);idx=next(i for i,l in enumerate(lines) if l.startswith('    ("ope.contratos",'));lines.insert(idx+1,approval);p.write_text('\n'.join(lines)+'\n',encoding='utf-8')

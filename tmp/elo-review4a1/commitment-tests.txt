@@ -1,0 +1,37 @@
+
+
+def test_commitment_text_limits_reject_before_persistence(finance):
+    a=finance['api'];c,_=new(finance);c=approve(finance,c)
+    for field,size in [('authorized_by',201),('authorization_reference',501)]:
+        r=commitment(a,c,**{field:'X'*size})
+        assert r.status_code==422,r.text
+    assert get(a,c)['commitments']==[]
+    r=commitment(a,c,authorized_by='X'*200,authorization_reference='Y'*500)
+    assert r.status_code==201,r.text
+
+
+def test_commitment_monitor_filters_balances_and_isolation(finance):
+    a=finance['api'];c,_=new(finance);c=approve(finance,c)
+    r=commitment(a,c);assert r.status_code==201,r.text;c=r.json();e=c['commitments'][0]
+    r=measurement(a,c,e['id']);assert r.status_code==201,r.text;c=r.json()
+    h=_h(a,'tgtSelf','A','A1');url='/contract_commitments/'+str(e['id'])
+    r=a['client'].get(url,headers=h);assert r.status_code==200,r.text;data=r.json()
+    assert data['contract_number']==c['number'] and data['supplier_name']
+    assert data['realized_cents']==30000 and data['available_cents']==50000 and data['released_cents']==0
+    assert len(data['measurements'])==1 and data['measurements'][0]['item_description']
+    assert [v['kind'] for v in data['events']]==['commitment','measurement']
+    assert r.headers['etag']==f'"v{c["version"]}"'
+    assert a['client'].get(url,headers=_h(a,'tgtSelf','A','A2')).status_code in (403,404)
+    assert a['client'].get(url,headers=_h(a,'multi','B','B1')).status_code==404
+    assert a['client'].get('/contract_commitments/99999999',headers=h).status_code==404
+    params=dict(contract_id=c['id'],supplier_id=finance['supplier'],q=e['number'],date_from=e['date'],date_to=e['date'])
+    r=a['client'].get('/contract_commitments/',params=params,headers=h);assert r.status_code==200,r.text
+    assert r.json()['total']==1 and r.json()['items'][0]['available_cents']==50000
+    assert a['client'].get('/contract_commitments/',params={**params,'q':'INEXISTENTE'},headers=h).json()['total']==0
+    assert a['client'].get('/contract_commitments/',params={'date_from':'2030-01-02','date_to':'2030-01-01'},headers=h).status_code==422
+    # Estorno restitui o disponível; cancelamento libera o empenho sem apagar a trilha.
+    r=command(a,c,f'measurements/{c["measurements"][0]["id"]}/reverse','tgtSelf');assert r.status_code==200,r.text;c=r.json()
+    r=command(a,c,f'commitments/{e["id"]}/cancel','tgtSelf');assert r.status_code==200,r.text
+    data=a['client'].get(url,headers=h).json()
+    assert data['available_cents']==0 and data['realized_cents']==0 and data['released_cents']==80000
+    assert data['measurements'][0]['status']=='reversed' and len(data['events'])==4

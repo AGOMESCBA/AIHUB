@@ -1,0 +1,11 @@
+﻿const fs = require('node:fs');
+const p = 'apps/IA Service/frontend/j2a/assets/conexao-servidor.js';
+let s = fs.readFileSync(p, 'utf8');
+s = s.replace('async function consultar(input, options, leitura) {', 'async function consultar(input, options, leitura, atualizarDados = true) {');
+s = s.replace('if (leitura && resposta.ok) ultimaOk', 'if (leitura && atualizarDados && resposta.ok) ultimaOk');
+s = s.replace("    if (url.origin !== location.origin || !/^\\/api\\/(ia-service(?:-externo|-publico)?(?:\\/|$)|version$)/.test(url.pathname)) return originalFetch(input, options);", "    const inicial = /^\\/api\\/(?:me|minhas-rotinas|session\\/empresa|empresas\\/minhas)$/.test(url.pathname);\n    const doModulo = /^\\/api\\/(ia-service(?:-externo|-publico)?(?:\\/|$)|version$)/.test(url.pathname);\n    if (url.origin !== location.origin || (!inicial && !doModulo)) return originalFetch(input, options);");
+s = s.replace('consultar(input, options, true);', "consultar(input, options, true, !inicial && url.pathname !== '/api/version');");
+fs.writeFileSync(p, s);
+const css = 'apps/IA Service/frontend/j2a/assets/conexao-servidor.css';
+s = fs.readFileSync(css, 'utf8').replace('.card,.data-table-wrap,.radar-shell,.radar-layout', '.card,.table-card,.data-table-wrap,.radar-shell,.radar-layout');
+fs.writeFileSync(css, s);

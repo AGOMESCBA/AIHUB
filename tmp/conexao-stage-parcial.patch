@@ -1,0 +1,14 @@
+diff --git "a/apps/IA Service/frontend/monitor-acessos.html" "b/apps/IA Service/frontend/monitor-acessos.html"
+--- "a/apps/IA Service/frontend/monitor-acessos.html"
++++ "b/apps/IA Service/frontend/monitor-acessos.html"
+@@ -266,1 +266,3 @@
++  <link rel="stylesheet" href="/iaservice/assets/conexao-servidor.css">
++  <script src="/iaservice/assets/conexao-servidor.js" data-conexao-nativa></script>
+ </head>
+diff --git "a/apps/IA Service/frontend/historico-acessos.html" "b/apps/IA Service/frontend/historico-acessos.html"
+--- "a/apps/IA Service/frontend/historico-acessos.html"
++++ "b/apps/IA Service/frontend/historico-acessos.html"
+@@ -183,1 +183,3 @@
++  <link rel="stylesheet" href="/iaservice/assets/conexao-servidor.css">
++  <script src="/iaservice/assets/conexao-servidor.js"></script>
+ </head>

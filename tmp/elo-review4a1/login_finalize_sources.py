@@ -1,0 +1,15 @@
+from pathlib import Path
+import shutil
+r=Path('C:/Apps/ELOGESTAO')
+p=r/'apps/backoffice/src/app/app/contexto/page.tsx';s=p.read_text(encoding='utf-8')
+s=s.replace("(customers.items.length > 1 ||\n                  customers.platform.available)","(customers.items.length > 0 ||\n                  customers.platform.available)")
+s=s.replace('                    Trocar órgão\n','                    Voltar à escolha do órgão\n',1)
+p.write_text(s,encoding='utf-8')
+p=r/'apps/backoffice/src/app/(auth)/page.tsx';s=p.read_text(encoding='utf-8').replace('// Depois do login: órgãos e modos autorizados; com uma única opção, entrada direta.','// Depois do login: escolha explícita entre os órgãos e ambientes autorizados.');p.write_text(s,encoding='utf-8')
+p=r/'apps/backoffice/src/app/app/documentacao/access-manual.tsx';s=p.read_text(encoding='utf-8')
+s=s.replace('Após entrar, o sistema mostra somente os órgãos e secretarias em que você tem perfil ativo. Com uma única opção, a entrada é direta.','Após entrar, escolha explicitamente o órgão e depois a secretaria ou a administração autorizada. A escolha aparece mesmo quando existe apenas um órgão ou ambiente disponível.')
+s=s.replace('A escolha define onde as novas rotinas serão abertas nesta aba do navegador ("Novas abas" no cabeçalho). Trocar a escolha não altera as rotinas já abertas.','A escolha define onde as novas rotinas serão abertas nesta aba do navegador. Trocar a escolha não altera as rotinas já abertas. Quando essa escolha difere do ambiente da aba atual, o cabeçalho identifica os dois.')
+s=s.replace('O cabeçalho mostra o usuário, a rotina ativa e o órgão e a secretaria dessa rotina, em texto. Use "Trocar órgão ou secretaria" sem entrar de novo.','O cabeçalho mostra Órgão / empresa e Secretaria da aba atual. O botão "Trocar empresa ou secretaria" permanece visível, inclusive com um único órgão, sem exigir novo login. "Voltar à escolha do órgão" retorna à primeira etapa sem trocar o ambiente por si só.')
+s=s.replace("      'Módulos operacionais de negócio continuam indisponíveis até as fases correspondentes e não aparecem no menu.',", "      'A busca permanece acima da lista de ambientes. Com muitas secretarias, a lista tem rolagem própria. Só aparecem opções autorizadas; módulos de negócio ainda não liberados não aparecem no menu.',")
+p.write_text(s,encoding='utf-8')
+print('Escolha e troca explícitas mantidas mesmo com um órgão; manual alinhado.')

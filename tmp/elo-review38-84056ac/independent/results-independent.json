@@ -1,0 +1,34 @@
+{
+  "results": [
+    {
+      "scenario": "independente: resposta de identidade anterior",
+      "name": "Resposta real autorizada da identidade anterior retida",
+      "ok": true
+    },
+    {
+      "scenario": "independente: resposta de identidade anterior",
+      "name": "Nova identidade confirmada antes da resposta antiga",
+      "ok": true
+    },
+    {
+      "scenario": "independente: resposta de identidade anterior",
+      "name": "Resposta antiga não recria aba nem contexto da identidade anterior",
+      "ok": true,
+      "detail": {
+        "abas": 0
+      }
+    },
+    {
+      "scenario": "independente: edição durante revalidação",
+      "name": "Revalidação ocorre ao retornar à edição",
+      "ok": true
+    },
+    {
+      "scenario": "independente: edição durante revalidação",
+      "name": "Mudança de ação de outra rotina preserva o texto ainda autorizado",
+      "ok": true
+    }
+  ],
+  "passed": 5,
+  "total": 5
+}
