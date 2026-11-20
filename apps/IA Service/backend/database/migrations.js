@@ -1511,6 +1511,26 @@ const MIGRATIONS = [
       CREATE INDEX idx_jade_pa_eventos_exec ON jade_pa_eventos (execucao_id, id);
     `,
   },
+  {
+    version: 64,
+    descricao: 'Jade no Primeiro Atendimento: lotes (pedido do usuário, 2026-11-20) — cada leitura que tratou chamado ou teve erro vira um lote numerado com início, fim, duração e origem (agendado/manual); cada registro da auditoria aponta o lote. proximo_ciclo_em guarda quando roda a próxima leitura (contador da tela; mudar o intervalo recomeça a contagem).',
+    sql: `
+      ALTER TABLE jade_pa_config ADD COLUMN proximo_ciclo_em TEXT DEFAULT NULL;
+      CREATE TABLE jade_pa_lotes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER NOT NULL,
+        fonte_id TEXT NOT NULL,
+        origem TEXT NOT NULL CHECK (origem IN ('agendado', 'manual')),
+        inicio TEXT NOT NULL,
+        fim TEXT,
+        duracao_ms INTEGER,
+        resumo TEXT
+      );
+      CREATE INDEX idx_jade_pa_lotes_fonte ON jade_pa_lotes (empresa_id, fonte_id, id DESC);
+      ALTER TABLE jade_pa_eventos ADD COLUMN lote_id INTEGER DEFAULT NULL;
+      CREATE INDEX idx_jade_pa_eventos_lote ON jade_pa_eventos (lote_id, execucao_id);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

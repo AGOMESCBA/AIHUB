@@ -21,6 +21,7 @@ function _config(row, empresaId, fonteId) {
     devolucaoAtiva: row.devolucao_ativa === 1, intervaloMinutos: row.intervalo_minutos, limiteDiario: row.limite_diario,
     processamentosSimultaneos: row.processamentos_simultaneos ?? PADRAO.processamentosSimultaneos,
     usuarioSoftexpert: row.usuario_softexpert ?? null, somenteChamados: _listaChamados(row.somente_chamados), cicloTravaAte: row.ciclo_trava_ate, ultimoCicloEm: row.ultimo_ciclo_em, ultimoCicloResumo: resumo, atualizadoEm: row.atualizado_em,
+    proximoCicloEm: row.proximo_ciclo_em ?? null,
   };
 }
 
@@ -60,6 +61,14 @@ function salvarConfig(empresaId, fonteId, dados) {
       somente_chamados = excluded.somente_chamados, atualizado_em = excluded.atualizado_em`)
     .run(Number(empresaId), fonteId, novo.ativo ? 1 : 0, novo.modo, novo.devolucaoAtiva ? 1 : 0, novo.intervaloMinutos, novo.limiteDiario, novo.processamentosSimultaneos,
       novo.usuarioSoftexpert, novo.somenteChamados.length ? novo.somenteChamados.join(',') : null, new Date().toISOString());
+  // Contador da tela: ligar agenda a leitura para já; mudar o intervalo recomeça a contagem.
+  const agora = Date.now();
+  const proximo = novo.ativo && !atual.ativo ? agora
+    : novo.intervaloMinutos !== atual.intervaloMinutos ? agora + novo.intervaloMinutos * 60000 : null;
+  if (proximo !== null) {
+    getDB().prepare('UPDATE jade_pa_config SET proximo_ciclo_em = ? WHERE empresa_id = ? AND fonte_id = ?')
+      .run(new Date(proximo).toISOString(), Number(empresaId), fonteId);
+  }
   return getConfig(empresaId, fonteId);
 }
 
@@ -69,9 +78,9 @@ function listarConfigsAtivas() {
 
 /**
  * Trava o ciclo da fonte no BANCO (vale entre processos): só um processo
- * roda o ciclo, e só quando o intervalo configurado já passou desde o último
- * (`forcar` ignora o intervalo — botão "Executar agora"). Trava vencida
- * (processo caiu no meio) é retomada.
+ * roda o ciclo, e só quando chegou a hora agendada (proximo_ciclo_em; sem
+ * agenda, o intervalo desde o último). `forcar` ignora a agenda — botão
+ * "Executar agora". Trava vencida (processo caiu no meio) é retomada.
  */
 function tentarTravarCiclo(empresaId, fonteId, { travaMs, forcar = false, agora = new Date() }) {
   const cfg = getConfig(empresaId, fonteId);
@@ -80,8 +89,9 @@ function tentarTravarCiclo(empresaId, fonteId, { travaMs, forcar = false, agora 
   const r = getDB().prepare(`UPDATE jade_pa_config SET ciclo_trava_ate = ?
     WHERE empresa_id = ? AND fonte_id = ? AND ativo = 1
       AND (ciclo_trava_ate IS NULL OR ciclo_trava_ate < ?)
-      AND (ultimo_ciclo_em IS NULL OR ultimo_ciclo_em <= ?)`)
-    .run(new Date(agora.getTime() + travaMs).toISOString(), Number(empresaId), fonteId, agoraIso, limiteIntervalo);
+      AND (? = 1 OR proximo_ciclo_em <= ?
+        OR (proximo_ciclo_em IS NULL AND (ultimo_ciclo_em IS NULL OR ultimo_ciclo_em <= ?)))`)
+    .run(new Date(agora.getTime() + travaMs).toISOString(), Number(empresaId), fonteId, agoraIso, forcar ? 1 : 0, agoraIso, limiteIntervalo);
   return r.changes === 1;
 }
 
@@ -92,8 +102,72 @@ function renovarTrava(empresaId, fonteId, travaMs) {
 }
 
 function liberarCiclo(empresaId, fonteId, resumo) {
-  getDB().prepare('UPDATE jade_pa_config SET ciclo_trava_ate = NULL, ultimo_ciclo_em = ?, ultimo_ciclo_resumo = ? WHERE empresa_id = ? AND fonte_id = ?')
-    .run(new Date().toISOString(), JSON.stringify(resumo || {}), Number(empresaId), fonteId);
+  const agora = Date.now();
+  const proximo = new Date(agora + getConfig(empresaId, fonteId).intervaloMinutos * 60000).toISOString();
+  getDB().prepare('UPDATE jade_pa_config SET ciclo_trava_ate = NULL, ultimo_ciclo_em = ?, ultimo_ciclo_resumo = ?, proximo_ciclo_em = ? WHERE empresa_id = ? AND fonte_id = ?')
+    .run(new Date(agora).toISOString(), JSON.stringify(resumo || {}), proximo, Number(empresaId), fonteId);
+}
+
+// ── Lotes: cada leitura que tratou chamado ou teve erro ────────────────────
+function criarLote(empresaId, fonteId, origem) {
+  return Number(getDB().prepare('INSERT INTO jade_pa_lotes (empresa_id, fonte_id, origem, inicio) VALUES (?, ?, ?, ?)')
+    .run(Number(empresaId), fonteId, origem, new Date().toISOString()).lastInsertRowid);
+}
+
+/** Fecha o lote; leitura sem registro e sem erro não fica gravada (evita centenas de lotes vazios por dia). */
+function finalizarLote(loteId, resumo) {
+  const temRegistro = getDB().prepare('SELECT 1 FROM jade_pa_eventos WHERE lote_id = ? LIMIT 1').get(loteId);
+  if (!temRegistro && !(resumo?.erros || []).length) {
+    getDB().prepare('DELETE FROM jade_pa_lotes WHERE id = ?').run(loteId);
+    return false;
+  }
+  getDB().prepare('UPDATE jade_pa_lotes SET fim = ?, duracao_ms = ?, resumo = ? WHERE id = ?')
+    .run(resumo.fim, resumo.duracaoMs ?? null, JSON.stringify(resumo), loteId);
+  return true;
+}
+
+const _PESO = { erro: 3, aviso: 2, ok: 1, info: 0 };
+
+/** Lotes mais recentes da fonte, cada um com os chamados que tocou e o pior resultado neles. */
+function listarLotes(empresaId, fonteId, { limite = 30 } = {}) {
+  const lotes = getDB().prepare('SELECT * FROM jade_pa_lotes WHERE empresa_id = ? AND fonte_id = ? ORDER BY id DESC LIMIT ?')
+    .all(Number(empresaId), fonteId, limite);
+  if (!lotes.length) return [];
+  const ids = lotes.map(l => l.id);
+  const eventos = getDB().prepare(`SELECT lote_id, execucao_id, situacao, resumo, momento FROM jade_pa_eventos
+    WHERE lote_id IN (${ids.map(() => '?').join(', ')}) ORDER BY id`).all(...ids);
+  const porLote = new Map(ids.map(id => [id, new Map()]));
+  for (const e of eventos) {
+    const chamados = porLote.get(e.lote_id);
+    const atual = chamados.get(e.execucao_id) || { execucaoId: e.execucao_id, situacao: 'info', registros: 0 };
+    if (_PESO[e.situacao] > _PESO[atual.situacao]) atual.situacao = e.situacao;
+    atual.registros++;
+    atual.ultimoRegistro = e.resumo;
+    atual.ultimoEm = e.momento;
+    chamados.set(e.execucao_id, atual);
+  }
+  return lotes.map((l) => {
+    let resumo = null;
+    try { resumo = l.resumo ? JSON.parse(l.resumo) : null; } catch (_) { resumo = null; }
+    const chamados = [...porLote.get(l.id).values()].map(c => ({ ...c, execucao: getExecucao(c.execucaoId) })).filter(c => c.execucao);
+    return { id: l.id, origem: l.origem, inicio: l.inicio, fim: l.fim, duracaoMs: l.duracao_ms, resumo, chamados };
+  });
+}
+
+/** Lote em andamento (trava do ciclo ainda válida), para o contador da tela. */
+function loteEmAndamento(empresaId, fonteId) {
+  const cfg = getConfig(empresaId, fonteId);
+  if (!cfg.cicloTravaAte || cfg.cicloTravaAte < new Date().toISOString()) return null;
+  const l = getDB().prepare('SELECT id, inicio, origem FROM jade_pa_lotes WHERE empresa_id = ? AND fonte_id = ? AND fim IS NULL ORDER BY id DESC LIMIT 1')
+    .get(Number(empresaId), fonteId);
+  return l ? { id: l.id, inicio: l.inicio, origem: l.origem } : { id: null, inicio: null, origem: null };
+}
+
+/** Chamados tratados antes dos lotes existirem (nenhum registro com lote). */
+function listarExecucoesSemLote(empresaId, fonteId, { limite = 100 } = {}) {
+  return getDB().prepare(`SELECT x.* FROM jade_pa_execucoes x WHERE x.empresa_id = ? AND x.fonte_id = ?
+      AND NOT EXISTS (SELECT 1 FROM jade_pa_eventos e WHERE e.execucao_id = x.id AND e.lote_id IS NOT NULL)
+    ORDER BY x.detectado_em DESC LIMIT ?`).all(Number(empresaId), fonteId, limite).map(_execucao);
 }
 
 function _execucao(row) {
@@ -119,10 +193,10 @@ function registrarDetectado(empresaId, fonteId, numeroChamado) {
 }
 
 /** Trilha de auditoria: uma linha por etapa/tentativa, na ordem em que aconteceu. */
-function registrarEvento(execucaoId, empresaId, { etapa, situacao, resumo, detalhes = null }) {
-  getDB().prepare(`INSERT INTO jade_pa_eventos (execucao_id, empresa_id, etapa, situacao, resumo, detalhes, momento)
-    VALUES (?, ?, ?, ?, ?, ?, ?)`).run(execucaoId, Number(empresaId), etapa, situacao, String(resumo),
-    detalhes ? JSON.stringify(detalhes) : null, new Date().toISOString());
+function registrarEvento(execucaoId, empresaId, { etapa, situacao, resumo, detalhes = null, loteId = null }) {
+  getDB().prepare(`INSERT INTO jade_pa_eventos (execucao_id, empresa_id, etapa, situacao, resumo, detalhes, momento, lote_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(execucaoId, Number(empresaId), etapa, situacao, String(resumo),
+    detalhes ? JSON.stringify(detalhes) : null, new Date().toISOString(), loteId);
 }
 
 function listarEventos(empresaId, execucaoId) {
@@ -130,7 +204,7 @@ function listarEventos(empresaId, execucaoId) {
     .map((r) => {
       let detalhes = null;
       try { detalhes = r.detalhes ? JSON.parse(r.detalhes) : null; } catch (_) { detalhes = null; }
-      return { id: r.id, etapa: r.etapa, situacao: r.situacao, resumo: r.resumo, detalhes, momento: r.momento };
+      return { id: r.id, etapa: r.etapa, situacao: r.situacao, resumo: r.resumo, detalhes, momento: r.momento, loteId: r.lote_id ?? null };
     });
 }
 
@@ -210,7 +284,7 @@ function listarExecucoes(empresaId, { limite = 100 } = {}) {
 }
 
 module.exports = {
-  PADRAO, getConfig, salvarConfig, listarConfigsAtivas, tentarTravarCiclo, renovarTrava, liberarCiclo,
+  PADRAO, getConfig, salvarConfig, listarConfigsAtivas, tentarTravarCiclo, renovarTrava, liberarCiclo, criarLote, finalizarLote, listarLotes, loteEmAndamento, listarExecucoesSemLote,
   registrarDetectado, registrarEvento, listarEventos, contarDetectadosDesde, listarParaGerar, marcarGerando, listarParaEnviar, contarTentativa, devolverTentativaGeracao,
   atualizar, getExecucao, listarExecucoes,
 };

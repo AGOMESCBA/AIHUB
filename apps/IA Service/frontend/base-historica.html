@@ -78,25 +78,50 @@
     .importacao-feedback { display:none; border:1px solid var(--border); border-radius:8px; background:var(--bg-base); padding:10px 12px; margin:0 0 12px; color:var(--text-md); font-size:12.5px; }
     .importacao-feedback strong { color:var(--text-hi); }
     .importacao-feedback .warn { color:var(--warning-text); font-weight:800; }
-    .jade-topo { display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; }
-    .jade-fonte-campo { flex:0 1 320px; }
-    .jade-estado { display:flex; gap:6px; padding-bottom:8px; }
-    .jade-topo-acoes { display:flex; gap:8px; margin-left:auto; }
+    /* Jade: barra de controle e grade agrupada (padrão Histórico de Acessos) */
+    .jade-barra { position:sticky; top:0; z-index:6; box-shadow:var(--shadow-sm); display:flex; justify-content:space-between; align-items:center; gap:10px 12px; flex-wrap:wrap; padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg-base); margin-bottom:12px; }
+    .jade-barra-esq, .jade-barra-dir { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .jade-barra-nome { font-size:15px; font-weight:800; color:var(--text-hi); margin-right:4px; }
+    .jade-parametros { margin-bottom:4px; }
+    .jade-param-rodape { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-top:12px; }
+    .jade-param-rodape code { word-break:break-all; }
+    .jade-grade-topo { display:flex; justify-content:space-between; align-items:center; gap:8px 12px; flex-wrap:wrap; padding:12px 16px; border-bottom:1px solid var(--border); }
+    .jade-grade-titulo { font-size:14px; font-weight:800; color:var(--text-hi); margin-bottom:3px; }
+    .jade-grade-dica { font-size:12px; color:var(--text-lo); }
+    .jade-grade-dica #jade-atualizado { margin-right:8px; transition:color .3s; }
+    .jade-grade-dica #jade-atualizado.flash { color:var(--accent); font-weight:700; }
+    .jade-timer { font-size:13px; font-weight:800; color:var(--text-hi); font-variant-numeric:tabular-nums; padding:4px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg-card); white-space:nowrap; }
+    .jade-timer.rodando { color:var(--accent); border-color:var(--accent); background:var(--accent-glow); }
+    .jade-timer.parado { color:var(--text-lo); font-weight:600; }
+    .jade-timer .pulso { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent); margin-right:6px; animation:jadePulso 1s ease-in-out infinite; }
+    @keyframes jadePulso { 50% { opacity:.25; } }
+    #btn-jade-atualizar.carregando .jade-giro { animation:jadeGiro .8s linear infinite; }
+    @keyframes jadeGiro { to { transform:rotate(360deg); } }
+    #jade-tbody tr.jade-lote td { background:var(--bg-base); color:var(--text-hi); font-weight:800; font-size:12px; padding:7px 10px; cursor:pointer; }
+    #jade-tbody tr.jade-lote:hover td { background:var(--bg-hover); }
+    #jade-tbody tr.jade-lote .group-resumo { font-weight:600; color:var(--text-md); margin-left:8px; }
+    #jade-tbody tr.jade-lote .warn { color:var(--warning-text); }
+    #jade-tbody tr.jade-filho td:first-child { padding-left:40px; }
+    .jade-toggle { width:22px; height:22px; border:1px solid var(--border); border-radius:5px; background:var(--bg-card); color:var(--text-hi); font-size:14px; font-weight:900; line-height:1; cursor:pointer; margin-right:8px; vertical-align:middle; }
+    .jade-toggle:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-glow); }
+    .jade-sit { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:middle; background:var(--border-hi); }
+    .jade-sit.ok { background:var(--success); } .jade-sit.aviso { background:var(--warning); } .jade-sit.erro { background:var(--error); } .jade-sit.info { background:var(--accent); }
     .jade-pill { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; padding:3px 10px; border-radius:20px; background:var(--bg-hover); color:var(--text-md); }
     .jade-pill.on { background:color-mix(in srgb, var(--success) 18%, transparent); color:var(--success-text); }
     .jade-pill.sim { background:color-mix(in srgb, var(--warning) 18%, transparent); color:var(--warning-text); }
     .jade-pill.pub { background:var(--accent-glow); color:var(--accent); }
-    .jade-intro { font-size:12.5px; color:var(--text-lo); margin:10px 0 14px; }
+    .jade-intro { font-size:12.5px; color:var(--text-lo); margin:0 0 10px; }
     .jade-grupos { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; }
     .jade-grupo { border:1px solid var(--border); border-radius:8px; background:var(--bg-base); padding:12px 14px; display:flex; flex-direction:column; gap:12px; }
     .jade-grupo h3 { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--accent); margin:0; }
     .jade-grupo .form-field { min-width:0; flex:none; }
-    .jade-id-fonte { margin-top:auto; word-break:break-all; }
-    .jade-rodape { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:14px; }
-    .jade-ciclo { font-size:12.5px; color:var(--text-md); display:flex; flex-wrap:wrap; gap:6px 14px; }
+    .jade-ciclo { font-size:12px; color:var(--text-lo); display:flex; flex-wrap:wrap; gap:4px 12px; }
     .jade-ciclo strong { color:var(--text-hi); }
     .jade-ciclo .warn { color:var(--warning-text); font-weight:800; }
-    @media (max-width:640px) { .jade-topo-acoes { margin-left:0; } .jade-rodape .btn { width:100%; } }
+    @media (max-width:640px) { .jade-barra-dir { width:100%; } .jade-param-rodape .btn { width:100%; } }
+    .jade-seta { display:block; transition:transform .15s; }
+    #tab-jade-pa.jade-recolhido .jade-seta { transform:rotate(180deg); }
+    #tab-jade-pa.jade-recolhido .jade-parametros { display:none; }
     #jade-tbody tr.jade-linha { cursor:pointer; }
     .jade-ultimo { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .jade-ultimo.erro { color:var(--error-text); }
@@ -166,6 +191,8 @@
     .jd-chips { display:flex; flex-wrap:wrap; gap:6px; }
     .jd-chip { font-size:11.5px; background:var(--bg-hover); border-radius:20px; padding:2px 10px; color:var(--text-md); }
     .jd-vazio { font-size:13px; color:var(--text-lo); padding:6px 0; }
+    .jd-tecnico { border:1px solid color-mix(in srgb, var(--error) 40%, var(--border)); background:color-mix(in srgb, var(--error) 6%, var(--bg-card)); border-radius:6px; padding:10px 12px; }
+    .jd-pilha { margin-top:8px; font-family:ui-monospace, Consolas, monospace; font-size:11.5px; white-space:pre-wrap; word-break:break-all; color:var(--text-lo); }
     @media (max-width:640px) {
       .jade-modal-fundo { padding:0; }
       .jade-modal { height:100%; border-radius:0; }
@@ -240,22 +267,33 @@
       </div>
 
       <div id="tab-jade-pa" class="tab-panel">
-        <div class="jade-topo">
-          <div class="form-field jade-fonte-campo"><label>Fonte SoftExpert</label><select id="jade-fonte" class="form-control" onchange="carregarJadePa()"></select></div>
-          <div class="jade-estado">
+        <section class="jade-barra" aria-label="Controle da Jade">
+          <div class="jade-barra-esq">
+            <span class="jade-barra-nome">Jade</span>
             <span id="jade-pill-ativo" class="jade-pill">—</span>
             <span id="jade-pill-modo" class="jade-pill">—</span>
+            <span id="jade-timer" class="jade-timer" title="Contagem até a próxima leitura (horário do servidor)">—</span>
           </div>
-          <div class="jade-topo-acoes">
-            <button class="btn btn-ghost btn-icon" type="button" id="btn-jade-executar" onclick="executarJadePa()">Executar agora</button>
-            <button class="btn btn-ghost btn-icon" type="button" onclick="carregarJadePa()">Atualizar</button>
+          <div class="jade-barra-dir">
+            <button class="btn btn-primary btn-icon" type="button" id="btn-jade-salvar" onclick="salvarJadePa()">Salvar</button>
+            <button class="btn btn-ghost btn-icon" type="button" id="btn-jade-atualizar" onclick="atualizarJadePa()">
+              <svg class="jade-giro" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><polyline points="21 3 21 8 16 8"/></svg>
+              <span id="jade-atualizar-rotulo">Atualizar</span>
+            </button>
+            <button class="btn btn-ghost btn-icon" type="button" id="btn-jade-executar" onclick="executarJadePa()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>
+              Executar agora
+            </button>
+            <button class="btn btn-ghost btn-icon" type="button" id="jade-params-toggle" onclick="alternarParametrosJade()" aria-expanded="true" aria-controls="jade-parametros">
+              <svg class="jade-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
+              <span id="jade-params-rotulo">Ocultar parâmetros</span>
+            </button>
           </div>
-        </div>
-        <p class="jade-intro">
-          A Jade analisa, uma única vez, cada chamado do Primeiro Atendimento sem responsável e sem posicionamento, e escreve o primeiro retorno ao cliente.
-        </p>
+        </section>
 
-        <div class="jade-grupos">
+        <section class="jade-parametros" id="jade-parametros" aria-label="Parâmetros da Jade">
+          <p class="jade-intro">A Jade analisa, uma única vez, cada chamado do Primeiro Atendimento sem responsável e sem posicionamento, e escreve o primeiro retorno ao cliente.</p>
+        <div class="jade-grupos" id="jade-grupos">
           <section class="jade-grupo">
             <h3>Funcionamento</h3>
             <div class="form-field">
@@ -299,6 +337,7 @@
 
           <section class="jade-grupo">
             <h3>Integração e teste</h3>
+            <div class="form-field"><label>Fonte SoftExpert</label><select id="jade-fonte" class="form-control" onchange="carregarJadePa()"></select></div>
             <div class="form-field">
               <label>Usuário da Jade no SoftExpert (CDUSER)</label>
               <input type="text" id="jade-usuario" class="form-control" inputmode="numeric" placeholder="ex.: 995">
@@ -308,25 +347,31 @@
               <input type="text" id="jade-somente" class="form-control" placeholder="vazio = todos · ex.: 037100, 037101">
               <div class="form-hint">Preenchido, a Jade só atua nesses chamados. Esvazie para liberar todos.</div>
             </div>
-            <div class="form-hint jade-id-fonte">ID da fonte: <code id="jade-fonte-id">—</code></div>
           </section>
         </div>
 
-        <div class="jade-rodape">
-          <div id="jade-ciclo" class="jade-ciclo"></div>
-          <button class="btn btn-primary" type="button" id="btn-jade-salvar" onclick="salvarJadePa()">Salvar configuração</button>
-        </div>
+          <div class="jade-param-rodape">
+            <span class="form-hint">ID da fonte: <code id="jade-fonte-id">—</code></span>
+          </div>
+        </section>
 
         <div class="table-card">
+          <div class="jade-grade-topo">
+            <div>
+              <div class="jade-grade-titulo">Chamados tratados pela Jade</div>
+              <div id="jade-ciclo" class="jade-ciclo"></div>
+            </div>
+            <div class="jade-grade-dica"><span id="jade-atualizado"></span> Clique num chamado para ver a auditoria</div>
+          </div>
           <div class="table-wrap">
             <table class="grid-table">
               <thead>
                 <tr>
                   <th style="width:90px">Chamado</th>
                   <th style="width:150px">Detectado em</th>
-                  <th style="width:140px">Estado</th>
+                  <th style="width:140px">Estado atual</th>
                   <th style="width:150px">Decisão</th>
-                  <th>Último registro</th>
+                  <th>Neste lote</th>
                   <th style="width:110px"></th>
                 </tr>
               </thead>
@@ -742,20 +787,100 @@
     carregarJadePa();
   }
 
-  async function carregarJadePa() {
+  let jadePainel = null;
+  let jadeDifRelogio = 0; // servidor - navegador (ms): o contador usa a hora do servidor
+  const jadeLotesAbertos = new Set();
+  let jadeLotesIniciados = false;
+
+  function _duracaoJade(ms) {
+    if (ms == null) return '—';
+    const seg = Math.max(0, Math.round(ms / 1000));
+    return seg < 60 ? `${seg} s` : `${Math.floor(seg / 60)} min ${String(seg % 60).padStart(2, '0')} s`;
+  }
+
+  function _mmss(ms) {
+    const seg = Math.max(0, Math.ceil(ms / 1000));
+    const h = Math.floor(seg / 3600);
+    const m = Math.floor((seg % 3600) / 60);
+    const r = String(seg % 60).padStart(2, '0');
+    return h ? `${h}:${String(m).padStart(2, '0')}:${r}` : `${String(m).padStart(2, '0')}:${r}`;
+  }
+
+  function _preencherFormularioJade(config) {
+    document.getElementById('jade-ativo').value = config.ativo ? '1' : '0';
+    document.getElementById('jade-modo').value = config.modo;
+    document.getElementById('jade-devolucao').value = config.devolucaoAtiva ? '1' : '0';
+    document.getElementById('jade-intervalo').value = config.intervaloMinutos;
+    document.getElementById('jade-limite').value = config.limiteDiario;
+    document.getElementById('jade-paralelo').value = config.processamentosSimultaneos;
+    document.getElementById('jade-usuario').value = config.usuarioSoftexpert || '';
+    document.getElementById('jade-somente').value = (config.somenteChamados || []).join(', ');
+  }
+
+  // Contador da barra: em execução (tempo do lote) ou tempo até a próxima leitura.
+  function atualizarTimerJade() {
+    const el = document.getElementById('jade-timer');
+    if (!jadePainel) { el.textContent = '—'; el.className = 'jade-timer parado'; return; }
+    const { config, loteEmAndamento } = jadePainel;
+    const agora = Date.now() + jadeDifRelogio;
+    if (loteEmAndamento) {
+      const desde = loteEmAndamento.inicio ? agora - Date.parse(loteEmAndamento.inicio) : 0;
+      el.className = 'jade-timer rodando';
+      el.innerHTML = `<span class="pulso"></span>Em execução${loteEmAndamento.id ? ` · Lote #${loteEmAndamento.id}` : ''} · ${_mmss(desde)}`;
+      return;
+    }
+    if (!config.ativo) { el.className = 'jade-timer parado'; el.textContent = 'Sem agenda (desligada)'; return; }
+    const proximo = config.proximoCicloEm ? Date.parse(config.proximoCicloEm)
+      : config.ultimoCicloEm ? Date.parse(config.ultimoCicloEm) + config.intervaloMinutos * 60000 : agora;
+    const falta = proximo - agora;
+    el.className = 'jade-timer';
+    el.textContent = falta > 0 ? `⏱ Próxima leitura em ${_mmss(falta)}` : '⏱ Iniciando a leitura…';
+  }
+
+  // Enquanto a aba está aberta: segundo a segundo no contador; consulta o
+  // servidor a cada 10 s durante uma leitura (ou quando o contador zera) e a
+  // cada 60 s no resto do tempo. Nunca mexe no formulário (edição em curso).
+  let jadeUltimaConsulta = 0;
+  setInterval(() => {
+    const aba = document.getElementById('tab-jade-pa');
+    if (!aba.classList.contains('active') || document.hidden) return;
+    atualizarTimerJade();
+    if (!jadePainel) return;
+    const { config, loteEmAndamento } = jadePainel;
+    const proximo = config.proximoCicloEm ? Date.parse(config.proximoCicloEm) : 0;
+    const urgente = loteEmAndamento || (config.ativo && proximo && proximo - (Date.now() + jadeDifRelogio) <= 0);
+    if (Date.now() - jadeUltimaConsulta >= (urgente ? 10000 : 60000)) carregarJadePa({ manterFormulario: true });
+  }, 1000);
+
+  async function atualizarJadePa() {
+    const btn = document.getElementById('btn-jade-atualizar');
+    const rotulo = document.getElementById('jade-atualizar-rotulo');
+    btn.disabled = true;
+    btn.classList.add('carregando');
+    rotulo.textContent = 'Atualizando…';
+    const inicio = Date.now();
+    try {
+      await carregarJadePa();
+    } finally {
+      // Tempo mínimo para o retorno ser visível mesmo quando a resposta é instantânea.
+      await new Promise(r => setTimeout(r, Math.max(0, 450 - (Date.now() - inicio))));
+      btn.disabled = false;
+      btn.classList.remove('carregando');
+      rotulo.textContent = 'Atualizar';
+    }
+  }
+
+  async function carregarJadePa({ manterFormulario = false } = {}) {
     const fonteId = document.getElementById('jade-fonte').value;
     const tbody = document.getElementById('jade-tbody');
-    if (!fonteId) { tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state">Cadastre uma fonte do SoftExpert.</div></td></tr>'; return; }
+    if (!fonteId) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">Cadastre uma fonte do SoftExpert.</div></td></tr>'; return; }
+    jadeUltimaConsulta = Date.now();
     try {
-      const { config, execucoes } = await api(`/api/ia-service/base-historica/fontes/${fonteId}/jade-pa?empresa_id=${empresaIdAtual()}`);
-      document.getElementById('jade-ativo').value = config.ativo ? '1' : '0';
-      document.getElementById('jade-modo').value = config.modo;
-      document.getElementById('jade-devolucao').value = config.devolucaoAtiva ? '1' : '0';
-      document.getElementById('jade-intervalo').value = config.intervaloMinutos;
-      document.getElementById('jade-limite').value = config.limiteDiario;
-      document.getElementById('jade-paralelo').value = config.processamentosSimultaneos;
-      document.getElementById('jade-usuario').value = config.usuarioSoftexpert || '';
-      document.getElementById('jade-somente').value = (config.somenteChamados || []).join(', ');
+      const painel = await api(`/api/ia-service/base-historica/fontes/${fonteId}/jade-pa?empresa_id=${empresaIdAtual()}`);
+      jadePainel = painel;
+      jadeDifRelogio = Date.parse(painel.agora) - Date.now();
+      const { config } = painel;
+      if (!manterFormulario) _preencherFormularioJade(config);
       const pillAtivo = document.getElementById('jade-pill-ativo');
       pillAtivo.textContent = config.ativo ? 'Ligada' : 'Desligada';
       pillAtivo.className = 'jade-pill' + (config.ativo ? ' on' : '');
@@ -763,39 +888,107 @@
       pillModo.textContent = config.modo === 'publicar' ? 'Publicando' : 'Simulação';
       pillModo.className = 'jade-pill ' + (config.modo === 'publicar' ? 'pub' : 'sim');
       document.getElementById('jade-fonte-id').textContent = fonteId;
-      const r = config.ultimoCicloResumo;
-      const itens = [];
-      if (config.ultimoCicloEm) {
-        itens.push(`<span>Última leitura <strong>${escapeHtml(formatarDataHora(config.ultimoCicloEm))}</strong></span>`);
-        if (r) {
-          itens.push(`<span><strong>${r.elegiveis ?? 0}</strong> elegível(is)</span>`);
-          itens.push(`<span><strong>${r.novos ?? 0}</strong> novo(s)</span>`);
-          itens.push(`<span><strong>${(r.processados || []).length}</strong> analisado(s)</span>`);
-          if (r.enviados) itens.push(`<span><strong>${r.enviados.length}</strong> enviado(s) ao SoftExpert</span>`);
-          if (r.duracaoMs != null) itens.push(`<span>Duração <strong>${Math.max(1, Math.round(r.duracaoMs / 60000))} min</strong></span>`);
-          if (r.encavalou) itens.push('<span class="warn">A leitura passou do intervalo: aumente o intervalo ou os chamados ao mesmo tempo</span>');
-          if (r.somenteChamados) itens.push(`<span class="warn">Só os chamados ${escapeHtml(r.somenteChamados.join(', '))}</span>`);
-          if (r.limiteAtingido) itens.push('<span class="warn">Limite diário atingido</span>');
-          if ((r.erros || []).length) itens.push(`<span class="warn">${escapeHtml(r.erros.join('; '))}</span>`);
-        }
-      } else {
-        itens.push(`<span>${config.ativo ? 'A primeira leitura acontece em instantes.' : 'Nenhuma leitura feita ainda.'}</span>`);
-      }
-      document.getElementById('jade-ciclo').innerHTML = itens.join('');
-      tbody.innerHTML = execucoes.length ? execucoes.map(e => `
-        <tr class="jade-linha" onclick="abrirAuditoriaJade('${escapeHtml(e.id)}')" title="Abrir a auditoria do chamado">
-          <td><strong>${escapeHtml(e.numeroChamado)}</strong></td>
-          <td>${escapeHtml(formatarDataHora(e.detectadoEm))}</td>
-          <td><span class="status-badge ${JADE_CLASSE[e.estado] || ''}">${escapeHtml(JADE_ESTADOS[e.estado] || e.estado)}</span>${e.alerta ? ' <span class="warn" title="Precisa da triagem">⚠</span>' : ''}</td>
-          <td>${e.decisao === 'devolver' ? 'Devolver ao cliente' : e.decisao === 'responder' ? 'Responder' : '—'}</td>
-          <td><div class="jade-ultimo ${e.ultimoErro ? 'erro' : ''}">${escapeHtml(e.ultimoErro || e.motivo || '—')}</div></td>
-          <td><button class="btn btn-ghost" type="button">Auditoria</button></td>
-        </tr>`).join('')
-        : '<tr><td colspan="6"><div class="empty-state">Nenhum chamado tratado pela Jade ainda.</div></td></tr>';
+      atualizarTimerJade();
+      _resumoUltimaLeituraJade(config);
+      _desenharLotesJade(painel);
+      const marca = document.getElementById('jade-atualizado');
+      marca.textContent = `Atualizado às ${new Date().toLocaleTimeString('pt-BR')} ·`;
+      marca.classList.add('flash');
+      setTimeout(() => marca.classList.remove('flash'), 900);
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">${escapeHtml(err.message)}</div></td></tr>`;
     }
   }
+
+  function _resumoUltimaLeituraJade(config) {
+    const r = config.ultimoCicloResumo;
+    const itens = [];
+    if (config.ultimoCicloEm) {
+      itens.push(`<span>Última leitura <strong>${escapeHtml(formatarDataHora(config.ultimoCicloEm))}</strong></span>`);
+      if (r) {
+        itens.push(`<span><strong>${r.elegiveis ?? 0}</strong> elegível(is)</span>`);
+        itens.push(`<span><strong>${r.novos ?? 0}</strong> novo(s)</span>`);
+        itens.push(`<span><strong>${(r.processados || []).length}</strong> analisado(s)</span>`);
+        if (r.enviados) itens.push(`<span><strong>${r.enviados.length}</strong> enviado(s)</span>`);
+        if (r.duracaoMs != null) itens.push(`<span>Duração <strong>${_duracaoJade(r.duracaoMs)}</strong></span>`);
+        if (r.encavalou) itens.push('<span class="warn">A leitura passou do intervalo: aumente o intervalo ou os chamados ao mesmo tempo</span>');
+        if (r.somenteChamados) itens.push(`<span class="warn">Só os chamados ${escapeHtml(r.somenteChamados.join(', '))}</span>`);
+        if (r.limiteAtingido) itens.push('<span class="warn">Limite diário atingido</span>');
+        if ((r.erros || []).length) itens.push(`<span class="warn">${escapeHtml(r.erros.join('; '))}</span>`);
+      }
+    } else {
+      itens.push(`<span>${config.ativo ? 'A primeira leitura acontece em instantes.' : 'Nenhuma leitura feita ainda.'}</span>`);
+    }
+    document.getElementById('jade-ciclo').innerHTML = itens.join('');
+  }
+
+  function _linhaChamadoJade(ex, neste) {
+    return `
+      <tr class="jade-linha jade-filho" onclick="abrirAuditoriaJade('${escapeHtml(ex.id)}')" title="Abrir a auditoria do chamado">
+        <td><strong>${escapeHtml(ex.numeroChamado)}</strong></td>
+        <td>${escapeHtml(formatarDataHora(ex.detectadoEm))}</td>
+        <td><span class="status-badge ${JADE_CLASSE[ex.estado] || ''}">${escapeHtml(JADE_ESTADOS[ex.estado] || ex.estado)}</span>${ex.alerta ? ' <span class="warn" title="Precisa da triagem">⚠</span>' : ''}</td>
+        <td>${ex.decisao === 'devolver' ? 'Devolver ao cliente' : ex.decisao === 'responder' ? 'Responder' : '—'}</td>
+        <td><div class="jade-ultimo ${neste.situacao === 'erro' ? 'erro' : ''}"><span class="jade-sit ${neste.situacao}"></span>${escapeHtml(neste.texto || '—')}</div></td>
+        <td><button class="btn btn-ghost" type="button">Auditoria</button></td>
+      </tr>`;
+  }
+
+  function alternarLoteJade(chave) {
+    if (jadeLotesAbertos.has(chave)) jadeLotesAbertos.delete(chave); else jadeLotesAbertos.add(chave);
+    if (jadePainel) _desenharLotesJade(jadePainel);
+  }
+
+  function _desenharLotesJade({ lotes, semLote }) {
+    const tbody = document.getElementById('jade-tbody');
+    // Primeira carga: o lote mais recente já vem aberto.
+    if (!jadeLotesIniciados && lotes.length) { jadeLotesAbertos.add(`l${lotes[0].id}`); jadeLotesIniciados = true; }
+    let html = '';
+    for (const lote of lotes) {
+      const chave = `l${lote.id}`;
+      const aberto = jadeLotesAbertos.has(chave);
+      const r = lote.resumo || {};
+      const comErro = lote.chamados.filter(c => c.situacao === 'erro').length;
+      const partes = [
+        lote.fim ? _duracaoJade(lote.duracaoMs) : 'em execução',
+        lote.origem === 'manual' ? 'Executar agora' : 'Agendado',
+        `${lote.chamados.length} chamado(s)`,
+        r.novos ? `${r.novos} novo(s)` : null,
+        r.enviados?.length ? `${r.enviados.length} enviado(s)` : null,
+      ].filter(Boolean);
+      const alertas = [
+        comErro ? `${comErro} com erro` : null,
+        (r.erros || []).length ? `erro na leitura: ${r.erros.join('; ')}` : null,
+      ].filter(Boolean);
+      html += `<tr class="jade-lote" onclick="alternarLoteJade('${chave}')">
+        <td colspan="6"><button type="button" class="jade-toggle" aria-expanded="${aberto}">${aberto ? '−' : '+'}</button>Lote #${lote.id} · ${escapeHtml(formatarDataHora(lote.inicio))}
+          <span class="group-resumo">${escapeHtml(partes.join(' · '))}</span>${alertas.length ? ` <span class="group-resumo warn">· ${escapeHtml(alertas.join(' · '))}</span>` : ''}</td></tr>`;
+      if (aberto) {
+        html += lote.chamados.length
+          ? lote.chamados.map(c => _linhaChamadoJade(c.execucao, { situacao: c.situacao, texto: c.ultimoRegistro })).join('')
+          : '<tr class="jade-filho"><td colspan="6"><div class="empty-state">Nenhum chamado neste lote.</div></td></tr>';
+      }
+    }
+    if (semLote.length) {
+      const aberto = jadeLotesAbertos.has('sem-lote');
+      html += `<tr class="jade-lote" onclick="alternarLoteJade('sem-lote')">
+        <td colspan="6"><button type="button" class="jade-toggle" aria-expanded="${aberto}">${aberto ? '−' : '+'}</button>Antes do agrupamento por lote
+          <span class="group-resumo">${semLote.length} chamado(s)</span></td></tr>`;
+      if (aberto) html += semLote.map(ex => _linhaChamadoJade(ex, { situacao: ex.ultimoErro ? 'erro' : 'info', texto: ex.ultimoErro || ex.motivo })).join('');
+    }
+    tbody.innerHTML = html || '<tr><td colspan="6"><div class="empty-state">Nenhum chamado tratado pela Jade ainda.</div></td></tr>';
+  }
+
+  // Parâmetros recolhíveis; a escolha fica neste navegador.
+  function alternarParametrosJade(recolher) {
+    const aba = document.getElementById('tab-jade-pa');
+    const recolhido = typeof recolher === 'boolean' ? recolher : !aba.classList.contains('jade-recolhido');
+    aba.classList.toggle('jade-recolhido', recolhido);
+    document.getElementById('jade-params-toggle').setAttribute('aria-expanded', String(!recolhido));
+    document.getElementById('jade-params-rotulo').textContent = recolhido ? 'Mostrar parâmetros' : 'Ocultar parâmetros';
+    try { localStorage.setItem('jade-pa-parametros-recolhidos', recolhido ? '1' : '0'); } catch (_) { /* só conveniência */ }
+  }
+  try { if (localStorage.getItem('jade-pa-parametros-recolhidos') === '1') alternarParametrosJade(true); } catch (_) { /* só conveniência */ }
 
   // ── Auditoria: fluxo do chamado (padrão workflow) ──────────────────────────
   const JADE_ETAPAS = [
@@ -806,6 +999,7 @@
     { id: 'retorno', rotulo: 'Retorno ao cliente', desc: 'Texto escrito para o cliente, a decisão (responder ou devolver) e as versões recusadas pela verificação.' },
     { id: 'envio', rotulo: 'Gravação no SoftExpert', desc: 'Posicionamento gravado na grade do chamado: campos enviados e resposta do SoftExpert.' },
     { id: 'devolucao', rotulo: 'Devolução ao cliente', desc: 'Movimentação do chamado para o cliente (ATV-02, ação 1 → Retorno do Usuário).' },
+    { id: 'situacao', rotulo: 'Atividade no SoftExpert', desc: 'Conferência final no SoftExpert: em que atividade o chamado ficou depois da Jade (respondido segue no Primeiro Atendimento; devolvido avança para o Retorno do Usuário).' },
   ];
   const JADE_ICONE = { ok: '✓', aviso: '!', erro: '✕', info: 'i', pendente: '' };
   const JADE_SITUACAO = { ok: 'Concluída', aviso: 'Com aviso', erro: 'Com erro', info: 'Informativa', pendente: 'Não executada' };
@@ -818,6 +1012,9 @@
   const JADE_ROTULOS = {
     titulo: 'Título', assunto: 'Assunto', modulo: 'Módulo', tipo: 'Tipo', decisao: 'Decisão', motivo: 'Motivo', modelo: 'Modelo de IA',
     usuario: 'Usuário no SoftExpert', atividade: 'Atividade', acao: 'Ação', destino: 'Destino',
+    atividadeAtual: 'Atividade atual', atividadeEsperada: 'Atividade esperada', posicionamentoJade: 'Posicionamento da Jade', responsavel: 'Responsável',
+    mensagem: 'Mensagem', tipo: 'Tipo', etapa: 'Etapa', operacao: 'Operação', code: 'Código', status: 'Status',
+    codigoTransporte: 'Código de transporte', resultadoIndeterminado: 'Resultado indeterminado',
     Status: 'Status', Code: 'Código', Detail: 'Detalhe', RecordID: 'Registro', RecordKey: 'Chave', httpStatus: 'HTTP',
   };
   let jadeAuditoria = null;
@@ -931,8 +1128,13 @@
     const usados = new Set();
     const pegar = (k) => { usados.add(k); return d[k]; };
     let html = '';
-    html += _kv(['titulo', 'assunto', 'modulo', 'tipo', 'decisao', 'motivo', 'modelo', 'usuario', 'atividade', 'acao', 'destino']
-      .map(k => [JADE_ROTULOS[k], pegar(k)]));
+    html += _kv(['titulo', 'assunto', 'modulo', 'tipo', 'decisao', 'motivo', 'modelo', 'usuario', 'atividade', 'acao', 'destino',
+      'atividadeAtual', 'atividadeEsperada', 'posicionamentoJade', 'responsavel'].map(k => [JADE_ROTULOS[k], pegar(k)]));
+    if (pegar('erroTecnico')) {
+      const { pilha, ...resto } = d.erroTecnico;
+      html += _bloco('Detalhe técnico do erro', `<div class="jd-tecnico">${_kv(Object.entries(resto).map(([k, v]) => [JADE_ROTULOS[k] || k, v]))}
+        ${pilha ? `<div class="jd-pilha">${escapeHtml(pilha)}</div>` : ''}</div>`);
+    }
     if (pegar('recusas')) html += _bloco('Versões recusadas pela verificação', `<ul class="jd-lista">${d.recusas.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>`);
     if (pegar('arquivos')) html += _bloco('Arquivos', `<div class="jd-chips">${d.arquivos.map(a => `<span class="jd-chip">${escapeHtml(a)}</span>`).join('')}</div>`);
     if (pegar('descricao')) html += _bloco('Descrição do cliente', `<div class="jd-texto">${escapeHtml(d.descricao)}</div>`);
@@ -967,7 +1169,7 @@
     } else {
       html += evs.map(e => `
         <div class="jd-evento ${e.situacao}">
-          <div class="jd-cab"><span class="jd-hora">${escapeHtml(formatarDataHora(e.momento))}</span><span class="jd-resumo">${escapeHtml(e.resumo)}</span></div>
+          <div class="jd-cab"><span class="jd-hora">${escapeHtml(formatarDataHora(e.momento))}</span>${e.loteId ? `<span class="jd-chip">Lote #${e.loteId}</span>` : ''}<span class="jd-resumo">${escapeHtml(e.resumo)}</span></div>
           ${_detalhesJade(e.detalhes)}
         </div>`).join('');
     }
@@ -1009,7 +1211,7 @@
     try {
       await api(`/api/ia-service/base-historica/fontes/${fonteId}/jade-pa/executar?empresa_id=${empresaIdAtual()}`, { method: 'POST' });
       showInfo('Leitura iniciada. A análise de cada chamado leva alguns minutos; use "Atualizar tela" para acompanhar.');
-      setTimeout(carregarJadePa, 3000);
+      setTimeout(() => carregarJadePa({ manterFormulario: true }), 1500);
     } catch (err) {
       showError(err.message);
     }

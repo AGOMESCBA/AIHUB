@@ -731,10 +731,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
   // ── Jade no Primeiro Atendimento (configuração por fonte) ────────────────
   app.get('/api/ia-service/base-historica/fontes/:id/jade-pa', (req, res) => {
     try {
-      res.json({
-        config: jadePaService.getConfig(req.svcEmpresaId, req.params.id),
-        execucoes: jadePaService.listarExecucoes(req.svcEmpresaId, { limite: req.query.limite }),
-      });
+      res.json(jadePaService.getPainel(req.svcEmpresaId, req.params.id));
     } catch (err) {
       _handleErro(res, err);
     }

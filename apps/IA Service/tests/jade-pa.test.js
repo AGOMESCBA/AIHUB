@@ -187,6 +187,44 @@ test('intervalo e trava entre processos', async () => {
   assert.throws(() => jade.executarAgora(EMPRESA, fonte.id), { status: 409 });
 });
 
+test('lotes: leitura que tratou chamado vira lote numerado; leitura vazia não é gravada', async () => {
+  await ligar();
+  chamadoNaOrigem('037150');
+  respostasIA = [RESPOSTA_OK];
+  const resumo = await jade.executarCiclo(EMPRESA, fonte.id);
+  assert.ok(resumo.loteId);
+  assert.equal(resumo.origem, 'agendado');
+  assert.equal(resumo.loteGravado, true);
+  const painel = jade.getPainel(EMPRESA, fonte.id);
+  const lote = painel.lotes.find(l => l.id === resumo.loteId);
+  assert.ok(lote.fim);
+  assert.equal(lote.chamados.length, 1);
+  assert.equal(lote.chamados[0].execucao.numeroChamado, '037150');
+  assert.equal(lote.chamados[0].situacao, 'ok');
+  assert.ok(jade.getAuditoria(EMPRESA, fonte.id, lote.chamados[0].execucaoId).eventos.every(e => e.loteId === resumo.loteId));
+  assert.equal(painel.loteEmAndamento, null);
+
+  const vazio = await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  assert.equal(vazio.origem, 'manual');
+  assert.equal(vazio.loteGravado, false);
+  assert.ok(!jade.getPainel(EMPRESA, fonte.id).lotes.some(l => l.id === vazio.loteId));
+});
+
+test('contador: ligar agenda para já; após a leitura agenda +intervalo; mudar o intervalo recomeça a contagem', async () => {
+  const antes = Date.now();
+  const ligada = await ligar({ intervaloMinutos: 5 });
+  assert.ok(Date.parse(ligada.proximoCicloEm) <= Date.now());
+  await jade.executarCiclo(EMPRESA, fonte.id);
+  const depois = jade.getConfig(EMPRESA, fonte.id);
+  assert.ok(Date.parse(depois.proximoCicloEm) >= antes + 5 * 60000 - 1000);
+  assert.equal(await jade.executarCiclo(EMPRESA, fonte.id), null);
+  const mudou = await jade.salvarConfig(EMPRESA, fonte.id, { intervaloMinutos: 10 });
+  const esperado = Date.now() + 10 * 60000;
+  assert.ok(Math.abs(Date.parse(mudou.proximoCicloEm) - esperado) < 2000);
+  const igual = await jade.salvarConfig(EMPRESA, fonte.id, { limiteDiario: 50 });
+  assert.equal(igual.proximoCicloEm, mudou.proximoCicloEm);
+});
+
 test('limite diário', async () => {
   await ligar({ limiteDiario: 1 });
   chamadoNaOrigem('037200');
@@ -309,6 +347,9 @@ test('publicar: grava na grade como Jade, com a marca IA SERVICE, zero horas e o
   assert.match(xml, /<urn:EntityAttributeID>horaini<\/urn:EntityAttributeID><urn:EntityAttributeValue>\d\d:(00|30)</);
   assert.ok(xml.includes('Olá &quot;cliente&quot;.'));
   assert.ok(!xml.includes('motivoapontamen'));
+  const situacao = jade.getAuditoria(EMPRESA, fonte.id, exec.id).eventos.find(e => e.etapa === 'situacao');
+  assert.equal(situacao.situacao, 'ok');
+  assert.match(situacao.resumo, /segue em ATV-02 Primeiro Atendimento, aguardando a triagem/);
 });
 
 test('envio não confirmado que entrou no SoftExpert: o próximo ciclo reconhece e nunca duplica', async () => {
@@ -372,7 +413,7 @@ test('auditoria: fluxo completo registra cada etapa e o que foi gravado, sem tok
   const exec = execs()[0];
   const { execucao, eventos } = jade.getAuditoria(EMPRESA, fonte.id, exec.id);
   assert.equal(execucao.numeroChamado, '038150');
-  for (const etapa of ['deteccao', 'importacao', 'anexos', 'analise', 'retorno', 'envio', 'devolucao']) {
+  for (const etapa of ['deteccao', 'importacao', 'anexos', 'analise', 'retorno', 'envio', 'devolucao', 'situacao']) {
     assert.ok(eventos.some(e => e.etapa === etapa && e.situacao === 'ok'), `etapa ${etapa} concluída`);
   }
   const envio = eventos.find(e => e.etapa === 'envio' && e.situacao === 'ok');
@@ -380,6 +421,9 @@ test('auditoria: fluxo completo registra cada etapa e o que foi gravado, sem tok
   assert.equal(envio.detalhes.resposta.Status, 'SUCCESS');
   assert.ok(eventos.find(e => e.etapa === 'retorno').detalhes.texto);
   assert.match(eventos.find(e => e.etapa === 'devolucao' && e.situacao === 'ok').detalhes.acao, /Retornar para cliente/);
+  const situacao = eventos.find(e => e.etapa === 'situacao');
+  assert.match(situacao.resumo, /Avançou no SoftExpert: chamado em ATV-06 Retorno do Usuário/);
+  assert.match(situacao.detalhes.posicionamentoJade, /encontrado na grade/);
   assert.ok(!JSON.stringify(eventos).match(/token|Bearer|soapenv/i));
   assert.throws(() => jade.getAuditoria(EMPRESA + 1, fonte.id, exec.id));
 });
@@ -398,9 +442,13 @@ test('auditoria: recusa do SoftExpert e falha da IA ficam como erro na etapa cer
   assert.equal(recusado.situacao, 'erro');
   assert.match(recusado.resumo, /Tentativa 1\/3: o SoftExpert recusou/);
   assert.ok(recusado.detalhes.campos);
+  assert.equal(recusado.detalhes.erroTecnico.operacao, 'newChildEntityRecord');
   const semIa = jade.getAuditoria(EMPRESA, fonte.id, porNumero['038161'].id).eventos.find(e => e.etapa === 'retorno');
   assert.equal(semIa.situacao, 'erro');
   assert.match(semIa.resumo, /IA sem resposta programada/);
+  assert.equal(semIa.detalhes.erroTecnico.mensagem, 'IA sem resposta programada');
+  assert.equal(semIa.detalhes.erroTecnico.etapa, 'retorno');
+  assert.ok(semIa.detalhes.erroTecnico.pilha);
 });
 
 test('devolver: triagem atuou depois do posicionamento → devolução cancelada', async () => {

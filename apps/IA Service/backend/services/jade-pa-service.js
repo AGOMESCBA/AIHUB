@@ -9,6 +9,7 @@
 //   3. escreve o texto ao cliente a partir dela e decide entre responder ou
 //      devolver ao cliente (só quando não há o que pesquisar).
 // Fase 1: nada é enviado ao SoftExpert — o resultado fica em "simulado".
+const { AsyncLocalStorage } = require('async_hooks');
 const repo = require('../repositories/jade-pa-repository');
 const agenteRepo = require('../repositories/agente-local-repository');
 const agenteLocalService = require('./agente-local-service');
@@ -25,7 +26,8 @@ const retornoConfig = require('./retorno-softexpert-config');
 const soapClient = require('./softexpert-soap-client');
 const clienteRepo = require('../repositories/cliente-repository');
 
-const TICK_MS = 60 * 1000;
+// Curto para a leitura começar perto da hora do contador da tela (a consulta é só ao banco local).
+const TICK_MS = 15 * 1000;
 const PRIMEIRA_EXECUCAO_MS = 90 * 1000;
 // O ciclo trata todos os elegíveis (pedido do usuário, 2026-11-19) e renova a
 // trava a cada chamado; trava vencida (sem renovação há 20 min) é de um processo
@@ -289,12 +291,26 @@ async function gerarTextoCliente(empresaId, dados) {
 
 // Trilha de auditoria (tela "fluxo" do chamado). Falha ao registrar nunca
 // interrompe o trabalho da Jade.
+// Lote da leitura em curso: chega a cada registro sem passar por todas as funções.
+const _loteAtual = new AsyncLocalStorage();
+
 function _evento(exec, etapa, situacao, resumo, detalhes = null) {
   try {
-    repo.registrarEvento(exec.id, exec.empresaId, { etapa, situacao, resumo, detalhes });
+    repo.registrarEvento(exec.id, exec.empresaId, { etapa, situacao, resumo, detalhes, loteId: _loteAtual.getStore()?.loteId ?? null });
   } catch (err) {
     console.error(`[IA Service] Jade PA: auditoria do chamado ${exec.numeroChamado || exec.id}:`, err.message);
   }
+}
+
+// Erro como veio, para o ajuste técnico pela tela (mensagem, códigos e o
+// início da pilha). Não carrega credencial: os erros do transporte SOAP não
+// incluem cabeçalhos nem envelope.
+function _erroTecnico(err, extra = {}) {
+  if (!err) return undefined;
+  const t = { mensagem: err.message, tipo: err.name !== 'Error' ? err.name : undefined, ...extra };
+  for (const k of ['code', 'status', 'httpStatus', 'codigoTransporte', 'resultadoIndeterminado']) if (err[k] !== undefined) t[k] = err[k];
+  if (err.stack) t.pilha = String(err.stack).split('\n').slice(1, 6).map(l => l.trim()).join('\n');
+  return t;
 }
 
 // Só o que interessa da resposta do SoftExpert (nunca o envelope).
@@ -370,7 +386,7 @@ async function processarExecucao(cfg, fonte, exec) {
     }
     const esgotou = tentativa >= MAX_TENTATIVAS;
     _evento(exec, etapa, 'erro', `${rotuloTentativa} falhou: ${err.message}${esgotou ? ' — tentativas esgotadas, chamado deixado para a triagem.' : ' — nova tentativa no próximo ciclo.'}`,
-      err.recusas?.length ? { recusas: err.recusas } : null);
+      { recusas: err.recusas?.length ? err.recusas : undefined, erroTecnico: _erroTecnico(err, { etapa }) });
     console.error(`[IA Service] Jade PA: chamado ${exec.numeroChamado}, tentativa ${tentativa}:`, err.message);
     return repo.atualizar(exec.id, { estado: esgotou ? 'falha' : 'detectado', ultimoErro: err.message, alerta: esgotou });
   }
@@ -484,11 +500,12 @@ async function _publicar(cfg, fonte, exec) {
     resposta = await soapClient.enviarOperacao({ ...config.transporte, xml, operacao: 'newChildEntityRecord' });
   } catch (err) {
     _evento(exec, 'envio', 'erro', `${tentativaEnvio}: o SoftExpert não confirmou a gravação (${err.message}). Será conferido no próximo ciclo antes de qualquer reenvio.`,
-      { ...gravado, resposta: _respostaSe({ httpStatus: err.httpStatus, Detail: err.codigoTransporte }) });
+      { ...gravado, resposta: _respostaSe({ httpStatus: err.httpStatus, Detail: err.codigoTransporte }), erroTecnico: _erroTecnico(err, { operacao: 'newChildEntityRecord' }) });
     return repo.atualizar(exec.id, { ultimoErro: 'Envio do posicionamento não confirmado; será conferido no próximo ciclo antes de qualquer reenvio.' });
   }
   if (resposta.Status !== 'SUCCESS' || resposta.Code !== '1') {
-    _evento(exec, 'envio', 'erro', `${tentativaEnvio}: o SoftExpert recusou o posicionamento — ${resposta.Detail || resposta.Code}`, { ...gravado, resposta: _respostaSe(resposta) });
+    _evento(exec, 'envio', 'erro', `${tentativaEnvio}: o SoftExpert recusou o posicionamento — ${resposta.Detail || resposta.Code}`,
+      { ...gravado, resposta: _respostaSe(resposta), erroTecnico: { mensagem: resposta.Detail || 'Recusa sem detalhe', operacao: 'newChildEntityRecord', status: resposta.Status, code: resposta.Code } });
     return repo.atualizar(exec.id, { ultimoErro: `O SoftExpert recusou o posicionamento: ${resposta.Detail || resposta.Code}` });
   }
   _evento(exec, 'envio', 'ok', 'Posicionamento gravado na grade do chamado no SoftExpert', { ...gravado, resposta: _respostaSe(resposta) });
@@ -527,11 +544,12 @@ async function _devolver(cfg, fonte, exec) {
     resposta = await soapClient.enviarOperacao({ ...config.transporte, xml, operacao: 'executeActivity' });
   } catch (err) {
     _evento(exec, 'devolucao', 'erro', `${tentativaDev}: o SoftExpert não confirmou a devolução (${err.message}). Será conferida no próximo ciclo.`,
-      { ...movimento, resposta: _respostaSe({ httpStatus: err.httpStatus, Detail: err.codigoTransporte }) });
+      { ...movimento, resposta: _respostaSe({ httpStatus: err.httpStatus, Detail: err.codigoTransporte }), erroTecnico: _erroTecnico(err, { operacao: 'executeActivity' }) });
     return repo.atualizar(exec.id, { ultimoErro: 'Devolução não confirmada; será conferida no próximo ciclo antes de qualquer nova tentativa.' });
   }
   if (resposta.Status !== 'SUCCESS' || resposta.Code !== '1') {
-    _evento(exec, 'devolucao', 'erro', `${tentativaDev}: o SoftExpert recusou a devolução — ${resposta.Detail || resposta.Code}`, { ...movimento, resposta: _respostaSe(resposta) });
+    _evento(exec, 'devolucao', 'erro', `${tentativaDev}: o SoftExpert recusou a devolução — ${resposta.Detail || resposta.Code}`,
+      { ...movimento, resposta: _respostaSe(resposta), erroTecnico: { mensagem: resposta.Detail || 'Recusa sem detalhe', operacao: 'executeActivity', status: resposta.Status, code: resposta.Code } });
     return repo.atualizar(exec.id, { ultimoErro: `O SoftExpert recusou a devolução: ${resposta.Detail || resposta.Code}` });
   }
   const depois = await situacaoNaOrigem(empresaId, fonte.id, exec.numeroChamado);
@@ -544,15 +562,47 @@ async function _devolver(cfg, fonte, exec) {
   return repo.atualizar(exec.id, { estado: 'publicado', alerta: true, ultimoErro });
 }
 
+const NOMES_ATIVIDADE = { 'ATV-02': 'Primeiro Atendimento', [ATIVIDADE_CLIENTE]: 'Retorno do Usuário' };
+
+/**
+ * Última atividade do fluxo de auditoria: onde o chamado ficou no SoftExpert
+ * depois da Jade. Respondido = segue no Primeiro Atendimento para a triagem;
+ * devolvido = avançou para o Retorno do Usuário. Só registra, nunca falha.
+ */
+async function _registrarSituacaoFinal(cfg, fonte, exec) {
+  try {
+    const s = await situacaoNaOrigem(cfg.empresaId, fonte.id, exec.numeroChamado);
+    if (!s) return _evento(exec, 'situacao', 'erro', 'O chamado não foi encontrado no SoftExpert na conferência final.');
+    const ativas = [...s.ativas];
+    const esperada = exec.estado === 'devolvido' ? ATIVIDADE_CLIENTE : 'ATV-02';
+    const nome = (id) => `${id}${NOMES_ATIVIDADE[id] ? ` ${NOMES_ATIVIDADE[id]}` : ''}`;
+    const onde = ativas.length ? ativas.map(nome).join(', ') : (s.aberto ? 'nenhuma atividade ativa' : 'chamado encerrado');
+    const chegou = s.ativas.has(esperada);
+    _evento(exec, 'situacao', chegou ? 'ok' : exec.estado === 'devolvido' ? 'erro' : 'aviso',
+      chegou
+        ? (exec.estado === 'devolvido' ? `Avançou no SoftExpert: chamado em ${nome(esperada)}, aguardando o cliente.` : `Chamado segue em ${nome(esperada)}, aguardando a triagem.`)
+        : `Chamado está em ${onde}; o esperado era ${nome(esperada)}.`,
+      {
+        atividadeAtual: onde, atividadeEsperada: nome(esperada),
+        posicionamentoJade: s.posicionamentosJade > 0 ? `encontrado na grade (${s.posicionamentosJade})` : 'não encontrado na grade',
+        responsavel: s.comResponsavel ? 'definido' : 'sem responsável',
+      });
+  } catch (err) {
+    _evento(exec, 'situacao', 'erro', `Não foi possível conferir a atividade atual no SoftExpert: ${err.message}`, { erroTecnico: _erroTecnico(err, { operacao: 'consulta SQL (Agente Local)' }) });
+  }
+}
+
 async function enviarExecucao(cfg, fonte, exec) {
   try {
     const atual = exec.estado === 'devolvendo' ? exec : await _publicar(cfg, fonte, exec);
-    return atual?.estado === 'devolvendo' ? await _devolver(cfg, fonte, repo.getExecucao(exec.id)) : atual;
+    const final = atual?.estado === 'devolvendo' ? await _devolver(cfg, fonte, repo.getExecucao(exec.id)) : atual;
+    if (final && ['publicado', 'devolvido'].includes(final.estado)) await _registrarSituacaoFinal(cfg, fonte, final);
+    return final;
   } catch (err) {
     // Falha antes de falar com o SoftExpert (consulta, usuário, contrato): não conta tentativa, mas avisa.
     console.error(`[IA Service] Jade PA: envio do chamado ${exec.numeroChamado}:`, err.message);
     _evento(exec, repo.getExecucao(exec.id)?.estado === 'devolvendo' ? 'devolucao' : 'envio', 'erro',
-      `Não foi possível falar com o SoftExpert: ${err.message} (não conta como tentativa).`);
+      `Não foi possível falar com o SoftExpert: ${err.message} (não conta como tentativa).`, { erroTecnico: _erroTecnico(err) });
     return repo.atualizar(exec.id, { ultimoErro: err.message, alerta: true });
   }
 }
@@ -566,8 +616,14 @@ async function _emParalelo(itens, limite, fn) {
   await Promise.all(Array.from({ length: Math.min(Math.max(1, limite), itens.length) }, trabalhador));
 }
 
-async function _rodarCiclo(empresaId, fonteId) {
-  const resumo = { inicio: new Date().toISOString(), elegiveis: 0, novos: 0, limiteAtingido: false, processados: [], erros: [] };
+async function _rodarCiclo(empresaId, fonteId, origem = 'agendado') {
+  let loteId = null;
+  try { loteId = repo.criarLote(empresaId, fonteId, origem); } catch (err) { console.error('[IA Service] Jade PA: lote não criado:', err.message); }
+  return _loteAtual.run({ loteId }, () => _executarLote(empresaId, fonteId, loteId, origem));
+}
+
+async function _executarLote(empresaId, fonteId, loteId, origem) {
+  const resumo = { loteId, origem, inicio: new Date().toISOString(), elegiveis: 0, novos: 0, limiteAtingido: false, processados: [], erros: [] };
   try {
     const cfg = repo.getConfig(empresaId, fonteId);
     const fonte = agenteRepo.getFonte(empresaId, fonteId);
@@ -629,6 +685,9 @@ async function _rodarCiclo(empresaId, fonteId) {
     resumo.duracaoMs = Date.parse(resumo.fim) - Date.parse(resumo.inicio);
     // Leitura mais longa que o intervalo: a próxima já está atrasada (aviso na tela).
     try { resumo.encavalou = resumo.duracaoMs > repo.getConfig(empresaId, fonteId).intervaloMinutos * 60000; } catch { /* aviso apenas */ }
+    if (loteId) {
+      try { resumo.loteGravado = repo.finalizarLote(loteId, resumo); } catch (err) { console.error('[IA Service] Jade PA: lote não finalizado:', err.message); }
+    }
     repo.liberarCiclo(empresaId, fonteId, resumo);
   }
   return resumo;
@@ -637,7 +696,7 @@ async function _rodarCiclo(empresaId, fonteId) {
 /** Roda o ciclo se o intervalo já passou e nenhum outro processo está rodando. */
 async function executarCiclo(empresaId, fonteId, { forcar = false } = {}) {
   if (!repo.tentarTravarCiclo(empresaId, fonteId, { travaMs: TRAVA_MS, forcar })) return null;
-  return _rodarCiclo(empresaId, fonteId);
+  return _rodarCiclo(empresaId, fonteId, forcar ? 'manual' : 'agendado');
 }
 
 /** Botão "Executar agora": não espera o ciclo terminar. */
@@ -645,7 +704,7 @@ function executarAgora(empresaId, fonteId) {
   const cfg = repo.getConfig(empresaId, fonteId);
   if (!cfg.ativo) throw _erro(409, 'Ligue a Jade no Primeiro Atendimento antes de executar.');
   if (!repo.tentarTravarCiclo(empresaId, fonteId, { travaMs: TRAVA_MS, forcar: true })) throw _erro(409, 'Já existe um ciclo em andamento.');
-  _rodarCiclo(empresaId, fonteId).catch(() => {});
+  _rodarCiclo(empresaId, fonteId, 'manual').catch(() => {});
   return { iniciado: true };
 }
 
@@ -680,6 +739,18 @@ async function salvarConfig(empresaId, fonteId, dados = {}) {
 
 function listarExecucoes(empresaId, opts) {
   return repo.listarExecucoes(empresaId, opts);
+}
+
+/** Tela: configuração, contador (horário do servidor), lote em andamento e lotes com seus chamados. */
+function getPainel(empresaId, fonteId) {
+  _fonteSoftExpert(empresaId, fonteId);
+  return {
+    config: repo.getConfig(empresaId, fonteId),
+    agora: new Date().toISOString(),
+    loteEmAndamento: repo.loteEmAndamento(empresaId, fonteId),
+    lotes: repo.listarLotes(empresaId, fonteId),
+    semLote: repo.listarExecucoesSemLote(empresaId, fonteId),
+  };
 }
 
 /** Execução + trilha de auditoria (fluxo do chamado na tela). */
@@ -717,5 +788,5 @@ function iniciarAgendamento() {
 module.exports = {
   iniciarAgendamento, executarCiclo, executarAgora, processarExecucao, gerarTextoCliente, verificarVazamento,
   normalizarTextoSoftExpert, montarAtributosPosicionamento, enviarExecucao, situacaoNaOrigem, nomesDeOutrosClientes,
-  listarElegiveisNaOrigem, getConfig, salvarConfig, listarExecucoes, getAuditoria, SQL_ELEGIVEIS, MAX_TENTATIVAS,
+  listarElegiveisNaOrigem, getConfig, salvarConfig, listarExecucoes, getAuditoria, getPainel, SQL_ELEGIVEIS, MAX_TENTATIVAS,
 };
