@@ -582,6 +582,9 @@
     analiseLogs?.reset();
     state.risk = { consultores: [], chamados: [] };
     state.selected = null;
+    state.retornoBase = null;
+    state.relatedById = new Map();
+    $('voltar-chamado-base').hidden = true;
     state.atendimentoId = null;
     state.messages = [];
     state.localAttachments = [];
@@ -911,11 +914,15 @@
     state.concluidosNaoVistos.add(atendimentoId);
   }
 
-  async function selectTicket(id) {
+  async function selectTicket(id, { aPartirBase = false, retorno = false } = {}) {
     const ticket = state.queue.find((c) => String(c.id) === String(id))
       || state.risk.chamados.find((c) => String(c.id) === String(id))
-      || state.relatedById?.get(String(id));
+      || state.relatedById?.get(String(id))
+      || (String(state.retornoBase?.id) === String(id) ? state.retornoBase : null);
     if (!ticket) return;
+    if (aPartirBase && state.selected && String(state.selected.id) !== String(id)) state.retornoBase = state.selected;
+    else if (retorno || !aPartirBase) state.retornoBase = null;
+    $('voltar-chamado-base').hidden = !state.retornoBase;
     state.somenteLeitura = ticket.statusEncerramento === 'Encerrado';
     aplicarModoSomenteLeitura();
     atualizarRotuloFila(ticket);
@@ -1368,6 +1375,9 @@
       const avisosFonte = assistant && Array.isArray(m.avisosFonteCorrigido) ? m.avisosFonteCorrigido : [];
       const avisosFonteHtml = avisosFonte.length
         ? `<div class="message-source-warnings" role="note">${avisosFonte.map((a) => `<p>⚠️ ${escapeHtml(a)}</p>`).join('')}</div>` : '';
+      const base = assistant ? m.diagnostico?.baseConhecimento : null;
+      const incluidos = Array.isArray(base?.incluidosNoContexto) ? base.incluidosNoContexto : null;
+      const baseHtml = incluidos ? `<div class="message-source-warnings" role="note"><strong>Base de Conhecimento</strong><p>Candidatos incluídos no contexto da IA: ${incluidos.length ? incluidos.map(x => `#${escapeHtml(x.numero || '')}`).join(', ') : 'nenhum'}. ${base.omitidosNoContexto?.length ? `${base.omitidosNoContexto.length} omitido(s) por limite de contexto.` : ''} A inclusão não comprova uso na resposta nem funcionamento.</p><button type="button" class="link-button" data-abrir-base>Ver candidatos da busca atual</button></div>` : '';
       const avaliacaoHtml = assistant ? renderizarAvaliacaoHumana(m) : '';
       // Avaliação à esquerda e Detalhes Técnicos à direita, na mesma faixa.
       const detalhesHtml = window.IaDetalhesTecnicos.botao(m, 'detalhes-tecnicos-link');
@@ -1388,7 +1398,8 @@
             ${menuHtml}
             <div class="message-head"><strong>${escapeHtml(messageRole(m))}</strong><span>${escapeHtml(formatDateTime(messageTimestamp(m)))}</span></div>
             ${attachmentsHtml}
-            <div class="message-text">${textoComLinksCurtos(messageText(m))}</div>
+            ${baseHtml}
+            <div class="message-text">${assistant ? '<strong>Análise da IA</strong><br>' : ''}${textoComLinksCurtos(messageText(m))}</div>
             ${avisosFonteHtml}
             ${acoesHtml}
             ${estadoEnvio}
@@ -1397,6 +1408,7 @@
       `;
     }).join('');
     container.querySelectorAll('[data-reenviar]').forEach((b) => b.addEventListener('click', () => reenviarPendente(b.dataset.reenviar)));
+    container.querySelectorAll('[data-abrir-base]').forEach((b) => b.addEventListener('click', () => { setPanel('knowledge'); setMobileTarget('more'); }));
     observarMiniaturas(container);
     if (statusPertenceAoAtual) appendChatStatusRow(state.chatStatusText, pertoDoFim);
     if (pertoDoFim) container.scrollTop = container.scrollHeight;
@@ -2277,6 +2289,14 @@
 
   function renderKnowledge() {
     const content = $('knowledge-content');
+    if (state.knowledgeTab === 'criteria') {
+      content.innerHTML = `
+        <div class="knowledge-card"><h3>Como interpretar os chamados</h3><p>A busca apresenta candidatos para comparação. A pontuação ordena resultados; não é percentual de acerto nem confirma que a solução se aplica. Abra o chamado e confira o problema, as condições e o resultado registrado.</p></div>
+        <div class="knowledge-card"><h3>Pontuação atual</h3><p>Na busca textual, são 6 pontos por termo completo no relato e 2 no histórico ou por termo sugerido pela IA, até 60; módulo igual soma 8, serviço 6, produto 5, família 4, tipo final 2 e chamado encerrado 3. Essa busca examina todos os chamados disponíveis no escopo e exige um termo em comum; classificações, sozinhas, não bastam. Quando habilitada, a busca semântica também pode recuperar candidatos sem termo comum e sua ordem é combinada com a textual. O índice é gradual e, se estiver indisponível, permanece a busca textual. A IA pode sugerir termos e comparar até 15 candidatos; sua avaliação é preliminar.</p><p>“Solução aplicada: Sim” é uma marcação da origem, não uma solução comprovada; ela não soma pontos. A lista desta aba pode diferir da busca feita durante a investigação, que usa contexto adicional.</p></div>
+        <div class="knowledge-card"><h3>Economia em observação</h3><p>A auditoria registra separadamente se a base poderia dispensar a pesquisa externa ou a geração da análise. É uma simulação: nenhuma chamada é dispensada por essa avaliação. O sistema atual não possui revisão estruturada dos critérios e, por isso, registra que a análise é necessária. Mesmo problema, condições compatíveis, procedimento, resultado observado, ausência de lacunas e autorização precisam ser comprovados. Score, encerramento e “solução aplicada” não bastam. A busca continua em avaliação por consultores.</p></div>
+        <div class="knowledge-card"><h3>Consultor e Primeiro Atendimento</h3><p>A busca do consultor abrange a empresa, incluindo outros clientes conforme as permissões. No Primeiro Atendimento, a busca é limitada ao cliente quando sua identidade é confirmada. A citação automática de outros chamados está suspensa até a validação de segurança e dos casos reais. A análise continua sem citar referências históricas.</p><p>O bloco junto à resposta indica candidatos incluídos no contexto, não prova de que a IA os utilizou. A lista desta aba é uma busca atual e pode diferir. A qualidade dos resultados segue em avaliação pelos consultores.</p></div>`;
+      return;
+    }
     if (!state.research) {
       content.innerHTML = '<div class="empty-block">Pesquisa ainda não carregada para este chamado.</div>';
       return;
@@ -2295,11 +2315,20 @@
       content.innerHTML = results || links || '<div class="empty-block">Nenhuma trilha técnica encontrada.</div>';
       return;
     }
+    if (state.research.avaliacaoBaseConhecimento?.estado === 'busca_indisponivel') {
+      content.innerHTML = '<div class="empty-block">A busca na base interna está indisponível. Não é possível concluir se existem chamados relacionados.</div>';
+      return;
+    }
     state.relatedById = new Map(internal.map((r) => r.chamado || r).filter((c) => c?.id).map((c) => [String(c.id), c]));
     content.innerHTML = internal.map((r) => {
       const c = r.chamado || r;
       const encerrado = c.statusEncerramento === 'Encerrado';
-      return `<div class="knowledge-card knowledge-card-link" data-related-id="${escapeHtml(c.id || '')}" role="button" tabindex="0" title="Abrir mensagens do chamado"><h3>#${escapeHtml(c.numero || '')} ${escapeHtml(currentTicketTitle(c))}${encerrado ? ' <span class="badge">Encerrado</span>' : ''}</h3><p>${escapeHtml(c.descricao || c.breveDescricao || '')}</p><div class="case-badges"><span class="badge">score ${escapeHtml(r.score ?? '-')}</span>${r.temSolucaoAplicada ? '<span class="badge ok">Possui solução</span>' : ''}</div></div>`;
+      const motivos = Array.isArray(r.motivos) && r.motivos.length ? `<p>Correspondências: ${escapeHtml(r.motivos.join('; '))}</p>` : '';
+      const resultados = (r.registrosResultado || []).map(p => `<p>Resultado registrado (${escapeHtml(p.data || 'sem data')}): ${escapeHtml(p.texto)}</p>`).join('');
+      const labelsIa = { mesmo_problema: 'Possível mesmo problema', relacionado: 'Relacionado', nao_relacionado: 'Não relacionado', inconclusivo: 'Inconclusivo' };
+      const avaliacaoIa = r.avaliacaoIa ? `<p>Avaliação preliminar da IA: ${escapeHtml(labelsIa[r.avaliacaoIa.relevancia] || 'Inconclusivo')} — ${escapeHtml(r.avaliacaoIa.justificativa || '')}</p><p>Trecho do chamado atual: ${escapeHtml(r.avaliacaoIa.trechoAtual)}<br>Trecho do candidato: ${escapeHtml(r.avaliacaoIa.trechoCandidato)}</p><p>Possíveis diferenças: ${escapeHtml(r.avaliacaoIa.diferencas || 'não identificadas; confira os históricos')}<br>Lacunas: ${escapeHtml(r.avaliacaoIa.lacunas || 'não avaliadas; confira ambiente e condições')}</p>` : '<p>Relevância, diferenças e lacunas não avaliadas pela IA.</p>';
+      const trechosIa = [r.avaliacaoIa?.trechoProcedimento ? `Possível procedimento: ${escapeHtml(r.avaliacaoIa.trechoProcedimento)}` : '', r.avaliacaoIa?.trechoResultado ? `Possível resultado: ${escapeHtml(r.avaliacaoIa.trechoResultado)}` : ''].filter(Boolean).join('<br>');
+      return `<div class="knowledge-card knowledge-card-link" data-related-id="${escapeHtml(c.id || '')}" role="button" tabindex="0" title="Abrir mensagens do chamado"><h3>#${escapeHtml(c.numero || '')} ${escapeHtml(currentTicketTitle(c))}${encerrado ? ' <span class="badge">Encerrado</span>' : ''}</h3><p>${escapeHtml(c.descricao || c.breveDescricao || '')}</p>${motivos}${avaliacaoIa}${resultados}${trechosIa ? `<p>Trechos sugeridos pela IA para conferência:<br>${trechosIa}</p>` : ''}<p>Funcionamento não confirmado; confira o histórico.</p><div class="case-badges"><span class="badge">Pontuação textual ${escapeHtml(r.score ?? '-')}</span>${r.temSolucaoAplicada ? '<span class="badge">Solução aplicada: Sim</span>' : ''}</div></div>`;
     }).join('') || '<div class="empty-block">Nenhum chamado semelhante encontrado.</div>';
   }
 
@@ -2996,12 +3025,13 @@
     const abrirRelacionado = (event) => {
       if (event.target.closest('a, [data-open-url]')) return;
       const card = event.target.closest('[data-related-id]');
-      if (card?.dataset.relatedId) selectTicket(card.dataset.relatedId);
+      if (card?.dataset.relatedId) selectTicket(card.dataset.relatedId, { aPartirBase: true });
     };
     $('knowledge-content').addEventListener('click', abrirRelacionado);
     $('knowledge-content').addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); abrirRelacionado(event); }
     });
+    $('voltar-chamado-base').addEventListener('click', () => { if (state.retornoBase) selectTicket(state.retornoBase.id, { retorno: true }); });
     $('trail-content').addEventListener('click', (event) => {
       const execToggle = event.target.closest('[data-trail-toggle]');
       if (execToggle) {

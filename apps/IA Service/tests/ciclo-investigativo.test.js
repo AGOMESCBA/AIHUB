@@ -110,3 +110,15 @@ test('fontes citadas pela IA que não foram lidas nem encontradas são descartad
   const { final } = await investigar([{ decisao: 'responder', avaliacaoFontes: [{ url: 'https://inventada.example/x', aplicavel: 'sim' }, { url: FONTE_A.url, aplicavel: 'sim' }] }]);
   assert.deepEqual(final.ciclo[0].avaliacaoFontes.map(f => f.url), [FONTE_A.url]);
 });
+
+test('resultado encontrado mas não lido não é classificado como fonte aplicável', async () => {
+  const r = await svc.avaliarEvidenciasPesquisa({ empresaId: 1 }, {
+    paginasLidas: [{ url: 'https://fonte.example/lida', status: 'lida', trecho: 'Texto lido.' }, { url: 'https://fonte.example/vazia', status: 'lida', trecho: '' }],
+    resultados: [{ url: 'https://fonte.example/nao-lida', titulo: 'Resultado', trecho: 'Resumo' }],
+  }, { avaliarEvidenciasIA: async () => ({ decisao: 'responder', avaliacaoFontes: [
+    { url: 'https://fonte.example/lida', aplicavel: 'sim' },
+    { url: 'https://fonte.example/vazia', aplicavel: 'sim' },
+    { url: 'https://fonte.example/nao-lida', aplicavel: 'sim' },
+  ] }) });
+  assert.deepEqual(r.avaliacaoFontes.map(f => f.url), ['https://fonte.example/lida']);
+});

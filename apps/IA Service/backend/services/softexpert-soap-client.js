@@ -6,15 +6,13 @@ const { SaxesParser } = require('saxes');
 const SOAP = 'http://schemas.xmlsoap.org/soap/envelope/';
 const WORKFLOW = 'urn:workflow';
 const MAX_RESPONSE_BYTES = 1024 * 1024;
-const OPERACOES = { newChildEntityRecord: { ns: WORKFLOW, ws: 'wf_ws.php' }, editChildEntityRecord: { ns: WORKFLOW, ws: 'wf_ws.php' }, editEntityRecord: { ns: WORKFLOW, ws: 'wf_ws.php' }, newComment: { ns: WORKFLOW, ws: 'wf_ws.php' }, newTableRecord: { ns: 'urn:form', ws: 'fm_ws.php' }, getWorkflow: { ns: WORKFLOW, ws: 'wf_ws.php', leitura: true }, getTableRecord: { ns: 'urn:form', ws: 'fm_ws.php', leitura: true }, executeActivity: { ns: WORKFLOW, ws: 'wf_ws.php' } };
-// Únicas movimentações de workflow permitidas (Jaade no Primeiro Atendimento):
-// ATV-02 ação 1 "Retornar para cliente" → ATV-06 (pedido de informação) e
-// ATV-02 ação 6 (revisão 89 do ITSM-02, 2026-11-20): envia o e-mail "Retorno
-// do ticket" ao cliente e volta ao Primeiro Atendimento (chamado segue na triagem).
-const MOVIMENTACOES_PERMITIDAS = {
-  devolucao: { activityId: 'ATV-02', actionSequence: '1' },
-  notificacao: { activityId: 'ATV-02', actionSequence: '6' },
-};
+const OPERACOES = { newChildEntityRecord: { ns: WORKFLOW, ws: 'wf_ws.php' }, editChildEntityRecord: { ns: WORKFLOW, ws: 'wf_ws.php' }, editEntityRecord: { ns: WORKFLOW, ws: 'wf_ws.php' }, newComment: { ns: WORKFLOW, ws: 'wf_ws.php' }, newTableRecord: { ns: 'urn:form', ws: 'fm_ws.php' }, getWorkflow: { ns: WORKFLOW, ws: 'wf_ws.php', leitura: true }, getTableRecord: { ns: 'urn:form', ws: 'fm_ws.php', leitura: true }, executeActivity: { ns: WORKFLOW, ws: 'wf_ws.php' }, newWorkflowEditData: { ns: WORKFLOW, ws: 'wf_ws.php' } };
+// Workflow da Jaade (2026-11-23): o ITSM-02 não aceita executeActivity pela API
+// (regra "Antes de salvar", erro -20). A Jaade abre uma instância deste processo,
+// sem regras, com o mesmo registro da grade, e executa a ATV-01; o SoftExpert
+// decide pelo TEXTO4, move o chamado original e manda os e-mails. Únicos
+// processo e movimentação que a Jaade pode abrir/executar.
+const WORKFLOW_JADE = { processId: 'ITSM-02-I.A-P.A', entityId: 'itsm02iapa', activityId: 'ATV-01', actionSequence: '1' };
 
 function autoridadesConfiaveis() {
   if (typeof tls.getCACertificates !== 'function') return undefined;
@@ -46,18 +44,21 @@ function montarComentario({ workflowId, texto, activityId, privado }) {
   return envelope('newComment', `<urn:WorkflowID>${escaparXml(workflowId)}</urn:WorkflowID><urn:ActivityID>${escaparXml(activityId || '')}</urn:ActivityID><urn:Text>${escaparXml(texto)}</urn:Text><urn:Private>${privado ? '1' : '0'}</urn:Private>`);
 }
 
-function _montarMovimentacao(tipo, { workflowId, userId }) {
+/** Abre a instância do workflow da Jaade já com o formulário preenchido (uma chamada, transacional). */
+function montarAberturaWorkflowJade({ titulo, userId, campos = {} }) {
+  if (![titulo, userId].every((v) => typeof v === 'string' && v.trim())) throw new Error('Título e matrícula do usuário são obrigatórios.');
+  const attrs = Object.entries(campos).map(([id, value]) => {
+    if (!id.trim() || typeof value !== 'string') throw new Error('Campo inválido.');
+    return `<urn:EntityAttribute><urn:EntityAttributeID>${escaparXml(id)}</urn:EntityAttributeID><urn:EntityAttributeValue>${escaparXml(value)}</urn:EntityAttributeValue></urn:EntityAttribute>`;
+  }).join('');
+  if (!attrs) throw new Error('O formulário do workflow da Jaade não pode ir vazio.');
+  return envelope('newWorkflowEditData', `<urn:ProcessID>${WORKFLOW_JADE.processId}</urn:ProcessID><urn:WorkflowTitle>${escaparXml(titulo)}</urn:WorkflowTitle><urn:UserID>${escaparXml(userId)}</urn:UserID><urn:EntityList><urn:Entity><urn:EntityID>${WORKFLOW_JADE.entityId}</urn:EntityID><urn:EntityAttributeList>${attrs}</urn:EntityAttributeList></urn:Entity></urn:EntityList>`);
+}
+
+/** Executa a ATV-01 do workflow da Jaade (o SoftExpert decide o caminho pelo TEXTO4). */
+function montarExecucaoWorkflowJade({ workflowId, userId }) {
   if (![workflowId, userId].every((v) => typeof v === 'string' && v.trim())) throw new Error('Instância e matrícula do executor são obrigatórias.');
-  const m = MOVIMENTACOES_PERMITIDAS[tipo];
-  return envelope('executeActivity', `<urn:WorkflowID>${escaparXml(workflowId)}</urn:WorkflowID><urn:ActivityID>${m.activityId}</urn:ActivityID><urn:ActionSequence>${m.actionSequence}</urn:ActionSequence><urn:UserID>${escaparXml(userId)}</urn:UserID>`);
-}
-
-function montarDevolucaoPrimeiroAtendimento(dados) {
-  return _montarMovimentacao('devolucao', dados);
-}
-
-function montarNotificacaoPrimeiroAtendimento(dados) {
-  return _montarMovimentacao('notificacao', dados);
+  return envelope('executeActivity', `<urn:WorkflowID>${escaparXml(workflowId)}</urn:WorkflowID><urn:ActivityID>${WORKFLOW_JADE.activityId}</urn:ActivityID><urn:ActionSequence>${WORKFLOW_JADE.actionSequence}</urn:ActionSequence><urn:UserID>${escaparXml(userId)}</urn:UserID>`);
 }
 
 function montarInclusaoAnexo({ tableId, relacionamentoId, posicionamentoOid, campoArquivoId, nome, conteudo, userId, contentId }) {
@@ -172,7 +173,7 @@ function validarEnvelopeOperacao(xml, operacao) {
   let chamadas = 0;
   const movimentacao = {};
   parser.on('text', (texto) => {
-    if (operacao === 'executeActivity' && stack.length === 4 && ['ActivityID', 'ActionSequence'].includes(stack[3].local)) {
+    if (stack.length === 4 && ((operacao === 'executeActivity' && ['ActivityID', 'ActionSequence'].includes(stack[3].local)) || (operacao === 'newWorkflowEditData' && stack[3].local === 'ProcessID'))) {
       movimentacao[stack[3].local] = (movimentacao[stack[3].local] || '') + texto;
     }
   });
@@ -189,10 +190,10 @@ function validarEnvelopeOperacao(xml, operacao) {
   parser.on('closetag', () => stack.pop());
   parser.write(xml).close();
   if (bodies !== 1 || chamadas !== 1) throw new Error('Requisição deve conter uma única operação SOAP.');
-  if (operacao === 'executeActivity' && !Object.values(MOVIMENTACOES_PERMITIDAS).some((m) =>
-    movimentacao.ActivityID?.trim() === m.activityId && movimentacao.ActionSequence?.trim() === m.actionSequence)) {
+  if (operacao === 'executeActivity' && (movimentacao.ActivityID?.trim() !== WORKFLOW_JADE.activityId || movimentacao.ActionSequence?.trim() !== WORKFLOW_JADE.actionSequence)) {
     throw new Error('Movimentação de workflow não permitida.');
   }
+  if (operacao === 'newWorkflowEditData' && movimentacao.ProcessID?.trim() !== WORKFLOW_JADE.processId) throw new Error('Abertura de workflow não permitida.');
 }
 
 async function enviarOperacao({ origem, apiKey, authorizationMode, encoding, xml, anexosSoap = [], timeoutMs = 30000, operacao = 'newChildEntityRecord' }) {
@@ -239,4 +240,4 @@ function enviarConsulta(config) {
   if (!Object.hasOwn(OPERACOES, config.operacao) || !OPERACOES[config.operacao].leitura) return Promise.reject(new Error('Somente operação de leitura permitida nesta consulta.'));
   return enviarOperacao(config);
 }
-module.exports = { escaparXml, montarInclusaoGrid, montarEdicaoGrid, montarEdicaoFormulario, montarInclusaoAnexo, montarDevolucaoPrimeiroAtendimento, montarNotificacaoPrimeiroAtendimento, montarComentario, montarCorpoRequisicao, montarConsultaWorkflow, montarConsultaTabela, autoridadesConfiaveis, interpretarResposta, enviarInclusaoGrid, enviarOperacao, enviarConsulta };
+module.exports = { escaparXml, montarInclusaoGrid, montarEdicaoGrid, montarEdicaoFormulario, montarInclusaoAnexo, montarAberturaWorkflowJade, montarExecucaoWorkflowJade, WORKFLOW_JADE, montarComentario, montarCorpoRequisicao, montarConsultaWorkflow, montarConsultaTabela, autoridadesConfiaveis, interpretarResposta, enviarInclusaoGrid, enviarOperacao, enviarConsulta };

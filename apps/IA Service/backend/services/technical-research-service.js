@@ -2,6 +2,8 @@
 
 const https = require('https');
 const chamadoRepo = require('../repositories/chamado-repository');
+const baseConhecimentoAvaliacao = require('./base-conhecimento-avaliacao-service');
+const baseConhecimentoHibrida = require('./base-conhecimento-hibrida-service');
 const execucaoRepo = require('../repositories/investigacao-execucao-repository');
 const aiConfigService = require('./ai-config-service');
 const aiProviderClient = require('./ai-provider-client');
@@ -56,7 +58,8 @@ const STATUS_URL_RETRY_PERMITIDO = new Set(['erro_fetch', 'timeout', 'erro', 'bl
 const RE_PEDIDO_PESQUISA = /\b(pesquis\w*|procur\w*|busc\w*|busqu\w*|consult\w*|investig\w*|vascul\w*|ve[ij]a?\s+se|check?a\s+se|d[áa]\s+uma\s+olhada|tenta\s+achar|olha\s+se|ser[áa]\s+que\s+(existe|tem|h[áa]))\b[^.?!]{0,80}\b(solu[cç][aã]o|document\w*|refer[eê]ncia\w*|internet|site|fonte\w*|conhecid\w*|publicad\w*|base\s+de\s+conhecimento|nota\s+t[eé]cnica|artigo\w*|tdn|oficial\w*|extern\w*)\b/i;
 
 function _temPedidoExplicitoPesquisa(texto) {
-  return RE_PEDIDO_PESQUISA.test(String(texto || ''));
+  const pedido = String(texto || '');
+  return RE_PEDIDO_PESQUISA.test(pedido) || /\b(?:pesquise|pesquisa|procure|procurar|busque|busca|investigue|investigar|aprofunde)\b[^.?!]{0,80}\b(?:novamente|de novo|outra vez|mais|alternativas|outras causas|outras fontes|f[oó]runs)\b/i.test(pedido);
 }
 const STOPWORDS_DEDUP = new Set([
   'site', 'www', 'com', 'br', 'pt', 'http', 'https', 'html', 'docs', 'doc', 'kb', 'tdn',
@@ -897,7 +900,9 @@ function planejarPesquisa(ctx = {}) {
   // um assunto diferente do diagnóstico já em curso (ver _textoConversa).
   const sinais = _temSinalForte(sinaisConversa) ? sinaisConversa : _extrairSinaisTecnicos({ ...ctx, texto: [ctx.texto, dossieTexto].filter(Boolean).join('\n') });
   const sinaisMensagemAtual = _extrairSinaisTecnicos({ ...ctx, chamado: null, atendimento: null, mensagens: [], anexos: [], texto: ctx.texto || '' });
-  const historico = _coletarHistoricoPesquisa(ctx.empresaId || ctx.atendimento?.empresaId, ctx.atendimentoId || ctx.atendimento?.id);
+  const historico = ctx.ignorarHistoricoPesquisa
+    ? { consultas: [], urlsEncontradas: [], urlsLidas: [], execucoes: [] }
+    : _coletarHistoricoPesquisa(ctx.empresaId || ctx.atendimento?.empresaId, ctx.atendimentoId || ctx.atendimento?.id);
   const objetivo = _objetivoDoPlano({ det, sinais, dossieOperacional: ctx.dossieOperacional, texto: ctx.texto || textoConversa });
   const lacunas = [];
   const guard = ctx.dossieOperacional?.manifesto?.regressaoGuard || {};
@@ -2148,7 +2153,7 @@ function _resumoProblemaParaIA(ctx = {}) {
 async function avaliarEvidenciasPesquisa(ctx, pesquisa, { rodada = 1, avaliarEvidenciasIA, timeoutMs = 20000, rodadasAnteriores = [] } = {}) {
   const inicio = Date.now();
   const auditoria = { rodada, executada: false, provider: null, model: null, latenciaMs: 0, erro: null, decisao: null };
-  const fontes = (pesquisa.paginasLidas || []).filter(p => ['lida', 'reutilizada'].includes(p.status))
+  const fontes = (pesquisa.paginasLidas || []).filter(p => ['lida', 'reutilizada'].includes(p.status) && String(p.trecho || '').trim())
     .map(p => ({ url: p.url, titulo: p.titulo || null, trecho: String(p.trecho || '').slice(0, 900) }));
   const lidas = new Set(fontes.map(f => f.url));
   const entrada = {
@@ -2205,7 +2210,9 @@ async function avaliarEvidenciasPesquisa(ctx, pesquisa, { rodada = 1, avaliarEvi
       informacaoNecessaria: redigirTexto(String(parsed?.informacaoNecessaria || '')).slice(0, 400) || null,
       justificativa: redigirTexto(String(parsed?.justificativa || '')).slice(0, 500) || null,
       avaliacaoFontes: (Array.isArray(parsed?.avaliacaoFontes) ? parsed.avaliacaoFontes : [])
-        .filter(f => f?.url && (lidas.has(f.url) || entrada.resultadosNaoLidos.some(r => r.url === f.url)))
+        // Um snippet encontrado pode orientar nova busca, mas não sustenta
+        // avaliação de aplicabilidade de uma página que não foi lida.
+        .filter(f => f?.url && lidas.has(f.url))
         .slice(0, 12).map(f => ({ url: f.url, aplicavel: ['sim', 'parcial', 'nao'].includes(f.aplicavel) ? f.aplicavel : 'parcial', motivo: redigirTexto(String(f.motivo || '')).slice(0, 240) })),
       hipoteses: (Array.isArray(parsed?.hipoteses) ? parsed.hipoteses : []).slice(0, 8)
         .map(h => ({ descricao: redigirTexto(String(h?.descricao || '')).slice(0, 240), situacao: ['reforcada', 'enfraquecida', 'nova', 'inalterada'].includes(h?.situacao) ? h.situacao : 'inalterada' }))
@@ -2307,6 +2314,8 @@ function _formatarChamadosRelacionados(relacionados = []) {
       c.descricao || c.breveDescricao || c.assunto ? `   Descrição: ${c.descricao || c.breveDescricao || c.assunto}` : null,
       c.solucaoAplicada ? `   Solução aplicada: ${c.solucaoAplicada}` : null,
       r.motivos?.length ? `   Similaridade: ${r.motivos.join('; ')}` : null,
+      r.avaliacaoIa ? `   Avaliação preliminar da IA: ${r.avaliacaoIa.relevancia}; ${r.avaliacaoIa.justificativa}. Trecho do caso: ${r.avaliacaoIa.trechoAtual}. Trecho do candidato: ${r.avaliacaoIa.trechoCandidato}` : null,
+      ...(r.registrosResultado || []).map(p => `   Resultado registrado (${p.data || 'sem data'}, posicionamento ${p.posicionamentoId}): ${p.texto}`),
       pos ? `   Posicionamentos recentes:\n${pos}` : null,
     ].filter(Boolean).join('\n');
   }).join('\n\n');
@@ -2373,7 +2382,7 @@ function formatarContextoParaPrompt(pesquisa, relacionados = []) {
     pesquisa.urlsReutilizadas?.length ? `URLs reutilizadas sem novo download: ${pesquisa.urlsReutilizadas.map(u => u.url).join(', ')}` : null,
     pesquisa.links?.length ? '\nConsultas rastreáveis sugeridas:' : null,
     ...(pesquisa.links || []).slice(0, 8).map((l, i) => `${i + 1}. ${l.fonte}: ${l.url}`),
-    relacionados.length ? '\nChamados semelhantes da base interna:' : null,
+    relacionados.length ? '\nCandidatos da base interna: as correspondências não confirmam relevância, solução registrada ou funcionamento. Examine os trechos e as condições antes de usar qualquer caso:' : null,
     relacionados.length ? _formatarChamadosRelacionados(relacionados) : null,
   ];
   if (orientacoes.length) linhas.push(`\n${MARCADOR_ORIENTACOES}`, ...orientacoes);
@@ -2384,7 +2393,22 @@ async function pesquisarParaChamado(empresaId, chamadoId, extras = {}) {
   const chamado = chamadoRepo.getChamado(empresaId, chamadoId);
   if (!chamado) throw new Error('Chamado não encontrado.');
   const posicionamentos = chamadoRepo.listarPosicionamentosDoChamado(empresaId, chamadoId);
-  const relacionados = chamadoRepo.listarChamadosRelacionados(empresaId, chamadoId, { limite: extras.limiteRelacionados || 5 });
+  const promessaAvaliacao = (async () => {
+    try {
+      const expansao = await baseConhecimentoAvaliacao.expandirBusca(empresaId, chamado);
+      const textuais = chamadoRepo.listarChamadosRelacionados(empresaId, chamadoId, { limite: 15, termosExpandidos: expansao.termos });
+      const hibrida = await baseConhecimentoHibrida.combinar(empresaId, chamadoId, textuais);
+      const candidatos = hibrida.candidatos;
+      const avaliacao = expansao.etapaFalha === 'provedor' || expansao.etapaFalha === 'configuracao'
+        ? { candidatos, estado: 'avaliacao_indisponivel', etapaFalha: expansao.etapaFalha }
+        : await baseConhecimentoAvaliacao.avaliar(empresaId, chamado, candidatos)
+          .catch(() => ({ candidatos, estado: 'avaliacao_indisponivel', etapaFalha: 'preparacao' }));
+      return { ...avaliacao, expansao: expansao.estado, buscaVetorial: hibrida.estadoVetorial };
+    } catch (_) {
+      // A falha na base não impede a pesquisa técnica independente.
+      return { candidatos: [], estado: 'busca_indisponivel' };
+    }
+  })();
   // Aba "Banco de conhecimento"/seleção do chamado dispara esta rota sozinha
   // (sem pedido do analista): sob pendência externa não faz pesquisa externa;
   // chamados relacionados internos continuam sendo devolvidos.
@@ -2400,7 +2424,10 @@ async function pesquisarParaChamado(empresaId, chamadoId, extras = {}) {
     mensagens: posicionamentos.map(p => ({ conteudo: [p.assunto, p.descricao, p.resultado].filter(Boolean).join('\n') })),
     ...(pesquisaExternaBloqueada ? { pesquisaExternaBloqueada } : {}),
   });
-  return { pesquisa: { ...pesquisa, resultados: _fontesVerificadas(empresaId, chamado, pesquisa) }, relacionados };
+  const avaliacao = await promessaAvaliacao;
+  const limiteRelacionados = Math.max(1, Math.min(Number(extras.limiteRelacionados) || 5, 15));
+  const relacionados = avaliacao.candidatos.slice(0, limiteRelacionados);
+  return { pesquisa: { ...pesquisa, resultados: _fontesVerificadas(empresaId, chamado, pesquisa) }, relacionados, avaliacaoBaseConhecimento: { estado: avaliacao.estado, expansao: avaliacao.expansao || null, buscaVetorial: avaliacao.buscaVetorial || null, avaliados: avaliacao.avaliados || 0, provider: avaliacao.provider || null, model: avaliacao.model || null, etapaFalha: avaliacao.etapaFalha || null } };
 }
 
 // Base de Conhecimento mostra só páginas abertas e lidas com conteúdo — desta
@@ -2426,6 +2453,7 @@ function _fontesVerificadas(empresaId, chamado, pesquisa) {
 }
 
 module.exports = {
+  _temPedidoExplicitoPesquisa,
   aprofundarPesquisa,
   avaliarEvidenciasPesquisa,
   MAX_RODADAS_APROFUNDAMENTO,

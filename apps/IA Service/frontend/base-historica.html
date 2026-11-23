@@ -885,7 +885,7 @@
   // ── Jaade no Primeiro Atendimento ──────────────────────────────────────────
   const JADE_ESTADOS = {
     detectado: 'Na fila', gerando: 'Gerando', simulado: 'Simulado', pronto: 'Pronto p/ enviar', publicando: 'Enviando',
-    publicado: 'Enviado', devolvendo: 'Devolvendo', devolvido: 'Devolvido', descartado: 'Descartado', falha: 'Falha',
+    publicado: 'Enviado', devolvendo: 'Acionando SE', devolvido: 'SE acionado', descartado: 'Descartado', falha: 'Falha',
   };
   const JADE_CLASSE = { simulado: 'concluido', publicado: 'concluido', devolvido: 'concluido', detectado: 'pendente', gerando: 'executando', falha: 'falhou' };
 
@@ -1236,9 +1236,10 @@
     { id: 'analise', rotulo: 'Análise técnica', desc: 'Pesquisa da IA para o ANALISTA, gravada no chat da J2iA do chamado. Este texto NÃO vai ao cliente; é a base do retorno ao cliente.' },
     { id: 'retorno', rotulo: 'Retorno ao cliente', desc: 'Texto que vai ao CLIENTE (gravado na grade do SoftExpert no modo Publicar), a decisão (responder ou devolver) e as versões recusadas pela verificação.' },
     { id: 'envio', rotulo: 'Gravação no SoftExpert', desc: 'Posicionamento gravado na grade do chamado: campos enviados e resposta do SoftExpert.' },
-    { id: 'notificacao', rotulo: 'E-mail ao cliente', desc: 'Ação 6 do Primeiro Atendimento (revisão 89 do fluxo em diante): o SoftExpert envia o e-mail "Retorno do ticket" ao cliente e o chamado volta à triagem. Em chamados de revisão anterior o retorno fica só na grade.' },
-    { id: 'devolucao', rotulo: 'Devolução ao cliente', desc: 'Movimentação do chamado para o cliente (ATV-02, ação 1 → Retorno do Usuário).' },
-    { id: 'situacao', rotulo: 'Atividade no SoftExpert', desc: 'Conferência final no SoftExpert: em que atividade o chamado ficou depois da Jaade (respondido segue no Primeiro Atendimento; devolvido avança para o Retorno do Usuário).' },
+    { id: 'workflow', rotulo: 'Workflow da Jaade', desc: 'Abertura de uma instância do processo ITSM-02-I.A-P.A com o mesmo registro da grade e execução da ATV-01. O SoftExpert segue pelo TEXTO4 (IA-RESPONDIDO: atendimento com analista; IA-INFORMACAO: volta ao cliente) e envia os e-mails.' },
+    { id: 'notificacao', rotulo: 'E-mail ao cliente (antigo)', desc: 'Ação 6 do Primeiro Atendimento, usada até 2026-11-23 (substituída pelo workflow da Jaade).' },
+    { id: 'devolucao', rotulo: 'Devolução ao cliente (antiga)', desc: 'ATV-02, ação 1 → Retorno do Usuário, usada até 2026-11-23 (substituída pelo workflow da Jaade).' },
+    { id: 'situacao', rotulo: 'Atividade no SoftExpert', desc: 'Conferência final no SoftExpert: em que atividade o chamado original está depois da Jaade.' },
     { id: 'aviso', rotulo: 'Aviso por WhatsApp', desc: 'Mensagem do fim da leitura aos grupos escolhidos: chamados sem PA ou com PA pela Jaade. Recebe todo membro dos grupos com acesso à empresa. Em Simulação sai marcada como teste. Não aparece sem grupo escolhido ou quando a triagem atendeu antes.' },
   ];
   const JADE_ICONE = { ok: '✓', aviso: '!', erro: '✕', info: 'i', pendente: '' };
@@ -1341,15 +1342,13 @@
       ${ex.alerta ? '<span class="warn" title="Precisa da triagem">⚠ precisa da triagem</span>' : ''}`;
     document.getElementById('jade-modal-sub').textContent = [
       `Detectado em ${formatarDataHora(ex.detectadoEm)}`,
-      ex.decisao ? `Decisão: ${ex.decisao === 'devolver' ? 'devolver ao cliente' : 'responder'}` : null,
-      `Tentativas: geração ${ex.tentativasGeracao}/3 · envio ${ex.tentativasPublicacao}/3 · devolução ${ex.tentativasDevolucao}/3`,
+      ex.decisao ? `Decisão: ${ex.decisao === 'devolver' ? 'pedir informação (IA-INFORMACAO)' : 'responder (IA-RESPONDIDO)'}` : null,
+      `Tentativas: geração ${ex.tentativasGeracao}/3 · envio ${ex.tentativasPublicacao}/3 · workflow ${ex.tentativasDevolucao}/3`,
     ].filter(Boolean).join('  ·  ');
 
     const porEtapa = Object.fromEntries(JADE_ETAPAS.map(et => [et.id, eventos.filter(e => e.etapa === et.id)]));
-    // Devolução só entra no fluxo quando a decisão foi devolver (ou houve registro dela).
-    // E-mail ao cliente só no "responder"; devolução só no "devolver" (ou quando houver registro).
-    const etapas = JADE_ETAPAS.filter(et => (et.id !== 'devolucao' || ex.decisao === 'devolver' || porEtapa.devolucao.length)
-      && (et.id !== 'notificacao' || ex.decisao !== 'devolver' || porEtapa.notificacao.length));
+    // Etapas antigas (e-mail pela ação 6, devolução pela ação 1) só aparecem em execuções que as registraram.
+    const etapas = JADE_ETAPAS.filter(et => !['notificacao', 'devolucao'].includes(et.id) || porEtapa[et.id].length);
     if (!jadeEtapaSel || !etapas.some(et => et.id === jadeEtapaSel)) {
       const comErro = [...etapas].reverse().find(et => _situacaoEtapa(porEtapa[et.id]) === 'erro');
       const ultima = [...etapas].reverse().find(et => porEtapa[et.id].length);

@@ -3,10 +3,11 @@
 // Fase 1 (simulação): uma ação por chamado, trava entre processos, intervalo e
 // limite diário, descarte quando a triagem chega antes, devolução desligada
 // vira resposta, texto que cita outro chamado é recusado, 3 falhas = alerta.
-// Fases 2/3 (publicar/devolver): grava na grade com a marca da Jaade, nunca
-// duplica (envio não confirmado é conferido antes de reenviar), devolve só
-// pela ATV-02/ação 1, confere a chegada na ATV-06 e respeita a lista de
-// chamados permitidos.
+// Fases 2/3 (publicar): grava na grade com o status da decisão no TEXTO4,
+// nunca duplica (envio não confirmado é conferido antes de reenviar), abre o
+// workflow da Jaade (ITSM-02-I.A-P.A) com o mesmo registro e executa a ATV-01
+// — o SoftExpert segue pelo TEXTO4 — sem nunca abrir dois, e respeita a lista
+// de chamados permitidos.
 const { test, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
@@ -24,7 +25,7 @@ function stub(relativo, exports) {
 }
 
 // SoftExpert simulado: situação de cada chamado e usuário da Jaade.
-const origem = { chamados: new Map(), usuarioAtivo: true, segurarEmpresa: null };
+const origem = { chamados: new Map(), workflows: new Map(), usuarioAtivo: true, segurarEmpresa: null };
 function chamadoNaOrigem(numero, dados = {}) {
   origem.chamados.set(numero, { aberto: true, comResp: false, posJade: 0, posOutros: 0, ativas: ['ATV-02'], ...dados });
 }
@@ -38,10 +39,11 @@ stub('../backend/services/agente-local-service', {
     if (sql.includes('FROM ADUSER')) {
       return params.cdUser === '995' ? [{ CDUSER: 995, NMUSER: 'Jaade', IDUSER: '10677535000155', FGUSERENABLED: origem.usuarioAtivo ? 1 : 0 }] : [];
     }
-    // Ação 6 do PA (e-mail ao cliente): só chamados da revisão 89 em diante.
-    if (sql.includes('WFSTRUCTACTION')) {
-      const c = origem.chamados.get(params.numero);
-      return c?.acao6 ? [{ NRORDER: 6, NMACTION: 'Enviar retorno da Jaade ao cliente' }] : [];
+    // Workflow da Jaade (ITSM-02-I.A-P.A) já aberto para o chamado, pelo título.
+    if (sql.includes('PMACTIVITY')) {
+      assert.equal(params.processo, 'ITSM-02-I.A-P.A');
+      const w = [...origem.workflows.values()].find(x => x.titulo === params.titulo);
+      return w ? [{ IDPROCESS: w.id, ATV01_ATIVA: w.atv01Ativa ? 1 : 0 }] : [];
     }
     if (sql.includes('LEFT JOIN WFSTRUCT')) {
       const c = origem.chamados.get(params.numero);
@@ -75,8 +77,10 @@ stub('../backend/services/investigacao-service', {
 });
 stub('../backend/services/ai-config-service', { resolverKeysEOrdem() { return { keys: {}, cfg: {} }; } });
 let respostasIA = [];
+const chamadasIA = [];
 stub('../backend/services/ai-provider-client', {
-  async chamarIA() {
+  async chamarIA(...args) {
+    chamadasIA.push(args);
     const r = respostasIA.length ? respostasIA.shift() : null;
     if (!r) throw new Error('IA sem resposta programada');
     return { texto: typeof r === 'string' ? r : JSON.stringify(r), provider: 'teste', model: 'teste' };
@@ -106,16 +110,30 @@ retornoConfigReal.resolver = ({ consultor }) => (contratoDisponivel && consultor
 const soapReal = require('../backend/services/softexpert-soap-client');
 const envios = [];
 let comportamentoEnvio = 'ok';
+// Workflow da Jaade: a abertura cria a instância (WFJ-<chamado>); a ATV-01
+// executada faz o SoftExpert mover o chamado original pelo TEXTO4
+// (IA-RESPONDIDO → atendimento ATV-03; IA-INFORMACAO → cliente ATV-06).
 soapReal.enviarOperacao = async ({ xml, operacao }) => {
   envios.push({ operacao, xml });
-  const numero = /<urn:WorkflowID>([^<]+)</.exec(xml)[1];
-  const c = origem.chamados.get(numero);
   if (comportamentoEnvio === 'recusa') return { Status: 'FAILURE', Code: '0', Detail: 'campo obrigatório' };
-  if (operacao === 'newChildEntityRecord') c.posJade++;
-  // Ação 1 leva ao cliente (ATV-06); ação 6 manda o e-mail e volta ao PA (ATV-02).
-  if (operacao === 'executeActivity') c.ativas = /<urn:ActionSequence>6</.test(xml) ? ['ATV-02'] : ['ATV-06'];
+  let recordId;
+  if (operacao === 'newWorkflowEditData') {
+    const titulo = /<urn:WorkflowTitle>([^<]+)</.exec(xml)[1];
+    const numero = /PA do chamado (\d+)/.exec(titulo)[1];
+    const status = /<urn:EntityAttributeID>texto4<\/urn:EntityAttributeID><urn:EntityAttributeValue>([^<]+)</.exec(xml)[1];
+    recordId = `WFJ-${numero}`;
+    origem.workflows.set(recordId, { id: recordId, titulo, numero, status, atv01Ativa: true });
+  } else {
+    const workflowId = /<urn:WorkflowID>([^<]+)</.exec(xml)[1];
+    if (operacao === 'newChildEntityRecord') origem.chamados.get(workflowId).posJade++;
+    if (operacao === 'executeActivity') {
+      const w = origem.workflows.get(workflowId);
+      w.atv01Ativa = false;
+      origem.chamados.get(w.numero).ativas = [w.status === 'IA-INFORMACAO' ? 'ATV-06' : 'ATV-03'];
+    }
+  }
   if (comportamentoEnvio === 'cai_depois_de_gravar') throw Object.assign(new Error('timeout'), { resultadoIndeterminado: true });
-  return { Status: 'SUCCESS', Code: '1' };
+  return { Status: 'SUCCESS', Code: '1', ...(recordId ? { RecordID: recordId } : {}) };
 };
 
 // IA Command simulado: cada aviso por WhatsApp que a Jaade mandaria aos grupos.
@@ -137,7 +155,7 @@ global.fetch = async (url, opts = {}) => {
 };
 
 const chamadoRepo = require('../backend/repositories/chamado-repository');
-chamadoRepo.getChamadoPorNumero = (_e, numero) => ({ id: `ch-${numero}`, numero, oidOrigem: `oid-${numero}`, titulo: 'Erro ao gerar pedido', descricao: 'Ao confirmar o pedido aparece erro.' });
+chamadoRepo.getChamadoPorNumero = (empresa, numero) => ({ id: `ch-${numero}`, numero, fonteId: getDB().prepare('SELECT id FROM fontes_historicas WHERE empresa_id = ? LIMIT 1').get(empresa)?.id, oidOrigem: `oid-${numero}`, titulo: 'Erro ao gerar pedido', descricao: 'Ao confirmar o pedido aparece erro.' });
 
 const { getDB } = require('../backend/database');
 const agenteRepo = require('../backend/repositories/agente-local-repository');
@@ -155,11 +173,13 @@ beforeEach(() => {
   getDB().prepare('DELETE FROM jade_pa_execucoes').run();
   getDB().prepare('DELETE FROM jade_pa_config').run();
   origem.chamados = new Map();
+  origem.workflows = new Map();
   origem.usuarioAtivo = true;
   origem.segurarEmpresa = null;
   turnos.length = 0;
   envios.length = 0;
   respostasIA = [];
+  chamadasIA.length = 0;
   comportamentoEnvio = 'ok';
   contratoDisponivel = true;
   whats.length = 0;
@@ -212,6 +232,7 @@ test('desligada não roda; ligada em simulação trata cada chamado uma vez e n�
   assert.deepEqual(execs().map(e => e.estado), ['simulado', 'simulado']);
   assert.ok(execs().every(e => e.decisao === 'responder' && e.mensagemAnaliseId));
   assert.ok(turnos.every(t => t.opts.automatico === true && t.opts.usuarioId === null));
+  assert.ok(turnos.every(t => t.opts.escopoPrimeiroAtendimento === true && t.opts.chamadoIdPa && t.atendimentoId === `at-${t.opts.chamadoIdPa}`));
 
   const segundo = await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
   assert.equal(segundo.novos, 0);
@@ -439,7 +460,7 @@ test('lista de chamados permitidos: só o chamado de teste é tratado e enviado'
   const resumo = await jade.executarCiclo(EMPRESA, fonte.id);
   assert.equal(resumo.elegiveis, 1);
   assert.deepEqual(execs().map(e => e.numeroChamado), ['037250']);
-  assert.ok(envios.every(e => e.xml.includes('<urn:WorkflowID>037250<')));
+  assert.ok(envios.every(e => e.xml.includes('037250')));
   assert.equal(origem.chamados.get('037251').posJade, 0);
 });
 
@@ -468,6 +489,23 @@ test('devolução desligada vira resposta; ligada mantém devolver', async () =>
   assert.equal(execs()[0].decisao, 'devolver');
 });
 
+test('orientação e pedido de evidências preservam a decisão da IA e o contexto de cada caso', async () => {
+  const abertura = 'Olá! Em breve seu chamado será direcionado a um atendente. Enquanto isso, segue abaixo uma análise preliminar feita pela atendente de IA Jaade.';
+  respostasIA = [
+    { decisao: 'responder', motivo: 'há contexto', texto: `${abertura}\nConfira o parâmetro MV_TESTE e repita o teste em homologação.\nJaade, atendente de IA` },
+    { decisao: 'devolver', motivo: 'faltam evidências', texto: `${abertura}\nInforme a mensagem exibida na aprovação para identificarmos a falha.\nJaade, atendente de IA` },
+  ];
+  const orientacao = await jade.gerarTextoCliente(EMPRESA, { chamado: { numero: '037500', descricao: 'Falha no parâmetro MV_TESTE' }, anexos: [], analise: { conteudo: 'Verificação possível do parâmetro.' } });
+  const pedido = await jade.gerarTextoCliente(EMPRESA, { chamado: { numero: '037501', descricao: 'Falha na aprovação' }, anexos: [], analise: { conteudo: 'Mensagem de erro ausente.' } });
+  assert.equal(orientacao.decisao, 'responder');
+  assert.equal(pedido.decisao, 'devolver');
+  assert.ok(orientacao.texto.startsWith(abertura) && pedido.texto.startsWith(abertura));
+  assert.match(chamadasIA[0][2], /ORIENTAÇÃO PRELIMINAR/);
+  assert.match(chamadasIA[1][2], /PEDIDO DE EVIDÊNCIAS/);
+  assert.match(chamadasIA[0][3], /MV_TESTE/);
+  assert.match(chamadasIA[1][3], /Falha na aprovação/);
+});
+
 test('texto que cita outro chamado é reescrito; se insistir, não é aceito; aspas tipográficas são normalizadas', async () => {
   assert.deepEqual(jade.verificarVazamento('Veja o chamado 036999.', '037500'), ['cita o chamado 036999']);
   assert.deepEqual(jade.verificarVazamento('Seu chamado 037500 está em análise.', '037500'), []);
@@ -487,6 +525,86 @@ test('texto que cita outro chamado é reescrito; se insistir, não é aceito; as
   assert.match(execs()[0].ultimoErro, /cita o chamado/);
 });
 
+test('citação automática permanece suspensa mesmo quando há referência selecionada', async () => {
+  await ligar();
+  respostasIA = [{ ...RESPOSTA_OK, texto: 'No chamado 036900 houve um caso possivelmente semelhante; confira as condições.' }, { ...RESPOSTA_OK, texto: 'No chamado 036900 houve um caso possivelmente semelhante; confira as condições.' }];
+  const dados = { chamado: { numero: '037500' }, anexos: [], analise: { conteudo: 'Análise preliminar' }, referencias: [{ numero: '036900', trechoAtual: 'erro específico', trechoCandidato: 'erro específico' }] };
+  await assert.rejects(jade.gerarTextoCliente(EMPRESA, dados), /cita o chamado 036900/);
+  respostasIA = [{ ...RESPOSTA_OK, texto: 'Consulte o chamado 036901.' }, { ...RESPOSTA_OK, texto: 'Consulte o chamado 036901.' }];
+  await assert.rejects(jade.gerarTextoCliente(EMPRESA, dados), /cita o chamado 036901/);
+});
+
+test('simulação fictícia permite à IA selecionar pistas e monta somente números autorizados', async () => {
+  const dados = { chamado: { numero: '037500', descricao: 'Falha fictícia no faturamento' }, anexos: [], analise: { conteudo: 'Avaliar configuração do faturamento.' }, referencias: [{ numero: '036900', trechoAtual: 'Falha no faturamento', trechoCandidato: 'Falha no faturamento', trechoProcedimento: 'Revisar configuração em homologação' }] };
+  respostasIA = [{ ...RESPOSTA_OK, texto: 'Confira a configuração em homologação e repita o teste.', indicesReferencias: [0] }];
+  const r = await jade.gerarTextoCliente(EMPRESA, dados, { simularReferencias: true });
+  assert.match(r.texto, /situações semelhantes[\s\S]*\n\n036900$/);
+  assert.deepEqual(r.referenciasSelecionadas, ['036900']);
+  assert.doesNotMatch(chamadasIA.at(-1)[3], /036900/);
+  assert.match(chamadasIA.at(-1)[3], /Índice 0/);
+  respostasIA = [{ ...RESPOSTA_OK, texto: 'Confira a configuração.', indicesReferencias: [1] }, { ...RESPOSTA_OK, texto: 'Confira a configuração.', indicesReferencias: [1] }];
+  await assert.rejects(jade.gerarTextoCliente(EMPRESA, dados, { simularReferencias: true }), /seleção de referências inválida/);
+});
+
+test('ciclo de PA não cita referência e bloqueia retorno antigo com referências mesmo autorizadas', async () => {
+  const auditoria = require('../backend/repositories/investigacao-execucao-repository');
+  const orig = { identidade: chamadoRepo.identidadeConfirmadaPa, obter: chamadoRepo.obterCandidatosPorIds, numero: chamadoRepo.getChamadoPorNumero, execucoes: auditoria.listarPorAtendimento };
+  const candidato = { chamado: { id: 'ch-036900', numero: '036900', descricao: 'Ao confirmar o pedido aparece erro.' }, posicionamentos: [] };
+  const avaliacaoIa = { relevancia: 'mesmo_problema', trechoAtual: 'Ao confirmar o pedido aparece erro', origemAtual: { tipo: 'chamado', campo: 'descricao' }, trechoCandidato: 'Ao confirmar o pedido aparece erro', origemCandidato: { tipo: 'chamado', campo: 'descricao' } };
+  try {
+    chamadoRepo.identidadeConfirmadaPa = () => true;
+    chamadoRepo.obterCandidatosPorIds = (_e, _id, _ids, opts) => opts.escopo === 'cliente_pa' ? [candidato] : [];
+    chamadoRepo.getChamadoPorNumero = (e, n, ...resto) => n === '036900' ? candidato.chamado : orig.numero(e, n, ...resto);
+    auditoria.listarPorAtendimento = (_e, at) => [{ mensagemId: `msg-${at}`, manifesto: { pesquisaExterna: { baseConhecimento: { selecionados: [{ chamadoId: candidato.chamado.id, numero: '036900', avaliacaoIa }] } } } }];
+    await ligar({ modo: 'simulacao' });
+    chamadoNaOrigem('037502');
+    respostasIA = [{ ...RESPOSTA_OK, texto: 'Confira a configuração e repita o teste.', indicesReferencias: [0] }];
+    await jade.executarCiclo(EMPRESA, fonte.id);
+    assert.doesNotMatch(execs()[0].textoCliente, /036900|Referências para consulta/);
+    assert.doesNotMatch(chamadasIA.at(-1)[2], /indicesReferencias/);
+    assert.equal(envios.length, 0);
+    repo.atualizar(execs()[0].id, { estado: 'pronto', textoCliente: 'Confira a configuração.\n\nReferências para consulta: 036900' });
+    await ligar({ modo: 'publicar', usuarioSoftexpert: '995' });
+    await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+    assert.equal(execs()[0].estado, 'falha');
+    assert.match(execs()[0].ultimoErro, /suspensa/);
+    assert.equal(envios.length, 0);
+    const rodapeNovo = jade.simularReferenciasNoRodape('Confira a configuração.', '037502', [{ numero: '036900' }], [0]);
+    repo.atualizar(execs()[0].id, { estado: 'pronto', textoCliente: rodapeNovo, ultimoErro: null, alerta: false });
+    await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+    assert.equal(execs()[0].estado, 'falha');
+    assert.match(execs()[0].ultimoErro, /suspensa/);
+    assert.equal(envios.length, 0);
+    repo.atualizar(execs()[0].id, { estado: 'pronto', textoCliente: 'Confira a configuração e repita o teste.', ultimoErro: null, alerta: false });
+    await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+    assert.equal(execs()[0].estado, 'devolvido');
+    assert.deepEqual(envios.map(e => e.operacao), ['newChildEntityRecord', 'newWorkflowEditData', 'executeActivity']);
+    chamadoNaOrigem('037503');
+    respostasIA = [{ ...RESPOSTA_OK, texto: 'Confira a configuração.', indicesReferencias: [0] }];
+    await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+    const novo = execs().find(e => e.numeroChamado === '037503');
+    assert.equal(novo.estado, 'devolvido');
+    assert.doesNotMatch(novo.textoCliente, /036900|Referências para consulta/);
+  } finally {
+    chamadoRepo.identidadeConfirmadaPa = orig.identidade; chamadoRepo.obterCandidatosPorIds = orig.obter;
+    chamadoRepo.getChamadoPorNumero = orig.numero; auditoria.listarPorAtendimento = orig.execucoes;
+  }
+});
+
+test('simulação fictícia recusa referência disfarçada e registra retorno seguro sem envio', async () => {
+  await ligar({ modo: 'simulacao' });
+  chamadoNaOrigem('037501');
+  const textoSeguro = 'Olá! Verifique a configuração do parâmetro MV_XYZ e teste novamente em homologação. Se o erro persistir, informe a mensagem exibida. Jaade, atendente de IA';
+  respostasIA = [{ ...RESPOSTA_OK, texto: 'Consulte o chamado 0 3 6 9 0 0.' }, { ...RESPOSTA_OK, texto: textoSeguro }];
+  await jade.executarCiclo(EMPRESA, fonte.id);
+  const exec = execs()[0];
+  assert.equal(exec.estado, 'simulado');
+  assert.equal(exec.textoCliente, textoSeguro);
+  assert.equal(envios.length, 0);
+  const evento = jade.getAuditoria(EMPRESA, fonte.id, exec.id).eventos.find(e => e.etapa === 'retorno');
+  assert.equal(evento.situacao, 'aviso');
+});
+
 test('3 falhas de geração: falha com alerta e não volta a ser processado', async () => {
   await ligar();
   chamadoNaOrigem('037600');
@@ -500,17 +618,18 @@ test('3 falhas de geração: falha com alerta e não volta a ser processado', as
   assert.equal(exec.tentativasGeracao, 3);
 });
 
-test('publicar: grava na grade como Jaade, com a marca IA SERVICE, zero horas e os valores combinados', async () => {
+test('publicar: grava na grade como Jaade, com o status IA-RESPONDIDO, zero horas e os valores combinados; o workflow da Jaade leva o mesmo registro', async () => {
   await ligar({ modo: 'publicar', usuarioSoftexpert: '995' });
   chamadoNaOrigem('037700');
   respostasIA = [{ ...RESPOSTA_OK, texto: 'Olá “cliente”.\nJade, assistente virtual' }];
   await jade.executarCiclo(EMPRESA, fonte.id);
   const exec = execs()[0];
-  assert.equal(exec.estado, 'publicado');
+  assert.equal(exec.estado, 'devolvido');
   assert.ok(exec.publicadoEm);
-  assert.equal(envios.length, 1);
+  assert.deepEqual(envios.map(e => e.operacao), ['newChildEntityRecord', 'newWorkflowEditData', 'executeActivity']);
   const { xml } = envios[0];
-  for (const [id, valor] of [['texto4', 'IA SERVICE'], ['cduserana', '995'], ['analistaj2a', 'Jaade'], ['situacaochamado', 'Primeiro Atendimento'],
+  assert.match(xml, /<urn:WorkflowID>037700<\/urn:WorkflowID><urn:MainEntityID>itsm</);
+  for (const [id, valor] of [['texto4', 'IA-RESPONDIDO'], ['cduserana', '995'], ['analistaj2a', 'Jaade'], ['situacaochamado', 'Primeiro Atendimento'],
     ['tipoposicioname', 'N'], ['aguardanretorno', 'RETORNO - ATENDENTE'], ['horatotalnum', '0'], ['horaintconv', '0']]) {
     assert.ok(xml.includes(`<urn:EntityAttributeID>${id}</urn:EntityAttributeID><urn:EntityAttributeValue>${valor}</urn:EntityAttributeValue>`), `${id}=${valor}`);
   }
@@ -527,9 +646,16 @@ test('publicar: grava na grade como Jaade, com a marca IA SERVICE, zero horas e 
   }
   assert.ok(xml.includes('Olá &quot;cliente&quot;.'));
   assert.ok(!xml.includes('motivoapontamen'));
+  // Workflow da Jaade: processo e formulário fixos, mesmo registro da grade, título com o chamado.
+  const abertura = envios[1].xml;
+  assert.match(abertura, /<urn:ProcessID>ITSM-02-I\.A-P\.A<\/urn:ProcessID><urn:WorkflowTitle>Jaade - PA do chamado 037700<\/urn:WorkflowTitle><urn:UserID>10677535000155<\/urn:UserID>/);
+  assert.match(abertura, /<urn:EntityID>itsm02iapa<\/urn:EntityID>/);
+  const atributos = (x) => x.match(/<urn:EntityAttribute>.*?<\/urn:EntityAttribute>/g).filter(a => !/<urn:EntityAttributeID>(dataatual|horaatual|horaini|horafim|horainiconv|horafimconv)</.test(a));
+  assert.deepEqual(atributos(abertura), atributos(xml), 'mesmo registro da grade (fora data/hora do instante)');
+  assert.match(envios[2].xml, /<urn:WorkflowID>WFJ-037700<\/urn:WorkflowID><urn:ActivityID>ATV-01<\/urn:ActivityID><urn:ActionSequence>1<\/urn:ActionSequence><urn:UserID>10677535000155</);
   const situacao = jade.getAuditoria(EMPRESA, fonte.id, exec.id).eventos.find(e => e.etapa === 'situacao');
   assert.equal(situacao.situacao, 'ok');
-  assert.match(situacao.resumo, /segue em ATV-02 Primeiro Atendimento, aguardando a triagem/);
+  assert.match(situacao.resumo, /Chamado em ATV-03 \(o workflow da Jaade segue pelo status IA-RESPONDIDO\)/);
 });
 
 test('envio não confirmado que entrou no SoftExpert: o próximo ciclo reconhece e nunca duplica', async () => {
@@ -541,9 +667,65 @@ test('envio não confirmado que entrou no SoftExpert: o próximo ciclo reconhece
   assert.equal(execs()[0].estado, 'publicando');
   comportamentoEnvio = 'ok';
   await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
-  assert.equal(execs()[0].estado, 'publicado');
-  assert.equal(envios.length, 1);
+  assert.equal(execs()[0].estado, 'devolvido');
+  assert.equal(envios.filter(e => e.operacao === 'newChildEntityRecord').length, 1);
   assert.equal(origem.chamados.get('037800').posJade, 1);
+});
+
+test('workflow da Jaade com resposta perdida: o próximo ciclo acha a instância pelo título e nunca abre outra', async () => {
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995' });
+  chamadoNaOrigem('037810');
+  respostasIA = [RESPOSTA_OK];
+  const original = soapReal.enviarOperacao;
+  // A abertura entra no SoftExpert, mas a resposta se perde.
+  soapReal.enviarOperacao = async (args) => {
+    const r = await original(args);
+    if (args.operacao === 'newWorkflowEditData') throw Object.assign(new Error('timeout'), { resultadoIndeterminado: true });
+    return r;
+  };
+  try {
+    await jade.executarCiclo(EMPRESA, fonte.id);
+  } finally {
+    soapReal.enviarOperacao = original;
+  }
+  assert.equal(execs()[0].estado, 'devolvendo');
+  assert.equal(origem.workflows.size, 1);
+  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  assert.equal(execs()[0].estado, 'devolvido');
+  assert.deepEqual(envios.map(e => e.operacao), ['newChildEntityRecord', 'newWorkflowEditData', 'executeActivity']);
+  assert.equal(origem.workflows.size, 1, 'uma instância só');
+  // Execução já feita: nada é reenviado.
+  repo.atualizar(execs()[0].id, { estado: 'devolvendo' });
+  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  assert.equal(envios.length, 3);
+  assert.equal(execs()[0].estado, 'devolvido');
+});
+
+test('workflow da Jaade recusado 3 vezes: falha com alerta e WhatsApp em "PA Não Respondido"', async () => {
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995' });
+  chamadoNaOrigem('037820');
+  respostasIA = [RESPOSTA_OK];
+  const original = soapReal.enviarOperacao;
+  soapReal.enviarOperacao = async (args) => {
+    if (args.operacao !== 'newWorkflowEditData') return original(args);
+    envios.push({ operacao: args.operacao, xml: args.xml });
+    return { Status: 'FAILURE', Code: '-20', Detail: 'campo inexistente' };
+  };
+  try {
+    for (let i = 0; i < 5; i++) await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  } finally {
+    soapReal.enviarOperacao = original;
+  }
+  const exec = execs()[0];
+  assert.equal(exec.estado, 'falha');
+  assert.equal(exec.alerta, true);
+  assert.equal(exec.tentativasDevolucao, 3);
+  assert.equal(envios.filter(e => e.operacao === 'newWorkflowEditData').length, 3);
+  assert.ok(!envios.some(e => e.operacao === 'executeActivity'));
+  const erros = jade.getAuditoria(EMPRESA, fonte.id, exec.id).eventos.filter(e => e.etapa === 'workflow' && e.situacao === 'erro');
+  assert.match(erros[0].resumo, /Tentativa 1\/3: o SoftExpert recusou a abertura do workflow da Jaade — campo inexistente/);
+  assert.equal(aviso.classificar(exec), 'falha');
+  assert.match(aviso.linhaDoChamado(EMPRESA, exec, 'falha'), / — PA gravado, mas e-mail NÃO enviado p\/ o cliente\.$/);
 });
 
 test('SoftExpert recusando 3 vezes: falha com alerta, sem quarta tentativa', async () => {
@@ -572,7 +754,20 @@ test('triagem atua entre a geração e o envio: nada é gravado', async () => {
   assert.equal(envios.length, 0);
 });
 
-test('devolver: grava o pedido, executa só ATV-02 ação 1 com a matrícula da Jaade e confirma a chegada na ATV-06', async () => {
+test('referência não autorizada inserida após geração bloqueia publicação', async () => {
+  await ligar({ modo: 'simulacao' });
+  chamadoNaOrigem('038001');
+  respostasIA = [RESPOSTA_OK];
+  await jade.executarCiclo(EMPRESA, fonte.id);
+  repo.atualizar(execs()[0].id, { estado: 'pronto', textoCliente: 'Consulte o chamado 036999.' });
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995' });
+  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  assert.equal(execs()[0].estado, 'falha');
+  assert.match(execs()[0].ultimoErro, /referência não autorizada/i);
+  assert.equal(envios.length, 0);
+});
+
+test('pedir informação: grava IA-INFORMACAO na grade e no workflow da Jaade e não movimenta o ITSM-02', async () => {
   await ligar({ modo: 'publicar', usuarioSoftexpert: '995', devolucaoAtiva: true });
   chamadoNaOrigem('038100');
   respostasIA = [DEVOLVER];
@@ -580,9 +775,10 @@ test('devolver: grava o pedido, executa só ATV-02 ação 1 com a matrícula da 
   const exec = execs()[0];
   assert.equal(exec.estado, 'devolvido');
   assert.ok(exec.devolvidoEm);
-  assert.deepEqual(envios.map(e => e.operacao), ['newChildEntityRecord', 'executeActivity']);
-  const mov = envios[1].xml;
-  assert.match(mov, /<urn:ActivityID>ATV-02<\/urn:ActivityID><urn:ActionSequence>1<\/urn:ActionSequence><urn:UserID>10677535000155<\/urn:UserID>/);
+  assert.deepEqual(envios.map(e => e.operacao), ['newChildEntityRecord', 'newWorkflowEditData', 'executeActivity']);
+  for (const { xml } of envios.slice(0, 2)) assert.ok(xml.includes('<urn:EntityAttributeID>texto4</urn:EntityAttributeID><urn:EntityAttributeValue>IA-INFORMACAO</urn:EntityAttributeValue>'));
+  assert.match(envios[2].xml, /<urn:WorkflowID>WFJ-038100<\/urn:WorkflowID><urn:ActivityID>ATV-01</);
+  assert.ok(!envios.some(e => /<urn:WorkflowID>038100<\/urn:WorkflowID><urn:ActivityID>/.test(e.xml)), 'nenhuma ação no ITSM-02');
 });
 
 test('auditoria: fluxo completo registra cada etapa e o que foi gravado, sem token', async () => {
@@ -593,16 +789,19 @@ test('auditoria: fluxo completo registra cada etapa e o que foi gravado, sem tok
   const exec = execs()[0];
   const { execucao, eventos } = jade.getAuditoria(EMPRESA, fonte.id, exec.id);
   assert.equal(execucao.numeroChamado, '038150');
-  for (const etapa of ['deteccao', 'importacao', 'anexos', 'analise', 'retorno', 'envio', 'devolucao', 'situacao']) {
+  for (const etapa of ['deteccao', 'importacao', 'anexos', 'analise', 'retorno', 'envio', 'workflow', 'situacao']) {
     assert.ok(eventos.some(e => e.etapa === etapa && e.situacao === 'ok'), `etapa ${etapa} concluída`);
   }
   const envio = eventos.find(e => e.etapa === 'envio' && e.situacao === 'ok');
-  assert.equal(envio.detalhes.campos.texto4, 'IA SERVICE');
+  assert.equal(envio.detalhes.campos.texto4, 'IA-INFORMACAO');
   assert.equal(envio.detalhes.resposta.Status, 'SUCCESS');
   assert.ok(eventos.find(e => e.etapa === 'retorno').detalhes.texto);
-  assert.match(eventos.find(e => e.etapa === 'devolucao' && e.situacao === 'ok').detalhes.acao, /Retornar para cliente/);
+  const workflow = eventos.find(e => e.etapa === 'workflow' && e.situacao === 'ok');
+  assert.equal(workflow.detalhes.workflow, 'WFJ-038150');
+  assert.equal(workflow.detalhes.atividade, 'ATV-01');
+  assert.equal(eventos.find(e => e.etapa === 'workflow' && e.situacao === 'info').detalhes.processo, 'ITSM-02-I.A-P.A');
   const situacao = eventos.find(e => e.etapa === 'situacao');
-  assert.match(situacao.resumo, /Avançou no SoftExpert: chamado em ATV-06 Retorno do Usuário/);
+  assert.match(situacao.resumo, /Chamado em ATV-06 Retorno do Usuário/);
   assert.match(situacao.detalhes.posicionamentoJade, /encontrado na grade/);
   assert.ok(!JSON.stringify(eventos).match(/token|Bearer|soapenv/i));
   assert.throws(() => jade.getAuditoria(EMPRESA + 1, fonte.id, exec.id));
@@ -631,7 +830,7 @@ test('auditoria: recusa do SoftExpert e falha da IA ficam como erro na etapa cer
   assert.ok(semIa.detalhes.erroTecnico.pilha);
 });
 
-test('devolver: triagem atuou depois do posicionamento → devolução cancelada', async () => {
+test('triagem atuou depois do posicionamento → workflow da Jaade não é aberto', async () => {
   await ligar({ modo: 'publicar', usuarioSoftexpert: '995', devolucaoAtiva: true });
   chamadoNaOrigem('038200');
   respostasIA = [DEVOLVER];
@@ -650,8 +849,11 @@ test('devolver: triagem atuou depois do posicionamento → devolução cancelada
   }
   const exec = execs()[0];
   assert.equal(exec.estado, 'publicado');
-  assert.match(exec.motivo, /devolução cancelada/);
-  assert.ok(!envios.some(e => e.operacao === 'executeActivity'));
+  assert.equal(exec.alerta, false);
+  assert.deepEqual(envios.map(e => e.operacao), ['newChildEntityRecord']);
+  const ev = jade.getAuditoria(EMPRESA, fonte.id, exec.id).eventos.find(e => e.etapa === 'workflow');
+  assert.equal(ev.situacao, 'aviso');
+  assert.match(ev.resumo, /a triagem atuou/);
 });
 
 test('texto ao cliente: link só da pesquisa; texto escrito para o analista é recusado', () => {
@@ -730,7 +932,7 @@ test('aviso WhatsApp: PA pela Jaade vai ao grupo de "com PA" uma única vez, com
     chamadoNaOrigem('037118');
     respostasIA = [RESPOSTA_OK];
     const resumo = await jade.executarCiclo(EMPRESA, fonte.id);
-    assert.equal(execs()[0].estado, 'publicado');
+    assert.equal(execs()[0].estado, 'devolvido');
     assert.equal(whats.length, 1);
     // O resultado do WhatsApp aparece no lote e na última leitura.
     assert.deepEqual(resumo.avisos.mensagens, ['WhatsApp (PA respondido): 1 chamado(s) avisado(s), entregue a 2 de 2 número(s).']);
@@ -795,7 +997,7 @@ test('aviso WhatsApp: uma mensagem por seção, cada uma à sua coluna; falha de
   try {
     let resumo;
     for (let i = 0; i < 5; i++) resumo = await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
-    assert.deepEqual(execs().map(e => [e.numeroChamado, e.estado]).sort(), [['039001', 'publicado'], ['039002', 'falha']]);
+    assert.deepEqual(execs().map(e => [e.numeroChamado, e.estado]).sort(), [['039001', 'devolvido'], ['039002', 'falha']]);
     // O publicado sai no 1º ciclo e a falha só no 4º: cada um na sua leitura.
     const porGrupos = Object.fromEntries(whats.map(w => [w.corpo.grupoIds.join(','), w.corpo]));
     assert.equal(porGrupos['g-ambos,g-coord'].texto, '✅ Jaade IA - 1 Chamado(s) - PA Respondido\n• #039001 · Produto não informado - Cliente não identificado');
@@ -864,7 +1066,7 @@ test('aviso WhatsApp: simulação envia marcada como teste; sem grupo escolhido 
   respostasIA = [RESPOSTA_OK];
   const semGrupo = await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
   const publicado = execs().find(e => e.numeroChamado === '038501');
-  assert.equal(publicado.estado, 'publicado');
+  assert.equal(publicado.estado, 'devolvido');
   assert.ok(publicado.avisoWhatsappEm);
   assert.equal(semGrupo.avisos.situacao, 'aviso');
   assert.deepEqual(semGrupo.avisos.mensagens, ['WhatsApp (PA respondido): 1 chamado(s) sem aviso, nenhum grupo escolhido.']);
@@ -905,74 +1107,28 @@ test('reserva de envio é atômica: registro lido desatualizado não envia', () 
   assert.equal(repo.contarTentativa(exec.id, 'publicacao', 'publicando', { estadoAnterior: 'publicando', tentativasAnteriores: 1 }), null);
 });
 
-test('transporte: só as movimentações ATV-02 / ação 1 e ação 6 passam pela validação', async () => {
-  const ok = soapReal.montarDevolucaoPrimeiroAtendimento({ workflowId: '038300', userId: '1' });
-  const email = soapReal.montarNotificacaoPrimeiroAtendimento({ workflowId: '038300', userId: '1' });
-  assert.match(email, /<urn:ActivityID>ATV-02<\/urn:ActivityID><urn:ActionSequence>6<\/urn:ActionSequence>/);
-  const outra = ok.replace('<urn:ActivityID>ATV-02</urn:ActivityID>', '<urn:ActivityID>ATV-03</urn:ActivityID>');
-  const outraAcao = ok.replace('<urn:ActionSequence>1</urn:ActionSequence>', '<urn:ActionSequence>3</urn:ActionSequence>');
-  const acao6OutraAtividade = email.replace('<urn:ActivityID>ATV-02</urn:ActivityID>', '<urn:ActivityID>ATV-04</urn:ActivityID>');
+test('transporte: só o processo ITSM-02-I.A-P.A e a ATV-01 / ação 1 passam pela validação', async () => {
+  const exec = soapReal.montarExecucaoWorkflowJade({ workflowId: '000123', userId: '1' });
+  const abre = soapReal.montarAberturaWorkflowJade({ titulo: 'Jaade - PA do chamado 038300', userId: '1', campos: { texto4: 'IA-RESPONDIDO' } });
+  assert.match(exec, /<urn:ActivityID>ATV-01<\/urn:ActivityID><urn:ActionSequence>1<\/urn:ActionSequence>/);
   // enviarOperacao real valida o envelope antes de qualquer rede.
-  for (const xml of [outra, outraAcao, acao6OutraAtividade]) {
+  for (const xml of [exec.replace('ATV-01', 'ATV-02'), exec.replace('<urn:ActionSequence>1<', '<urn:ActionSequence>6<')]) {
     await assert.rejects(enviarReal({ xml }), /Movimentação de workflow não permitida/);
   }
+  await assert.rejects(enviarReal({ xml: abre.replace('ITSM-02-I.A-P.A', 'ITSM-02'), operacao: 'newWorkflowEditData' }), /Abertura de workflow não permitida/);
+  assert.throws(() => soapReal.montarAberturaWorkflowJade({ titulo: 'x', userId: '1', campos: {} }), /não pode ir vazio/);
+  assert.throws(() => jade.montarAtributosPosicionamento({ contrato: CONTRATO, chamado: { numero: '1' }, jade: { codigo: '995', nome: 'J' }, texto: 'x' }), /Decisão da Jaade ausente/);
   // Os envelopes permitidos passam da validação e só falham no transporte (host inexistente).
-  for (const xml of [ok, email]) await assert.rejects(enviarReal({ xml }), (err) => !/Movimentação/.test(err.message));
-});
-
-test('responder: na revisão 89+ (ação 6 no PA) manda o e-mail ao cliente e o chamado segue na triagem; sem a ação, só a grade', async () => {
-  await ligar({ modo: 'publicar', usuarioSoftexpert: '995' });
-  chamadoNaOrigem('038600', { acao6: true });
-  chamadoNaOrigem('038601');
-  respostasIA = [RESPOSTA_OK, RESPOSTA_OK];
-  await jade.executarCiclo(EMPRESA, fonte.id);
-  const por = Object.fromEntries(execs().map(e => [e.numeroChamado, e]));
-  // Revisão 89+: grava na grade e executa ATV-02 / ação 6 com a matrícula da Jaade.
-  const mov = envios.filter(e => e.operacao === 'executeActivity');
-  assert.equal(mov.length, 1);
-  assert.match(mov[0].xml, /<urn:WorkflowID>038600<\/urn:WorkflowID><urn:ActivityID>ATV-02<\/urn:ActivityID><urn:ActionSequence>6<\/urn:ActionSequence><urn:UserID>10677535000155</);
-  assert.equal(por['038600'].estado, 'publicado');
-  assert.deepEqual(origem.chamados.get('038600').ativas, ['ATV-02'], 'segue no Primeiro Atendimento');
-  const ev600 = jade.getAuditoria(EMPRESA, fonte.id, por['038600'].id).eventos.find(e => e.etapa === 'notificacao');
-  assert.equal(ev600.situacao, 'ok');
-  assert.match(ev600.resumo, /Enviar retorno da Jaade ao cliente.*voltou ao Primeiro Atendimento/);
-  // Revisão anterior: só a grade, sem movimentar.
-  assert.equal(por['038601'].estado, 'publicado');
-  const ev601 = jade.getAuditoria(EMPRESA, fonte.id, por['038601'].id).eventos.find(e => e.etapa === 'notificacao');
-  assert.equal(ev601.situacao, 'info');
-  assert.match(ev601.resumo, /sem a ação 6/);
-
-  // Recusa da ação 6: não repete (evita e-mail duplicado) e o chamado continua publicado.
-  chamadoNaOrigem('038602', { acao6: true });
-  respostasIA = [RESPOSTA_OK];
-  const enviarOriginal = soapReal.enviarOperacao;
-  soapReal.enviarOperacao = async (args) => (args.operacao === 'executeActivity' ? { Status: 'FAILURE', Code: '-9', Detail: 'sem permissão' } : enviarOriginal(args));
-  try {
-    await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
-  } finally {
-    soapReal.enviarOperacao = enviarOriginal;
-  }
-  // Recusada (teste real 037067: -20 regra de salvar formulário): cliente não avisado = alerta,
-  // e o WhatsApp leva o chamado em "PA Não Respondido".
-  const e602 = execs().find(e => e.numeroChamado === '038602');
-  assert.equal(e602.estado, 'publicado');
-  assert.equal(e602.alerta, true);
-  const ev602 = jade.getAuditoria(EMPRESA, fonte.id, e602.id).eventos.find(e => e.etapa === 'notificacao');
-  assert.equal(ev602.situacao, 'erro');
-  assert.match(ev602.resumo, /recusou a ação.*sem permissão/);
-  assert.equal(aviso.classificar(e602), 'falha');
-  assert.match(aviso.linhaDoChamado(EMPRESA, e602, 'falha'), / — PA gravado, mas e-mail NÃO enviado p\/ o cliente\.$/);
-  const antes = envios.length;
-  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
-  assert.equal(envios.length, antes, 'nada é reenviado');
+  await assert.rejects(enviarReal({ xml: exec }), (err) => !/Movimentação/.test(err.message));
+  await assert.rejects(enviarReal({ xml: abre, operacao: 'newWorkflowEditData' }), (err) => !/Abertura/.test(err.message));
 });
 
 // Cliente SOAP recarregado sem o stub de envio, para validar o envelope real.
-function enviarReal({ xml }) {
+function enviarReal({ xml, operacao = 'executeActivity' }) {
   const p = require.resolve('../backend/services/softexpert-soap-client');
   const cache = require.cache[p];
   delete require.cache[p];
   const novo = require('../backend/services/softexpert-soap-client');
   require.cache[p] = cache;
-  return novo.enviarOperacao({ origem: 'https://se.teste', apiKey: 'x', authorizationMode: 'bearer', encoding: 'utf8', xml, operacao: 'executeActivity', timeoutMs: 1 });
+  return novo.enviarOperacao({ origem: 'https://se.teste', apiKey: 'x', authorizationMode: 'bearer', encoding: 'utf8', xml, operacao, timeoutMs: 1 });
 }

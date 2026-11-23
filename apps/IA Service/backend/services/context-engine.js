@@ -1020,7 +1020,7 @@ function _formatarAnexo(anexo, textoPreparado, preparado = null) {
   return `--- Anexo: ${anexo.nomeOriginal}${linguagem} [${marcador}] ---\n${cobertura}${textoPreparado}\n--- fim de ${anexo.nomeOriginal} ---`;
 }
 
-function _selecionarPesquisaExterna(pesquisa, pesquisaTecnicaTextoCompleto, tokensDisponiveis) {
+function _selecionarPesquisaExterna(pesquisa, pesquisaTecnicaTextoCompleto, tokensDisponiveis, relacionados = []) {
   // Orientações para a resposta (seção marcada no fim do texto da pesquisa)
   // são instruções, não conteúdo de pesquisa: sempre preservadas, mesmo quando
   // o texto é remontado só com as páginas lidas ou cortado por orçamento
@@ -1030,7 +1030,39 @@ function _selecionarPesquisaExterna(pesquisa, pesquisaTecnicaTextoCompleto, toke
   const iMarcador = completo.indexOf(marcador);
   const orientacoes = iMarcador >= 0 ? completo.slice(iMarcador).trim() : '';
   const pesquisaTecnicaTexto = iMarcador >= 0 ? completo.slice(0, iMarcador).trim() : completo;
-  const resultado = _selecionarPesquisaExternaSemOrientacoes(pesquisa, pesquisaTecnicaTexto, tokensDisponiveis);
+  // Ao remontar páginas lidas, a seção de candidatos do texto original seria
+  // descartada. Reserve parte do orçamento e inclua apenas trechos rastreáveis.
+  const tetoCandidatos = relacionados.length ? Math.floor(Math.max(0, tokensDisponiveis || 0) * 0.25) : 0;
+  const resultado = _selecionarPesquisaExternaSemOrientacoes(pesquisa, pesquisaTecnicaTexto, Math.max(0, (tokensDisponiveis || 0) - tetoCandidatos));
+  resultado.manifesto.baseConhecimento = { selecionados: [], omitidos: [] };
+  if (tetoCandidatos > 0) {
+    const linhas = ['Candidatos da base interna (relevância e solução não confirmadas):'];
+    let usados = tokenBudget.estimarTokens(linhas[0]);
+    for (const r of relacionados) {
+      const c = r.chamado || r;
+      const bloco = [`Chamado #${c.numero || c.id}: ${String(c.titulo || '').slice(0, 180)}`,
+        `Descrição: ${String(c.descricao || c.breveDescricao || c.assunto || '').slice(0, 500)}`,
+        `Correspondências: ${(r.motivos || []).join('; ').slice(0, 400)}`,
+        ...(r.avaliacaoIa ? [`Avaliação preliminar da IA: ${r.avaliacaoIa.relevancia}; ${String(r.avaliacaoIa.justificativa || '').slice(0, 300)}`] : []),
+        ...(r.avaliacaoIa?.diferencas ? [`Possíveis diferenças: ${r.avaliacaoIa.diferencas}`] : []),
+        ...(r.avaliacaoIa?.lacunas ? [`Lacunas a verificar: ${r.avaliacaoIa.lacunas}`] : []),
+        ...(r.avaliacaoIa?.trechoAtual && r.avaliacaoIa?.trechoCandidato ? [`Trechos para conferência: atual: ${r.avaliacaoIa.trechoAtual}; candidato: ${r.avaliacaoIa.trechoCandidato}`] : []),
+        ...(r.avaliacaoIa?.trechoProcedimento ? [`Procedimento registrado (a conferir): ${r.avaliacaoIa.trechoProcedimento}`] : []),
+        ...(r.avaliacaoIa?.trechoResultado ? [`Resultado registrado (a conferir): ${r.avaliacaoIa.trechoResultado}`] : []),
+        ...(r.registrosResultado || []).slice(0, 2).map(p => `Resultado registrado (${p.posicionamentoId || 'sem id'}): ${String(p.texto || '').slice(0, 500)}`),
+      ].join('\n');
+      const custo = tokenBudget.estimarTokens(bloco);
+      if (usados + custo > tetoCandidatos) { resultado.manifesto.baseConhecimento.omitidos.push({ chamadoId: c.id, numero: c.numero, motivo: 'orçamento de contexto' }); continue; }
+      linhas.push(bloco);
+      usados += custo;
+      resultado.manifesto.baseConhecimento.selecionados.push({ chamadoId: c.id, numero: c.numero, avaliacaoIa: r.avaliacaoIa || null });
+    }
+    if (linhas.length > 1) {
+      resultado.texto = [resultado.texto, linhas.join('\n')].filter(Boolean).join('\n\n');
+      resultado.manifesto.tokensUsados += usados;
+    }
+  }
+  if (!tetoCandidatos) for (const r of relacionados) resultado.manifesto.baseConhecimento.omitidos.push({ chamadoId: (r.chamado || r).id, numero: (r.chamado || r).numero, motivo: 'sem orçamento de contexto' });
   if (orientacoes) resultado.texto = [resultado.texto, orientacoes].filter(Boolean).join('\n\n');
   return resultado;
 }
@@ -1117,6 +1149,7 @@ function montarContextoInvestigacao({
   analistaAtualNome = null,
   textoPrints = '',
   chamado = null,
+  escopoPrimeiroAtendimento = false,
 } = {}) {
   const termos = _termos([mensagemAtual, atendimento?.conteudoBruto].filter(Boolean).join('\n'));
   // Documentos textuais usam um conjunto de termos mais amplo que o de
@@ -1341,7 +1374,7 @@ function montarContextoInvestigacao({
   const pdfsVisuaisSelecionados = anexosSelecionados.filter(c => c.pdfVisual);
   const tokensRestantesParaPesquisa = Math.max(0, orcamento.entradaDisponivel - usados);
   const tetoPesquisa = Math.min(tokensRestantesParaPesquisa, Math.floor(orcamento.entradaDisponivel * 0.25));
-  const pesquisaSelecionada = _selecionarPesquisaExterna(pesquisa, pesquisaTecnicaTexto, tetoPesquisa);
+  const pesquisaSelecionada = _selecionarPesquisaExterna(pesquisa, pesquisaTecnicaTexto, tetoPesquisa, relacionados);
   usados += pesquisaSelecionada.manifesto.tokensUsados;
   const quadroInvestigativo = _montarQuadroInvestigativo({
     atendimento,
@@ -1354,7 +1387,7 @@ function montarContextoInvestigacao({
     chamado,
     // Resolve so titulo/situacao do chamado citado na base local (1 SELECT por
     // numero, no maximo 8). Nao carrega historico nem consulta a origem.
-    resolverChamado: (numero) => {
+    resolverChamado: escopoPrimeiroAtendimento ? null : (numero) => {
       const c = require('../repositories/chamado-repository')
         .getChamadoPorNumero(atendimento.empresaId, numero, atendimento.origem || chamado?.sistemaOrigem || 'softexpert');
       return c ? { titulo: c.titulo, situacao: c.statusEncerramento, aguardando: c.aguardandoConsolidado } : null;

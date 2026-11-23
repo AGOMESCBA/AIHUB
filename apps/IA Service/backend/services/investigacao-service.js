@@ -19,6 +19,9 @@ const { validarFluxoFonte } = require('./validacao-fluxo-fonte-service');
 const respostaOperacionalService = require('./resposta-operacional-service');
 const { construirRespostaBloqueada } = require('./resposta-validacao-fonte-service');
 const chamadoRepo = require('../repositories/chamado-repository');
+const baseConhecimentoAvaliacao = require('./base-conhecimento-avaliacao-service');
+const baseConhecimentoHibrida = require('./base-conhecimento-hibrida-service');
+const baseConhecimentoEconomia = require('./base-conhecimento-economia-service');
 const anexosSoftExpertService = require('./anexos-softexpert-service');
 const technicalResearchService = require('./technical-research-service');
 const contextEngine = require('./context-engine');
@@ -1155,7 +1158,7 @@ async function _garantirAnexosDoChamado(empresaId, atendimento) {
   }
 }
 
-async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, consultorId = null, anexoIds = [], automatico = false, anexosComoContexto = false, forcarPesquisa = false, analistaAtualNome = null, origemAcao: origemAcaoInformada = null }) {
+async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, consultorId = null, anexoIds = [], automatico = false, anexosComoContexto = false, forcarPesquisa = false, analistaAtualNome = null, origemAcao: origemAcaoInformada = null, escopoPrimeiroAtendimento = false, chamadoIdPa = null }) {
   const inicioTurno = Date.now();
   const temposEtapasMs = {};
   const atendimento = mensagemService.getAtendimento(empresaId, atendimentoId);
@@ -1187,6 +1190,9 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     historico = mensagemRepo.listarMensagens(empresaId, atendimentoId)
       .filter(m => m.id !== mensagemUsuario.id); // histórico ANTERIOR a este turno
   }
+
+  // Respostas anteriores podem ter usado histórico de outro cliente.
+  if (escopoPrimeiroAtendimento) historico = historico.filter(m => m.papel !== 'assistant');
 
   // A humanização é apresentação. Nos próximos turnos, pesquisa e Context
   // Engine continuam recebendo a resposta técnica completa, sem alterar o
@@ -1242,7 +1248,8 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   // "Pesquisar Soluções" sempre quer investigação completa) e sem anexo novo
   // deste turno (anexo novo é, quase sempre, evidência técnica). A
   // classificação roda junto com a conferência de anexos (não depende dela).
-  const podeSerConversa = !automatico && !forcarPesquisa && anexoIds.length === 0 && !!mensagemUsuario;
+  const pedidoPesquisaExplicito = !automatico && !!mensagemUsuario && technicalResearchService._temPedidoExplicitoPesquisa(texto);
+  const podeSerConversa = !automatico && !forcarPesquisa && !pedidoPesquisaExplicito && anexoIds.length === 0 && !!mensagemUsuario;
   let conversaTurno = null;
   if (podeSerConversa) {
     const { keys, cfg } = aiConfigService.resolverKeysEOrdem(empresaId);
@@ -1309,17 +1316,21 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
   let pesquisaTecnicaTexto = '';
   let pesquisaTecnica = null;
   let relacionados = [];
+  let diagnosticoBaseConhecimento = { estado: 'nao_executada', avaliados: 0 };
   let textoPrintsPesquisa = '';
   let dossieOperacionalTurno = null;
+  let identidadePaConfirmada = null;
   let chamado = null;
   try {
-    chamado = atendimento.referenciaExterna
-      ? chamadoRepo.getChamadoPorNumero(empresaId, atendimento.referenciaExterna, atendimento.origem)
-      : null;
+    chamado = escopoPrimeiroAtendimento
+      ? (chamadoIdPa ? chamadoRepo.getChamado(empresaId, chamadoIdPa) : null)
+      : (atendimento.referenciaExterna ? chamadoRepo.getChamadoPorNumero(empresaId, atendimento.referenciaExterna, atendimento.origem) : null);
+    if (escopoPrimeiroAtendimento && chamado && (String(chamado.numero) !== String(atendimento.referenciaExterna) || chamado.sistemaOrigem !== atendimento.origem)) chamado = null;
     const { cfg: cfgPesquisa } = aiConfigService.resolverKeysEOrdem(empresaId);
     const modeloPesquisa = cfgPesquisa?.modelos?.[cfgPesquisa?.provedorPrimario] || Object.values(cfgPesquisa?.modelos || {})[0] || null;
     const orcamentoPesquisa = tokenBudget.criarOrcamento({ modelo: modeloPesquisa, systemPrompt: systemPromptTurno });
     try {
+      if (escopoPrimeiroAtendimento) throw new Error('Memória anterior omitida no Primeiro Atendimento.');
       if (!(await _medir(temposEtapasMs, 'esperaDossiePendente', aguardarDossiePendente(empresaId, atendimentoId)))) {
         console.warn('[IA Service] Atualização anterior do dossiê ainda em curso; turno segue com o dossiê atual.');
       }
@@ -1358,28 +1369,12 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       } catch (gateErr) {
         console.error('[IA Service] Gate de pendencia externa falhou, mantendo comportamento atual:', gateErr.message);
         decisaoPesquisaExterna = null;
-        // Botão e pré-análise nunca pesquisam sob pendência externa (decisão do
-        // usuário, 2026-10): se a confirmação na origem falhar, vale a situação
-        // local. Só o pedido no chat continua com o comportamento atual.
+        // Na falha da consulta, preserva-se o bloqueio apenas automático.
         const local = pendenciaExternaGate.classificarPendencia(chamado);
-        if (local.externa && origemAcao !== pendenciaExternaGate.ORIGEM.TEXTO_LIVRE) {
+        if (local.externa && origemAcao === pendenciaExternaGate.ORIGEM.AUTOMATICO) {
           decisaoPesquisaExterna = { liberada: false, pendencia: local, origemAcao, chamadaIA: false, motivo: `${origemAcao}_sem_pesquisa_sob_pendencia_externa (situacao local; confirmacao na origem falhou): aguardando ${local.responsavel}` };
         }
       }
-    }
-    // Botão Pesquisar sob pendência de cliente/fornecedor: não pesquisa nem
-    // resume o chamado — só avisa que estamos aguardando o retorno (decisão do
-    // usuário, 2026-10). Mensagem fixa, sem chamada à IA. Pedido no chat segue
-    // o fluxo normal.
-    if (decisaoPesquisaExterna && !decisaoPesquisaExterna.liberada && origemAcao === pendenciaExternaGate.ORIGEM.BOTAO) {
-      const quem = decisaoPesquisaExterna.pendencia?.responsavel || 'cliente';
-      const aviso = quem === 'cliente'
-        ? 'Este chamado já teve retorno enviado ao cliente e estamos aguardando a resposta dele, por isso não fiz uma nova pesquisa agora. Se quiser que eu pesquise mesmo assim, é só pedir aqui no chat.'
-        : `Este chamado está aguardando o retorno do ${quem}, por isso não fiz uma nova pesquisa agora. Se quiser que eu pesquise mesmo assim, é só pedir aqui no chat.`;
-      return mensagemRepo.salvarMensagem(empresaId, atendimentoId, {
-        papel: 'assistant', conteudo: aviso, usuarioId: null,
-        diagnostico: { pendenciaExterna: { responsavel: quem, origemAcao, motivo: decisaoPesquisaExterna.motivo } },
-      });
     }
     const pesquisaExternaBloqueada = decisaoPesquisaExterna && !decisaoPesquisaExterna.liberada
       ? { responsavel: decisaoPesquisaExterna.pendencia.responsavel, origemAcao, motivo: decisaoPesquisaExterna.motivo }
@@ -1389,13 +1384,35 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     if (!pesquisaExternaBloqueada && (primeiraAnalise || temImagemNova)) {
       textoPrintsPesquisa = await _medir(temposEtapasMs, 'leituraPrints', _transcreverPrintsParaBusca(empresaId, todosAnexosDoAtendimento));
     }
+    // No PA, `texto` é a instrução fixa de pré-análise, não um relato do
+    // cliente; usá-la como consulta adiciona palavras genéricas ao ranking.
+    const contextoBusca = [textoPrintsPesquisa, escopoPrimeiroAtendimento ? null : texto, ...historico.filter(m => m.papel !== 'assistant').slice(-4).map(m => m.conteudo)].filter(Boolean).join('\n');
+    if (escopoPrimeiroAtendimento && chamado) identidadePaConfirmada = chamadoRepo.identidadeConfirmadaPa(empresaId, chamado.id);
+    const expansao = chamado && (!escopoPrimeiroAtendimento || identidadePaConfirmada)
+      ? await baseConhecimentoAvaliacao.expandirBusca(empresaId, chamado, { textoContexto: contextoBusca })
+      : { termos: [], estado: 'nao_executada' };
     relacionados = chamado ? chamadoRepo.listarChamadosRelacionados(empresaId, chamado.id, {
-      limite: 5,
-      textoContexto: [textoPrintsPesquisa, texto, ...historico.filter(m => m.papel !== 'assistant').slice(-4).map(m => m.conteudo)].filter(Boolean).join('\n'),
+      limite: 15,
+      escopo: escopoPrimeiroAtendimento ? 'cliente_pa' : 'empresa',
+      textoContexto: contextoBusca,
+      termosExpandidos: expansao.termos,
     }) : [];
+    const hibrida = chamado ? await baseConhecimentoHibrida.combinar(empresaId, chamado.id, relacionados, { escopo: escopoPrimeiroAtendimento ? 'cliente_pa' : 'empresa', textoContexto: contextoBusca }) : { candidatos: relacionados, estadoVetorial: 'nao_executada' };
+    relacionados = hibrida.candidatos;
+    if (chamado && relacionados.length) {
+      const avaliacao = expansao.etapaFalha === 'provedor' || expansao.etapaFalha === 'configuracao'
+        ? { candidatos: relacionados, estado: 'avaliacao_indisponivel', etapaFalha: expansao.etapaFalha }
+        : await _medir(temposEtapasMs, 'avaliacaoBaseConhecimento', baseConhecimentoAvaliacao.avaliar(empresaId, chamado, relacionados, { textoContexto: contextoBusca })
+          .catch(() => ({ candidatos: relacionados, estado: 'avaliacao_indisponivel', etapaFalha: 'preparacao' })));
+      relacionados = avaliacao.candidatos.slice(0, 5);
+      diagnosticoBaseConhecimento = { estado: avaliacao.estado, expansao: expansao.estado, buscaVetorial: hibrida.estadoVetorial, avaliados: avaliacao.avaliados || 0, provider: avaliacao.provider || null, model: avaliacao.model || null, etapaFalha: avaliacao.etapaFalha || null, candidatosApresentados: relacionados.length };
+    } else if (chamado) {
+      diagnosticoBaseConhecimento = { estado: 'sem_candidatos', buscaVetorial: hibrida.estadoVetorial, avaliados: 0, candidatosApresentados: 0 };
+    }
     const ctxPesquisa = {
       empresaId,
       atendimentoId,
+      ignorarHistoricoPesquisa: escopoPrimeiroAtendimento,
       chamado,
       ...(pesquisaExternaBloqueada ? { pesquisaExternaBloqueada } : {}),
       atendimento,
@@ -1420,7 +1437,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       // Pedido de investigação externa reconhecido semanticamente sob pendência
       // externa (gate) tem a mesma garantia de um pedido explícito: o analista
       // pediu de propósito, não deve cair em dedup/atalhos de "sem novidade".
-      forcarPesquisa: forcarPesquisa || !!(decisaoPesquisaExterna?.liberada && decisaoPesquisaExterna.chamadaIA),
+      forcarPesquisa: forcarPesquisa || pedidoPesquisaExplicito || !!(decisaoPesquisaExterna?.liberada && decisaoPesquisaExterna.chamadaIA),
       // Etapa 4B (disciplina investigativa) existia implementada e testada
       // isoladamente, mas nunca conectada ao fluxo real — nenhum atendimento
       // de produção jamais chamou com esse flag (achado real, Caso #001,
@@ -1474,7 +1491,9 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       };
     }
     pesquisaTecnica = pesquisa;
-    pesquisaTecnicaTexto =technicalResearchService.formatarContextoParaPrompt(pesquisa, relacionados);
+    // Os candidatos são selecionados separadamente pelo motor de contexto,
+    // para que a auditoria registre exatamente o que coube no prompt.
+    pesquisaTecnicaTexto =technicalResearchService.formatarContextoParaPrompt(pesquisa, []);
     if (pesquisaExternaBloqueada) {
       pesquisaTecnicaTexto = _comOrientacao(pesquisaTecnicaTexto, pendenciaExternaGate.instrucaoParaPrompt(decisaoPesquisaExterna));
     }
@@ -1492,6 +1511,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       pesquisaTecnicaTexto = _comOrientacao(pesquisaTecnicaTexto, '## Nova investigação pedida pelo analista\nNão repita nem parafraseie respostas anteriores da IA neste chamado. Refaça a análise a partir do histórico do chamado e das fontes lidas nesta pesquisa. Da resposta anterior, mantenha só o que continua sustentado pelo chamado ou pelas fontes; o que era hipótese sem lastro (rotina, ponto de entrada, tabela ou parâmetro que não aparece no chamado nem nas fontes) deve ser descartado ou reapresentado como hipótese a confirmar.');
     }
   } catch (err) {
+    if (diagnosticoBaseConhecimento.estado === 'nao_executada') diagnosticoBaseConhecimento = { estado: 'busca_indisponivel', avaliados: 0 };
     pesquisaTecnicaTexto = [
       '## Pesquisa técnica assistida',
       `Pesquisa técnica indisponível nesta tentativa: ${err.message}`,
@@ -1518,6 +1538,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     dossieOperacionalPrecarregado: dossieOperacionalTurno,
     analistaAtualNome,
     chamado,
+    escopoPrimeiroAtendimento,
   };
   // Primeiro candidato da ordem cadastrada (primario + fallback) com chave,
   // SEM exigir visao: so se sabe se ha imagem efetivamente enviada depois que
@@ -1675,7 +1696,8 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     const mensagemErro = erro._semChave
       ? 'Não há provider de IA configurado para esta empresa. Configure ao menos uma chave em Configurações do IA Service.'
       : `Não foi possível concluir a análise no momento: ${erro.message}`;
-    const msgErro = mensagemRepo.salvarMensagem(empresaId, atendimentoId, { papel: 'assistant', conteudo: mensagemErro, usuarioId: null, diagnostico: { erroInfraestrutura: true } });
+    const economiaErro = baseConhecimentoEconomia.avaliar({ baseDisponivel: !!chamado && diagnosticoBaseConhecimento.estado !== 'busca_indisponivel', provedorDisponivel: false, escopo: escopoPrimeiroAtendimento ? 'cliente_pa' : 'empresa', identidadePa: identidadePaConfirmada, pesquisaObrigatoriaPa: escopoPrimeiroAtendimento });
+    const msgErro = mensagemRepo.salvarMensagem(empresaId, atendimentoId, { papel: 'assistant', conteudo: mensagemErro, usuarioId: null, diagnostico: { erroInfraestrutura: true, baseConhecimento: { ...diagnosticoBaseConhecimento, economiaObservada: economiaErro } } });
     try {
       execucaoRepo.salvarExecucao(empresaId, {
         atendimentoId,
@@ -1683,7 +1705,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
         mensagemUsuarioId: mensagemUsuario?.id ?? null,
         status: 'erro_provider',
         manifesto: contexto.manifesto,
-        contexto: contexto.contextoResumo,
+        contexto: { ...contexto.contextoResumo, economiaBaseConhecimento: economiaErro },
         pesquisa: pesquisaTecnica,
         qualityGate,
         tentativas: erro._tentativas || [],
@@ -1787,10 +1809,28 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
 
   // Entrega direta após as validações técnicas. A reescrita editorial não
   // participa de novos turnos; auditorias de mensagens antigas são preservadas.
+  const selecaoBase = contexto.manifesto?.pesquisaExterna?.baseConhecimento;
+  if (selecaoBase) diagnosticoBaseConhecimento = { ...diagnosticoBaseConhecimento,
+    incluidosNoContexto: selecaoBase.selecionados.map(x => ({ chamadoId: x.chamadoId, numero: x.numero })),
+    omitidosNoContexto: selecaoBase.omitidos.map(x => ({ chamadoId: x.chamadoId, numero: x.numero, motivo: x.motivo })) };
+  let observacaoEconomia;
+  try {
+    const escopoEconomia = escopoPrimeiroAtendimento ? 'cliente_pa' : 'empresa';
+    const idsValidos = chamado ? new Set(chamadoRepo.obterCandidatosPorIds(empresaId, chamado.id, relacionados.map(r => r.chamado?.id).filter(Boolean), { escopo: escopoEconomia }).map(r => r.chamado.id)) : new Set();
+    // O sistema atual não possui revisão estruturada dos critérios. Não se
+    // promove a avaliação preliminar da IA a comprovação de funcionamento.
+    const candidatosParaObservacao = relacionados.filter(r => idsValidos.has(r.chamado?.id)).map(r => ({ chamado: { id: r.chamado.id, numero: r.chamado.numero } }));
+    const pedidoExplicito = !escopoPrimeiroAtendimento && (forcarPesquisa || origemAcao === pendenciaExternaGate.ORIGEM.BOTAO || (technicalResearchService._temPedidoExplicitoPesquisa?.(texto) ?? !!mensagemUsuario) || pesquisaTecnica?.plano?.pedidoInvestigacaoAnalista === true);
+    observacaoEconomia = baseConhecimentoEconomia.avaliar({ candidatos: candidatosParaObservacao, baseDisponivel: !!chamado && diagnosticoBaseConhecimento.estado !== 'busca_indisponivel', provedorDisponivel: !['provedor', 'configuracao'].includes(diagnosticoBaseConhecimento.etapaFalha), escopo: escopoEconomia, identidadePa: identidadePaConfirmada, pedidoExplicito, pesquisaObrigatoriaPa: escopoPrimeiroAtendimento,
+      metricas: { geracaoIa: { provider: resultado.provider || null, model: resultado.model || null, tentativasRegistradas: Array.isArray(resultado.tentativas) ? resultado.tentativas.filter(t => ['ok', 'erro'].includes(t.status)).length : null, usage: resultado.usage || null, tempoMs: resultado.latenciaMs ?? null, tokensPromptEstimados: tokenBudget.estimarTokens(promptUsado), tokensRespostaEstimados: tokenBudget.estimarTokens(textoFinal) }, pesquisaExterna: { consultasRegistradas: Array.isArray(pesquisaTecnica?.consultasExecutadas) ? pesquisaTecnica.consultasExecutadas.length : null, tentativasRegistradas: Array.isArray(pesquisaTecnica?.tentativasBusca) ? pesquisaTecnica.tentativasBusca.length : null, tempoMs: pesquisaTecnica?.temposMs?.total ?? null, tokensContextoEstimados: pesquisaTecnica?.tokensPesquisa ?? null }, tempoFluxoAteGravacaoMs: Date.now() - inicioTurno } });
+  } catch (_) {
+    observacaoEconomia = baseConhecimentoEconomia.avaliar({ baseDisponivel: false, escopo: escopoPrimeiroAtendimento ? 'cliente_pa' : 'empresa', identidadePa: identidadePaConfirmada });
+  }
+  diagnosticoBaseConhecimento = { ...diagnosticoBaseConhecimento, economiaObservada: observacaoEconomia };
   const dadosResposta = {
     papel: 'assistant',
     conteudo: textoFinal,
-    diagnostico: limpezaTecnica ? { ...(secoes || {}), limpezaTecnica } : secoes,
+    diagnostico: { ...(secoes || {}), ...(limpezaTecnica ? { limpezaTecnica } : {}), baseConhecimento: diagnosticoBaseConhecimento, ...(escopoPrimeiroAtendimento ? { baseConhecimentoPa: { identidadeConfirmada: identidadePaConfirmada, motivo: identidadePaConfirmada === true ? null : identidadePaConfirmada === false ? 'Identidade do cliente não confirmada; histórico do cliente não utilizado.' : 'Busca de histórico indisponível ou chamado não identificado.' } } : {}) },
     nivelConfianca,
     provider: resultado.provider,
     model: resultado.model,
@@ -1811,6 +1851,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       manifesto: contexto.manifesto,
       contexto: {
         ...contexto.contextoResumo,
+        economiaBaseConhecimento: observacaoEconomia,
         temposEtapasMs: {
           ...temposEtapasMs,
           pesquisa: pesquisaTecnica?.temposMs || null,

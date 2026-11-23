@@ -67,14 +67,14 @@ teste('classificarPendencia: distribuidor e nomenclatura "AGUARDANDO X" equivale
 teste('botao e automatico nao pesquisam sob pendencia de distribuidor; chat liberado', async () => {
   const pend = gate.classificarPendencia({ aguardandoConsolidado: 'RETORNO - DISTRIBUIDOR' }, []);
   const calls = [];
-  for (const origem of [gate.ORIGEM.BOTAO, gate.ORIGEM.AUTOMATICO]) {
+  for (const origem of [gate.ORIGEM.AUTOMATICO]) {
     const d = await gate.decidirPesquisaExterna({ pendencia: pend, origemAcao: origem, texto: 'pesquise', historico: [], chamarIA: chamarIAFixa({ pesquisa_externa: 'sim' }, calls) });
     assert.strictEqual(d.liberada, false, origem);
   }
   assert.strictEqual(calls.length, 0);
   const livre = await gate.decidirPesquisaExterna({ pendencia: pend, origemAcao: gate.ORIGEM.TEXTO_LIVRE, texto: 'pesquise na documentacao oficial outra causa', historico: [], chamarIA: chamarIAFixa({ pesquisa_externa: 'sim' }, calls) });
   assert.strictEqual(livre.liberada, true);
-  assert.match(gate.instrucaoParaPrompt({ pendencia: pend, origemAcao: gate.ORIGEM.BOTAO }), /aguarda retorno de distribuidor/);
+  assert.match(gate.instrucaoParaPrompt({ pendencia: pend, origemAcao: gate.ORIGEM.AUTOMATICO }), /aguarda retorno de distribuidor/);
 });
 
 teste('classificarPendencia: atendente, vazio e desconhecido NAO sao externos (fail-safe)', () => {
@@ -113,13 +113,13 @@ teste('sem pendencia externa: libera sem chamar IA', async () => {
   assert.strictEqual(calls.length, 0);
 });
 
-teste('botao Pesquisar e pre-analise automatica nunca liberam sob pendencia externa (sem chamada IA)', async () => {
+teste('botao libera pesquisa e pre-analise automatica bloqueia sob pendencia externa', async () => {
   const calls = [];
   for (const origem of [gate.ORIGEM.BOTAO, gate.ORIGEM.AUTOMATICO]) {
     const d = await gate.decidirPesquisaExterna({
       pendencia: PEND_CLIENTE, origemAcao: origem, texto: 'pesquise uma solucao', historico: [], chamarIA: chamarIAFixa({ pesquisa_externa: 'sim' }, calls),
     });
-    assert.strictEqual(d.liberada, false, origem);
+    assert.strictEqual(d.liberada, origem === gate.ORIGEM.BOTAO, origem);
   }
   assert.strictEqual(calls.length, 0, 'nenhuma chamada ao provider para botao/automatico');
 });
@@ -276,8 +276,8 @@ async function comProvidersFake({ decisaoGate, situacaoOrigem = { ok: false, mot
   }
 }
 
-teste('#036752 botao Pesquisar com RETORNO - CLIENTE/FORNECEDOR: só avisa que aguarda retorno, sem IA e sem pesquisa', async () => {
-  for (const [numero, aguardando, quem] of [['036752', 'RETORNO - CLIENTE', /retorno enviado ao cliente/], ['036799', 'RETORNO - FORNECEDOR', /aguardando o retorno do fornecedor/]]) {
+teste('#036752 botao Pesquisar com pendencia de cliente ou fornecedor executa pesquisa e analise', async () => {
+  for (const [numero, aguardando] of [['036752', 'RETORNO - CLIENTE'], ['036799', 'RETORNO - FORNECEDOR']]) {
     const { atendimento } = criarChamadoComAtendimento({
       numero, aguardando,
       posicionamentos: [{ aguardandoRetorno: false, situacaoRetorno: aguardando, assunto: 'retorno', descricao: 'problema ja resolvido, transmitido e com retorno da RFB' }],
@@ -286,11 +286,12 @@ teste('#036752 botao Pesquisar com RETORNO - CLIENTE/FORNECEDOR: só avisa que a
       const msg = await investigacaoService.processarTurno(EMPRESA, atendimento.id, {
         texto: 'Revise todo o historico e pesquise uma solucao para este chamado.', usuarioId: 1, forcarPesquisa: true,
       });
-      assert.match(msg.conteudo, quem);
-      assert.match(msg.conteudo, /pedir aqui no chat/);
+      assert.ok(msg.conteudo);
       assert.strictEqual(reg.gateCalls, 0, 'botao nao deve gastar chamada de classificacao');
-      assert.strictEqual(reg.pesquisarCtx.length, 0, 'botao sob pendencia nao chama pesquisar()');
-      assert.strictEqual(reg.promptsPrincipais.length, 0, 'botao sob pendencia nao chama a IA');
+      assert.strictEqual(reg.pesquisarCtx.length, 1);
+      assert.strictEqual(reg.pesquisarCtx[0].forcarPesquisa, true);
+      assert.equal(reg.pesquisarCtx[0].pesquisaExternaBloqueada, undefined);
+      assert.ok(reg.promptsPrincipais.length > 0);
     });
   }
 });
@@ -302,9 +303,32 @@ teste('chat sob pendencia de cliente/fornecedor: pesquisa liberada, sem classifi
       await investigacaoService.processarTurno(EMPRESA, atendimento.id, { texto, usuarioId: 1 });
       assert.strictEqual(reg.gateCalls, 0);
       assert.strictEqual(reg.pesquisarCtx[0].pesquisaExternaBloqueada, undefined, texto);
-      assert.strictEqual(reg.pesquisarCtx[0].forcarPesquisa, false, 'liberar nao e forcar: o plano normal decide');
+      assert.strictEqual(reg.pesquisarCtx[0].forcarPesquisa, texto.includes('procure alternativas'));
     });
   }
+});
+
+teste('pedido claro no chat pesquisa mesmo sob pendencia e sem depender do classificador de conversa', async () => {
+  for (const [numero, aguardando, texto] of [['036764', 'RETORNO - CLIENTE', 'Investigue novamente.'], ['036765', 'RETORNO - FORNECEDOR', 'Pesquise outras fontes para esse erro.']]) {
+    const { atendimento } = criarChamadoComAtendimento({ numero, aguardando });
+    await comProvidersFake({ decisaoGate: {} }, async reg => {
+      await investigacaoService.processarTurno(EMPRESA, atendimento.id, { texto, usuarioId: 1 });
+      assert.equal(reg.pesquisarCtx[0].forcarPesquisa, true);
+      assert.equal(reg.pesquisarCtx[0].pesquisaExternaBloqueada, undefined);
+      assert.ok(reg.promptsPrincipais.length > 0);
+    });
+  }
+});
+
+teste('falha na consulta da situacao nao bloqueia pedido pelo botao', async () => {
+  const { atendimento } = criarChamadoComAtendimento({ numero: '036766', aguardando: 'RETORNO - CLIENTE' });
+  await comProvidersFake({ decisaoGate: {} }, async reg => {
+    situacaoOrigemService.consultarSituacaoAtual = async () => { throw new Error('origem indisponivel'); };
+    await investigacaoService.processarTurno(EMPRESA, atendimento.id, { texto: 'Pesquise uma solução.', usuarioId: 1, forcarPesquisa: true });
+    assert.equal(reg.pesquisarCtx[0].forcarPesquisa, true);
+    assert.equal(reg.pesquisarCtx[0].pesquisaExternaBloqueada, undefined);
+    assert.ok(reg.promptsPrincipais.length > 0);
+  });
 });
 
 teste('processarTurno: origem confirma ao vivo que voltou ao atendente => pesquisa normal', async () => {
@@ -314,6 +338,24 @@ teste('processarTurno: origem confirma ao vivo que voltou ao atendente => pesqui
     assert.strictEqual(reg.origemCalls, 1);
     assert.strictEqual(reg.gateCalls, 0);
     assert.strictEqual(reg.pesquisarCtx[0].pesquisaExternaBloqueada, undefined);
+  });
+});
+
+teste('economia é apenas observada: pesquisa e IA continuam, e resultado é auditado', async () => {
+  const { atendimento } = criarChamadoComAtendimento({ numero: '036763', aguardando: 'RETORNO - ATENDENTE' });
+  await comProvidersFake({ decisaoGate: { pesquisa_externa: 'sim' } }, async (reg) => {
+    const msg = await investigacaoService.processarTurno(EMPRESA, atendimento.id, { texto: 'Pesquise documentação oficial do erro 4010.', usuarioId: 1, forcarPesquisa: true });
+    assert.ok(reg.pesquisarCtx.length > 0);
+    assert.ok(reg.promptsPrincipais.length > 0);
+    const obs = msg.diagnostico.baseConhecimento.economiaObservada;
+    assert.equal(obs.modo, 'observacao');
+    assert.equal(obs.pesquisaExterna.poderiaDispensar, false);
+    assert.equal(obs.analiseIa.poderiaDispensar, false);
+    assert.ok(obs.analiseIa.motivos.some(x => /solicitada explicitamente/.test(x)));
+    const repoAuditoria = require('../backend/repositories/investigacao-execucao-repository');
+    const execucao = repoAuditoria.listarPorAtendimento(EMPRESA, atendimento.id).find(x => x.mensagemId === msg.id);
+    assert.equal(execucao.contexto.economiaBaseConhecimento.modo, 'observacao');
+    assert.equal(execucao.contexto.economiaBaseConhecimento.metricas.economiaReal, 0);
   });
 });
 
@@ -371,6 +413,20 @@ teste('pesquisarParaChamado (aba/selecao): sob pendencia externa nao pesquisa e 
   assert.ok(r.pesquisa.plano.bloqueioPendenciaExterna);
   assert.ok(Array.isArray(r.relacionados));
   technicalResearchService.pesquisar = old;
+});
+
+teste('falha na busca de relacionados é explícita e não impede a pesquisa técnica', async () => {
+  const { chamado } = criarChamadoComAtendimento({ numero: '036759', aguardando: 'RETORNO - CLIENTE' });
+  const original = chamadoRepo.listarChamadosRelacionados;
+  chamadoRepo.listarChamadosRelacionados = () => { throw new Error('base indisponível'); };
+  try {
+    const resultado = await technicalResearchService.pesquisarParaChamado(EMPRESA, chamado.id);
+    assert.strictEqual(resultado.avaliacaoBaseConhecimento.estado, 'busca_indisponivel');
+    assert.deepStrictEqual(resultado.relacionados, []);
+    assert.ok(resultado.pesquisa);
+  } finally {
+    chamadoRepo.listarChamadosRelacionados = original;
+  }
 });
 
 // ── Quality Gate: pesquisa dispensada pelo gate nao e alerta; pesquisa devida sem resultado continua alertando

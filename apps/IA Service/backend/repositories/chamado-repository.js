@@ -4,6 +4,7 @@
 
 const crypto = require('crypto');
 const { getDB } = require('../database');
+const { redigirTexto, redigirValor } = require('../services/redaction-service');
 
 function hashConteudo(objeto) {
   const json = JSON.stringify(objeto, Object.keys(objeto).sort());
@@ -168,7 +169,7 @@ function getChamado(empresaId, chamadoId) {
   return _chamadoParaDominio(db.prepare(`SELECT * FROM chamados WHERE id = ? AND empresa_id = ?`).get(chamadoId, Number(empresaId)));
 }
 
-function getChamadoPorNumero(empresaId, numero, sistemaOrigem) {
+function getChamadoPorNumero(empresaId, numero, sistemaOrigem, { exigirUnico = false } = {}) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   if (!numero) return null;
   const db = getDB();
@@ -178,13 +179,14 @@ function getChamadoPorNumero(empresaId, numero, sistemaOrigem) {
     condicoes.push('sistema_origem = ?');
     params.push(sistemaOrigem);
   }
-  const row = db.prepare(`
+  const rows = db.prepare(`
     SELECT * FROM chamados
      WHERE ${condicoes.join(' AND ')}
      ORDER BY data_abertura DESC
-     LIMIT 1
-  `).get(...params);
-  return _chamadoParaDominio(row);
+     LIMIT 2
+  `).all(...params);
+  if (exigirUnico && rows.length > 1) throw new Error('Número de chamado ambíguo entre fontes; não é possível confirmar o atendimento.');
+  return _chamadoParaDominio(rows[0]);
 }
 
 function listarChamados(empresaId, filtros = {}) {
@@ -314,16 +316,6 @@ function listarPosicionamentosDoChamado(empresaId, chamadoId) {
   return rows.map(_posicionamentoParaDominio);
 }
 
-function _textoBuscaChamado(chamado, posicionamentos = []) {
-  return [
-    chamado.numero, chamado.produto, chamado.familia, chamado.modulo, chamado.servico,
-    chamado.tipoChamado, chamado.tipoChamadoSe, chamado.tipoChamadoFinal, chamado.natureza, chamado.nivel,
-    chamado.titulo, chamado.assunto, chamado.breveDescricao, chamado.descricao,
-    chamado.informacoesAdicionais, chamado.observacoes, chamado.solucaoAplicada,
-    ...posicionamentos.flatMap(p => [p.assunto, p.descricao, p.resultado, p.situacao, p.tipo, p.motivo]),
-  ].filter(Boolean).join(' ').toLowerCase();
-}
-
 // Tokens extraídos SÓ do conteúdo específico do problema (assunto/
 // breveDescricao/descricao, e a parte do TÍTULO após o padrão
 // "CLIENTE | Produto | ..." quando existir) — categoria estrutural
@@ -352,20 +344,26 @@ const STOPWORDS_BUSCA = new Set([
   'usuario', 'usuarios', 'tela', 'processo', 'protheus', 'softexpert',
   'pelo', 'pela', 'pelos', 'pelas', 'esta', 'estao', 'sendo', 'pode', 'podem',
   'favor', 'segue', 'anexo', 'anexos', 'logo', 'sequencia', 'mostra', 'mensagem',
-  'bom', 'dia', 'tarde', 'noite', 'gostaria', 'poderia', 'obrigado', 'atenciosamente',
+  'bom', 'dia', 'tarde', 'noite', 'gostaria', 'poderia', 'obrigado', 'atenciosamente', 'redacted',
+  'durante', 'desde', 'tanto', 'quanto', 'existe',
 ]);
 
-function _tokensDeBusca(chamado) {
+function _tokensDeBusca(chamado, ignorar = new Set()) {
   const texto = [
     _tituloSemPrefixo(chamado.titulo), chamado.assunto, chamado.breveDescricao, chamado.descricao,
+    chamado.informacoesAdicionais, chamado.observacoes,
   ].filter(Boolean).join(' ').toLowerCase();
 
-  return [...new Set(texto
+  return [...new Set(redigirTexto(texto)
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .split(/\s+/)
-    .filter(t => t.length >= 4)
+    // Códigos como A12 são sinais técnicos; palavras comuns de três letras
+    // continuam fora para não ampliar ruído por conectores ou siglas genéricas.
+    .filter(t => t.length >= 4 || (t.length === 3 && /[a-z]/.test(t) && /\d/.test(t)))
+    .filter(t => !/^(?:19|20)\d{2}$/.test(t))
     .filter(t => !STOPWORDS_BUSCA.has(t))
+    .filter(t => !ignorar.has(t))
   )].slice(0, 24);
 }
 
@@ -395,10 +393,10 @@ function _tokensDeBusca(chamado) {
  * 3) CORTE MÍNIMO: antes, score > 0 bastava para entrar na lista — um
  *    candidato podia aparecer só por "está encerrado" (+6), sem nenhuma
  *    correspondência real de categoria OU texto. Agora exige pelo menos 1
- *    token de texto em comum OU (módulo E serviço) iguais — nunca entra só
- *    por ser um chamado genérico encerrado com solução.
+ *    token de texto em comum — categoria, encerramento e solução aplicada
+ *    isoladamente não tornam um chamado elegível.
  */
-function _pontuarSimilaridade(atual, candidato, tokens, textoCandidato) {
+function _pontuarSimilaridade(atual, candidato, tokens, textoCandidato, textoProblema, tokensOriginais) {
   let scoreEstrutural = 0;
   let scoreTexto = 0;
   const motivos = [];
@@ -409,17 +407,20 @@ function _pontuarSimilaridade(atual, candidato, tokens, textoCandidato) {
   if (atual.familia && candidato.familia === atual.familia) { scoreEstrutural += 4; motivos.push(`Família: ${candidato.familia}`); }
   if (atual.tipoChamadoFinal && candidato.tipoChamadoFinal === atual.tipoChamadoFinal) { scoreEstrutural += 2; motivos.push(`Tipo: ${candidato.tipoChamadoFinal}`); }
 
-  let tokensEncontrados = 0;
-  for (const token of tokens) {
-    if (textoCandidato.includes(token)) tokensEncontrados++;
-  }
-  if (tokensEncontrados) {
-    scoreTexto += Math.min(tokensEncontrados * 6, 60);
-    motivos.push(`${tokensEncontrados} termo(s) do problema em comum`);
+  const palavrasCandidato = new Set(textoCandidato.split(/[^a-z0-9]+/).filter(Boolean));
+  const termosEncontrados = tokens.filter(token => palavrasCandidato.has(token));
+  const palavrasProblema = new Set(textoProblema.split(/[^a-z0-9]+/).filter(Boolean));
+  const termosSugeridos = termosEncontrados.filter(t => !tokensOriginais.has(t));
+  const termosProblema = termosEncontrados.filter(t => tokensOriginais.has(t) && palavrasProblema.has(t));
+  const termosHistorico = termosEncontrados.filter(t => tokensOriginais.has(t) && !palavrasProblema.has(t));
+  if (termosEncontrados.length) {
+    scoreTexto += Math.min(termosProblema.length * 6 + termosHistorico.length * 2 + termosSugeridos.length * 2, 60);
+    if (termosProblema.length) motivos.push(`Termos no relato: ${termosProblema.join(', ')}`);
+    if (termosHistorico.length) motivos.push(`Termos no histórico: ${termosHistorico.join(', ')}`);
+    if (termosSugeridos.length) motivos.push(`Termos sugeridos pela IA para busca: ${termosSugeridos.join(', ')}`);
   }
 
-  const matchModuloEServico = atual.modulo && atual.servico && candidato.modulo === atual.modulo && candidato.servico === atual.servico;
-  const elegivel = tokensEncontrados > 0 || matchModuloEServico;
+  const elegivel = termosEncontrados.length > 0;
   if (!elegivel) return null;
 
   const temSolucaoAplicada = candidato.solucaoAplicada === 'Sim';
@@ -429,48 +430,113 @@ function _pontuarSimilaridade(atual, candidato, tokens, textoCandidato) {
   return { score: scoreEstrutural + scoreTexto, temSolucaoAplicada, motivos };
 }
 
-function listarChamadosRelacionados(empresaId, chamadoId, { limite = 8, textoContexto = '' } = {}) {
+function _identidadePa(db, empresaId, chamado) {
+  if (!chamado?.clienteId || chamado.sistemaOrigem !== 'softexpert') return null;
+  const row = db.prepare(`SELECT c.cnpj, r.dados_json FROM clientes c
+    JOIN raw_import r ON r.empresa_id = c.empresa_id AND r.fonte_id = ?
+      AND r.sistema_origem = 'softexpert' AND r.tabela_origem = 'DYNITSM' AND r.oid_origem = ?
+    WHERE c.empresa_id = ? AND c.id = ?`).get(chamado.fonteId, chamado.oidOrigem, Number(empresaId), chamado.clienteId);
+  if (!row) return null;
+  let origem;
+  try { origem = JSON.parse(row.dados_json).CNPJCPF; } catch (_) { return null; }
+  const documento = String(origem || '').replace(/\D/g, '');
+  if (documento !== row.cnpj || ![11, 14].includes(documento.length) || /^(\d)\1+$/.test(documento)) return null;
+  const digito = (base, pesos) => {
+    const resto = [...base].reduce((s, n, i) => s + Number(n) * pesos[i], 0) % 11;
+    return resto < 2 ? 0 : 11 - resto;
+  };
+  const pesos1 = documento.length === 11 ? [10,9,8,7,6,5,4,3,2] : [5,4,3,2,9,8,7,6,5,4,3,2];
+  const pesos2 = documento.length === 11 ? [11,10,9,8,7,6,5,4,3,2] : [6,5,4,3,2,9,8,7,6,5,4,3,2];
+  const base = documento.slice(0, -2);
+  if (digito(base, pesos1) !== Number(documento.at(-2)) || digito(documento.slice(0, -1), pesos2) !== Number(documento.at(-1))) return null;
+  return chamado.clienteId;
+}
+
+function identidadeConfirmadaPa(empresaId, chamadoId) {
+  const chamado = getChamado(empresaId, chamadoId);
+  return !!(chamado && _identidadePa(getDB(), empresaId, chamado));
+}
+
+function obterCandidatosPorIds(empresaId, chamadoId, ids, { escopo = 'empresa' } = {}) {
+  if (!['empresa', 'cliente_pa'].includes(escopo)) throw new Error('Escopo de busca inválido.');
+  const atual = getChamado(empresaId, chamadoId);
+  if (!atual) throw new Error('Chamado não encontrado.');
+  const db = getDB();
+  const clientePa = escopo === 'cliente_pa' ? _identidadePa(db, empresaId, atual) : null;
+  if (escopo === 'cliente_pa' && !clientePa) return [];
+  const saida = [];
+  for (const id of [...new Set(Array.isArray(ids) ? ids : [])].slice(0, 50)) {
+    const candidato = getChamado(empresaId, id);
+    if (!candidato || candidato.id === atual.id || (clientePa && (candidato.clienteId !== clientePa || _identidadePa(db, empresaId, candidato) !== clientePa))) continue;
+    const posicionamentos = listarPosicionamentosDoChamado(empresaId, candidato.id);
+    saida.push(redigirValor({ chamado: candidato, score: 0, temSolucaoAplicada: candidato.solucaoAplicada === 'Sim', motivos: ['Recuperado por similaridade semântica'], avaliacao: { relevancia: 'nao_avaliada', solucaoRegistrada: 'nao_avaliada', funcionamento: 'nao_confirmado' }, registrosResultado: posicionamentos.filter(p => String(p.resultado || '').trim()).slice(-3).map(p => ({ posicionamentoId: p.id, data: p.dataPosicionamento, texto: p.resultado })), posicionamentos: posicionamentos.slice(-8) }));
+  }
+  return saida;
+}
+
+function listarChamadosRelacionados(empresaId, chamadoId, { limite = 8, textoContexto = '', termosExpandidos = [], escopo = 'empresa' } = {}) {
   if (!empresaId) throw new Error('empresaId é obrigatório.');
   if (!chamadoId) throw new Error('chamadoId é obrigatório.');
+  if (!['empresa', 'cliente_pa'].includes(escopo)) throw new Error('Escopo de busca inválido.');
 
   const atual = getChamado(empresaId, chamadoId);
   if (!atual) throw new Error('Chamado não encontrado.');
 
   const db = getDB();
+  const clientePa = escopo === 'cliente_pa' ? _identidadePa(db, empresaId, atual) : null;
+  if (escopo === 'cliente_pa' && !clientePa) return [];
+  // Nomes cadastrados identificam pessoas/organizações, não o defeito técnico.
+  // São usados apenas para reduzir ruído textual, nunca para resolver cliente.
+  const identidade = db.prepare(`SELECT c.nome, c.nome_fantasia, u.nome AS solicitante, u.identificador
+    FROM chamados ch LEFT JOIN clientes c ON c.id = ch.cliente_id AND c.empresa_id = ch.empresa_id
+    LEFT JOIN usuarios_cliente u ON u.id = ch.solicitante_id AND u.empresa_id = ch.empresa_id
+    WHERE ch.empresa_id = ? AND ch.id = ?`).get(Number(empresaId), chamadoId) || {};
+  const ignorar = new Set(_tokensDeBusca({ descricao: [identidade.nome, identidade.nome_fantasia, identidade.solicitante, identidade.identificador].filter(Boolean).join(' ') }));
   const rows = db.prepare(`
     SELECT * FROM chamados
      WHERE empresa_id = ? AND id != ?
-     ORDER BY data_abertura DESC
-     LIMIT 1200
-  `).all(Number(empresaId), chamadoId).map(_chamadoParaDominio);
+       ${escopo === 'cliente_pa' ? 'AND cliente_id = ?' : ''}
+  `).iterate(Number(empresaId), chamadoId, ...(clientePa ? [clientePa] : []));
 
+  const tokensOriginais = new Set([
+    ..._tokensDeBusca({ descricao: textoContexto }, ignorar).slice(0, 12),
+    ..._tokensDeBusca(atual, ignorar).slice(0, 16),
+  ]);
   const tokens = [...new Set([
-    ..._tokensDeBusca({ descricao: textoContexto }).slice(0, 12),
-    ..._tokensDeBusca(atual),
-  ])].slice(0, 24);
+    ...tokensOriginais,
+    ..._tokensDeBusca({ descricao: Array.isArray(termosExpandidos) ? termosExpandidos.join(' ') : '' }, ignorar).slice(0, 8),
+  ])].slice(0, 36);
   const limiteSeguro = Math.min(Number(limite) || 8, 20);
   const pontuados = [];
 
-  for (const candidato of rows) {
-    const posicionamentos = listarPosicionamentosDoChamado(empresaId, candidato.id);
-    const texto = _textoBuscaChamado(candidato, posicionamentos)
+  const comparar = (a, b) => b.score - a.score || String(b.chamado.dataAbertura || '').localeCompare(String(a.chamado.dataAbertura || '')) || String(a.chamado.id).localeCompare(String(b.chamado.id));
+  const buscarPosicionamentos = db.prepare('SELECT * FROM posicionamentos WHERE empresa_id = ? AND chamado_id = ? ORDER BY data_posicionamento ASC');
+  for (const row of rows) {
+    const candidato = _chamadoParaDominio(row);
+    if (clientePa && _identidadePa(db, empresaId, candidato) !== clientePa) continue;
+    const posicionamentos = buscarPosicionamentos.all(Number(empresaId), candidato.id).map(_posicionamentoParaDominio);
+    const textoProblema = redigirTexto([_tituloSemPrefixo(candidato.titulo), candidato.assunto, candidato.breveDescricao, candidato.descricao, candidato.informacoesAdicionais, candidato.observacoes].filter(Boolean).join(' ')).toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const texto = redigirTexto([textoProblema, ...posicionamentos.flatMap(p => [p.assunto, p.descricao, p.resultado])].filter(Boolean).join(' ')).toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-    const resultado = _pontuarSimilaridade(atual, candidato, tokens, texto);
+    const resultado = _pontuarSimilaridade(atual, candidato, tokens, texto, textoProblema, tokensOriginais);
     if (!resultado) continue;
 
     pontuados.push({
       chamado: candidato,
       score: resultado.score,
       temSolucaoAplicada: resultado.temSolucaoAplicada,
-      motivos: resultado.motivos.slice(0, 5),
+      motivos: resultado.motivos,
+      avaliacao: { relevancia: 'nao_avaliada', solucaoRegistrada: 'nao_avaliada', funcionamento: 'nao_confirmado' },
+      registrosResultado: posicionamentos.filter(p => String(p.resultado || '').trim()).slice(-3).map(p => ({ posicionamentoId: p.id, data: p.dataPosicionamento, texto: p.resultado })),
       posicionamentos: posicionamentos.slice(-8),
     });
+    pontuados.sort(comparar);
+    if (pontuados.length > limiteSeguro) pontuados.pop();
   }
 
-  return pontuados
-    .sort((a, b) => b.score - a.score || String(b.chamado.dataAbertura || '').localeCompare(String(a.chamado.dataAbertura || '')))
-    .slice(0, limiteSeguro);
+  return pontuados.map(redigirValor);
 }
 
 /** Números (IDPROCESS) dos chamados que o banco local considera abertos, por fonte. */
@@ -504,6 +570,6 @@ function contarPosicionamentos(empresaId, filtros = {}) {
 module.exports = {
   hashConteudo,
   upsertChamado, getChamadoPorOid, getChamado, getChamadoPorNumero, listarChamados, contarChamados,
-  upsertPosicionamento, listarPosicionamentosDoChamado, listarChamadosRelacionados, contarPosicionamentos,
+  upsertPosicionamento, listarPosicionamentosDoChamado, listarChamadosRelacionados, obterCandidatosPorIds, identidadeConfirmadaPa, contarPosicionamentos,
   listarNumerosAbertos, contarPosicionamentosDoChamado,
 };

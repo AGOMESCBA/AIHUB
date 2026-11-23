@@ -1550,6 +1550,30 @@ const MIGRATIONS = [
         WHERE estado IN ('publicado', 'devolvido', 'falha', 'descartado', 'simulado');
     `,
   },
+  {
+    version: 67,
+    descricao: 'Índice vetorial local de chamados: vetores por empresa e modelo, removidos quando a origem muda.',
+    sql: `
+      CREATE TABLE IF NOT EXISTS chamados_embeddings (
+        chamado_id TEXT PRIMARY KEY REFERENCES chamados(id) ON DELETE CASCADE,
+        empresa_id INTEGER NOT NULL,
+        modelo TEXT NOT NULL,
+        dimensoes INTEGER NOT NULL,
+        hash_conteudo TEXT NOT NULL,
+        vetor BLOB NOT NULL,
+        criado_em TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_svc_embeddings_empresa ON chamados_embeddings (empresa_id, modelo);
+      CREATE TRIGGER IF NOT EXISTS trg_svc_embeddings_chamado_update AFTER UPDATE ON chamados
+      BEGIN DELETE FROM chamados_embeddings WHERE chamado_id = NEW.id; END;
+      CREATE TRIGGER IF NOT EXISTS trg_svc_embeddings_pos_insert AFTER INSERT ON posicionamentos
+      BEGIN DELETE FROM chamados_embeddings WHERE chamado_id = NEW.chamado_id; END;
+      CREATE TRIGGER IF NOT EXISTS trg_svc_embeddings_pos_update AFTER UPDATE ON posicionamentos
+      BEGIN DELETE FROM chamados_embeddings WHERE chamado_id IN (OLD.chamado_id, NEW.chamado_id); END;
+      CREATE TRIGGER IF NOT EXISTS trg_svc_embeddings_pos_delete AFTER DELETE ON posicionamentos
+      BEGIN DELETE FROM chamados_embeddings WHERE chamado_id = OLD.chamado_id; END;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

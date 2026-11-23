@@ -25,6 +25,8 @@ const retornoConfig = require('./retorno-softexpert-config');
 const soapClient = require('./softexpert-soap-client');
 const clienteRepo = require('../repositories/cliente-repository');
 const investigacaoExecucaoRepo = require('../repositories/investigacao-execucao-repository');
+const { _trechoValido } = require('./base-conhecimento-avaliacao-service');
+const { redigirTexto } = require('./redaction-service');
 const avisoService = require('./jade-pa-aviso-service');
 
 // Curto para a leitura começar perto da hora do contador da tela (a consulta é só ao banco local).
@@ -37,6 +39,7 @@ const TRAVA_MS = 20 * 60 * 1000;
 // Teto de segurança da consulta de elegíveis no SoftExpert, não um limite de vazão.
 const MAX_ELEGIVEIS = 500;
 const MAX_TENTATIVAS = 3;
+const ATIVIDADE_CLIENTE = 'ATV-06';
 const MAX_TEXTO_CLIENTE = 6000;
 // Texto gerado há mais tempo que o SLA do Primeiro Atendimento não é mais
 // enviado (ex.: ficou "pronto" com o modo em Simulação e só depois foi ligado).
@@ -61,15 +64,17 @@ const SQL_ELEGIVEIS = `
 `;
 
 // Situação atual do chamado na origem: atividades ativas, responsável e
-// posicionamentos (os da Jaade são marcados com TEXTO4 = 'IA SERVICE').
+// posicionamentos (os da Jaade são marcados no TEXTO4: o status da decisão,
+// IA-RESPONDIDO/IA-INFORMACAO, ou 'IA SERVICE' dos registros anteriores a ele).
 // Posicionamento pelo vínculo com o chamado (FK) ou pela coluna CHAMADO —
 // não está comprovado que a inclusão pela API preenche CHAMADO.
 const DO_CHAMADO = `(G.CHAMADO = W.IDPROCESS OR G.OIDABCA7HP6S55J0LV IN (SELECT D3.OID FROM DYNITSM D3 WHERE D3.IDPROCESS = W.IDPROCESS))`;
+const MARCAS_JADE_SQL = `('IA SERVICE', 'IA-RESPONDIDO', 'IA-INFORMACAO')`;
 const SQL_SITUACAO = `
   SELECT W.FGSTATUS AS PROC_STATUS,
     (SELECT COUNT(*) FROM DYNITSM D WHERE D.IDPROCESS = W.IDPROCESS AND D.RESPONSAVEL IS NOT NULL) AS COM_RESP,
-    (SELECT COUNT(*) FROM DYNITSMGRIDREGISTR G WHERE ${DO_CHAMADO} AND G.TEXTO4 = 'IA SERVICE') AS POS_JADE,
-    (SELECT COUNT(*) FROM DYNITSMGRIDREGISTR G WHERE ${DO_CHAMADO} AND (G.TEXTO4 IS NULL OR G.TEXTO4 <> 'IA SERVICE')) AS POS_OUTROS,
+    (SELECT COUNT(*) FROM DYNITSMGRIDREGISTR G WHERE ${DO_CHAMADO} AND G.TEXTO4 IN ${MARCAS_JADE_SQL}) AS POS_JADE,
+    (SELECT COUNT(*) FROM DYNITSMGRIDREGISTR G WHERE ${DO_CHAMADO} AND (G.TEXTO4 IS NULL OR G.TEXTO4 NOT IN ${MARCAS_JADE_SQL})) AS POS_OUTROS,
     (SELECT TOP 1 D.DP FROM DYNITSM D WHERE D.IDPROCESS = W.IDPROCESS) AS CAB_EMPRESA,
     (SELECT TOP 1 D.NMSOLICITANTE FROM DYNITSM D WHERE D.IDPROCESS = W.IDPROCESS) AS CAB_COLABORADOR,
     (SELECT TOP 1 D.TEXTO31 FROM DYNITSM D WHERE D.IDPROCESS = W.IDPROCESS) AS CAB_ASSUNTO,
@@ -81,18 +86,21 @@ const SQL_SITUACAO = `
 
 const SQL_USUARIO_JADE = 'SELECT CDUSER, NMUSER, IDUSER, FGUSERENABLED FROM ADUSER WHERE CDUSER = @cdUser';
 
-// Ação 6 do Primeiro Atendimento ativo DESTE chamado (e-mail ao cliente; só da
-// revisão 89 do ITSM-02 em diante). Cada instância guarda as ações da sua revisão.
-const SQL_ACAO_EMAIL = `
-  SELECT TOP 1 A.NRORDER, A.NMACTION
+// Instância do workflow da Jaade (ITSM-02-I.A-P.A) já aberta para o chamado,
+// achada pelo título — é o que impede abrir duas (e mandar dois e-mails) quando
+// a resposta do SoftExpert se perde. ATV01_ATIVA = 0: a ATV-01 já foi executada.
+const SQL_WORKFLOW_JADE = `
+  SELECT TOP 1 W.IDPROCESS,
+    (SELECT COUNT(*) FROM WFSTRUCT S WHERE S.IDPROCESS = W.IDOBJECT AND S.IDSTRUCT = @atividade AND S.FGSTATUS = 2) AS ATV01_ATIVA
   FROM WFPROCESS W
-  INNER JOIN WFSTRUCT S ON S.IDPROCESS = W.IDOBJECT AND S.IDSTRUCT = 'ATV-02' AND S.FGSTATUS = 2
-  INNER JOIN WFSTRUCTACTION A ON A.IDACTIVITY = S.IDOBJECT AND A.NRORDER = 6
-  WHERE W.IDPROCESS = @numero
+  INNER JOIN PMACTIVITY P ON P.CDACTIVITY = W.CDPROCESSMODEL AND P.IDACTIVITY = @processo
+  WHERE W.NMPROCESS = @titulo
+  ORDER BY W.DTSTART DESC, W.TMSTART DESC
 `;
 
-const MARCA_JADE = 'IA SERVICE';
-const ATIVIDADE_CLIENTE = 'ATV-06';
+// TEXTO4 da grade = decisor do workflow da Jaade no SoftExpert (pedido do usuário, 2026-11-23).
+const STATUS_DECISAO = { responder: 'IA-RESPONDIDO', devolver: 'IA-INFORMACAO' };
+const tituloWorkflowJade = (numero) => `Jaade - PA do chamado ${numero}`;
 
 const TEXTO_ANALISE_PA = 'Este chamado acabou de ser aberto pelo cliente e está no Primeiro Atendimento (triagem), sem nenhum posicionamento ainda. Faça uma pré-análise inicial com base no texto do chamado e nos anexos sincronizados, quando existirem: identifique o problema relatado, hipóteses prováveis de causa, possíveis soluções que o próprio cliente consiga testar e quais informações ou evidências ainda faltam para avançar. Deixe claro no nível de confiança que esta é uma análise preliminar, sem confirmação humana.';
 
@@ -104,13 +112,19 @@ Responda SOMENTE com um JSON válido, sem nada antes ou depois:
 Como decidir:
 - "responder": há informação suficiente para orientar. Se faltar algo que ajudaria, peça no mesmo texto.
 - "devolver": SOMENTE quando realmente não há o que pesquisar — sem anexo ou evidência E descrição vaga, sem rotina/tela identificada e sem mensagem de erro. Na dúvida, escolha "responder".
+Essa decisão controla a movimentação no SoftExpert e é separada do conteúdo da resposta; o pedido de evidências pode ser enviado como resposta quando a devolução estiver desligada.
+
+Escolha pela análise um dos dois tipos de conteúdo:
+- ORIENTAÇÃO PRELIMINAR: se existem evidências suficientes para orientar, apresente a possível solução ou verificação, as condições relevantes e como conferir o resultado. Se ainda houver dúvida, apresente-a como hipótese; não prometa que resolverá. Peça somente o que faltar caso os passos não resolvam.
+- PEDIDO DE EVIDÊNCIAS: se não há informações suficientes para indicar uma solução ou verificação concreta com segurança, não invente uma causa ou procedimento. Explique brevemente o que falta para avançar e solicite as evidências mínimas e específicas deste chamado, considerando sua descrição, rotina, erro, anexos e o que já foi informado. Explique para que cada pedido servirá. Não peça novamente informação já disponível nem use uma lista genérica igual para todos os casos.
+Escolha o conteúdo de acordo com a análise, sem confundir ausência de histórico relacionado com ausência de evidências. Em ambos os casos use a abertura e o encerramento abaixo.
 
 Como escrever — o campo do SoftExpert é TEXTO PURO: nada de markdown (#, **, crases, tabelas):
 1. Comece exatamente com: "Olá! Em breve seu chamado será direcionado a um atendente. Enquanto isso, segue abaixo uma análise preliminar feita pela atendente de IA Jaade."
-2. Diagnóstico curto (2 a 4 frases): o que a mensagem, o relato e os anexos indicam e a causa mais provável, citando os fatos concretos do chamado (rotina, mensagem, valores, datas).
-3. O centro do texto é COMO RESOLVER: o passo a passo técnico que um analista passaria para o cliente corrigir ou contornar sozinho — rotina e caminho de menu, parâmetro, campo, cadastro ou configuração a conferir, o que ajustar e como confirmar que resolveu. Se houver mais de uma causa possível, uma verificação objetiva para cada, da mais provável para a menos provável. Itens numerados ("1.", "2.") em linhas próprias.
-4. Só depois, e só se realmente faltar algo, peça o mínimo necessário para avançar caso os passos não resolvam, específico para ESTE chamado (prefira um recorte pequeno e comparável a "envie tudo"). Pode fazer uma pergunta direta quando ela acelerar a análise.
-5. Ao devolver, explique de forma cordial por que ainda não dá para analisar e liste o que ele precisa enviar.
+2. Resuma o que o relato e os anexos disponíveis indicam, citando fatos concretos sem afirmar uma causa que não esteja demonstrada.
+3. Quando houver base para orientar, priorize passos específicos para resolver ou contornar e explique como verificar o resultado. Quando não houver, priorize o pedido de evidências específico, sem instruções técnicas inventadas.
+4. Peça somente o mínimo necessário para avançar; prefira um recorte pequeno e comparável a "envie tudo". Pode fazer uma pergunta direta quando ela acelerar a análise.
+5. Ao pedir evidências, explique de forma cordial por que elas são necessárias para este caso.
 6. Títulos em MAIÚSCULAS numa linha própria são opcionais: use só se ajudarem a organizar um texto mais longo.
 7. Termine com "Ficamos no aguardo do seu retorno." e, na última linha, "Jaade, atendente de IA".
 
@@ -118,7 +132,7 @@ Regras:
 - Português do Brasil; tom de analista: cordial, seguro e direto, frases curtas, sem rodeios, sem repetir a mesma ideia e sem jargão interno do suporte.
 - Quem lê costuma ser usuário de negócio (financeiro, fiscal, compras), não programador: explique em palavras simples o que for técnico (ex.: "ponto de entrada, que é uma customização feita no sistema"); ao pedir algo técnico (fonte, log, arquivo de integração), diga o que é e quem na equipe dele costuma ter (a TI ou a consultoria responsável pela customização). Mantenha a precisão: nomes de rotinas, campos e mensagens ficam como estão.
 - Não invente: use só o que está no chamado, nos anexos e na análise técnica. Não prometa prazo nem solução garantida.
-- NUNCA cite números de outros chamados, nomes de outros clientes, empresas, pessoas ou dados internos; não mencione "base histórica", fontes internas, nível de confiança, a análise técnica em si nem a classificação interna do chamado (tipo, nível, categoria).
+- Não cite outros chamados, protocolos ou atendimentos, mesmo do próprio cliente. Não cite nomes de outros clientes, empresas, pessoas ou dados internos; não mencione "base histórica", fontes internas, nível de confiança, a análise técnica em si nem a classificação interna do chamado (tipo, nível, categoria).
 - Links: quando a entrada trouxer documentação oficial lida pela pesquisa que ajude a resolver (artigo da Central TOTVS, TDN, atualização ou pacote a aplicar), cite o link completo numa linha própria logo após o passo a que se refere. Use SOMENTE os links dessa lista, copiados exatamente; nunca escreva outro endereço. Se a documentação indicar atualização (patch, pacote, expedição) que corrige o problema, oriente a aplicação e recomende aplicar primeiro em ambiente de homologação.
 - Nunca peça senha, token, chave de acesso ou credencial; ao pedir log, requisição ou cabeçalhos de API, peça para ocultar esses dados antes de enviar.
 - No máximo 3000 caracteres.`;
@@ -145,7 +159,8 @@ async function _aindaElegivel(empresaId, fonteId, numero) {
 async function _importarChamado(empresaId, fonteId, numero) {
   const saida = await historicalImportService.atualizarChamadosPorIds(empresaId, fonteId, [String(numero)]);
   if (saida.erros.length) throw new Error(`Falha ao importar o chamado: ${saida.erros[0].erro}`);
-  const chamado = chamadoRepo.getChamadoPorNumero(empresaId, String(numero), 'softexpert');
+  const chamado = chamadoRepo.getChamadoPorNumero(empresaId, String(numero), 'softexpert', { exigirUnico: true });
+  if (chamado && chamado.fonteId !== fonteId) throw new Error('Chamado encontrado em outra fonte; não é possível confirmar o atendimento.');
   if (!chamado) throw new Error('Chamado não encontrado na base após a importação.');
   return chamado;
 }
@@ -154,13 +169,13 @@ async function _importarChamado(empresaId, fonteId, numero) {
 // chat da J2iA. Não reaproveita a que já estiver no chat: ela pode ser antiga
 // e sem pesquisa, e o retorno ao cliente sairia sem os links oficiais (caso
 // real #037059, 2026-11-20).
-async function _obterAnaliseTecnica(empresaId, atendimentoId, anexos) {
+async function _obterAnaliseTecnica(empresaId, atendimentoId, anexos, chamadoId) {
   if (!turnoLockService.tentarAdquirir(empresaId, atendimentoId)) {
     throw Object.assign(new Error('O chat deste chamado está em uso; a Jaade tenta de novo no próximo ciclo.'), { adiar: true });
   }
   try {
     const mensagem = await _investigacao().processarTurno(empresaId, atendimentoId, {
-      texto: TEXTO_ANALISE_PA, usuarioId: null, anexoIds: anexos.map(a => a.id).filter(Boolean), automatico: true,
+      texto: TEXTO_ANALISE_PA, usuarioId: null, anexoIds: anexos.map(a => a.id).filter(Boolean), automatico: true, escopoPrimeiroAtendimento: true, chamadoIdPa: chamadoId,
       // Pesquisa na documentação oficial sempre: o retorno ao cliente só cita
       // links que a pesquisa realmente leu (pedido do usuário, 2026-11-20).
       forcarPesquisa: true,
@@ -197,7 +212,43 @@ function fontesDaAnalise(empresaId, atendimentoId, mensagemId) {
   return [...fontes.values()].slice(0, MAX_FONTES);
 }
 
-function _montarEntrada({ chamado, anexos, analise, fontes = [] }) {
+// Apenas evidências que realmente entraram no prompt da análise, ainda
+// rastreáveis e pertencentes ao cliente confirmado, podem autorizar números.
+function referenciasDaAnalise(empresaId, atendimentoId, mensagemId, chamado) {
+  try { return _referenciasDaAnalise(empresaId, atendimentoId, mensagemId, chamado); }
+  catch (_) { return []; }
+}
+
+function _referenciasDaAnalise(empresaId, atendimentoId, mensagemId, chamado) {
+  if (!mensagemId || !chamado?.id || !chamadoRepo.identidadeConfirmadaPa(empresaId, chamado.id)) return [];
+  const execucao = investigacaoExecucaoRepo.listarPorAtendimento(empresaId, atendimentoId, { limite: 20 }).find(x => x.mensagemId === mensagemId);
+  const selecionados = execucao?.manifesto?.pesquisaExterna?.baseConhecimento?.selecionados;
+  if (!Array.isArray(selecionados)) return [];
+  const candidatos = chamadoRepo.obterCandidatosPorIds(empresaId, chamado.id, selecionados.map(x => x.chamadoId), { escopo: 'cliente_pa' });
+  const porId = new Map(candidatos.map(x => [x.chamado.id, x]));
+  const referencias = [];
+  for (const item of selecionados) {
+    const candidato = porId.get(item.chamadoId), a = item.avaliacaoIa;
+    if (!candidato || !a || a.relevancia !== 'mesmo_problema' || a.origemAtual?.tipo !== 'chamado') continue;
+    const numero = String(candidato.chamado.numero || '');
+    if (!/^0\d{5}$/.test(numero) || numero !== String(item.numero)) continue;
+    let unico;
+    try { unico = chamadoRepo.getChamadoPorNumero(empresaId, numero, 'softexpert', { exigirUnico: true }); } catch (_) { continue; }
+    if (!unico || unico.id !== candidato.chamado.id) continue;
+    const obterCampo = (origem) => {
+      if (origem?.tipo === 'chamado') return candidato.chamado[origem.campo];
+      if (origem?.tipo === 'posicionamento') return candidato.posicionamentos.find(p => p.id === origem.id)?.[origem.campo];
+      return null;
+    };
+    if (!_trechoValido(a.trechoAtual, redigirTexto(chamado[a.origemAtual.campo])) || !_trechoValido(a.trechoCandidato, redigirTexto(obterCampo(a.origemCandidato)))) continue;
+    referencias.push({ numero, trechoAtual: a.trechoAtual, trechoCandidato: a.trechoCandidato, diferencas: a.diferencas || null, lacunas: a.lacunas || null,
+      trechoProcedimento: _trechoValido(a.trechoProcedimento, redigirTexto(obterCampo(a.origemProcedimento))) ? a.trechoProcedimento : null,
+      trechoResultado: _trechoValido(a.trechoResultado, redigirTexto(obterCampo(a.origemResultado))) ? a.trechoResultado : null });
+  }
+  return referencias.slice(0, 5);
+}
+
+function _montarEntrada({ chamado, anexos, analise, fontes = [], referencias = [] }) {
   const partes = [`Chamado nº ${chamado.numero}`];
   for (const [rotulo, valor] of [['Título', chamado.titulo], ['Assunto', chamado.assunto], ['Breve descrição', chamado.breveDescricao],
     ['Descrição do cliente', chamado.descricao], ['Informações adicionais', chamado.informacoesAdicionais]]) {
@@ -207,6 +258,7 @@ function _montarEntrada({ chamado, anexos, analise, fontes = [] }) {
     ? `Anexos enviados pelo cliente (${anexos.length}): ${anexos.map(a => a.nomeOriginal || a.nome || 'arquivo').join(', ')}`
     : 'Anexos enviados pelo cliente: nenhum.');
   partes.push(`Análise técnica interna (NÃO copie referências, números de chamados ou nomes daqui):\n${_limitar(analise?.conteudo, 8000) || '(indisponível)'}`);
+  partes.push(referencias.length ? `Referências autorizadas do próprio cliente (a semelhança é preliminar; apenas estes números podem ser citados):\n${referencias.map(r => `- Chamado ${r.numero}; trecho do problema atual: ${r.trechoAtual}; trecho do histórico: ${r.trechoCandidato}${r.diferencas ? `; possíveis diferenças: ${r.diferencas}` : ''}${r.lacunas ? `; lacunas a verificar: ${r.lacunas}` : ''}${r.trechoProcedimento ? `; possível procedimento: ${r.trechoProcedimento}` : ''}${r.trechoResultado ? `; resultado registrado: ${r.trechoResultado}` : ''}`).join('\n')}` : 'Referências autorizadas do próprio cliente: nenhuma; não cite outros chamados.');
   partes.push(fontes.length
     ? `Documentação oficial lida pela pesquisa (os ÚNICOS links que podem ir ao cliente, copiados exatamente):\n${fontes.map(x => `- ${x.titulo} — ${x.url}`).join('\n')}`
     : 'Documentação oficial lida pela pesquisa: nenhuma. Não cite links.');
@@ -267,7 +319,7 @@ function nomesDeOutrosClientes(empresaId, clienteIdProprio) {
 }
 
 /** Trechos que não podem ir ao cliente: número de outro chamado, nome de outro cliente e menções internas. */
-function verificarVazamento(texto, numeroProprio, outrosClientes = [], linksPermitidos = []) {
+function verificarVazamento(texto, numeroProprio, outrosClientes = [], linksPermitidos = [], numerosPermitidos = []) {
   const problemas = [];
   const permitidos = new Set(linksPermitidos);
   for (const m of String(texto).matchAll(/https?:\/\/[^\s<>"]+/g)) {
@@ -275,9 +327,22 @@ function verificarVazamento(texto, numeroProprio, outrosClientes = [], linksPerm
     if (!permitidos.has(url)) problemas.push(`cita link que não veio da pesquisa (${url})`);
   }
   const proprio = String(numeroProprio || '');
-  for (const m of String(texto).matchAll(/(?<!\d)0\d{5}(?!\d)/g)) {
-    if (m[0] !== proprio) problemas.push(`cita o chamado ${m[0]}`);
+  const permitidosChamados = new Set([proprio, ...numerosPermitidos.map(String)]);
+  // Normaliza algarismos de largura cheia e remove caracteres invisíveis;
+  // também reconhece separadores dentro de números de seis dígitos.
+  const verificavel = String(texto || '').normalize('NFKC').replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, '')
+    .replace(/[٠-٩۰-۹]/g, c => String('٠١٢٣٤٥٦٧٨٩'.indexOf(c) >= 0 ? '٠١٢٣٤٥٦٧٨٩'.indexOf(c) : '۰۱۲۳۴۵۶۷۸۹'.indexOf(c)));
+  const semUrls = verificavel.replace(/https?:\/\/[^\s<>"]+/gi, ' ');
+  const semDatas = semUrls.replace(/\b\d{1,2}\/\d{1,2}\/\d{4}\b/g, ' ');
+  for (const m of semDatas.matchAll(/(?<![\w\d])0(?:[\s.\-_/]*\d){5}(?!\d)/g)) {
+    const numero = m[0].replace(/\D/g, '');
+    if (!permitidosChamados.has(numero)) problemas.push(`cita o chamado ${numero}`);
   }
+  for (const m of semUrls.matchAll(/\b(?:chamado|ticket|protocolo|atendimento|ocorr[eê]ncia)s?\s*(?:n[º°o.]\s*)?[#:]?\s*(\d{1,10})(?!\d)/gi)) if (!permitidosChamados.has(m[1])) problemas.push(`cita o chamado ${m[1]}`);
+  for (const m of semUrls.matchAll(/(?<![\w])#\s*(\d{1,10})(?!\d)/g)) if (!permitidosChamados.has(m[1])) problemas.push(`cita o chamado ${m[1]}`);
+  const semAcentos = _semAcento(semUrls);
+  if (/\b(?:chamado|ticket|protocolo|atendimento|ocorrencia)s?\s+(?:(?:numero|de numero|nro|num)\s+)?(?:zero|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|quinze|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|cento|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|setecentos|oitocentos|novecentos|mil|milhao|milhoes)\b/i.test(semAcentos)) problemas.push('referência a chamado por extenso não verificável');
+  if (/\b(?:outro|outros|outra|outras|anterior|anteriores)\s+(?:chamado|chamados|ticket|tickets|protocolo|protocolos|atendimento|atendimentos)\b|\b(?:chamado|ticket|protocolo|atendimento)\s+(?:anterior|anteriores|passado|passados)\b/i.test(semAcentos)) problemas.push('referência a outro atendimento não permitida');
   const normalizado = ` ${_semAcento(texto).replace(/[^a-z0-9]+/g, ' ')} `;
   for (const nome of outrosClientes) {
     if (normalizado.includes(` ${nome} `)) problemas.push(`cita outro cliente (${nome})`);
@@ -290,15 +355,64 @@ function verificarVazamento(texto, numeroProprio, outrosClientes = [], linksPerm
   return [...new Set(problemas)];
 }
 
-async function gerarTextoCliente(empresaId, dados) {
+// Ensaio isolado para a futura citação: a IA escolhe marcadores de uma lista
+// já validada; só o servidor escreve os números. Não é ligado à publicação.
+function simularMontagemReferencias(texto, numeroProprio, referencias, { outrosClientes = [], linksPermitidos = [] } = {}) {
+  if (!Array.isArray(referencias) || referencias.length > 5) throw new Error('Lista de referências inválida.');
+  const numeros = referencias.map(r => String(r?.numero || ''));
+  if (numeros.some(n => !/^0\d{5}$/.test(n)) || new Set(numeros).size !== numeros.length) throw new Error('Referência inválida ou duplicada.');
+  const original = String(texto || '');
+  const problemas = verificarVazamento(original, numeroProprio, outrosClientes, linksPermitidos);
+  if (problemas.length) throw new Error('Resposta contém referência fora dos marcadores autorizados.');
+  let restantes = original;
+  const saida = original.replace(/\[\[REF_(\d+)\]\]/g, (marcador, indice) => {
+    const n = Number(indice);
+    if (!Number.isInteger(n) || n < 1 || n > numeros.length || String(n) !== indice) throw new Error('Marcador de referência não autorizado.');
+    restantes = restantes.replace(marcador, '');
+    return `chamado ${numeros[n - 1]}`;
+  });
+  if (restantes.includes('[[') || restantes.includes(']]')) throw new Error('Marcador de referência inválido.');
+  const errosSaida = verificarVazamento(saida, numeroProprio, outrosClientes, linksPermitidos, numeros);
+  if (errosSaida.length) throw new Error('Resposta com referência não autorizada.');
+  return normalizarTextoSoftExpert(saida);
+}
+
+// A seleção por índices vem da IA; a lista deve ser obtida por
+// referenciasDaAnalise, não do modelo. Não ligado à publicação do PA.
+const CABECALHO_REFERENCIAS = 'Encontramos outros chamados seus que podem tratar de situações semelhantes. Se quiser, você pode consultá-los pelos números abaixo:';
+
+function simularReferenciasNoRodape(texto, numeroProprio, referencias, indicesSelecionados, { outrosClientes = [], linksPermitidos = [] } = {}) {
+  if (!Array.isArray(referencias) || referencias.length > 5 || !Array.isArray(indicesSelecionados)) throw new Error('Seleção de referências inválida.');
+  const numeros = referencias.map(r => String(r?.numero || ''));
+  if (numeros.some(n => !/^0\d{5}$/.test(n)) || new Set(numeros).size !== numeros.length) throw new Error('Referência inválida ou duplicada.');
+  if (indicesSelecionados.some(i => !Number.isInteger(i) || i < 0 || i >= numeros.length) || new Set(indicesSelecionados).size !== indicesSelecionados.length) throw new Error('Seleção de referência não autorizada.');
+  const conteudo = String(texto || '').trim();
+  if (!conteudo || verificarVazamento(conteudo, numeroProprio, outrosClientes, linksPermitidos).length) throw new Error('Texto contém referência fora da lista controlada.');
+  const escolhidos = indicesSelecionados.map(i => numeros[i]);
+  const saida = normalizarTextoSoftExpert([conteudo, escolhidos.length ? [CABECALHO_REFERENCIAS, ...escolhidos].join('\n\n') : ''].filter(Boolean).join('\n\n'));
+  if (saida.length > MAX_TEXTO_CLIENTE) throw new Error('Retorno inválido após inclusão de referências.');
+  return saida;
+}
+
+async function gerarTextoCliente(empresaId, dados, { simularReferencias = false } = {}) {
   const { keys, cfg } = aiConfigService.resolverKeysEOrdem(empresaId);
-  let entrada = _montarEntrada(dados);
+  // A IA seleciona índices; os números são inseridos pelo servidor.
+  const numeroAtual = String(dados.chamado.numero || '');
+  const analiseSemNumeros = String(dados.analise?.conteudo || '').replace(/(?<!\d)0\d{5}(?!\d)/g, n => n === numeroAtual ? n : '[referência omitida]');
+  const dadosSemCitacoes = { ...dados, referencias: [], analise: { ...dados.analise, conteudo: analiseSemNumeros } };
+  let entrada = _montarEntrada(dadosSemCitacoes);
+  const candidatasSimuladas = simularReferencias && Array.isArray(dados.referencias) ? dados.referencias.slice(0, 5) : [];
+  const instrucaoSelecao = candidatasSimuladas.length
+    ? '\nInclua no JSON o campo indicesReferencias: lista de índices inteiros das pistas que você considerar úteis, ou [] se nenhuma ajudar. Use somente os índices fornecidos. Não escreva números de chamados no texto.' : '';
+  const blocoSelecao = candidatasSimuladas.length
+    ? `\n\nPistas para avaliar (relevância preliminar; selecione somente as úteis):\n${candidatasSimuladas.map((r, i) => `Índice ${i}: problema atual: ${r.trechoAtual}; histórico: ${r.trechoCandidato}${r.diferencas ? `; diferenças: ${r.diferencas}` : ''}${r.lacunas ? `; lacunas: ${r.lacunas}` : ''}${r.trechoProcedimento ? `; possível procedimento: ${r.trechoProcedimento}` : ''}${r.trechoResultado ? `; resultado registrado: ${r.trechoResultado}` : ''}`).join('\n')}` : '';
+  entrada += blocoSelecao;
   const outrosClientes = nomesDeOutrosClientes(empresaId, dados.chamado.clienteId);
   let ultimoProblema = 'resposta da IA sem o formato esperado';
   // Versões recusadas vão para a auditoria (motivo de cada uma).
   const recusas = [];
   for (let tentativa = 1; tentativa <= 2; tentativa++) {
-    const resultado = await aiProviderClient.chamarIA(keys, cfg, SYSTEM_PROMPT_CLIENTE, entrada, [], { maxTokens: 2000, timeoutMs: 90000 });
+    const resultado = await aiProviderClient.chamarIA(keys, cfg, SYSTEM_PROMPT_CLIENTE + instrucaoSelecao, entrada, [], { maxTokens: 2000, timeoutMs: 90000 });
     const json = resultado.truncado ? null : _extrairJson(resultado.texto);
     const texto = normalizarTextoSoftExpert(json?.texto);
     if (!json || !['responder', 'devolver'].includes(json.decisao) || !texto) {
@@ -311,14 +425,22 @@ async function gerarTextoCliente(empresaId, dados) {
       recusas.push(`Versão ${tentativa}: ${ultimoProblema}`);
       continue;
     }
-    const problemas = verificarVazamento(texto, dados.chamado.numero, outrosClientes, (dados.fontes || []).map(x => x.url));
+    const problemas = [...new Set([...verificarVazamento(json.texto, dados.chamado.numero, outrosClientes, (dados.fontes || []).map(x => x.url)), ...verificarVazamento(texto, dados.chamado.numero, outrosClientes, (dados.fontes || []).map(x => x.url))])];
     if (problemas.length) {
       ultimoProblema = `texto ao cliente ${problemas.join(', ')}`;
       recusas.push(`Versão ${tentativa}: ${ultimoProblema}`);
-      entrada = `${_montarEntrada(dados)}\n\nATENÇÃO: a versão anterior foi recusada porque ${problemas.join(', ')}. Reescreva sem isso.`;
+      entrada = `${_montarEntrada(dadosSemCitacoes)}${blocoSelecao}\n\nATENÇÃO: a versão anterior foi recusada porque ${problemas.join(', ')}. Reescreva sem isso.`;
       continue;
     }
-    return { decisao: json.decisao, motivo: _limitar(json.motivo, 500), texto, provider: resultado.provider, model: resultado.model, recusas };
+    let textoFinal = texto, referenciasSelecionadas = [];
+    if (candidatasSimuladas.length) {
+      const indices = json.indicesReferencias === undefined ? [] : json.indicesReferencias;
+      try {
+        textoFinal = simularReferenciasNoRodape(texto, dados.chamado.numero, candidatasSimuladas, indices, { outrosClientes, linksPermitidos: (dados.fontes || []).map(x => x.url) });
+        referenciasSelecionadas = indices.map(i => candidatasSimuladas[i].numero);
+      } catch (_) { ultimoProblema = 'seleção de referências inválida'; recusas.push(`Versão ${tentativa}: ${ultimoProblema}`); continue; }
+    }
+    return { decisao: json.decisao, motivo: _limitar(json.motivo, 500), texto: textoFinal, referenciasSelecionadas, provider: resultado.provider, model: resultado.model, recusas };
   }
   throw Object.assign(new Error(`Texto ao cliente recusado: ${ultimoProblema}.`), { recusas });
 }
@@ -393,19 +515,22 @@ async function processarExecucao(cfg, fonte, exec) {
       arquivos.length ? { arquivos } : null);
     etapa = 'analise';
     const inicioAnalise = Date.now();
-    const analise = await _obterAnaliseTecnica(empresaId, atendimento.id, anexos);
+    const analise = await _obterAnaliseTecnica(empresaId, atendimento.id, anexos, chamado.id);
     const fontes = fontesDaAnalise(empresaId, atendimento.id, analise.id);
     _evento(exec, 'analise', 'ok',
       `Análise técnica com pesquisa feita em ${Math.round((Date.now() - inicioAnalise) / 1000)} s e gravada no chat da J2iA — ${fontes.length ? `${fontes.length} página(s) oficial(is) lida(s)` : 'nenhuma página oficial lida'}`,
     { analise: _limitar(analise.conteudo, 8000), fontesOficiais: fontes.length ? fontes.map(x => `${x.titulo} — ${x.url}`) : undefined });
     etapa = 'retorno';
-    const gerado = await gerarTextoCliente(empresaId, { chamado, anexos, analise, fontes });
+    // Suspensão deliberada em todos os modos, inclusive na simulação do ciclo.
+    // Ensaios da montagem usam somente dados fictícios e não passam por aqui.
+    const referencias = [];
+    const gerado = await gerarTextoCliente(empresaId, { chamado, anexos, analise, fontes, referencias });
     // Devolução desligada: o pedido de informação vai como resposta (o chamado fica no PA).
     const devolver = gerado.decisao === 'devolver' && cfg.devolucaoAtiva;
     const motivo = gerado.decisao === 'devolver' && !cfg.devolucaoAtiva ? `${gerado.motivo} (devolução desligada: fica como resposta)` : gerado.motivo;
     _evento(exec, 'retorno', gerado.recusas.length ? 'aviso' : 'ok',
       `Retorno ao cliente escrito — decisão: ${devolver ? 'devolver ao cliente' : 'responder'}${gerado.recusas.length ? ` (${gerado.recusas.length} versão(ões) recusada(s) antes)` : ''}`,
-      { decisao: devolver ? 'Devolver ao cliente' : 'Responder', motivo, modelo: [gerado.provider, gerado.model].filter(Boolean).join(' · '),
+      { decisao: devolver ? 'Devolver ao cliente' : 'Responder', motivo, referenciasAutorizadas: referencias.map(r => r.numero), referenciasSelecionadas: gerado.referenciasSelecionadas, modelo: [gerado.provider, gerado.model].filter(Boolean).join(' · '),
         recusas: gerado.recusas.length ? gerado.recusas : undefined, texto: gerado.texto });
     if (!(await _aindaElegivel(empresaId, fonte.id, exec.numeroChamado))) return descartar();
     if (cfg.modo !== 'publicar') _evento(exec, 'envio', 'info', 'Modo Simulação: o retorno não foi enviado ao SoftExpert.');
@@ -474,8 +599,12 @@ function _horaMeiaHora(data) {
   return `${String(Math.floor(minutos / 60)).padStart(2, '0')}:${String(minutos % 60).padStart(2, '0')}`;
 }
 
-/** Atributos da grade: os campos fechados com o usuário (2026-11-19) e zero horas apontadas. */
-function montarAtributosPosicionamento({ contrato, chamado, jade, texto, cabecalho = {}, instante = new Date() }) {
+/**
+ * Atributos da grade: os campos fechados com o usuário (2026-11-19) e zero horas
+ * apontadas. Os mesmos vão ao formulário do workflow da Jaade (DYNITSM02IAPA).
+ */
+function montarAtributosPosicionamento({ contrato, chamado, jade, texto, decisao, cabecalho = {}, instante = new Date() }) {
+  if (!STATUS_DECISAO[decisao]) throw new Error('Decisão da Jaade ausente: sem ela o SoftExpert não sabe o caminho do chamado.');
   const hora = _horaMeiaHora(instante);
   const desejados = {
     DESCRICAO: texto,
@@ -496,7 +625,7 @@ function montarAtributosPosicionamento({ contrato, chamado, jade, texto, cabecal
   for (const id of Object.keys(atributos)) if (PREENCHIDOS.includes(id.toLowerCase())) delete atributos[id];
   atributos.cduserana = jade.codigo;
   atributos.analistaj2a = jade.nome;
-  atributos.texto4 = MARCA_JADE;
+  atributos.texto4 = STATUS_DECISAO[decisao];
   // Campos que o formulário preenche sozinho quando o registro é feito pela tela
   // (vinham vazios pela API, chamado 037058; conferido contra registros do Edson):
   // CHAMADO = IDPROCESS; Data e Hora = momento da integração, no fuso do
@@ -523,18 +652,8 @@ async function _publicar(cfg, fonte, exec) {
   if (s?.posicionamentosJade > 0) {
     // Envio anterior confirmado na origem (inclusive um "não confirmado" que tinha entrado).
     _evento(exec, 'envio', 'ok', 'Conferido no SoftExpert: o posicionamento da Jaade está na grade do chamado.');
-    const publicado = repo.atualizar(exec.id, { estado: 'publicado', publicadoEm: exec.publicadoEm || new Date().toISOString(), ultimoErro: null, alerta: false });
-    if (exec.decisao === 'devolver') return repo.atualizar(publicado.id, { estado: 'devolvendo' });
-    // Gravação confirmada só agora (o envio anterior caiu antes do e-mail): o e-mail sai aqui.
-    if (!exec.publicadoEm) {
-      try {
-        const jade = await _usuarioJade(empresaId, fonte.id, cfg.usuarioSoftexpert);
-        await _notificarCliente(cfg, fonte, publicado, { jade, config: _contratoEscrita(empresaId, fonte.id, jade.codigo) });
-      } catch (err) {
-        _evento(publicado, 'notificacao', 'aviso', `E-mail ao cliente não enviado: ${err.message}. O retorno continua na grade.`);
-      }
-    }
-    return publicado;
+    // Próximo passo: o workflow da Jaade (abre ou continua de onde parou).
+    return repo.atualizar(exec.id, { estado: 'devolvendo', publicadoEm: exec.publicadoEm || new Date().toISOString(), ultimoErro: null, alerta: false });
   }
   if (exec.tentativasPublicacao >= MAX_TENTATIVAS) return _falhaDefinitiva(exec, 'O SoftExpert não confirmou o posicionamento após 3 tentativas.', 'envio');
   if (_triagemAtuou(s)) {
@@ -546,11 +665,19 @@ async function _publicar(cfg, fonte, exec) {
     return repo.atualizar(exec.id, { estado: 'descartado', motivo: 'Texto gerado há mais de 4 horas; não foi enviado para não chegar desatualizado ao cliente.', motivoCodigo: 'texto_vencido', alerta: false });
   }
   const tentativaEnvio = `Tentativa ${exec.tentativasPublicacao + 1}/${MAX_TENTATIVAS}`;
-  const chamado = chamadoRepo.getChamadoPorNumero(empresaId, exec.numeroChamado, 'softexpert');
+  const chamado = chamadoRepo.getChamadoPorNumero(empresaId, exec.numeroChamado, 'softexpert', { exigirUnico: true });
   if (!chamado) throw new Error('Chamado não encontrado na base local.');
+  if (chamado.fonteId !== fonte.id || (exec.chamadoId && chamado.id !== exec.chamadoId)) return _falhaDefinitiva(exec, 'A identidade do chamado mudou antes do envio.', 'envio');
+  const fontes = fontesDaAnalise(empresaId, exec.atendimentoId, exec.mensagemAnaliseId);
+  const textoCliente = String(exec.textoCliente || '');
+  // Retornos anteriormente enfileirados com qualquer bloco de referências
+  // devem ser bloqueados também quando o número antes estava autorizado.
+  if (textoCliente.includes(CABECALHO_REFERENCIAS) || /referências para consulta:/i.test(textoCliente)) return _falhaDefinitiva(exec, 'Citação automática de histórico suspensa.', 'envio');
+  const problemas = verificarVazamento(textoCliente, chamado.numero, nomesDeOutrosClientes(empresaId, chamado.clienteId), fontes.map(f => f.url));
+  if (problemas.length) return _falhaDefinitiva(exec, 'O retorno contém referência não autorizada ou não verificável.', 'envio');
   const jade = await _usuarioJade(empresaId, fonte.id, cfg.usuarioSoftexpert);
   const config = _contratoEscrita(empresaId, fonte.id, jade.codigo);
-  const atributos = montarAtributosPosicionamento({ contrato: config.contrato, chamado, jade, texto: exec.textoCliente, cabecalho: s?.cabecalho });
+  const atributos = montarAtributosPosicionamento({ contrato: config.contrato, chamado, jade, texto: exec.textoCliente, decisao: exec.decisao, cabecalho: s?.cabecalho });
   const xml = soapClient.montarInclusaoGrid({ workflowId: exec.numeroChamado, mainEntityId: config.contrato.mainEntityId, childRelationshipId: config.contrato.childRelationshipId, campos: atributos });
   if (!repo.contarTentativa(exec.id, 'publicacao', 'publicando', { estadoAnterior: exec.estado, tentativasAnteriores: exec.tentativasPublicacao })) return null;
   const gravado = { usuario: `${jade.nome} (CDUSER ${jade.codigo}, matrícula ${jade.matricula})`, campos: atributos };
@@ -568,135 +695,114 @@ async function _publicar(cfg, fonte, exec) {
     return repo.atualizar(exec.id, { ultimoErro: `O SoftExpert recusou o posicionamento: ${resposta.Detail || resposta.Code}` });
   }
   _evento(exec, 'envio', 'ok', 'Posicionamento gravado na grade do chamado no SoftExpert', { ...gravado, resposta: _respostaSe(resposta) });
-  const publicado = repo.atualizar(exec.id, { estado: 'publicado', publicadoEm: new Date().toISOString(), ultimoErro: null, alerta: false });
-  if (exec.decisao === 'devolver') return repo.atualizar(publicado.id, { estado: 'devolvendo' });
-  await _notificarCliente(cfg, fonte, publicado, { jade, config });
-  return publicado;
+  return repo.atualizar(exec.id, { estado: 'devolvendo', publicadoEm: new Date().toISOString(), ultimoErro: null, alerta: false });
 }
 
 /**
- * Responder: o retorno fica na grade e o chamado SEGUE na triagem. Na revisão
- * 89 em diante do ITSM-02 o PA tem a ação 6, que envia o e-mail "Retorno do
- * ticket" ao cliente e volta ao Primeiro Atendimento (pedido do usuário,
- * 2026-11-20). Confere a ação no próprio chamado (cada instância guarda as
- * ações da sua revisão): sem ela, só a grade, como antes. Uma tentativa só —
- * repetir mandaria o e-mail duas vezes. Ação 6 recusada ou não confirmada =
- * o cliente não foi avisado: fica com alerta e o WhatsApp avisa em "PA Não
- * Respondido" (teste real 037067, recusa -20 do SoftExpert). Nunca lança.
+ * Workflow da Jaade (2026-11-23): o ITSM-02 recusa executeActivity pela API
+ * (regra "Antes de salvar" do formulário, erro -20). Depois da grade, a Jaade
+ * abre uma instância do ITSM-02-I.A-P.A com o mesmo registro (TEXTO4 = decisão)
+ * e executa a ATV-01; o SoftExpert lê o TEXTO4, move o chamado original
+ * (atendimento ou cliente) e manda os e-mails. Retomável: a instância é achada
+ * pelo título antes de abrir outra e a ATV-01 só é executada se ainda estiver
+ * ativa — repetir abriria outro workflow e mandaria o e-mail duas vezes.
  */
-async function _notificarCliente(cfg, fonte, exec, { jade, config }) {
+async function _encaminhar(cfg, fonte, exec) {
   const { empresaId } = cfg;
-  const naoAvisado = (motivo, resumo, detalhes) => {
-    _evento(exec, 'notificacao', 'erro', resumo, detalhes);
-    repo.atualizar(exec.id, { alerta: true, ultimoErro: `E-mail ao cliente não enviado: ${motivo}` });
+  const { processId, activityId, actionSequence } = soapClient.WORKFLOW_JADE;
+  const titulo = tituloWorkflowJade(exec.numeroChamado);
+  const concluir = (workflowId, resumo, detalhes = {}) => {
+    _evento(exec, 'workflow', 'ok', resumo, { workflow: workflowId, ...detalhes });
+    return repo.atualizar(exec.id, { estado: 'devolvido', devolvidoEm: new Date().toISOString(), ultimoErro: null, alerta: false });
   };
-  try {
-    const [acao] = await agenteLocalService.executarSelectNaFonte(empresaId, fonte.id, { sql: SQL_ACAO_EMAIL, params: { numero: String(exec.numeroChamado) }, limit: 2 });
-    if (!acao) {
-      _evento(exec, 'notificacao', 'info', 'E-mail ao cliente não enviado: o chamado é de uma revisão do fluxo sem a ação 6 (anterior à 89). O retorno fica só na grade.');
-      return;
-    }
-    const nomeAcao = String(acao.NMACTION || '').trim() || 'ação 6';
-    const movimento = { usuario: `${jade.nome} (matrícula ${jade.matricula})`, atividade: 'ATV-02 Primeiro Atendimento', acao: `6 — ${nomeAcao}` };
-    let resposta;
-    try {
-      const xml = soapClient.montarNotificacaoPrimeiroAtendimento({ workflowId: exec.numeroChamado, userId: jade.matricula });
-      resposta = await soapClient.enviarOperacao({ ...config.transporte, xml, operacao: 'executeActivity' });
-    } catch (err) {
-      naoAvisado('ação não confirmada pelo SoftExpert.', `A ação "${nomeAcao}" (e-mail ao cliente) não foi confirmada pelo SoftExpert (${err.message}). Não é repetida, para o cliente não receber o e-mail duas vezes.`,
-        { ...movimento, resposta: _respostaSe({ httpStatus: err.httpStatus, Detail: err.codigoTransporte }), erroTecnico: _erroTecnico(err, { operacao: 'executeActivity' }) });
-      return;
-    }
-    if (resposta.Status !== 'SUCCESS' || resposta.Code !== '1') {
-      naoAvisado(`o SoftExpert recusou a ação — ${resposta.Detail || resposta.Code}`, `O SoftExpert recusou a ação "${nomeAcao}" (e-mail ao cliente) — ${resposta.Detail || resposta.Code}. O retorno continua na grade.`,
-        { ...movimento, resposta: _respostaSe(resposta), erroTecnico: { mensagem: resposta.Detail || 'Recusa sem detalhe', operacao: 'executeActivity', status: resposta.Status, code: resposta.Code } });
-      return;
-    }
-    const depois = await situacaoNaOrigem(empresaId, fonte.id, exec.numeroChamado);
-    const ativas = [...(depois?.ativas || [])];
-    if (depois?.ativas.has('ATV-02')) {
-      _evento(exec, 'notificacao', 'ok', `Ação "${nomeAcao}" executada: o SoftExpert envia o e-mail "Retorno do ticket" ao cliente e o chamado voltou ao Primeiro Atendimento.`,
-        { ...movimento, resposta: _respostaSe(resposta) });
-    } else {
-      _evento(exec, 'notificacao', 'aviso', `Ação "${nomeAcao}" executada, mas o chamado está em ${ativas.join(', ') || 'etapa desconhecida'}, não no Primeiro Atendimento.`,
-        { ...movimento, resposta: _respostaSe(resposta) });
-    }
-  } catch (err) {
-    naoAvisado(err.message, `E-mail ao cliente não enviado: ${err.message}. O retorno continua na grade.`);
+  const [existente] = await agenteLocalService.executarSelectNaFonte(empresaId, fonte.id, {
+    sql: SQL_WORKFLOW_JADE, params: { processo: processId, atividade: activityId, titulo }, limit: 1,
+  });
+  let workflowId = existente ? String(existente.IDPROCESS) : null;
+  if (existente && Number(existente.ATV01_ATIVA) === 0) {
+    return concluir(workflowId, `Conferido no SoftExpert: o workflow da Jaade ${workflowId} já foi executado.`);
   }
-}
-
-async function _devolver(cfg, fonte, exec) {
-  const { empresaId } = cfg;
-  const s = await situacaoNaOrigem(empresaId, fonte.id, exec.numeroChamado);
-  if (s && !s.ativas.has('ATV-02')) {
-    if (s.ativas.has(ATIVIDADE_CLIENTE)) {
-      _evento(exec, 'devolucao', 'ok', 'Conferido no SoftExpert: o chamado está com o cliente (Retorno do Usuário).');
-      return repo.atualizar(exec.id, { estado: 'devolvido', devolvidoEm: new Date().toISOString(), ultimoErro: null, alerta: false });
+  let s = null;
+  if (!workflowId) {
+    s = await situacaoNaOrigem(empresaId, fonte.id, exec.numeroChamado);
+    if (!s || !s.aberto || s.comResponsavel || s.posicionamentosOutros > 0) {
+      _evento(exec, 'workflow', 'aviso', 'Workflow da Jaade não aberto: a triagem atuou no chamado depois da gravação na grade. O retorno fica na grade.');
+      return repo.atualizar(exec.id, { estado: 'publicado', alerta: false });
     }
-    // Saiu do PA para outro lugar: se a Jaade tentou devolver, alguém precisa olhar.
-    const ultimoErro = `O chamado saiu do Primeiro Atendimento para ${[...s.ativas].join(', ') || 'outra etapa'}, não para o cliente.`;
-    _evento(exec, 'devolucao', exec.tentativasDevolucao > 0 ? 'erro' : 'aviso', ultimoErro);
-    return repo.atualizar(exec.id, { estado: 'publicado', alerta: exec.tentativasDevolucao > 0, ultimoErro });
   }
-  const cancelar = (motivo) => {
-    _evento(exec, 'devolucao', 'aviso', `Devolução não feita: ${motivo}.`);
-    return repo.atualizar(exec.id, { estado: 'publicado', motivo: `${exec.motivo || ''} (${motivo})`.trim(), alerta: false });
-  };
-  if (!cfg.devolucaoAtiva) return cancelar('devolução desligada antes do envio; o pedido ficou como resposta');
-  if (!s || !s.aberto || s.comResponsavel || s.posicionamentosOutros > 0) return cancelar('devolução cancelada: a triagem atuou no chamado');
-  if (exec.tentativasDevolucao >= MAX_TENTATIVAS) return _falhaDefinitiva(exec, 'O SoftExpert não confirmou a devolução ao cliente após 3 tentativas; o pedido de informação já está na grade.', 'devolucao');
-  const tentativaDev = `Tentativa ${exec.tentativasDevolucao + 1}/${MAX_TENTATIVAS}`;
+  if (exec.tentativasDevolucao >= MAX_TENTATIVAS) {
+    return _falhaDefinitiva(exec, 'O SoftExpert não confirmou o workflow da Jaade após 3 tentativas; o retorno está na grade, mas o SoftExpert não foi acionado (sem e-mail ao cliente).', 'workflow');
+  }
+  const tentativa = `Tentativa ${exec.tentativasDevolucao + 1}/${MAX_TENTATIVAS}`;
   const jade = await _usuarioJade(empresaId, fonte.id, cfg.usuarioSoftexpert);
   const config = _contratoEscrita(empresaId, fonte.id, jade.codigo);
-  const xml = soapClient.montarDevolucaoPrimeiroAtendimento({ workflowId: exec.numeroChamado, userId: jade.matricula });
+  let xmlAbertura = null;
+  let campos = null;
+  if (!workflowId) {
+    const chamado = chamadoRepo.getChamadoPorNumero(empresaId, exec.numeroChamado, 'softexpert', { exigirUnico: true });
+    if (!chamado) throw new Error('Chamado não encontrado na base local.');
+    campos = montarAtributosPosicionamento({ contrato: config.contrato, chamado, jade, texto: exec.textoCliente, decisao: exec.decisao, cabecalho: s?.cabecalho });
+    xmlAbertura = soapClient.montarAberturaWorkflowJade({ titulo, userId: jade.matricula, campos });
+  }
   if (!repo.contarTentativa(exec.id, 'devolucao', 'devolvendo', { estadoAnterior: exec.estado, tentativasAnteriores: exec.tentativasDevolucao })) return null;
-  const movimento = { usuario: `${jade.nome} (matrícula ${jade.matricula})`, atividade: 'ATV-02 Primeiro Atendimento', acao: '1 — Retornar para cliente', destino: `${ATIVIDADE_CLIENTE} Retorno do Usuário` };
+  const usuario = `${jade.nome} (matrícula ${jade.matricula})`;
+  const falhou = (resumo, detalhes, ultimoErro) => {
+    _evento(exec, 'workflow', 'erro', `${tentativa}: ${resumo}`, detalhes);
+    return repo.atualizar(exec.id, { ultimoErro });
+  };
   let resposta;
+  if (!workflowId) {
+    const abertura = { usuario, processo: processId, titulo, status: STATUS_DECISAO[exec.decisao], campos };
+    try {
+      resposta = await soapClient.enviarOperacao({ ...config.transporte, xml: xmlAbertura, operacao: 'newWorkflowEditData' });
+    } catch (err) {
+      return falhou(`o SoftExpert não confirmou a abertura do workflow da Jaade (${err.message}). Será conferido no próximo ciclo antes de abrir outro.`,
+        { ...abertura, resposta: _respostaSe({ httpStatus: err.httpStatus, Detail: err.codigoTransporte }), erroTecnico: _erroTecnico(err, { operacao: 'newWorkflowEditData' }) },
+        'Abertura do workflow da Jaade não confirmada; será conferida no próximo ciclo.');
+    }
+    if (resposta.Status !== 'SUCCESS' || resposta.Code !== '1' || !String(resposta.RecordID || '').trim()) {
+      return falhou(`o SoftExpert recusou a abertura do workflow da Jaade — ${resposta.Detail || resposta.Code}`,
+        { ...abertura, resposta: _respostaSe(resposta), erroTecnico: { mensagem: resposta.Detail || 'Recusa sem detalhe', operacao: 'newWorkflowEditData', status: resposta.Status, code: resposta.Code } },
+        `O SoftExpert recusou a abertura do workflow da Jaade: ${resposta.Detail || resposta.Code}`);
+    }
+    workflowId = String(resposta.RecordID).trim();
+    _evento(exec, 'workflow', 'info', `Workflow da Jaade ${workflowId} aberto no SoftExpert (${processId}) com o status ${STATUS_DECISAO[exec.decisao]}.`,
+      { ...abertura, workflow: workflowId, resposta: _respostaSe(resposta) });
+  }
+  const movimento = { usuario, workflow: workflowId, atividade: activityId, acao: actionSequence };
   try {
-    resposta = await soapClient.enviarOperacao({ ...config.transporte, xml, operacao: 'executeActivity' });
+    resposta = await soapClient.enviarOperacao({ ...config.transporte, xml: soapClient.montarExecucaoWorkflowJade({ workflowId, userId: jade.matricula }), operacao: 'executeActivity' });
   } catch (err) {
-    _evento(exec, 'devolucao', 'erro', `${tentativaDev}: o SoftExpert não confirmou a devolução (${err.message}). Será conferida no próximo ciclo.`,
-      { ...movimento, resposta: _respostaSe({ httpStatus: err.httpStatus, Detail: err.codigoTransporte }), erroTecnico: _erroTecnico(err, { operacao: 'executeActivity' }) });
-    return repo.atualizar(exec.id, { ultimoErro: 'Devolução não confirmada; será conferida no próximo ciclo antes de qualquer nova tentativa.' });
+    return falhou(`o SoftExpert não confirmou a execução da ${activityId} no workflow da Jaade ${workflowId} (${err.message}). Será conferida no próximo ciclo.`,
+      { ...movimento, resposta: _respostaSe({ httpStatus: err.httpStatus, Detail: err.codigoTransporte }), erroTecnico: _erroTecnico(err, { operacao: 'executeActivity' }) },
+      'Execução do workflow da Jaade não confirmada; será conferida no próximo ciclo.');
   }
   if (resposta.Status !== 'SUCCESS' || resposta.Code !== '1') {
-    _evento(exec, 'devolucao', 'erro', `${tentativaDev}: o SoftExpert recusou a devolução — ${resposta.Detail || resposta.Code}`,
-      { ...movimento, resposta: _respostaSe(resposta), erroTecnico: { mensagem: resposta.Detail || 'Recusa sem detalhe', operacao: 'executeActivity', status: resposta.Status, code: resposta.Code } });
-    return repo.atualizar(exec.id, { ultimoErro: `O SoftExpert recusou a devolução: ${resposta.Detail || resposta.Code}` });
+    return falhou(`o SoftExpert recusou a execução da ${activityId} no workflow da Jaade ${workflowId} — ${resposta.Detail || resposta.Code}`,
+      { ...movimento, resposta: _respostaSe(resposta), erroTecnico: { mensagem: resposta.Detail || 'Recusa sem detalhe', operacao: 'executeActivity', status: resposta.Status, code: resposta.Code } },
+      `O SoftExpert recusou a execução do workflow da Jaade: ${resposta.Detail || resposta.Code}`);
   }
-  const depois = await situacaoNaOrigem(empresaId, fonte.id, exec.numeroChamado);
-  if (depois?.ativas.has(ATIVIDADE_CLIENTE)) {
-    _evento(exec, 'devolucao', 'ok', 'Chamado devolvido ao cliente — agora em Retorno do Usuário', { ...movimento, resposta: _respostaSe(resposta) });
-    return repo.atualizar(exec.id, { estado: 'devolvido', devolvidoEm: new Date().toISOString(), ultimoErro: null, alerta: false });
-  }
-  const ultimoErro = `A devolução foi aceita, mas o chamado está em ${[...(depois?.ativas || [])].join(', ') || 'etapa desconhecida'}, não em ${ATIVIDADE_CLIENTE}.`;
-  _evento(exec, 'devolucao', 'erro', ultimoErro, { ...movimento, resposta: _respostaSe(resposta) });
-  return repo.atualizar(exec.id, { estado: 'publicado', alerta: true, ultimoErro });
+  return concluir(workflowId, `Workflow da Jaade ${workflowId} executado: o SoftExpert segue pelo status ${STATUS_DECISAO[exec.decisao]} e envia os e-mails.`,
+    { ...movimento, resposta: _respostaSe(resposta) });
 }
 
-const NOMES_ATIVIDADE = { 'ATV-02': 'Primeiro Atendimento', [ATIVIDADE_CLIENTE]: 'Retorno do Usuário' };
+const NOMES_ATIVIDADE = { 'ATV-02': 'Primeiro Atendimento', 'ATV-06': 'Retorno do Usuário' };
 
 /**
- * Última atividade do fluxo de auditoria: onde o chamado ficou no SoftExpert
- * depois da Jaade. Respondido = segue no Primeiro Atendimento para a triagem;
- * devolvido = avançou para o Retorno do Usuário. Só registra, nunca falha.
+ * Última atividade do fluxo de auditoria: onde o chamado original ficou no
+ * SoftExpert depois da Jaade. Quem move o chamado é o workflow da Jaade (pelo
+ * TEXTO4), então aqui só registra onde ele está. Nunca falha.
  */
 async function _registrarSituacaoFinal(cfg, fonte, exec) {
   try {
     const s = await situacaoNaOrigem(cfg.empresaId, fonte.id, exec.numeroChamado);
     if (!s) return _evento(exec, 'situacao', 'erro', 'O chamado não foi encontrado no SoftExpert na conferência final.');
-    const ativas = [...s.ativas];
-    const esperada = exec.estado === 'devolvido' ? ATIVIDADE_CLIENTE : 'ATV-02';
     const nome = (id) => `${id}${NOMES_ATIVIDADE[id] ? ` ${NOMES_ATIVIDADE[id]}` : ''}`;
-    const onde = ativas.length ? ativas.map(nome).join(', ') : (s.aberto ? 'nenhuma atividade ativa' : 'chamado encerrado');
-    const chegou = s.ativas.has(esperada);
-    _evento(exec, 'situacao', chegou ? 'ok' : exec.estado === 'devolvido' ? 'erro' : 'aviso',
-      chegou
-        ? (exec.estado === 'devolvido' ? `Avançou no SoftExpert: chamado em ${nome(esperada)}, aguardando o cliente.` : `Chamado segue em ${nome(esperada)}, aguardando a triagem.`)
-        : `Chamado está em ${onde}; o esperado era ${nome(esperada)}.`,
+    const onde = s.ativas.size ? [...s.ativas].map(nome).join(', ') : (s.aberto ? 'nenhuma atividade ativa' : 'chamado encerrado');
+    _evento(exec, 'situacao', 'ok',
+      exec.estado === 'devolvido' ? `Chamado em ${onde} (o workflow da Jaade segue pelo status ${STATUS_DECISAO[exec.decisao]}).` : `Chamado em ${onde}, com a triagem.`,
       {
-        atividadeAtual: onde, atividadeEsperada: nome(esperada),
+        atividadeAtual: onde,
         posicionamentoJade: s.posicionamentosJade > 0 ? `encontrado na grade (${s.posicionamentosJade})` : 'não encontrado na grade',
         responsavel: s.comResponsavel ? 'definido' : 'sem responsável',
       });
@@ -708,13 +814,13 @@ async function _registrarSituacaoFinal(cfg, fonte, exec) {
 async function enviarExecucao(cfg, fonte, exec) {
   try {
     const atual = exec.estado === 'devolvendo' ? exec : await _publicar(cfg, fonte, exec);
-    const final = atual?.estado === 'devolvendo' ? await _devolver(cfg, fonte, repo.getExecucao(exec.id)) : atual;
+    const final = atual?.estado === 'devolvendo' ? await _encaminhar(cfg, fonte, repo.getExecucao(exec.id)) : atual;
     if (final && ['publicado', 'devolvido'].includes(final.estado)) await _registrarSituacaoFinal(cfg, fonte, final);
     return final;
   } catch (err) {
     // Falha antes de falar com o SoftExpert (consulta, usuário, contrato): não conta tentativa, mas avisa.
     console.error(`[IA Service] Jaade PA: envio do chamado ${exec.numeroChamado}:`, err.message);
-    _evento(exec, repo.getExecucao(exec.id)?.estado === 'devolvendo' ? 'devolucao' : 'envio', 'erro',
+    _evento(exec, repo.getExecucao(exec.id)?.estado === 'devolvendo' ? 'workflow' : 'envio', 'erro',
       `Não foi possível falar com o SoftExpert: ${err.message} (não conta como tentativa).`, { erroTecnico: _erroTecnico(err) });
     return repo.atualizar(exec.id, { ultimoErro: err.message, alerta: true });
   }
@@ -943,7 +1049,7 @@ function iniciarAgendamento() {
 
 module.exports = {
   iniciarAgendamento, executarCiclo, executarAgora, processarExecucao, gerarTextoCliente, verificarVazamento,
-  normalizarTextoSoftExpert, montarAtributosPosicionamento, fontesDaAnalise, enviarExecucao, situacaoNaOrigem, nomesDeOutrosClientes,
+  normalizarTextoSoftExpert, montarAtributosPosicionamento, fontesDaAnalise, referenciasDaAnalise, simularMontagemReferencias, simularReferenciasNoRodape, enviarExecucao, situacaoNaOrigem, nomesDeOutrosClientes,
   listarElegiveisNaOrigem, getConfig, salvarConfig, listarGruposAviso, listarExecucoes, getAuditoria, getPainel, limparLogs, SQL_ELEGIVEIS, MAX_TENTATIVAS,
   _test: { tick: _tick },
 };

@@ -114,7 +114,7 @@ async function decidirPesquisaExterna({ pendencia, origemAcao, texto, historico,
     return { ...base, liberada: false, motivo: `pre_analise_automatica_sem_pesquisa_externa: aguardando ${pendencia.responsavel}` };
   }
   if (origemAcao === ORIGEM.BOTAO) {
-    return { ...base, liberada: false, motivo: `botao_pesquisar_nao_autoriza_sob_pendencia_externa: aguardando ${pendencia.responsavel}` };
+    return { ...base, liberada: true, motivo: `pesquisa_solicitada_pelo_analista: aguardando ${pendencia.responsavel}` };
   }
   // Mensagem no chat: liberada 100% (decisão do usuário, 2026-10-21). A
   // situação do chamado não restringe a conversa; o planejamento normal da
@@ -134,9 +134,7 @@ function instrucaoParaPrompt(decisao) {
     'Continue a conversa normalmente: use o histórico, as evidências do chamado e seu conhecimento técnico; separe o que é evidência do chamado do que é hipótese; responda exatamente o que o analista perguntou.',
     'Não repita avisos burocráticos: mencione que não houve consulta externa só quando isso for relevante para a pergunta e se ainda não tiver dito na conversa.',
   ];
-  if (decisao?.origemAcao === ORIGEM.BOTAO) {
-    linhas.push('O analista acionou o botão Pesquisar, que não autoriza pesquisa externa nesta situação: apresente de forma objetiva a situação atual do chamado (o que já foi feito, quem deve responder e o que falta), diga que nenhuma pesquisa externa foi executada e que, se quiser investigar fontes externas, basta pedir na conversa.');
-  } else if (decisao?.duvida) {
+  if (decisao?.duvida) {
     // Na duvida, o chat pergunta ao analista (decisao do usuario, 2026-10).
     linhas.push('Não ficou claro se o analista quer pesquisa externa: responda o que for possível com o histórico e pergunte, em uma frase objetiva, se ele quer que a pesquisa externa seja feita.');
   } else if (decisao?.origemAcao === ORIGEM.AUTOMATICO) {

@@ -615,6 +615,8 @@ require('./apps/IA Command/modules/routes')(app, { requireAuth, requireIaCommand
 // Banco proprio e exclusivo (ia-service.db) — nunca compartilha tabelas com o
 // IA Command. Ver IA_SERVICE_ANALISE_IAHUB_COMMAND.md e IA_SERVICE_ETAPA1_IMPLEMENTACAO.md.
 require('./apps/IA Service/backend/database').inicializarDB();
+// Habilitar o indexador em somente uma instância; a consulta tem opção própria.
+require('./apps/IA Service/backend/services/base-conhecimento-vetores-service').iniciarIndexacao();
 require('./apps/IA Service/backend/routes')(app, { requireAuth, requireIaService });
 require('./apps/IA Service/backend/routes/login-externo-routes')(app);
 require('./apps/IA Service/backend/routes/externo-routes')(app);

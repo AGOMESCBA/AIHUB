@@ -85,16 +85,14 @@ function _limitar(texto, max) {
 }
 
 /**
- * PA gravado na grade, mas a devolução não levou o chamado ao cliente: o
- * retorno da Jaade existe, mas o cliente não foi acionado. Frase fixa
- * combinada com o usuário (2026-11-20); o detalhe fica na auditoria.
+ * PA gravado na grade, mas o workflow da Jaade (que manda o e-mail e move o
+ * chamado) não foi aberto/executado: o retorno existe, mas o cliente não foi
+ * acionado. Frases fixas combinadas com o usuário (2026-11-20); o detalhe
+ * fica na auditoria.
  */
 function _devolucaoNaoChegou(exec) {
-  if (!exec.publicadoEm) return null;
-  // Responder (revisão 89+): a ação 6 que manda o e-mail ao cliente foi recusada.
-  if (exec.decisao !== 'devolver') return exec.estado === 'publicado' && exec.alerta ? 'PA gravado, mas e-mail NÃO enviado p/ o cliente.' : null;
-  if (!(exec.estado === 'falha' || (exec.estado === 'publicado' && exec.alerta))) return null;
-  return 'PA gravado, mas NÃO transferido p/ o cliente.';
+  if (!exec.publicadoEm || !(exec.estado === 'falha' || (exec.estado === 'publicado' && exec.alerta))) return null;
+  return exec.decisao === 'devolver' ? 'PA gravado, mas NÃO transferido p/ o cliente.' : 'PA gravado, mas e-mail NÃO enviado p/ o cliente.';
 }
 
 // Motivo curto do PA não respondido (é o que a triagem precisa para agir).

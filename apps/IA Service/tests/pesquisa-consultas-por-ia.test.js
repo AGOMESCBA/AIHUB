@@ -185,6 +185,13 @@ test('orientações da pesquisa sobrevivem quando o motor de contexto remonta o 
   assert.match(r.texto, /Paginas abertas e lidas/);
   assert.match(r.texto, /AVALIACAO DAS PAGINAS LIDAS/);
   assert.match(r.texto, /Chamado de customização/);
+  const comCandidato = _selecionarPesquisaExterna(pesquisa, texto, 5000, [{ chamado: { numero: '123', descricao: 'Falha TESTE123' }, motivos: ['Termos em comum: teste123'], registrosResultado: [{ posicionamentoId: 'pos-1', texto: 'Teste aguardando validação' }] }]);
+  assert.match(comCandidato.texto, /Chamado #123/);
+  assert.match(comCandidato.texto, /Teste aguardando validação/);
+  assert.match(comCandidato.texto, /não confirmadas/);
+  assert.equal(comCandidato.manifesto.baseConhecimento.selecionados[0].numero, '123');
+  const semEspaco = _selecionarPesquisaExterna(pesquisa, texto, 0, [{ chamado: { id: 'id-1', numero: '123' } }]);
+  assert.equal(semEspaco.manifesto.baseConhecimento.omitidos[0].numero, '123');
   const curto = _selecionarPesquisaExterna({ configurado: true }, 'x'.repeat(20000) + '\n## Orientacoes para a resposta\nRegra Y', 200);
   assert.match(curto.texto, /Regra Y/, 'mesmo cortado por orçamento');
 });

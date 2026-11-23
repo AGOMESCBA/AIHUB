@@ -237,6 +237,7 @@
                   <h1 id="case-title">Chamado</h1>
                 </div>
                 <div class="case-actions">
+                  <button type="button" id="voltar-chamado-base" class="link-button" hidden>Voltar ao chamado anterior</button>
                   <!-- Item do menu ⋯ (tab-export.js o move para dentro do menu), longe do Pesquisar Soluções. -->
                   <button id="retorno-btn" class="ia-export-item" type="button" role="menuitem" title="Registrar retorno no SoftExpert" data-retorno-custom data-export-item>
                     <span class="ia-export-icon"><svg viewBox="-0.4 0.6 25.8 22.8" width="19" height="17" aria-hidden="true" focusable="false">
@@ -326,6 +327,7 @@
               <div class="subtabs">
                 <button class="active" data-knowledge-tab="internal">Base interna</button>
                 <button data-knowledge-tab="technical">Pesquisa técnica</button>
+                <button type="button" data-knowledge-tab="criteria">Como funciona</button>
               </div>
               <div id="knowledge-content" class="section-stack"></div>
             </section>
