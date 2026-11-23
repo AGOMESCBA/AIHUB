@@ -43,7 +43,7 @@ stub('../backend/services/agente-local-service', {
     if (sql.includes('PMACTIVITY')) {
       assert.equal(params.processo, 'ITSM-02-I.A-P.A');
       const w = [...origem.workflows.values()].find(x => x.titulo === params.titulo);
-      return w ? [{ IDPROCESS: w.id, ATV01_ATIVA: w.atv01Ativa ? 1 : 0 }] : [];
+      return w ? [{ IDPROCESS: w.id, ATV01_ATIVA: w.statusAtividade !== undefined ? Number(w.statusAtividade === 2) : Number(w.atv01Ativa), ATV01_EXECUTADA: w.statusAtividade !== undefined ? Number(w.statusAtividade === 3) : Number(!w.atv01Ativa) }] : [];
     }
     if (sql.includes('LEFT JOIN WFSTRUCT')) {
       const c = origem.chamados.get(params.numero);
@@ -699,6 +699,52 @@ test('workflow da Jaade com resposta perdida: o próximo ciclo acha a instância
   await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
   assert.equal(envios.length, 3);
   assert.equal(execs()[0].estado, 'devolvido');
+});
+
+test('workflow existente sem ATV-01 ativa ou executada aguarda, sem abrir outra instância', async () => {
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995' });
+  chamadoNaOrigem('037815');
+  respostasIA = [RESPOSTA_OK];
+  const original = soapReal.enviarOperacao;
+  soapReal.enviarOperacao = async (args) => {
+    const r = await original(args);
+    if (args.operacao === 'newWorkflowEditData') throw new Error('timeout');
+    return r;
+  };
+  try { await jade.executarCiclo(EMPRESA, fonte.id); } finally { soapReal.enviarOperacao = original; }
+  const workflow = [...origem.workflows.values()][0];
+  for (const status of [1, 0]) {
+    workflow.statusAtividade = status;
+    await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+    assert.equal(execs()[0].estado, 'devolvendo');
+    assert.equal(execs()[0].alerta, true);
+    assert.equal(origem.workflows.size, 1);
+    assert.equal(envios.filter(e => e.operacao === 'executeActivity').length, 0);
+  }
+  // A espera é registrada uma vez na auditoria, não a cada ciclo.
+  const esperas = jade.getAuditoria(EMPRESA, fonte.id, execs()[0].id).eventos.filter(e => e.etapa === 'workflow' && e.situacao === 'aviso');
+  assert.equal(esperas.length, 1);
+  workflow.statusAtividade = 2;
+  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  assert.equal(execs()[0].estado, 'devolvido');
+  assert.equal(execs()[0].alerta, false);
+  assert.equal(envios.filter(e => e.operacao === 'executeActivity').length, 1);
+});
+
+test('workflow da Jaade sem confirmação em 4 horas da gravação: falha, não aciona o SoftExpert e avisa como PA Não Respondido', async () => {
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995' });
+  chamadoNaOrigem('037816');
+  // Sobra do fluxo antigo: grade gravada há 5 horas, ainda em "devolvendo".
+  repo.registrarDetectado(EMPRESA, fonte.id, '037816');
+  repo.atualizar(execs()[0].id, { estado: 'devolvendo', decisao: 'devolver', textoCliente: 'Pedido antigo.', publicadoEm: new Date(Date.now() - 5 * 3600 * 1000).toISOString() });
+  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  const exec = execs()[0];
+  assert.equal(exec.estado, 'falha');
+  assert.equal(exec.alerta, true);
+  assert.match(exec.ultimoErro, /até 4 horas da gravação/);
+  assert.equal(envios.length, 0, 'nada é enviado ao SoftExpert');
+  assert.equal(aviso.classificar(exec), 'falha');
+  assert.match(aviso.linhaDoChamado(EMPRESA, exec, 'falha'), / — PA gravado, mas NÃO transferido p\/ o cliente\.$/);
 });
 
 test('workflow da Jaade recusado 3 vezes: falha com alerta e WhatsApp em "PA Não Respondido"', async () => {

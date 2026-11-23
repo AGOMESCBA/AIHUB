@@ -39,7 +39,6 @@ const TRAVA_MS = 20 * 60 * 1000;
 // Teto de segurança da consulta de elegíveis no SoftExpert, não um limite de vazão.
 const MAX_ELEGIVEIS = 500;
 const MAX_TENTATIVAS = 3;
-const ATIVIDADE_CLIENTE = 'ATV-06';
 const MAX_TEXTO_CLIENTE = 6000;
 // Texto gerado há mais tempo que o SLA do Primeiro Atendimento não é mais
 // enviado (ex.: ficou "pronto" com o modo em Simulação e só depois foi ligado).
@@ -88,10 +87,11 @@ const SQL_USUARIO_JADE = 'SELECT CDUSER, NMUSER, IDUSER, FGUSERENABLED FROM ADUS
 
 // Instância do workflow da Jaade (ITSM-02-I.A-P.A) já aberta para o chamado,
 // achada pelo título — é o que impede abrir duas (e mandar dois e-mails) quando
-// a resposta do SoftExpert se perde. ATV01_ATIVA = 0: a ATV-01 já foi executada.
+// a resposta do SoftExpert se perde. Apenas status 3 comprova execução.
 const SQL_WORKFLOW_JADE = `
   SELECT TOP 1 W.IDPROCESS,
-    (SELECT COUNT(*) FROM WFSTRUCT S WHERE S.IDPROCESS = W.IDOBJECT AND S.IDSTRUCT = @atividade AND S.FGSTATUS = 2) AS ATV01_ATIVA
+    (SELECT COUNT(*) FROM WFSTRUCT S WHERE S.IDPROCESS = W.IDOBJECT AND S.IDSTRUCT = @atividade AND S.FGSTATUS = 2) AS ATV01_ATIVA,
+    (SELECT COUNT(*) FROM WFSTRUCT S WHERE S.IDPROCESS = W.IDOBJECT AND S.IDSTRUCT = @atividade AND S.FGSTATUS = 3) AS ATV01_EXECUTADA
   FROM WFPROCESS W
   INNER JOIN PMACTIVITY P ON P.CDACTIVITY = W.CDPROCESSMODEL AND P.IDACTIVITY = @processo
   WHERE W.NMPROCESS = @titulo
@@ -719,8 +719,20 @@ async function _encaminhar(cfg, fonte, exec) {
     sql: SQL_WORKFLOW_JADE, params: { processo: processId, atividade: activityId, titulo }, limit: 1,
   });
   let workflowId = existente ? String(existente.IDPROCESS) : null;
-  if (existente && Number(existente.ATV01_ATIVA) === 0) {
+  if (existente && Number(existente.ATV01_EXECUTADA) > 0 && Number(existente.ATV01_ATIVA) === 0) {
     return concluir(workflowId, `Conferido no SoftExpert: o workflow da Jaade ${workflowId} já foi executado.`);
+  }
+  // Sem o SoftExpert confirmar em 4 h da gravação na grade, não aciona mais: o
+  // cliente receberia um retorno desatualizado (vale também para as execuções
+  // que ficaram em "devolvendo" no fluxo antigo da ação 1).
+  if (exec.publicadoEm && Date.now() - Date.parse(exec.publicadoEm) > MAX_IDADE_ENVIO_MS) {
+    return _falhaDefinitiva(exec, `O workflow da Jaade não foi confirmado em até 4 horas da gravação na grade${workflowId ? ` (instância ${workflowId})` : ''}; não é mais acionado, para o cliente não receber retorno desatualizado.`, 'workflow');
+  }
+  if (existente && Number(existente.ATV01_ATIVA) < 1) {
+    const espera = `Workflow da Jaade ${workflowId} aberto, mas a ${activityId} ainda não está ativa nem executada; conferido de novo no próximo ciclo (até 4 horas da gravação).`;
+    // Registra uma vez só, não a cada ciclo de espera.
+    if (exec.ultimoErro !== espera) _evento(exec, 'workflow', 'aviso', espera);
+    return repo.atualizar(exec.id, { ultimoErro: espera, alerta: true });
   }
   let s = null;
   if (!workflowId) {
