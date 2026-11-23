@@ -49,7 +49,8 @@ stub('../backend/services/agente-local-service', {
       const c = origem.chamados.get(params.numero);
       if (!c) return [];
       const base = { PROC_STATUS: c.aberto ? 1 : 2, COM_RESP: c.comResp ? 1 : 0, POS_JADE: c.posJade, POS_OUTROS: c.posOutros,
-        CAB_EMPRESA: 'APROSOJA', CAB_COLABORADOR: 'kelvyn.ramos@aprosoja.com.br', CAB_ASSUNTO: 'API de solicitacao de compras' };
+        CAB_EMPRESA: 'APROSOJA', CAB_COLABORADOR: 'kelvyn.ramos@aprosoja.com.br', CAB_ASSUNTO: 'API de solicitacao de compras',
+        CAB_EMAIL: 'kelvyn.ramos@aprosoja.com.br', CAB_EMAIL_COPIA: 'emailCopia' in c ? c.emailCopia : 'ti@aprosoja.com.br; compras@aprosoja.com.br' };
       return (c.ativas.length ? c.ativas : [null]).map(a => ({ ...base, ATIVA: a }));
     }
     const lista = [...origem.chamados].filter(([, c]) => elegivel(c)).map(([n]) => n);
@@ -78,11 +79,22 @@ stub('../backend/services/investigacao-service', {
 stub('../backend/services/ai-config-service', { resolverKeysEOrdem() { return { keys: {}, cfg: {} }; } });
 let respostasIA = [];
 const chamadasIA = [];
+// Conferência independente do status: por padrão concorda com a última decisão
+// escrita; `conferenciaStatus` força uma leitura (ex.: 'orientacao' sempre).
+let conferenciaStatus = null;
+let ultimaDecisao = null;
+const conferencias = [];
 stub('../backend/services/ai-provider-client', {
   async chamarIA(...args) {
+    if (String(args[2]).startsWith('Você confere o tipo')) {
+      conferencias.push(args[3]);
+      const tipo = conferenciaStatus || (ultimaDecisao === 'devolver' ? 'pedido_evidencias' : 'orientacao');
+      return { texto: JSON.stringify({ tipo, motivo: 'leitura do teste' }), provider: 'teste', model: 'conferencia' };
+    }
     chamadasIA.push(args);
     const r = respostasIA.length ? respostasIA.shift() : null;
     if (!r) throw new Error('IA sem resposta programada');
+    if (typeof r === 'object') ultimaDecisao = r.decisao;
     return { texto: typeof r === 'string' ? r : JSON.stringify(r), provider: 'teste', model: 'teste' };
   },
 });
@@ -180,6 +192,9 @@ beforeEach(() => {
   envios.length = 0;
   respostasIA = [];
   chamadasIA.length = 0;
+  conferencias.length = 0;
+  conferenciaStatus = null;
+  ultimaDecisao = null;
   comportamentoEnvio = 'ok';
   contratoDisponivel = true;
   whats.length = 0;
@@ -474,13 +489,13 @@ test('triagem atuou antes da Jaade: descartado sem análise', async () => {
   assert.equal(turnos.length, 0);
 });
 
-test('devolução desligada vira resposta; ligada mantém devolver', async () => {
+test('pedido de informação desligado vai como IA-RESPONDIDO; ligado mantém devolver', async () => {
   await ligar({ devolucaoAtiva: false });
   chamadoNaOrigem('037400');
   respostasIA = [DEVOLVER];
   await jade.executarCiclo(EMPRESA, fonte.id);
   assert.equal(execs()[0].decisao, 'responder');
-  assert.match(execs()[0].motivo, /devolução desligada/);
+  assert.match(execs()[0].motivo, /pedido de informação desligado: vai como IA-RESPONDIDO/);
 
   getDB().prepare('DELETE FROM jade_pa_execucoes').run();
   await ligar({ devolucaoAtiva: true });
@@ -618,6 +633,59 @@ test('3 falhas de geração: falha com alerta e não volta a ser processado', as
   assert.equal(exec.tentativasGeracao, 3);
 });
 
+test('status conferido: texto lido como pedido de evidências com decisão "responder" nunca é gravado; 3 divergências = alerta', async () => {
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995', devolucaoAtiva: true });
+  chamadoNaOrigem('037610');
+  // A IA escreve "responder", mas a conferência independente lê pedido de evidências.
+  conferenciaStatus = 'pedido_evidencias';
+  for (let i = 0; i < 4; i++) {
+    respostasIA = [RESPOSTA_OK, RESPOSTA_OK];
+    await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  }
+  const exec = execs()[0];
+  assert.equal(exec.estado, 'falha');
+  assert.equal(exec.alerta, true);
+  assert.equal(exec.tentativasGeracao, 3);
+  assert.equal(envios.length, 0, 'nada vai ao SoftExpert');
+  assert.equal(conferencias.length, 6, '2 versões do texto por tentativa');
+  assert.match(conferencias[0], /Texto que será enviado ao cliente:/);
+  // A 2ª versão é pedida com o aviso da divergência.
+  assert.match(chamadasIA[1][3], /ATENÇÃO: a versão anterior foi marcada como "responder", mas o texto foi lido como pedido de evidências/);
+  const erro = jade.getAuditoria(EMPRESA, fonte.id, exec.id).eventos.find(e => e.etapa === 'retorno' && e.situacao === 'erro');
+  assert.match(erro.resumo, /Status não confirmado: decisão e texto divergiram nas 2 versões \(Versão 2: escrita como orientação, lida como pedido de evidências/);
+  assert.equal(aviso.classificar(exec), 'falha');
+
+  // Concordando, grava e registra a conferência na auditoria.
+  conferenciaStatus = null;
+  chamadoNaOrigem('037611');
+  respostasIA = [DEVOLVER];
+  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  const ok = execs().find(e => e.numeroChamado === '037611');
+  assert.equal(ok.estado, 'devolvido');
+  assert.equal(ok.decisao, 'devolver');
+  const retorno = jade.getAuditoria(EMPRESA, fonte.id, ok.id).eventos.find(e => e.etapa === 'retorno' && e.situacao === 'ok');
+  assert.match(retorno.detalhes.conferenciaStatus, /^pedido_evidencias — /);
+  assert.match(retorno.resumo, /status: pedido de informação \(IA-INFORMACAO\), conferido$/);
+});
+
+test('status conferido: 1ª versão divergente é reescrita na mesma tentativa, sem refazer a análise', async () => {
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995', devolucaoAtiva: true });
+  chamadoNaOrigem('037612');
+  // 1ª versão: "responder" com texto de pedido (lido como pedido); 2ª: "devolver" coerente.
+  conferenciaStatus = 'pedido_evidencias';
+  respostasIA = [RESPOSTA_OK, DEVOLVER];
+  await jade.executarCiclo(EMPRESA, fonte.id);
+  const exec = execs()[0];
+  assert.equal(exec.estado, 'devolvido');
+  assert.equal(exec.decisao, 'devolver');
+  assert.equal(exec.tentativasGeracao, 1);
+  assert.equal(turnos.length, 1, 'análise técnica feita uma vez só');
+  assert.ok(envios[0].xml.includes('<urn:EntityAttributeValue>IA-INFORMACAO</urn:EntityAttributeValue>'));
+  const retorno = jade.getAuditoria(EMPRESA, fonte.id, exec.id).eventos.find(e => e.etapa === 'retorno');
+  assert.equal(retorno.situacao, 'aviso');
+  assert.match(retorno.detalhes.recusas[0], /^Versão 1: escrita como orientação, lida como pedido de evidências/);
+});
+
 test('publicar: grava na grade como Jaade, com o status IA-RESPONDIDO, zero horas e os valores combinados; o workflow da Jaade leva o mesmo registro', async () => {
   await ligar({ modo: 'publicar', usuarioSoftexpert: '995' });
   chamadoNaOrigem('037700');
@@ -648,10 +716,14 @@ test('publicar: grava na grade como Jaade, com o status IA-RESPONDIDO, zero hora
   assert.ok(!xml.includes('motivoapontamen'));
   // Workflow da Jaade: processo e formulário fixos, mesmo registro da grade, título com o chamado.
   const abertura = envios[1].xml;
-  assert.match(abertura, /<urn:ProcessID>ITSM-02-I\.A-P\.A<\/urn:ProcessID><urn:WorkflowTitle>Jaade - PA do chamado 037700<\/urn:WorkflowTitle><urn:UserID>10677535000155<\/urn:UserID>/);
+  assert.match(abertura, /<urn:ProcessID>ITSM-02-I\.A-P\.A<\/urn:ProcessID><urn:WorkflowTitle>Jaade - PA do chamado 037700 - \d\d\/\d\d\/\d{4} \d\d:\d\d:\d\d<\/urn:WorkflowTitle><urn:UserID>10677535000155<\/urn:UserID>/);
   assert.match(abertura, /<urn:EntityID>itsm02iapa<\/urn:EntityID>/);
-  const atributos = (x) => x.match(/<urn:EntityAttribute>.*?<\/urn:EntityAttribute>/g).filter(a => !/<urn:EntityAttributeID>(dataatual|horaatual|horaini|horafim|horainiconv|horafimconv)</.test(a));
+  const atributos = (x) => x.match(/<urn:EntityAttribute>.*?<\/urn:EntityAttribute>/g).filter(a => !/<urn:EntityAttributeID>(dataatual|horaatual|horaini|horafim|horainiconv|horafimconv|email|texto32)</.test(a));
   assert.deepEqual(atributos(abertura), atributos(xml), 'mesmo registro da grade (fora data/hora do instante)');
+  // E-mails do chamado (DYNITSM EMAIL / TEXTO32) só no workflow: a grade não tem esses campos.
+  assert.ok(abertura.includes('<urn:EntityAttributeID>email</urn:EntityAttributeID><urn:EntityAttributeValue>kelvyn.ramos@aprosoja.com.br</urn:EntityAttributeValue>'));
+  assert.ok(abertura.includes('<urn:EntityAttributeID>texto32</urn:EntityAttributeID><urn:EntityAttributeValue>ti@aprosoja.com.br; compras@aprosoja.com.br</urn:EntityAttributeValue>'));
+  assert.ok(!/<urn:EntityAttributeID>(email|texto32)</.test(xml));
   assert.match(envios[2].xml, /<urn:WorkflowID>WFJ-037700<\/urn:WorkflowID><urn:ActivityID>ATV-01<\/urn:ActivityID><urn:ActionSequence>1<\/urn:ActionSequence><urn:UserID>10677535000155</);
   const situacao = jade.getAuditoria(EMPRESA, fonte.id, exec.id).eventos.find(e => e.etapa === 'situacao');
   assert.equal(situacao.situacao, 'ok');
@@ -699,6 +771,20 @@ test('workflow da Jaade com resposta perdida: o próximo ciclo acha a instância
   await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
   assert.equal(envios.length, 3);
   assert.equal(execs()[0].estado, 'devolvido');
+});
+
+test('chamado reprocessado: workflow de uma execução anterior não conta, abre um novo e manda o e-mail', async () => {
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995' });
+  chamadoNaOrigem('037830');
+  // Workflow antigo do mesmo chamado (processamento anterior, antes de "Limpar log"), já executado.
+  origem.workflows.set('WFJ-ANTIGO', { id: 'WFJ-ANTIGO', titulo: 'Jaade - PA do chamado 037830 - 20/11/2026 10:00:00', numero: '037830', status: 'IA-RESPONDIDO', atv01Ativa: false });
+  respostasIA = [RESPOSTA_OK];
+  await jade.executarCiclo(EMPRESA, fonte.id);
+  assert.equal(execs()[0].estado, 'devolvido');
+  assert.deepEqual(envios.map(e => e.operacao), ['newChildEntityRecord', 'newWorkflowEditData', 'executeActivity']);
+  assert.equal(origem.workflows.size, 2, 'abriu um workflow novo');
+  assert.match(envios[1].xml, /<urn:WorkflowTitle>Jaade - PA do chamado 037830 - \d\d\/\d\d\/\d{4} \d\d:\d\d:\d\d</);
+  assert.doesNotMatch(envios[1].xml, /20\/11\/2026 10:00:00/);
 });
 
 test('workflow existente sem ATV-01 ativa ou executada aguarda, sem abrir outra instância', async () => {
@@ -815,7 +901,7 @@ test('referência não autorizada inserida após geração bloqueia publicação
 
 test('pedir informação: grava IA-INFORMACAO na grade e no workflow da Jaade e não movimenta o ITSM-02', async () => {
   await ligar({ modo: 'publicar', usuarioSoftexpert: '995', devolucaoAtiva: true });
-  chamadoNaOrigem('038100');
+  chamadoNaOrigem('038100', { emailCopia: null });
   respostasIA = [DEVOLVER];
   await jade.executarCiclo(EMPRESA, fonte.id);
   const exec = execs()[0];
@@ -823,6 +909,9 @@ test('pedir informação: grava IA-INFORMACAO na grade e no workflow da Jaade e 
   assert.ok(exec.devolvidoEm);
   assert.deepEqual(envios.map(e => e.operacao), ['newChildEntityRecord', 'newWorkflowEditData', 'executeActivity']);
   for (const { xml } of envios.slice(0, 2)) assert.ok(xml.includes('<urn:EntityAttributeID>texto4</urn:EntityAttributeID><urn:EntityAttributeValue>IA-INFORMACAO</urn:EntityAttributeValue>'));
+  // TEXTO32 vazio no chamado (como em 037067/037068): o campo não vai.
+  assert.ok(envios[1].xml.includes('<urn:EntityAttributeID>email</urn:EntityAttributeID>'));
+  assert.ok(!envios[1].xml.includes('<urn:EntityAttributeID>texto32<'));
   assert.match(envios[2].xml, /<urn:WorkflowID>WFJ-038100<\/urn:WorkflowID><urn:ActivityID>ATV-01</);
   assert.ok(!envios.some(e => /<urn:WorkflowID>038100<\/urn:WorkflowID><urn:ActivityID>/.test(e.xml)), 'nenhuma ação no ITSM-02');
 });

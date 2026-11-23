@@ -377,9 +377,9 @@
               <div class="form-hint">Simulação gera o retorno só aqui, sem gravar no SoftExpert.</div>
             </div>
             <div class="form-field">
-              <label>Devolver ao cliente</label>
-              <select id="jade-devolucao" class="form-control"><option value="1">Sim, se faltar informação</option><option value="0">Não, sempre responde</option></select>
-              <div class="form-hint">Quando falta informação, pede ao cliente e devolve a atividade.</div>
+              <label>Pedido de informação</label>
+              <select id="jade-devolucao" class="form-control"><option value="1">Sim, marca IA-INFORMACAO</option><option value="0">Não, sempre IA-RESPONDIDO</option></select>
+              <div class="form-hint">Quando o retorno é um pedido de evidências ao cliente, grava o status IA-INFORMACAO (o SoftExpert decide o caminho).</div>
             </div>
           </section>
 
@@ -1192,7 +1192,7 @@
     const limite = Number(val('jade-limite').value);
     const somente = val('jade-somente').value.trim();
     const resumos = {
-      funcionamento: [texto('jade-modo'), val('jade-devolucao').value === '1' ? 'Devolve se faltar informação' : 'Não devolve'],
+      funcionamento: [texto('jade-modo'), val('jade-devolucao').value === '1' ? 'Marca IA-INFORMACAO se faltar informação' : 'Sempre IA-RESPONDIDO'],
       ritmo: [`A cada ${val('jade-intervalo').value || '—'} min`, limite === 0 ? 'Sem limite diário' : `Até ${limite || '—'} por dia`, `${val('jade-paralelo').value || '—'} ao mesmo tempo`],
       integracao: [texto('jade-fonte'), `CDUSER ${val('jade-usuario').value || '—'}`, somente ? `Só: ${somente}` : 'Todos os chamados'],
       avisos: [`Sem PA: ${_nomesGruposAvisoJade('falha')}`, `Com PA: ${_nomesGruposAvisoJade('sucesso')}`],

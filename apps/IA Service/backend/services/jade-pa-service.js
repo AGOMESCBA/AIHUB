@@ -6,8 +6,8 @@
 // para cada um, uma única vez:
 //   1. importa o chamado e copia os anexos (mesmo caminho do Radar);
 //   2. faz a análise técnica no chat da J2iA (fica para o consultor);
-//   3. escreve o texto ao cliente a partir dela e decide entre responder ou
-//      devolver ao cliente (só quando não há o que pesquisar).
+//   3. escreve o texto ao cliente a partir dela: orientação (responder →
+//      IA-RESPONDIDO) ou pedido de evidências (devolver → IA-INFORMACAO).
 // Fase 1: nada é enviado ao SoftExpert — o resultado fica em "simulado".
 const { AsyncLocalStorage } = require('async_hooks');
 const repo = require('../repositories/jade-pa-repository');
@@ -77,6 +77,8 @@ const SQL_SITUACAO = `
     (SELECT TOP 1 D.DP FROM DYNITSM D WHERE D.IDPROCESS = W.IDPROCESS) AS CAB_EMPRESA,
     (SELECT TOP 1 D.NMSOLICITANTE FROM DYNITSM D WHERE D.IDPROCESS = W.IDPROCESS) AS CAB_COLABORADOR,
     (SELECT TOP 1 D.TEXTO31 FROM DYNITSM D WHERE D.IDPROCESS = W.IDPROCESS) AS CAB_ASSUNTO,
+    (SELECT TOP 1 D.EMAIL FROM DYNITSM D WHERE D.IDPROCESS = W.IDPROCESS) AS CAB_EMAIL,
+    (SELECT TOP 1 D.TEXTO32 FROM DYNITSM D WHERE D.IDPROCESS = W.IDPROCESS) AS CAB_EMAIL_COPIA,
     S.IDSTRUCT AS ATIVA
   FROM WFPROCESS W
   LEFT JOIN WFSTRUCT S ON S.IDPROCESS = W.IDOBJECT AND S.FGSTATUS = 2
@@ -100,7 +102,17 @@ const SQL_WORKFLOW_JADE = `
 
 // TEXTO4 da grade = decisor do workflow da Jaade no SoftExpert (pedido do usuário, 2026-11-23).
 const STATUS_DECISAO = { responder: 'IA-RESPONDIDO', devolver: 'IA-INFORMACAO' };
-const tituloWorkflowJade = (numero) => `Jaade - PA do chamado ${numero}`;
+// O momento da gravação na grade (fixo por execução) no título separa os
+// workflows de processamentos diferentes do mesmo chamado (ex.: reprocessado
+// depois de "Limpar log"): sem ele, a busca achava o workflow antigo já
+// executado e o cliente ficava sem o e-mail novo (teste real 037068, 2026-11-23).
+function tituloWorkflowJade(exec) {
+  const d = new Date(exec.publicadoEm);
+  const p2 = (n) => String(n).padStart(2, '0');
+  const quando = Number.isNaN(d.getTime()) ? `ref. ${String(exec.id).slice(0, 8)}`
+    : `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()} ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
+  return `Jaade - PA do chamado ${exec.numeroChamado} - ${quando}`;
+}
 
 const TEXTO_ANALISE_PA = 'Este chamado acabou de ser aberto pelo cliente e está no Primeiro Atendimento (triagem), sem nenhum posicionamento ainda. Faça uma pré-análise inicial com base no texto do chamado e nos anexos sincronizados, quando existirem: identifique o problema relatado, hipóteses prováveis de causa, possíveis soluções que o próprio cliente consiga testar e quais informações ou evidências ainda faltam para avançar. Deixe claro no nível de confiança que esta é uma análise preliminar, sem confirmação humana.';
 
@@ -109,10 +121,10 @@ const SYSTEM_PROMPT_CLIENTE = `Você é a Jaade, atendente de IA do suporte. Voc
 Responda SOMENTE com um JSON válido, sem nada antes ou depois:
 {"decisao": "responder" | "devolver", "motivo": "frase curta, uso interno, explicando a decisão", "texto": "texto ao cliente"}
 
-Como decidir:
-- "responder": há informação suficiente para orientar. Se faltar algo que ajudaria, peça no mesmo texto.
-- "devolver": SOMENTE quando realmente não há o que pesquisar — sem anexo ou evidência E descrição vaga, sem rotina/tela identificada e sem mensagem de erro. Na dúvida, escolha "responder".
-Essa decisão controla a movimentação no SoftExpert e é separada do conteúdo da resposta; o pedido de evidências pode ser enviado como resposta quando a devolução estiver desligada.
+Como decidir — a decisão é o tipo de conteúdo do texto e vai ao SoftExpert como status:
+- "responder": o texto é uma ORIENTAÇÃO PRELIMINAR (há evidência suficiente para indicar solução ou verificação concreta). Se faltar algo que ajudaria, peça no mesmo texto.
+- "devolver": o texto é um PEDIDO DE EVIDÊNCIAS (sem base para indicar solução ou verificação concreta, o centro do texto é pedir ao cliente o que falta).
+Seja coerente: decisão e conteúdo nunca divergem.
 
 Escolha pela análise um dos dois tipos de conteúdo:
 - ORIENTAÇÃO PRELIMINAR: se existem evidências suficientes para orientar, apresente a possível solução ou verificação, as condições relevantes e como conferir o resultado. Se ainda houver dúvida, apresente-a como hipótese; não prometa que resolverá. Peça somente o que faltar caso os passos não resolvam.
@@ -394,7 +406,7 @@ function simularReferenciasNoRodape(texto, numeroProprio, referencias, indicesSe
   return saida;
 }
 
-async function gerarTextoCliente(empresaId, dados, { simularReferencias = false } = {}) {
+async function gerarTextoCliente(empresaId, dados, { simularReferencias = false, aviso = null } = {}) {
   const { keys, cfg } = aiConfigService.resolverKeysEOrdem(empresaId);
   // A IA seleciona índices; os números são inseridos pelo servidor.
   const numeroAtual = String(dados.chamado.numero || '');
@@ -406,7 +418,9 @@ async function gerarTextoCliente(empresaId, dados, { simularReferencias = false 
     ? '\nInclua no JSON o campo indicesReferencias: lista de índices inteiros das pistas que você considerar úteis, ou [] se nenhuma ajudar. Use somente os índices fornecidos. Não escreva números de chamados no texto.' : '';
   const blocoSelecao = candidatasSimuladas.length
     ? `\n\nPistas para avaliar (relevância preliminar; selecione somente as úteis):\n${candidatasSimuladas.map((r, i) => `Índice ${i}: problema atual: ${r.trechoAtual}; histórico: ${r.trechoCandidato}${r.diferencas ? `; diferenças: ${r.diferencas}` : ''}${r.lacunas ? `; lacunas: ${r.lacunas}` : ''}${r.trechoProcedimento ? `; possível procedimento: ${r.trechoProcedimento}` : ''}${r.trechoResultado ? `; resultado registrado: ${r.trechoResultado}` : ''}`).join('\n')}` : '';
-  entrada += blocoSelecao;
+  // Versão anterior com decisão e texto divergentes (conferência de status).
+  const blocoAviso = aviso ? `\n\nATENÇÃO: ${aviso}` : '';
+  entrada += blocoSelecao + blocoAviso;
   const outrosClientes = nomesDeOutrosClientes(empresaId, dados.chamado.clienteId);
   let ultimoProblema = 'resposta da IA sem o formato esperado';
   // Versões recusadas vão para a auditoria (motivo de cada uma).
@@ -429,7 +443,7 @@ async function gerarTextoCliente(empresaId, dados, { simularReferencias = false 
     if (problemas.length) {
       ultimoProblema = `texto ao cliente ${problemas.join(', ')}`;
       recusas.push(`Versão ${tentativa}: ${ultimoProblema}`);
-      entrada = `${_montarEntrada(dadosSemCitacoes)}${blocoSelecao}\n\nATENÇÃO: a versão anterior foi recusada porque ${problemas.join(', ')}. Reescreva sem isso.`;
+      entrada = `${_montarEntrada(dadosSemCitacoes)}${blocoSelecao}${blocoAviso}\n\nATENÇÃO: a versão anterior foi recusada porque ${problemas.join(', ')}. Reescreva sem isso.`;
       continue;
     }
     let textoFinal = texto, referenciasSelecionadas = [];
@@ -443,6 +457,28 @@ async function gerarTextoCliente(empresaId, dados, { simularReferencias = false 
     return { decisao: json.decisao, motivo: _limitar(json.motivo, 500), texto: textoFinal, referenciasSelecionadas, provider: resultado.provider, model: resultado.model, recusas };
   }
   throw Object.assign(new Error(`Texto ao cliente recusado: ${ultimoProblema}.`), { recusas });
+}
+
+const SYSTEM_PROMPT_STATUS = `Você confere o tipo de um texto de suporte que será enviado a um cliente. Leia SOMENTE o texto e responda SOMENTE com um JSON válido:
+{"tipo": "orientacao" | "pedido_evidencias", "motivo": "frase curta citando o trecho que decidiu"}
+
+- "orientacao": o texto indica ao cliente uma solução, um contorno ou uma verificação técnica concreta para resolver ou diagnosticar o problema (rotina, parâmetro, cadastro, configuração, permissão ou passo específico a conferir ou ajustar), mesmo que também peça alguma informação adicional.
+- "pedido_evidencias": o texto não traz solução, contorno nem verificação técnica concreta; seu objetivo principal é pedir ao cliente informações, evidências, mensagem de erro, prints, logs, exemplos ou detalhes para o atendimento poder avançar.
+
+Pedir para o cliente observar ou informar algo ("verifique se aparece mensagem de erro", "nos envie o log", "informe se houve alteração recente") é pedido de evidências, não orientação. Hipóteses genéricas sem um passo concreto ("pode ser permissão ou configuração") também não são orientação.`;
+
+/**
+ * Conferência independente do status: classifica só o texto final, sem ver a
+ * decisão de quem escreveu. Usada para não gravar IA-RESPONDIDO/IA-INFORMACAO
+ * errado no SoftExpert.
+ */
+async function conferirStatus(empresaId, texto) {
+  const { keys, cfg } = aiConfigService.resolverKeysEOrdem(empresaId);
+  const resultado = await aiProviderClient.chamarIA(keys, cfg, SYSTEM_PROMPT_STATUS, `Texto que será enviado ao cliente:\n"""\n${texto}\n"""`, [], { maxTokens: 300, timeoutMs: 60000 });
+  const json = resultado.truncado ? null : _extrairJson(resultado.texto);
+  const decisao = { orientacao: 'responder', pedido_evidencias: 'devolver' }[json?.tipo];
+  if (!decisao) throw new Error('A conferência do status não respondeu no formato esperado. Nada foi gravado.');
+  return { decisao, tipo: json.tipo, motivo: _limitar(json.motivo, 300), modelo: [resultado.provider, resultado.model].filter(Boolean).join(' · ') };
 }
 
 // Trilha de auditoria (tela "fluxo" do chamado). Falha ao registrar nunca
@@ -524,14 +560,32 @@ async function processarExecucao(cfg, fonte, exec) {
     // Suspensão deliberada em todos os modos, inclusive na simulação do ciclo.
     // Ensaios da montagem usam somente dados fictícios e não passam por aqui.
     const referencias = [];
-    const gerado = await gerarTextoCliente(empresaId, { chamado, anexos, analise, fontes, referencias });
-    // Devolução desligada: o pedido de informação vai como resposta (o chamado fica no PA).
+    // O status (IA-RESPONDIDO/IA-INFORMACAO) decide o caminho no SoftExpert e não
+    // pode sair errado: uma segunda leitura, independente, classifica só o texto
+    // final. Divergiu: reescreve só o texto uma vez (a análise é mantida); divergiu
+    // de novo, nada é gravado e a tentativa conta (3 = alerta para a triagem).
+    const nome = (d) => (d === 'devolver' ? 'pedido de evidências' : 'orientação');
+    let gerado, conferencia, aviso = null;
+    const divergencias = [];
+    for (let versao = 1; versao <= 2; versao++) {
+      gerado = await gerarTextoCliente(empresaId, { chamado, anexos, analise, fontes, referencias }, { aviso });
+      conferencia = await conferirStatus(empresaId, gerado.texto);
+      if (conferencia.decisao === gerado.decisao) break;
+      divergencias.push(`Versão ${versao}: escrita como ${nome(gerado.decisao)}, lida como ${nome(conferencia.decisao)} (${conferencia.motivo})`);
+      aviso = `a versão anterior foi marcada como "${gerado.decisao}", mas o texto foi lido como ${nome(conferencia.decisao)}. Escolha o tipo de conteúdo pela análise e mantenha decisão e texto coerentes.`;
+    }
+    if (conferencia.decisao !== gerado.decisao) {
+      throw Object.assign(new Error(`Status não confirmado: decisão e texto divergiram nas 2 versões (${divergencias.at(-1)}). Nada foi gravado.`),
+        { recusas: [...gerado.recusas, ...divergencias] });
+    }
+    const recusas = [...gerado.recusas, ...divergencias];
+    // "Pedido de informação" desligado na tela: o pedido vai com o status IA-RESPONDIDO.
     const devolver = gerado.decisao === 'devolver' && cfg.devolucaoAtiva;
-    const motivo = gerado.decisao === 'devolver' && !cfg.devolucaoAtiva ? `${gerado.motivo} (devolução desligada: fica como resposta)` : gerado.motivo;
-    _evento(exec, 'retorno', gerado.recusas.length ? 'aviso' : 'ok',
-      `Retorno ao cliente escrito — decisão: ${devolver ? 'devolver ao cliente' : 'responder'}${gerado.recusas.length ? ` (${gerado.recusas.length} versão(ões) recusada(s) antes)` : ''}`,
-      { decisao: devolver ? 'Devolver ao cliente' : 'Responder', motivo, referenciasAutorizadas: referencias.map(r => r.numero), referenciasSelecionadas: gerado.referenciasSelecionadas, modelo: [gerado.provider, gerado.model].filter(Boolean).join(' · '),
-        recusas: gerado.recusas.length ? gerado.recusas : undefined, texto: gerado.texto });
+    const motivo = gerado.decisao === 'devolver' && !cfg.devolucaoAtiva ? `${gerado.motivo} (pedido de informação desligado: vai como IA-RESPONDIDO)` : gerado.motivo;
+    _evento(exec, 'retorno', recusas.length ? 'aviso' : 'ok',
+      `Retorno ao cliente escrito — status: ${devolver ? 'pedido de informação (IA-INFORMACAO)' : 'respondido (IA-RESPONDIDO)'}, conferido${recusas.length ? ` (${recusas.length} versão(ões) recusada(s) antes)` : ''}`,
+      { decisao: devolver ? 'Pedido de informação (IA-INFORMACAO)' : 'Respondido (IA-RESPONDIDO)', motivo, conferenciaStatus: `${conferencia.tipo} — ${conferencia.motivo} (${conferencia.modelo})`, referenciasAutorizadas: referencias.map(r => r.numero), referenciasSelecionadas: gerado.referenciasSelecionadas, modelo: [gerado.provider, gerado.model].filter(Boolean).join(' · '),
+        recusas: recusas.length ? recusas : undefined, texto: gerado.texto });
     if (!(await _aindaElegivel(empresaId, fonte.id, exec.numeroChamado))) return descartar();
     if (cfg.modo !== 'publicar') _evento(exec, 'envio', 'info', 'Modo Simulação: o retorno não foi enviado ao SoftExpert.');
     return repo.atualizar(exec.id, {
@@ -565,7 +619,7 @@ async function situacaoNaOrigem(empresaId, fonteId, numero) {
     posicionamentosOutros: Number(r.POS_OUTROS) || 0,
     ativas: new Set(rows.map(x => x.ATIVA).filter(Boolean).map(String)),
     // Cabeçalho do chamado (DYNITSM) que o formulário copia para a grade.
-    cabecalho: { empresa: r.CAB_EMPRESA ?? null, colaborador: r.CAB_COLABORADOR ?? null, assunto: r.CAB_ASSUNTO ?? null },
+    cabecalho: { empresa: r.CAB_EMPRESA ?? null, colaborador: r.CAB_COLABORADOR ?? null, assunto: r.CAB_ASSUNTO ?? null, email: r.CAB_EMAIL ?? null, emailCopia: r.CAB_EMAIL_COPIA ?? null },
   };
 }
 
@@ -710,7 +764,7 @@ async function _publicar(cfg, fonte, exec) {
 async function _encaminhar(cfg, fonte, exec) {
   const { empresaId } = cfg;
   const { processId, activityId, actionSequence } = soapClient.WORKFLOW_JADE;
-  const titulo = tituloWorkflowJade(exec.numeroChamado);
+  const titulo = tituloWorkflowJade(exec);
   const concluir = (workflowId, resumo, detalhes = {}) => {
     _evento(exec, 'workflow', 'ok', resumo, { workflow: workflowId, ...detalhes });
     return repo.atualizar(exec.id, { estado: 'devolvido', devolvidoEm: new Date().toISOString(), ultimoErro: null, alerta: false });
@@ -754,6 +808,11 @@ async function _encaminhar(cfg, fonte, exec) {
     const chamado = chamadoRepo.getChamadoPorNumero(empresaId, exec.numeroChamado, 'softexpert', { exigirUnico: true });
     if (!chamado) throw new Error('Chamado não encontrado na base local.');
     campos = montarAtributosPosicionamento({ contrato: config.contrato, chamado, jade, texto: exec.textoCliente, decisao: exec.decisao, cabecalho: s?.cabecalho });
+    // E-mails do chamado (DYNITSM EMAIL e TEXTO32): só o workflow tem esses campos —
+    // é por eles que o SoftExpert manda o retorno ao cliente (pedido do usuário, 2026-11-23).
+    for (const [id, valor] of [['email', s?.cabecalho?.email], ['texto32', s?.cabecalho?.emailCopia]]) {
+      if (String(valor ?? '').trim()) campos[id] = String(valor).trim();
+    }
     xmlAbertura = soapClient.montarAberturaWorkflowJade({ titulo, userId: jade.matricula, campos });
   }
   if (!repo.contarTentativa(exec.id, 'devolucao', 'devolvendo', { estadoAnterior: exec.estado, tentativasAnteriores: exec.tentativasDevolucao })) return null;
@@ -1060,7 +1119,7 @@ function iniciarAgendamento() {
 }
 
 module.exports = {
-  iniciarAgendamento, executarCiclo, executarAgora, processarExecucao, gerarTextoCliente, verificarVazamento,
+  iniciarAgendamento, executarCiclo, executarAgora, processarExecucao, gerarTextoCliente, conferirStatus, verificarVazamento,
   normalizarTextoSoftExpert, montarAtributosPosicionamento, fontesDaAnalise, referenciasDaAnalise, simularMontagemReferencias, simularReferenciasNoRodape, enviarExecucao, situacaoNaOrigem, nomesDeOutrosClientes,
   listarElegiveisNaOrigem, getConfig, salvarConfig, listarGruposAviso, listarExecucoes, getAuditoria, getPainel, limparLogs, SQL_ELEGIVEIS, MAX_TENTATIVAS,
   _test: { tick: _tick },
