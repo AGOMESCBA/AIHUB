@@ -159,6 +159,36 @@
     .chamado-box h4 { margin:0;font-size:13px;color:var(--text-hi);line-height:1.4; }
     .posic { font-size:12px;color:var(--text-md);border-top:1px solid var(--border);padding-top:6px; }
     .posic b { color:var(--text-hi);font-weight:600; }
+    button.badge { font:inherit;font-size:11px;font-weight:600;border:none;cursor:pointer; }
+    button.badge:hover { filter:brightness(1.15);text-decoration:underline; }
+
+    /* Conversa com a IA do chamado (somente leitura, 2026-11). */
+    .conv-dialog { width:min(860px,calc(100vw - 32px));height:min(86vh,900px);margin:auto;padding:0;box-sizing:border-box;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);color:var(--text-hi);flex-direction:column;overflow:hidden; }
+    .conv-dialog[open] { display:flex; }
+    .conv-dialog::backdrop { background:rgba(15,23,42,.48); }
+    .conv-head { padding:16px 18px 12px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px; }
+    .conv-linha { display:flex;align-items:flex-start;gap:12px; }
+    .conv-linha .modal-close { margin-left:auto;border:none;background:transparent;color:var(--text-lo);font-size:22px;line-height:1;cursor:pointer; }
+    .conv-num { font-size:15px;font-weight:800; }
+    .conv-titulo { font-size:13px;color:var(--text-md);line-height:1.4; }
+    .conv-filtro { display:flex;gap:6px;flex-wrap:wrap;margin-top:4px; }
+    .conv-filtro button { font:inherit;font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid var(--border);background:var(--bg-base);color:var(--text-md);cursor:pointer; }
+    .conv-filtro button[aria-pressed="true"] { background:var(--accent);border-color:var(--accent);color:#fff; }
+    .conv-corpo { flex:1;overflow:auto;padding:16px 18px;display:flex;flex-direction:column;gap:14px;background:var(--bg-base); }
+    .conv-msg { max-width:88%;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5;overflow-wrap:anywhere; }
+    .conv-msg.pergunta { align-self:flex-end;background:var(--accent-glow);white-space:pre-wrap; }
+    .conv-msg.resposta { align-self:flex-start;background:var(--bg-card); }
+    .conv-quem { font-size:11.5px;color:var(--text-lo);margin-bottom:4px;font-weight:600; }
+    .conv-msg.resposta pre { overflow:auto;padding:10px;border:1px solid var(--border);border-radius:7px;white-space:pre; }
+    .conv-msg.resposta code { font-family:'Cascadia Code','Consolas',monospace;font-size:12px; }
+    .conv-msg.resposta .technical-table { overflow-x:auto; }
+    .conv-msg.resposta table { border-collapse:collapse;width:100%; }
+    .conv-msg.resposta th, .conv-msg.resposta td { border:1px solid var(--border);padding:6px 8px;text-align:left; }
+    .conv-msg.resposta ul, .conv-msg.resposta ol { margin:4px 0;padding-left:20px; }
+    .conv-msg.resposta h1, .conv-msg.resposta h2, .conv-msg.resposta h3, .conv-msg.resposta h4 { font-size:13.5px;margin:8px 0 4px; }
+    .conv-msg.resposta a { color:var(--accent); }
+    .conv-mais { align-self:center; }
+    @media (max-width:560px) { .conv-dialog { width:100vw;height:var(--iasvc-vh,100dvh);max-width:none;max-height:none;border-radius:0; } .conv-msg { max-width:100%; } }
 
     @media (max-width:1150px) { .board.com-gaveta { grid-template-columns:minmax(0,1fr); } }
     @media (max-width:760px) { .gaveta.ampliada .gv-corpo { display:block; } .gaveta.ampliada .gv-col + .gv-col { border-left:none; } }
@@ -409,6 +439,14 @@
           <aside class="card gaveta" id="gaveta" hidden style="padding:0" aria-label="Detalhes do usuário"></aside>
         </div>
         <div class="gv-fundo" id="gv-fundo" hidden></div>
+        <dialog id="conv-dialog" class="conv-dialog" aria-labelledby="conv-num">
+          <div class="conv-head">
+            <div class="conv-linha"><div style="min-width:0"><div class="conv-num" id="conv-num"></div><div class="conv-titulo" id="conv-titulo"></div></div>
+              <button type="button" class="modal-close" id="conv-fechar" aria-label="Fechar">×</button></div>
+            <div class="conv-filtro" id="conv-filtro"></div>
+          </div>
+          <div class="conv-corpo" id="conv-corpo"></div>
+        </dialog>
       </div>
     </div>
   </div>
@@ -418,6 +456,7 @@
 <script src="/app/ia-service/js/mobile-viewport.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <script src="/iaservice/assets/chat-interno.js"></script>
+<script src="/iaservice/assets/detalhes-tecnicos.js"></script>
 <script src="/app/ia-service/js/sidebar.js"></script>
 <script>
 (function () {
@@ -706,7 +745,7 @@
   }
 
   function listaChamados(chamados) {
-    return chamados.length ? `<div class="chamados-acessados">${chamados.map((n) => `<span class="badge badge-blue">#${esc(n)}</span>`).join('')}</div>` : '<span class="sub">Nenhum chamado registrado neste acesso.</span>';
+    return chamados.length ? `<div class="chamados-acessados">${chamados.map((n) => `<button type="button" class="badge badge-blue" data-conversa="${esc(n)}" title="Ver a conversa com a IA">#${esc(n)}</button>`).join('')}</div>` : '<span class="sub">Nenhum chamado registrado neste acesso.</span>';
   }
 
   function render(mudaram = []) {
@@ -764,6 +803,7 @@
           <dt>Aberto em</dt><dd>${dataHora(c.abertoEm)}</dd><dt>Status</dt><dd>${esc(c.status || 'Em andamento')}</dd>
           <dt>Aguardando</dt><dd>${esc(c.aguardando || '-')}</dd><dt>SLA</dt><dd>${esc(c.slaStatus || '-')}${c.slaPrazo ? ' · ' + dataHora(c.slaPrazo) : ''}</dd></dl>
         ${c.posicionamentos.map((p) => `<div class="posic"><b>${dataHora(p.em)}</b> · ${esc(p.tecnico || '-')}<br>${esc(p.assunto || p.situacao || '')}</div>`).join('')}
+        <button type="button" class="btn btn-ghost" data-conversa="${esc(c.numero)}" style="align-self:flex-start">Conversa com a IA</button>
       </div></div>`;
     } else if (s.chamadoId) {
       blocoChamado = `<div class="gv-sec"><div class="gv-titulo">Chamado aberto</div>
@@ -792,7 +832,7 @@
         return `<li><span class="badge ${sx.badge}">${sx.rotulo}</span>Entrou ${dataHora(x.inicioEm)} · último sinal ${ha(x.ultimoSinalEm)} · ${dur(x.segundosAtivos)} de tela<br><span class="sub">${esc(x.tela || '-')}${x.acao ? ' · ' + esc(x.acao) : ''}</span></li>`;
       }).join('')}</ul></div>` : ''}
       <div class="gv-sec" id="gv-chamados"><div class="gv-titulo">Chamados acessados (${s.chamados.length})</div>
-        <p class="sub">Durante os logins ainda válidos. O acesso não comprova alteração no chamado.</p>${listaChamados(s.chamados)}</div>
+        <p class="sub">Durante os logins ainda válidos. O acesso não comprova alteração no chamado. Clique no número para ver a conversa com a IA.</p>${listaChamados(s.chamados)}</div>
       ${blocoChamado}
       ${blocoMensagem(s)}
       ${blocoAcesso(s)}
@@ -960,6 +1000,72 @@
     }
     renderGaveta();
   }
+
+  // Conversa com a IA do chamado (2026-11): somente leitura, pelo login do
+  // IAHub (não precisa entrar no J2A). Abre filtrada na pessoa selecionada.
+  const conv = { numero: null, pessoa: null, nome: '', soPessoa: true, turnos: [], haMais: false, carregando: false, erro: null, chamado: null };
+  const textoIa = (t) => (window.IaDetalhesTecnicos?.markdown ? window.IaDetalhesTecnicos.markdown(t) : `<div style="white-space:pre-wrap">${esc(t)}</div>`);
+
+  function abrirConversa(numero) {
+    const p = st.dados?.pessoas.find((x) => x.id === st.selId);
+    Object.assign(conv, { numero, pessoa: p?.id || null, nome: p?.nome || '', soPessoa: !!p, turnos: [], haMais: false, erro: null, chamado: null });
+    $('conv-dialog').showModal();
+    carregarConversa(false);
+  }
+
+  async function carregarConversa(anteriores) {
+    if (conv.carregando) return;
+    conv.carregando = true;
+    if (!anteriores) { conv.turnos = []; conv.erro = null; }
+    renderConversa();
+    const q = new URLSearchParams({ empresa_id: empresaId(), numero: conv.numero, limite: '20' });
+    if (conv.soPessoa && conv.pessoa) q.set('pessoa', conv.pessoa);
+    if (anteriores && conv.turnos.length) q.set('antes', conv.turnos[0].em);
+    const numero = conv.numero, soPessoa = conv.soPessoa;
+    try {
+      const r = await api(`/api/ia-service/monitor-acessos/conversa?${q}`);
+      if (numero !== conv.numero || soPessoa !== conv.soPessoa) return;
+      conv.chamado = r.chamado;
+      conv.turnos = anteriores ? [...r.turnos, ...conv.turnos] : r.turnos;
+      conv.haMais = r.haMais;
+    } catch (e) {
+      conv.erro = 'Não foi possível carregar a conversa: ' + e.message;
+    } finally {
+      conv.carregando = false;
+    }
+    const corpo = $('conv-corpo');
+    const doFim = corpo.scrollHeight - corpo.scrollTop;
+    renderConversa();
+    // Primeira carga mostra a última troca; "anteriores" mantém a posição.
+    corpo.scrollTop = anteriores ? corpo.scrollHeight - doFim : corpo.scrollHeight;
+  }
+
+  function renderConversa() {
+    const c = conv.chamado;
+    $('conv-num').textContent = `Chamado #${conv.numero}${c ? [c.cliente, c.modulo, c.status].filter(Boolean).map((x) => ' · ' + x).join('') : ''}`;
+    $('conv-titulo').textContent = c?.titulo || '';
+    $('conv-filtro').innerHTML = conv.pessoa
+      ? `<button type="button" data-conv-filtro="pessoa" aria-pressed="${conv.soPessoa}">Só de ${esc(conv.nome)}</button>
+         <button type="button" data-conv-filtro="todos" aria-pressed="${!conv.soPessoa}">Todos os analistas</button>`
+      : '';
+    const turnos = conv.turnos.map((t) => `
+      ${t.pergunta !== null ? `<div class="conv-msg pergunta"><div class="conv-quem">${dataHora(t.em)} · ${esc(t.autor || 'Analista')}</div>${esc(t.pergunta)}</div>` : ''}
+      ${t.respostas.map((r) => `<div class="conv-msg resposta"><div class="conv-quem">${dataHora(r.em)} · Jaade${t.pergunta === null ? ' (pré-análise)' : ''}</div>${textoIa(r.conteudo)}</div>`).join('')}
+      ${t.pergunta !== null && !t.respostas.length ? '<div class="sub">Sem resposta da IA registrada para esta pergunta.</div>' : ''}`).join('');
+    let vazio = '';
+    if (conv.erro) vazio = `<div class="vazio">${esc(conv.erro)}</div>`;
+    else if (conv.carregando && !conv.turnos.length) vazio = '<div class="vazio">Carregando conversa…</div>';
+    else if (!conv.turnos.length) vazio = `<div class="vazio">${conv.soPessoa && conv.pessoa ? `${esc(conv.nome)} não conversou com a IA neste chamado. Veja "Todos os analistas".` : 'Ninguém conversou com a IA neste chamado ainda.'}</div>`;
+    $('conv-corpo').innerHTML = (conv.haMais ? `<button type="button" class="btn btn-ghost conv-mais" data-conv-mais ${conv.carregando ? 'disabled' : ''}>${conv.carregando ? 'Carregando…' : 'Carregar mensagens anteriores'}</button>` : '') + (vazio || turnos);
+  }
+
+  $('conv-fechar').addEventListener('click', () => $('conv-dialog').close());
+  $('conv-dialog').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) return e.currentTarget.close(); // clique no fundo
+    const filtro = e.target.closest('[data-conv-filtro]')?.dataset.convFiltro;
+    if (filtro && (filtro === 'pessoa') !== conv.soPessoa) { conv.soPessoa = filtro === 'pessoa'; return carregarConversa(false); }
+    if (e.target.closest('[data-conv-mais]')) carregarConversa(true);
+  });
 
   function tick() {
     const bar = $('refresh-bar');
@@ -1143,6 +1249,8 @@
     }
     if (acao === 'msg-abrir') { const p = st.dados?.pessoas.find((x) => x.id === st.selId); if (p && chat.api) chat.api.abrirConversa(p.id.replace(/^chat:/, '')); return; }
     if (acao === 'derrubar-ok') { const p = st.dados?.pessoas.find((x) => x.id === st.selId); if (p && !st.derrubando) derrubar(p); return; }
+    const conversa = e.target.closest('[data-conversa]');
+    if (conversa) return abrirConversa(conversa.dataset.conversa);
     const btn = e.target.closest('[data-chamado]');
     if (btn) carregarChamado(btn.dataset.chamado);
   });
@@ -1154,7 +1262,8 @@
   }
   $('gv-fundo').addEventListener('click', recuar);
   document.addEventListener('keydown', (e) => {
-    if (!st.selId || e.target.closest?.('input, textarea, select')) return;
+    // Com a conversa aberta, Esc só fecha a janela (o <dialog> cuida disso).
+    if (!st.selId || $('conv-dialog').open || e.target.closest?.('input, textarea, select')) return;
     if (e.key === 'Escape') recuar();
     else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); navegar(1); }
     else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); navegar(-1); }

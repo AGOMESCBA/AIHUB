@@ -156,6 +156,46 @@ try {
   assert.strictEqual(presencaService.resumoChamado(EMPRESA, chamado.id).numero, '035988');
   assert.strictEqual(presencaService.resumoChamado(EMPRESA, chamadoOutra.id), null);
 
+  // 10b. Conversa com a IA do chamado: só pergunta + resposta, sem histórico
+  // importado nem excluídas, filtro por pessoa e paginação por turno.
+  const atendimentoRepo = require('../backend/repositories/atendimento-repository');
+  const mensagemRepo = require('../backend/repositories/mensagem-repository');
+  const consultorService = require('../backend/services/consultor-service');
+  assert.deepStrictEqual(presencaService.conversaDoChamado(EMPRESA, '035988').turnos, [], 'chamado sem atendimento: conversa vazia');
+  const { atendimento: { id: atendId } } = atendimentoRepo.buscarOuCriarAtendimentoPorReferencia(EMPRESA, { origem: 'softexpert', referenciaExterna: '035988' }, { conteudoBruto: 'Chamado SoftExpert #035988' });
+  const em = (min) => new Date(Date.UTC(2026, 10, 23, 10, min)).toISOString();
+  const msg = (papel, conteudo, min, extra = {}) => mensagemRepo.salvarMensagem(EMPRESA, atendId, { papel, conteudo, criadoEm: em(min), ...extra });
+  msg('customer', '[2026-11-19] Cliente: vencimento cai no sábado', 0, { origemSistema: 'softexpert' });
+  msg('assistant', 'Pré-análise da Jaade', 1);
+  msg('user', 'Pergunta da Maria', 2, { origemAutor: 'Maria Teste' });
+  msg('assistant', 'Resposta para a Maria', 3);
+  msg('user', 'Pergunta do interno', 4, { usuarioId: 4242, origemAutor: 'Fulano IAHub' });
+  msg('assistant', 'Resposta para o interno', 5);
+  const excluida = msg('user', 'Pergunta excluída', 6, { origemAutor: 'Maria Teste' });
+  mensagemRepo.excluirMensagem(EMPRESA, atendId, excluida.id);
+  const todos = presencaService.conversaDoChamado(EMPRESA, '035988');
+  assert.strictEqual(todos.chamado.numero, '035988');
+  assert.deepStrictEqual(todos.turnos.map(t => t.pergunta), [null, 'Pergunta da Maria', 'Pergunta do interno'], 'sem histórico importado nem excluída');
+  assert.deepStrictEqual(todos.turnos[1].respostas.map(r => r.conteudo), ['Resposta para a Maria']);
+  assert.strictEqual(todos.turnos[1].autor, 'Maria Teste');
+  assert.ok(todos.turnos.every(t => !('usuarioId' in t)), 'id interno do usuário não sai na resposta');
+  const nomeOriginal = consultorService.getNomeExibicao;
+  consultorService.getNomeExibicao = (emp, id) => (id === consultor.id ? 'Maria Teste' : nomeOriginal(emp, id));
+  try {
+    assert.deepStrictEqual(presencaService.conversaDoChamado(EMPRESA, '035988', { pessoa: `chat:${consultor.id}` }).turnos.map(t => t.pergunta), ['Pergunta da Maria'], 'chat: filtra pelo nome do analista');
+  } finally {
+    consultorService.getNomeExibicao = nomeOriginal;
+  }
+  assert.deepStrictEqual(presencaService.conversaDoChamado(EMPRESA, '035988', { pessoa: 'interno:4242' }).turnos.map(t => t.pergunta), ['Pergunta do interno'], 'interno: filtra pelo usuário IAHub');
+  assert.deepStrictEqual(presencaService.conversaDoChamado(EMPRESA, '035988', { pessoa: 'qualquer' }).turnos, [], 'pessoa inválida não devolve conversa de ninguém');
+  const pagina = presencaService.conversaDoChamado(EMPRESA, '035988', { limite: 2 });
+  assert.deepStrictEqual(pagina.turnos.map(t => t.pergunta), ['Pergunta da Maria', 'Pergunta do interno']);
+  assert.strictEqual(pagina.haMais, true);
+  const anterior = presencaService.conversaDoChamado(EMPRESA, '035988', { limite: 2, antes: pagina.turnos[0].em });
+  assert.deepStrictEqual(anterior.turnos.map(t => t.pergunta), [null]);
+  assert.strictEqual(anterior.haMais, false);
+  assert.strictEqual(presencaService.conversaDoChamado(OUTRA_EMPRESA, '035988'), null, 'chamado de outra empresa não aparece');
+
   // 11. Hash da sessão interna nunca é o sessionID em claro.
   assert.notStrictEqual(presencaService.hashSessaoInterna('sid-teste'), 'sid-teste');
 

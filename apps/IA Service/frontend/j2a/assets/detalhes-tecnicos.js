@@ -140,5 +140,6 @@
     window.addEventListener('resize', align);
     return { close, contextChanged() { if (contexto !== getContext()) close(false); } };
   }
-  window.IaDetalhesTecnicos = { disponivel, botao, mount };
+  // markdown: usado também pelo Monitor de Acessos para ler a conversa.
+  window.IaDetalhesTecnicos = { disponivel, botao, mount, markdown };
 })();

@@ -207,6 +207,21 @@ function registrarInterno(app) {
       _handleErro(res, err);
     }
   });
+
+  // Conversa com a IA do chamado (somente leitura). Pelo login do IAHub —
+  // não exige entrar no J2A.
+  app.get('/api/ia-service/monitor-acessos/conversa', podeMonitorar, (req, res) => {
+    try {
+      res.set('Cache-Control', 'no-store');
+      const { numero, pessoa, antes, limite } = req.query;
+      if (!numero) return res.status(400).json({ error: 'Informe o número do chamado.' });
+      const conversa = presencaService.conversaDoChamado(req.svcEmpresaId, numero, { pessoa, antes, limite });
+      if (!conversa) return res.status(404).json({ error: 'Chamado não encontrado.' });
+      res.json(conversa);
+    } catch (err) {
+      _handleErro(res, err);
+    }
+  });
 }
 
 function registrarExterno(app) {

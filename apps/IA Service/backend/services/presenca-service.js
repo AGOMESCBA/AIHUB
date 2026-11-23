@@ -447,6 +447,105 @@ function resumoChamado(empresaId, chamadoId) {
   };
 }
 
+// Quem é a pessoa do painel nas mensagens: o chat J2A grava só o nome do
+// analista (origem_autor, usuario_id nulo); as rotinas internas gravam o
+// usuário IAHub. Por isso a busca é pelo id OU pelo nome de exibição.
+function _autoriaDaPessoa(empresaId, pessoa) {
+  const [origem, ref] = String(pessoa || '').split(/:(.+)/);
+  const ids = new Set(), nomes = new Set();
+  let consultor = null;
+  if (origem === 'chat' && ref) {
+    consultor = consultorRepo.getConsultor(empresaId, ref);
+  } else if (origem === 'interno' && /^\d+$/.test(ref || '')) {
+    ids.add(Number(ref));
+    nomes.add(consultorService.getNomeExibicaoPorUsuarioIahub(Number(ref)));
+    consultor = consultorRepo.getConsultorPorUsuario(empresaId, Number(ref));
+  } else {
+    return null;
+  }
+  if (consultor) {
+    nomes.add(consultorService.getNomeExibicao(empresaId, consultor.id));
+    if (consultor.usuarioIdIahub) ids.add(Number(consultor.usuarioIdIahub));
+  }
+  nomes.delete(null); nomes.delete(undefined);
+  return { ids, nomes };
+}
+
+/**
+ * Conversa com a IA de um chamado, somente leitura, para o Monitor
+ * (2026-11). Traz só pergunta do analista + resposta da IA: o histórico
+ * importado do SoftExpert e os registros internos da investigação ficam de
+ * fora, assim como mensagens excluídas. O atendimento é um só por chamado
+ * (compartilhado entre analistas); `pessoa` (id da linha do painel) limita
+ * às perguntas dela. Paginado por turno, do mais recente para trás.
+ */
+function conversaDoChamado(empresaId, numero, { pessoa = null, antes = null, limite = 20 } = {}) {
+  if (!empresaId) throw new Error('empresaId é obrigatório.');
+  const chamado = chamadoRepo.getChamadoPorNumero(Number(empresaId), String(numero || ''), null);
+  if (!chamado) return null;
+  const cliente = chamado.clienteId
+    ? getDB().prepare('SELECT nome, nome_fantasia FROM clientes WHERE id = ? AND empresa_id = ?').get(chamado.clienteId, Number(empresaId))
+    : null;
+  const resposta = {
+    chamado: {
+      id: chamado.id,
+      numero: chamado.numero,
+      titulo: chamado.titulo || chamado.assunto || chamado.breveDescricao,
+      cliente: cliente?.nome_fantasia || cliente?.nome || null,
+      modulo: chamado.modulo || chamado.produto,
+      status: chamado.statusEncerramento,
+    },
+    turnos: [],
+    haMais: false,
+  };
+  const db = getDB();
+  const atendimento = db.prepare(`
+    SELECT id FROM atendimentos
+     WHERE empresa_id = ? AND origem = ? AND referencia_externa = ?
+     ORDER BY criado_em DESC LIMIT 1
+  `).get(Number(empresaId), chamado.sistemaOrigem || 'softexpert', chamado.numero);
+  if (!atendimento) return resposta;
+
+  const mensagens = db.prepare(`
+    SELECT id, papel, conteudo, usuario_id, origem_autor, criado_em
+      FROM mensagens
+     WHERE empresa_id = ? AND atendimento_id = ?
+       AND papel IN ('user', 'assistant')
+       AND origem_sistema IS NULL AND excluida_em IS NULL
+     ORDER BY criado_em ASC
+     LIMIT 2000
+  `).all(Number(empresaId), atendimento.id);
+
+  // Turno = pergunta + respostas seguintes. Resposta sem pergunta antes
+  // (pré-análise ao abrir o chamado) vira turno sem pergunta.
+  let turnos = [];
+  for (const m of mensagens) {
+    if (m.papel === 'user' || !turnos.length) {
+      turnos.push({
+        id: m.id,
+        em: m.criado_em,
+        autor: m.papel === 'user' ? (m.origem_autor || null) : null,
+        usuarioId: m.papel === 'user' ? m.usuario_id : null,
+        pergunta: m.papel === 'user' ? m.conteudo : null,
+        respostas: [],
+      });
+    }
+    if (m.papel === 'assistant') turnos[turnos.length - 1].respostas.push({ id: m.id, em: m.criado_em, conteudo: m.conteudo });
+  }
+
+  if (pessoa) {
+    const autoria = _autoriaDaPessoa(Number(empresaId), pessoa);
+    turnos = autoria
+      ? turnos.filter(t => t.pergunta !== null && (autoria.ids.has(Number(t.usuarioId)) || autoria.nomes.has(t.autor)))
+      : [];
+  }
+  if (antes) turnos = turnos.filter(t => t.em < String(antes));
+  const max = Math.min(Math.max(Number(limite) || 20, 1), 100);
+  resposta.haMais = turnos.length > max;
+  resposta.turnos = turnos.slice(-max).map(({ usuarioId, ...t }) => t);
+  return resposta;
+}
+
 module.exports = {
   registrarSinal,
   registrarSaida,
@@ -460,6 +559,7 @@ module.exports = {
   listarMonitor,
   limparMonitor,
   resumoChamado,
+  conversaDoChamado,
   situacaoPorSinal,
   hashSessaoInterna,
   INTERVALO_SINAL_SEGUNDOS,
