@@ -27,10 +27,12 @@ function stub(relativo, exports) {
 // SoftExpert simulado: situação de cada chamado e usuário da Jaade.
 const origem = { chamados: new Map(), workflows: new Map(), usuarioAtivo: true, segurarEmpresa: null };
 function chamadoNaOrigem(numero, dados = {}) {
-  origem.chamados.set(numero, { aberto: true, comResp: false, posJade: 0, posOutros: 0, ativas: ['ATV-02'], ...dados });
+  origem.chamados.set(numero, { aberto: true, comResp: false, posJade: 0, posOutros: 0, ativas: [ETAPA_JADE], ...dados });
 }
-function elegivel(c) {
-  return c.aberto && c.ativas.includes('ATV-02') && !c.comResp && c.posJade + c.posOutros === 0;
+// Etapa em que o chamado espera a Jaade (ITSM-02 ajustado em 2026-11-24; antes era a ATV-02).
+const ETAPA_JADE = 'Aguardar Retorno JAADE';
+function elegivel(c, etapa) {
+  return c.aberto && c.ativas.includes(etapa) && !c.comResp && c.posJade + c.posOutros === 0;
 }
 stub('../backend/services/agente-local-service', {
   async executarSelectNaFonte(_empresaId, _fonteId, { sql, params }) {
@@ -53,7 +55,9 @@ stub('../backend/services/agente-local-service', {
         CAB_EMAIL: 'kelvyn.ramos@aprosoja.com.br', CAB_EMAIL_COPIA: 'emailCopia' in c ? c.emailCopia : 'ti@aprosoja.com.br; compras@aprosoja.com.br' };
       return (c.ativas.length ? c.ativas : [null]).map(a => ({ ...base, ATIVA: a }));
     }
-    const lista = [...origem.chamados].filter(([, c]) => elegivel(c)).map(([n]) => n);
+    // A etapa vem da própria consulta: o teste comprova o que é lido no SoftExpert.
+    const etapa = (sql.match(/S.IDSTRUCT = '([^']+)'/) || [])[1];
+    const lista = [...origem.chamados].filter(([, c]) => elegivel(c, etapa)).map(([n]) => n);
     return (params.numero ? lista.filter(n => n === params.numero) : lista).map(n => ({ NUM: n }));
   },
 });
@@ -477,6 +481,26 @@ test('lista de chamados permitidos: só o chamado de teste é tratado e enviado'
   assert.deepEqual(execs().map(e => e.numeroChamado), ['037250']);
   assert.ok(envios.every(e => e.xml.includes('037250')));
   assert.equal(origem.chamados.get('037251').posJade, 0);
+});
+
+test('só lê chamados em "Aguardar Retorno JAADE" (ATV-02 não entra mais)', async () => {
+  await ligar();
+  chamadoNaOrigem('037310');
+  chamadoNaOrigem('037311', { ativas: ['ATV-02'] });
+  respostasIA = [RESPOSTA_OK];
+  const resumo = await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  assert.equal(resumo.elegiveis, 1);
+  assert.deepEqual(execs().map(e => e.numeroChamado), ['037310']);
+});
+
+test('chamado que saiu de "Aguardar Retorno JAADE" antes da análise é descartado', async () => {
+  await ligar();
+  chamadoNaOrigem('037312');
+  repo.registrarDetectado(EMPRESA, fonte.id, '037312');
+  origem.chamados.get('037312').ativas = ['ATV-02'];
+  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  assert.equal(execs()[0].estado, 'descartado');
+  assert.equal(turnos.length, 0);
 });
 
 test('triagem atuou antes da Jaade: descartado sem análise', async () => {

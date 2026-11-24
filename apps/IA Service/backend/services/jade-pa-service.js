@@ -1,7 +1,7 @@
 // Jaade no Primeiro Atendimento (pedido do usuário, 2026-11-19).
 //
-// A cada intervalo configurado, lê no SoftExpert os chamados parados no
-// Primeiro Atendimento (ATV-02) que ainda não tiveram triagem — sem
+// A cada intervalo configurado, lê no SoftExpert os chamados parados na etapa
+// "Aguardar Retorno JAADE" (antes do Primeiro Atendimento) que ainda não tiveram triagem — sem
 // responsável (DYNITSM.RESPONSAVEL) e sem nenhum posicionamento na grade — e,
 // para cada um, uma única vez:
 //   1. importa o chamado e copia os anexos (mesmo caminho do Radar);
@@ -47,11 +47,16 @@ const MAX_IDADE_ENVIO_MS = 4 * 60 * 60 * 1000;
 // não entram na verificação de vazamento, para não recusar texto bom.
 const NOMES_GENERICOS = new Set(['seta', 'bom jesus', 'porto seco', 'caieira', 'abaco']);
 
+// Etapa do ITSM-02 onde o chamado espera a Jaade, antes do Primeiro Atendimento
+// (ajuste do processo no SoftExpert, 2026-11-24; antes era a ATV-02). O código
+// da etapa no WFSTRUCT é o próprio nome.
+const ATIVIDADE_JADE = 'Aguardar Retorno JAADE';
+
 // Mesma regra de status da view ITSM_CHAMADOS: RESPONSAVEL IS NULL = "Pendente".
 const SQL_ELEGIVEIS = `
   SELECT TOP ${MAX_ELEGIVEIS} W.IDPROCESS AS NUM, MIN(S.DHENABLED) AS ENTROU_PA
   FROM WFPROCESS W
-  INNER JOIN WFSTRUCT S ON S.IDPROCESS = W.IDOBJECT AND S.IDSTRUCT = 'ATV-02' AND S.FGSTATUS = 2
+  INNER JOIN WFSTRUCT S ON S.IDPROCESS = W.IDOBJECT AND S.IDSTRUCT = '${ATIVIDADE_JADE}' AND S.FGSTATUS = 2
   WHERE W.FGSTATUS = 1
     AND EXISTS (SELECT 1 FROM DYNITSM D WHERE D.IDPROCESS = W.IDPROCESS AND D.RESPONSAVEL IS NULL)
     AND NOT EXISTS (SELECT 1 FROM DYNITSM D2 WHERE D2.IDPROCESS = W.IDPROCESS AND D2.RESPONSAVEL IS NOT NULL)
@@ -528,7 +533,7 @@ async function processarExecucao(cfg, fonte, exec) {
   };
   try {
     if (!(await _aindaElegivel(empresaId, fonte.id, exec.numeroChamado))) return descartar();
-    _evento(exec, 'deteccao', 'info', `${rotuloTentativa}: conferido no SoftExpert — segue no Primeiro Atendimento, sem responsável e sem posicionamento.`);
+    _evento(exec, 'deteccao', 'info', `${rotuloTentativa}: conferido no SoftExpert — segue em "${ATIVIDADE_JADE}", sem responsável e sem posicionamento.`);
     etapa = 'importacao';
     const chamado = await _importarChamado(empresaId, fonte.id, exec.numeroChamado);
     const { atendimento } = radarService.iniciarAnalise(empresaId, chamado.id, { preAnaliseAutomatica: false });
@@ -624,7 +629,7 @@ async function situacaoNaOrigem(empresaId, fonteId, numero) {
 }
 
 function _triagemAtuou(s) {
-  return !s || !s.aberto || !s.ativas.has('ATV-02') || s.comResponsavel || s.posicionamentosOutros > 0;
+  return !s || !s.aberto || !s.ativas.has(ATIVIDADE_JADE) || s.comResponsavel || s.posicionamentosOutros > 0;
 }
 
 async function _usuarioJade(empresaId, fonteId, cdUser) {
@@ -868,7 +873,7 @@ async function _registrarSituacaoFinal(cfg, fonte, exec) {
   try {
     const s = await situacaoNaOrigem(cfg.empresaId, fonte.id, exec.numeroChamado);
     if (!s) return _evento(exec, 'situacao', 'erro', 'O chamado não foi encontrado no SoftExpert na conferência final.');
-    const nome = (id) => `${id}${NOMES_ATIVIDADE[id] ? ` ${NOMES_ATIVIDADE[id]}` : ''}`;
+    const nome = (id) => (id === ATIVIDADE_JADE ? `"${id}"` : `${id}${NOMES_ATIVIDADE[id] ? ` ${NOMES_ATIVIDADE[id]}` : ''}`);
     const onde = s.ativas.size ? [...s.ativas].map(nome).join(', ') : (s.aberto ? 'nenhuma atividade ativa' : 'chamado encerrado');
     _evento(exec, 'situacao', 'ok',
       exec.estado === 'devolvido' ? `Chamado em ${onde} (o workflow da Jaade segue pelo status ${STATUS_DECISAO[exec.decisao]}).` : `Chamado em ${onde}, com a triagem.`,
@@ -936,7 +941,7 @@ async function _executarLote(empresaId, fonteId, loteId, origem) {
         resumo.novos++;
         usadosHoje++;
         _evento({ id, empresaId, numeroChamado: numero }, 'deteccao', 'ok',
-          'Detectado no SoftExpert: Primeiro Atendimento, sem responsável e sem posicionamento.');
+          `Detectado no SoftExpert: em "${ATIVIDADE_JADE}", sem responsável e sem posicionamento.`);
       }
     }
     // Desligado no meio do ciclo: para antes do próximo chamado.

@@ -363,7 +363,7 @@
         </section>
 
         <section class="jade-parametros" id="jade-parametros" aria-label="Parâmetros da Jaade">
-          <p class="jade-intro">A Jaade analisa, uma única vez, cada chamado do Primeiro Atendimento sem responsável e sem posicionamento, e escreve o primeiro retorno ao cliente.</p>
+          <p class="jade-intro">A Jaade analisa, uma única vez, cada chamado que entra em "Aguardar Retorno JAADE" (antes do Primeiro Atendimento) sem responsável e sem posicionamento, e escreve o primeiro retorno ao cliente.</p>
         <div class="jade-grupos" id="jade-grupos">
           <section class="jade-grupo" data-grupo="funcionamento">
             <h3><button type="button" class="jade-grupo-toggle" onclick="alternarGrupoJade('funcionamento')" aria-expanded="true"><svg class="jade-grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span>Funcionamento</span></button></h3>
@@ -1167,7 +1167,7 @@
           ? lote.chamados.map(c => _linhaChamadoJade(c.execucao, { situacao: c.situacao, texto: c.ultimoRegistro })).join('')
           : `<tr class="jade-filho"><td colspan="6"><div class="empty-state">${r.elegiveis
             ? 'A leitura encontrou chamados elegíveis, mas todos já tinham sido tratados pela Jaade (ela age uma única vez por chamado).'
-            : 'A leitura não encontrou chamados no Primeiro Atendimento sem triagem.'}</div></td></tr>`;
+            : 'A leitura não encontrou chamados em "Aguardar Retorno JAADE" sem triagem.'}</div></td></tr>`;
       }
     }
     if (semLote.length) {
@@ -1230,7 +1230,7 @@
 
   // ── Auditoria: fluxo do chamado (padrão workflow) ──────────────────────────
   const JADE_ETAPAS = [
-    { id: 'deteccao', rotulo: 'Detecção no SoftExpert', desc: 'A Jaade encontra o chamado no Primeiro Atendimento sem responsável e sem posicionamento, e confere de novo antes de cada tentativa.' },
+    { id: 'deteccao', rotulo: 'Detecção no SoftExpert', desc: 'A Jaade encontra o chamado em "Aguardar Retorno JAADE" sem responsável e sem posicionamento, e confere de novo antes de cada tentativa.' },
     { id: 'importacao', rotulo: 'Importação do chamado', desc: 'Dados do chamado trazidos do SoftExpert para a base do IA Service.' },
     { id: 'anexos', rotulo: 'Anexos', desc: 'Arquivos do chamado copiados e entregues à IA.' },
     { id: 'analise', rotulo: 'Análise técnica', desc: 'Pesquisa da IA para o ANALISTA, gravada no chat da J2iA do chamado. Este texto NÃO vai ao cliente; é a base do retorno ao cliente.' },
@@ -1590,7 +1590,7 @@
         const partes = [`${r.elegiveis ?? 0} elegível(is)`, `${r.novos ?? 0} novo(s)`, `${(r.processados || []).length} analisado(s)`];
         if (r.enviados) partes.push(`${r.enviados.length} enviado(s) ao SoftExpert`);
         const explica = !r.novos && !(r.processados || []).length && !(r.enviados || []).length
-          ? (r.elegiveis ? ' Os chamados encontrados já tinham sido tratados pela Jaade (ela age uma única vez por chamado).' : ' Nenhum chamado no Primeiro Atendimento sem triagem.')
+          ? (r.elegiveis ? ' Os chamados encontrados já tinham sido tratados pela Jaade (ela age uma única vez por chamado).' : ' Nenhum chamado em "Aguardar Retorno JAADE" sem triagem.')
           : '';
         const erros = (r.erros || []).length ? ` Erros: ${r.erros.join('; ')}` : '';
         showInfo(`Leitura concluída${loteId ? ` (Lote #${loteId})` : ''}: ${partes.join(', ')}.${explica}${erros}`);
