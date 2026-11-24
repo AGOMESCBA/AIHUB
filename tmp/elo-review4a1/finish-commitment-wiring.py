@@ -1,7 +1,0 @@
-from pathlib import Path
-r=Path('C:/Apps/ELOGESTAO')
-p=r/'apps/backoffice/src/workspace/registry.ts';s=p.read_text(encoding='utf-8');a=s.index("code: 'ope.empenhos'");b=s.index("code: 'ope.medicoes'",a);part=s[a:b].replace('hasRecord: false','hasRecord: true');s=s[:a]+part+s[b:];p.write_text(s,encoding='utf-8')
-p=r/'apps/backoffice/src/app/app/contratos/commitment-screens.tsx';s=p.read_text(encoding='utf-8');a=s.index('            <SearchSelect\n              title="Fornecedor"');b=s.index('            <Field',a);s=s[:a]+"            {api.can('cad.fornecedores.consultar') && (\n"+s[a:b]+"            )}\n"+s[b:];p.write_text(s,encoding='utf-8')
-p=r/'apps/backoffice/src/app/app/documentacao/access-manual.tsx';s=p.read_text(encoding='utf-8');needle="'Empenhos são registros de autorizações já emitidas";a=s.index(needle);b=s.index('\n',a)
-s=s[:b]+"\n      'A GRID de Empenhos permite buscar número, contrato, fornecedor e período, mostrando valor registrado, realizado e disponível. Consultar empenho abre a origem, o responsável, as medições permitidas e o histórico financeiro conforme o perfil. O cadastro simula o saldo após o registro; o servidor revalida ao confirmar. Cancelamento integral exige justificativa e ausência de medições realizadas. Nota fiscal não é obrigatória no empenho; seu cadastro vinculado à execução e a anulação parcial serão entregas separadas.',"+s[b:];p.write_text(s,encoding='utf-8')
-print('Registro de rotinas, seletor e manual atualizados')
