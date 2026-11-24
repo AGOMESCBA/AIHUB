@@ -259,6 +259,9 @@ function obterResumoAgregado(empresaId, { provider = null, model = null, produto
       model: exec?.model || null,
       produto: produtoPorAtendimento.get(row.atendimento_id) || null,
       qgAprovado: exec?.qualityGate?.aprovado === true,
+      baseContexto: Array.isArray(exec?.manifesto?.pesquisaExterna?.baseConhecimento?.selecionados)
+        ? (exec.manifesto.pesquisaExterna.baseConhecimento.selecionados.length ? 'com_candidatos' : 'sem_candidatos')
+        : 'nao_identificado',
     };
   }).filter(item => {
     if (provider && item.provider !== provider) return false;
@@ -270,6 +273,17 @@ function obterResumoAgregado(empresaId, { provider = null, model = null, produto
   const total = enriquecidos.length;
   const somaNotas = enriquecidos.reduce((acc, item) => acc + item.dominio.notaTotal, 0);
   const mediaGeral = total ? somaNotas / total : 0;
+
+  const baseConhecimento = {};
+  for (const chave of ['com_candidatos', 'sem_candidatos', 'nao_identificado']) {
+    const grupo = enriquecidos.filter(item => item.baseContexto === chave);
+    baseConhecimento[chave] = {
+      avaliacoes: grupo.length,
+      respostas: new Set(grupo.map(item => item.dominio.mensagemAssistenteId)).size,
+      mediaConfiabilidadeTecnica: grupo.length ? grupo.reduce((s, item) => s + item.dominio.notas.confiabilidadeTecnica, 0) / grupo.length : null,
+      errosCriticos: grupo.filter(item => item.dominio.erroTecnicoCritico).length,
+    };
+  }
 
   const distribuicaoFaixas = { EXCELENTE: 0, BOA: 0, PARCIAL: 0, INSATISFATORIA: 0 };
   for (const item of enriquecidos) distribuicaoFaixas[item.dominio.faixa]++;
@@ -312,6 +326,7 @@ function obterResumoAgregado(empresaId, { provider = null, model = null, produto
     total,
     mediaGeral,
     distribuicaoFaixas,
+    baseConhecimento,
     porProvider: _agruparPor('provider'),
     porModel: _agruparPor('model'),
     porProduto: _agruparPor('produto'),

@@ -319,7 +319,9 @@ teste('cortesia + ordem ("Ok, procura nos foruns") chega a semantica e executa a
     });
     assert.ok(consultada, `"${texto}" deve chegar a camada semantica`);
     assert.strictEqual(r.plano.devePesquisar, true, `"${texto}": ${r.plano.motivo}`);
-    assert.strictEqual(r.plano.pedidoInvestigacaoAnalista, true, texto);
+    // Pedido reconhecido já no texto ("pesquisa de novo") vai como o botão
+    // Pesquisar Soluções (forcarPesquisa); os demais, pela ordem do analista na semântica.
+    if (!technicalResearchService._temPedidoExplicitoPesquisa(texto)) assert.strictEqual(r.plano.pedidoInvestigacaoAnalista, true, texto);
   }
 });
 

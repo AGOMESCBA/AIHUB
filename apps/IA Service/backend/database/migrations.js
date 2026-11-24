@@ -1574,6 +1574,25 @@ const MIGRATIONS = [
       BEGIN DELETE FROM chamados_embeddings WHERE chamado_id = OLD.chamado_id; END;
     `,
   },
+  {
+    version: 68,
+    descricao: 'Avaliações humanas dos candidatos da base e controle dos convites por consultor e período.',
+    sql: `
+      CREATE TABLE IF NOT EXISTS avaliacoes_base_candidatos (
+        id TEXT PRIMARY KEY, empresa_id INTEGER NOT NULL,
+        mensagem_id TEXT NOT NULL REFERENCES mensagens(id) ON DELETE CASCADE,
+        candidato_id TEXT NOT NULL, consultor_id TEXT NOT NULL,
+        mesmo_problema TEXT NOT NULL, utilidade TEXT NOT NULL, resultado TEXT NOT NULL,
+        criado_em TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_avaliacoes_base_mensagem ON avaliacoes_base_candidatos (empresa_id, mensagem_id, candidato_id, criado_em);
+      CREATE TABLE IF NOT EXISTS avaliacoes_base_convites (
+        empresa_id INTEGER NOT NULL, consultor_id TEXT NOT NULL, data_local TEXT NOT NULL,
+        periodo TEXT NOT NULL, criado_em TEXT NOT NULL,
+        PRIMARY KEY (empresa_id, consultor_id, data_local, periodo)
+      );
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

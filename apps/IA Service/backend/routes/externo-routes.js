@@ -39,6 +39,7 @@ const respostaOperacionalService = require('../services/resposta-operacional-ser
 const validacaoSolucaoService = require('../services/validacao-solucao-service');
 const validacaoSolucaoRepo = require('../repositories/validacao-solucao-repository');
 const avaliacaoInvestigacaoService = require('../services/avaliacao-investigacao-service');
+const avaliacoesPendentes = require('../services/avaliacoes-pendentes-service');
 const preAvaliacaoIaService = require('../services/pre-avaliacao-ia-service');
 const crud = require('../../../IAHUB/backend/crud');
 
@@ -144,6 +145,16 @@ module.exports = function registrarRotasExterno(app) {
     } catch (err) {
       _handleErro(res, err);
     }
+  });
+
+  app.get('/api/ia-service-externo/avaliacoes-pendentes', (req, res) => {
+    try { res.json(avaliacoesPendentes.listar(req.svcEmpresaId, req.svcConsultorExterno)); } catch (err) { _handleErro(res, err); }
+  });
+  app.post('/api/ia-service-externo/avaliacoes-pendentes/convite', (req, res) => {
+    try { res.json(avaliacoesPendentes.convidar(req.svcEmpresaId, req.svcConsultorExterno)); } catch (err) { _handleErro(res, err); }
+  });
+  app.post('/api/ia-service-externo/avaliacoes-pendentes', (req, res) => {
+    try { res.status(201).json(avaliacoesPendentes.registrar(req.svcEmpresaId, req.svcConsultorExterno, req.body)); } catch (err) { _handleErro(res, err); }
   });
 
   // Risco SLA é sempre uma visão de TODOS os consultores (mesmo motivo já

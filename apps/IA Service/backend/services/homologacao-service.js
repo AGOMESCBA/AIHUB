@@ -17,6 +17,7 @@ function obterRelatorioAgregado(empresaId, { provider = null, model = null, prod
     total: resumo.total,
     mediaGeral: _arredondar(resumo.mediaGeral),
     distribuicaoFaixas: resumo.distribuicaoFaixas,
+    baseConhecimento: resumo.baseConhecimento,
     porProvider: resumo.porProvider.map(g => ({ ...g, media: _arredondar(g.media) })),
     porModel: resumo.porModel.map(g => ({ ...g, media: _arredondar(g.media) })),
     porProduto: resumo.porProduto.map(g => ({ ...g, media: _arredondar(g.media) })),

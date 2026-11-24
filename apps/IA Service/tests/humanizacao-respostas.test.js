@@ -44,6 +44,9 @@ const consultorRepo = require('../backend/repositories/consultor-repository');
 const atendimentoRepo = require('../backend/repositories/atendimento-repository');
 const mensagemRepo = require('../backend/repositories/mensagem-repository');
 const { analisarPreservacao } = require('../backend/services/validacao-preservacao-service');
+// Detector real de pedido explícito de pesquisa (só lê o texto; não pesquisa):
+// a investigação o consulta antes de decidir se o turno é conversa.
+const { _temPedidoExplicitoPesquisa } = require('../backend/services/technical-research-service');
 const consultor = consultorRepo.criarConsultor(1, { telefone: '5599999999999', preAnaliseAutomatica: false });
 const consultores = carregar('../backend/services/consultor-service.js', {
   '../../../IAHUB/backend/platform-store': store,
@@ -112,7 +115,7 @@ test('resposta curta (pergunta de processo) é gravada como a IA escreveu, sem r
   const investigacao = carregar('../backend/services/investigacao-service.js', {
     './ai-provider-client': curtoProvider, './ai-config-service': config,
     './consultor-service': consultores,
-    './technical-research-service': new Proxy({}, { get: () => () => { throw Error('Pesquisa externa indevida'); } }),
+    './technical-research-service': new Proxy({ _temPedidoExplicitoPesquisa }, { get: (alvo, k) => alvo[k] || (() => { throw Error('Pesquisa externa indevida'); }) }),
   });
   const retorno = await investigacao.processarTurno(1, at.id, { texto: 'Você consegue ajudar?', consultorId: consultor.id });
   assert.equal(retorno.conteudo, original.trim(), 'texto da IA, sem reescrita');
@@ -245,7 +248,7 @@ test('fluxo entrega diálogo original sem editorial mesmo com preferência NATUR
       }
       return montado;
     } },
-    './technical-research-service': { pesquisar: async () => { pesquisas++; return {}; }, formatarContextoParaPrompt: () => '' },
+    './technical-research-service': { pesquisar: async () => { pesquisas++; return {}; }, formatarContextoParaPrompt: () => '', _temPedidoExplicitoPesquisa },
     './quality-gate-service': { avaliarResposta: dados => {
       etapas.push('quality_gate'); assert.equal(dados.textoResposta, textoGerado);
       return { aprovado: true, deveRetry: false, falhas: [] };
@@ -283,7 +286,7 @@ test('gate reprovado entrega original com alerta, mesmo se um avaliador antigo s
   const investigacao = carregar('../backend/services/investigacao-service.js', {
     './ai-config-service': { ...config, resolverConfigPesquisa: () => ({}) },
     './ai-provider-client': { ...realProvider, chamarIA: async () => { geracoes++; return { texto: original, provider: 'openai', model: 'gpt-4o' }; } },
-    './technical-research-service': { pesquisar: async () => ({}), formatarContextoParaPrompt: () => '' },
+    './technical-research-service': { pesquisar: async () => ({}), formatarContextoParaPrompt: () => '', _temPedidoExplicitoPesquisa },
     './quality-gate-service': { ...realGate, avaliarResposta: () => ({ aprovado: false, aprovadoSemRessalvas: false, deveRetry: true,
       falhas: [{ codigo: 'HYPOTHESIS_PROMOTED_TO_CONFIRMED_CAUSE', severidade: 'alta' }] }) },
     './investigacao-dossie-atualizador-service': { atualizarAposTurno: async () => ({}) },
@@ -304,7 +307,7 @@ test('resposta truncada é entregue com aviso e fica em revisão, sem segunda ge
   const investigacao = carregar('../backend/services/investigacao-service.js', {
     './ai-config-service': { ...config, resolverConfigPesquisa: () => ({}) },
     './ai-provider-client': { ...realProvider, chamarIA: async () => { geracoes++; return { texto: 'O erro ainda precisa de confirmação pelo log', truncado: true, provider: 'openai', model: 'gpt-4o' }; } },
-    './technical-research-service': { pesquisar: async () => ({}), formatarContextoParaPrompt: () => '' },
+    './technical-research-service': { pesquisar: async () => ({}), formatarContextoParaPrompt: () => '', _temPedidoExplicitoPesquisa },
     './investigacao-dossie-atualizador-service': { atualizarAposTurno: async () => ({}) },
   });
   const retorno = await investigacao.processarTurno(1, at.id, { texto: 'Analise.', forcarPesquisa: true });
@@ -324,7 +327,7 @@ test('imagem selecionada e ilegível mantém interrupção e aviso, sem inferên
   const investigacao = carregar('../backend/services/investigacao-service.js', {
     './ai-config-service': { ...config, resolverConfigPesquisa: () => ({}) },
     './ai-provider-client': { ...realProvider, chamarIA: async () => { geracoes++; throw Error('Não deveria gerar análise sem o print'); } },
-    './technical-research-service': { pesquisar: async () => ({}), formatarContextoParaPrompt: () => '' },
+    './technical-research-service': { pesquisar: async () => ({}), formatarContextoParaPrompt: () => '', _temPedidoExplicitoPesquisa },
   });
   const retorno = await investigacao.processarPreAnalise(1, at.id);
   assert.equal(geracoes, 0);

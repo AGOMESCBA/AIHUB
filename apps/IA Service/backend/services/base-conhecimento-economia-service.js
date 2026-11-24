@@ -1,6 +1,7 @@
 'use strict';
 
 // Observação: não toma decisões no fluxo nem faz chamadas de IA.
+const CONFIANCA_MINIMA_PERCENTUAL = 90;
 const CRITERIOS = {
   mesmoProblema: 'Mesmo problema e sintomas não demonstrados.',
   compatibilidade: 'Compatibilidade de ambiente, versão, configuração e customização não demonstrada.',
@@ -29,11 +30,16 @@ function avaliar({ candidatos = [], baseDisponivel = true, provedorDisponivel = 
     return { chamadoId: c.chamado?.id || null, numero: c.chamado?.numero || null, revisaoConfirmada: revisao, criterios,
       motivos: [...(!revisao ? ['Revisão rastreável dos critérios ainda não disponível; avaliação preliminar da IA não comprova solução.'] : []), ...Object.values(criterios).filter(v => !v.demonstrado).map(v => v.motivo)] };
   });
+  // Ainda não existe medição calibrada de confiança por solução. Score de
+  // recuperação e avaliações preliminares não são probabilidades de acerto.
+  const confianca = { percentual: null, minimoPercentual: CONFIANCA_MINIMA_PERCENTUAL, validada: false,
+    motivo: 'Índice de confiança calibrado e validado ainda indisponível.' };
+  gerais.push(confianca.motivo);
   const elegivel = !gerais.length ? verificacoes.find(v => v.revisaoConfirmada && Object.values(v.criterios).every(x => x.demonstrado)) : null;
   const motivos = elegivel ? [] : [...gerais, ...(verificacoes.length ? verificacoes[0].motivos : [])];
   const externa = !!elegivel && !pesquisaObrigatoriaPa;
   return {
-    modo: 'observacao', escopo, candidatosAvaliados: verificacoes.length, verificacoes,
+    modo: 'observacao', escopo, candidatosAvaliados: verificacoes.length, verificacoes, confianca,
     cobertura: Object.fromEntries(Object.keys(CRITERIOS).map(k => [k, { demonstrados: verificacoes.filter(v => v.criterios[k].demonstrado).length, avaliados: verificacoes.length }])),
     pesquisaExterna: { poderiaDispensar: externa, motivos: pesquisaObrigatoriaPa ? [...motivos, 'Pesquisa externa do PA é obrigatória no fluxo atual.'] : motivos },
     analiseIa: { poderiaDispensar: !!elegivel, motivos },

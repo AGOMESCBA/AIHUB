@@ -415,6 +415,22 @@ teste('pesquisarParaChamado (aba/selecao): sob pendencia externa nao pesquisa e 
   technicalResearchService.pesquisar = old;
 });
 
+teste('falha da base no turno não impede pesquisa externa e informa a limitação à IA', async () => {
+  const { atendimento } = criarChamadoComAtendimento({ numero: '036768', aguardando: 'RETORNO - ATENDENTE' });
+  await comProvidersFake({ decisaoGate: {} }, async reg => {
+    const original = chamadoRepo.listarChamadosRelacionados;
+    chamadoRepo.listarChamadosRelacionados = () => { throw new Error('base indisponível'); };
+    try {
+      const msg = await investigacaoService.processarTurno(EMPRESA, atendimento.id, { texto: 'Pesquise uma solução para o erro 4010.', usuarioId: 1, forcarPesquisa: true });
+      assert.equal(reg.pesquisarCtx.length, 1);
+      assert.equal(reg.pesquisarCtx[0].pesquisaExternaBloqueada, undefined);
+      assert.equal(reg.pesquisarCtx[0].forcarPesquisa, true);
+      assert.equal(msg.diagnostico.baseConhecimento.estado, 'busca_indisponivel');
+      assert.match(JSON.stringify(reg.promptsPrincipais), /busca na base interna de chamados ficou indisponível/i);
+    } finally { chamadoRepo.listarChamadosRelacionados = original; }
+  });
+});
+
 teste('falha na busca de relacionados é explícita e não impede a pesquisa técnica', async () => {
   const { chamado } = criarChamadoComAtendimento({ numero: '036759', aguardando: 'RETORNO - CLIENTE' });
   const original = chamadoRepo.listarChamadosRelacionados;

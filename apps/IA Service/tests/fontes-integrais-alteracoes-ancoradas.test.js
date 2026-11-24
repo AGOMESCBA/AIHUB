@@ -90,6 +90,9 @@ before(async () => {
   });
   require('../backend/routes/externo-routes')(app);
   server = await new Promise(r => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+  // O fetch reaproveita a conexão; com o padrão de 5 s o servidor podia fechá-la
+  // no mesmo instante do próximo pedido ("other side closed") com a máquina carregada.
+  server.keepAliveTimeout = 60 * 1000;
   base = `http://127.0.0.1:${server.address().port}`;
 });
 after(async () => {

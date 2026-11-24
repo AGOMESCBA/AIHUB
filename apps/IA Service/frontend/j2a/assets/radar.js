@@ -375,6 +375,7 @@
   }
 
   function showAccess(message) {
+    $('pending-invite-backdrop')?.classList.remove('ativo');
     state.tokenEscolha = '';
     retornoPanel?.clear();
     chatInterno?.stop();
@@ -576,6 +577,12 @@
   // dar F5). Mantem so token/preferencias de tema, que sao do dispositivo,
   // nao da sessao.
   function _resetEstadoDoChat() {
+    pendenciasAvaliacao = [];
+    avaliacoesParaAtualizar = [];
+    metricasAvaliacoes = null;
+    atualizacaoSelecionada = null;
+    $('pending-invite-backdrop')?.classList.remove('ativo');
+    if ($('pending-evaluations-count')) $('pending-evaluations-count').textContent = '';
     detalhesTecnicos?.close(false);
     retornoPanel?.clear();
     state.queue = [];
@@ -608,7 +615,7 @@
     // (reportado em producao, 2026-10).
     $('case-view').hidden = true;
     $('empty-state').hidden = false;
-    for (const id of ['messages', 'evidence-content', 'details-content', 'trail-content', 'knowledge-content']) {
+    for (const id of ['messages', 'evidence-content', 'details-content', 'trail-content', 'knowledge-content', 'pending-evaluations-content']) {
       const el = $(id);
       if (el) el.innerHTML = '';
     }
@@ -642,6 +649,7 @@
       await Promise.allSettled([loadPreferences(), loadQueue(), loadRisk()]);
       setupAutoRefresh();
       setMobileTarget('queue');
+      carregarAvaliacoesPendentes(true).catch(() => null);
     } catch (err) {
       showAccess(err.message);
     }
@@ -2293,7 +2301,7 @@
       content.innerHTML = `
         <div class="knowledge-card"><h3>Como interpretar os chamados</h3><p>A busca apresenta candidatos para comparação. A pontuação ordena resultados; não é percentual de acerto nem confirma que a solução se aplica. Abra o chamado e confira o problema, as condições e o resultado registrado.</p></div>
         <div class="knowledge-card"><h3>Pontuação atual</h3><p>Na busca textual, são 6 pontos por termo completo no relato e 2 no histórico ou por termo sugerido pela IA, até 60; módulo igual soma 8, serviço 6, produto 5, família 4, tipo final 2 e chamado encerrado 3. Essa busca examina todos os chamados disponíveis no escopo e exige um termo em comum; classificações, sozinhas, não bastam. Quando habilitada, a busca semântica também pode recuperar candidatos sem termo comum e sua ordem é combinada com a textual. O índice é gradual e, se estiver indisponível, permanece a busca textual. A IA pode sugerir termos e comparar até 15 candidatos; sua avaliação é preliminar.</p><p>“Solução aplicada: Sim” é uma marcação da origem, não uma solução comprovada; ela não soma pontos. A lista desta aba pode diferir da busca feita durante a investigação, que usa contexto adicional.</p></div>
-        <div class="knowledge-card"><h3>Economia em observação</h3><p>A auditoria registra separadamente se a base poderia dispensar a pesquisa externa ou a geração da análise. É uma simulação: nenhuma chamada é dispensada por essa avaliação. O sistema atual não possui revisão estruturada dos critérios e, por isso, registra que a análise é necessária. Mesmo problema, condições compatíveis, procedimento, resultado observado, ausência de lacunas e autorização precisam ser comprovados. Score, encerramento e “solução aplicada” não bastam. A busca continua em avaliação por consultores.</p></div>
+        <div class="knowledge-card"><h3>Economia em observação</h3><p>A auditoria registra separadamente se a base poderia dispensar a pesquisa externa ou a geração da análise. Nenhuma chamada é dispensada por essa avaliação. Para uma futura dispensa da IA, será exigida confiança validada de pelo menos 90%, além das evidências dos critérios. Esse índice ainda não está disponível; a pontuação da busca não é percentual de certeza. A análise da IA continua necessária. Mesmo problema, condições compatíveis, procedimento, resultado observado, ausência de lacunas e autorização precisam ser comprovados. A busca continua em avaliação por consultores.</p></div>
         <div class="knowledge-card"><h3>Consultor e Primeiro Atendimento</h3><p>A busca do consultor abrange a empresa, incluindo outros clientes conforme as permissões. No Primeiro Atendimento, a busca é limitada ao cliente quando sua identidade é confirmada. A citação automática de outros chamados está suspensa até a validação de segurança e dos casos reais. A análise continua sem citar referências históricas.</p><p>O bloco junto à resposta indica candidatos incluídos no contexto, não prova de que a IA os utilizou. A lista desta aba é uma busca atual e pode diferir. A qualidade dos resultados segue em avaliação pelos consultores.</p></div>`;
       return;
     }
@@ -2705,6 +2713,7 @@
   }
 
   const ROTULOS_ROTINA = {
+    'pending-evaluations': 'Avaliações pendentes',
     conversation: 'Chamados',
     risk: 'Radar de Chamados',
     evidence: 'Evidências',
@@ -2718,23 +2727,65 @@
     try { return localStorage.getItem('iaservice.filaRecolhida') === '1'; } catch (_) { return false; }
   }
 
+  let pendenciasAvaliacao = [];
+  let avaliacoesParaAtualizar = [];
+  let metricasAvaliacoes = null;
+  let atualizacaoSelecionada = null;
+  async function carregarAvaliacoesPendentes(convidar = false) {
+    const token = state.token;
+    const dados = await request(ext('/avaliacoes-pendentes'));
+    if (token !== state.token) return;
+    pendenciasAvaliacao = dados.pendencias || [];
+    avaliacoesParaAtualizar = dados.paraAtualizar || [];
+    metricasAvaliacoes = dados.metricas || null;
+    const contador = $('pending-evaluations-count');
+    if (contador) contador.textContent = pendenciasAvaliacao.length ? `(${pendenciasAvaliacao.length}${dados.limitada ? '+' : ''})` : '';
+    renderizarAvaliacoesPendentes(dados);
+    if (convidar && pendenciasAvaliacao.length) {
+      const convite = await request(ext('/avaliacoes-pendentes/convite'), { method: 'POST' });
+      if (token !== state.token || !convite.mostrar) return;
+      $('pending-invite-message').textContent = `Você tem ${convite.total}${convite.limitada ? ' ou mais' : ''} avaliações que podem ajudar a melhorar a Jaade.`;
+      $('pending-invite-backdrop').classList.add('ativo');
+      $('pending-invite-open').focus();
+    }
+  }
+  function renderizarAvaliacoesPendentes(dados = {}) {
+    const alvo = $('pending-evaluations-content');
+    if (!alvo) return;
+    const m = metricasAvaliacoes;
+    const explicacao = `<div class="knowledge-card"><h3>Por que avaliar?</h3><p>Sua avaliação ajuda a verificar se a base encontra casos úteis. Entre as suas ${m?.testadas || 0} soluções registradas como testadas, ${m?.funcionaram || 0} funcionaram. Isso não é certeza para um novo caso nem mede casos não avaliados. O índice de 90% ainda exige validação. A IA continua analisando os chamados.</p></div>`;
+    const item = atualizacaoSelecionada || pendenciasAvaliacao[0];
+    if (!item) {
+      alvo.innerHTML = explicacao + `<div class="empty-block">${dados.semVinculo ? 'Seu cadastro não está vinculado ao técnico responsável na origem.' : 'Nenhuma avaliação pendente.'}</div>` + (avaliacoesParaAtualizar.length ? `<div class="knowledge-card"><h3>Resultados ainda não confirmados</h3><p>Quando o teste for concluído, atualize o resultado.</p>${avaliacoesParaAtualizar.map((x, i) => `<button type="button" class="secondary-button" data-update-pending="${i}">#${escapeHtml(x.numero)} · candidato #${escapeHtml(x.candidato.numero)}</button>`).join(' ')}</div>` : '');
+      return;
+    }
+    const select = (id, opcoes, selecionado) => `<select id="${id}" required><option value="" ${selecionado ? '' : 'selected'} disabled>Selecione</option>${opcoes.map(([v, t]) => `<option value="${v}" ${v === selecionado ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+    alvo.innerHTML = explicacao + `
+      <div class="knowledge-card"><h3>Chamado #${escapeHtml(item.numero)} · candidato #${escapeHtml(item.candidato.numero)}</h3><p>${escapeHtml(item.titulo || '')}</p><p><strong>Resposta da IA:</strong> ${escapeHtml(item.resposta || '')}</p><p><strong>Chamado anterior:</strong> ${escapeHtml(item.candidato.titulo || '')} ${escapeHtml(item.candidato.descricao || '')}</p><button class="secondary-button" type="button" data-open-pending="current">Abrir chamado</button> <button class="secondary-button" type="button" data-open-pending="candidate">Abrir histórico anterior</button></div>
+      <form id="pending-evaluation-form" class="knowledge-card"><h3>Avaliar candidato</h3>
+        <div class="avaliacao-criterio"><label for="pending-problema">Trata do mesmo problema?</label>${select('pending-problema', [['sim','Sim'],['parcial','Parcialmente'],['nao','Não'],['nao_sei','Não consegui avaliar']], item.avaliacao?.mesmoProblema)}</div>
+        <div class="avaliacao-criterio"><label for="pending-utilidade">A solução anterior ajuda neste caso?</label>${select('pending-utilidade', [['sim','Sim'],['talvez','Talvez'],['nao','Não'],['sem_solucao','Não há solução registrada'],['nao_sei','Não consegui avaliar']], item.avaliacao?.utilidade)}</div>
+        <div class="avaliacao-criterio"><label for="pending-resultado">A solução foi aplicada e funcionou neste caso?</label>${select('pending-resultado', [['sim','Sim'],['nao','Não'],['nao_testada','Ainda não testada'],['nao_sei','Não sei']], item.avaliacao?.resultado)}</div>
+        <div class="avaliacao-modal-actions"><button type="submit" class="primary-button">Salvar avaliação</button></div></form>`;
+  }
+
   function setPanel(panel) {
     if (panel !== 'conversation') detalhesTecnicos?.close(false);
     state.activePanel = panel;
     document.querySelectorAll('[data-panel-tab]').forEach((btn) => btn.classList.toggle('active', btn.dataset.panelTab === panel));
-    ['conversation', 'evidence', 'knowledge', 'trail', 'details', 'risk', 'logs'].forEach((name) => {
+    ['conversation', 'evidence', 'knowledge', 'trail', 'details', 'risk', 'logs', 'pending-evaluations'].forEach((name) => {
       const el = $(`panel-${name}`);
       if (el) el.classList.toggle('active', name === panel);
     });
     // Radar de Chamados lista todos os chamados: cabecalho e descricao do
     // chamado selecionado nao se aplicam e so tomam espaco da grade.
-    $('case-view').classList.toggle('modo-radar', panel === 'risk');
+    $('case-view').classList.toggle('modo-radar', panel === 'risk' || panel === 'pending-evaluations');
     $('case-view').classList.toggle('modo-logs', panel === 'logs');
     // O Radar nao depende de chamado selecionado: sem chamado aberto, mostra a
     // area do Radar no lugar do "Selecione um chamado" (antes ficava vazia).
     if (!state.selected) {
-      $('case-view').hidden = panel !== 'risk' && panel !== 'logs';
-      $('empty-state').hidden = panel === 'risk' || panel === 'logs';
+      $('case-view').hidden = panel !== 'risk' && panel !== 'logs' && panel !== 'pending-evaluations';
+      $('empty-state').hidden = panel === 'risk' || panel === 'logs' || panel === 'pending-evaluations';
     }
     // No Radar e na Analise de Logs a Fila tambem recolhe, para a tela usar a
     // largura toda (logs so dependem do chamado ja selecionado). Nao grava
@@ -2760,6 +2811,7 @@
     if (panel === 'risk') loadRisk();
     if (panel === 'logs') analiseLogs?.abrir();
     if (panel === 'knowledge') renderKnowledge();
+    if (panel === 'pending-evaluations') carregarAvaliacoesPendentes().catch(err => { $('pending-evaluations-content').textContent = `Não foi possível carregar as avaliações: ${err.message}`; });
     if (panel === 'trail') renderTrail();
     enviarPresenca();
   }
@@ -2895,6 +2947,42 @@
   }
 
   function bindEvents() {
+    const fecharConvite = () => $('pending-invite-backdrop').classList.remove('ativo');
+    $('pending-invite-close').addEventListener('click', fecharConvite);
+    $('pending-invite-later').addEventListener('click', fecharConvite);
+    $('pending-invite-open').addEventListener('click', () => { fecharConvite(); setPanel('pending-evaluations'); setMobileTarget('more'); });
+    $('pending-evaluations-content').addEventListener('submit', async event => {
+      if (event.target.id !== 'pending-evaluation-form') return;
+      event.preventDefault();
+      const item = atualizacaoSelecionada || pendenciasAvaliacao[0];
+      if (!item) return;
+      const botao = event.target.querySelector('button[type="submit"]');
+      botao.disabled = true;
+      try {
+        await request(ext('/avaliacoes-pendentes'), { method: 'POST', body: JSON.stringify({ mensagemId: item.mensagemId, candidatoId: item.candidato.id,
+          mesmoProblema: $('pending-problema').value, utilidade: $('pending-utilidade').value, resultado: $('pending-resultado').value }) });
+        toast('Avaliação registrada.');
+        atualizacaoSelecionada = null;
+        await carregarAvaliacoesPendentes();
+      } catch (err) { toast(`Não foi possível salvar a avaliação: ${err.message}`); botao.disabled = false; }
+    });
+    $('pending-evaluations-content').addEventListener('click', async event => {
+      const atualizar = event.target.closest('[data-update-pending]');
+      if (atualizar) { atualizacaoSelecionada = avaliacoesParaAtualizar[Number(atualizar.dataset.updatePending)] || null; renderizarAvaliacoesPendentes(); return; }
+      const btn = event.target.closest('[data-open-pending]');
+      const item = atualizacaoSelecionada || pendenciasAvaliacao[0];
+      if (!btn || !item) return;
+      const ticket = btn.dataset.openPending === 'candidate' ? item.candidato : { id: item.chamadoId, numero: item.numero, titulo: item.titulo };
+      state.relatedById = state.relatedById || new Map();
+      state.relatedById.set(String(ticket.id), ticket);
+      try {
+        await selectTicket(ticket.id);
+        if (btn.dataset.openPending === 'candidate' && String(state.selected?.id) === String(ticket.id)) {
+          state.retornoBase = { id: item.chamadoId, numero: item.numero, titulo: item.titulo };
+          $('voltar-chamado-base').hidden = false;
+        }
+      } catch (err) { toast(`Não foi possível abrir o chamado: ${err.message}`); }
+    });
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') sincronizarChatAtivo();
     });

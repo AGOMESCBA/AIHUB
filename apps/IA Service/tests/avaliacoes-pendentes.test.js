@@ -1,0 +1,52 @@
+'use strict';
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const os = require('os');
+const path = require('path');
+const crypto = require('crypto');
+const database = require('../backend/database');
+const consultores = require('../backend/services/consultor-service');
+const clientes = require('../backend/repositories/cliente-repository');
+const fontes = require('../backend/repositories/agente-local-repository');
+const chamados = require('../backend/repositories/chamado-repository');
+const atendimentos = require('../backend/repositories/atendimento-repository');
+const mensagens = require('../backend/repositories/mensagem-repository');
+const execucoes = require('../backend/repositories/investigacao-execucao-repository');
+const fila = require('../backend/services/avaliacoes-pendentes-service');
+
+test('fila acompanha responsável, protege empresa e controla convites por período', () => {
+  database.inicializarDB(path.join(os.tmpdir(), `avaliacoes-pendentes-${crypto.randomUUID()}.db`));
+  const original = consultores.getConsultor;
+  consultores.getConsultor = (_empresa, id) => ({ idSoftexpert: id });
+  try {
+    const empresa = 5511;
+    const fonte = fontes.criarFonte(empresa, { connectionKey: 'teste', nome: 'Teste', sistemaOrigem: 'softexpert', adapter: 'x' });
+    const t1 = clientes.upsertTecnico(empresa, { sistemaOrigem: 'softexpert', idOrigem: '1' }).tecnico;
+    const t2 = clientes.upsertTecnico(empresa, { sistemaOrigem: 'softexpert', idOrigem: '2' }).tecnico;
+    const atual = chamados.upsertChamado(empresa, { fonteId: fonte.id, sistemaOrigem: 'softexpert', oidOrigem: 'a', numero: '000001', tecnicoResponsavelId: t1.id }).chamado;
+    const anterior = chamados.upsertChamado(empresa, { fonteId: fonte.id, sistemaOrigem: 'softexpert', oidOrigem: 'b', numero: '000002' }).chamado;
+    const at = atendimentos.criarAtendimento(empresa, { origem: 'softexpert', referenciaExterna: atual.numero, conteudoBruto: 'teste' });
+    const msg = mensagens.salvarMensagem(empresa, at.id, { papel: 'assistant', conteudo: 'Resposta.' });
+    execucoes.salvarExecucao(empresa, { atendimentoId: at.id, mensagemId: msg.id, manifesto: { pesquisaExterna: { baseConhecimento: { selecionados: [{ chamadoId: anterior.id }] } } } });
+    assert.equal(fila.listar(empresa, '1').pendencias.length, 1);
+    assert.equal(fila.listar(empresa + 1, '1').pendencias.length, 0);
+    assert.equal(fila.convidar(empresa, '1', new Date(2026, 10, 24, 8, 0)).mostrar, true);
+    assert.equal(fila.convidar(empresa, '1', new Date(2026, 10, 24, 11, 59)).mostrar, false);
+    assert.equal(fila.convidar(empresa, '1', new Date(2026, 10, 24, 12, 0)).mostrar, true);
+    assert.equal(fila.convidar(empresa, '1', new Date(2026, 10, 24, 18, 0)).mostrar, false);
+    database.getDB().prepare('UPDATE chamados SET tecnico_responsavel_id = ? WHERE id = ?').run(t2.id, atual.id);
+    assert.equal(fila.listar(empresa, '1').pendencias.length, 0);
+    assert.equal(fila.listar(empresa, '2').pendencias.length, 1);
+    const dados = { mensagemId: msg.id, candidatoId: anterior.id, mesmoProblema: 'sim', utilidade: 'talvez', resultado: 'nao_testada' };
+    assert.throws(() => fila.registrar(empresa, '1', dados), /outro consultor/);
+    fila.registrar(empresa, '2', dados);
+    assert.equal(fila.listar(empresa, '2').pendencias.length, 0);
+    assert.equal(fila.listar(empresa, '2').paraAtualizar.length, 1);
+    fila.registrar(empresa, '2', { ...dados, resultado: 'sim' });
+    const final = fila.listar(empresa, '2');
+    assert.equal(final.paraAtualizar.length, 0);
+    assert.equal(final.metricas.testadas, 1);
+    assert.equal(final.metricas.funcionaram, 1);
+    assert.equal(database.getDB().prepare('SELECT COUNT(*) n FROM avaliacoes_base_candidatos').get().n, 2);
+  } finally { consultores.getConsultor = original; database.fecharDB(); }
+});

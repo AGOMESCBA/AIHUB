@@ -1387,6 +1387,7 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
     // No PA, `texto` é a instrução fixa de pré-análise, não um relato do
     // cliente; usá-la como consulta adiciona palavras genéricas ao ranking.
     const contextoBusca = [textoPrintsPesquisa, escopoPrimeiroAtendimento ? null : texto, ...historico.filter(m => m.papel !== 'assistant').slice(-4).map(m => m.conteudo)].filter(Boolean).join('\n');
+    try {
     if (escopoPrimeiroAtendimento && chamado) identidadePaConfirmada = chamadoRepo.identidadeConfirmadaPa(empresaId, chamado.id);
     const expansao = chamado && (!escopoPrimeiroAtendimento || identidadePaConfirmada)
       ? await baseConhecimentoAvaliacao.expandirBusca(empresaId, chamado, { textoContexto: contextoBusca })
@@ -1408,6 +1409,14 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       diagnosticoBaseConhecimento = { estado: avaliacao.estado, expansao: expansao.estado, buscaVetorial: hibrida.estadoVetorial, avaliados: avaliacao.avaliados || 0, provider: avaliacao.provider || null, model: avaliacao.model || null, etapaFalha: avaliacao.etapaFalha || null, candidatosApresentados: relacionados.length };
     } else if (chamado) {
       diagnosticoBaseConhecimento = { estado: 'sem_candidatos', buscaVetorial: hibrida.estadoVetorial, avaliados: 0, candidatosApresentados: 0 };
+    }
+    } catch (err) {
+      // A base histórica é independente da pesquisa externa. Não use candidatos
+      // parciais após uma falha nem confunda indisponibilidade com busca vazia.
+      relacionados = [];
+      if (escopoPrimeiroAtendimento) identidadePaConfirmada = null;
+      diagnosticoBaseConhecimento = { estado: 'busca_indisponivel', avaliados: 0 };
+      console.error('[IA Service] Busca na base de conhecimento indisponível; seguindo com a pesquisa técnica.', err.message);
     }
     const ctxPesquisa = {
       empresaId,
@@ -1517,6 +1526,10 @@ async function processarTurno(empresaId, atendimentoId, { texto, usuarioId, cons
       `Pesquisa técnica indisponível nesta tentativa: ${err.message}`,
       'Siga com as evidências locais do chamado e peça confirmação humana quando necessário.',
     ].join('\n');
+  }
+
+  if (diagnosticoBaseConhecimento.estado === 'busca_indisponivel') {
+    pesquisaTecnicaTexto = _comOrientacao(pesquisaTecnicaTexto, 'A busca na base interna de chamados ficou indisponível nesta tentativa. Não afirme que não existem chamados semelhantes nem que a base foi consultada com sucesso. Informe essa limitação ao analista quando pertinente e use as demais evidências disponíveis.');
   }
 
   const { keys, cfg } = aiConfigService.resolverKeysEOrdem(empresaId);

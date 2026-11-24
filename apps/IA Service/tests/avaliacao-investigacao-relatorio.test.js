@@ -21,13 +21,13 @@ const homologacaoService = require('../backend/services/homologacao-service');
 
 const EMPRESA_A = 98501;
 
-function criarCasoAvaliado(empresaId, { notas, provider = null, model = null, qgAprovado = null, erroTecnicoCritico = false, usuarioId = 1 }) {
+function criarCasoAvaliado(empresaId, { notas, provider = null, model = null, qgAprovado = null, erroTecnicoCritico = false, usuarioId = 1, manifesto = null }) {
   const atendimento = atendimentoRepo.criarAtendimento(empresaId, { origem: 'manual', canalEntrada: 'web', conteudoBruto: 'Caso de teste.' });
   const mensagemAssistente = mensagemRepo.salvarMensagem(empresaId, atendimento.id, { papel: 'assistant', conteudo: 'Resposta de teste.' });
-  if (provider || model || qgAprovado !== null) {
+  if (provider || model || qgAprovado !== null || manifesto) {
     investigacaoExecucaoRepo.salvarExecucao(empresaId, {
       atendimentoId: atendimento.id, mensagemId: mensagemAssistente.id,
-      provider, model, status: 'concluido',
+      provider, model, status: 'concluido', manifesto,
       qualityGate: qgAprovado !== null ? { aprovado: qgAprovado } : null,
     });
   }
@@ -38,6 +38,17 @@ function criarCasoAvaliado(empresaId, { notas, provider = null, model = null, qg
 }
 
 async function main() {
+  {
+    const notas = { compreensaoProblema: 4, aproveitamentoEvidencias: 4, profundidadeTecnica: 4, orientacaoPratica: 4, confiabilidadeTecnica: 3 };
+    criarCasoAvaliado(98590, { notas, manifesto: { pesquisaExterna: { baseConhecimento: { selecionados: [{ chamadoId: 'x' }] } } } });
+    criarCasoAvaliado(98590, { notas, erroTecnicoCritico: true, manifesto: { pesquisaExterna: { baseConhecimento: { selecionados: [] } } } });
+    criarCasoAvaliado(98590, { notas });
+    criarCasoAvaliado(98591, { notas, manifesto: { pesquisaExterna: { baseConhecimento: { selecionados: [{ chamadoId: 'outro' }] } } } });
+    const base = homologacaoService.obterRelatorioAgregado(98590).baseConhecimento;
+    assert.deepStrictEqual(base.com_candidatos, { avaliacoes: 1, respostas: 1, mediaConfiabilidadeTecnica: 3, errosCriticos: 0 });
+    assert.equal(base.sem_candidatos.errosCriticos, 1);
+    assert.equal(base.nao_identificado.avaliacoes, 1);
+  }
   // 1) Faixas de borda exatas: 22=Excelente, 21=Boa, 18=Boa, 17=Parcial, 13=Parcial, 12=Insatisfatoria
   {
     assert.strictEqual(avaliacaoRepo.faixaDeNota(25), 'EXCELENTE');

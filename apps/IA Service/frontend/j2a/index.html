@@ -118,6 +118,7 @@
           <button class="nav-item" data-panel-tab="conversation">Chamados</button>
           <button class="nav-item" data-panel-tab="details">Detalhes</button>
           <button class="nav-item" data-panel-tab="risk">Radar de Chamados</button>
+          <button class="nav-item" type="button" data-panel-tab="pending-evaluations">Avaliações pendentes <span id="pending-evaluations-count"></span></button>
           <details class="topbar-menu more-menu">
             <summary class="nav-item">Mais</summary>
             <div class="topbar-menu-panel compact" role="menu">
@@ -331,6 +332,9 @@
               </div>
               <div id="knowledge-content" class="section-stack"></div>
             </section>
+            <section id="panel-pending-evaluations" class="tab-panel">
+              <div id="pending-evaluations-content" class="section-stack"></div>
+            </section>
             <section id="panel-risk" class="tab-panel">
               <div class="risk-toolbar">
                 <div class="segmented">
@@ -407,6 +411,12 @@
       </div>
     </div>
 
+    <div id="pending-invite-backdrop" class="avaliacao-modal-backdrop">
+      <div class="avaliacao-modal" role="dialog" aria-modal="true" aria-labelledby="pending-invite-title">
+        <div class="avaliacao-modal-head"><div><div id="pending-invite-title" class="avaliacao-modal-title">Avaliações pendentes</div><div class="avaliacao-modal-subtitle" id="pending-invite-message"></div></div><button type="button" id="pending-invite-close" class="avaliacao-modal-close-btn" aria-label="Fechar">×</button></div>
+        <div class="avaliacao-modal-body"><p>Sua avaliação ajuda a Jaade a encontrar soluções úteis. A IA continua analisando os chamados enquanto a confiabilidade da base é validada.</p><div class="avaliacao-modal-actions"><button type="button" id="pending-invite-later" class="secondary-button">Depois</button><button type="button" id="pending-invite-open" class="primary-button">Avaliar agora</button></div></div>
+      </div>
+    </div>
     <div id="avaliacao-modal-backdrop" class="avaliacao-modal-backdrop">
       <div class="avaliacao-modal" role="dialog" aria-modal="true">
         <div class="avaliacao-modal-head">

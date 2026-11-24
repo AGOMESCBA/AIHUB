@@ -68,6 +68,9 @@ before(async () => {
   });
   require('../backend/routes/externo-routes')(app);
   server = await new Promise(r => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+  // Mesmo ajuste de fontes-integrais-alteracoes-ancoradas: conexão reaproveitada
+  // pelo fetch não pode ser fechada pelo servidor (5 s) no meio da suíte carregada.
+  server.keepAliveTimeout = 60 * 1000;
   base = `http://127.0.0.1:${server.address().port}`;
 });
 after(async () => {

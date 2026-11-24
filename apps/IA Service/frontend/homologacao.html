@@ -70,6 +70,12 @@
         <div class="page-subtitle">Utilidade técnica real das investigações, medida pela avaliação de consultores — independente da aprovação do Quality Gate.</div>
       </div>
 
+      <div class="card card-resumo" style="margin-bottom:20px">
+        <div class="card-resumo-label">Avaliações das respostas e Base de Conhecimento</div>
+        <p>A nota de confiabilidade técnica avalia a resposta completa, não comprova que um candidato foi usado ou resolveu o chamado. Não representa percentual de certeza.</p>
+        <div id="resumo-base-conhecimento">—</div>
+      </div>
+
       <div id="error-banner" class="error-banner"></div>
 
       <div class="filtros-homologacao">
@@ -205,6 +211,13 @@
 
         document.getElementById('resumo-total').textContent = relatorio.total;
         document.getElementById('resumo-media').textContent = relatorio.mediaGeral;
+        const base = relatorio.baseConhecimento || {};
+        const gruposBase = [['com_candidatos', 'Com candidatos no contexto'], ['sem_candidatos', 'Sem candidatos incluídos no contexto'], ['nao_identificado', 'Contexto não identificado']];
+        document.getElementById('resumo-base-conhecimento').textContent = gruposBase.map(([chave, nome]) => {
+          const grupo = base[chave] || {};
+          const media = grupo.mediaConfiabilidadeTecnica == null ? 'sem notas' : `média ${Number(grupo.mediaConfiabilidadeTecnica).toFixed(2)}/5`;
+          return `${nome}: ${grupo.avaliacoes || 0} avaliações em ${grupo.respostas || 0} respostas, ${media}, ${grupo.errosCriticos || 0} erro(s) crítico(s)`;
+        }).join(' | ');
 
         const faixas = relatorio.distribuicaoFaixas || {};
         document.getElementById('resumo-faixas').innerHTML = Object.entries(ROTULO_FAIXA).map(([chave, rotulo]) => `
