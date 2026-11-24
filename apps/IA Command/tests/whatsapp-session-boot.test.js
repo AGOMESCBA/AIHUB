@@ -12,9 +12,9 @@ const begin = source.indexOf('  async _start(config) {');
 const end = source.indexOf('\n  // Tenta retomar', begin);
 assert.ok(begin >= 0 && end > begin, 'metodo de inicializacao encontrado');
 
-async function fixture({ savedSession = true, encodeQr = qrcode.toDataURL } = {}) {
+async function fixture({ savedSession = true, encodeQr = qrcode.toDataURL, webVersion = '' } = {}) {
   const timers = new Map();
-  const effects = { destroy: 0, quarantine: 0, cleanup: 0, stop: 0, databaseWrites: 0, logout: 0, removed: 0 };
+  const effects = { destroy: 0, quarantine: 0, cleanup: 0, stop: 0, databaseWrites: 0, logout: 0, removed: 0, reconnect: 0 };
   let timerId = 0;
   class Client {
     constructor(options) {
@@ -32,6 +32,7 @@ async function fixture({ savedSession = true, encodeQr = qrcode.toDataURL } = {}
   }
   const context = {
     Client,
+    process: { env: { IAC_WA_WEB_VERSION: webVersion } },
     LocalAuth: class { constructor(options) { Object.assign(this, options); } },
     AUTH_BASE: 'PERFIL_ISOLADO', PUPPETEER_ARGS: [],
     _sessionLooksAuthenticated: () => savedSession,
@@ -57,6 +58,7 @@ async function fixture({ savedSession = true, encodeQr = qrcode.toDataURL } = {}
     _processedMessageIds: new Set(),
     _senderContext: new Map(),
     _cancelarAutoReconnect() {},
+    _agendarAutoReconnect() { effects.reconnect++; },
     _resolveConfiguredAuthClientId: () => 'iac_simulado',
     async _killChromeForSession() { effects.cleanup++; },
     _bootLog() {},
@@ -82,6 +84,57 @@ async function fixture({ savedSession = true, encodeQr = qrcode.toDataURL } = {}
     useRealLifecycle() { svc.stop = lifecycle.stop; svc.disconnectSession = lifecycle.disconnectSession; },
   };
 }
+
+test('versao fixada usa cache local estrito sem alterar o perfil', async () => {
+  const { client } = await fixture({ webVersion: '2.3000.1055574960' });
+  assert.equal(client.options.webVersion, '2.3000.1055574960');
+  assert.equal(client.options.webVersionCache.strict, true);
+  assert.equal(client.options.webVersionCache.path, path.join('PERFIL_ISOLADO', '..', '.wwebjs_cache'));
+  assert.equal(client.options.authStrategy.clientId, 'iac_simulado');
+});
+
+test('falha de inicializacao agenda reconexao preservando a sessao', async () => {
+  const { client, svc, effects } = await fixture();
+  client.rejectInit(new Error('falha temporaria'));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(svc.status, 'stopped');
+  assert.equal(effects.reconnect, 1);
+  assert.equal(effects.removed, 0);
+  assert.equal(effects.quarantine, 0);
+});
+
+test('reconexao continua em intervalos longos e alerta apenas uma vez', async () => {
+  const beginReconnect = source.indexOf('  _agendarAutoReconnect({ empresaId, channel }) {');
+  const endReconnect = source.indexOf('\n  // Mata processos Chrome', beginReconnect);
+  let scheduled;
+  let alerts = 0;
+  const context = {
+    WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS: 2,
+    WHATSAPP_AUTO_RECONNECT_BASE_DELAY_MS: 5000,
+    WHATSAPP_AUTO_RECONNECT_RETRY_MS: 900000,
+    alertarOperacionalTelegram() { alerts++; },
+    setTimeout(fn, delay) { scheduled = { fn, delay }; return scheduled; },
+    clearTimeout() {},
+  };
+  const svc = vm.runInNewContext('(new class {' + source.slice(beginReconnect, endReconnect) + '})', context);
+  Object.assign(svc, { status: 'stopped', _autoReconnectAttempts: 0, _autoReconnectGeneration: 0, log() {}, start: async () => {} });
+  const cfg = { empresaId: 1, channel: { id: 'simulado' } };
+  svc._agendarAutoReconnect(cfg);
+  assert.equal(scheduled.delay, 5000);
+  scheduled.fn();
+  svc._agendarAutoReconnect(cfg);
+  assert.equal(scheduled.delay, 10000);
+  scheduled.fn();
+  svc._agendarAutoReconnect(cfg);
+  assert.equal(scheduled.delay, 900000);
+  assert.equal(alerts, 1);
+  scheduled.fn();
+  svc._agendarAutoReconnect(cfg);
+  assert.equal(scheduled.delay, 900000);
+  assert.equal(alerts, 1);
+  svc._cancelarAutoReconnect();
+  assert.equal(svc._autoReconnectTimer, null);
+});
 
 test('sessao valida conecta automaticamente sem QR nem destruicao do cliente', async () => {
   const { svc, client, effects, timers } = await fixture();

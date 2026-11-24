@@ -56,6 +56,7 @@ const WHATSAPP_PROGRESS_REFRESH_MS = Math.max(700, Number(process.env.IAC_WA_PRO
 // LOGOUT nao entra aqui: significa que o vinculo foi revogado no celular e a sessao salva fica invalida.
 const WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS = Math.max(0, Number(process.env.IAC_WA_AUTO_RECONNECT_MAX_TENTATIVAS ?? 5));
 const WHATSAPP_AUTO_RECONNECT_BASE_DELAY_MS = Math.max(1000, Number(process.env.IAC_WA_AUTO_RECONNECT_BASE_DELAY_MS || 5000));
+const WHATSAPP_AUTO_RECONNECT_RETRY_MS = Math.max(120000, Number(process.env.IAC_WA_AUTO_RECONNECT_RETRY_MS || 900000));
 const NOMES_MODULOS_WHATSAPP = {
   compras:     'Compras',
   financeiro:  'Financeiro',
@@ -388,6 +389,8 @@ class IACWhatsAppService extends EventEmitter {
     this._processedMessageOrder = [];
     this._autoReconnectAttempts = 0;
     this._autoReconnectTimer = null;
+    this._autoReconnectGeneration = 0;
+    this._autoReconnectAlerted = false;
   }
 
   getStatus()    { return this.status; }
@@ -490,11 +493,21 @@ class IACWhatsAppService extends EventEmitter {
     const puppeteerCfg = { headless: true, args: PUPPETEER_ARGS };
     if (chromePath) puppeteerCfg.executablePath = chromePath;
 
+    // Alternativa temporaria para incompatibilidades da versao atual do WhatsApp Web.
+    // A versao fixada deve existir no cache local; nunca recuar silenciosamente para a atual.
+    const webVersion = (process.env.IAC_WA_WEB_VERSION || '').trim();
+    const webVersionOptions = webVersion ? {
+      webVersion,
+      webVersionCache: { type: 'local', path: path.join(AUTH_BASE, '..', '.wwebjs_cache'), strict: true },
+    } : {};
+    if (webVersion) this.log(`WhatsApp Web: usando versao fixada ${webVersion} do cache local.`, 'info');
+
     // Prefixo 'iac_' evita conflito com sessões do IAHub Recrutamento
     this.client = new Client({
       authStrategy: new LocalAuth({ clientId: this._authClientId, dataPath: AUTH_BASE }),
       puppeteer: puppeteerCfg,
       qrMaxRetries: 8, // ~200s de janela (QR renova a cada ~25s)
+      ...webVersionOptions,
     });
     this._bootLog('cliente WhatsApp criado');
     const bootClient = this.client;
@@ -514,6 +527,7 @@ class IACWhatsAppService extends EventEmitter {
       retryingCleanSession = true;
       clearTimers();
       const sessao = this._authClientId;
+      const generation = this._autoReconnectGeneration;
 
       if (WHATSAPP_PRESERVE_AUTH_SESSION_ON_TIMEOUT && _sessionLooksAuthenticated(sessao)) {
         this.log(
@@ -526,8 +540,10 @@ class IACWhatsAppService extends EventEmitter {
           this.client = null;
         }
         await this._killChromeForSession(sessao);
+        if (generation !== this._autoReconnectGeneration || this._stopping) return true;
         this.lastQrUrl = null;
         this.setStatus('stopped');
+        this._agendarAutoReconnect({ empresaId, channel });
         return true;
       }
 
@@ -674,6 +690,7 @@ class IACWhatsAppService extends EventEmitter {
       this._processedMessageOrder = [];
       this.setStatus('connected');
       this._autoReconnectAttempts = 0;
+      this._autoReconnectAlerted = false;
       const seg = ((Date.now() - this._startTime) / 1000).toFixed(1);
       this._bootLog('ready');
       this.log(`Conectado! Número: ${this.client.info.wid.user} — ${seg}s`, 'success');
@@ -731,51 +748,60 @@ class IACWhatsAppService extends EventEmitter {
     this.client.initialize().catch(async (err) => {
       clearTimers();
       if (!isCurrentClient()) return;
+      const generation = this._autoReconnectGeneration;
       this._bootLog('initialize erro', this._startTime, err?.message || String(err));
       this.client = null;
       this.setStatus('stopped');
       this.log(`Falha ao inicializar: ${err.message}`, 'error');
       await this._killChromeForSession(this._authClientId);
+      if (generation === this._autoReconnectGeneration && this.status === 'stopped') {
+        this._agendarAutoReconnect({ empresaId, channel });
+      }
     });
   }
 
   // Tenta retomar a sessao automaticamente apos desconexao por motivo recuperavel
   // (NAVIGATION, CONFLICT, UNLAUNCHED, etc). Nao mexe na sessao salva; se ela ainda
   // for valida, o WhatsApp Web reconecta sem exigir novo QR. Backoff exponencial e
-  // numero maximo de tentativas evitam martelar caso o problema seja persistente.
+  // apos as tentativas iniciais, mantem intervalos longos e alerta uma vez.
   _agendarAutoReconnect({ empresaId, channel }) {
     if (this._stopping) return;
     if (this._autoReconnectTimer) return;
-    if (this._autoReconnectAttempts >= WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS) {
+    if (WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS === 0) return;
+    const esgotou = this._autoReconnectAttempts >= WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS;
+    if (esgotou && !this._autoReconnectAlerted) {
+      this._autoReconnectAlerted = true;
       this.log(
-        `🔴 Limite de ${WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS} tentativas de reconexão automática atingido. ` +
-        'Verifique a conexão/celular e reconecte manualmente pelo painel.',
+        `🔴 ${WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS} tentativas de reconexão falharam. ` +
+        'Novas tentativas continuarão em intervalos maiores; verifique o painel.',
         'error'
       );
       alertarOperacionalTelegram(
         `🔴 IAHub — WhatsApp fora do ar\n` +
         `Canal: ${this._channelName || this._channelId}\n` +
-        `Reconexão automática esgotou ${WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS} tentativas. Verifique o painel — pode ser necessário escanear um novo QR Code.`
+        `Reconexão automática falhou ${WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS} vezes. Novas tentativas continuarão; verifique o painel.`
       );
-      return;
     }
 
-    this._autoReconnectAttempts++;
+    if (!esgotou) this._autoReconnectAttempts++;
     const tentativa = this._autoReconnectAttempts;
-    const delay = Math.min(WHATSAPP_AUTO_RECONNECT_BASE_DELAY_MS * Math.pow(2, tentativa - 1), 120000);
-    this.log(`Tentando reconexão automática (${tentativa}/${WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS}) em ${Math.round(delay / 1000)}s...`, 'warning');
+    const delay = esgotou ? WHATSAPP_AUTO_RECONNECT_RETRY_MS : Math.min(WHATSAPP_AUTO_RECONNECT_BASE_DELAY_MS * Math.pow(2, tentativa - 1), 120000);
+    this.log(`Tentando reconexão automática ${esgotou ? '(intervalo prolongado)' : `(${tentativa}/${WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS})`} em ${Math.round(delay / 1000)}s...`, 'warning');
 
     this._autoReconnectTimer = setTimeout(() => {
       this._autoReconnectTimer = null;
       if (this._stopping || this.status !== 'stopped') return;
       this.start({ empresaId, channel }).catch(err => {
         this.log(`Falha na reconexão automática: ${err.message}`, 'error');
+        if (!this._stopping && this.status === 'stopped') this._agendarAutoReconnect({ empresaId, channel });
       });
     }, delay);
   }
 
   _cancelarAutoReconnect() {
     this._autoReconnectAttempts = 0;
+    this._autoReconnectGeneration++;
+    this._autoReconnectAlerted = false;
     if (this._autoReconnectTimer) {
       clearTimeout(this._autoReconnectTimer);
       this._autoReconnectTimer = null;
