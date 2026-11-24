@@ -1593,6 +1593,18 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 69,
+    descricao: 'Jade no Primeiro Atendimento: contadores de leituras (pedido do usuário, 2026-11-24). A leitura agendada sem chamado não fica em jade_pa_lotes; os contadores mostram que o job rodou sem guardar cada leitura — o do dia (zera quando muda o dia, data local do servidor) e o acumulado desde leituras_desde. "Limpar logs" (tudo ou período) zera os dois e recomeça leituras_desde.',
+    sql: `
+      ALTER TABLE jade_pa_config ADD COLUMN leituras_dia TEXT DEFAULT NULL;
+      ALTER TABLE jade_pa_config ADD COLUMN leituras_dia_total INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE jade_pa_config ADD COLUMN leituras_dia_sem_chamados INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE jade_pa_config ADD COLUMN leituras_desde TEXT DEFAULT NULL;
+      ALTER TABLE jade_pa_config ADD COLUMN leituras_total INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE jade_pa_config ADD COLUMN leituras_sem_chamados INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

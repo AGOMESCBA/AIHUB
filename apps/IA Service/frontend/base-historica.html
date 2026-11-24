@@ -1091,6 +1091,12 @@
     const r = config.ultimoCicloResumo;
     const itens = [];
     if (config.ultimoCicloEm) {
+      // Leituras sem chamado não ficam na lista; o contador do dia mostra que o job rodou.
+      // O acumulado (desde a última limpeza) fica na dica, para não ocupar a linha.
+      const lh = config.leiturasHoje || {};
+      const la = config.leiturasAcumuladas;
+      const dica = la?.desde ? `Desde ${formatarDataHora(la.desde)}: ${la.total} leitura(s), ${la.semChamados} sem chamados. Limpar logs recomeça a contagem.` : '';
+      if (lh.total || la?.total) itens.push(`<span title="${escapeHtml(dica)}">Hoje <strong>${lh.total || 0}</strong> leitura(s), <strong>${lh.semChamados || 0}</strong> sem chamados</span>`);
       itens.push(`<span>Última leitura <strong>${escapeHtml(formatarDataHora(config.ultimoCicloEm))}</strong></span>`);
       if (r) {
         itens.push(`<span><strong>${r.elegiveis ?? 0}</strong> elegível(is)</span>`);

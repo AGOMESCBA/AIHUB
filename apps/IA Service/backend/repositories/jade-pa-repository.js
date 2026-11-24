@@ -19,8 +19,18 @@ function _listaGrupos(valor) {
   return [...new Set((Array.isArray(lista) ? lista : []).map(v => String(v ?? '').trim()).filter(Boolean))];
 }
 
+// Data local do servidor (YYYY-MM-DD): o "hoje" do contador de leituras, como o limite diário.
+function _diaLocal(d = new Date()) {
+  const p2 = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+}
+
 function _config(row, empresaId, fonteId) {
-  if (!row) return { empresaId: Number(empresaId), fonteId, ...PADRAO, ultimoCicloEm: null, ultimoCicloResumo: null, atualizadoEm: null };
+  if (!row) {
+    return { empresaId: Number(empresaId), fonteId, ...PADRAO, ultimoCicloEm: null, ultimoCicloResumo: null, atualizadoEm: null,
+      leiturasHoje: { total: 0, semChamados: 0 }, leiturasAcumuladas: { desde: null, total: 0, semChamados: 0 } };
+  }
+  const hoje = row.leituras_dia === _diaLocal();
   let resumo = null;
   try { resumo = row.ultimo_ciclo_resumo ? JSON.parse(row.ultimo_ciclo_resumo) : null; } catch (_) { resumo = null; }
   return {
@@ -29,6 +39,8 @@ function _config(row, empresaId, fonteId) {
     processamentosSimultaneos: row.processamentos_simultaneos ?? PADRAO.processamentosSimultaneos,
     usuarioSoftexpert: row.usuario_softexpert ?? null, somenteChamados: _listaChamados(row.somente_chamados), cicloTravaAte: row.ciclo_trava_ate, ultimoCicloEm: row.ultimo_ciclo_em, ultimoCicloResumo: resumo, atualizadoEm: row.atualizado_em,
     proximoCicloEm: row.proximo_ciclo_em ?? null,
+    leiturasHoje: { total: hoje ? row.leituras_dia_total ?? 0 : 0, semChamados: hoje ? row.leituras_dia_sem_chamados ?? 0 : 0 },
+    leiturasAcumuladas: { desde: row.leituras_desde ?? null, total: row.leituras_total ?? 0, semChamados: row.leituras_sem_chamados ?? 0 },
     gruposAvisoFalha: _listaGrupos(row.grupos_aviso_falha), gruposAvisoSucesso: _listaGrupos(row.grupos_aviso_sucesso),
   };
 }
@@ -123,8 +135,18 @@ function liberarCiclo(empresaId, fonteId, resumo, { avulsa = false } = {}) {
   const agora = Date.now();
   const proximo = avulsa ? getConfig(empresaId, fonteId).proximoCicloEm
     : new Date(agora + getConfig(empresaId, fonteId).intervaloMinutos * 60000).toISOString();
-  getDB().prepare('UPDATE jade_pa_config SET ciclo_trava_ate = NULL, ultimo_ciclo_em = ?, ultimo_ciclo_resumo = ?, proximo_ciclo_em = ? WHERE empresa_id = ? AND fonte_id = ?')
-    .run(new Date(agora).toISOString(), JSON.stringify(resumo || {}), proximo, Number(empresaId), fonteId);
+  // Contadores do dia e acumulado: "sem chamados" = nenhum elegível e nenhum erro (o que não fica em jade_pa_lotes).
+  const dia = _diaLocal(new Date(agora));
+  const semChamados = !resumo?.elegiveis && !(resumo?.erros || []).length ? 1 : 0;
+  getDB().prepare(`UPDATE jade_pa_config SET ciclo_trava_ate = NULL, ultimo_ciclo_em = @em, ultimo_ciclo_resumo = @resumo, proximo_ciclo_em = @proximo,
+      leituras_dia_total = CASE WHEN leituras_dia = @dia THEN leituras_dia_total + 1 ELSE 1 END,
+      leituras_dia_sem_chamados = CASE WHEN leituras_dia = @dia THEN leituras_dia_sem_chamados + @sem ELSE @sem END,
+      leituras_dia = @dia,
+      leituras_desde = COALESCE(leituras_desde, @em),
+      leituras_total = leituras_total + 1,
+      leituras_sem_chamados = leituras_sem_chamados + @sem
+    WHERE empresa_id = @emp AND fonte_id = @fonte`)
+    .run({ em: new Date(agora).toISOString(), resumo: JSON.stringify(resumo || {}), proximo, dia, sem: semChamados, emp: Number(empresaId), fonte: fonteId });
 }
 
 // ── Lotes: cada leitura que tratou chamado ou teve erro ────────────────────
@@ -244,6 +266,11 @@ function limparLogs(empresaId, fonteId, { deIso = null, ateIso = null } = {}) {
     // A data fica: o relógio do job ainda a usa para a próxima leitura.
     db.prepare(`UPDATE jade_pa_config SET ultimo_ciclo_resumo = NULL
       WHERE empresa_id = @emp AND fonte_id = @fonte AND ${tudo ? '1 = 1' : 'ultimo_ciclo_em >= @de AND ultimo_ciclo_em <= @ate'}`).run(p);
+    // Contadores de leituras recomeçam em toda limpeza (tudo ou período): não guardam
+    // quando cada leitura foi, então não dá para tirar só as do período.
+    db.prepare(`UPDATE jade_pa_config SET leituras_dia = @dia, leituras_dia_total = 0, leituras_dia_sem_chamados = 0,
+        leituras_desde = @agora, leituras_total = 0, leituras_sem_chamados = 0
+      WHERE empresa_id = @emp AND fonte_id = @fonte`).run({ emp: p.emp, fonte: p.fonte, dia: _diaLocal(), agora: new Date().toISOString() });
     return { lotesRemovidos, registrosRemovidos, chamadosLiberados };
   })();
 }

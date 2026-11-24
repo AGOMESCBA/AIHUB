@@ -317,6 +317,35 @@ test('lotes: leitura que tratou chamado vira lote numerado; leitura vazia não �
   assert.ok(!jade.getPainel(EMPRESA, fonte.id).lotes.some(l => l.id === vazio.loteId));
 });
 
+test('contador do dia: toda leitura conta, a sem chamados também (mesmo sem lote gravado)', async () => {
+  await ligar();
+  const antes = jade.getConfig(EMPRESA, fonte.id).leiturasHoje;
+  chamadoNaOrigem('037155');
+  respostasIA = [RESPOSTA_OK];
+  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  origem.chamados.delete('037155');
+  const vazio = await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  assert.equal(vazio.elegiveis, 0);
+  assert.equal(vazio.loteGravado, false);
+  const cfg = jade.getConfig(EMPRESA, fonte.id);
+  assert.equal(cfg.leiturasHoje.total, antes.total + 2);
+  assert.equal(cfg.leiturasHoje.semChamados, antes.semChamados + 1);
+  assert.ok(cfg.leiturasAcumuladas.desde);
+  assert.ok(cfg.leiturasAcumuladas.total >= 2);
+
+  // Limpar logs (mesmo por período que não cobre nada) recomeça os dois contadores.
+  jade.limparLogs(EMPRESA, fonte.id, { de: '2020-01-01T00:00:00.000Z', ate: '2020-01-02T00:00:00.000Z' });
+  const limpo = jade.getConfig(EMPRESA, fonte.id);
+  assert.deepEqual(limpo.leiturasHoje, { total: 0, semChamados: 0 });
+  assert.equal(limpo.leiturasAcumuladas.total, 0);
+  assert.equal(limpo.leiturasAcumuladas.semChamados, 0);
+  assert.ok(Date.parse(limpo.leiturasAcumuladas.desde) > Date.parse(cfg.leiturasAcumuladas.desde));
+
+  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  assert.deepEqual(jade.getConfig(EMPRESA, fonte.id).leiturasHoje, { total: 1, semChamados: 1 });
+  assert.equal(jade.getConfig(EMPRESA, fonte.id).leiturasAcumuladas.total, 1);
+});
+
 test('limpar logs: período apaga lotes, auditoria e libera o chamado sem retorno no SoftExpert; nada é enviado ao SoftExpert', async () => {
   await ligar();
   chamadoNaOrigem('037160');
