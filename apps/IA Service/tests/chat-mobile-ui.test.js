@@ -157,10 +157,10 @@ test('avaliação e retorno permanecem na área visual com teclado aberto', asyn
     await page.locator('#avaliacao-observacoes').fill('Observação com teclado');
     await page.evaluate(() => { visualViewport.height = 480; visualViewport.dispatchEvent(new Event('resize')); });
     await page.waitForFunction(() => document.documentElement.style.getPropertyValue('--chat-vh') === '480px');
-    await visivelNaTela(page, '.avaliacao-modal', 480);
-    await visivelNaTela(page, '.avaliacao-modal-close-btn', 480);
+    await visivelNaTela(page, '#avaliacao-modal-backdrop .avaliacao-modal', 480);
+    await visivelNaTela(page, '#avaliacao-modal-close', 480);
     assert.equal(await page.locator('#avaliacao-observacoes').evaluate(el => getComputedStyle(el).fontSize), '16px');
-    await page.locator('.avaliacao-modal-close-btn').click();
+    await page.locator('#avaliacao-modal-close').click();
     await page.locator('.ia-export-trigger').click();
     await page.locator('#retorno-btn').click();
     await page.locator('.retorno-panel:not([hidden]) textarea[name="DESCRICAO"]').fill('Rascunho de retorno');

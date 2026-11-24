@@ -349,6 +349,8 @@ button.loading .loader { display: block; }
 }
 .topbar-menu-panel .nav-item:hover { background: var(--panel-2); }
 .topbar-menu-panel .nav-item.active { background: rgba(0,107,214,.12); color: var(--brand); }
+/* Cópia no "Mais" de item que só cabe na barra de cima a partir de 901px. */
+.topbar-menu-panel .nav-item-mobile { display: none; }
 .more-menu:has(.nav-item.active) > summary { color: #fff; background: rgba(47, 140, 255, .24); }
 .help-button {
   min-height: 28px;
@@ -1600,6 +1602,9 @@ body.col-resizing { cursor: col-resize; user-select: none; }
   }
   .topbar { grid-template-columns: auto 1fr auto; padding: 0 12px; gap: 8px; }
   .topbar-nav > .nav-item[data-panel-tab="risk"] { display: none; }
+  /* Avaliações pendentes empurrava o "Mais" para cima da conta no celular. */
+  .topbar-nav > .nav-item[data-panel-tab="pending-evaluations"] { display: none; }
+  .topbar-menu-panel .nav-item-mobile { display: revert; }
   .account-copy, .help-button strong { display: none; }
   .help-button { width: 30px; padding: 0; justify-content: center; border-radius: 50%; }
   .account-summary { width: 32px; padding: 2px; justify-content: center; }
