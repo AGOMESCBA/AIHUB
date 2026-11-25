@@ -1151,6 +1151,15 @@ function listarExecucoes(empresaId, opts) {
   return repo.listarExecucoes(empresaId, opts);
 }
 
+function getLote(empresaId, fonteId, loteId) {
+  _fonteSoftExpert(empresaId, fonteId);
+  const id = Number(loteId);
+  if (!Number.isSafeInteger(id) || id < 1) throw _erro(404, 'Lote da Jaade não encontrado.');
+  const lote = repo.listarLotes(empresaId, fonteId, { loteId: id, limite: 1 })[0];
+  if (!lote) throw _erro(404, 'Lote da Jaade não encontrado ou removido.');
+  return lote;
+}
+
 /** Tela: configuração, contador (horário do servidor), lote em andamento e lotes com seus chamados. */
 function getPainel(empresaId, fonteId) {
   _fonteSoftExpert(empresaId, fonteId);
@@ -1245,6 +1254,6 @@ function iniciarAgendamento() {
 module.exports = {
   iniciarAgendamento, executarCiclo, executarAgora, executarAvulsa, JOB_ID_SERVICO, instanciaServico, processarExecucao, gerarTextoCliente, conferirStatus, verificarVazamento,
   normalizarTextoSoftExpert, montarAtributosPosicionamento, fontesDaAnalise, referenciasDaAnalise, simularMontagemReferencias, simularReferenciasNoRodape, enviarExecucao, situacaoNaOrigem, nomesDeOutrosClientes,
-  listarElegiveisNaOrigem, getConfig, salvarConfig, listarGruposAviso, listarExecucoes, getAuditoria, getPainel, limparLogs, SQL_ELEGIVEIS, MAX_TENTATIVAS,
+  listarElegiveisNaOrigem, getConfig, salvarConfig, listarGruposAviso, listarExecucoes, getAuditoria, getPainel, getLote, limparLogs, SQL_ELEGIVEIS, MAX_TENTATIVAS,
   _test: { tick: _tick },
 };

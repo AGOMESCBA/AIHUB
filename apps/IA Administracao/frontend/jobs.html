@@ -56,16 +56,20 @@
     .topo-blocos > [data-grupo="situacao"] { flex:1; }
     .topo-blocos .kpis { grid-template-columns:repeat(auto-fit, minmax(118px, 1fr)); }
     .topo-blocos .aviso { font-size:13px; line-height:1.5; padding:9px 12px; }
+    .topo-painel { border:1px solid var(--border); border-radius:8px; background:var(--bg-card); margin-bottom:12px; }
+    .topo-painel > summary { cursor:pointer; padding:10px 14px; color:var(--accent); font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; }
+    .topo-painel > summary span { color:var(--text-md); font-size:12px; font-weight:400; letter-spacing:normal; text-transform:none; margin-left:8px; }
+    .topo-painel .topo-blocos { margin:0; padding:0 12px 12px; }
     @media (max-width:1100px) { .topo-blocos { flex-direction:column; } .topo-blocos > #bloco-avisos, .topo-blocos > #bloco-avisos.recolhido { flex:none; } }
     /* Jobs e Agrupamento lado a lado (mesmo molde de Avisos e Situação). */
     .linha-blocos { display:flex; gap:12px; align-items:stretch; margin-bottom:12px; }
     .linha-blocos > .grupo { margin-bottom:0; min-width:0; flex:1 1 0; }
-    .linha-blocos > [data-grupo="filtros-inst"] { flex:0 1 36%; }
+    .linha-blocos > [data-grupo="filtros-inst"] { flex:1 1 100%; }
     @media (max-width:1100px) { .linha-blocos { flex-direction:column; } .linha-blocos > [data-grupo="filtros-inst"] { flex:none; } }
     .btn-ampliar { margin-left:auto; }
     /* Grade ampliada: some tudo acima da grade, menos a barra de filtros (que tem o botão de voltar).
        Não mexe no abrir/fechar de cada bloco. */
-    body.grade-ampliada .cab, body.grade-ampliada .topo-blocos, body.grade-ampliada .abas,
+    body.grade-ampliada .cab, body.grade-ampliada .topo-painel, body.grade-ampliada .abas,
     body.grade-ampliada [data-grupo="controle-jobs"] { display:none !important; }
     body.grade-ampliada .linha-blocos > [data-grupo="filtros-inst"] { flex:1 1 auto; }
     body.grade-ampliada .grupo[data-grupo^="filtros"] > h3,
@@ -247,12 +251,15 @@
     </div>
     <a class="btn btn-ghost" id="btn-guia" href="/iahub/guia-jobs#e4-1" target="_blank" rel="noopener" title="Guia de uso: Jobs e Parâmetros por Empresa">❔ Guia</a>
     <button class="btn btn-ghost" type="button" id="btn-todos" title="Recolhe ou abre todos os blocos desta tela (cada bloco continua com o seu abrir/fechar)">⇳ Recolher tudo</button>
-    <label class="auto"><input type="checkbox" id="auto" checked> Atualizar sozinho</label>
+    <label class="auto">Atualizar automaticamente <select id="auto-intervalo" aria-label="Intervalo da atualização automática"><option value="60">1 min</option><option value="300">5 min</option><option value="900">15 min</option><option value="1800">30 min</option><option value="0">Nunca</option></select></label>
+    <span class="auto" id="auto-contador" aria-live="off">Próxima em 01:00</span>
     <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
   </div>
 
   <div id="erro" class="erro-banner" role="alert"></div>
   <!-- Avisos e Situação na mesma linha (cada um com seu bloco recolhível). -->
+  <details class="topo-painel" id="topo-painel">
+  <summary>Painel de avisos e situação <span id="topo-resumo">Carregando…</span></summary>
   <div class="topo-blocos">
   <section class="grupo" data-grupo="avisos" id="bloco-avisos" hidden>
     <h3><button type="button" class="grupo-toggle" data-alternar="avisos" aria-expanded="true"><svg class="grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span id="titulo-avisos">Avisos</span></button></h3>
@@ -273,6 +280,7 @@
     </div>
   </section>
   </div>
+  </details>
 
   <div class="abas" role="tablist">
     <button class="aba ativa" type="button" data-aba="jobs">Jobs</button>
@@ -286,13 +294,8 @@
   <section class="painel-aba ativa" id="aba-jobs">
     <!-- Jobs e Agrupamento na mesma linha (cada um com seu bloco recolhível). -->
     <div class="linha-blocos">
-    <section class="grupo" data-grupo="controle-jobs">
-      <h3><button type="button" class="grupo-toggle" data-alternar="controle-jobs" aria-expanded="true"><svg class="grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span>Jobs</span></button></h3>
-      <div class="grupo-resumo" id="resumo-controle-jobs"></div>
-      <div id="lista-jobs"><span class="sub">Carregando...</span></div>
-    </section>
-    <section class="grupo" data-grupo="filtros-inst">
-      <h3><button type="button" class="grupo-toggle" data-alternar="filtros-inst" aria-expanded="true"><svg class="grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span>Agrupamento</span></button></h3>
+    <section class="grupo barra-jobs" data-grupo="filtros-inst">
+      <h3><button type="button" class="grupo-toggle" data-alternar="filtros-inst" aria-expanded="true"><svg class="grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span>Filtros e agrupamento</span></button></h3>
       <div class="grupo-resumo" id="resumo-filtros-inst"></div>
       <div class="filter-bar-row">
         <button class="btn btn-ghost" type="button" data-agrupamento="inst" title="Filtros: no cabeçalho de cada coluna da grade.">+ Mostrar agrupamento</button>
@@ -303,6 +306,7 @@
         <div class="gp-chips-row" id="gp-chips-inst"><span class="gp-label">Agrupar por:</span></div>
         <div id="dz-inst"></div>
       </div>
+      <div id="jobs-sem-instancia" class="sub" hidden></div>
     </section>
     </div>
     <div class="grade"><div id="tabela-inst"></div></div>
@@ -572,6 +576,12 @@
   const qs = (o) => new URLSearchParams(Object.entries(o).filter(([, v]) => v !== '' && v != null)).toString();
 
   // ── Blocos recolhíveis (a escolha fica neste navegador) ─────────────────
+  const topoPainel = $('topo-painel');
+  try { topoPainel.open = localStorage.getItem('iahub-jobs-topo-aberto') === '1'; } catch (_) { /* inicia recolhido */ }
+  topoPainel.addEventListener('toggle', () => {
+    try { localStorage.setItem('iahub-jobs-topo-aberto', topoPainel.open ? '1' : '0'); } catch (_) { /* só conveniência */ }
+    ajustarAlturas();
+  });
   function alternarGrupo(id, recolher) {
     const grupo = document.querySelector(`.grupo[data-grupo="${id}"]`);
     if (!grupo) return;
@@ -717,7 +727,7 @@
         formatter: c => (c.getValue() ? `<div class="texto-erro">${esc(c.getValue())}</div>` : '') },
       { title: 'Falhas seg.', field: 'falhasSeguidas', width: 105, hozAlign: 'center', groupable: false, sorter: 'number',
         formatter: c => (c.getValue() ? pill([String(c.getValue()), 'ruim']) : '0') },
-      { title: 'Ações', field: '_acoes', width: 150, frozen: window.innerWidth > 760, headerSort: false, groupable: false, formatter: c => acoesInstancia(c.getRow().getData()) },
+      { title: 'Ações', field: '_acoes', width: 220, frozen: window.innerWidth > 760, headerSort: false, groupable: false, formatter: c => acoesInstancia(c.getRow().getData()) },
     ],
   });
 
@@ -761,8 +771,10 @@
       desenharJobs();
       preencherFiltrosJob();
       if (!configCarregada && $('aba-config').classList.contains('ativa')) carregarConfig();
+      return true;
     } catch (err) {
       erro(err.message);
+      return false;
     }
   }
 
@@ -816,29 +828,15 @@
     $('bloco-avisos').hidden = !avisos.length;
     const erros = avisos.filter(([cl]) => cl === 'erro').length;
     $('titulo-avisos').textContent = `Avisos (${avisos.length})`;
+    $('topo-resumo').textContent = `Serviço: ${servTxt} · ${modoTxt} · ${r.emExecucao} em execução · ${r.falhas24h} falha(s) em 24 h · ${avisos.length} aviso(s)`;
     $('resumo-avisos').textContent = erros ? `${erros} problema(s) e ${avisos.length - erros} pendência(s) de configuração — abra para ver.` : `${avisos.length} pendência(s) de configuração — abra para ver.`;
     if (antes !== $('bloco-avisos').hidden) { atualizarBotaoTodos(); ajustarAlturas(); }
   }
 
   function desenharJobs() {
-    // Controles do job inteiro (linha compacta por job).
-    $('lista-jobs').innerHTML = painel.jobs.length ? painel.jobs.map((j) => {
-      const pills = [
-        j.pausado ? pill([`Pausado${j.pausaPor ? ` por ${j.pausaPor}` : ''}`, 'atencao']) : '',
-        j.limite ? pill([`Máx. ${j.limite} juntas`, 'info']) : '',
-        j.emExecucao ? pill([`${j.emExecucao} executando`, 'info']) : '',
-        j.falhas24h ? pill([`${j.falhas24h} falha(s) em 24 h`, 'ruim']) : '',
-      ].join(' ');
-      return `<div class="job-linha">
-        <span class="job-nome" title="${esc(j.descricao)}">${esc(j.nome)}</span> ${pills}
-        <span class="job-meta" title="${esc(j.descricao)}">${j.instancias.length} empresa(s) · máx. ${duracao(j.timeoutMs)}</span>
-        <span class="esp"></span>
-        <button class="btn btn-ghost" type="button" data-acao="historico-job" data-job="${esc(j.id)}">Execuções</button>
-        <button class="btn ${j.pausado ? 'btn-primary' : 'btn-ghost'}" type="button" data-acao="${j.pausado ? 'retomar' : 'pausar'}" data-job="${esc(j.id)}" data-inst="*">${j.pausado ? 'Retomar job' : 'Pausar job'}</button>
-        ${j.erroInstancias ? `<div class="texto-erro" style="flex-basis:100%">${esc(j.erroInstancias)}</div>` : ''}
-      </div>`;
-    }).join('') : `<span class="sub">Nenhum job ${SISTEMA ? `do ${esc(NOMES_SISTEMA[SISTEMA] || SISTEMA)} ` : ''}no catálogo.</span>`;
-    $('resumo-controle-jobs').textContent = painel.jobs.map(j => `${j.nome}: ${j.instancias.length} empresa(s)${j.pausado ? ', PAUSADO' : ''}${j.emExecucao ? `, ${j.emExecucao} executando` : ''}`).join(' · ') || 'Nenhum job.';
+    const semInstancia = painel.jobs.filter(j => !j.instancias.length || j.erroInstancias);
+    $('jobs-sem-instancia').hidden = !semInstancia.length;
+    $('jobs-sem-instancia').innerHTML = semInstancia.map(j => `<span>${esc(j.nome)}: ${esc(j.erroInstancias || 'sem empresa com job ligado')} </span><button class="btn btn-ghost" type="button" data-acao="historico-job" data-job="${esc(j.id)}">Execuções</button> <button class="btn btn-ghost" type="button" data-acao="${j.pausado ? 'retomar' : 'pausar'}" data-job="${esc(j.id)}" data-inst="*">${j.pausado ? 'Retomar job' : 'Pausar job'}</button>`).join(' · ');
 
     // Grade das empresas/instâncias de todos os jobs.
     const linhas = painel.jobs.flatMap(j => j.instancias.map(i => ({
@@ -846,6 +844,7 @@
       id: `${j.id}|${i.instancia}`,
       jobId: j.id,
       jobNome: j.nome,
+      jobPausado: j.pausado,
       situacaoRotulo: (SITUACOES[i.situacao] || [i.situacao])[0],
       extraSituacao: extraSituacao(i),
       ultimaResultado: i.ultima ? rotuloResultado(i.ultima.resultado, i.ultima.fim) : 'Nunca rodou',
@@ -879,6 +878,8 @@
   function acoesInstancia(i) {
     const alvo = `data-job="${esc(i.jobId)}" data-inst="${esc(i.instancia)}"`;
     return `<div class="acoes">${[
+      botaoIcone('log', 'Ver execuções deste job', '', `data-acao="historico-job" data-job="${esc(i.jobId)}"`),
+      botaoIcone(i.jobPausado ? 'retomar' : 'pausar', i.jobPausado ? 'Retomar job em todas as empresas' : 'Pausar job em todas as empresas', '', `data-acao="${i.jobPausado ? 'retomar' : 'pausar'}" data-job="${esc(i.jobId)}" data-inst="*"`),
       i.execucaoAberta ? botaoIcone('log', 'Ver log da execução em andamento', '', `data-acao="detalhe" data-id="${i.execucaoAberta.id}"`) : '',
       i.execucaoAberta ? botaoIcone('encerrar', 'Encerrar a execução', 'danger', `data-acao="encerrar" data-id="${i.execucaoAberta.id}"`)
         : botaoIcone('executar', i.pedidoPendente ? 'Executar agora (já pedido, aguardando)' : 'Executar agora', 'primary', `data-acao="executar" ${alvo}`, i.pedidoPendente),
@@ -977,8 +978,10 @@
       exCursor = execucoes.length ? execucoes[execucoes.length - 1].id : exCursor;
       $('mais-ex').hidden = execucoes.length < 200;
       ajustarAlturas();
+      return true;
     } catch (err) {
       erro(err.message);
+      return false;
     }
   }
 
@@ -1014,13 +1017,50 @@
         </div>
         ${e.erro ? `<div class="det-titulo">Erro</div><pre class="resumo texto-erro">${esc(e.erro)}</pre>` : ''}
         ${e.resumo ? `<div class="det-titulo">Resumo</div><pre class="resumo">${esc(JSON.stringify(e.resumo, null, 2))}</pre>` : ''}
+        ${e.jobId === 'ia-service.jade-pa' ? '<div class="det-titulo">Dados da Jaade</div><div id="det-jade" class="sub">Consultando dados da origem…</div>' : ''}
         <div class="det-titulo">Log da execução ${e.fim ? '' : pill(['ao vivo', 'info'])}</div>
         <pre class="log" id="det-log">${esc(e.log || (e.fim ? 'Esta execução não escreveu nada no log.' : 'Aguardando a primeira linha...'))}</pre>`;
       const novoLog = document.getElementById('det-log');
       if (rolarFim || noFim) novoLog.scrollTop = novoLog.scrollHeight;
       $('det-corpo').dataset.fim = e.fim ? '1' : '';
+      if (e.jobId === 'ia-service.jade-pa') carregarDetalhesJaade(e);
     } catch (err) {
       $('det-corpo').innerHTML = `<div class="texto-erro">${esc(err.message)}</div>`;
+    }
+  }
+
+  async function carregarDetalhesJaade(e) {
+    const alvo = $('det-jade');
+    const loteId = e.resumo?.loteId;
+    if (!loteId) { alvo.textContent = e.fim ? 'Esta execução não possui lote registrado na Jaade. Consulte o resumo acima.' : 'Aguardando a conclusão para consultar o lote.'; return; }
+    const separador = String(e.instancia || '').indexOf(':');
+    if (separador < 1) { alvo.textContent = 'Não foi possível identificar a empresa e a fonte desta execução.'; return; }
+    const empresa = String(e.instancia).slice(0, separador);
+    const fonte = String(e.instancia).slice(separador + 1);
+    try {
+      const url = `/api/ia-service/base-historica/fontes/${encodeURIComponent(fonte)}/jade-pa/lotes/${encodeURIComponent(loteId)}?empresa_id=${encodeURIComponent(empresa)}`;
+      const resposta = await fetch(url, { cache: 'no-store' });
+      const dados = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(dados.error || `Erro ${resposta.status}`);
+      if (detalheId !== e.id || $('det-jade') !== alvo) return;
+      alvo.innerHTML = `<p>Lote #${esc(dados.id)} · ${dados.chamados.length} chamado(s)</p>` + (dados.chamados.length
+        ? dados.chamados.map(c => `<details class="resumo" data-jade-auditoria="${esc(c.execucao.id)}"><summary><strong>Chamado ${esc(c.execucao.numeroChamado)}</strong> · Estado atual: ${esc(c.execucao.estado)} · Decisão: ${esc(c.execucao.decisao || '—')}</summary><div>Último registro neste lote: ${esc(c.ultimoRegistro || '—')}</div><div class="jade-auditoria">Abra para consultar a auditoria.</div></details>`).join('')
+        : '<p>Nenhum chamado registrado neste lote.</p>');
+      alvo.querySelectorAll('[data-jade-auditoria]').forEach(bloco => bloco.addEventListener('toggle', async () => {
+        if (!bloco.open || bloco.dataset.carregado) return;
+        const conteudo = bloco.querySelector('.jade-auditoria');
+        conteudo.textContent = 'Consultando auditoria…';
+        try {
+          const urlAuditoria = `/api/ia-service/base-historica/fontes/${encodeURIComponent(fonte)}/jade-pa/execucoes/${encodeURIComponent(bloco.dataset.jadeAuditoria)}?empresa_id=${encodeURIComponent(empresa)}`;
+          const respostaAuditoria = await fetch(urlAuditoria, { cache: 'no-store' });
+          const auditoria = await respostaAuditoria.json().catch(() => ({}));
+          if (!respostaAuditoria.ok) throw new Error(auditoria.error || `Erro ${respostaAuditoria.status}`);
+          conteudo.innerHTML = auditoria.eventos.length ? auditoria.eventos.map(ev => `<div>${esc(dataHora(ev.momento))} · ${esc(ev.resumo)}</div>`).join('') : 'Nenhum evento de auditoria disponível.';
+          bloco.dataset.carregado = '1';
+        } catch (err) { conteudo.textContent = `Auditoria indisponível: ${err.message}. Feche e abra para tentar novamente.`; }
+      }));
+    } catch (err) {
+      if (detalheId === e.id && $('det-jade') === alvo) alvo.textContent = `Dados da origem indisponíveis: ${err.message}`;
     }
   }
 
@@ -1049,8 +1089,10 @@
       evCursor = eventos.length ? eventos[eventos.length - 1].id : evCursor;
       $('mais-ev').hidden = eventos.length < 300;
       ajustarAlturas();
+      return true;
     } catch (err) {
       erro(err.message);
+      return false;
     }
   }
 
@@ -1104,7 +1146,7 @@
 
   async function carregarGrupos() {
     const empresaId = $('cfg-al-empresa').value;
-    if (!empresaId) { gruposAlerta = []; gruposAlertaErro = null; desenharGrupos(); return; }
+    if (!empresaId) { gruposAlerta = []; gruposAlertaErro = null; desenharGrupos(); return true; }
     gruposAlerta = null;
     desenharGrupos();
     try {
@@ -1116,6 +1158,7 @@
       gruposAlertaErro = err.message;
     }
     desenharGrupos();
+    return !gruposAlertaErro;
   }
 
   function desenharGrupos() {
@@ -1219,16 +1262,20 @@
           }
         }
       }
+      return true;
     } catch (err) {
       erro(err.message);
+      return false;
     }
   }
   async function carregarServico() {
     try {
       svStatus = await api('/servico');
       desenharServico();
+      return true;
     } catch (err) {
       erro(err.message);
+      return false;
     }
   }
   function desenharServico() {
@@ -1289,7 +1336,10 @@
   }
   document.addEventListener('click', (ev) => { const b = ev.target.closest('[data-sv]'); if (b) acaoServico(b.dataset.sv); });
   $('sv-filtro').addEventListener('change', desenharLog);
-  $('sv-atualizar').addEventListener('click', () => { carregarServico(); carregarLog(false); });
+  $('sv-atualizar').addEventListener('click', () => atualizarComRetorno($('sv-atualizar'), async () => {
+    const resultados = await Promise.all([carregarServico(), carregarLog(false)]);
+    return resultados.every(Boolean);
+  }));
   $('sv-limpar').addEventListener('click', async () => {
     if (!confirm('Limpar o log do serviço? (as execuções, com seus logs, continuam em "Execuções e logs")')) return;
     try { await api('/log/limpar', { method: 'POST' }); svUltimoId = 0; await carregarLog(true); } catch (err) { erro(err.message); }
@@ -1321,7 +1371,32 @@
   }
 
   document.querySelector('.abas').addEventListener('click', (ev) => { const b = ev.target.closest('.aba'); if (b) trocarAba(b.dataset.aba); });
-  $('btn-atualizar').addEventListener('click', () => { carregarPainel(); if ($('aba-execucoes').classList.contains('ativa')) carregarExecucoes(true); if ($('aba-eventos').classList.contains('ativa')) carregarEventos(true); });
+  async function atualizarComRetorno(botao, acao) {
+    const texto = botao.textContent;
+    botao.disabled = true;
+    botao.textContent = 'Atualizando…';
+    botao.setAttribute('aria-busy', 'true');
+    try {
+      botao.textContent = await acao() ? '✓ Atualizado' : 'Falha ao atualizar';
+    } catch (err) {
+      erro(err.message);
+      botao.textContent = 'Falha ao atualizar';
+    } finally {
+      botao.removeAttribute('aria-busy');
+      setTimeout(() => { botao.textContent = texto; botao.disabled = false; }, 2000);
+    }
+  }
+  $('btn-atualizar').addEventListener('click', () => atualizarComRetorno($('btn-atualizar'), async () => {
+    const sucessoPainel = await carregarPainel();
+    let sucessoAba = true;
+    if ($('aba-execucoes').classList.contains('ativa')) sucessoAba = await carregarExecucoes(true);
+    if ($('aba-eventos').classList.contains('ativa')) sucessoAba = await carregarEventos(true);
+    if ($('aba-servico').classList.contains('ativa')) {
+      const resultados = await Promise.all([carregarServico(), carregarLog(false)]);
+      sucessoAba = resultados.every(Boolean);
+    }
+    return sucessoPainel && sucessoAba;
+  }));
   $('btn-ex-filtrar').addEventListener('click', () => carregarExecucoes(true));
   $('btn-mais-ex').addEventListener('click', () => carregarExecucoes(false));
   $('btn-ev-filtrar').addEventListener('click', () => carregarEventos(true));
@@ -1364,7 +1439,7 @@
     }
   });
   $('cfg-al-empresa').addEventListener('change', () => { selAlerta.falha.clear(); selAlerta.servico.clear(); carregarGrupos(); });
-  $('btn-grupos-alerta').addEventListener('click', carregarGrupos);
+  $('btn-grupos-alerta').addEventListener('click', () => atualizarComRetorno($('btn-grupos-alerta'), carregarGrupos));
   $('btn-salvar-alerta').addEventListener('click', (ev) => salvar({
     alertaEmpresaId: $('cfg-al-empresa').value || null,
     alertaGruposFalha: [...selAlerta.falha],
@@ -1383,20 +1458,39 @@
     $('subtitulo').textContent = 'Os jobs deste sistema no serviço IAHub-Jobs. A visão de todos os sistemas fica na IA Gestão › Jobs.';
   }
 
-  // Atualização automática: painel a cada 5 s; detalhe aberto e em andamento a cada 3 s.
+  const intervaloAuto = $('auto-intervalo');
+  try {
+    const salvo = localStorage.getItem('iahub-jobs-intervalo-atualizacao');
+    if (salvo !== null && [...intervaloAuto.options].some(opcao => opcao.value === salvo)) intervaloAuto.value = salvo;
+  } catch (_) { /* mantém o padrão quando o armazenamento não está disponível */ }
+  let proximaAtualizacao = Date.now();
+  function exibirContador(segundos) {
+    return `${String(Math.floor(segundos / 60)).padStart(2, '0')}:${String(segundos % 60).padStart(2, '0')}`;
+  }
+  function reiniciarContador() {
+    const intervalo = Number($('auto-intervalo').value);
+    proximaAtualizacao = Date.now() + intervalo * 1000;
+    $('auto-contador').textContent = intervalo ? `Próxima em ${exibirContador(intervalo)}` : 'Atualização automática desativada';
+  }
+  intervaloAuto.addEventListener('change', () => {
+    try { localStorage.setItem('iahub-jobs-intervalo-atualizacao', intervaloAuto.value); } catch (_) { /* só conveniência */ }
+    reiniciarContador();
+  });
+  reiniciarContador();
   setInterval(() => {
-    if (!$('auto').checked || document.hidden) return;
-    // Situação e avisos ficam visíveis em todas as abas: atualiza sempre.
+    if (!Number($('auto-intervalo').value)) return;
+    if (document.hidden) { reiniciarContador(); return; }
+    const falta = Math.max(0, Math.ceil((proximaAtualizacao - Date.now()) / 1000));
+    $('auto-contador').textContent = `Próxima em ${exibirContador(falta)}`;
+    if (falta) return;
+    reiniciarContador();
     carregarPainel();
+    if ($('aba-execucoes').classList.contains('ativa')) carregarExecucoes(true);
+    if ($('aba-eventos').classList.contains('ativa')) carregarEventos(true);
     if ($('aba-servico').classList.contains('ativa') && !svOcupado) carregarServico();
-  }, 5000);
-  // Log ao vivo (aba Serviço): só as linhas novas, a cada 2 s.
-  setInterval(() => {
-    if ($('auto').checked && !document.hidden && svCarregado && $('aba-servico').classList.contains('ativa')) carregarLog(false);
-  }, 2000);
-  setInterval(() => {
-    if (detalheId && !document.hidden && $('det-corpo').dataset.fim !== '1') atualizarDetalhe();
-  }, 3000);
+    if (svCarregado && $('aba-servico').classList.contains('ativa')) carregarLog(false);
+    if (detalheId && $('det-corpo').dataset.fim !== '1') atualizarDetalhe();
+  }, 1000);
 
   tabelas.inst.on('tableBuilt', () => { carregarPainel().then(ajustarAlturas); resumirFiltros(); });
 })();

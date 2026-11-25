@@ -311,6 +311,10 @@ test('lotes: leitura que tratou chamado vira lote numerado; leitura vazia nÃ£o Ã
   assert.ok(lote.fim);
   assert.equal(lote.chamados.length, 1);
   assert.equal(lote.chamados[0].execucao.numeroChamado, '037150');
+  assert.equal(jade.getLote(EMPRESA, fonte.id, lote.id).chamados[0].execucao.numeroChamado, '037150');
+  assert.throws(() => jade.getLote(EMPRESA, fonte.id, 0), { status: 404 });
+  assert.deepEqual(repo.listarLotes(EMPRESA, 'outra-fonte', { loteId: lote.id }), []);
+  assert.throws(() => jade.getLote(EMPRESA + 1, fonte.id, lote.id), { status: 404 });
   assert.equal(lote.chamados[0].situacao, 'ok');
   assert.ok(jade.getAuditoria(EMPRESA, fonte.id, lote.chamados[0].execucaoId).eventos.every(e => e.loteId === resumo.loteId));
   assert.equal(painel.loteEmAndamento, null);

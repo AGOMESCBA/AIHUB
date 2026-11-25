@@ -737,6 +737,11 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaService })
     }
   });
 
+  app.get('/api/ia-service/base-historica/fontes/:id/jade-pa/lotes/:loteId', (req, res) => {
+    try { res.json(jadePaService.getLote(req.svcEmpresaId, req.params.id, req.params.loteId)); }
+    catch (err) { _handleErro(res, err); }
+  });
+
   app.get('/api/ia-service/base-historica/fontes/:id/jade-pa/execucoes/:execucaoId', (req, res) => {
     try {
       res.json(jadePaService.getAuditoria(req.svcEmpresaId, req.params.id, req.params.execucaoId));
