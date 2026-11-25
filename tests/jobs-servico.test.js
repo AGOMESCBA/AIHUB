@@ -158,7 +158,7 @@ function filhosFalsos() {
     const fim = new Promise(r => { resolver = r; });
     const f = {
       jobId, instancia, origem, encerrado: false, pid: 1000 + lista.length, fim,
-      terminar: (m) => resolver(m ? { mensagem: { tipo: 'fim', ...m }, codigo: 0 } : { mensagem: null, codigo: 3 }),
+      terminar: (m, codigo = 0) => resolver(m ? { mensagem: { tipo: 'fim', ...m }, codigo } : { mensagem: null, codigo: 3 }),
       encerrar() { f.encerrado = true; resolver({ mensagem: null, codigo: null, sinal: 'SIGTERM' }); },
       logTexto: '',
       log: () => f.logTexto,
@@ -222,6 +222,22 @@ test('supervisor: roda só o que está na hora, uma vez por instância, e regist
   assert.equal(ult.resultado, 'ok');
   assert.deepEqual(ult.resumo, { n: 1 });
   assert.equal(repo.falhasSeguidas('teste.job', 'x'), 0);
+  await sup.parar({ prazoMs: 0 });
+});
+
+test('supervisor: resultado recebido seguido de saída anormal vira aviso sem interromper o job', async () => {
+  const { def, chamadas } = defTeste();
+  const { sup, filhos } = montarSupervisor({ defs: [def] });
+  await sup.tick();
+  filhos.lista[0].terminar({ resultado: 'ok', resumo: { enviados: 2 } }, 3221226505);
+  await esperar(() => !sup.emCurso.size);
+  const ult = repo.ultimaExecucao('teste.job', 'x');
+  assert.equal(ult.resultado, 'aviso');
+  assert.deepEqual(ult.resumo, { enviados: 2 });
+  assert.match(ult.erro, /encerrou de forma anormal/);
+  assert.equal(repo.falhasSeguidas('teste.job', 'x'), 0);
+  assert.equal(chamadas.interrompidas.length, 0);
+  assert.ok(repo.listarEventos().some(e => e.tipo === 'encerramento_anormal'));
   await sup.parar({ prazoMs: 0 });
 });
 
@@ -566,6 +582,22 @@ test('vigia (site): alerta uma vez quando o serviço some e outra quando volta; 
   assert.ok(repo.listarEventos().some(e => e.tipo === 'servico_sem_sinal'));
 });
 
+test('filho real: resultado por IPC após HTTP local e encerramento', async () => {
+  const servidor = require('node:http').createServer((_req, res) => res.end('ok'));
+  await new Promise(resolve => servidor.listen(0, '127.0.0.1', resolve));
+  try {
+    const url = `http://127.0.0.1:${servidor.address().port}`;
+    for (let i = 0; i < 10; i++) {
+      const filho = iniciarFilhoReal({ moduloCatalogo: CATALOGO_TESTE, jobId: 'teste.http', instancia: url, origem: 'manual' });
+      const r = await filho.fim;
+      assert.equal(r.codigo, 0, filho.log());
+      assert.equal(r.mensagem?.resumo?.resposta, 'ok');
+    }
+  } finally {
+    await new Promise(resolve => servidor.close(resolve));
+  }
+});
+
 test('filho real: o que o processo escreve vira o log da execução', async () => {
   const h = iniciarFilhoReal({ moduloCatalogo: CATALOGO_TESTE, jobId: 'teste.loga', instancia: 'i1', origem: 'manual' });
   const r = await h.fim;
@@ -876,7 +908,7 @@ test('serviço Windows: consulta de estado (só leitura) responde sem travar', {
   assert.ok(['nao_instalado', 'parado', 'rodando', 'iniciando', 'parando', 'pausado', 'erro', 'desconhecido'].includes(s.estado));
 });
 
-test('API do serviço: parar/desinstalar devolvem os jobs ao Site; tudo vai ao log, à Auditoria e aos eventos', async () => {
+test('API do serviço: ações preservam o modo escolhido e registram log, auditoria e eventos', async () => {
   const express = require('express');
   const auditoria = [];
   const chamadas = [];
@@ -918,17 +950,16 @@ test('API do serviço: parar/desinstalar devolvem os jobs ao Site; tudo vai ao l
 
     const p = await chamar('POST', '/servico/parar');
     assert.equal(p.status, 200);
-    assert.equal(p.corpo.modo, 'site', 'parar pela tela volta os jobs ao Site');
-    assert.equal(repo.getConfigJobs().modo, 'site');
+    assert.equal(p.corpo.modo, 'servico');
+    assert.equal(repo.getConfigJobs().modo, 'servico');
     assert.ok(auditoria.some(a => a.acao === 'jobs_servico_parar' && a.usuario === 'ana'));
 
     // Iniciar não muda o modo.
     await chamar('POST', '/servico/iniciar');
-    assert.equal(repo.getConfigJobs().modo, 'site');
+    assert.equal(repo.getConfigJobs().modo, 'servico');
 
-    repo.salvarConfigJobs({ modo: 'servico' });
     await chamar('POST', '/servico/desinstalar');
-    assert.equal(repo.getConfigJobs().modo, 'site');
+    assert.equal(repo.getConfigJobs().modo, 'servico');
 
     falharInstalar = true;
     const i = await chamar('POST', '/servico/instalar');
@@ -939,7 +970,7 @@ test('API do serviço: parar/desinstalar devolvem os jobs ao Site; tudo vai ao l
     assert.deepEqual(chamadas, ['parar', 'iniciar', 'desinstalar', 'instalar']);
 
     const log = (await chamar('GET', '/log')).corpo;
-    assert.ok(log.linhas.some(l => l.tipo === 'warning' && /parada do serviço pedida.*por ana.*voltaram para o Site/i.test(l.texto)));
+    assert.ok(log.linhas.some(l => l.tipo === 'warning' && /parada do serviço pedida.*por ana.*modo Serviço permanece escolhido/i.test(l.texto)));
     assert.ok(log.linhas.some(l => l.tipo === 'error' && /Falha ao instalar/.test(l.texto)));
     const depois = (await chamar('GET', `/log?apos=${log.ultimoId}`)).corpo;
     assert.equal(depois.linhas.length, 0);

@@ -45,6 +45,7 @@
     .grupo.recolhido .grupo-seta { transform:rotate(-90deg); }
     .grupo.recolhido > :not(h3):not(.grupo-resumo) { display:none; }
     .grupo-resumo { display:none; font-size:12.5px; color:var(--text-md); line-height:1.5; }
+    .sub.contagem-job { color:var(--error-text); font-weight:700; }
     .grupo.recolhido .grupo-resumo { display:block; }
 
     .kpis { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:8px; }
@@ -193,6 +194,15 @@
     .det-titulo { font-size:12px; font-weight:800; color:var(--text-hi); margin:12px 0 6px; display:flex; align-items:center; gap:8px; }
     pre.log { background:#0b1220; color:#d7e0ee; border-radius:8px; padding:10px 12px; font-size:11.5px; line-height:1.45; max-height:52vh; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; margin:0; }
     pre.resumo { background:var(--bg-base); color:var(--text-hi); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:11.5px; max-height:200px; overflow:auto; white-space:pre-wrap; margin:0; }
+    .det-numeros { display:flex; flex-wrap:wrap; gap:8px; }
+    .det-numero { flex:1 1 110px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-base); }
+    .det-numero span { display:block; color:var(--text-md); font-size:11px; }
+    .det-numero strong { color:var(--text-hi); font-size:16px; }
+    .det-chamado { border:1px solid var(--border); border-radius:8px; margin:8px 0; background:var(--bg-card); }
+    .det-chamado > summary { cursor:pointer; padding:10px 12px; color:var(--text-hi); font-size:13px; }
+    .det-chamado-info, .jade-auditoria { padding:0 12px 10px; color:var(--text-md); font-size:12px; }
+    .det-evento { border-left:2px solid var(--border-hi); padding:4px 10px; margin-top:6px; color:var(--text-hi); }
+    .det-evento small { display:block; color:var(--text-md); }
 
     /* Aba Serviço e log — mesmo molde do Monitor do WhatsApp (apps/IA Command/frontend/monitor.html):
        terminal e painel com a mesma altura, ocupando a tela; o painel rola por dentro. */
@@ -555,6 +565,16 @@
     const txt = abs < 60000 ? `${Math.round(abs / 1000)} s` : abs < 3600000 ? `${Math.round(abs / 60000)} min` : `${Math.round(abs / 3600000)} h`;
     return dif >= 0 ? `em ${txt}` : `há ${txt}`;
   };
+  function contagemJob(iso) {
+    const instante = Date.parse(iso);
+    if (!Number.isFinite(instante)) return 'Horário indisponível';
+    const segundos = Math.ceil((instante - Date.now()) / 1000);
+    if (segundos <= 0) return 'Horário atingido · aguardando atualização';
+    const horas = Math.floor(segundos / 3600);
+    const minutos = Math.floor((segundos % 3600) / 60);
+    const resto = segundos % 60;
+    return `Em ${horas ? `${horas}h ` : ''}${String(minutos).padStart(2, '0')}:${String(resto).padStart(2, '0')}`;
+  }
   const pill = ([texto, classe]) => `<span class="pill ${classe || ''}">${esc(texto)}</span>`;
   const rotuloResultado = (r, fim) => (!fim && !r ? 'Em andamento' : (RESULTADOS[r] || [r || '—'])[0]);
   const pillResultado = (r, fim) => (!fim && !r ? pill(['Em andamento', 'info']) : pill(RESULTADOS[r] || [r || '—', '']));
@@ -718,7 +738,12 @@
       { title: 'Situação', field: 'situacaoRotulo', width: 210, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true },
         formatter: c => { const d = c.getRow().getData(); return `<div class="celula-quebra">${pill(SITUACOES[d.situacao] || [d.situacao, ''])}${d.extraSituacao ? `<div class="sub">${esc(d.extraSituacao)}</div>` : ''}</div>`; } },
       { title: 'Próxima', field: 'proximaEm', width: 165, groupable: false, sorter: 'string',
-        formatter: c => (c.getValue() ? `<div class="celula-quebra">${dataHora(c.getValue())}<div class="sub">${relativo(c.getValue())}</div></div>` : '—') },
+        formatter: c => {
+          const data = c.getValue();
+          if (!data) return '—';
+          const pausado = c.getRow().getData().situacao === 'pausada';
+          return `<div class="celula-quebra">${dataHora(data)}<div class="sub${pausado ? '' : ' contagem-job'}" ${pausado ? '' : `data-proxima-contagem="${esc(data)}"`}>${pausado ? 'Agendamento pausado' : esc(contagemJob(data))}</div></div>`;
+        } },
       { title: 'Última execução', field: 'ultimaResultado', width: 150, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true },
         formatter: c => { const u = c.getRow().getData().ultima; return u ? pillResultado(u.resultado, u.fim) : '<span class="sub">nunca rodou pelo serviço</span>'; } },
       { title: 'Última em', field: 'ultimaInicio', width: 165, groupable: false, sorter: 'string',
@@ -1016,7 +1041,7 @@
           <div><div class="r">Instância</div><div class="v">${esc(e.instancia)}</div></div>
         </div>
         ${e.erro ? `<div class="det-titulo">Erro</div><pre class="resumo texto-erro">${esc(e.erro)}</pre>` : ''}
-        ${e.resumo ? `<div class="det-titulo">Resumo</div><pre class="resumo">${esc(JSON.stringify(e.resumo, null, 2))}</pre>` : ''}
+        ${e.resumo ? `<div class="det-titulo">Resumo do processamento</div>${e.jobId === 'ia-service.jade-pa' ? resumoJaade(e.resumo) : `<pre class="resumo">${esc(JSON.stringify(e.resumo, null, 2))}</pre>`}` : ''}
         ${e.jobId === 'ia-service.jade-pa' ? '<div class="det-titulo">Dados da Jaade</div><div id="det-jade" class="sub">Consultando dados da origem…</div>' : ''}
         <div class="det-titulo">Log da execução ${e.fim ? '' : pill(['ao vivo', 'info'])}</div>
         <pre class="log" id="det-log">${esc(e.log || (e.fim ? 'Esta execução não escreveu nada no log.' : 'Aguardando a primeira linha...'))}</pre>`;
@@ -1027,6 +1052,13 @@
     } catch (err) {
       $('det-corpo').innerHTML = `<div class="texto-erro">${esc(err.message)}</div>`;
     }
+  }
+
+  function resumoJaade(r) {
+    const campos = [['Elegíveis', r.elegiveis], ['Novos', r.novos], ['Analisados', r.processados], ['Enviados', r.enviados], ['Erros', Array.isArray(r.erros) ? r.erros.length : null]];
+    const numeros = campos.filter(([, v]) => v != null).map(([nome, valor]) => `<div class="det-numero"><span>${esc(nome)}</span><strong>${esc(valor)}</strong></div>`).join('');
+    const erros = Array.isArray(r.erros) && r.erros.length ? `<div class="texto-erro">${r.erros.map(esc).join('<br>')}</div>` : '';
+    return `<div class="det-numeros">${numeros}</div>${r.motivo ? `<p class="sub">${esc(r.motivo)}</p>` : ''}${erros}`;
   }
 
   async function carregarDetalhesJaade(e) {
@@ -1043,8 +1075,8 @@
       const dados = await resposta.json().catch(() => ({}));
       if (!resposta.ok) throw new Error(dados.error || `Erro ${resposta.status}`);
       if (detalheId !== e.id || $('det-jade') !== alvo) return;
-      alvo.innerHTML = `<p>Lote #${esc(dados.id)} · ${dados.chamados.length} chamado(s)</p>` + (dados.chamados.length
-        ? dados.chamados.map(c => `<details class="resumo" data-jade-auditoria="${esc(c.execucao.id)}"><summary><strong>Chamado ${esc(c.execucao.numeroChamado)}</strong> · Estado atual: ${esc(c.execucao.estado)} · Decisão: ${esc(c.execucao.decisao || '—')}</summary><div>Último registro neste lote: ${esc(c.ultimoRegistro || '—')}</div><div class="jade-auditoria">Abra para consultar a auditoria.</div></details>`).join('')
+      alvo.innerHTML = `<p>Lote #${esc(dados.id)} · ${dados.chamados.length} chamado(s) · Abra um chamado para ver as etapas e horários.</p>` + (dados.chamados.length
+        ? dados.chamados.map(c => `<details class="det-chamado" data-jade-auditoria="${esc(c.execucao.id)}"><summary><strong>Chamado ${esc(c.execucao.numeroChamado)}</strong> · Estado atual: ${esc(c.execucao.estado)} · Decisão: ${esc(c.execucao.decisao || '—')}</summary><div class="det-chamado-info">Último registro neste lote: ${esc(c.ultimoRegistro || '—')}</div><div class="jade-auditoria">Abra para consultar a auditoria.</div></details>`).join('')
         : '<p>Nenhum chamado registrado neste lote.</p>');
       alvo.querySelectorAll('[data-jade-auditoria]').forEach(bloco => bloco.addEventListener('toggle', async () => {
         if (!bloco.open || bloco.dataset.carregado) return;
@@ -1055,7 +1087,7 @@
           const respostaAuditoria = await fetch(urlAuditoria, { cache: 'no-store' });
           const auditoria = await respostaAuditoria.json().catch(() => ({}));
           if (!respostaAuditoria.ok) throw new Error(auditoria.error || `Erro ${respostaAuditoria.status}`);
-          conteudo.innerHTML = auditoria.eventos.length ? auditoria.eventos.map(ev => `<div>${esc(dataHora(ev.momento))} · ${esc(ev.resumo)}</div>`).join('') : 'Nenhum evento de auditoria disponível.';
+          conteudo.innerHTML = auditoria.eventos.length ? auditoria.eventos.map(ev => `<div class="det-evento"><small>${esc(dataHora(ev.momento))} · ${esc(ev.etapa || 'Etapa')} ${ev.loteId && ev.loteId !== dados.id ? `· lote #${esc(ev.loteId)}` : ''}</small>${esc(ev.resumo)}</div>`).join('') : 'Nenhum evento de auditoria disponível.';
           bloco.dataset.carregado = '1';
         } catch (err) { conteudo.textContent = `Auditoria indisponível: ${err.message}. Feche e abra para tentar novamente.`; }
       }));
@@ -1303,10 +1335,10 @@
   async function acaoServico(acao) {
     const modoServico = svStatus?.modo === 'servico';
     const confirmar = {
-      instalar: 'Instalar o serviço do Windows "IAHub - Jobs"? Ele fica pronto, mas os jobs continuam no Site até você escolher Serviço em Configuração.',
+      instalar: 'Instalar o serviço do Windows "IAHub - Jobs"? O modo escolhido em Configuração será mantido.',
       iniciar: 'Iniciar o serviço "IAHub - Jobs"?',
-      parar: `Parar o serviço "IAHub - Jobs"? Ele termina as execuções em andamento (até 45 s).${modoServico ? '\n\nOs jobs voltam para o Site (como antes).' : ''}`,
-      desinstalar: `Desinstalar o serviço "IAHub - Jobs" do Windows? Ele é parado antes (até 45 s).${modoServico ? '\n\nOs jobs voltam para o Site (como antes).' : ''}\n\nPara usar de novo, é só Instalar.`,
+      parar: `Parar o serviço "IAHub - Jobs"? Ele termina as execuções em andamento (até 45 s).${modoServico ? '\n\nO modo Serviço continua escolhido. O site reassume enquanto o serviço estiver sem sinal e o serviço reassume quando voltar.' : ''}`,
+      desinstalar: `Desinstalar o serviço "IAHub - Jobs" do Windows? Ele é parado antes (até 45 s).${modoServico ? '\n\nO modo Serviço continua escolhido. O site reassume enquanto o serviço estiver sem sinal.' : ''}\n\nPara usar de novo, é só Instalar.`,
     }[acao];
     if (!confirm(confirmar)) return;
     svOcupado = true;
@@ -1478,6 +1510,7 @@
   });
   reiniciarContador();
   setInterval(() => {
+    if (!document.hidden) document.querySelectorAll('[data-proxima-contagem]').forEach(el => { el.textContent = contagemJob(el.dataset.proximaContagem); });
     if (!Number($('auto-intervalo').value)) return;
     if (document.hidden) { reiniciarContador(); return; }
     const falta = Math.max(0, Math.ceil((proximaAtualizacao - Date.now()) / 1000));

@@ -192,8 +192,7 @@ function registrar(app, { requireAuth, requireAdmin }) {
     modo: repo.getConfigJobs().modo,
   })));
 
-  // Parar e desinstalar pela tela devolvem os jobs ao Site ("voltar como
-  // hoje"); instalar e iniciar não mudam o modo (escolha em Configuração).
+  // A escolha do modo só muda pela configuração, nunca por ações no serviço.
   app.post(`${BASE}/servico/:acao`, guarda, rota(async (req) => {
     const acao = req.params.acao;
     const usuario = _usuario(req);
@@ -205,13 +204,12 @@ function registrar(app, { requireAuth, requireAdmin }) {
     };
     if (!acoes[acao]) throw _erro(404, 'Ação desconhecida.');
     const [nome, fn, texto] = acoes[acao];
-    const voltarAoSite = (acao === 'parar' || acao === 'desinstalar') && repo.getConfigJobs().modo === 'servico';
-    if (voltarAoSite) repo.salvarConfigJobs({ modo: 'site' }, { usuario });
+    const reassumirSite = (acao === 'parar' || acao === 'desinstalar') && repo.getConfigJobs().modo === 'servico';
     try {
       repo.registrarLog('system', `${texto.split(' (')[0]} pela tela por ${usuario}…`);
       const windows = await fn();
-      repo.registrarLog(acao === 'parar' || acao === 'desinstalar' ? 'warning' : 'success', `${texto} por ${usuario}.${voltarAoSite ? ' Os jobs voltaram para o Site.' : ''}`);
-      registrarAcao(req, `servico_${nome}`, `${texto} pela tela.${voltarAoSite ? ' Jobs devolvidos ao Site.' : ''}`);
+      repo.registrarLog(acao === 'parar' || acao === 'desinstalar' ? 'warning' : 'success', `${texto} por ${usuario}.${reassumirSite ? ' O modo Serviço permanece escolhido; o Site reassume enquanto o serviço estiver sem sinal.' : ''}`);
+      registrarAcao(req, `servico_${nome}`, `${texto} pela tela.${reassumirSite ? ' Modo Serviço preservado; Site reassume enquanto o serviço estiver sem sinal.' : ''}`);
       return { windows, modo: repo.getConfigJobs().modo };
     } catch (err) {
       repo.registrarLog('error', `Falha ao ${nome} o serviço (${usuario}): ${err.message}`);

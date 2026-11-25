@@ -7,6 +7,7 @@ module.exports = {
   padrao: () => montar([
     { ...base, id: 'teste.ok', executar: async (instancia, { origem }) => ({ resultado: 'ok', resumo: { instancia, origem, pid: process.pid } }) },
     { ...base, id: 'teste.loga', executar: async () => { console.log('linha um'); console.error('linha de erro'); console.log('linha dois'); return { resultado: 'ok' }; } },
+    { ...base, id: 'teste.http', executar: async (url) => ({ resultado: 'ok', resumo: { resposta: await (await fetch(url)).text() } }) },
     { ...base, id: 'teste.lanca', executar: async () => { throw new Error('falha de propósito'); } },
     { ...base, id: 'teste.morre', executar: async () => { process.exit(3); } },
     { ...base, id: 'teste.trava', executar: () => new Promise(() => setInterval(() => {}, 1000)) },

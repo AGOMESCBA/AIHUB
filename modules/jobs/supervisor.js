@@ -378,6 +378,7 @@ class Supervisor {
     let resultado;
     let textoErro = null;
     let resumo = null;
+    let encerramentoAnormal = false;
     const motivo = reg.motivoEncerramento;
     if (motivo === 'timeout') {
       resultado = 'timeout';
@@ -395,6 +396,11 @@ class Supervisor {
       resultado = mensagem.resultado;
       textoErro = mensagem.erro || null;
       resumo = mensagem.resumo ?? null;
+      if (resultado !== 'erro' && (codigo !== 0 || sinal)) {
+        encerramentoAnormal = true;
+        resultado = 'aviso';
+        textoErro = `O job informou o resultado, mas o processo encerrou de forma anormal (código ${codigo ?? 'indisponível'}${sinal ? `, sinal ${sinal}` : ''}). Verifique o log; não repita o processamento sem conferir os efeitos.`;
+      }
     } else {
       resultado = 'erro';
       textoErro = erro?.message || `Processo terminou sem resultado (código ${codigo}${sinal ? `, sinal ${sinal}` : ''}).`;
@@ -418,6 +424,7 @@ class Supervisor {
       if (resultado === 'interrompido') {
         this._evento('aviso', 'execucao_interrompida', `Execução #${reg.execId}: ${textoErro}`, { ...onde, usuario: motivo === 'tela' ? reg.encerradoPor : null });
       }
+      if (encerramentoAnormal) this._evento('aviso', 'encerramento_anormal', `Execução #${reg.execId}: ${textoErro}`, onde);
       this._info(`■ ${def.id} ${instancia} execução #${reg.execId}: ${resultado}.`);
       if (resultado !== 'interrompido') this._alertarNormalizou(def, instancia);
     }
