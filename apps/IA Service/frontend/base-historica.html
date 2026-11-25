@@ -344,6 +344,7 @@
             <span class="jade-barra-nome">Jaade</span>
             <span id="jade-pill-ativo" class="jade-pill">—</span>
             <span id="jade-pill-modo" class="jade-pill">—</span>
+            <span id="jade-pill-origem" class="jade-pill" title="Responsável pelo agendamento das leituras">Agendamento: verificando</span>
             <span id="jade-pill-servico" class="jade-pill erro" hidden></span>
           </div>
           <div class="jade-barra-dir">
@@ -1076,9 +1077,16 @@
       const pillModo = document.getElementById('jade-pill-modo');
       pillModo.textContent = config.modo === 'publicar' ? 'Produção' : 'Simulação';
       pillModo.className = 'jade-pill ' + (config.modo === 'publicar' ? 'pub' : 'sim');
-      // Tela Jobs (IA Gestão): pausa do administrador, ou serviço IAHub-Jobs
-      // escolhido mas sem sinal (o site reassumiu a Jaade). Normal = nada aparece.
+      // Responsável pelo agendamento e avisos da tela Jobs (IA Gestão).
       const sj = painel.servicoJobs;
+      const pillOrigem = document.getElementById('jade-pill-origem');
+      const origemDesconhecida = !!sj?.erro;
+      const peloServico = sj?.modo === 'servico' && sj.noComando;
+      pillOrigem.textContent = origemDesconhecida ? 'Agendamento: indisponível' : `Agendamento: ${peloServico ? 'serviço' : 'site'}`;
+      pillOrigem.className = 'jade-pill ' + (origemDesconhecida ? 'erro' : 'pub');
+      pillOrigem.title = origemDesconhecida ? sj.erro : peloServico
+        ? 'O serviço IAHub-Jobs está responsável pelas leituras agendadas.'
+        : 'O site está responsável pelas leituras agendadas.';
       const pillServico = document.getElementById('jade-pill-servico');
       let textoServico = '';
       let dicaServico = '';
@@ -1086,7 +1094,7 @@
         textoServico = 'Pausado em Jobs';
         dicaServico = `Pausado na tela Jobs (IA Gestão)${sj.pausa.doJob ? ' para todas as empresas' : ''}${sj.pausa.por ? ` por ${sj.pausa.por}` : ''}${sj.pausa.em ? ` em ${formatarDataHora(sj.pausa.em)}` : ''}. Nenhuma leitura agendada roda até retomar; o Executar agora continua funcionando.`;
       } else if (sj?.modo === 'servico' && !sj.noComando) {
-        textoServico = 'Serviço parado · rodando no site';
+        textoServico = sj.erro ? 'Situação do serviço indisponível' : 'Serviço sem sinal · site reassumiu';
         dicaServico = sj.erro || `O serviço IAHub-Jobs ${sj.batimentoEm ? `deu sinal pela última vez em ${formatarDataHora(sj.batimentoEm)}` : 'não está dando sinal'}; o site reassumiu as leituras até ele voltar.`;
       }
       pillServico.hidden = !textoServico;

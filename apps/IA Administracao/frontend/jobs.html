@@ -247,7 +247,8 @@
     </div>
     <a class="btn btn-ghost" id="btn-guia" href="/iahub/guia-jobs#e4-1" target="_blank" rel="noopener" title="Guia de uso: Jobs e Parâmetros por Empresa">❔ Guia</a>
     <button class="btn btn-ghost" type="button" id="btn-todos" title="Recolhe ou abre todos os blocos desta tela (cada bloco continua com o seu abrir/fechar)">⇳ Recolher tudo</button>
-    <label class="auto"><input type="checkbox" id="auto" checked> Atualizar sozinho</label>
+    <label class="auto">Atualizar automaticamente <select id="auto-intervalo" aria-label="Intervalo da atualização automática"><option value="60">1 min</option><option value="300">5 min</option><option value="900">15 min</option><option value="1800">30 min</option><option value="0">Nunca</option></select></label>
+    <span class="auto" id="auto-contador" aria-live="off">Próxima em 01:00</span>
     <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
   </div>
 
@@ -761,8 +762,10 @@
       desenharJobs();
       preencherFiltrosJob();
       if (!configCarregada && $('aba-config').classList.contains('ativa')) carregarConfig();
+      return true;
     } catch (err) {
       erro(err.message);
+      return false;
     }
   }
 
@@ -977,8 +980,10 @@
       exCursor = execucoes.length ? execucoes[execucoes.length - 1].id : exCursor;
       $('mais-ex').hidden = execucoes.length < 200;
       ajustarAlturas();
+      return true;
     } catch (err) {
       erro(err.message);
+      return false;
     }
   }
 
@@ -1014,13 +1019,50 @@
         </div>
         ${e.erro ? `<div class="det-titulo">Erro</div><pre class="resumo texto-erro">${esc(e.erro)}</pre>` : ''}
         ${e.resumo ? `<div class="det-titulo">Resumo</div><pre class="resumo">${esc(JSON.stringify(e.resumo, null, 2))}</pre>` : ''}
+        ${e.jobId === 'ia-service.jade-pa' ? '<div class="det-titulo">Dados da Jaade</div><div id="det-jade" class="sub">Consultando dados da origem…</div>' : ''}
         <div class="det-titulo">Log da execução ${e.fim ? '' : pill(['ao vivo', 'info'])}</div>
         <pre class="log" id="det-log">${esc(e.log || (e.fim ? 'Esta execução não escreveu nada no log.' : 'Aguardando a primeira linha...'))}</pre>`;
       const novoLog = document.getElementById('det-log');
       if (rolarFim || noFim) novoLog.scrollTop = novoLog.scrollHeight;
       $('det-corpo').dataset.fim = e.fim ? '1' : '';
+      if (e.jobId === 'ia-service.jade-pa') carregarDetalhesJaade(e);
     } catch (err) {
       $('det-corpo').innerHTML = `<div class="texto-erro">${esc(err.message)}</div>`;
+    }
+  }
+
+  async function carregarDetalhesJaade(e) {
+    const alvo = $('det-jade');
+    const loteId = e.resumo?.loteId;
+    if (!loteId) { alvo.textContent = e.fim ? 'Esta execução não possui lote registrado na Jaade. Consulte o resumo acima.' : 'Aguardando a conclusão para consultar o lote.'; return; }
+    const separador = String(e.instancia || '').indexOf(':');
+    if (separador < 1) { alvo.textContent = 'Não foi possível identificar a empresa e a fonte desta execução.'; return; }
+    const empresa = String(e.instancia).slice(0, separador);
+    const fonte = String(e.instancia).slice(separador + 1);
+    try {
+      const url = `/api/ia-service/base-historica/fontes/${encodeURIComponent(fonte)}/jade-pa/lotes/${encodeURIComponent(loteId)}?empresa_id=${encodeURIComponent(empresa)}`;
+      const resposta = await fetch(url, { cache: 'no-store' });
+      const dados = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(dados.error || `Erro ${resposta.status}`);
+      if (detalheId !== e.id || $('det-jade') !== alvo) return;
+      alvo.innerHTML = `<p>Lote #${esc(dados.id)} · ${dados.chamados.length} chamado(s)</p>` + (dados.chamados.length
+        ? dados.chamados.map(c => `<details class="resumo" data-jade-auditoria="${esc(c.execucao.id)}"><summary><strong>Chamado ${esc(c.execucao.numeroChamado)}</strong> · Estado atual: ${esc(c.execucao.estado)} · Decisão: ${esc(c.execucao.decisao || '—')}</summary><div>Último registro neste lote: ${esc(c.ultimoRegistro || '—')}</div><div class="jade-auditoria">Abra para consultar a auditoria.</div></details>`).join('')
+        : '<p>Nenhum chamado registrado neste lote.</p>');
+      alvo.querySelectorAll('[data-jade-auditoria]').forEach(bloco => bloco.addEventListener('toggle', async () => {
+        if (!bloco.open || bloco.dataset.carregado) return;
+        const conteudo = bloco.querySelector('.jade-auditoria');
+        conteudo.textContent = 'Consultando auditoria…';
+        try {
+          const urlAuditoria = `/api/ia-service/base-historica/fontes/${encodeURIComponent(fonte)}/jade-pa/execucoes/${encodeURIComponent(bloco.dataset.jadeAuditoria)}?empresa_id=${encodeURIComponent(empresa)}`;
+          const respostaAuditoria = await fetch(urlAuditoria, { cache: 'no-store' });
+          const auditoria = await respostaAuditoria.json().catch(() => ({}));
+          if (!respostaAuditoria.ok) throw new Error(auditoria.error || `Erro ${respostaAuditoria.status}`);
+          conteudo.innerHTML = auditoria.eventos.length ? auditoria.eventos.map(ev => `<div>${esc(dataHora(ev.momento))} · ${esc(ev.resumo)}</div>`).join('') : 'Nenhum evento de auditoria disponível.';
+          bloco.dataset.carregado = '1';
+        } catch (err) { conteudo.textContent = `Auditoria indisponível: ${err.message}. Feche e abra para tentar novamente.`; }
+      }));
+    } catch (err) {
+      if (detalheId === e.id && $('det-jade') === alvo) alvo.textContent = `Dados da origem indisponíveis: ${err.message}`;
     }
   }
 
@@ -1049,8 +1091,10 @@
       evCursor = eventos.length ? eventos[eventos.length - 1].id : evCursor;
       $('mais-ev').hidden = eventos.length < 300;
       ajustarAlturas();
+      return true;
     } catch (err) {
       erro(err.message);
+      return false;
     }
   }
 
@@ -1104,7 +1148,7 @@
 
   async function carregarGrupos() {
     const empresaId = $('cfg-al-empresa').value;
-    if (!empresaId) { gruposAlerta = []; gruposAlertaErro = null; desenharGrupos(); return; }
+    if (!empresaId) { gruposAlerta = []; gruposAlertaErro = null; desenharGrupos(); return true; }
     gruposAlerta = null;
     desenharGrupos();
     try {
@@ -1116,6 +1160,7 @@
       gruposAlertaErro = err.message;
     }
     desenharGrupos();
+    return !gruposAlertaErro;
   }
 
   function desenharGrupos() {
@@ -1219,16 +1264,20 @@
           }
         }
       }
+      return true;
     } catch (err) {
       erro(err.message);
+      return false;
     }
   }
   async function carregarServico() {
     try {
       svStatus = await api('/servico');
       desenharServico();
+      return true;
     } catch (err) {
       erro(err.message);
+      return false;
     }
   }
   function desenharServico() {
@@ -1289,7 +1338,10 @@
   }
   document.addEventListener('click', (ev) => { const b = ev.target.closest('[data-sv]'); if (b) acaoServico(b.dataset.sv); });
   $('sv-filtro').addEventListener('change', desenharLog);
-  $('sv-atualizar').addEventListener('click', () => { carregarServico(); carregarLog(false); });
+  $('sv-atualizar').addEventListener('click', () => atualizarComRetorno($('sv-atualizar'), async () => {
+    const resultados = await Promise.all([carregarServico(), carregarLog(false)]);
+    return resultados.every(Boolean);
+  }));
   $('sv-limpar').addEventListener('click', async () => {
     if (!confirm('Limpar o log do serviço? (as execuções, com seus logs, continuam em "Execuções e logs")')) return;
     try { await api('/log/limpar', { method: 'POST' }); svUltimoId = 0; await carregarLog(true); } catch (err) { erro(err.message); }
@@ -1321,7 +1373,32 @@
   }
 
   document.querySelector('.abas').addEventListener('click', (ev) => { const b = ev.target.closest('.aba'); if (b) trocarAba(b.dataset.aba); });
-  $('btn-atualizar').addEventListener('click', () => { carregarPainel(); if ($('aba-execucoes').classList.contains('ativa')) carregarExecucoes(true); if ($('aba-eventos').classList.contains('ativa')) carregarEventos(true); });
+  async function atualizarComRetorno(botao, acao) {
+    const texto = botao.textContent;
+    botao.disabled = true;
+    botao.textContent = 'Atualizando…';
+    botao.setAttribute('aria-busy', 'true');
+    try {
+      botao.textContent = await acao() ? '✓ Atualizado' : 'Falha ao atualizar';
+    } catch (err) {
+      erro(err.message);
+      botao.textContent = 'Falha ao atualizar';
+    } finally {
+      botao.removeAttribute('aria-busy');
+      setTimeout(() => { botao.textContent = texto; botao.disabled = false; }, 2000);
+    }
+  }
+  $('btn-atualizar').addEventListener('click', () => atualizarComRetorno($('btn-atualizar'), async () => {
+    const sucessoPainel = await carregarPainel();
+    let sucessoAba = true;
+    if ($('aba-execucoes').classList.contains('ativa')) sucessoAba = await carregarExecucoes(true);
+    if ($('aba-eventos').classList.contains('ativa')) sucessoAba = await carregarEventos(true);
+    if ($('aba-servico').classList.contains('ativa')) {
+      const resultados = await Promise.all([carregarServico(), carregarLog(false)]);
+      sucessoAba = resultados.every(Boolean);
+    }
+    return sucessoPainel && sucessoAba;
+  }));
   $('btn-ex-filtrar').addEventListener('click', () => carregarExecucoes(true));
   $('btn-mais-ex').addEventListener('click', () => carregarExecucoes(false));
   $('btn-ev-filtrar').addEventListener('click', () => carregarEventos(true));
@@ -1364,7 +1441,7 @@
     }
   });
   $('cfg-al-empresa').addEventListener('change', () => { selAlerta.falha.clear(); selAlerta.servico.clear(); carregarGrupos(); });
-  $('btn-grupos-alerta').addEventListener('click', carregarGrupos);
+  $('btn-grupos-alerta').addEventListener('click', () => atualizarComRetorno($('btn-grupos-alerta'), carregarGrupos));
   $('btn-salvar-alerta').addEventListener('click', (ev) => salvar({
     alertaEmpresaId: $('cfg-al-empresa').value || null,
     alertaGruposFalha: [...selAlerta.falha],
@@ -1383,20 +1460,30 @@
     $('subtitulo').textContent = 'Os jobs deste sistema no serviço IAHub-Jobs. A visão de todos os sistemas fica na IA Gestão › Jobs.';
   }
 
-  // Atualização automática: painel a cada 5 s; detalhe aberto e em andamento a cada 3 s.
+  let proximaAtualizacao = Date.now() + 60000;
+  function exibirContador(segundos) {
+    return `${String(Math.floor(segundos / 60)).padStart(2, '0')}:${String(segundos % 60).padStart(2, '0')}`;
+  }
+  function reiniciarContador() {
+    const intervalo = Number($('auto-intervalo').value);
+    proximaAtualizacao = Date.now() + intervalo * 1000;
+    $('auto-contador').textContent = intervalo ? `Próxima em ${exibirContador(intervalo)}` : 'Atualização automática desativada';
+  }
+  $('auto-intervalo').addEventListener('change', reiniciarContador);
   setInterval(() => {
-    if (!$('auto').checked || document.hidden) return;
-    // Situação e avisos ficam visíveis em todas as abas: atualiza sempre.
+    if (!Number($('auto-intervalo').value)) return;
+    if (document.hidden) { reiniciarContador(); return; }
+    const falta = Math.max(0, Math.ceil((proximaAtualizacao - Date.now()) / 1000));
+    $('auto-contador').textContent = `Próxima em ${exibirContador(falta)}`;
+    if (falta) return;
+    reiniciarContador();
     carregarPainel();
+    if ($('aba-execucoes').classList.contains('ativa')) carregarExecucoes(true);
+    if ($('aba-eventos').classList.contains('ativa')) carregarEventos(true);
     if ($('aba-servico').classList.contains('ativa') && !svOcupado) carregarServico();
-  }, 5000);
-  // Log ao vivo (aba Serviço): só as linhas novas, a cada 2 s.
-  setInterval(() => {
-    if ($('auto').checked && !document.hidden && svCarregado && $('aba-servico').classList.contains('ativa')) carregarLog(false);
-  }, 2000);
-  setInterval(() => {
-    if (detalheId && !document.hidden && $('det-corpo').dataset.fim !== '1') atualizarDetalhe();
-  }, 3000);
+    if (svCarregado && $('aba-servico').classList.contains('ativa')) carregarLog(false);
+    if (detalheId && $('det-corpo').dataset.fim !== '1') atualizarDetalhe();
+  }, 1000);
 
   tabelas.inst.on('tableBuilt', () => { carregarPainel().then(ajustarAlturas); resumirFiltros(); });
 })();

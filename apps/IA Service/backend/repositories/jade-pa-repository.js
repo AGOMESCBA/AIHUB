@@ -241,9 +241,9 @@ function anexarAvisosAoResumo(empresaId, fonteId, loteId, avisos) {
 const _PESO = { erro: 3, aviso: 2, ok: 1, info: 0 };
 
 /** Lotes mais recentes da fonte, cada um com os chamados que tocou e o pior resultado neles. */
-function listarLotes(empresaId, fonteId, { limite = 30 } = {}) {
-  const lotes = getDB().prepare('SELECT * FROM jade_pa_lotes WHERE empresa_id = ? AND fonte_id = ? ORDER BY id DESC LIMIT ?')
-    .all(Number(empresaId), fonteId, limite);
+function listarLotes(empresaId, fonteId, { limite = 30, loteId = null } = {}) {
+  const lotes = getDB().prepare('SELECT * FROM jade_pa_lotes WHERE empresa_id = ? AND fonte_id = ? AND (? IS NULL OR id = ?) ORDER BY id DESC LIMIT ?')
+    .all(Number(empresaId), fonteId, loteId, loteId, limite);
   if (!lotes.length) return [];
   const ids = lotes.map(l => l.id);
   const eventos = getDB().prepare(`SELECT lote_id, execucao_id, situacao, resumo, momento FROM jade_pa_eventos
