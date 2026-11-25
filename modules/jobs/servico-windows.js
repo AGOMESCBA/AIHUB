@@ -36,8 +36,20 @@ function _traduzir(r, acao) {
   return `Não foi possível ${acao}: ${r.saida.split('\n').filter(Boolean).slice(-2).join(' ')}`;
 }
 
+// Muda raramente: guardado por 1 min (cada consulta abre um processo).
+let _nssmCache = { valor: null, em: 0 };
 async function _nssmDisponivel() {
-  return (await _rodar('where', ['nssm'], { timeout: 10000 })).ok;
+  if (_nssmCache.valor !== null && Date.now() - _nssmCache.em < 60000) return _nssmCache.valor;
+  _nssmCache = { valor: (await _rodar('where', ['nssm'], { timeout: 10000 })).ok, em: Date.now() };
+  return _nssmCache.valor;
+}
+
+/** Só o estado (um sc.exe): usado na espera entre ações. */
+async function _estado() {
+  const q = await _rodar('sc.exe', ['query', NOME], { timeout: 15000 });
+  if (!q.ok) return q.codigo === 1060 || /1060/.test(q.saida) ? 'nao_instalado' : 'erro';
+  const m = q.saida.match(/(?:STATE|ESTADO)[^:]*:\s+(\d+)/i);
+  return (m && ESTADOS[Number(m[1])]) || 'desconhecido';
 }
 
 async function status() {
@@ -57,9 +69,9 @@ async function status() {
 }
 
 async function _esperar(estadoAlvo, segundos) {
-  for (let i = 0; i < segundos; i++) {
-    const s = await status();
-    if (s.estado === estadoAlvo || (estadoAlvo === 'nao_instalado' && !s.instalado)) return s;
+  const ate = Date.now() + segundos * 1000;
+  while (Date.now() < ate) {
+    if (await _estado() === estadoAlvo) break;
     await new Promise(r => setTimeout(r, 1000));
   }
   return status();
@@ -111,7 +123,7 @@ async function iniciar() {
   if (s.estado === 'rodando') return s;
   const r = await _rodar('sc.exe', ['start', NOME]);
   if (!r.ok && !/1056/.test(r.saida)) throw _erro(500, _traduzir(r, 'iniciar o serviço'));
-  return _esperar('rodando', 15);
+  return _esperar('rodando', 20);
 }
 
 /** Parada controlada: o serviço termina as execuções (até 45 s) e sai. */

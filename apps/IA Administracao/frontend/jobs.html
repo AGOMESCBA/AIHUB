@@ -17,6 +17,8 @@
   <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
   <style>
     :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    /* O iahub.css trava a rolagem do body (telas com painéis próprios); esta página rola inteira. */
+    html, body { height:auto; min-height:100%; overflow:auto; }
     body { background:var(--bg-base); }
     .pagina { max-width:1500px; margin:0 auto; padding:20px 24px 40px; }
     html.embedded .pagina { padding:12px 16px 24px; max-width:none; }
@@ -46,10 +48,19 @@
     .grupo.recolhido .grupo-resumo { display:block; }
 
     .kpis { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:8px; }
-    .kpi { background:var(--bg-base); border:1px solid var(--border); border-radius:var(--radius); padding:9px 12px; min-width:0; }
+    /* Avisos e Situação lado a lado: cada um no seu bloco; fechados encolhem. */
+    .topo-blocos { display:flex; gap:12px; align-items:stretch; margin-bottom:12px; }
+    .topo-blocos > .grupo { margin-bottom:0; min-width:0; }
+    .topo-blocos > #bloco-avisos { flex:0 1 34%; }
+    .topo-blocos > #bloco-avisos.recolhido { flex:0 0 240px; }
+    .topo-blocos > [data-grupo="situacao"] { flex:1; }
+    .topo-blocos .kpis { grid-template-columns:repeat(auto-fit, minmax(118px, 1fr)); }
+    .topo-blocos .aviso { font-size:13px; line-height:1.5; padding:9px 12px; }
+    @media (max-width:1100px) { .topo-blocos { flex-direction:column; } .topo-blocos > #bloco-avisos, .topo-blocos > #bloco-avisos.recolhido { flex:none; } }
+    .kpi { background:var(--bg-base); border:1px solid var(--border); border-radius:var(--radius); padding:7px 10px; min-width:0; }
     .kpi-rot { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-md); }
-    .kpi-val { font-size:18px; font-weight:800; color:var(--text-hi); font-variant-numeric:tabular-nums; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .kpi-pe { font-size:11px; color:var(--text-lo); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .kpi-val { font-size:16px; font-weight:800; color:var(--text-hi); font-variant-numeric:tabular-nums; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .kpi-pe { font-size:11px; color:var(--text-lo); margin-top:1px; line-height:1.35; overflow-wrap:anywhere; }
     .kpi-val.ok { color:var(--success-text); } .kpi-val.ruim { color:var(--error-text); } .kpi-val.atencao { color:var(--warning-text); }
 
     .abas { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:12px; overflow-x:auto; }
@@ -154,16 +165,17 @@
     pre.log { background:#0b1220; color:#d7e0ee; border-radius:8px; padding:10px 12px; font-size:11.5px; line-height:1.45; max-height:52vh; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; margin:0; }
     pre.resumo { background:var(--bg-base); color:var(--text-hi); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:11.5px; max-height:200px; overflow:auto; white-space:pre-wrap; margin:0; }
 
-    /* Aba Serviço e log — mesmo visual da tela de serviços do WhatsApp */
-    .sv-layout { display:grid; grid-template-columns:minmax(0,1fr) 290px; gap:12px; align-items:stretch; }
-    .sv-terminal-wrap { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); display:flex; flex-direction:column; min-height:420px; overflow:hidden; }
-    .sv-terminal-cab { display:flex; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
-    .sv-terminal-tit { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--accent); flex:1; }
-    .sv-terminal-cab .form-control { width:auto; height:30px; padding:2px 8px; font-size:12px; }
-    .sv-terminal { flex:1; overflow-y:auto; padding:10px 16px; font-family:ui-monospace,'Cascadia Code',Consolas,monospace; font-size:12px; line-height:1.75; background:var(--bg-base); scrollbar-width:thin; scrollbar-color:rgba(124,58,237,.25) transparent; }
-    .log-line { display:flex; gap:10px; padding:1px 0; }
-    .log-ts { color:var(--text-lo); flex-shrink:0; user-select:none; font-size:11px; padding-top:1px; }
-    .log-icon { flex-shrink:0; font-size:12px; }
+    /* Aba Serviço e log — mesmo molde do Monitor do WhatsApp (apps/IA Command/frontend/monitor.html):
+       terminal e painel com a mesma altura, ocupando a tela; o painel rola por dentro. */
+    .sv-layout { display:flex; gap:14px; height:calc(100vh - 120px); min-height:420px; }
+    .sv-terminal-wrap { flex:1; min-width:0; display:flex; flex-direction:column; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+    .sv-terminal-cab { padding:7px 14px; border-bottom:1px solid var(--border); font-size:12px; font-weight:700; color:var(--text-md); display:flex; align-items:center; gap:10px; flex-shrink:0; flex-wrap:wrap; }
+    .sv-terminal-cab .tit { flex:1; display:flex; align-items:center; gap:7px; }
+    .sv-terminal-cab .form-control { width:auto; height:28px; padding:2px 8px; font-size:12px; }
+    .sv-terminal { flex:1; overflow-y:auto; padding:10px 14px; font-family:ui-monospace,'Cascadia Code',Consolas,monospace; font-size:12px; line-height:1.7; background:var(--bg-base); scrollbar-width:thin; scrollbar-color:rgba(124,58,237,.3) transparent; }
+    .log-line { display:flex; gap:8px; padding:1px 0; }
+    .log-ts { color:var(--text-lo); flex-shrink:0; user-select:none; }
+    .log-icon { flex-shrink:0; }
     .log-msg { overflow-wrap:anywhere; white-space:pre-wrap; }
     .log-msg.info { color:var(--text-md); }
     .log-msg.success { color:#22c55e; }
@@ -171,25 +183,31 @@
     .log-msg.warning { color:#f59e0b; }
     .log-msg.system { color:#60a5fa; }
     .sv-vazio { color:var(--text-lo); font-size:12px; padding:12px 0; }
-    .sv-painel { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; display:flex; flex-direction:column; gap:10px; }
-    .sv-badge { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:800; padding:4px 14px; border-radius:20px; background:var(--bg-hover); color:var(--text-md); }
-    .sv-badge.ok { background:color-mix(in srgb, var(--success) 18%, transparent); color:var(--success-text); }
-    .sv-badge.atencao { background:color-mix(in srgb, var(--warning) 20%, transparent); color:var(--warning-text); }
-    .sv-badge.ruim { background:color-mix(in srgb, var(--error) 18%, transparent); color:var(--error-text); }
-    .sv-nome { text-align:center; border-bottom:1px solid var(--border); padding-bottom:10px; }
-    .sv-nome strong { display:block; font-size:13px; font-weight:800; color:var(--text-hi); }
-    .sv-nome span { font-size:11px; color:var(--text-lo); }
-    .sv-secao { display:flex; flex-direction:column; gap:6px; }
-    .sv-secao-2 { flex-direction:row; }
-    .sv-secao .btn { height:32px; font-size:12.5px; width:100%; justify-content:center; }
+    .sv-painel { width:260px; min-width:260px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:18px 16px; display:flex; flex-direction:column; align-items:center; gap:12px; text-align:center; overflow-y:auto; scrollbar-width:thin; }
+    .sv-controles { display:flex; flex-direction:column; gap:8px; width:100%; padding-bottom:12px; border-bottom:1px solid var(--border); }
+    .sv-botoes { display:flex; gap:6px; width:100%; }
+    .sv-botoes .btn { flex:1; justify-content:center; height:32px; font-size:12.5px; padding:0 8px; }
+    .sv-botoes .btn.peq { font-size:12px; }
+    .sv-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:99px; font-size:12px; font-weight:700; background:var(--bg-hover); color:var(--text-lo); align-self:center; }
+    .sv-badge.ok { background:#dcfce7; color:#15803d; }
+    .sv-badge.atencao { background:#fef9c3; color:#92400e; }
+    .sv-badge.ruim { background:#fee2e2; color:#b91c1c; }
+    :root[data-theme="dark"] .sv-badge.ok { background:rgba(34,197,94,.15); color:#4ade80; }
+    :root[data-theme="dark"] .sv-badge.atencao { background:rgba(245,158,11,.15); color:#fbbf24; }
+    :root[data-theme="dark"] .sv-badge.ruim { background:rgba(239,68,68,.15); color:#f87171; }
+    .sv-dot { width:8px; height:8px; border-radius:99px; background:currentColor; flex-shrink:0; }
+    .sv-dot.pulsa { animation:sv-pulsa 1s ease-in-out infinite; }
+    @keyframes sv-pulsa { 0%,100% { opacity:1; } 50% { opacity:.3; } }
+    .sv-titulo { font-size:13px; font-weight:800; color:var(--text-hi); border-bottom:1px solid var(--border); width:100%; padding-bottom:10px; }
+    .sv-titulo span { display:block; font-size:11px; font-weight:400; color:var(--text-lo); margin-top:2px; }
+    .sv-lbl { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--text-lo); text-align:left; width:100%; }
+    .sv-stat { display:flex; justify-content:space-between; gap:10px; width:100%; font-size:12px; color:var(--text-lo); border-top:1px solid var(--border); padding-top:8px; }
+    .sv-stat strong { color:var(--text-hi); text-align:right; min-width:0; overflow-wrap:anywhere; }
+    .sv-btn-alerta { color:#92400e; border-color:#fde68a; }
+    :root[data-theme="dark"] .sv-btn-alerta { color:#fbbf24; border-color:rgba(245,158,11,.4); }
     .sv-painel .btn:disabled { opacity:.4; cursor:not-allowed; filter:grayscale(.6); }
-    .sv-btn-alerta { background:color-mix(in srgb, var(--warning) 18%, var(--bg-card)); color:var(--warning-text); border:1px solid color-mix(in srgb, var(--warning) 40%, transparent); }
-    .sv-sep { height:1px; background:var(--border); }
-    .sv-lbl { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text-lo); }
-    .sv-stat { display:flex; justify-content:space-between; gap:8px; font-size:12px; color:var(--text-md); }
-    .sv-stat strong { color:var(--text-hi); text-align:right; overflow-wrap:anywhere; }
-    .sv-dica { font-size:11.5px; color:var(--text-lo); line-height:1.5; margin:0; }
-    @media (max-width:860px) { .sv-layout { grid-template-columns:1fr; } .sv-terminal-wrap { min-height:360px; } }
+    .sv-dica { font-size:11px; color:var(--text-lo); line-height:1.5; margin:0; text-align:left; border-top:1px solid var(--border); padding-top:8px; }
+    @media (max-width:860px) { .sv-layout { flex-direction:column; height:auto !important; } .sv-terminal-wrap { height:420px; flex:none; } .sv-painel { width:100%; min-width:0; } }
     @media (max-width:1100px) { .kpis { grid-template-columns:repeat(3, minmax(0, 1fr)); } }
     @media (max-width:860px) { .config-grid { grid-template-columns:1fr; } .det-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
     @media (max-width:760px) { .pagina { padding:12px 16px 32px; } .kpis { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
@@ -208,6 +226,8 @@
   </div>
 
   <div id="erro" class="erro-banner" role="alert"></div>
+  <!-- Avisos e Situação na mesma linha (cada um com seu bloco recolhível). -->
+  <div class="topo-blocos">
   <section class="grupo" data-grupo="avisos" id="bloco-avisos" hidden>
     <h3><button type="button" class="grupo-toggle" data-alternar="avisos" aria-expanded="true"><svg class="grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span id="titulo-avisos">Avisos</span></button></h3>
     <div class="grupo-resumo" id="resumo-avisos"></div>
@@ -226,6 +246,7 @@
       <div class="kpi"><div class="kpi-rot">Pausados</div><div class="kpi-val" id="k-pausados">—</div><div class="kpi-pe">job ou empresa</div></div>
     </div>
   </section>
+  </div>
 
   <div class="abas" role="tablist">
     <button class="aba ativa" type="button" data-aba="jobs">Jobs</button>
@@ -321,9 +342,10 @@
   <!-- Serviço e log (mesmo modelo da tela de serviços do WhatsApp) -->
   <section class="painel-aba" id="aba-servico">
     <div class="sv-layout">
+      <!-- Terminal (log em tempo real) -->
       <div class="sv-terminal-wrap">
         <div class="sv-terminal-cab">
-          <span class="sv-terminal-tit">Log do serviço — ao vivo</span>
+          <span class="tit"><span>📋</span> Log em tempo real</span>
           <select id="sv-filtro" class="form-control" aria-label="Filtrar o log">
             <option value="">Tudo</option>
             <option value="error">Só erros</option>
@@ -335,38 +357,36 @@
         <div class="sv-terminal" id="sv-terminal"><div class="sv-vazio">Carregando o log…</div></div>
       </div>
 
+      <!-- Painel de controle (rola por dentro) -->
       <aside class="sv-painel">
-        <div style="text-align:center"><span id="sv-badge" class="sv-badge">—</span></div>
-        <div class="sv-nome">
-          <strong>IAHub - Jobs</strong>
-          <span>Serviço do Windows <code>IAHub-Jobs</code></span>
+        <div class="sv-controles">
+          <span id="sv-badge" class="sv-badge"><span class="sv-dot" id="sv-dot"></span><span id="sv-badge-txt">—</span></span>
+          <div class="sv-botoes">
+            <button class="btn btn-primary" type="button" data-sv="iniciar">▶ Iniciar</button>
+            <button class="btn btn-ghost sv-btn-alerta" type="button" data-sv="parar">■ Parar</button>
+          </div>
+          <div class="sv-botoes">
+            <button class="btn btn-ghost peq" type="button" id="sv-limpar">🗑 Limpar Log</button>
+            <button class="btn btn-ghost peq" type="button" id="sv-salvar">💾 Salvar Log</button>
+          </div>
+          <div class="sv-botoes">
+            <button class="btn btn-ghost peq" type="button" id="sv-copiar">📋 Copiar</button>
+            <button class="btn btn-ghost peq" type="button" id="sv-atualizar">⟳ Atualizar</button>
+          </div>
         </div>
-        <div class="sv-secao">
-          <button class="btn btn-primary" type="button" data-sv="iniciar">▶ Iniciar</button>
-          <button class="btn sv-btn-alerta" type="button" data-sv="parar">■ Parar</button>
-        </div>
-        <div class="sv-sep"></div>
-        <div class="sv-lbl">Instalação</div>
-        <div class="sv-secao">
-          <button class="btn btn-ghost" type="button" data-sv="instalar">⬇ Instalar serviço</button>
-          <button class="btn btn-danger" type="button" data-sv="desinstalar">🗑 Desinstalar</button>
-        </div>
-        <div class="sv-sep"></div>
+
+        <div class="sv-titulo">IAHub - Jobs<span>Serviço do Windows IAHub-Jobs</span></div>
         <div class="sv-stat"><span>Estado</span><strong id="sv-estado">—</strong></div>
         <div class="sv-stat"><span>Inicialização</span><strong id="sv-inicio">—</strong></div>
         <div class="sv-stat"><span>Processo</span><strong id="sv-pid">—</strong></div>
         <div class="sv-stat"><span>Último sinal</span><strong id="sv-sinal">—</strong></div>
         <div class="sv-stat"><span>Onde rodam</span><strong id="sv-modo">—</strong></div>
         <div class="sv-stat"><span>NSSM</span><strong id="sv-nssm">—</strong></div>
-        <div class="sv-sep"></div>
-        <div class="sv-lbl">Log</div>
-        <div class="sv-secao sv-secao-2">
-          <button class="btn btn-ghost" type="button" id="sv-limpar">🗑 Limpar</button>
-          <button class="btn btn-ghost" type="button" id="sv-copiar">📋 Copiar</button>
-        </div>
-        <div class="sv-secao">
-          <button class="btn btn-ghost" type="button" id="sv-salvar">💾 Salvar log</button>
-          <button class="btn btn-ghost" type="button" id="sv-atualizar">⟳ Atualizar status</button>
+
+        <div class="sv-lbl">Instalação no Windows</div>
+        <div class="sv-botoes">
+          <button class="btn btn-ghost peq" type="button" data-sv="instalar">⬇ Instalar</button>
+          <button class="btn btn-ghost peq" type="button" data-sv="desinstalar" style="color:#ef4444;border-color:#fecaca">🗑 Desinstalar</button>
         </div>
         <p class="sv-dica">Parar ou desinstalar por aqui devolve os jobs para o <strong>Site</strong> (como antes). Iniciar não muda onde eles rodam — isso é em Configuração.</p>
       </aside>
@@ -485,6 +505,7 @@
   const paineisGrupo = {};
 
   const dataHora = (iso) => { if (!iso) return '—'; const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' }); };
+  const dataCurta = (iso) => { if (!iso) return '—'; const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); };
   const duracao = (ms) => {
     if (ms == null) return '—';
     const s = Math.round(ms / 1000);
@@ -539,12 +560,13 @@
         if (!t || !$(aba).classList.contains('ativa')) continue;
         const topo = $(el).getBoundingClientRect().top;
         const mais = aba === 'aba-execucoes' ? !$('mais-ex').hidden : aba === 'aba-eventos' ? !$('mais-ev').hidden : false;
-        t.setHeight(Math.max(260, Math.floor(window.innerHeight - topo - (mais ? 64 : 16))));
+        t.setHeight(Math.max(480, Math.floor(window.innerHeight - topo - (mais ? 64 : 16))));
       }
       // Aba Serviço: o terminal do log ocupa o que sobra da janela.
       if ($('aba-servico').classList.contains('ativa')) {
-        const wrap = document.querySelector('.sv-terminal-wrap');
-        wrap.style.height = `${Math.max(420, Math.floor(window.innerHeight - wrap.getBoundingClientRect().top - 16))}px`;
+        // Terminal e painel juntos ocupam o que sobra da janela (o painel rola por dentro).
+        const lay = document.querySelector('.sv-layout');
+        if (window.innerWidth > 860) lay.style.height = `${Math.max(480, Math.floor(window.innerHeight - lay.getBoundingClientRect().top - 16))}px`;
       }
     });
   }
@@ -568,7 +590,9 @@
       },
     });
     tabelas[chave] = new Tabulator(seletor, {
-      layout: 'fitColumns', movableColumns: true, index: 'id',
+      // fitDataFill: colunas na largura confortável (sem esticar a última, que pode ser a de Ações fixa);
+      // faltou espaço, a grade rola para o lado.
+      layout: 'fitDataFill', movableColumns: true, index: 'id',
       groupBy: paineisGrupo[chave].getActiveFields(), groupStartOpen: true,
       ...opcoes,
     });
@@ -617,7 +641,7 @@
     height: 400, placeholder: placeholder('Nenhuma empresa com job ligado.'),
     columns: [
       { title: 'Job', field: 'jobNome', width: 170, headerFilter: true, formatter: c => `<span class="forte">${esc(c.getValue())}</span>` },
-      { title: 'Empresa / instância', field: 'rotulo', minWidth: 220, headerFilter: true,
+      { title: 'Empresa / instância', field: 'rotulo', minWidth: 220, maxWidth: 340, headerFilter: true,
         formatter: c => { const d = c.getRow().getData(); return `<div class="celula-quebra"><span class="forte">${esc(d.rotulo)}</span>${d.inativa ? ' <span class="pill">desligado</span>' : ''}<div class="sub">${esc(d.instancia)}</div></div>`; } },
       { title: 'Situação', field: 'situacaoRotulo', width: 210, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true },
         formatter: c => { const d = c.getRow().getData(); return `<div class="celula-quebra">${pill(SITUACOES[d.situacao] || [d.situacao, ''])}${d.extraSituacao ? `<div class="sub">${esc(d.extraSituacao)}</div>` : ''}</div>`; } },
@@ -627,7 +651,7 @@
         formatter: c => { const u = c.getRow().getData().ultima; return u ? pillResultado(u.resultado, u.fim) : '<span class="sub">nunca rodou pelo serviço</span>'; } },
       { title: 'Última em', field: 'ultimaInicio', width: 165, groupable: false, sorter: 'string',
         formatter: c => { const u = c.getRow().getData().ultima; return u ? `<div class="celula-quebra">${dataHora(u.inicio)}<div class="sub">${duracao(u.duracaoMs)}</div></div>` : '—'; } },
-      { title: 'Erro da última', field: 'ultimaErro', minWidth: 140, headerFilter: true, groupable: false,
+      { title: 'Erro da última', field: 'ultimaErro', minWidth: 160, maxWidth: 320, headerFilter: true, groupable: false,
         formatter: c => (c.getValue() ? `<div class="texto-erro">${esc(c.getValue())}</div>` : '') },
       { title: 'Falhas seg.', field: 'falhasSeguidas', width: 105, hozAlign: 'center', groupable: false, sorter: 'number',
         formatter: c => (c.getValue() ? pill([String(c.getValue()), 'ruim']) : '0') },
@@ -647,7 +671,7 @@
       { title: 'Duração', field: 'duracaoMs', width: 110, sorter: 'number', groupable: false, formatter: c => { const d = c.getRow().getData(); return d.fim ? duracao(d.duracaoMs) : duracao(Date.now() - Date.parse(d.inicio)); } },
       { title: 'Resultado', field: 'resultadoRotulo', width: 140, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true },
         formatter: c => { const d = c.getRow().getData(); return pillResultado(d.resultado, d.fim); } },
-      { title: 'Detalhe', field: 'detalhe', minWidth: 240, headerFilter: true, groupable: false,
+      { title: 'Detalhe', field: 'detalhe', minWidth: 240, maxWidth: 460, headerFilter: true, groupable: false,
         formatter: c => { const d = c.getRow().getData(); return d.erro ? `<div class="texto-erro">${esc(c.getValue())}</div>` : `<span class="sub">${esc(c.getValue())}</span>`; } },
     ],
   });
@@ -661,7 +685,7 @@
         formatter: c => pill(NIVEIS[c.getRow().getData().nivel] || [c.getValue(), '']) },
       { title: 'Job', field: 'jobNome', minWidth: 150, headerFilter: true },
       { title: 'Empresa / instância', field: 'rotulo', minWidth: 170, headerFilter: true },
-      { title: 'O que aconteceu', field: 'texto', minWidth: 320, headerFilter: true, groupable: false, formatter: c => `<div class="celula-quebra">${esc(c.getValue())}</div>` },
+      { title: 'O que aconteceu', field: 'texto', minWidth: 320, maxWidth: 640, headerFilter: true, groupable: false, formatter: c => `<div class="celula-quebra">${esc(c.getValue())}</div>` },
       { title: 'Usuário', field: 'usuario', width: 130, headerFilter: true },
     ],
   });
@@ -687,7 +711,7 @@
     if (s.ativo) {
       servTxt = 'No ar';
       $('k-servico').className = 'kpi-val ok';
-      $('k-servico-pe').textContent = `desde ${dataHora(s.iniciadoEm)}`;
+      $('k-servico-pe').textContent = `desde ${dataCurta(s.iniciadoEm)}`;
     } else {
       servTxt = s.parando ? 'Parando' : s.paradoEm && !s.batimentoEm ? 'Parado' : s.batimentoEm ? 'Sem sinal' : 'Não instalado';
       $('k-servico').className = `kpi-val ${p.modo === 'servico' ? 'ruim' : 'atencao'}`;
@@ -1136,8 +1160,9 @@
     if (!s) return;
     const w = s.windows;
     const [txt, cls] = ESTADOS_SV[w.estado] || [w.estado, ''];
-    $('sv-badge').textContent = txt;
+    $('sv-badge-txt').textContent = txt.replace(/^[●○◐‖]\s*/, '');
     $('sv-badge').className = `sv-badge ${cls}`;
+    $('sv-dot').className = `sv-dot${['iniciando', 'parando'].includes(w.estado) ? ' pulsa' : ''}`;
     $('sv-estado').textContent = w.instalado ? txt.replace(/^[●○◐‖]\s*/, '') : txt;
     $('sv-inicio').textContent = !w.instalado ? '—' : w.inicializacao === 'automatica' ? 'Automática' : w.inicializacao === 'manual' ? 'Manual' : (w.inicializacao || '—');
     $('sv-pid').textContent = w.pid ? `pid ${w.pid}` : '—';
@@ -1163,7 +1188,9 @@
     if (!confirm(confirmar)) return;
     svOcupado = true;
     desenharServico();
-    $('sv-badge').textContent = { instalar: 'Instalando…', iniciar: 'Iniciando…', parar: 'Parando…', desinstalar: 'Desinstalando…' }[acao];
+    $('sv-badge-txt').textContent = { instalar: 'Instalando…', iniciar: 'Iniciando…', parar: 'Parando…', desinstalar: 'Desinstalando…' }[acao];
+    $('sv-badge').className = 'sv-badge atencao';
+    $('sv-dot').className = 'sv-dot pulsa';
     try {
       const r = await api(`/servico/${acao}`, { method: 'POST' });
       svStatus = { ...svStatus, windows: r.windows, modo: r.modo };
@@ -1282,7 +1309,8 @@
   // Atualização automática: painel a cada 5 s; detalhe aberto e em andamento a cada 3 s.
   setInterval(() => {
     if (!$('auto').checked || document.hidden) return;
-    if ($('aba-jobs').classList.contains('ativa')) carregarPainel();
+    // Situação e avisos ficam visíveis em todas as abas: atualiza sempre.
+    carregarPainel();
     if ($('aba-servico').classList.contains('ativa') && !svOcupado) carregarServico();
   }, 5000);
   // Log ao vivo (aba Serviço): só as linhas novas, a cada 2 s.
