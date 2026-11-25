@@ -34,6 +34,14 @@ const path = require('path');
       await page.locator('.inicio-card').first().click();
       const destino = await page.evaluate(() => window._clicado);
       if (!destino) throw new Error(`${app}: card não acionou o menu`);
+      await page.getByRole('button', { name: /Recolher tudo/ }).click();
+      if (await page.locator('.inicio-card:visible').count()) throw new Error(`${app}: recolher tudo falhou`);
+      await page.getByRole('button', { name: /Expandir tudo/ }).click();
+      if (await page.locator('.inicio-card:visible').count() !== result.cards.length) throw new Error(`${app}: expandir tudo falhou`);
+      await page.locator('.inicio-grupo-cab').first().click();
+      if (await page.locator('.inicio-card:visible').count()) throw new Error(`${app}: recolher grupo falhou`);
+      await page.locator('.inicio-grupo-cab').first().click();
+      if (await page.locator('.inicio-card:visible').count() !== result.cards.length) throw new Error(`${app}: expandir grupo falhou`);
       console.log(`${app}: acesso ${rotina}; menu e card: ${result.cards.join(', ')}; destino: ${destino}`);
       await page.close();
     }

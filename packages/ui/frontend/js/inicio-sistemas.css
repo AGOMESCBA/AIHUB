@@ -1,9 +1,17 @@
 .inicio-home { flex:none; width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--border); border-radius:8px; background:var(--bg-card); color:var(--text-md); cursor:pointer; font-size:19px; }
 .inicio-home:hover, .inicio-home:focus-visible { color:var(--accent); border-color:var(--accent); }
 #mdi-empty { display:block; overflow:auto; pointer-events:auto; user-select:auto; padding:24px; }
-#mdi-empty h1 { margin:0 0 18px; font-size:22px; color:var(--text-hi); }
+.inicio-barra { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; }
+#mdi-empty h1 { margin:0; font-size:22px; color:var(--text-hi); }
+.inicio-todos { padding:8px 12px; border:1px solid var(--border); border-radius:8px; background:var(--bg-card); color:var(--text-md); font:inherit; cursor:pointer; }
+.inicio-todos:hover, .inicio-todos:focus-visible { color:var(--accent); border-color:var(--accent); }
+.inicio-todos[hidden], .inicio-cards[hidden] { display:none; }
 .inicio-grupo { margin-bottom:16px; border:1px solid var(--border); border-radius:12px; background:var(--bg-card); box-shadow:var(--shadow-sm); }
-.inicio-grupo h2 { margin:0; padding:16px; font-size:15px; color:var(--text-hi); border-bottom:1px solid var(--border); }
+.inicio-grupo-cab { display:flex; align-items:center; justify-content:space-between; width:100%; padding:16px; border:0; border-radius:12px; background:transparent; color:var(--text-hi); font:inherit; font-size:15px; font-weight:700; text-align:left; cursor:pointer; }
+.inicio-grupo-cab::after { content:'▾'; color:var(--text-md); }
+.inicio-grupo-cab[aria-expanded="false"]::after { content:'▸'; }
+.inicio-grupo-cab[aria-expanded="true"] { border-bottom:1px solid var(--border); border-radius:12px 12px 0 0; }
+.inicio-grupo-cab:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
 .inicio-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; padding:16px; }
 .inicio-card { display:flex; align-items:center; gap:12px; min-width:0; padding:13px; border:1px solid var(--border); border-radius:10px; color:var(--text-hi); text-decoration:none; background:var(--bg-card); }
 .inicio-card:hover, .inicio-card:focus-visible { border-color:var(--accent); background:var(--bg-hover); }
