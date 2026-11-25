@@ -18,7 +18,7 @@ Plano completo e decisões: relatório "IA Talk — arquitetura e planejamento" 
 | C5 — Migração onda 1 | Claude Code | a fazer | | login IA Service, Jaade, Jobs |
 | C6 — Migração ondas 2 e 3 | Claude Code | a fazer | | canal real + IA Command (autorização própria) |
 | C7 — Operação e publicação | Claude Code | a fazer | | nginx, NSSM, pacote oficial, backup |
-| G4 — Bibliotecas mídia e assinatura | Antigravity | a fazer | | testes `tests/g4-*.test.js` com `todo` |
+| G4 — Bibliotecas mídia e assinatura | Antigravity | em revisão | `node --test "apps/IA Talk/tests/*.test.js"` (48/48, 14/14 na G4, 0 todo) | `midia/index.js` (+ `decodificarBase64Estrito` para C3) e `assinatura/index.js` implementados; sem commits |
 | G1 — Telas de acesso e cadastros | Antigravity | a fazer | | entrar, usuários, aplicações, configurações |
 | G2 — Telas de canais | Antigravity | a fazer | | |
 | G3 — Painel, histórico, eventos, auditoria | Antigravity | a fazer | | |
