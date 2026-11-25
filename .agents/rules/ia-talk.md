@@ -22,6 +22,24 @@ Resumo do que não pode faltar:
   (`grid-group-panel.js`), chamadas só por `TalkApi`, estados por `TalkUI`. Modelo obrigatório:
   `apps/IA Talk/frontend/empresas.html`. Referências visuais: Histórico de Interpretações (IA Command)
   e Jobs (IA Gestão).
+- **Cada tela do Talk copia uma tela que já existe no IA Service / IA Command** (estrutura, componentes,
+  espaçamentos e comportamento). Antes de escrever uma tela, abra a tela modelo e siga-a:
+
+  | Tela do IA Talk | Tela modelo (copiar o padrão) |
+  |---|---|
+  | Qualquer lista com filtro, agrupamento e detalhe (usuários, aplicações, histórico de mensagens, eventos, auditoria) | `apps/IA Command/frontend/admin-interpretacoes-v2.html` (Histórico de Interpretações) + agrupamento de `apps/IA Administracao/frontend/jobs.html` — já aplicado em `apps/IA Talk/frontend/empresas.html` |
+  | Formulário de cadastro em página (usuário, aplicação) | `apps/IA Service/frontend/numeros-autorizados.html` (editor em página) e `apps/IA Command/frontend/admin-intencao-form.html` |
+  | Página de entrada / login por telefone (`entrar.html`) | `apps/IA Service/frontend/entrar.html` |
+  | Configurações (link, sites autorizados, e-mail de envio) | `apps/IA Service/frontend/config-ia.html` e `apps/IA Command/frontend/config-ia.html`; e-mail: "E-mail Geral" em `modules/configuracoes/frontend/configuracoes.html` |
+  | Canais: lista, QR Code e terminal ao vivo | `apps/IA Command/frontend/whatsapp-services.html` e `apps/IA Command/frontend/admin-canais-whatsapp.html` |
+  | Painel / monitoramento | `apps/IA Administracao/frontend/jobs.html` (painel) e `apps/IA Command/frontend/dashboard.html` |
+  | Auditoria / histórico de acessos | `apps/IA Command/frontend/admin-auditoria.html` e `apps/IA Service/frontend/historico-acessos.html` |
+  | Versão celular de listas muito usadas | `apps/IA Service/frontend/css/iaservice-mobile.css` (cartões) |
+
+  Se a tela modelo e o `empresas.html` divergirem, vale o `empresas.html` (já adaptado ao Talk). Na entrega,
+  inclua **uma captura da tela modelo ao lado da tela nova** e diga o que foi copiado e o que foi diferente, e por quê.
+  A tela modelo exige login no IAHub; sem acesso, compare pelo código-fonte dela e liste os elementos copiados
+  (nunca peça nem use senha de usuário real).
 - **Sem dependência nova, sem framework, sem build.**
 - Contrato faltando ou errado: registre em `apps/IA Talk/docs/andamento.md` e espere; não invente campo.
 - Nenhuma chave, token ou número real em código, teste, captura ou log.

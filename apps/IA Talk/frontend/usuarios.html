@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Usuários e papéis · IA Talk</title>
+  <!-- Etapa G1 (Antigravity) — lista + detalhe de usuários e papéis da empresa.
+       Tela modelo: apps/IA Talk/frontend/empresas.html (baseada em Histórico de
+       Interpretações + Jobs) e apps/IA Service/frontend/numeros-autorizados.html
+       (formulário em página). Contrato: docs/contratos.md §3.3. -->
+  <script src="/app/ia-talk/js/talk-ui.js"></script>
+  <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g1.css">
+</head>
+<body class="tlk-pagina">
+<main class="tlk-conteudo">
+
+  <!-- ── Lista ──────────────────────────────────────────────────────── -->
+  <section id="vista-lista" aria-labelledby="titulo-lista">
+    <div class="head-row">
+      <div>
+        <div class="page-kicker">Administração da empresa</div>
+        <h1 class="head-title" id="titulo-lista">Usuários e papéis <span class="head-count" id="contador" aria-live="polite"></span></h1>
+      </div>
+      <div class="head-actions">
+        <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
+        <button class="btn btn-primary" type="button" id="btn-novo">+ Novo usuário</button>
+      </div>
+    </div>
+    <p class="head-sub">Quem pode acessar o IA Talk nesta empresa. Cada pessoa entra pelo celular com código temporário e vê apenas as rotinas do seu papel.</p>
+
+    <div class="filter-bar">
+      <form class="filter-bar-row" id="filtros" role="search">
+        <label class="sr-only" for="f-busca">Buscar</label>
+        <input class="form-control tlk-busca" id="f-busca" name="busca" type="search" placeholder="Buscar por nome, e-mail ou celular" autocomplete="off">
+        <label class="sr-only" for="f-papel">Papel</label>
+        <select class="form-control" id="f-papel" name="papel">
+          <option value="">Todos os papéis</option>
+        </select>
+        <label class="sr-only" for="f-situacao">Situação</label>
+        <select class="form-control" id="f-situacao" name="situacao">
+          <option value="">Todas as situações</option>
+          <option value="ativo">Ativos</option>
+          <option value="inativo">Inativos</option>
+        </select>
+        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area">+ Mostrar agrupamento</button>
+        <span class="grupo-status" id="grupo-status">Sem agrupamento ativo</span>
+      </form>
+      <div class="grupo-area" id="grupo-area">
+        <div class="gp-chips-row" id="gp-chips"><span class="gp-label">Agrupar por:</span></div>
+        <div id="dz"></div>
+      </div>
+    </div>
+
+    <div class="grade">
+      <div id="estado-lista" hidden></div>
+      <div id="tabela"></div>
+      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais">Carregar mais</button></div>
+    </div>
+  </section>
+
+  <!-- ── Detalhe / formulário ──────────────────────────────────────── -->
+  <section id="vista-detalhe" hidden aria-labelledby="titulo-detalhe">
+    <div class="editor-bar">
+      <div class="editor-title"><strong id="titulo-detalhe">Novo usuário</strong><span id="sub-detalhe"></span></div>
+      <button class="btn btn-ghost" type="button" id="btn-voltar">← Voltar à lista</button>
+    </div>
+
+    <div class="tlk-cartao">
+      <div class="tlk-abas" role="tablist" aria-label="Seções do usuário">
+        <button class="tlk-aba" type="button" role="tab" id="aba-dados" aria-controls="painel-dados" aria-selected="true">Dados e papel</button>
+        <button class="tlk-aba" type="button" role="tab" id="aba-papeis" aria-controls="painel-papeis" aria-selected="false">Permissões por papel</button>
+      </div>
+
+      <div class="tlk-painel-aba" id="painel-dados" role="tabpanel" aria-labelledby="aba-dados">
+        <div class="tlk-alerta tlk-alerta--erro" id="alerta-form" role="alert" hidden></div>
+        <form id="form" novalidate>
+          <div class="tlk-form">
+            <div class="tlk-campo tlk-largo">
+              <label for="c-nome">Nome completo</label>
+              <input class="form-control" id="c-nome" name="nome" type="text" maxlength="120" required autocomplete="name" placeholder="Ex.: Maria Oliveira">
+            </div>
+
+            <div class="tlk-campo">
+              <label for="c-telefone">Celular (WhatsApp)</label>
+              <input class="form-control" id="c-telefone" name="telefone" type="tel" inputmode="tel" maxlength="20" autocomplete="off" placeholder="5565999990000">
+              <span class="form-hint" id="dica-telefone">Somente dígitos com DDI e DDD (ex.: 5565999990000). Recebe o código de login.</span>
+            </div>
+
+            <div class="tlk-campo">
+              <label for="c-email">E-mail (reserva para código)</label>
+              <input class="form-control" id="c-email" name="email" type="email" maxlength="160" autocomplete="email" placeholder="nome@empresa.com.br">
+              <span class="form-hint">Opcional. Usado se o canal WhatsApp da empresa estiver fora do ar.</span>
+            </div>
+
+            <div class="tlk-campo">
+              <label for="c-papel">Papel na empresa</label>
+              <select class="form-control" id="c-papel" name="papel" required></select>
+              <span class="form-hint" id="dica-papel">Escolha o perfil de acesso do usuário.</span>
+            </div>
+
+            <div class="tlk-campo" id="campo-situacao">
+              <label for="c-situacao">Situação</label>
+              <select class="form-control" id="c-situacao" name="situacao">
+                <option value="ativo">Ativo</option>
+                <option value="inativo">Inativo (perde o acesso imediatamente)</option>
+              </select>
+              <span class="form-hint">Inativar encerra as sessões ativas deste usuário nesta empresa.</span>
+            </div>
+          </div>
+
+          <div class="tlk-acoes-form">
+            <button class="btn btn-ghost" type="button" id="btn-cancelar">Cancelar</button>
+            <button class="btn btn-primary" type="submit" id="btn-salvar">Salvar</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="tlk-painel-aba" id="painel-papeis" role="tabpanel" aria-labelledby="aba-papeis" hidden>
+        <div class="tlk-secao-cab">
+          <div>
+            <h2>Catálogo de papéis e rotinas</h2>
+            <p>As rotinas abaixo são aplicadas automaticamente conforme o papel selecionado para o usuário.</p>
+          </div>
+        </div>
+        <div class="tlk-lista-bloco" id="lista-papeis"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/app/ia-talk/ui/js/grid-group-panel.js"></script>
+<script src="/app/ia-talk/js/talk-api.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const { esc, pill, dataHora, relativo } = TalkUI;
+
+  const ROTULOS_ROTINA = {
+    'talk-painel': 'Painel',
+    'talk-canais': 'Canais',
+    'talk-mensagens': 'Histórico de mensagens',
+    'talk-eventos': 'Eventos e webhooks',
+    'talk-aplicacoes': 'Aplicações e tokens',
+    'talk-usuarios': 'Usuários e papéis',
+    'talk-configuracoes': 'Configurações',
+    'talk-auditoria': 'Auditoria',
+    'talk-empresas': 'Empresas (plataforma)',
+  };
+
+  let tabela = null;
+  let painelGrupo = null;
+  let proximoCursor = null;
+  let total = 0;
+  let atual = null;
+  let papeis = [];
+
+  function mapaPapel(codigo) {
+    return papeis.find((p) => p.codigo === codigo) || null;
+  }
+
+  function nomePapel(codigo) {
+    return mapaPapel(codigo)?.nome || codigo || '—';
+  }
+
+  function renderizarCatalogoPapeis(codigoSelecionado) {
+    const el = $('lista-papeis');
+    if (!papeis.length) {
+      el.innerHTML = '<div class="tlk-lista-item"><div class="tlk-lista-item-sub">Nenhum papel carregado.</div></div>';
+      return;
+    }
+    el.innerHTML = papeis.map((p) => {
+      const ativo = p.codigo === codigoSelecionado;
+      const chips = (p.rotinas || []).map((r) => `<span class="tlk-chip ${ativo ? 'tlk-chip--ativo' : ''}">${esc(ROTULOS_ROTINA[r] || r)}</span>`).join('');
+      return `<div class="tlk-lista-item">
+        <div class="tlk-lista-item-info">
+          <div class="tlk-lista-item-titulo">
+            <span>${esc(p.nome)}</span>
+            <code>${esc(p.codigo)}</code>
+            ${ativo ? '<span class="tlk-pill tlk-pill--info">Selecionado</span>' : ''}
+          </div>
+          <div class="tlk-lista-item-sub">${esc(p.descricao || '')}</div>
+          <div class="tlk-chips" style="margin-top:8px">${chips || '<span class="tlk-chip">Sem rotinas</span>'}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function atualizarDicaPapel() {
+    const p = mapaPapel($('c-papel').value);
+    $('dica-papel').textContent = p ? `${p.descricao} (${(p.rotinas || []).length} rotina(s)).` : 'Escolha o perfil de acesso do usuário.';
+    renderizarCatalogoPapeis($('c-papel').value);
+  }
+  $('c-papel').addEventListener('change', atualizarDicaPapel);
+
+  async function carregarPapeis() {
+    try {
+      const res = await TalkApi.get('/papeis');
+      papeis = Array.isArray(res?.itens) ? res.itens : [];
+    } catch (_) {
+      papeis = [];
+    }
+    const selFiltro = $('f-papel');
+    const selForm = $('c-papel');
+    const filtroAtual = selFiltro.value;
+    selFiltro.innerHTML = '<option value="">Todos os papéis</option>'
+      + papeis.map((p) => `<option value="${esc(p.codigo)}">${esc(p.nome)}</option>`).join('');
+    selFiltro.value = filtroAtual;
+    selForm.innerHTML = papeis.map((p) => `<option value="${esc(p.codigo)}">${esc(p.nome)}</option>`).join('');
+  }
+
+  // ── Lista ───────────────────────────────────────────────────────────
+  function filtrosAtuais() {
+    return {
+      busca: $('f-busca').value.trim(),
+      papel: $('f-papel').value,
+      situacao: $('f-situacao').value,
+      limite: 50,
+    };
+  }
+
+  function criarTabela() {
+    painelGrupo = createGroupPanel({
+      chipsRowId: 'gp-chips',
+      dropZoneId: 'dz',
+      storageKey: 'talk_usuarios_grupo',
+      getTable: () => tabela,
+      onChange: (campos) => {
+        $('grupo-status').textContent = campos.length ? `${campos.length} campo(s) agrupado(s)` : 'Sem agrupamento ativo';
+      },
+    });
+    tabela = new Tabulator('#tabela', {
+      layout: 'fitDataFill',
+      movableColumns: true,
+      index: 'id',
+      height: 'calc(100vh - 290px)',
+      responsiveLayout: 'collapse',
+      responsiveLayoutCollapseStartOpen: false,
+      placeholder: 'Nenhum usuário com estes filtros.',
+      groupBy: painelGrupo.getActiveFields(),
+      groupStartOpen: true,
+      rowFormatter: (row) => row.getElement().classList.add('clicavel'),
+      columns: [
+        { formatter: 'responsiveCollapse', width: 34, minWidth: 34, hozAlign: 'center', headerSort: false, resizable: false, groupable: false, responsive: 0 },
+        { title: 'Nome', field: 'nome', minWidth: 160, cssClass: 'tlk-forte', headerFilter: 'input', responsive: 0 },
+        { title: 'Celular', field: 'telefone_mascarado', minWidth: 165, formatter: (c) => `<code>${esc(c.getValue() || '—')}</code>`, responsive: 2 },
+        { title: 'Papel', field: 'papel', minWidth: 155, formatter: (c) => `<span class="tlk-chip">${esc(nomePapel(c.getValue()))}</span>`, responsive: 1 },
+        { title: 'Situação', field: 'situacao', formatter: (c) => pill(c.getValue()), headerFilter: 'list', headerFilterParams: { values: { ativo: 'Ativo', inativo: 'Inativo' }, clearable: true }, responsive: 0 },
+        { title: 'E-mail de reserva', field: 'email', minWidth: 190, formatter: (c) => esc(c.getValue() || '—'), headerFilter: 'input', responsive: 2 },
+        { title: 'Último acesso', field: 'ultimo_acesso_em', minWidth: 140, formatter: (c) => (c.getValue() ? esc(relativo(c.getValue())) : '<span class="text-muted">Nunca entrou</span>'), sorter: 'string', responsive: 3 },
+        { title: 'Cadastrado em', field: 'criado_em', minWidth: 140, formatter: (c) => esc(dataHora(c.getValue())), sorter: 'string', responsive: 3 },
+      ],
+    });
+    tabela.on('tableBuilt', () => { painelGrupo.refresh(); painelGrupo.applyToTable(); });
+    tabela.on('rowClick', (_e, row) => abrirDetalhe(row.getData()));
+  }
+
+  async function carregar({ continuar = false } = {}) {
+    const estado = $('estado-lista');
+    if (!continuar) {
+      $('tabela').hidden = true;
+      $('mais').hidden = true;
+      TalkUI.estado(estado, 'carregando', { titulo: 'Carregando usuários…' });
+    }
+    try {
+      const pagina = await TalkApi.get('/usuarios', { ...filtrosAtuais(), cursor: continuar ? proximoCursor : undefined });
+      proximoCursor = pagina.proximo_cursor;
+      total = pagina.total ?? pagina.itens.length;
+      if (!continuar && !pagina.itens.length) {
+        const comFiltro = Object.entries(filtrosAtuais()).some(([k, v]) => k !== 'limite' && v);
+        TalkUI.estado(estado, 'vazio', comFiltro
+          ? { titulo: 'Nenhum usuário encontrado', texto: 'Ajuste a busca ou os filtros para ver outros usuários.' }
+          : { titulo: 'Nenhum usuário cadastrado', texto: 'Cadastre o primeiro usuário da empresa para liberar acesso por celular.', acao: { rotulo: '+ Novo usuário', aoClicar: () => abrirDetalhe(null) } });
+        $('contador').textContent = '';
+        return;
+      }
+      estado.hidden = true;
+      $('tabela').hidden = false;
+      if (continuar) await tabela.addData(pagina.itens); else await tabela.replaceData(pagina.itens);
+      tabela.redraw();
+      $('mais').hidden = !proximoCursor;
+      $('contador').textContent = pagina.total != null ? `${tabela.getDataCount()} de ${total}` : `${tabela.getDataCount()}`;
+    } catch (err) {
+      if (continuar) return TalkUI.toast(err.message, 'erro');
+      TalkUI.estadoDoErro(estado, err, () => carregar());
+      $('contador').textContent = '';
+    }
+  }
+
+  let espera = null;
+  $('f-busca').addEventListener('input', () => { clearTimeout(espera); espera = setTimeout(() => carregar(), 350); });
+  $('f-papel').addEventListener('change', () => carregar());
+  $('f-situacao').addEventListener('change', () => carregar());
+  $('filtros').addEventListener('submit', (e) => { e.preventDefault(); carregar(); });
+  $('btn-atualizar').addEventListener('click', () => carregar());
+  $('btn-mais').addEventListener('click', () => carregar({ continuar: true }));
+  $('btn-agrupar').addEventListener('click', () => {
+    const area = $('grupo-area');
+    const abrir = !area.classList.contains('aberta');
+    area.classList.toggle('aberta', abrir);
+    $('btn-agrupar').setAttribute('aria-expanded', String(abrir));
+    $('btn-agrupar').textContent = abrir ? '− Ocultar agrupamento' : '+ Mostrar agrupamento';
+  });
+  $('btn-novo').addEventListener('click', () => abrirDetalhe(null));
+
+  // ── Detalhe ─────────────────────────────────────────────────────────
+  function mostrar(vista) {
+    $('vista-lista').hidden = vista !== 'lista';
+    $('vista-detalhe').hidden = vista !== 'detalhe';
+    window.scrollTo(0, 0);
+  }
+
+  function abrirDetalhe(usuario) {
+    atual = usuario;
+    const form = $('form');
+    form.reset();
+    TalkUI.limparErros(form);
+    $('alerta-form').hidden = true;
+    $('titulo-detalhe').textContent = usuario ? usuario.nome : 'Novo usuário';
+    $('sub-detalhe').textContent = usuario
+      ? `Cadastrado em ${dataHora(usuario.criado_em)} · último acesso ${usuario.ultimo_acesso_em ? relativo(usuario.ultimo_acesso_em) : 'ainda não entrou'}`
+      : 'Preencha os dados e escolha o papel na empresa.';
+
+    $('campo-situacao').hidden = !usuario;
+    form.telefone.required = !usuario;
+
+    if (usuario) {
+      form.nome.value = usuario.nome || '';
+      form.telefone.value = '';
+      form.telefone.placeholder = 'Deixe vazio para manter o número atual';
+      $('dica-telefone').textContent = `Número atual: ${usuario.telefone_mascarado}. Preencha só se quiser trocar o celular.`;
+      form.email.value = usuario.email || '';
+      form.papel.value = usuario.papel || (papeis[0]?.codigo || '');
+      form.situacao.value = usuario.situacao || 'ativo';
+    } else {
+      form.telefone.placeholder = '5565999990000';
+      $('dica-telefone').textContent = 'Somente dígitos com DDI e DDD (ex.: 5565999990000). Recebe o código de login.';
+      form.papel.value = papeis[0]?.codigo || '';
+      form.situacao.value = 'ativo';
+    }
+
+    atualizarDicaPapel();
+    $('aba-dados').click();
+    mostrar('detalhe');
+    form.nome.focus();
+  }
+
+  const voltar = () => { atual = null; mostrar('lista'); };
+  $('btn-voltar').addEventListener('click', voltar);
+  $('btn-cancelar').addEventListener('click', voltar);
+
+  $('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    TalkUI.limparErros(form);
+    $('alerta-form').hidden = true;
+
+    const telDigitos = form.telefone.value.replace(/\D/g, '');
+    const corpo = {
+      nome: form.nome.value.trim(),
+      email: form.email.value.trim() || null,
+      papel: form.papel.value,
+    };
+    if (atual) {
+      corpo.situacao = form.situacao.value;
+      if (telDigitos) corpo.telefone = telDigitos;
+    } else {
+      corpo.telefone = telDigitos.length === 10 || telDigitos.length === 11 ? `55${telDigitos}` : telDigitos;
+    }
+
+    const botao = $('btn-salvar');
+    botao.disabled = true;
+    botao.textContent = 'Salvando…';
+    try {
+      const salvo = atual
+        ? await TalkApi.put(`/usuarios/${encodeURIComponent(atual.id)}`, corpo)
+        : await TalkApi.post('/usuarios', corpo);
+      TalkUI.toast(atual ? 'Usuário atualizado.' : 'Usuário cadastrado.', 'ok');
+      voltar();
+      await carregar();
+      if (salvo?.id) tabela.selectRow?.(salvo.id);
+    } catch (err) {
+      if (!TalkUI.errosNoFormulario(form, err)) {
+        $('alerta-form').textContent = err.message;
+        $('alerta-form').hidden = false;
+      }
+    } finally {
+      botao.disabled = false;
+      botao.textContent = 'Salvar';
+    }
+  });
+
+  TalkUI.abas(document.querySelector('.tlk-abas'));
+  criarTabela();
+  carregarPapeis().then(() => carregar()).then(async () => {
+    const id = new URLSearchParams(location.search).get('id');
+    if (!id) return;
+    try { abrirDetalhe(await TalkApi.get(`/usuarios/${encodeURIComponent(id)}`)); } catch (err) { TalkUI.toast(err.message, 'erro'); }
+  });
+})();
+</script>
+</body>
+</html>

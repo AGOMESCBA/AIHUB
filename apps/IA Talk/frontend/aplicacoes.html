@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aplicações e tokens · IA Talk</title>
+  <!-- Etapa G1 (Antigravity) — lista + detalhe de aplicações da API v1,
+       escopos, canais autorizados, tokens (exibidos uma única vez) e webhook.
+       Tela modelo: apps/IA Talk/frontend/empresas.html. Contrato: docs/contratos.md §3.3. -->
+  <script src="/app/ia-talk/js/talk-ui.js"></script>
+  <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g1.css">
+</head>
+<body class="tlk-pagina">
+<main class="tlk-conteudo">
+
+  <!-- ── Lista ──────────────────────────────────────────────────────── -->
+  <section id="vista-lista" aria-labelledby="titulo-lista">
+    <div class="head-row">
+      <div>
+        <div class="page-kicker">Integrações</div>
+        <h1 class="head-title" id="titulo-lista">Aplicações e tokens <span class="head-count" id="contador" aria-live="polite"></span></h1>
+      </div>
+      <div class="head-actions">
+        <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
+        <button class="btn btn-primary" type="button" id="btn-nova">+ Nova aplicação</button>
+      </div>
+    </div>
+    <p class="head-sub">Sistemas autorizados a usar a API v1 do IA Talk nesta empresa. Cada aplicação recebe seus próprios tokens, escopos, canais e segredo de webhook.</p>
+
+    <div class="filter-bar">
+      <form class="filter-bar-row" id="filtros" role="search">
+        <label class="sr-only" for="f-busca">Buscar</label>
+        <input class="form-control tlk-busca" id="f-busca" name="busca" type="search" placeholder="Buscar por nome ou descrição" autocomplete="off">
+        <label class="sr-only" for="f-situacao">Situação</label>
+        <select class="form-control" id="f-situacao" name="situacao">
+          <option value="">Todas as situações</option>
+          <option value="ativa">Ativas</option>
+          <option value="inativa">Inativas</option>
+        </select>
+        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area">+ Mostrar agrupamento</button>
+        <span class="grupo-status" id="grupo-status">Sem agrupamento ativo</span>
+      </form>
+      <div class="grupo-area" id="grupo-area">
+        <div class="gp-chips-row" id="gp-chips"><span class="gp-label">Agrupar por:</span></div>
+        <div id="dz"></div>
+      </div>
+    </div>
+
+    <div class="grade">
+      <div id="estado-lista" hidden></div>
+      <div id="tabela"></div>
+      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais">Carregar mais</button></div>
+    </div>
+  </section>
+
+  <!-- ── Detalhe / formulário ──────────────────────────────────────── -->
+  <section id="vista-detalhe" hidden aria-labelledby="titulo-detalhe">
+    <div class="editor-bar">
+      <div class="editor-title"><strong id="titulo-detalhe">Nova aplicação</strong><span id="sub-detalhe"></span></div>
+      <button class="btn btn-ghost" type="button" id="btn-voltar">← Voltar à lista</button>
+    </div>
+
+    <div class="tlk-cartao">
+      <div class="tlk-abas" role="tablist" aria-label="Seções da aplicação">
+        <button class="tlk-aba" type="button" role="tab" id="aba-dados" aria-controls="painel-dados" aria-selected="true">Dados e permissões</button>
+        <button class="tlk-aba" type="button" role="tab" id="aba-tokens" aria-controls="painel-tokens" aria-selected="false">Tokens de API</button>
+        <button class="tlk-aba" type="button" role="tab" id="aba-webhook" aria-controls="painel-webhook" aria-selected="false">Webhook</button>
+      </div>
+
+      <!-- Aba 1: Dados, escopos e canais -->
+      <div class="tlk-painel-aba" id="painel-dados" role="tabpanel" aria-labelledby="aba-dados">
+        <div class="tlk-alerta tlk-alerta--erro" id="alerta-form" role="alert" hidden></div>
+        <form id="form-dados" novalidate>
+          <div class="tlk-form">
+            <div class="tlk-campo">
+              <label for="c-nome">Nome da aplicação</label>
+              <input class="form-control" id="c-nome" name="nome" type="text" maxlength="100" required placeholder="Ex.: ERP Protheus">
+            </div>
+
+            <div class="tlk-campo" id="campo-situacao">
+              <label for="c-situacao">Situação</label>
+              <select class="form-control" id="c-situacao" name="situacao">
+                <option value="ativa">Ativa</option>
+                <option value="inativa">Inativa (bloqueia chamadas da API)</option>
+              </select>
+            </div>
+
+            <div class="tlk-campo tlk-largo">
+              <label for="c-descricao">Descrição</label>
+              <input class="form-control" id="c-descricao" name="descricao" type="text" maxlength="240" placeholder="Para que este sistema usa o IA Talk">
+            </div>
+
+            <div class="tlk-campo tlk-largo" id="grupo-escopos">
+              <label>Escopos permitidos</label>
+              <input type="hidden" name="escopos">
+              <div class="tlk-opcoes-grid" id="lista-escopos"></div>
+              <span class="form-hint">Conceda apenas os escopos mínimos que a aplicação precisa.</span>
+            </div>
+
+            <div class="tlk-campo tlk-largo" id="grupo-canais">
+              <label>Canais autorizados</label>
+              <input type="hidden" name="canais_autorizados">
+              <div class="tlk-opcoes-grid" id="lista-canais"></div>
+              <span class="form-hint" id="dica-canais">A aplicação só pode enviar mensagens e consultar estados dos canais marcados aqui.</span>
+            </div>
+          </div>
+
+          <div class="tlk-acoes-form">
+            <button class="btn btn-ghost" type="button" id="btn-cancelar">Cancelar</button>
+            <button class="btn btn-primary" type="submit" id="btn-salvar">Salvar</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Aba 2: Tokens de API (exibição única, sem botão de revelar antigos) -->
+      <div class="tlk-painel-aba" id="painel-tokens" role="tabpanel" aria-labelledby="aba-tokens" hidden>
+        <div class="tlk-secao-cab">
+          <div>
+            <h2>Tokens da API v1</h2>
+            <p>Para rotacionar sem parar a integração, gere um token novo, atualize no sistema consumidor e depois revogue o antigo.</p>
+          </div>
+          <button class="btn btn-primary" type="button" id="btn-gerar-token">+ Gerar novo token</button>
+        </div>
+
+        <div class="tlk-segredo-unico" id="quadro-token-novo" role="alert" hidden>
+          <div class="tlk-segredo-unico-titulo">Novo token gerado — exibição única</div>
+          <div class="tlk-segredo-unico-aviso" id="aviso-token-novo">Copie o token agora. Ele não será mostrado de novo.</div>
+          <div class="tlk-segredo-linha">
+            <code class="tlk-segredo-valor" id="valor-token-novo"></code>
+            <button class="btn btn-primary" type="button" id="btn-copiar-token">Copiar token</button>
+            <button class="btn btn-ghost" type="button" id="btn-ocultar-token">Já copiei, ocultar</button>
+          </div>
+        </div>
+
+        <div class="tlk-lista-bloco" id="lista-tokens"></div>
+      </div>
+
+      <!-- Aba 3: Webhook + segredo de assinatura -->
+      <div class="tlk-painel-aba" id="painel-webhook" role="tabpanel" aria-labelledby="aba-webhook" hidden>
+        <div class="tlk-alerta tlk-alerta--erro" id="alerta-webhook" role="alert" hidden></div>
+
+        <form id="form-webhook" novalidate>
+          <div class="tlk-form">
+            <div class="tlk-campo tlk-largo">
+              <label for="c-wh-url">URL de destino do webhook</label>
+              <input class="form-control" id="c-wh-url" name="webhook_url" type="url" maxlength="500" placeholder="https://sistema.empresa.com.br/webhooks/ia-talk" autocomplete="off">
+              <span class="form-hint">Recebe POST com <code>X-Talk-Evento-Id</code>, <code>X-Talk-Timestamp</code> e <code>X-Talk-Assinatura</code> (HMAC-SHA256).</span>
+            </div>
+            <div class="tlk-campo tlk-largo">
+              <label class="tlk-check-card">
+                <input type="checkbox" id="c-wh-ativo" name="webhook_ativo">
+                <div>
+                  <strong>Entrega de webhooks ativa</strong>
+                  <span>Quando desmarcado, os eventos continuam disponíveis em <code>GET /v1/eventos</code> por 7 dias.</span>
+                </div>
+              </label>
+            </div>
+          </div>
+          <div class="tlk-acoes-form">
+            <button class="btn btn-primary" type="submit" id="btn-salvar-webhook">Salvar webhook</button>
+          </div>
+        </form>
+
+        <div style="border-top:1px solid var(--border);margin-top:20px;padding-top:18px;max-width:880px">
+          <div class="tlk-secao-cab">
+            <div>
+              <h2>Segredo de assinatura do webhook</h2>
+              <p>Usado para conferir o cabeçalho <code>X-Talk-Assinatura</code> no sistema consumidor. Por segurança, o valor completo só aparece no momento da geração.</p>
+            </div>
+            <button class="btn btn-ghost" type="button" id="btn-pedir-segredo">Gerar segredo</button>
+          </div>
+
+          <div class="meta-grid" id="meta-segredo"></div>
+
+          <div class="tlk-confirm-inline" id="confirm-segredo" hidden>
+            <span><strong>Atenção:</strong> gerar um novo segredo substitui o segredo atual imediatamente. O sistema consumidor precisará atualizar o segredo para validar os próximos webhooks.</span>
+            <div class="tlk-confirm-inline-acoes">
+              <button class="btn btn-ghost" type="button" id="btn-cancelar-segredo">Cancelar</button>
+              <button class="btn btn-perigo" type="button" id="btn-confirmar-segredo">Confirmar novo segredo</button>
+            </div>
+          </div>
+
+          <div class="tlk-segredo-unico" id="quadro-segredo-novo" role="alert" hidden>
+            <div class="tlk-segredo-unico-titulo">Novo segredo do webhook — exibição única</div>
+            <div class="tlk-segredo-unico-aviso" id="aviso-segredo-novo">Copie o segredo agora. Ele não será mostrado de novo.</div>
+            <div class="tlk-segredo-linha">
+              <code class="tlk-segredo-valor" id="valor-segredo-novo"></code>
+              <button class="btn btn-primary" type="button" id="btn-copiar-segredo">Copiar segredo</button>
+              <button class="btn btn-ghost" type="button" id="btn-ocultar-segredo">Já copiei, ocultar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/app/ia-talk/ui/js/grid-group-panel.js"></script>
+<script src="/app/ia-talk/js/talk-api.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const { esc, pill, dataHora, relativo } = TalkUI;
+
+  const ESCOPOS = [
+    { codigo: 'mensagens:enviar', titulo: 'Enviar mensagens', desc: 'Permite POST /v1/mensagens (texto e anexos) nos canais autorizados.' },
+    { codigo: 'mensagens:ler', titulo: 'Consultar mensagens', desc: 'Permite consultar estado e histórico de mensagens enviadas.' },
+    { codigo: 'eventos:ler', titulo: 'Ler eventos', desc: 'Permite recuperar eventos pendentes em GET /v1/eventos.' },
+    { codigo: 'canais:ler', titulo: 'Consultar canais', desc: 'Permite verificar estado e capacidades dos canais autorizados.' },
+  ];
+
+  let tabela = null;
+  let painelGrupo = null;
+  let proximoCursor = null;
+  let total = 0;
+  let atual = null;
+  let canaisDisponiveis = [];
+
+  async function copiarTexto(texto, rotulo) {
+    try {
+      await navigator.clipboard.writeText(texto);
+      TalkUI.toast(`${rotulo} copiado.`, 'ok');
+    } catch (_) {
+      TalkUI.toast('Selecione o texto no quadro para copiar.', 'info');
+    }
+  }
+
+  function limparQuadrosSegredo() {
+    $('quadro-token-novo').hidden = true;
+    $('valor-token-novo').textContent = '';
+    $('quadro-segredo-novo').hidden = true;
+    $('valor-segredo-novo').textContent = '';
+    $('confirm-segredo').hidden = true;
+  }
+
+  async function carregarCanais() {
+    try {
+      const res = await TalkApi.get('/canais', { limite: 200 });
+      canaisDisponiveis = Array.isArray(res?.itens) ? res.itens : [];
+    } catch (_) {
+      canaisDisponiveis = [];
+    }
+  }
+
+  function renderizarCheckboxesEscopos(selecionados = []) {
+    const sel = new Set(selecionados);
+    $('lista-escopos').innerHTML = ESCOPOS.map((e) => `
+      <label class="tlk-check-card">
+        <input type="checkbox" data-escopo="${esc(e.codigo)}" ${sel.has(e.codigo) ? 'checked' : ''}>
+        <div>
+          <strong>${esc(e.titulo)} <code>${esc(e.codigo)}</code></strong>
+          <span>${esc(e.desc)}</span>
+        </div>
+      </label>`).join('');
+  }
+
+  function renderizarCheckboxesCanais(selecionados = []) {
+    const sel = new Set(selecionados);
+    if (!canaisDisponiveis.length) {
+      $('lista-canais').innerHTML = '<div class="tlk-alerta tlk-alerta--info" style="grid-column:1/-1;margin:0">Nenhum canal disponível para vincular agora. Você poderá autorizar canais depois.</div>';
+      return;
+    }
+    $('lista-canais').innerHTML = canaisDisponiveis.map((c) => `
+      <label class="tlk-check-card">
+        <input type="checkbox" data-canal="${esc(c.id)}" ${sel.has(c.id) ? 'checked' : ''}>
+        <div>
+          <strong>${esc(c.nome)} ${pill(c.estado)}</strong>
+          <span>${esc(c.numero_mascarado || 'Sem número')} · ${esc(c.provedor === 'meta' ? 'Meta Cloud API' : 'WhatsApp Web')}</span>
+        </div>
+      </label>`).join('');
+  }
+
+  function renderizarTokens() {
+    const lista = $('lista-tokens');
+    const tokens = atual?.tokens || [];
+    if (!tokens.length) {
+      lista.innerHTML = '<div class="tlk-lista-item"><div class="tlk-lista-item-sub">Nenhum token gerado para esta aplicação ainda. Clique em <strong>+ Gerar novo token</strong> para criar o primeiro.</div></div>';
+      return;
+    }
+    lista.innerHTML = tokens.map((t) => {
+      const revogado = !!t.revogado_em;
+      const statusHtml = revogado
+        ? `<span class="tlk-pill tlk-pill--neutro">Revogado em ${esc(dataHora(t.revogado_em))}</span>`
+        : '<span class="tlk-pill tlk-pill--ok">Ativo</span>';
+      return `<div class="tlk-lista-item" data-token-id="${esc(t.id)}">
+        <div class="tlk-lista-item-info">
+          <div class="tlk-lista-item-titulo">
+            <code>${esc(t.prefixo)}••••••••</code>
+            ${statusHtml}
+          </div>
+          <div class="tlk-lista-item-sub">
+            Criado em ${esc(dataHora(t.criado_em))} · último uso ${t.ultimo_uso_em ? esc(relativo(t.ultimo_uso_em)) : 'nunca usado'}
+          </div>
+        </div>
+        <div class="tlk-lista-item-acoes">
+          ${revogado ? '' : `<button class="btn btn-ghost" type="button" data-pedir-revogar="${esc(t.id)}">Revogar</button>`}
+        </div>
+        ${revogado ? '' : `<div class="tlk-confirm-inline" id="conf-tok-${esc(t.id)}" hidden>
+          <span><strong>Confirmar revogação?</strong> Qualquer sistema usando o token <code>${esc(t.prefixo)}…</code> perderá acesso na hora. Esta ação não pode ser desfeita.</span>
+          <div class="tlk-confirm-inline-acoes">
+            <button class="btn btn-ghost" type="button" data-cancelar-revogar="${esc(t.id)}">Cancelar</button>
+            <button class="btn btn-perigo" type="button" data-confirmar-revogar="${esc(t.id)}">Revogar token</button>
+          </div>
+        </div>`}
+      </div>`;
+    }).join('');
+  }
+
+  function renderizarMetaWebhook() {
+    const wh = atual?.webhook || { url: null, ativo: false, segredo_configurado: false };
+    $('c-wh-url').value = wh.url || '';
+    $('c-wh-ativo').checked = !!wh.ativo;
+    $('meta-segredo').innerHTML = `
+      <div class="meta-item"><span>Situação do segredo</span><strong>${wh.segredo_configurado ? 'Configurado (oculto por segurança)' : 'Não configurado'}</strong></div>
+      <div class="meta-item"><span>Entrega automática</span><strong>${wh.ativo ? 'Ativa' : 'Desativada'}</strong></div>`;
+    $('btn-pedir-segredo').textContent = wh.segredo_configurado ? 'Rotacionar segredo' : 'Gerar segredo';
+  }
+
+  // ── Lista ───────────────────────────────────────────────────────────
+  function filtrosAtuais() {
+    return { busca: $('f-busca').value.trim(), situacao: $('f-situacao').value, limite: 50 };
+  }
+
+  function criarTabela() {
+    painelGrupo = createGroupPanel({
+      chipsRowId: 'gp-chips',
+      dropZoneId: 'dz',
+      storageKey: 'talk_aplicacoes_grupo',
+      getTable: () => tabela,
+      onChange: (campos) => {
+        $('grupo-status').textContent = campos.length ? `${campos.length} campo(s) agrupado(s)` : 'Sem agrupamento ativo';
+      },
+    });
+    tabela = new Tabulator('#tabela', {
+      layout: 'fitDataFill',
+      movableColumns: true,
+      index: 'id',
+      height: 'calc(100vh - 290px)',
+      responsiveLayout: 'collapse',
+      responsiveLayoutCollapseStartOpen: false,
+      placeholder: 'Nenhuma aplicação com estes filtros.',
+      groupBy: painelGrupo.getActiveFields(),
+      groupStartOpen: true,
+      rowFormatter: (row) => row.getElement().classList.add('clicavel'),
+      columns: [
+        { formatter: 'responsiveCollapse', width: 34, minWidth: 34, hozAlign: 'center', headerSort: false, resizable: false, groupable: false, responsive: 0 },
+        { title: 'Aplicação', field: 'nome', minWidth: 190, cssClass: 'tlk-forte', headerFilter: 'input', responsive: 0 },
+        { title: 'Situação', field: 'situacao', formatter: (c) => pill(c.getValue()), headerFilter: 'list', headerFilterParams: { values: { ativa: 'Ativa', inativa: 'Inativa' }, clearable: true }, responsive: 0 },
+        {
+          title: 'Escopos', field: 'escopos', minWidth: 200, headerSort: false, responsive: 1,
+          formatter: (c) => {
+            const lista = c.getValue() || [];
+            return `<div class="tlk-chips">${lista.map((e) => `<span class="tlk-chip">${esc(e)}</span>`).join('') || '—'}</div>`;
+          },
+        },
+        {
+          title: 'Tokens ativos', field: 'tokens', minWidth: 115, responsive: 2,
+          formatter: (c) => {
+            const ativos = (c.getValue() || []).filter((t) => !t.revogado_em).length;
+            return ativos ? `<strong>${ativos}</strong> ativo(s)` : '<span class="text-muted">Nenhum</span>';
+          },
+          sorter: (a, b) => (a || []).filter((t) => !t.revogado_em).length - (b || []).filter((t) => !t.revogado_em).length,
+        },
+        {
+          title: 'Webhook', field: 'webhook', minWidth: 130, responsive: 2,
+          formatter: (c) => {
+            const wh = c.getValue();
+            if (!wh?.url) return '<span class="text-muted">Sem webhook</span>';
+            return wh.ativo ? '<span class="tlk-pill tlk-pill--ok">Ativo</span>' : '<span class="tlk-pill tlk-pill--neutro">Pausado</span>';
+          },
+          sorter: (a, b) => Number(!!a?.ativo) - Number(!!b?.ativo),
+        },
+        { title: 'Descrição', field: 'descricao', minWidth: 220, formatter: (c) => esc(c.getValue() || '—'), responsive: 3 },
+        { title: 'Criada em', field: 'criado_em', minWidth: 140, formatter: (c) => esc(dataHora(c.getValue())), sorter: 'string', responsive: 3 },
+      ],
+    });
+    tabela.on('tableBuilt', () => { painelGrupo.refresh(); painelGrupo.applyToTable(); });
+    tabela.on('rowClick', (_e, row) => abrirDetalhe(row.getData()));
+  }
+
+  async function carregar({ continuar = false } = {}) {
+    const estado = $('estado-lista');
+    if (!continuar) {
+      $('tabela').hidden = true;
+      $('mais').hidden = true;
+      TalkUI.estado(estado, 'carregando', { titulo: 'Carregando aplicações…' });
+    }
+    try {
+      const pagina = await TalkApi.get('/aplicacoes', { ...filtrosAtuais(), cursor: continuar ? proximoCursor : undefined });
+      proximoCursor = pagina.proximo_cursor;
+      total = pagina.total ?? pagina.itens.length;
+      if (!continuar && !pagina.itens.length) {
+        const comFiltro = Object.entries(filtrosAtuais()).some(([k, v]) => k !== 'limite' && v);
+        TalkUI.estado(estado, 'vazio', comFiltro
+          ? { titulo: 'Nenhuma aplicação encontrada', texto: 'Mude a busca ou os filtros para ver outras aplicações.' }
+          : { titulo: 'Nenhuma aplicação cadastrada', texto: 'Cadastre uma aplicação para gerar tokens e integrar sistemas externos via API v1.', acao: { rotulo: '+ Nova aplicação', aoClicar: () => abrirDetalhe(null) } });
+        $('contador').textContent = '';
+        return;
+      }
+      estado.hidden = true;
+      $('tabela').hidden = false;
+      if (continuar) await tabela.addData(pagina.itens); else await tabela.replaceData(pagina.itens);
+      tabela.redraw();
+      $('mais').hidden = !proximoCursor;
+      $('contador').textContent = pagina.total != null ? `${tabela.getDataCount()} de ${total}` : `${tabela.getDataCount()}`;
+    } catch (err) {
+      if (continuar) return TalkUI.toast(err.message, 'erro');
+      TalkUI.estadoDoErro(estado, err, () => carregar());
+      $('contador').textContent = '';
+    }
+  }
+
+  let espera = null;
+  $('f-busca').addEventListener('input', () => { clearTimeout(espera); espera = setTimeout(() => carregar(), 350); });
+  $('f-situacao').addEventListener('change', () => carregar());
+  $('filtros').addEventListener('submit', (e) => { e.preventDefault(); carregar(); });
+  $('btn-atualizar').addEventListener('click', () => carregar());
+  $('btn-mais').addEventListener('click', () => carregar({ continuar: true }));
+  $('btn-agrupar').addEventListener('click', () => {
+    const area = $('grupo-area');
+    const abrir = !area.classList.contains('aberta');
+    area.classList.toggle('aberta', abrir);
+    $('btn-agrupar').setAttribute('aria-expanded', String(abrir));
+    $('btn-agrupar').textContent = abrir ? '− Ocultar agrupamento' : '+ Mostrar agrupamento';
+  });
+  $('btn-nova').addEventListener('click', () => abrirDetalhe(null));
+
+  // ── Detalhe ─────────────────────────────────────────────────────────
+  function mostrar(vista) {
+    $('vista-lista').hidden = vista !== 'lista';
+    $('vista-detalhe').hidden = vista !== 'detalhe';
+    window.scrollTo(0, 0);
+  }
+
+  function abrirDetalhe(app) {
+    atual = app;
+    limparQuadrosSegredo();
+    const form = $('form-dados');
+    form.reset();
+    TalkUI.limparErros(form);
+    $('alerta-form').hidden = true;
+    $('alerta-webhook').hidden = true;
+
+    $('titulo-detalhe').textContent = app ? app.nome : 'Nova aplicação';
+    $('sub-detalhe').textContent = app
+      ? `Criada em ${dataHora(app.criado_em)} · ${(app.tokens || []).filter((t) => !t.revogado_em).length} token(s) ativo(s)`
+      : 'Defina nome, escopos e canais autorizados. Depois de salvar, gere os tokens na aba Tokens de API.';
+
+    $('campo-situacao').hidden = !app;
+    $('aba-tokens').hidden = !app;
+    $('aba-webhook').hidden = !app;
+
+    if (app) {
+      form.nome.value = app.nome || '';
+      form.descricao.value = app.descricao || '';
+      form.situacao.value = app.situacao || 'ativa';
+      renderizarCheckboxesEscopos(app.escopos || []);
+      renderizarCheckboxesCanais(app.canais_autorizados || []);
+      renderizarTokens();
+      renderizarMetaWebhook();
+    } else {
+      form.situacao.value = 'ativa';
+      renderizarCheckboxesEscopos(['mensagens:enviar']);
+      renderizarCheckboxesCanais([]);
+    }
+
+    $('aba-dados').click();
+    mostrar('detalhe');
+    form.nome.focus();
+  }
+
+  const voltar = () => { limparQuadrosSegredo(); atual = null; mostrar('lista'); };
+  $('btn-voltar').addEventListener('click', voltar);
+  $('btn-cancelar').addEventListener('click', voltar);
+
+  // Salvar dados, escopos e canais
+  $('form-dados').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    TalkUI.limparErros(form);
+    $('alerta-form').hidden = true;
+
+    const escopos = [...form.querySelectorAll('input[data-escopo]:checked')].map((i) => i.dataset.escopo);
+    const canais = [...form.querySelectorAll('input[data-canal]:checked')].map((i) => i.dataset.canal);
+    const corpo = {
+      nome: form.nome.value.trim(),
+      descricao: form.descricao.value.trim() || null,
+      escopos,
+      canais_autorizados: canais,
+    };
+    if (atual) corpo.situacao = form.situacao.value;
+
+    const botao = $('btn-salvar');
+    botao.disabled = true;
+    botao.textContent = 'Salvando…';
+    try {
+      const eraNova = !atual;
+      const salva = atual
+        ? await TalkApi.put(`/aplicacoes/${encodeURIComponent(atual.id)}`, corpo)
+        : await TalkApi.post('/aplicacoes', corpo);
+      TalkUI.toast(eraNova ? 'Aplicação criada. Gere o primeiro token abaixo.' : 'Aplicação atualizada.', 'ok');
+      await carregar();
+      if (eraNova) {
+        abrirDetalhe(salva);
+        $('aba-tokens').click();
+      } else {
+        atual = salva;
+        $('titulo-detalhe').textContent = salva.nome;
+      }
+    } catch (err) {
+      if (!TalkUI.errosNoFormulario(form, err)) {
+        $('alerta-form').textContent = err.message;
+        $('alerta-form').hidden = false;
+      }
+    } finally {
+      botao.disabled = false;
+      botao.textContent = 'Salvar';
+    }
+  });
+
+  // Gerar token (exibição única)
+  $('btn-gerar-token').addEventListener('click', async () => {
+    if (!atual) return;
+    const btn = $('btn-gerar-token');
+    btn.disabled = true;
+    btn.textContent = 'Gerando…';
+    try {
+      const res = await TalkApi.post(`/aplicacoes/${encodeURIComponent(atual.id)}/tokens`);
+      atual.tokens = [res.registro, ...(atual.tokens || [])];
+      $('aviso-token-novo').textContent = res.aviso || 'Copie o token agora. Ele não será mostrado de novo.';
+      $('valor-token-novo').textContent = res.token;
+      $('quadro-token-novo').hidden = false;
+      renderizarTokens();
+      await carregar();
+      TalkUI.toast('Token gerado. Copie-o agora.', 'ok');
+    } catch (err) {
+      TalkUI.toast(err.message, 'erro');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '+ Gerar novo token';
+    }
+  });
+
+  $('btn-copiar-token').addEventListener('click', () => copiarTexto($('valor-token-novo').textContent, 'Token'));
+  $('btn-ocultar-token').addEventListener('click', () => {
+    $('quadro-token-novo').hidden = true;
+    $('valor-token-novo').textContent = '';
+  });
+
+  // Revogar token (confirmação inline, nunca window.confirm)
+  $('lista-tokens').addEventListener('click', async (e) => {
+    const pedir = e.target.closest('[data-pedir-revogar]')?.dataset.pedirRevogar;
+    if (pedir) {
+      const el = $(`conf-tok-${pedir}`);
+      if (el) el.hidden = false;
+      return;
+    }
+    const cancelar = e.target.closest('[data-cancelar-revogar]')?.dataset.cancelarRevogar;
+    if (cancelar) {
+      const el = $(`conf-tok-${cancelar}`);
+      if (el) el.hidden = true;
+      return;
+    }
+    const confirmar = e.target.closest('[data-confirmar-revogar]')?.dataset.confirmarRevogar;
+    if (confirmar && atual) {
+      const btn = e.target.closest('button');
+      btn.disabled = true;
+      btn.textContent = 'Revogando…';
+      try {
+        const atualizado = await TalkApi.del(`/aplicacoes/${encodeURIComponent(atual.id)}/tokens/${encodeURIComponent(confirmar)}`);
+        atual.tokens = (atual.tokens || []).map((t) => (t.id === confirmar ? atualizado : t));
+        renderizarTokens();
+        await carregar();
+        TalkUI.toast('Token revogado.', 'ok');
+      } catch (err) {
+        TalkUI.toast(err.message, 'erro');
+        btn.disabled = false;
+        btn.textContent = 'Revogar token';
+      }
+    }
+  });
+
+  // Salvar webhook
+  $('form-webhook').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!atual) return;
+    $('alerta-webhook').hidden = true;
+    const btn = $('btn-salvar-webhook');
+    btn.disabled = true;
+    btn.textContent = 'Salvando…';
+    try {
+      const url = $('c-wh-url').value.trim() || null;
+      const ativo = $('c-wh-ativo').checked;
+      const salva = await TalkApi.put(`/aplicacoes/${encodeURIComponent(atual.id)}`, {
+        webhook: { url, ativo },
+      });
+      atual = salva;
+      renderizarMetaWebhook();
+      await carregar();
+      TalkUI.toast('Configuração de webhook salva.', 'ok');
+    } catch (err) {
+      $('alerta-webhook').textContent = err.message;
+      $('alerta-webhook').hidden = false;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Salvar webhook';
+    }
+  });
+
+  // Gerar / rotacionar segredo de webhook (exibição única)
+  async function gerarSegredoWebhook() {
+    if (!atual) return;
+    $('confirm-segredo').hidden = true;
+    const btn = $('btn-pedir-segredo');
+    btn.disabled = true;
+    try {
+      const res = await TalkApi.post(`/aplicacoes/${encodeURIComponent(atual.id)}/webhook/segredo`);
+      atual.webhook = { ...(atual.webhook || {}), segredo_configurado: true };
+      renderizarMetaWebhook();
+      $('aviso-segredo-novo').textContent = res.aviso || 'Copie o segredo agora. Ele não será mostrado de novo.';
+      $('valor-segredo-novo').textContent = res.segredo;
+      $('quadro-segredo-novo').hidden = false;
+      await carregar();
+      TalkUI.toast('Segredo de webhook gerado. Copie-o agora.', 'ok');
+    } catch (err) {
+      TalkUI.toast(err.message, 'erro');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  $('btn-pedir-segredo').addEventListener('click', () => {
+    if (atual?.webhook?.segredo_configurado) {
+      $('confirm-segredo').hidden = false;
+    } else {
+      gerarSegredoWebhook();
+    }
+  });
+  $('btn-cancelar-segredo').addEventListener('click', () => { $('confirm-segredo').hidden = true; });
+  $('btn-confirmar-segredo').addEventListener('click', gerarSegredoWebhook);
+  $('btn-copiar-segredo').addEventListener('click', () => copiarTexto($('valor-segredo-novo').textContent, 'Segredo'));
+  $('btn-ocultar-segredo').addEventListener('click', () => {
+    $('quadro-segredo-novo').hidden = true;
+    $('valor-segredo-novo').textContent = '';
+  });
+
+  TalkUI.abas(document.querySelector('.tlk-abas'));
+  criarTabela();
+  carregarCanais().then(() => carregar()).then(async () => {
+    const id = new URLSearchParams(location.search).get('id');
+    if (!id) return;
+    try { abrirDetalhe(await TalkApi.get(`/aplicacoes/${encodeURIComponent(id)}`)); } catch (err) { TalkUI.toast(err.message, 'erro'); }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+  <title>Entrar · IA Talk</title>
+  <!-- Etapa G1 (Antigravity) — página de entrada da empresa por telefone/código.
+       Tela modelo: apps/IA Service/frontend/entrar.html (J2iA), adaptada ao
+       design system claro/escuro do IA Talk (iahub.css + talk.css) e aos
+       contratos de docs/contratos.md §3.1. -->
+  <script src="/app/ia-talk/js/talk-ui.js"></script>
+  <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g1.css">
+</head>
+<body class="tlk-entrar-body">
+  <div class="tlk-entrar-topo-acoes">
+    <button class="btn btn-ghost" type="button" id="btn-tema" aria-label="Alternar tema claro ou escuro" title="Alternar tema claro/escuro">◐ Tema</button>
+  </div>
+
+  <main class="tlk-entrar-shell" aria-label="Acesso ao IA Talk">
+    <!-- ── Coluna institucional (padrão entrar.html do IA Service) ──── -->
+    <section class="tlk-entrar-hero">
+      <div class="tlk-entrar-brand">
+        <div class="tlk-logo-preview" id="logo-box">
+          <div class="tlk-logo-fallback" id="logo-fallback">IA</div>
+        </div>
+        <div>
+          <h1 id="empresa-nome">IA Talk</h1>
+          <p class="tlk-entrar-brand-sub">Conectando empresas e clientes em um só lugar</p>
+        </div>
+      </div>
+
+      <div class="tlk-entrar-copy">
+        <h2>Acesso direto pelo celular, sem senha.</h2>
+        <p>Informe o número cadastrado na empresa. Enviamos um código temporário pelo WhatsApp — ou pelo e-mail de reserva — para confirmar sua identidade com segurança.</p>
+      </div>
+
+      <div class="tlk-entrar-fluxo" aria-label="Como funciona o acesso">
+        <div class="tlk-fluxo-item">
+          <div class="tlk-fluxo-num">1</div>
+          <div>
+            <div class="tlk-fluxo-titulo">Celular cadastrado</div>
+            <div class="tlk-fluxo-texto">Digite o número com DDD autorizado no painel da empresa.</div>
+          </div>
+        </div>
+        <div class="tlk-fluxo-item">
+          <div class="tlk-fluxo-num">2</div>
+          <div>
+            <div class="tlk-fluxo-titulo">Código de 6 dígitos</div>
+            <div class="tlk-fluxo-texto">O código vale por poucos minutos e é de uso único.</div>
+          </div>
+        </div>
+        <div class="tlk-fluxo-item">
+          <div class="tlk-fluxo-num">3</div>
+          <div>
+            <div class="tlk-fluxo-titulo">Sessão protegida</div>
+            <div class="tlk-fluxo-texto">Você entra direto no contexto da empresa com as suas permissões.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Coluna de autenticação ───────────────────────────────────── -->
+    <section class="tlk-entrar-card-wrap">
+      <div class="tlk-entrar-card">
+        <div id="estado-empresa" hidden></div>
+
+        <div id="conteudo-login" hidden>
+          <div class="tlk-stepper" aria-hidden="true">
+            <div class="tlk-step-pill ativo" id="pill-tel"><span class="tlk-step-dot">1</span>Telefone</div>
+            <div class="tlk-step-pill" id="pill-cod"><span class="tlk-step-dot">2</span>Código</div>
+          </div>
+
+          <div class="tlk-entrar-painel">
+            <div class="tlk-entrar-painel-cab">
+              <div class="tlk-entrar-eyebrow" id="eyebrow-apelido">Acesso da empresa</div>
+              <h2 id="painel-titulo">Identifique seu WhatsApp</h2>
+              <p id="painel-sub">Informe o celular com DDI e DDD para receber o código de entrada.</p>
+            </div>
+
+            <div class="tlk-entrar-painel-corpo">
+              <div class="tlk-alerta" id="alerta-login" role="alert" hidden></div>
+
+              <!-- Passo 1: Telefone -->
+              <form id="form-telefone" novalidate>
+                <div class="tlk-campo">
+                  <label for="c-telefone">Número do celular (WhatsApp)</label>
+                  <div class="tlk-tel-wrap">
+                    <span class="tlk-tel-prefixo" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-12.2 7.5L4 20l1-4.5A8.4 8.4 0 1 1 21 11.5z"/></svg>
+                    </span>
+                    <input class="form-control" id="c-telefone" name="telefone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+55 (65) 99999-0000" required>
+                  </div>
+                  <span class="form-hint">Se digitar apenas DDD e número do Brasil, adicionamos o +55 automaticamente.</span>
+                </div>
+
+                <div class="tlk-entrar-acoes tlk-entrar-acoes--dir">
+                  <button class="btn btn-primary" type="submit" id="btn-enviar">Enviar código →</button>
+                </div>
+              </form>
+
+              <!-- Passo 2: Código de 6 dígitos -->
+              <form id="form-codigo" novalidate hidden>
+                <div class="tlk-resumo-envio">
+                  <div>
+                    <span id="rotulo-envio">Enviado por WhatsApp para</span>
+                    <strong id="destino-envio">—</strong>
+                  </div>
+                  <span class="tlk-pill tlk-pill--info" id="canal-envio-pill">WhatsApp</span>
+                </div>
+
+                <div class="tlk-campo">
+                  <label for="cod-0">Código de 6 dígitos</label>
+                  <div class="tlk-codigo-row" id="codigo-row" role="group" aria-label="Código de verificação de 6 dígitos">
+                    <input class="form-control" id="cod-0" maxlength="1" inputmode="numeric" autocomplete="one-time-code" aria-label="Dígito 1">
+                    <input class="form-control" id="cod-1" maxlength="1" inputmode="numeric" aria-label="Dígito 2">
+                    <input class="form-control" id="cod-2" maxlength="1" inputmode="numeric" aria-label="Dígito 3">
+                    <input class="form-control" id="cod-3" maxlength="1" inputmode="numeric" aria-label="Dígito 4">
+                    <input class="form-control" id="cod-4" maxlength="1" inputmode="numeric" aria-label="Dígito 5">
+                    <input class="form-control" id="cod-5" maxlength="1" inputmode="numeric" aria-label="Dígito 6">
+                  </div>
+                  <span class="form-hint" id="dica-codigo">Digite ou cole os 6 dígitos recebidos.</span>
+                </div>
+
+                <div class="tlk-reenvio-linha">
+                  <span id="contagem-reenvio">Você pode pedir outro código em 60 s.</span>
+                  <button class="btn btn-ghost" type="button" id="btn-reenviar" disabled>Reenviar código</button>
+                </div>
+
+                <div class="tlk-entrar-acoes">
+                  <button class="btn btn-ghost" type="button" id="btn-voltar">← Trocar número</button>
+                  <button class="btn btn-primary" type="submit" id="btn-confirmar">Confirmar e entrar</button>
+                </div>
+              </form>
+
+              <div class="tlk-rodape-nota">
+                Por segurança, a resposta de envio é igual mesmo se o número não estiver cadastrado. Se o WhatsApp da empresa estiver indisponível, o código vai para o e-mail de reserva cadastrado no seu usuário.
+              </div>
+            </div>
+          </div>
+
+          <p class="tlk-copyright" id="rodape-copy">IA Talk · Acesso seguro por código temporário</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app/ia-talk/js/talk-api.js"></script>
+  <script>
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    const { esc } = TalkUI;
+    const TEL_KEY = 'talk_login_telefone';
+    const REENVIO_SEG = 60;
+    const inputsCodigo = [0, 1, 2, 3, 4, 5].map((i) => $(`cod-${i}`));
+
+    let apelido = '';
+    let desafioId = null;
+    let timerReenvio = null;
+    let segundosRestantes = 0;
+
+    // ── Tema claro/escuro ─────────────────────────────────────────────
+    $('btn-tema').addEventListener('click', () => {
+      const escuro = document.documentElement.getAttribute('data-theme') === 'dark';
+      if (escuro) document.documentElement.removeAttribute('data-theme');
+      else document.documentElement.setAttribute('data-theme', 'dark');
+      try { localStorage.setItem('talk_tema', escuro ? 'light' : 'dark'); } catch (_) {}
+    });
+
+    // ── Descobrir apelido (/app/ia-talk/<apelido> ou ?apelido=) ───────
+    function descobrirApelido() {
+      const q = new URLSearchParams(location.search);
+      const daQuery = (q.get('apelido') || '').trim().toLowerCase();
+      if (daQuery) return daQuery;
+      const partes = location.pathname.split('/').filter(Boolean);
+      const ultimo = (partes[partes.length - 1] || '').toLowerCase();
+      if (ultimo && ultimo !== 'entrar.html' && ultimo !== 'ia-talk') return ultimo;
+      return '';
+    }
+
+    function querySimular() {
+      const s = new URLSearchParams(location.search).get('simular');
+      return s ? { simular: s } : undefined;
+    }
+
+    // ── Helpers de telefone (mesmo padrão de entrar.html do IA Service)
+    function digitos(v) { return String(v || '').replace(/\D/g, ''); }
+
+    function normalizarTelefoneEnvio(valor) {
+      const d = digitos(valor);
+      if (d.length === 10 || d.length === 11) return `55${d}`;
+      return d;
+    }
+
+    function formatarTelefone(v) {
+      const d = digitos(v);
+      if (d.length === 13 && d.startsWith('55')) return `+55 (${d.slice(2, 4)}) ${d.slice(4, 9)}-${d.slice(9)}`;
+      if (d.length === 12 && d.startsWith('55')) return `+55 (${d.slice(2, 4)}) ${d.slice(4, 8)}-${d.slice(8)}`;
+      if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+      if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+      return d ? (d.startsWith('55') ? `+${d}` : d) : '';
+    }
+
+    function contarDigitosAntesCursor(valor, pos) {
+      return digitos(String(valor || '').slice(0, Math.max(0, pos || 0))).length;
+    }
+
+    function posAposDigito(valor, indiceDigito) {
+      if (indiceDigito <= 0) return valor.startsWith('+') ? 1 : 0;
+      let vistos = 0;
+      for (let i = 0; i < valor.length; i++) {
+        if (/\d/.test(valor[i])) {
+          vistos++;
+          if (vistos >= indiceDigito) return i + 1;
+        }
+      }
+      return valor.length;
+    }
+
+    function mostrarAlerta(texto, tipo = 'erro') {
+      const el = $('alerta-login');
+      if (!texto) { el.hidden = true; el.textContent = ''; return; }
+      el.className = `tlk-alerta tlk-alerta--${tipo}`;
+      el.textContent = texto;
+      el.hidden = false;
+    }
+
+    function pararContagem() {
+      if (timerReenvio) clearInterval(timerReenvio);
+      timerReenvio = null;
+    }
+
+    function iniciarContagem(segundos = REENVIO_SEG) {
+      pararContagem();
+      segundosRestantes = Math.max(0, Number(segundos) || 0);
+      const atualizar = () => {
+        if (segundosRestantes <= 0) {
+          pararContagem();
+          $('contagem-reenvio').textContent = 'Não recebeu o código?';
+          $('btn-reenviar').disabled = false;
+          return;
+        }
+        $('contagem-reenvio').textContent = `Você pode pedir outro código em ${segundosRestantes} s.`;
+        $('btn-reenviar').disabled = true;
+        segundosRestantes--;
+      };
+      atualizar();
+      timerReenvio = setInterval(atualizar, 1000);
+    }
+
+    function mostrarPasso(passo) {
+      const emCodigo = passo === 'codigo';
+      $('form-telefone').hidden = emCodigo;
+      $('form-codigo').hidden = !emCodigo;
+      $('pill-tel').classList.toggle('ativo', !emCodigo);
+      $('pill-cod').classList.toggle('ativo', emCodigo);
+      $('painel-titulo').textContent = emCodigo ? 'Confirme o código' : 'Identifique seu WhatsApp';
+      $('painel-sub').textContent = emCodigo
+        ? 'Digite os 6 dígitos enviados para concluir a entrada.'
+        : 'Informe o celular com DDI e DDD para receber o código de entrada.';
+      if (emCodigo) setTimeout(() => inputsCodigo[0].focus(), 0);
+      else setTimeout(() => $('c-telefone').focus(), 0);
+    }
+
+    function iniciaisEmpresa(nome) {
+      const partes = String(nome || 'IA').trim().split(/\s+/).filter(Boolean);
+      return partes.slice(0, 2).map((p) => p[0]).join('').toUpperCase() || 'IA';
+    }
+
+    // ── Carregar identidade da empresa pelo apelido ───────────────────
+    async function carregarEmpresa() {
+      apelido = descobrirApelido();
+      const elEstado = $('estado-empresa');
+      $('conteudo-login').hidden = true;
+
+      if (!apelido) {
+        TalkUI.estado(elEstado, 'vazio', {
+          titulo: 'Link da empresa não informado',
+          texto: 'Use o endereço enviado pela sua empresa no formato /app/ia-talk/apelido.',
+        });
+        return;
+      }
+
+      TalkUI.estado(elEstado, 'carregando', { titulo: 'Carregando dados da empresa…' });
+
+      try {
+        const info = await TalkApi.get(`/empresa/${encodeURIComponent(apelido)}`, querySimular(), { api: 'publico' });
+        elEstado.hidden = true;
+        $('conteudo-login').hidden = false;
+
+        document.title = `Entrar · ${info.nome} · IA Talk`;
+        $('empresa-nome').textContent = info.nome;
+        $('eyebrow-apelido').textContent = `Acesso · ${info.apelido}`;
+        $('rodape-copy').textContent = `IA Talk · ${info.nome}`;
+
+        if (info.logo_url) {
+          $('logo-box').innerHTML = `<img src="${esc(info.logo_url)}" alt="${esc(info.nome)}">`;
+        } else {
+          $('logo-fallback').textContent = iniciaisEmpresa(info.nome);
+        }
+
+        try {
+          const salvo = localStorage.getItem(TEL_KEY);
+          if (salvo && !$('c-telefone').value) $('c-telefone').value = formatarTelefone(salvo);
+        } catch (_) {}
+
+        mostrarPasso('telefone');
+      } catch (err) {
+        if (err?.status === 404) {
+          TalkUI.estado(elEstado, 'vazio', {
+            titulo: 'Link de acesso não encontrado',
+            texto: err.message || 'Esta empresa não foi encontrada ou está inativa. Confira o endereço com o administrador.',
+          });
+          return;
+        }
+        TalkUI.estadoDoErro(elEstado, err, () => carregarEmpresa());
+      }
+    }
+
+    // ── Solicitar código (Passo 1 e Reenvio) ──────────────────────────
+    async function solicitarCodigo({ origem = 'enviar' } = {}) {
+      const form = $('form-telefone');
+      TalkUI.limparErros(form);
+      mostrarAlerta('');
+
+      const tel = normalizarTelefoneEnvio($('c-telefone').value);
+      if (!/^\d{12,13}$/.test(tel)) {
+        TalkUI.errosNoFormulario(form, { campos: { telefone: 'Informe o celular com DDD (ex.: +55 65 99999-0000).' } });
+        return;
+      }
+
+      const btn = origem === 'reenviar' ? $('btn-reenviar') : $('btn-enviar');
+      const rotuloAnterior = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Enviando…';
+
+      try {
+        const res = await TalkApi.post('/login/codigo', { apelido, telefone: tel }, { api: 'publico', params: querySimular() });
+        desafioId = res.desafio_id;
+        try { localStorage.setItem(TEL_KEY, tel); } catch (_) {}
+
+        const porEmail = res.enviado_por === 'email';
+        $('rotulo-envio').textContent = porEmail ? 'Enviado pelo e-mail de reserva para' : 'Enviado por WhatsApp para';
+        $('destino-envio').textContent = res.destino_mascarado || 'destino cadastrado';
+        $('canal-envio-pill').textContent = porEmail ? 'E-mail de reserva' : 'WhatsApp';
+        $('canal-envio-pill').className = `tlk-pill ${porEmail ? 'tlk-pill--aviso' : 'tlk-pill--ok'}`;
+        $('dica-codigo').textContent = res.dica_simulado
+          ? `Digite ou cole os 6 dígitos. ${res.dica_simulado}`
+          : 'Digite ou cole os 6 dígitos recebidos. O código expira em poucos minutos.';
+
+        inputsCodigo.forEach((inp) => { inp.value = ''; });
+        mostrarPasso('codigo');
+        iniciarContagem(REENVIO_SEG);
+        mostrarAlerta(
+          porEmail
+            ? 'Código enviado para o seu e-mail de reserva. Confira também a caixa de spam.'
+            : 'Código enviado. Confira seu WhatsApp.',
+          'ok'
+        );
+      } catch (err) {
+        if (!TalkUI.errosNoFormulario(form, err)) {
+          mostrarAlerta(err.message, err.status === 429 ? 'aviso' : 'erro');
+        }
+        if (origem === 'reenviar') {
+          const espera = Number(err?.detalhe?.tentar_novamente_em_seg || 30);
+          if (err.status === 429) iniciarContagem(espera);
+        }
+      } finally {
+        btn.textContent = rotuloAnterior;
+        if (origem === 'enviar') btn.disabled = false;
+      }
+    }
+
+    $('form-telefone').addEventListener('submit', (e) => {
+      e.preventDefault();
+      solicitarCodigo({ origem: 'enviar' });
+    });
+
+    $('btn-reenviar').addEventListener('click', () => solicitarCodigo({ origem: 'reenviar' }));
+
+    $('btn-voltar').addEventListener('click', () => {
+      desafioId = null;
+      pararContagem();
+      inputsCodigo.forEach((inp) => { inp.value = ''; });
+      mostrarAlerta('');
+      mostrarPasso('telefone');
+    });
+
+    // ── Confirmar código (Passo 2) ────────────────────────────────────
+    function valorCodigo() {
+      return inputsCodigo.map((i) => i.value).join('');
+    }
+
+    $('form-codigo').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      mostrarAlerta('');
+      const codigo = valorCodigo();
+      if (codigo.length !== 6) {
+        mostrarAlerta('Digite os 6 dígitos do código recebido.', 'erro');
+        inputsCodigo.find((i) => !i.value)?.focus();
+        return;
+      }
+
+      const btn = $('btn-confirmar');
+      btn.disabled = true;
+      btn.textContent = 'Verificando…';
+
+      try {
+        const res = await TalkApi.post('/login/confirmar', { desafio_id: desafioId, codigo }, { api: 'publico', params: querySimular() });
+        mostrarAlerta('Acesso confirmado. Abrindo o IA Talk…', 'ok');
+        pararContagem();
+        location.href = res.redirecionar || '/app/ia-talk/shell.html';
+      } catch (err) {
+        let msg = err.message || 'Código inválido.';
+        if (typeof err?.detalhe?.tentativas_restantes === 'number') {
+          msg += ` Tentativas restantes: ${err.detalhe.tentativas_restantes}.`;
+        }
+        mostrarAlerta(msg, err.status === 429 ? 'aviso' : 'erro');
+        if (err.status === 429 || err.status === 404) {
+          desafioId = null;
+          pararContagem();
+          $('contagem-reenvio').textContent = 'Peça um novo código para tentar de novo.';
+          $('btn-reenviar').disabled = false;
+        }
+        inputsCodigo.forEach((i) => { i.value = ''; });
+        inputsCodigo[0].focus();
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Confirmar e entrar';
+      }
+    });
+
+    // ── Máscara do telefone preservando cursor ────────────────────────
+    $('c-telefone').addEventListener('input', () => {
+      const inp = $('c-telefone');
+      const idx = contarDigitosAntesCursor(inp.value, inp.selectionStart);
+      inp.value = formatarTelefone(inp.value);
+      const pos = posAposDigito(inp.value, idx);
+      try { inp.setSelectionRange(pos, pos); } catch (_) {}
+    });
+
+    // ── Navegação nos 6 campos de código ──────────────────────────────
+    inputsCodigo.forEach((inp, idx) => {
+      inp.addEventListener('input', () => {
+        inp.value = digitos(inp.value).slice(0, 1);
+        if (inp.value && idx < inputsCodigo.length - 1) inputsCodigo[idx + 1].focus();
+        if (valorCodigo().length === 6) $('btn-confirmar').focus();
+      });
+      inp.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !inp.value && idx > 0) inputsCodigo[idx - 1].focus();
+        if (e.key === 'ArrowLeft' && idx > 0) inputsCodigo[idx - 1].focus();
+        if (e.key === 'ArrowRight' && idx < inputsCodigo.length - 1) inputsCodigo[idx + 1].focus();
+      });
+      inp.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const chars = digitos(e.clipboardData.getData('text')).slice(0, 6).split('');
+        inputsCodigo.forEach((c, i) => { c.value = chars[i] || ''; });
+        inputsCodigo[Math.min(chars.length, inputsCodigo.length - 1)].focus();
+      });
+    });
+
+    carregarEmpresa();
+  })();
+  </script>
+</body>
+</html>

@@ -19,14 +19,14 @@
     {
       id: 'integracoes', label: 'Integrações', icon: '🔌', defaultOpen: false,
       items: [
-        { id: 'talk-aplicacoes', label: 'Aplicações e tokens', href: `${B}/aplicacoes.html`, icon: '🔑', etapa: 'G1' },
+        { id: 'talk-aplicacoes', label: 'Aplicações e tokens', href: `${B}/aplicacoes.html`, icon: '🔑', etapa: null },
       ],
     },
     {
       id: 'administracao', label: 'Administração', icon: '⚙', defaultOpen: false,
       items: [
-        { id: 'talk-usuarios', label: 'Usuários e papéis', href: `${B}/usuarios.html`, icon: '👥', etapa: 'G1' },
-        { id: 'talk-configuracoes', label: 'Configurações', href: `${B}/configuracoes.html`, icon: '🛠', etapa: 'G1' },
+        { id: 'talk-usuarios', label: 'Usuários e papéis', href: `${B}/usuarios.html`, icon: '👥', etapa: null },
+        { id: 'talk-configuracoes', label: 'Configurações', href: `${B}/configuracoes.html`, icon: '🛠', etapa: null },
         { id: 'talk-auditoria', label: 'Auditoria', href: `${B}/auditoria.html`, icon: '🧾', etapa: 'G3' },
         // Só administração da plataforma. Tela modelo da C0 (pronta).
         { id: 'talk-empresas', label: 'Empresas', href: `${B}/empresas.html`, icon: '🏢', etapa: null },

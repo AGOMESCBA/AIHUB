@@ -248,6 +248,13 @@ abas `role="tab"` + `tlk-form`). Formulário: rótulo visível, dica abaixo, err
 campo, Salvar/Cancelar no fim. Ação destrutiva: confirmação na própria tela dizendo a
 consequência (nunca `confirm()` sozinho).
 
+### Tela modelo de cada tela
+
+A tabela "Tela do IA Talk → tela modelo" está em `.agents/rules/ia-talk.md` (carregado
+automaticamente). Regra: abrir a tela modelo antes de começar, copiar estrutura e
+comportamento, e entregar a captura dela ao lado da tela nova. Divergência entre a tela
+modelo e `frontend/empresas.html`: vale o `empresas.html`.
+
 ### Telas específicas
 
 * **Canais (G2):** lista com pill de estado + detalhe com QR (imagem grande, contagem até `expira_em`,
@@ -277,7 +284,8 @@ consequência (nunca `confirm()` sozinho).
 
 1. `node --test "apps/IA Talk/tests/*.test.js"` passando (incluindo os seus).
 2. Capturas da tela contra o simulado em **1440 e 390 px, claro e escuro** (4 imagens),
-   mais `vazio`, `lento` (carregando) e um erro (`403` ou `500`), em `apps/IA Talk/tests/telas/capturas/`.
+   mais `vazio`, `lento` (carregando) e um erro (`403` ou `500`), em `apps/IA Talk/tests/telas/capturas/`,
+   e **uma captura da tela modelo** (IA Service / IA Command) para comparação lado a lado.
 3. Nenhum número completo, token ou segredo nas capturas e nos logs.
 4. Lista de arquivos alterados com caminho completo + linha atualizada no `docs/andamento.md`.
 5. Sem commit e sem push: o usuário decide; o Claude Code revisa antes.

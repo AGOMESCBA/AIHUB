@@ -1,0 +1,717 @@
+/* IA Talk · Etapa G1 — estilos específicos das telas entrar, usuarios,
+   aplicacoes e configuracoes. Usa exclusivamente variáveis de iahub.css e
+   talk.css para respeitar tema claro e escuro. */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.tlk-alerta--ok {
+  background: var(--tlk-ok-bg);
+  color: var(--tlk-ok);
+}
+
+/* ── Quadro de exibição única de token / segredo (aplicacoes.html) ───── */
+.tlk-segredo-unico {
+  background: var(--tlk-aviso-bg);
+  color: var(--tlk-aviso);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.tlk-segredo-unico-titulo {
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.tlk-segredo-unico-aviso {
+  font-size: 12.5px;
+  margin-bottom: 10px;
+  line-height: 1.45;
+}
+.tlk-segredo-linha {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.tlk-segredo-valor {
+  flex: 1 1 260px;
+  min-width: 0;
+  font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+  font-size: 12.5px;
+  background: var(--bg-card);
+  color: var(--text-hi);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 10px;
+  word-break: break-all;
+  user-select: all;
+}
+
+/* ── Grupos de checkboxes (escopos, canais autorizados) ──────────────── */
+.tlk-opcoes-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.tlk-check-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-base);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+.tlk-check-card:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+.tlk-check-card input[type="checkbox"] {
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  flex: none;
+}
+.tlk-check-card strong {
+  display: block;
+  font-size: 13px;
+  color: var(--text-hi);
+}
+.tlk-check-card span {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-lo);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+/* ── Listas compactas em cartões (tokens, sites autorizados, papéis) ─── */
+.tlk-lista-bloco {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-card);
+}
+.tlk-lista-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.tlk-lista-item:last-child {
+  border-bottom: none;
+}
+.tlk-lista-item-info {
+  min-width: 0;
+  flex: 1 1 220px;
+}
+.tlk-lista-item-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-hi);
+}
+.tlk-lista-item-sub {
+  font-size: 12px;
+  color: var(--text-lo);
+  margin-top: 3px;
+}
+.tlk-lista-item-acoes {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Confirmação inline para ação destrutiva (nunca window.confirm) */
+.tlk-confirm-inline {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--tlk-erro-bg);
+  color: var(--tlk-erro);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+}
+.tlk-confirm-inline[hidden] {
+  display: none;
+}
+.tlk-confirm-inline-acoes {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-perigo {
+  background: var(--error);
+  color: #fff;
+  border-color: var(--error);
+}
+.btn-perigo:hover {
+  opacity: .92;
+}
+
+.tlk-secao-cab {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.tlk-secao-cab h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-hi);
+}
+.tlk-secao-cab p {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--text-md);
+  max-width: 66ch;
+  line-height: 1.45;
+}
+
+/* ── Chips / badges neutros para escopos e rotinas ───────────────────── */
+.tlk-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.tlk-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg-hover);
+  color: var(--text-md);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.tlk-chip--ativo {
+  background: var(--accent-glow);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ── Input linha com botão (link copiável, adicionar site, senha) ────── */
+.tlk-input-linha {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  max-width: 680px;
+}
+.tlk-input-linha .form-control {
+  flex: 1;
+  min-width: 0;
+}
+.tlk-pass-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.tlk-pass-wrap .form-control {
+  padding-right: 42px;
+}
+.tlk-pass-btn {
+  position: absolute;
+  right: 1px;
+  top: 1px;
+  bottom: 1px;
+  width: 38px;
+  border: none;
+  background: transparent;
+  color: var(--text-lo);
+  cursor: pointer;
+  border-radius: 0 7px 7px 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tlk-pass-btn:hover {
+  color: var(--text-hi);
+  background: var(--bg-hover);
+}
+
+/* ── Etapas de teste SMTP (padrão E-mail Geral + contrato §3.3) ──────── */
+.tlk-etapas-teste {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  max-width: 680px;
+}
+.tlk-etapa-item {
+  display: grid;
+  grid-template-columns: 22px 110px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+  font-size: 12.5px;
+}
+.tlk-etapa-item--ok {
+  border-color: var(--tlk-ok-bg);
+  background: var(--tlk-ok-bg);
+  color: var(--tlk-ok);
+}
+.tlk-etapa-item--erro {
+  border-color: var(--tlk-erro-bg);
+  background: var(--tlk-erro-bg);
+  color: var(--tlk-erro);
+}
+.tlk-etapa-icone {
+  font-weight: 800;
+  text-align: center;
+}
+.tlk-etapa-nome {
+  font-weight: 700;
+}
+
+.tlk-box-ajuda {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+  font-size: 12.5px;
+  color: var(--text-md);
+  line-height: 1.65;
+  max-width: 880px;
+}
+.tlk-box-ajuda strong {
+  color: var(--text-hi);
+}
+
+.tlk-logo-preview {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  flex: none;
+}
+.tlk-logo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.tlk-logo-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: var(--talk-gradiente);
+  color: #fff;
+  font-weight: 800;
+  font-size: 18px;
+}
+
+/* ── Página de entrada (entrar.html — referência IA Service entrar.html) */
+body.tlk-entrar-body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg-base);
+  color: var(--text-hi);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.tlk-entrar-topo-acoes {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  display: flex;
+  gap: 8px;
+  z-index: 20;
+}
+.tlk-entrar-shell {
+  width: min(1040px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, .86fr) minmax(380px, 1fr);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+.tlk-entrar-hero {
+  padding: 28px 30px;
+  border-right: 1px solid var(--border);
+  background: linear-gradient(160deg, var(--accent-glow), transparent 55%), var(--bg-base);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 18px;
+}
+.tlk-entrar-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.tlk-entrar-brand h1 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 800;
+  color: var(--text-hi);
+  line-height: 1.2;
+}
+.tlk-entrar-brand-sub {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--text-md);
+}
+.tlk-entrar-copy h2 {
+  margin: 0;
+  font-size: clamp(22px, 2.5vw, 30px);
+  font-weight: 800;
+  color: var(--text-hi);
+  line-height: 1.15;
+}
+.tlk-entrar-copy p {
+  margin: 10px 0 0;
+  font-size: 13.5px;
+  color: var(--text-md);
+  line-height: 1.55;
+}
+.tlk-entrar-fluxo {
+  display: grid;
+  gap: 8px;
+}
+.tlk-fluxo-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+.tlk-fluxo-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent-glow);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 800;
+}
+.tlk-fluxo-titulo {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-hi);
+}
+.tlk-fluxo-texto {
+  font-size: 12px;
+  color: var(--text-md);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+.tlk-entrar-card-wrap {
+  display: grid;
+  place-items: center;
+  padding: 32px 34px;
+  background: var(--bg-card);
+}
+.tlk-entrar-card {
+  width: min(440px, 100%);
+}
+.tlk-stepper {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.tlk-step-pill {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-lo);
+  background: var(--bg-base);
+  font-size: 13px;
+  font-weight: 700;
+}
+.tlk-step-pill.ativo {
+  color: var(--text-hi);
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+.tlk-step-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bg-hover);
+  font-size: 12px;
+}
+.tlk-step-pill.ativo .tlk-step-dot {
+  background: var(--accent);
+  color: #fff;
+}
+.tlk-entrar-painel {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-card);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.tlk-entrar-painel-cab {
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-base);
+}
+.tlk-entrar-eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--accent);
+}
+.tlk-entrar-painel-cab h2 {
+  margin: 6px 0 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-hi);
+}
+.tlk-entrar-painel-cab p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-md);
+  line-height: 1.5;
+}
+.tlk-entrar-painel-corpo {
+  padding: 20px;
+}
+.tlk-tel-wrap {
+  position: relative;
+}
+.tlk-tel-prefixo {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent-glow);
+  color: var(--accent);
+  pointer-events: none;
+}
+.tlk-tel-prefixo svg {
+  width: 15px;
+  height: 15px;
+}
+.tlk-tel-wrap input {
+  height: 48px;
+  padding-left: 48px;
+  font-size: 16px;
+}
+.tlk-codigo-row {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+}
+.tlk-codigo-row input {
+  height: 52px;
+  padding: 0;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.tlk-resumo-envio {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-base);
+}
+.tlk-resumo-envio span {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-lo);
+}
+.tlk-resumo-envio strong {
+  display: block;
+  font-size: 14px;
+  color: var(--text-hi);
+  margin-top: 2px;
+}
+.tlk-entrar-acoes {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+.tlk-entrar-acoes--dir {
+  justify-content: flex-end;
+}
+.tlk-entrar-acoes .btn {
+  min-height: 42px;
+}
+.tlk-reenvio-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--text-md);
+  flex-wrap: wrap;
+}
+.tlk-rodape-nota {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-md);
+  line-height: 1.5;
+}
+.tlk-copyright {
+  margin: 12px 0 0;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--text-lo);
+}
+
+@media (max-width: 900px) {
+  .tlk-entrar-shell {
+    grid-template-columns: 1fr;
+  }
+  .tlk-entrar-hero {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 20px;
+  }
+  .tlk-entrar-brand {
+    padding-right: 84px;
+  }
+  .tlk-entrar-card-wrap {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .tlk-abas {
+    padding: 0 8px;
+  }
+  .tlk-aba {
+    padding: 10px 9px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 760px) {
+  .tlk-opcoes-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tlk-input-linha {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .tlk-etapa-item {
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+  .tlk-etapa-nome {
+    grid-column: 2;
+  }
+  .tlk-etapa-msg {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 520px) {
+  body.tlk-entrar-body {
+    padding: 0;
+    place-items: stretch;
+  }
+  .tlk-entrar-shell {
+    border: none;
+    border-radius: 0;
+    min-height: 100vh;
+  }
+  .tlk-entrar-hero {
+    padding: 18px 16px;
+  }
+  .tlk-entrar-fluxo {
+    display: none;
+  }
+  .tlk-entrar-card-wrap {
+    padding: 16px;
+    place-items: start stretch;
+  }
+  .tlk-entrar-acoes {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .tlk-entrar-acoes--dir {
+    flex-direction: column;
+  }
+  .tlk-entrar-acoes .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .tlk-codigo-row {
+    gap: 5px;
+  }
+  .tlk-codigo-row input {
+    height: 46px;
+    font-size: 19px;
+  }
+}

@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Configurações · IA Talk</title>
+  <!-- Etapa G1 (Antigravity) — configurações da empresa ativa:
+       1) Link de entrada (padrão aba Link de acesso em apps/IA Service/frontend/config-ia.html)
+       2) Sites autorizados (iframe com controle de versão, contrato §1.4 e §3.3)
+       3) E-mail de envio (fluxo "E-mail Geral" de modules/configuracoes/frontend/configuracoes.html)
+       Estrutura de cartão/abas alinhada a apps/IA Talk/frontend/empresas.html. -->
+  <script src="/app/ia-talk/js/talk-ui.js"></script>
+  <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g1.css">
+</head>
+<body class="tlk-pagina">
+<main class="tlk-conteudo">
+
+  <div class="head-row">
+    <div>
+      <div class="page-kicker">Administração da empresa</div>
+      <h1 class="head-title" id="titulo-pagina">Configurações</h1>
+    </div>
+    <div class="head-actions">
+      <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
+    </div>
+  </div>
+  <p class="head-sub">Ajuste o link de acesso da empresa, os sistemas externos autorizados a incorporar telas do IA Talk e o e-mail de reserva para envio do código de login.</p>
+
+  <div id="estado-geral" hidden></div>
+
+  <div class="tlk-cartao" id="cartao-config" hidden>
+    <div class="tlk-abas" role="tablist" aria-label="Seções de configuração">
+      <button class="tlk-aba" type="button" role="tab" id="aba-link" aria-controls="painel-link" aria-selected="true">Link de entrada</button>
+      <button class="tlk-aba" type="button" role="tab" id="aba-sites" aria-controls="painel-sites" aria-selected="false">Sites autorizados</button>
+      <button class="tlk-aba" type="button" role="tab" id="aba-email" aria-controls="painel-email" aria-selected="false">E-mail de envio</button>
+    </div>
+
+    <!-- ── Aba 1: Link de entrada ────────────────────────────────────── -->
+    <div class="tlk-painel-aba" id="painel-link" role="tabpanel" aria-labelledby="aba-link">
+      <div class="tlk-secao-cab">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div class="tlk-logo-preview" id="link-logo-box">
+            <div class="tlk-logo-fallback" id="link-logo-fallback">IA</div>
+          </div>
+          <div>
+            <h2 id="link-empresa-nome">Empresa</h2>
+            <p>Endereço próprio da empresa para entrada por celular com código temporário (sem senha).</p>
+          </div>
+        </div>
+        <button class="btn btn-ghost" type="button" id="btn-editar-empresa" hidden>Editar apelido e logo ↗</button>
+      </div>
+
+      <div class="meta-grid" id="meta-link"></div>
+
+      <div class="tlk-campo" style="max-width:680px">
+        <label for="c-link-entrada">Link para compartilhar</label>
+        <div class="tlk-input-linha">
+          <input class="form-control" id="c-link-entrada" type="text" readonly>
+          <button class="btn btn-primary" type="button" id="btn-copiar-link">Copiar link</button>
+          <a class="btn btn-ghost" id="btn-abrir-link" href="#" target="_blank" rel="noopener">Abrir página ↗</a>
+        </div>
+        <span class="form-hint">O apelido e a logomarca são gerenciados no cadastro de Empresas pela administração da plataforma.</span>
+      </div>
+    </div>
+
+    <!-- ── Aba 2: Sites autorizados (iframe com versão) ──────────────── -->
+    <div class="tlk-painel-aba" id="painel-sites" role="tabpanel" aria-labelledby="aba-sites" hidden>
+      <div class="tlk-secao-cab">
+        <div>
+          <h2>Sites autorizados para incorporação (iframe)</h2>
+          <p>Informe os endereços HTTPS de sistemas externos (como SoftExpert ou intranet) autorizados a abrir telas do IA Talk incorporadas. Sem sites listados, a incorporação fica bloqueada.</p>
+        </div>
+        <span class="tlk-chip" id="sites-versao-chip">Versão —</span>
+      </div>
+
+      <div class="tlk-alerta tlk-alerta--erro" id="alerta-sites" role="alert" hidden></div>
+
+      <form id="form-add-site" class="tlk-campo" style="max-width:680px;margin-bottom:14px" novalidate>
+        <label for="c-novo-site">Adicionar origem HTTPS</label>
+        <div class="tlk-input-linha">
+          <input class="form-control" id="c-novo-site" name="origens" type="url" placeholder="https://sistema.empresa.com.br" autocomplete="off">
+          <button class="btn btn-ghost" type="submit" id="btn-add-site">+ Adicionar</button>
+        </div>
+        <span class="form-hint">Use apenas protocolo <code>https://</code> e domínio (com porta opcional), sem caminho no final.</span>
+      </form>
+
+      <div class="tlk-lista-bloco" id="lista-sites" style="max-width:680px"></div>
+
+      <div class="tlk-acoes-form" style="max-width:680px">
+        <button class="btn btn-ghost" type="button" id="btn-recarregar-sites">Descartar alterações</button>
+        <button class="btn btn-primary" type="button" id="btn-salvar-sites">Salvar sites autorizados</button>
+      </div>
+    </div>
+
+    <!-- ── Aba 3: E-mail de envio (padrão "E-mail Geral" do IA Recruit) ─ -->
+    <div class="tlk-painel-aba" id="painel-email" role="tabpanel" aria-labelledby="aba-email" hidden>
+      <div class="tlk-secao-cab">
+        <div>
+          <h2>E-mail de envio (reserva para código de login)</h2>
+          <p>Quando o canal WhatsApp da empresa estiver indisponível, o código de entrada é enviado automaticamente por este servidor de e-mail.</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span id="email-pill-situacao"></span>
+          <button class="btn btn-ghost" type="button" id="btn-restaurar-email">↺ Restaurar padrões</button>
+        </div>
+      </div>
+
+      <div class="tlk-alerta tlk-alerta--erro" id="alerta-email" role="alert" hidden></div>
+
+      <form id="form-email" novalidate>
+        <div class="tlk-form">
+          <div class="tlk-campo">
+            <label for="c-email-tipo">Tipo de servidor</label>
+            <select class="form-control" id="c-email-tipo" name="tipo">
+              <option value="gmail">Gmail (Senha de App)</option>
+              <option value="smtp">SMTP Genérico</option>
+            </select>
+            <span class="form-hint" id="dica-email-tipo">Para Gmail, usa automaticamente os padrões do Google (smtp.gmail.com, porta 465 SSL/TLS).</span>
+          </div>
+
+          <div class="tlk-campo">
+            <label for="c-email-nome">Nome do remetente</label>
+            <input class="form-control" id="c-email-nome" name="remetente_nome" type="text" maxlength="120" placeholder="Ex.: J2A Consultoria">
+            <span class="form-hint">Aparece como remetente na caixa de entrada do usuário.</span>
+          </div>
+
+          <div class="tlk-campo">
+            <label for="c-email-addr">Endereço de e-mail</label>
+            <input class="form-control" id="c-email-addr" name="email" type="email" maxlength="160" required placeholder="nao-responda@empresa.com.br" autocomplete="off">
+          </div>
+
+          <div class="tlk-campo">
+            <label for="c-email-senha" id="label-email-senha">Senha SMTP</label>
+            <div class="tlk-pass-wrap">
+              <input class="form-control" id="c-email-senha" name="senha" type="password" autocomplete="new-password" placeholder="••••••••">
+              <button class="tlk-pass-btn" type="button" id="btn-ver-senha" aria-label="Mostrar ou ocultar senha digitada" title="Mostrar ou ocultar senha digitada">👁</button>
+            </div>
+            <span class="form-hint" id="dica-email-senha">Deixe em branco para manter a senha atual salva. A senha salva nunca é exibida de volta.</span>
+          </div>
+
+          <div class="tlk-campo">
+            <label for="c-smtp-host">Host SMTP</label>
+            <input class="form-control" id="c-smtp-host" name="smtp_host" type="text" maxlength="160" placeholder="smtp.gmail.com" autocomplete="off">
+          </div>
+
+          <div class="tlk-campo">
+            <label for="c-smtp-porta">Porta SMTP</label>
+            <input class="form-control" id="c-smtp-porta" name="smtp_porta" type="number" min="1" max="65535" placeholder="465">
+            <span class="form-hint">465 = SSL/TLS · 587 = STARTTLS</span>
+          </div>
+
+          <div class="tlk-campo">
+            <label for="c-smtp-seguro">Segurança (TLS)</label>
+            <select class="form-control" id="c-smtp-seguro" name="smtp_seguro">
+              <option value="true">SSL/TLS (porta 465)</option>
+              <option value="false">STARTTLS (porta 587)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="tlk-acoes-form">
+          <button class="btn btn-ghost" type="button" id="btn-testar-email">📤 Testar envio (SMTP)</button>
+          <button class="btn btn-primary" type="submit" id="btn-salvar-email">Salvar configuração</button>
+        </div>
+      </form>
+
+      <ul class="tlk-etapas-teste" id="lista-etapas-teste" aria-live="polite" hidden></ul>
+
+      <div class="tlk-box-ajuda">
+        <strong>Como funciona:</strong><br>
+        • <strong>Gmail:</strong> obrigatório usar uma <strong>Senha de App</strong> (Conta Google → Segurança → Verificação em 2 etapas → Senhas de app). Não use a senha normal da conta.<br>
+        • <strong>SMTP Genérico:</strong> informe o servidor de saída, porta e tipo de TLS fornecidos pelo seu provedor de e-mail.<br>
+        • Após alterar qualquer campo, salve e clique em <strong>Testar envio (SMTP)</strong> para confirmar DNS, porta, autenticação e entrega.
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script src="/app/ia-talk/js/talk-api.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const { esc, dataHora } = TalkUI;
+
+  const ROTULO_ETAPA = {
+    dns: 'DNS',
+    porta: 'Porta SMTP',
+    autenticacao: 'Autenticação',
+    envio: 'Envio de teste',
+  };
+
+  let sessaoAtual = null;
+  let sitesOriginais = { origens: [], versao: 1, atualizado_em: null };
+  let sitesEditados = [];
+  let emailAtual = null;
+
+  function iniciais(nome) {
+    return String(nome || 'IA').trim().split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || 'IA';
+  }
+
+  // ── Aba 1: Link de entrada ──────────────────────────────────────────
+  function renderizarLink(sessao) {
+    const emp = sessao?.empresa || { nome: 'Empresa', apelido: '', logo_url: null };
+    const link = `${location.origin}/app/ia-talk/${emp.apelido}`;
+    $('link-empresa-nome').textContent = emp.nome;
+    if (emp.logo_url) {
+      $('link-logo-box').innerHTML = `<img src="${esc(emp.logo_url)}" alt="${esc(emp.nome)}">`;
+    } else {
+      $('link-logo-box').innerHTML = `<div class="tlk-logo-fallback">${esc(iniciais(emp.nome))}</div>`;
+    }
+    $('c-link-entrada').value = link;
+    $('btn-abrir-link').href = link;
+
+    const podeEmpresas = Array.isArray(sessao?.rotinas) && sessao.rotinas.includes('talk-empresas');
+    $('btn-editar-empresa').hidden = !podeEmpresas;
+
+    $('meta-link').innerHTML = `
+      <div class="meta-item"><span>Empresa ativa</span><strong>${esc(emp.nome)}</strong></div>
+      <div class="meta-item"><span>Apelido da URL</span><strong><code>${esc(emp.apelido || '—')}</code></strong></div>
+      <div class="meta-item"><span>Método de entrada</span><strong>Celular + código (sem senha)</strong></div>`;
+  }
+
+  $('btn-copiar-link').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText($('c-link-entrada').value);
+      TalkUI.toast('Link de entrada copiado.', 'ok');
+    } catch (_) {
+      $('c-link-entrada').select();
+      TalkUI.toast('Selecione o link para copiar.', 'info');
+    }
+  });
+
+  $('btn-editar-empresa').addEventListener('click', () => {
+    const id = sessaoAtual?.empresa?.id;
+    if (!id) return;
+    const url = `/app/ia-talk/empresas.html?id=${encodeURIComponent(id)}`;
+    if (window.top?.TalkAbas?.abrir) window.top.TalkAbas.abrir(url, 'Empresas', '🏢');
+    else location.href = url;
+  });
+
+  // ── Aba 2: Sites autorizados ────────────────────────────────────────
+  function renderizarSites() {
+    $('sites-versao-chip').textContent = `Versão ${sitesOriginais.versao} · atualizado em ${dataHora(sitesOriginais.atualizado_em)}`;
+    const el = $('lista-sites');
+    if (!sitesEditados.length) {
+      el.innerHTML = '<div class="tlk-lista-item"><div class="tlk-lista-item-sub">Nenhum site externo autorizado. A incorporação por iframe está bloqueada para esta empresa.</div></div>';
+      return;
+    }
+    el.innerHTML = sitesEditados.map((origem, idx) => `
+      <div class="tlk-lista-item">
+        <div class="tlk-lista-item-info">
+          <div class="tlk-lista-item-titulo"><code>${esc(origem)}</code></div>
+        </div>
+        <div class="tlk-lista-item-acoes">
+          <button class="btn btn-ghost" type="button" data-remover-site="${idx}" aria-label="Remover ${esc(origem)}">Remover</button>
+        </div>
+      </div>`).join('');
+  }
+
+  $('form-add-site').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    TalkUI.limparErros(form);
+    $('alerta-sites').hidden = true;
+    const valor = $('c-novo-site').value.trim().replace(/\/+$/, '');
+    if (!/^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(valor)) {
+      TalkUI.errosNoFormulario(form, { campos: { origens: 'Use só https://dominio (com porta opcional), sem caminho.' } });
+      return;
+    }
+    const normalizado = valor.toLowerCase();
+    if (sitesEditados.includes(normalizado)) {
+      TalkUI.errosNoFormulario(form, { campos: { origens: 'Esta origem já está na lista.' } });
+      return;
+    }
+    sitesEditados.push(normalizado);
+    $('c-novo-site').value = '';
+    renderizarSites();
+  });
+
+  $('lista-sites').addEventListener('click', (e) => {
+    const idx = e.target.closest('[data-remover-site]')?.dataset.removerSite;
+    if (idx === undefined) return;
+    sitesEditados.splice(Number(idx), 1);
+    renderizarSites();
+  });
+
+  $('btn-recarregar-sites').addEventListener('click', () => {
+    sitesEditados = [...(sitesOriginais.origens || [])];
+    $('alerta-sites').hidden = true;
+    TalkUI.limparErros($('form-add-site'));
+    renderizarSites();
+  });
+
+  async function recarregarSites() {
+    sitesOriginais = await TalkApi.get('/sites-autorizados');
+    sitesEditados = [...(sitesOriginais.origens || [])];
+    renderizarSites();
+  }
+
+  $('btn-salvar-sites').addEventListener('click', async () => {
+    $('alerta-sites').hidden = true;
+    const btn = $('btn-salvar-sites');
+    btn.disabled = true;
+    btn.textContent = 'Salvando…';
+    try {
+      const salvo = await TalkApi.put('/sites-autorizados', { origens: sitesEditados, versao: sitesOriginais.versao });
+      sitesOriginais = salvo;
+      sitesEditados = [...(salvo.origens || [])];
+      renderizarSites();
+      TalkUI.toast('Sites autorizados salvos.', 'ok');
+    } catch (err) {
+      if (err.status === 409) {
+        $('alerta-sites').textContent = `${err.message} A lista foi recarregada com a versão mais recente.`;
+        $('alerta-sites').hidden = false;
+        try { await recarregarSites(); } catch (_) {}
+      } else {
+        $('alerta-sites').textContent = err.message;
+        $('alerta-sites').hidden = false;
+      }
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Salvar sites autorizados';
+    }
+  });
+
+  // ── Aba 3: E-mail de envio ──────────────────────────────────────────
+  function atualizarDicasTipoEmail() {
+    const gmail = $('c-email-tipo').value === 'gmail';
+    $('label-email-senha').textContent = gmail ? 'Senha de App (Google)' : 'Senha SMTP';
+    $('dica-email-tipo').textContent = gmail
+      ? 'Gmail usa smtp.gmail.com, porta 465 com SSL/TLS e exige Senha de App.'
+      : 'Informe o servidor de saída, porta e segurança do seu provedor.';
+  }
+
+  function renderizarEmail(dados) {
+    emailAtual = dados;
+    const form = $('form-email');
+    TalkUI.limparErros(form);
+    $('alerta-email').hidden = true;
+    form.tipo.value = dados.tipo || 'smtp';
+    form.remetente_nome.value = dados.remetente_nome || '';
+    form.email.value = dados.email || '';
+    form.senha.value = '';
+    form.senha.placeholder = dados.senha_configurada ? 'Senha salva (deixe vazio para manter)' : 'Informe a senha de envio';
+    form.smtp_host.value = dados.smtp_host || '';
+    form.smtp_porta.value = dados.smtp_porta || 465;
+    form.smtp_seguro.value = dados.smtp_seguro === false ? 'false' : 'true';
+    $('dica-email-senha').textContent = dados.senha_configurada
+      ? 'Já existe uma senha salva. Deixe vazio para mantê-la ou digite uma nova para substituir.'
+      : 'Nenhuma senha salva ainda. A senha nunca volta para a tela após salvar.';
+
+    const testado = dados.situacao === 'testado';
+    $('email-pill-situacao').innerHTML = testado
+      ? '<span class="tlk-pill tlk-pill--ok">Testado</span>'
+      : '<span class="tlk-pill tlk-pill--aviso">Não testado</span>';
+    atualizarDicasTipoEmail();
+  }
+
+  $('c-email-tipo').addEventListener('change', () => {
+    atualizarDicasTipoEmail();
+    if ($('c-email-tipo').value === 'gmail') {
+      $('c-smtp-host').value = 'smtp.gmail.com';
+      $('c-smtp-porta').value = '465';
+      $('c-smtp-seguro').value = 'true';
+    }
+  });
+
+  $('btn-restaurar-email').addEventListener('click', () => {
+    const gmail = $('c-email-tipo').value === 'gmail';
+    $('c-smtp-host').value = gmail ? 'smtp.gmail.com' : '';
+    $('c-smtp-porta').value = gmail ? '465' : '587';
+    $('c-smtp-seguro').value = gmail ? 'true' : 'false';
+    TalkUI.toast('Padrões do servidor restaurados.', 'info');
+  });
+
+  $('btn-ver-senha').addEventListener('click', () => {
+    const inp = $('c-email-senha');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+  });
+
+  async function salvarEmail() {
+    const form = $('form-email');
+    TalkUI.limparErros(form);
+    $('alerta-email').hidden = true;
+    const corpo = {
+      tipo: form.tipo.value,
+      email: form.email.value.trim(),
+      remetente_nome: form.remetente_nome.value.trim(),
+      smtp_host: form.smtp_host.value.trim(),
+      smtp_porta: Number(form.smtp_porta.value),
+      smtp_seguro: form.smtp_seguro.value === 'true',
+    };
+    const senhaDigitada = form.senha.value;
+    if (senhaDigitada) corpo.senha = senhaDigitada;
+    const salvo = await TalkApi.put('/email-envio', corpo);
+    renderizarEmail(salvo);
+    return salvo;
+  }
+
+  $('form-email').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('btn-salvar-email');
+    btn.disabled = true;
+    btn.textContent = 'Salvando…';
+    try {
+      await salvarEmail();
+      $('lista-etapas-teste').hidden = true;
+      TalkUI.toast('Configuração de e-mail salva. Execute o teste para validar.', 'ok');
+    } catch (err) {
+      if (!TalkUI.errosNoFormulario($('form-email'), err)) {
+        $('alerta-email').textContent = err.message;
+        $('alerta-email').hidden = false;
+      }
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Salvar configuração';
+    }
+  });
+
+  $('btn-testar-email').addEventListener('click', async () => {
+    const btn = $('btn-testar-email');
+    const lista = $('lista-etapas-teste');
+    $('alerta-email').hidden = true;
+    btn.disabled = true;
+    btn.textContent = '⏳ Testando…';
+    lista.hidden = false;
+    lista.innerHTML = '<li class="tlk-etapa-item"><span class="tlk-etapa-icone">…</span><span class="tlk-etapa-nome">Conexão</span><span class="tlk-etapa-msg">Validando DNS, porta, autenticação e envio…</span></li>';
+
+    try {
+      await salvarEmail();
+      const res = await TalkApi.post('/email-envio/testar');
+      const etapas = Array.isArray(res?.etapas) ? res.etapas : [];
+      lista.innerHTML = etapas.map((et) => `
+        <li class="tlk-etapa-item ${et.ok ? 'tlk-etapa-item--ok' : 'tlk-etapa-item--erro'}">
+          <span class="tlk-etapa-icone" aria-hidden="true">${et.ok ? '✓' : '✕'}</span>
+          <span class="tlk-etapa-nome">${esc(ROTULO_ETAPA[et.etapa] || et.etapa)}</span>
+          <span class="tlk-etapa-msg">${esc(et.mensagem || '')}</span>
+        </li>`).join('');
+      if (res?.ok) {
+        $('email-pill-situacao').innerHTML = '<span class="tlk-pill tlk-pill--ok">Testado</span>';
+        TalkUI.toast('Teste de e-mail concluído com sucesso.', 'ok');
+      }
+    } catch (err) {
+      lista.hidden = true;
+      if (!TalkUI.errosNoFormulario($('form-email'), err)) {
+        $('alerta-email').textContent = err.message;
+        $('alerta-email').hidden = false;
+      }
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '📤 Testar envio (SMTP)';
+    }
+  });
+
+  // ── Carga inicial ───────────────────────────────────────────────────
+  async function carregarTudo() {
+    const estado = $('estado-geral');
+    $('cartao-config').hidden = true;
+    TalkUI.estado(estado, 'carregando', { titulo: 'Carregando configurações…' });
+    try {
+      const [sessao, sites, email] = await Promise.all([
+        TalkApi.get('/sessao'),
+        TalkApi.get('/sites-autorizados'),
+        TalkApi.get('/email-envio'),
+      ]);
+      sessaoAtual = sessao;
+      sitesOriginais = sites;
+      sitesEditados = [...(sites.origens || [])];
+
+      renderizarLink(sessao);
+      renderizarSites();
+      renderizarEmail(email);
+
+      estado.hidden = true;
+      $('cartao-config').hidden = false;
+    } catch (err) {
+      TalkUI.estadoDoErro(estado, err, () => carregarTudo());
+    }
+  }
+
+  $('btn-atualizar').addEventListener('click', () => carregarTudo());
+  TalkUI.abas(document.querySelector('.tlk-abas'));
+  carregarTudo();
+})();
+</script>
+</body>
+</html>

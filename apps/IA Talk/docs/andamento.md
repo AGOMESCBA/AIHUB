@@ -9,17 +9,17 @@ Plano completo e decisões: relatório "IA Talk — arquitetura e planejamento" 
 
 | Etapa | Dono | Situação | Evidências | Observações |
 |---|---|---|---|---|
-| S — Segurança IA Command | Claude Code | commit `f38299b` (branch `fix/ia-command-seguranca-whatsapp`), sem push | suíte IA Command 169/171 (2 falhas pré-existentes), consumidores ok | publicar só com autorização |
-| C0 — Contratos e esqueleto | Claude Code | em homologação | `node --test "apps/IA Talk/tests/*.test.js"` | branch `feature/ia-talk`, sem commit |
-| C1 — Acesso e identidade | Claude Code | a fazer | | inclui e-mail de envio (padrão IA Recruit, senha cifrada) |
+| S — Segurança IA Command | Claude Code | publicada no pacote 20261125_1556 (`f38299b`, junção `aacd273d`) | suíte IA Command 169/171 (2 falhas pré-existentes), consumidores ok | publicar só com autorização |
+| C0 — Contratos e esqueleto | Claude Code | homologada (`e815684`) | `node --test "apps/IA Talk/tests/*.test.js"` | branch `feature/ia-talk` |
+| C1 — Acesso e identidade | Claude Code | em homologação (I1 com G1 ok) | `tests/c1-rotas.test.js` (10/10) + ponta a ponta no navegador; suíte Talk 58/58, IAHub 15/15 | login por código, link de primeiro acesso, card do IAHub (ticket Ed25519), sessão, empresas, usuários, sites, e-mail de envio, aplicações/tokens, auditoria. Telas de cadastro = G1 |
 | C2 — Canais WhatsApp Web | Claude Code | a fazer | | precisa do chip de teste |
 | C3 — Envio, fila e estados | Claude Code | a fazer | | usa G4 (mídia) |
 | C4 — Recebimento e webhooks | Claude Code | a fazer | | usa G4 (assinatura) |
 | C5 — Migração onda 1 | Claude Code | a fazer | | login IA Service, Jaade, Jobs |
 | C6 — Migração ondas 2 e 3 | Claude Code | a fazer | | canal real + IA Command (autorização própria) |
 | C7 — Operação e publicação | Claude Code | a fazer | | nginx, NSSM, pacote oficial, backup |
-| G4 — Bibliotecas mídia e assinatura | Antigravity | em revisão | `node --test "apps/IA Talk/tests/*.test.js"` (48/48, 14/14 na G4, 0 todo) | `midia/index.js` (+ `decodificarBase64Estrito` para C3) e `assinatura/index.js` implementados; sem commits |
-| G1 — Telas de acesso e cadastros | Antigravity | a fazer | | entrar, usuários, aplicações, configurações |
+| G4 — Bibliotecas mídia e assinatura | Antigravity | aprovada e commitada (`f054e6a`) | `node --test "apps/IA Talk/tests/*.test.js"` (48/48, 14/14 na G4, 0 todo) | `midia/index.js` (+ `decodificarBase64Estrito` para C3) e `assinatura/index.js` implementados; sem commits |
+| G1 — Telas de acesso e cadastros | Antigravity | em homologação (revisão Claude Code ok + I1 contra o servidor real ok) | `g1-telas.test.js` (4/4) + `tests/*.test.js` (58/58) + 33 capturas em `tests/telas/capturas/` | `entrar.html`, `usuarios.html`, `aplicacoes.html`, `configuracoes.html` + `css/telas/g1.css`; sem commits |
 | G2 — Telas de canais | Antigravity | a fazer | | |
 | G3 — Painel, histórico, eventos, auditoria | Antigravity | a fazer | | |
 | G5 — Guia do integrador | Antigravity | a fazer | | assume `docs/openapi-v1.yaml` |
@@ -30,7 +30,7 @@ Plano completo e decisões: relatório "IA Talk — arquitetura e planejamento" 
 
 | Data | Quem pede | O quê | Situação |
 |---|---|---|---|
-| | | | |
+| 25/11/2026 | Antigravity | Trocar `etapa: 'G1'` para `etapa: null` em `frontend/js/talk-sidebar.js` para `talk-usuarios`, `talk-aplicacoes` e `talk-configuracoes` | feito (Claude Code, 25/11) |
 
 ## Decisões
 
