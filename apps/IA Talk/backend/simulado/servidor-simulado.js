@@ -13,7 +13,9 @@
 // No navegador: sessionStorage.setItem('talk_simular', 'vazio,lento') faz o
 // talk-api.js mandar o cabeçalho em toda chamada (ver frontend/js/talk-api.js).
 
+const fs = require('fs');
 const http = require('http');
+const path = require('path');
 const express = require('express');
 const QRCode = require('qrcode');
 const { Server } = require('socket.io');
@@ -536,6 +538,14 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, l
   app.use(config.API_V1, v1);
 
   montarEstaticos(app, { comPrototipos: true });
+
+  // Página de entrada da empresa: /app/ia-talk/<apelido> serve frontend/entrar.html (G1).
+  // A tela lê o apelido do último trecho do endereço (ou de ?apelido= ao abrir entrar.html direto).
+  app.get(`${config.BASE_PATH}/:apelido([a-z0-9-]{3,40})`, (req, res) => {
+    const arquivo = path.join(config.DIR_FRONTEND, 'entrar.html');
+    if (!fs.existsSync(arquivo)) return res.status(404).send('Página de entrada ainda não entregue (etapa G1).');
+    res.set('Cache-Control', 'no-cache, must-revalidate').sendFile(arquivo);
+  });
 
   // ── Socket.IO (QR, estado e terminal do canal; painel) ──────────────────────
   const servidor = http.createServer(app);

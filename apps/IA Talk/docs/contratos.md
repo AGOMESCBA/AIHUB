@@ -108,7 +108,7 @@ Rótulos e cores: `TalkUI.pill()` em `frontend/js/talk-ui.js`.
 | `POST /login/confirmar` | `{ desafio_id, codigo }` | `{ ok: true, redirecionar }` + cookie. Código errado: 400 com `campos.codigo` e `detalhe.tentativas_restantes`. Mais de 5: 429 |
 | `GET /entrar-hub?ticket=…` | — | Redireciona para o shell com sessão criada. Ticket inválido/vencido: 401 |
 
-Página de entrada (G1): `frontend/entrar.html`, servida em `/app/ia-talk/<apelido>` (C1 liga a rota). No simulado o código é sempre `123456`; `?simular=email` mostra o envio pelo e-mail de reserva.
+Página de entrada (G1): `frontend/entrar.html`, servida em `/app/ia-talk/<apelido>` (já no simulado; no servidor real, C1). A tela lê o apelido do último trecho do endereço; aberta direto como `entrar.html`, usa `?apelido=`. No simulado o código é sempre `123456`; `?simular=email` mostra o envio pelo e-mail de reserva.
 
 ### 3.2 Sessão (`/api/admin`)
 

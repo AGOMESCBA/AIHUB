@@ -14,28 +14,8 @@ function mascararTelefone(digitos) {
   return `+${d.slice(0, 2)} ${d.slice(2, 4)} ${d.slice(4, 5)}••••-${d.slice(-4)}`;
 }
 
-const ROTINAS = Object.freeze({
-  painel: 'talk-painel',
-  canais: 'talk-canais',
-  mensagens: 'talk-mensagens',
-  eventos: 'talk-eventos',
-  aplicacoes: 'talk-aplicacoes',
-  usuarios: 'talk-usuarios',
-  configuracoes: 'talk-configuracoes',
-  auditoria: 'talk-auditoria',
-  empresas: 'talk-empresas', // só administração da plataforma
-});
-
-const PAPEIS = [
-  { codigo: 'admin_empresa', nome: 'Administrador da empresa', descricao: 'Configura canais, aplicações, usuários e e-mail de envio da própria empresa.',
-    rotinas: [ROTINAS.painel, ROTINAS.canais, ROTINAS.mensagens, ROTINAS.eventos, ROTINAS.aplicacoes, ROTINAS.usuarios, ROTINAS.configuracoes, ROTINAS.auditoria] },
-  { codigo: 'supervisor', nome: 'Supervisor', descricao: 'Acompanha canais, mensagens e eventos. Na Fase 2, gerencia setores e filas.',
-    rotinas: [ROTINAS.painel, ROTINAS.canais, ROTINAS.mensagens, ROTINAS.eventos] },
-  { codigo: 'atendente', nome: 'Atendente', descricao: 'Atende conversas dos setores em que está (Fase 2). Na Fase 1, vê o painel.',
-    rotinas: [ROTINAS.painel] },
-  { codigo: 'auditor', nome: 'Auditor', descricao: 'Somente leitura de histórico e auditoria.',
-    rotinas: [ROTINAS.painel, ROTINAS.mensagens, ROTINAS.eventos, ROTINAS.auditoria] },
-];
+// Papéis e rotinas: catálogo único do servidor real (backend/acesso/papeis.js).
+const { ROTINAS, PAPEIS } = require('../acesso/papeis');
 
 const LOGO_J2A = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="9" fill="#4f46e5"/><text x="20" y="26" font-family="Segoe UI,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle">J2A</text></svg>');
 

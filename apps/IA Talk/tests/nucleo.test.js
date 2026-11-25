@@ -23,7 +23,7 @@ test('migrações: aplicam uma vez e registram a versão', () => {
   const tabelas = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r => r.name);
   for (const t of ['empresas', 'usuarios', 'membros', 'auditoria', 'talk_migracoes']) assert.ok(tabelas.includes(t), `tabela ${t}`);
   assert.deepEqual(aplicarMigracoes(db), [], 'segunda aplicação não repete nada');
-  assert.equal(db.prepare('SELECT COUNT(*) n FROM talk_migracoes').get().n, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM talk_migracoes').get().n, require('../backend/database/migrations').length);
 });
 
 test('banco: apelido é único sem diferenciar maiúsculas e situação é conferida', () => {
