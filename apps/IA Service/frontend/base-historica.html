@@ -123,6 +123,7 @@
     .jade-pill.on { background:color-mix(in srgb, var(--success) 18%, transparent); color:var(--success-text); }
     .jade-pill.sim { background:color-mix(in srgb, var(--warning) 18%, transparent); color:var(--warning-text); }
     .jade-pill.pub { background:var(--accent-glow); color:var(--accent); }
+    .jade-pill.erro { background:color-mix(in srgb, var(--error) 18%, transparent); color:var(--error-text); }
     .jade-intro { font-size:12.5px; color:var(--text-lo); margin:0 0 10px; }
     .jade-grupos { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; }
     .jade-grupo { border:1px solid var(--border); border-radius:8px; background:var(--bg-base); padding:12px 14px; display:flex; flex-direction:column; gap:12px; }
@@ -343,6 +344,7 @@
             <span class="jade-barra-nome">Jaade</span>
             <span id="jade-pill-ativo" class="jade-pill">—</span>
             <span id="jade-pill-modo" class="jade-pill">—</span>
+            <span id="jade-pill-servico" class="jade-pill erro" hidden></span>
           </div>
           <div class="jade-barra-dir">
             <button class="btn btn-primary btn-icon" type="button" id="btn-jade-salvar" onclick="salvarJadePa()">Salvar</button>
@@ -372,7 +374,7 @@
               <label>Modo</label>
               <select id="jade-modo" class="form-control">
                 <option value="simulacao">Simulação</option>
-                <option value="publicar">Publicar no SoftExpert</option>
+                <option value="publicar">Produção</option>
               </select>
               <div class="form-hint">Simulação gera o retorno só aqui, sem gravar no SoftExpert.</div>
             </div>
@@ -426,7 +428,7 @@
                 <div class="jade-aviso-cab"><span>Grupo</span><span title="Retorno não gravado, ou gravado sem devolver ao cliente">Sem PA</span><span title="PA gravado pela Jaade">Com PA</span></div>
                 <div id="jade-grupos-aviso"></div>
               </div>
-              <div class="form-hint"><b>Sem PA</b>: retorno não gravado no SoftExpert, ou gravado sem devolver ao cliente (precisam de ação). <b>Com PA</b>: PA gravado pela Jaade. Uma mensagem de cada por leitura. Em Simulação também envia, marcada "🧪 SIMULAÇÃO" (nada é gravado no SoftExpert). Grupos cadastrados no IA Command.</div>
+              <div class="form-hint"><b>Sem PA</b>: precisa de ação no SoftExpert. <b>Com PA</b>: gravado pela Jaade.</div>
             </div>
             <div><button type="button" class="btn btn-ghost" onclick="carregarGruposAvisoJade()">Atualizar grupos</button></div>
           </section>
@@ -996,7 +998,7 @@
     };
     if (!jadePainel) return estado('parado', 'Jaade · próxima leitura', '--:--', 'carregando…', 0);
     const { config, loteEmAndamento } = jadePainel;
-    const modo = config.modo === 'publicar' ? 'Publicando' : 'Simulação';
+    const modo = config.modo === 'publicar' ? 'Produção' : 'Simulação';
     const agora = Date.now() + jadeDifRelogio;
     if (loteEmAndamento) {
       const desde = loteEmAndamento.inicio ? agora - Date.parse(loteEmAndamento.inicio) : 0;
@@ -1072,8 +1074,24 @@
         : '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M9 2h6"/>';
       pillAtivo.className = 'jade-pill' + (config.ativo ? ' on' : '');
       const pillModo = document.getElementById('jade-pill-modo');
-      pillModo.textContent = config.modo === 'publicar' ? 'Publicando' : 'Simulação';
+      pillModo.textContent = config.modo === 'publicar' ? 'Produção' : 'Simulação';
       pillModo.className = 'jade-pill ' + (config.modo === 'publicar' ? 'pub' : 'sim');
+      // Tela Jobs (IA Gestão): pausa do administrador, ou serviço IAHub-Jobs
+      // escolhido mas sem sinal (o site reassumiu a Jaade). Normal = nada aparece.
+      const sj = painel.servicoJobs;
+      const pillServico = document.getElementById('jade-pill-servico');
+      let textoServico = '';
+      let dicaServico = '';
+      if (sj?.pausa) {
+        textoServico = 'Pausado em Jobs';
+        dicaServico = `Pausado na tela Jobs (IA Gestão)${sj.pausa.doJob ? ' para todas as empresas' : ''}${sj.pausa.por ? ` por ${sj.pausa.por}` : ''}${sj.pausa.em ? ` em ${formatarDataHora(sj.pausa.em)}` : ''}. Nenhuma leitura agendada roda até retomar; o Executar agora continua funcionando.`;
+      } else if (sj?.modo === 'servico' && !sj.noComando) {
+        textoServico = 'Serviço parado · rodando no site';
+        dicaServico = sj.erro || `O serviço IAHub-Jobs ${sj.batimentoEm ? `deu sinal pela última vez em ${formatarDataHora(sj.batimentoEm)}` : 'não está dando sinal'}; o site reassumiu as leituras até ele voltar.`;
+      }
+      pillServico.hidden = !textoServico;
+      pillServico.textContent = textoServico;
+      pillServico.title = dicaServico;
       document.getElementById('jade-fonte-id').textContent = fonteId;
       atualizarTimerJade();
       _resumoUltimaLeituraJade(config);

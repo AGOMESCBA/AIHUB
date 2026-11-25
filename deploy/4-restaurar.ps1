@@ -150,6 +150,18 @@ Write-Host "Dados preservados: .env, data, uploads, sessions, logs, WhatsApp aut
 Write-Host ""
 
 Write-Host "[1/6] Parando servico IAHub..." -ForegroundColor Yellow
+# Servico de jobs para antes (desligamento controlado) e so volta se estava rodando.
+$JOBS_SERVICE_NAME = "IAHub-Jobs"
+$jobsSvc = Get-Service -Name $JOBS_SERVICE_NAME -ErrorAction SilentlyContinue
+$jobsEstavaRodando = $false
+if ($jobsSvc -and ($jobsSvc.Status -eq "Running" -or $jobsSvc.Status -eq "StartPending")) {
+    $jobsEstavaRodando = $true
+    Invoke-Nssm -Arguments @("stop", $JOBS_SERVICE_NAME)
+    if (!(Wait-ServiceState -Name $JOBS_SERVICE_NAME -DesiredStatus "Stopped" -TimeoutSeconds $SERVICE_STOP_TIMEOUT_SECONDS)) {
+        throw "Servico $JOBS_SERVICE_NAME nao parou dentro do tempo esperado."
+    }
+    Write-Host "      $JOBS_SERVICE_NAME parado." -ForegroundColor Green
+}
 $svc = Get-Service -Name $SERVICE_NAME -ErrorAction SilentlyContinue
 if ($svc -and ($svc.Status -eq "Running" -or $svc.Status -eq "StartPending" -or $svc.Status -eq "StopPending")) {
     if ($svc.Status -ne "StopPending") {
@@ -214,6 +226,17 @@ if (Wait-ServiceState -Name $SERVICE_NAME -DesiredStatus "Running" -TimeoutSecon
     $current = Get-ServiceStatusText -Name $SERVICE_NAME
     Write-Host "      AVISO: IAHub nao ficou Running em $SERVICE_START_TIMEOUT_SECONDS segundos. Status atual: $current" -ForegroundColor Yellow
     Write-Host "             Verifique os logs em $PROJECT_PATH\logs\" -ForegroundColor Yellow
+}
+
+if ($jobsEstavaRodando) {
+    # Backup anterior ao servico de jobs nao tem o jobs-servico.js: nao sobe (evita laco de reinicio).
+    if (Test-Path (Join-Path $PROJECT_PATH "jobs-servico.js")) {
+        Invoke-Nssm -Arguments @("start", $JOBS_SERVICE_NAME)
+        Write-Host "      $JOBS_SERVICE_NAME iniciado." -ForegroundColor Green
+    } else {
+        Write-Host "      AVISO: backup restaurado nao tem jobs-servico.js; $JOBS_SERVICE_NAME ficou parado." -ForegroundColor Yellow
+        Write-Host "             O site reassume os jobs sozinho (modo Servico sem sinal)." -ForegroundColor Yellow
+    }
 }
 
 if (Test-Path $TEMP_PATH) {

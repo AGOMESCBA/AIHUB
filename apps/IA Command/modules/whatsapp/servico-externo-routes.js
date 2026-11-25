@@ -205,6 +205,7 @@ async function registrarNoCanal(empresaId, tipo, msg, deps = {}) {
 const ROTULOS_GRUPO = {
   iaservice_jade_pa_falha: 'Jaade IA · aviso de PA não respondido',
   iaservice_jade_pa_sucesso: 'Jaade IA · aviso de PA respondido',
+  iahub_jobs_alerta: 'IAHub · alerta do serviço de jobs',
 };
 
 /**

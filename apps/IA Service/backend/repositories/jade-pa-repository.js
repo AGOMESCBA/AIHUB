@@ -111,48 +111,91 @@ function listarConfigsAtivas() {
  * "Executar agora". `avulsa` = leitura única do botão, que roda mesmo com o
  * job parado. Trava vencida (processo caiu no meio) é retomada.
  */
-function tentarTravarCiclo(empresaId, fonteId, { travaMs, forcar = false, avulsa = false, agora = new Date() }) {
+function tentarTravarCiclo(empresaId, fonteId, { travaMs, forcar = false, avulsa = false, agora = new Date(), dono = null }) {
   const cfg = getConfig(empresaId, fonteId);
   const agoraIso = agora.toISOString();
   const limiteIntervalo = forcar ? agoraIso : new Date(agora.getTime() - cfg.intervaloMinutos * 60000).toISOString();
-  const r = getDB().prepare(`UPDATE jade_pa_config SET ciclo_trava_ate = ?
+  const r = getDB().prepare(`UPDATE jade_pa_config SET ciclo_trava_ate = ?, ciclo_dono = ?
     WHERE empresa_id = ? AND fonte_id = ? AND (ativo = 1 OR ? = 1)
       AND (ciclo_trava_ate IS NULL OR ciclo_trava_ate < ?)
       AND (? = 1 OR proximo_ciclo_em <= ?
         OR (proximo_ciclo_em IS NULL AND (ultimo_ciclo_em IS NULL OR ultimo_ciclo_em <= ?)))`)
-    .run(new Date(agora.getTime() + travaMs).toISOString(), Number(empresaId), fonteId, avulsa ? 1 : 0, agoraIso, forcar || avulsa ? 1 : 0, agoraIso, limiteIntervalo);
-  return r.changes === 1;
+    .run(new Date(agora.getTime() + travaMs).toISOString(), dono, Number(empresaId), fonteId, avulsa ? 1 : 0, agoraIso, forcar || avulsa ? 1 : 0, agoraIso, limiteIntervalo);
+  if (r.changes !== 1) return false;
+  // Quem pegou a trava agora prova que a leitura anterior a perdeu: lote que
+  // ela deixou aberto (processo morto sem fechar) fecha como interrompido.
+  try {
+    const resumo = JSON.stringify({ interrompida: true, erros: ['Leitura interrompida: o processo parou sem fechar o lote; a trava venceu e outra leitura assumiu.'] });
+    getDB().prepare(`UPDATE jade_pa_lotes SET fim = ?, resumo = COALESCE(resumo, ?) WHERE empresa_id = ? AND fonte_id = ? AND fim IS NULL AND ciclo_dono IS NOT ?`)
+      .run(agoraIso, resumo, Number(empresaId), fonteId, dono);
+  } catch (err) {
+    console.error('[IA Service] Jaade PA: lotes abertos não fechados:', err.message);
+  }
+  return true;
+}
+
+/**
+ * Mesma condição do tentarTravarCiclo, sem travar: o serviço de jobs só abre
+ * processo para a fonte que está na hora (a trava continua sendo a palavra final).
+ */
+function cicloDevido(cfg, agora = new Date()) {
+  if (!cfg?.ativo) return false;
+  const agoraIso = agora.toISOString();
+  if (cfg.cicloTravaAte && cfg.cicloTravaAte >= agoraIso) return false;
+  if (cfg.proximoCicloEm) return cfg.proximoCicloEm <= agoraIso;
+  return !cfg.ultimoCicloEm || cfg.ultimoCicloEm <= new Date(agora.getTime() - cfg.intervaloMinutos * 60000).toISOString();
+}
+
+/**
+ * Leitura que morreu no meio (serviço de jobs: timeout, queda, parada).
+ * Só age se a trava ainda está posta — leitura que terminou já a soltou.
+ * Fecha o lote aberto com o motivo e libera a trava pelo caminho normal
+ * (Última leitura mostra o erro; a próxima leitura segue a agenda).
+ */
+function liberarCicloInterrompido(empresaId, fonteId, { motivo, avulsa = false, dono = null } = {}) {
+  const cfg = getConfig(empresaId, fonteId);
+  if (!cfg.cicloTravaAte) return false;
+  const resumo = { origem: avulsa ? 'manual' : 'agendado', interrompida: true, erros: [`Leitura interrompida: ${motivo}`], elegiveis: 0, novos: 0, processados: [] };
+  const db = getDB();
+  return db.transaction(() => {
+    const pertence = db.prepare('SELECT 1 FROM jade_pa_config WHERE empresa_id = ? AND fonte_id = ? AND ciclo_trava_ate IS NOT NULL AND ciclo_dono IS ?').get(Number(empresaId), fonteId, dono);
+    if (!pertence) return false;
+    db.prepare(`UPDATE jade_pa_lotes SET fim = @fim, resumo = @resumo WHERE empresa_id = @emp AND fonte_id = @fonte AND fim IS NULL AND ciclo_dono IS @dono`)
+      .run({ fim: new Date().toISOString(), resumo: JSON.stringify(resumo), emp: Number(empresaId), fonte: fonteId, dono });
+    return liberarCiclo(empresaId, fonteId, resumo, { avulsa, dono });
+  }).immediate();
 }
 
 /** Estende a trava do ciclo em andamento (chamada a cada chamado tratado). */
-function renovarTrava(empresaId, fonteId, travaMs) {
-  getDB().prepare('UPDATE jade_pa_config SET ciclo_trava_ate = ? WHERE empresa_id = ? AND fonte_id = ? AND ciclo_trava_ate IS NOT NULL')
-    .run(new Date(Date.now() + travaMs).toISOString(), Number(empresaId), fonteId);
+function renovarTrava(empresaId, fonteId, travaMs, dono = null) {
+  const agora = new Date().toISOString();
+  return getDB().prepare('UPDATE jade_pa_config SET ciclo_trava_ate = ? WHERE empresa_id = ? AND fonte_id = ? AND ciclo_dono IS ? AND ciclo_trava_ate >= ?')
+    .run(new Date(Date.now() + travaMs).toISOString(), Number(empresaId), fonteId, dono, agora).changes === 1;
 }
 
 /** Libera a trava. A leitura avulsa (Executar agora) não mexe na contagem do job. */
-function liberarCiclo(empresaId, fonteId, resumo, { avulsa = false } = {}) {
+function liberarCiclo(empresaId, fonteId, resumo, { avulsa = false, dono = null } = {}) {
   const agora = Date.now();
   const proximo = avulsa ? getConfig(empresaId, fonteId).proximoCicloEm
     : new Date(agora + getConfig(empresaId, fonteId).intervaloMinutos * 60000).toISOString();
   // Contadores do dia e acumulado: "sem chamados" = nenhum elegível e nenhum erro (o que não fica em jade_pa_lotes).
   const dia = _diaLocal(new Date(agora));
   const semChamados = !resumo?.elegiveis && !(resumo?.erros || []).length ? 1 : 0;
-  getDB().prepare(`UPDATE jade_pa_config SET ciclo_trava_ate = NULL, ultimo_ciclo_em = @em, ultimo_ciclo_resumo = @resumo, proximo_ciclo_em = @proximo,
+  return getDB().prepare(`UPDATE jade_pa_config SET ciclo_trava_ate = NULL, ciclo_dono = NULL, ultimo_ciclo_em = @em, ultimo_ciclo_resumo = @resumo, proximo_ciclo_em = @proximo,
       leituras_dia_total = CASE WHEN leituras_dia = @dia THEN leituras_dia_total + 1 ELSE 1 END,
       leituras_dia_sem_chamados = CASE WHEN leituras_dia = @dia THEN leituras_dia_sem_chamados + @sem ELSE @sem END,
       leituras_dia = @dia,
       leituras_desde = COALESCE(leituras_desde, @em),
       leituras_total = leituras_total + 1,
       leituras_sem_chamados = leituras_sem_chamados + @sem
-    WHERE empresa_id = @emp AND fonte_id = @fonte`)
-    .run({ em: new Date(agora).toISOString(), resumo: JSON.stringify(resumo || {}), proximo, dia, sem: semChamados, emp: Number(empresaId), fonte: fonteId });
+    WHERE empresa_id = @emp AND fonte_id = @fonte AND ciclo_trava_ate IS NOT NULL AND ciclo_dono IS @dono`)
+    .run({ em: new Date(agora).toISOString(), resumo: JSON.stringify(resumo || {}), proximo, dia, sem: semChamados, emp: Number(empresaId), fonte: fonteId, dono }).changes === 1;
 }
 
 // ── Lotes: cada leitura que tratou chamado ou teve erro ────────────────────
-function criarLote(empresaId, fonteId, origem) {
-  return Number(getDB().prepare('INSERT INTO jade_pa_lotes (empresa_id, fonte_id, origem, inicio) VALUES (?, ?, ?, ?)')
-    .run(Number(empresaId), fonteId, origem, new Date().toISOString()).lastInsertRowid);
+function criarLote(empresaId, fonteId, origem, dono = null) {
+  return Number(getDB().prepare('INSERT INTO jade_pa_lotes (empresa_id, fonte_id, origem, inicio, ciclo_dono) VALUES (?, ?, ?, ?, ?)')
+    .run(Number(empresaId), fonteId, origem, new Date().toISOString(), dono).lastInsertRowid);
 }
 
 /**
@@ -425,7 +468,7 @@ function listarExecucoes(empresaId, { limite = 100 } = {}) {
 }
 
 module.exports = {
-  PADRAO, getConfig, salvarConfig, listarConfigsAtivas, tentarTravarCiclo, renovarTrava, liberarCiclo, criarLote, finalizarLote, listarLotes, loteEmAndamento, listarExecucoesSemLote, limparLogs,
+  PADRAO, getConfig, salvarConfig, listarConfigsAtivas, tentarTravarCiclo, cicloDevido, liberarCicloInterrompido, renovarTrava, liberarCiclo, criarLote, finalizarLote, listarLotes, loteEmAndamento, listarExecucoesSemLote, limparLogs,
   registrarDetectado, registrarEvento, listarEventos, contarDetectadosDesde, listarParaGerar, marcarGerando, listarParaEnviar, contarTentativa, devolverTentativaGeracao,
   atualizar, getExecucao, listarExecucoes, listarParaAvisar, reservarAviso, liberarAviso, anexarAvisosAoResumo,
 };

@@ -49,6 +49,10 @@
         // Mesma permissão do Monitor (a API exige svc-monitor-acessos).
         { id: 'svc-limpeza-anexos', rotina: 'svc-monitor-acessos', label: 'Limpeza de Anexos (LGPD)', href: '/app/ia-service/limpeza-anexos.html', icon: '🧹' },
         { id: 'svc-config-ia',   label: 'Configuração de IA', href: '/app/ia-service/config-ia.html', icon: '🤖' },
+        // Tela Jobs do serviço IAHub-Jobs (a mesma da IA Gestão, filtrada no IA
+        // Service). Controla o servidor inteiro: só administrador do IAHub, não
+        // é rotina liberável por empresa (fica fora da tela de permissões).
+        { id: 'svc-jobs', somenteAdmin: true, label: 'Jobs', href: '/app/ia-service/jobs.html', icon: '⏱' },
       ],
     },
   ];
@@ -68,10 +72,10 @@
   }
 
   function filtrarMenu(rotinas) {
-    if (rotinas === null) return MENU;
+    const admin = window._iahubUser?.role === 'admin';
     return MENU.map(section => ({
       ...section,
-      items: section.items.filter(item => rotinas.includes(item.rotina || item.id)),
+      items: section.items.filter(item => (item.somenteAdmin ? admin : rotinas === null || rotinas.includes(item.rotina || item.id))),
     })).filter(section => section.items.length > 0);
   }
 

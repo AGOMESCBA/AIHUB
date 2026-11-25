@@ -32,6 +32,26 @@ function inicializarDB(dbPathOverride) {
   return _db;
 }
 
+// Serviço de jobs (processo separado do site, 2026-11-24): abre o mesmo arquivo
+// SEM migrar — quem migra é só o site, para dois processos nunca aplicarem a
+// mesma versão juntos. Com migração pendente o job espera (migracoesPendentes).
+function abrirDBSemMigrar(dbPathOverride) {
+  if (_db) return _db;
+  _db = new Database(dbPathOverride || DB_PATH, { fileMustExist: true });
+  _db.pragma('journal_mode = WAL');
+  _db.pragma('foreign_keys = ON');
+  _db.pragma('busy_timeout = 5000');
+  return _db;
+}
+
+/** Versões do código ainda não aplicadas no banco aberto. */
+function migracoesPendentes() {
+  const db = getDB();
+  const temTabela = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'").get();
+  const aplicadas = new Set(temTabela ? db.prepare('SELECT version FROM schema_migrations').all().map(r => r.version) : []);
+  return MIGRATIONS.map(m => m.version).filter(v => !aplicadas.has(v));
+}
+
 function _criarTabelaMigracoes() {
   _db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -72,4 +92,4 @@ function fecharDB() {
   }
 }
 
-module.exports = { inicializarDB, getDB, fecharDB };
+module.exports = { inicializarDB, abrirDBSemMigrar, migracoesPendentes, getDB, fecharDB };

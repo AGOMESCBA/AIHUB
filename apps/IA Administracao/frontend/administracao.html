@@ -401,6 +401,8 @@
           <button class="tab-btn"        id="adm-btn-auditoria" onclick="mudarAbaAdmin('auditoria', this)">📋 Auditoria</button>
           <button class="tab-btn"        id="adm-btn-sistemas"  onclick="mudarAbaAdmin('sistemas',  this)">▦ Sistemas</button>
           <button class="tab-btn"        id="adm-btn-platform" onclick="mudarAbaAdmin('platform', this)">⚙ IAHub Platform</button>
+          <button class="tab-btn"        id="adm-btn-parametros" onclick="mudarAbaAdmin('parametros', this)">🎛 Parâmetros</button>
+          <button class="tab-btn"        id="adm-btn-jobs"      onclick="mudarAbaAdmin('jobs',      this)">⏱ Jobs</button>
           <button class="tab-btn"        id="adm-btn-reset"     onclick="mudarAbaAdmin('reset',     this)">🗑 Reset de Dados</button>
         </div>
 
@@ -1117,6 +1119,30 @@
           </div>
         </div>
 
+        <!-- ── Aba: Parâmetros por Empresa ─────────────────────────────────────── -->
+        <div id="adm-tab-parametros" class="adm-tab-content">
+          <div class="platform-frame-wrap">
+            <iframe
+              id="adm-parametros-frame"
+              class="platform-frame"
+              title="Parâmetros por Empresa"
+              data-src="/iahub/parametros?embedded=1">
+            </iframe>
+          </div>
+        </div>
+
+        <!-- ── Aba: Jobs (serviço IAHub-Jobs) ─────────────────────────────────── -->
+        <div id="adm-tab-jobs" class="adm-tab-content">
+          <div class="platform-frame-wrap">
+            <iframe
+              id="adm-jobs-frame"
+              class="platform-frame"
+              title="Jobs"
+              data-src="/iahub/jobs?embedded=1">
+            </iframe>
+          </div>
+        </div>
+
         <!-- ── Aba: Reset de Dados ───────────────────────────────────────────── -->
         <div id="adm-tab-reset" class="adm-tab-content">
           <div class="reset-layout">
@@ -1438,6 +1464,8 @@ function montarMenuAdmin() {
     ['usuarios', 'Usuarios', '👤'],
     ['sistemas', 'Sistemas', '▦'],
     ['platform', 'IAHub Platform', '⚙'],
+    ['parametros', 'Parâmetros', '🎛'],
+    ['jobs', 'Jobs', '⏱'],
     ['seguranca', 'Seguranca', '🔒'],
     ['auditoria', 'Auditoria', '📋'],
     ['reset', 'Reset de Dados', '🗑'],
@@ -1490,9 +1518,23 @@ function mudarAbaAdmin(aba, btn) {
     else if (aba === 'auditoria') audCarregar();
     else if (aba === 'sistemas')  admSisCarregar();
     else if (aba === 'platform')  admPlatformCarregar();
+    else if (aba === 'jobs')      admJobsCarregar();
+    else if (aba === 'parametros') admParametrosCarregar();
     else if (aba === 'sistema')   sisCarregarConfig();
     else if (aba === 'reset')     rstInicializar();
   }
+}
+
+// Parâmetros por Empresa: cadastro central do IAHub (página própria, embutida).
+function admParametrosCarregar() {
+  const frame = document.getElementById('adm-parametros-frame');
+  if (frame && !frame.src) frame.src = frame.dataset.src;
+}
+
+// Tela Jobs (serviço IAHub-Jobs): mesma página do menu Jobs dentro dos sistemas.
+function admJobsCarregar() {
+  const frame = document.getElementById('adm-jobs-frame');
+  if (frame && !frame.src) frame.src = frame.dataset.src;
 }
 
 function admPlatformCarregar() {

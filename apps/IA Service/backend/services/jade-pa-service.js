@@ -10,6 +10,7 @@
 //      IA-RESPONDIDO) ou pedido de evidências (devolver → IA-INFORMACAO).
 // Fase 1: nada é enviado ao SoftExpert — o resultado fica em "simulado".
 const { AsyncLocalStorage } = require('async_hooks');
+const { randomUUID } = require('crypto');
 const repo = require('../repositories/jade-pa-repository');
 const agenteRepo = require('../repositories/agente-local-repository');
 const agenteLocalService = require('./agente-local-service');
@@ -28,6 +29,8 @@ const investigacaoExecucaoRepo = require('../repositories/investigacao-execucao-
 const { _trechoValido } = require('./base-conhecimento-avaliacao-service');
 const { redigirTexto } = require('./redaction-service');
 const avisoService = require('./jade-pa-aviso-service');
+const jobsModo = require('../../../../modules/jobs/modo');
+const jobsRepo = require('../../../../modules/jobs/repositorio');
 
 // Curto para a leitura começar perto da hora do contador da tela (a consulta é só ao banco local).
 const TICK_MS = 15 * 1000;
@@ -36,6 +39,8 @@ const PRIMEIRA_EXECUCAO_MS = 90 * 1000;
 // trava a cada chamado; trava vencida (sem renovação há 20 min) é de um processo
 // que caiu e é retomada.
 const TRAVA_MS = 20 * 60 * 1000;
+// Teto de uma leitura (igual ao timeoutMs do job no serviço de jobs).
+const MAX_LEITURA_MS = 2 * 60 * 60 * 1000;
 // Teto de segurança da consulta de elegíveis no SoftExpert, não um limite de vazão.
 const MAX_ELEGIVEIS = 500;
 const MAX_TENTATIVAS = 3;
@@ -491,6 +496,18 @@ async function conferirStatus(empresaId, texto) {
 // Lote da leitura em curso: chega a cada registro sem passar por todas as funções.
 const _loteAtual = new AsyncLocalStorage();
 
+// Perda da trava não é falha do SoftExpert: nada foi enviado, não conta
+// tentativa e o chamado fica para a leitura que tem a trava. Os catch das
+// chamadas SOAP repassam este erro em vez de tratá-lo como envio incerto.
+class ErroPosse extends Error {}
+
+function _verificarPosse() {
+  const c = _loteAtual.getStore();
+  if (c && !repo.renovarTrava(c.empresaId, c.fonteId, TRAVA_MS, c.dono)) {
+    throw new ErroPosse('A leitura perdeu a posse da trava da Jaade; outra leitura segue com este chamado.');
+  }
+}
+
 function _evento(exec, etapa, situacao, resumo, detalhes = null) {
   try {
     repo.registrarEvento(exec.id, exec.empresaId, { etapa, situacao, resumo, detalhes, loteId: _loteAtual.getStore()?.loteId ?? null });
@@ -738,6 +755,7 @@ async function _publicar(cfg, fonte, exec) {
   const config = _contratoEscrita(empresaId, fonte.id, jade.codigo);
   const atributos = montarAtributosPosicionamento({ contrato: config.contrato, chamado, jade, texto: exec.textoCliente, decisao: exec.decisao, cabecalho: s?.cabecalho });
   const xml = soapClient.montarInclusaoGrid({ workflowId: exec.numeroChamado, mainEntityId: config.contrato.mainEntityId, childRelationshipId: config.contrato.childRelationshipId, campos: atributos });
+  _verificarPosse();
   if (!repo.contarTentativa(exec.id, 'publicacao', 'publicando', { estadoAnterior: exec.estado, tentativasAnteriores: exec.tentativasPublicacao })) return null;
   const gravado = { usuario: `${jade.nome} (CDUSER ${jade.codigo}, matrícula ${jade.matricula})`, campos: atributos };
   let resposta;
@@ -820,6 +838,7 @@ async function _encaminhar(cfg, fonte, exec) {
     }
     xmlAbertura = soapClient.montarAberturaWorkflowJade({ titulo, userId: jade.matricula, campos });
   }
+  _verificarPosse();
   if (!repo.contarTentativa(exec.id, 'devolucao', 'devolvendo', { estadoAnterior: exec.estado, tentativasAnteriores: exec.tentativasDevolucao })) return null;
   const usuario = `${jade.nome} (matrícula ${jade.matricula})`;
   const falhou = (resumo, detalhes, ultimoErro) => {
@@ -847,8 +866,12 @@ async function _encaminhar(cfg, fonte, exec) {
   }
   const movimento = { usuario, workflow: workflowId, atividade: activityId, acao: actionSequence };
   try {
+    // Entre abrir o workflow e executá-lo: se a trava mudou de dono, quem a
+    // tem acha este workflow pelo título e executa a ATV-01 (nunca abre outro).
+    _verificarPosse();
     resposta = await soapClient.enviarOperacao({ ...config.transporte, xml: soapClient.montarExecucaoWorkflowJade({ workflowId, userId: jade.matricula }), operacao: 'executeActivity' });
   } catch (err) {
+    if (err instanceof ErroPosse) throw err;
     return falhou(`o SoftExpert não confirmou a execução da ${activityId} no workflow da Jaade ${workflowId} (${err.message}). Será conferida no próximo ciclo.`,
       { ...movimento, resposta: _respostaSe({ httpStatus: err.httpStatus, Detail: err.codigoTransporte }), erroTecnico: _erroTecnico(err, { operacao: 'executeActivity' }) },
       'Execução do workflow da Jaade não confirmada; será conferida no próximo ciclo.');
@@ -894,9 +917,14 @@ async function enviarExecucao(cfg, fonte, exec) {
     if (final && ['publicado', 'devolvido'].includes(final.estado)) await _registrarSituacaoFinal(cfg, fonte, final);
     return final;
   } catch (err) {
+    const etapa = repo.getExecucao(exec.id)?.estado === 'devolvendo' ? 'workflow' : 'envio';
+    if (err instanceof ErroPosse) {
+      _evento(exec, etapa, 'aviso', `Envio interrompido (nada novo foi enviado ao SoftExpert nesta etapa): ${err.message}`);
+      return repo.atualizar(exec.id, { ultimoErro: err.message });
+    }
     // Falha antes de falar com o SoftExpert (consulta, usuário, contrato): não conta tentativa, mas avisa.
     console.error(`[IA Service] Jaade PA: envio do chamado ${exec.numeroChamado}:`, err.message);
-    _evento(exec, repo.getExecucao(exec.id)?.estado === 'devolvendo' ? 'workflow' : 'envio', 'erro',
+    _evento(exec, etapa, 'erro',
       `Não foi possível falar com o SoftExpert: ${err.message} (não conta como tentativa).`, { erroTecnico: _erroTecnico(err) });
     return repo.atualizar(exec.id, { ultimoErro: err.message, alerta: true });
   }
@@ -911,13 +939,28 @@ async function _emParalelo(itens, limite, fn) {
   await Promise.all(Array.from({ length: Math.min(Math.max(1, limite), itens.length) }, trabalhador));
 }
 
-async function _rodarCiclo(empresaId, fonteId, origem = 'agendado') {
+async function _rodarCiclo(empresaId, fonteId, origem = 'agendado', dono) {
   let loteId = null;
-  try { loteId = repo.criarLote(empresaId, fonteId, origem); } catch (err) { console.error('[IA Service] Jaade PA: lote não criado:', err.message); }
-  return _loteAtual.run({ loteId }, () => _executarLote(empresaId, fonteId, loteId, origem));
+  try { loteId = repo.criarLote(empresaId, fonteId, origem, dono); } catch (err) { console.error('[IA Service] Jaade PA: lote não criado:', err.message); }
+  // Renova enquanto a leitura vive, mas só até MAX_LEITURA_MS (mesmo teto do
+  // serviço de jobs): leitura presa no site não pode segurar a fonte para sempre.
+  const inicio = Date.now();
+  let avisouTeto = false;
+  const timer = setInterval(() => {
+    if (Date.now() - inicio > MAX_LEITURA_MS) {
+      if (!avisouTeto) console.error(`[IA Service] Jaade PA: leitura da empresa ${empresaId} passou de ${MAX_LEITURA_MS / 3600000} h; a trava deixa de ser renovada e vence sozinha.`);
+      avisouTeto = true;
+      return;
+    }
+    try { if (!repo.renovarTrava(empresaId, fonteId, TRAVA_MS, dono)) console.error('[IA Service] Jaade PA: posse da trava perdida.'); }
+    catch (err) { console.error('[IA Service] Jaade PA: renovação da trava falhou:', err.message); }
+  }, 60000);
+  timer.unref?.();
+  try { return await _loteAtual.run({ loteId, empresaId, fonteId, dono }, () => _executarLote(empresaId, fonteId, loteId, origem, dono)); }
+  finally { clearInterval(timer); }
 }
 
-async function _executarLote(empresaId, fonteId, loteId, origem) {
+async function _executarLote(empresaId, fonteId, loteId, origem, dono) {
   const resumo = { loteId, origem, inicio: new Date().toISOString(), elegiveis: 0, novos: 0, limiteAtingido: false, processados: [], erros: [] };
   try {
     const cfg = repo.getConfig(empresaId, fonteId);
@@ -951,7 +994,7 @@ async function _executarLote(empresaId, fonteId, loteId, origem) {
     const publicar = cfg.modo === 'publicar';
     if (publicar) resumo.enviados = [];
     const enviar = async (exec) => {
-      repo.renovarTrava(empresaId, fonteId, TRAVA_MS);
+      _verificarPosse();
       const r = await enviarExecucao(cfg, fonte, exec);
       if (r) resumo.enviados.push({ numero: exec.numeroChamado, estado: r.estado });
     };
@@ -968,7 +1011,7 @@ async function _executarLote(empresaId, fonteId, loteId, origem) {
     // Todos os chamados na fila; cada retorno vai ao SoftExpert assim que fica pronto.
     const fila = repo.listarParaGerar(empresaId, fonteId, { gerandoParadoMs: TRAVA_MS }).filter(e => permitido(e.numeroChamado));
     await _emParalelo(fila, paralelo, isolado(async (exec) => {
-      repo.renovarTrava(empresaId, fonteId, TRAVA_MS);
+      _verificarPosse();
       const r = await processarExecucao(cfg, fonte, exec);
       if (r) resumo.processados.push({ numero: exec.numeroChamado, estado: r.estado });
       if (publicar && r?.estado === 'pronto' && aindaLigada()) await enviar(r);
@@ -984,7 +1027,7 @@ async function _executarLote(empresaId, fonteId, loteId, origem) {
     if (loteId) {
       try { resumo.loteGravado = repo.finalizarLote(loteId, resumo, { manter: origem === 'manual' }); } catch (err) { console.error('[IA Service] Jaade PA: lote não finalizado:', err.message); }
     }
-    repo.liberarCiclo(empresaId, fonteId, resumo, { avulsa: origem === 'manual' });
+    repo.liberarCiclo(empresaId, fonteId, resumo, { avulsa: origem === 'manual', dono });
   }
   // Aviso por WhatsApp depois de fechar a leitura: nunca atrasa nem derruba o lote.
   resumo.avisos = await avisoService.avisarLote(empresaId, fonteId, { loteId: resumo.loteGravado ? loteId : null });
@@ -997,9 +1040,9 @@ async function _executarLote(empresaId, fonteId, loteId, origem) {
 }
 
 /** Leitura do job (agendador). `forcar` ignora a contagem; a leitura avulsa do botão é executarAgora. */
-async function executarCiclo(empresaId, fonteId, { forcar = false } = {}) {
-  if (!repo.tentarTravarCiclo(empresaId, fonteId, { travaMs: TRAVA_MS, forcar })) return null;
-  return _rodarCiclo(empresaId, fonteId, 'agendado');
+async function executarCiclo(empresaId, fonteId, { forcar = false, dono = `site:${randomUUID()}` } = {}) {
+  if (!repo.tentarTravarCiclo(empresaId, fonteId, { travaMs: TRAVA_MS, forcar, dono })) return null;
+  return _rodarCiclo(empresaId, fonteId, 'agendado', dono);
 }
 
 /**
@@ -1010,9 +1053,63 @@ async function executarCiclo(empresaId, fonteId, { forcar = false } = {}) {
 function executarAgora(empresaId, fonteId) {
   const cfg = repo.getConfig(empresaId, fonteId);
   if (!cfg.atualizadoEm) throw _erro(409, 'Salve a configuração da Jaade antes de executar.');
-  if (!repo.tentarTravarCiclo(empresaId, fonteId, { travaMs: TRAVA_MS, avulsa: true })) throw _erro(409, 'Já existe uma leitura da Jaade em execução.');
-  _rodarCiclo(empresaId, fonteId, 'manual').catch(() => {});
+  // Serviço de jobs no comando e dando sinal agora: o site só registra o
+  // pedido e o serviço roda em segundos. Serviço sem sinal recente: o site
+  // roda, para o botão nunca ficar esperando quem não vai atender.
+  if (jobsModo.servicoNoComando() && jobsRepo.estadoServico().ativo) {
+    if (repo.loteEmAndamento(empresaId, fonteId)) throw _erro(409, 'Já existe uma leitura da Jaade em execução.');
+    jobsRepo.criarPedido(JOB_ID_SERVICO, instanciaServico(empresaId, fonteId), { solicitadoPor: 'tela da Jaade' });
+    return { iniciado: true, loteId: null, aguardandoServico: true };
+  }
+  const dono = `site:${randomUUID()}`;
+  if (!repo.tentarTravarCiclo(empresaId, fonteId, { travaMs: TRAVA_MS, avulsa: true, dono })) throw _erro(409, 'Já existe uma leitura da Jaade em execução.');
+  _rodarCiclo(empresaId, fonteId, 'manual', dono).catch(err => console.error('[IA Service] Jaade PA: leitura avulsa falhou:', err.message));
   return { iniciado: true, loteId: repo.loteEmAndamento(empresaId, fonteId)?.id ?? null };
+}
+
+/** "Executar agora" no serviço de jobs: a mesma leitura avulsa, aguardando o fim. null = já havia leitura. */
+async function executarAvulsa(empresaId, fonteId, { dono = `site:${randomUUID()}` } = {}) {
+  if (!repo.tentarTravarCiclo(empresaId, fonteId, { travaMs: TRAVA_MS, avulsa: true, dono })) return null;
+  return _rodarCiclo(empresaId, fonteId, 'manual', dono);
+}
+
+// Identificação da Jaade no serviço de jobs: um job, uma instância por empresa+fonte.
+const JOB_ID_SERVICO = 'ia-service.jade-pa';
+function instanciaServico(empresaId, fonteId) {
+  return `${Number(empresaId)}:${fonteId}`;
+}
+
+/** Pausa da tela Jobs (job inteiro ou esta empresa+fonte); vale no site e no serviço. */
+function _pausaJobs(empresaId, fonteId) {
+  try {
+    return jobsRepo.pausa(JOB_ID_SERVICO, instanciaServico(empresaId, fonteId));
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Situação na tela Jobs para a tela da Jaade: onde está rodando (modo,
+ * serviço no comando ou site reassumiu) e pausa. modo 'site' = como antes.
+ */
+function _servicoJobs(empresaId, fonteId) {
+  try {
+    const modo = jobsModo.modoConfigurado();
+    const pausa = _pausaJobs(empresaId, fonteId);
+    if (modo !== 'servico') return pausa ? { modo, pausa } : null;
+    const instancia = instanciaServico(empresaId, fonteId);
+    const ultima = jobsRepo.ultimaExecucao(JOB_ID_SERVICO, instancia);
+    return {
+      modo,
+      ...jobsRepo.estadoServico(),
+      noComando: jobsModo.servicoNoComando(),
+      pausa,
+      pedidoPendente: !!jobsRepo.pedidoAberto(JOB_ID_SERVICO, instancia),
+      ultimaExecucao: ultima && { origem: ultima.origem, inicio: ultima.inicio, fim: ultima.fim, resultado: ultima.resultado, erro: ultima.erro },
+    };
+  } catch (err) {
+    return { modo: 'servico', ativo: false, erro: `Banco do serviço de jobs indisponível: ${err.message}` };
+  }
 }
 
 function _fonteSoftExpert(empresaId, fonteId) {
@@ -1057,10 +1154,18 @@ function listarExecucoes(empresaId, opts) {
 /** Tela: configuração, contador (horário do servidor), lote em andamento e lotes com seus chamados. */
 function getPainel(empresaId, fonteId) {
   _fonteSoftExpert(empresaId, fonteId);
+  const servicoJobs = _servicoJobs(empresaId, fonteId);
+  // Pedido do "Executar agora" ainda não atendido, ou execução do serviço que
+  // ainda não travou a leitura (processo subindo), conta como em andamento: a
+  // tela segue acompanhando até o lote começar e terminar.
+  const execAberta = servicoJobs?.ultimaExecucao && !servicoJobs.ultimaExecucao.fim;
+  const aguardando = servicoJobs?.noComando && servicoJobs.ativo && (servicoJobs.pedidoPendente || execAberta)
+    ? { id: null, inicio: null, origem: servicoJobs.pedidoPendente ? 'manual' : servicoJobs.ultimaExecucao.origem, aguardandoServico: true } : null;
   return {
     config: repo.getConfig(empresaId, fonteId),
     agora: new Date().toISOString(),
-    loteEmAndamento: repo.loteEmAndamento(empresaId, fonteId),
+    servicoJobs,
+    loteEmAndamento: repo.loteEmAndamento(empresaId, fonteId) || aguardando,
     lotes: repo.listarLotes(empresaId, fonteId),
     semLote: repo.listarExecucoesSemLote(empresaId, fonteId),
   };
@@ -1095,7 +1200,20 @@ function getAuditoria(empresaId, fonteId, execucaoId) {
 // por WhatsApp) da outra. O conjunto só evita disparar de novo a mesma fonte
 // neste processo; entre processos quem garante é a trava no banco.
 const _ciclosEmAndamento = new Set();
+let _servicoNoComandoAntes = null;
 function _tick() {
+  // Tela Jobs escolheu o serviço IAHub-Jobs e ele dá sinal: o site não agenda.
+  // Sem sinal (ou modo site), o site agenda — inclusive reassumindo sozinho.
+  const noComando = jobsModo.servicoNoComando();
+  if (noComando !== _servicoNoComandoAntes) {
+    if (_servicoNoComandoAntes !== null || noComando) {
+      console.log(noComando
+        ? '[IA Service] Jaade PA: agendada pelo serviço IAHub-Jobs (tela Jobs).'
+        : '[IA Service] Jaade PA: agendada pelo site.');
+    }
+    _servicoNoComandoAntes = noComando;
+  }
+  if (noComando) return [];
   let configs;
   try {
     configs = repo.listarConfigsAtivas();
@@ -1107,6 +1225,7 @@ function _tick() {
   for (const cfg of configs) {
     const chave = `${cfg.empresaId}:${cfg.fonteId}`;
     if (_ciclosEmAndamento.has(chave)) continue;
+    if (_pausaJobs(cfg.empresaId, cfg.fonteId)) continue;
     _ciclosEmAndamento.add(chave);
     disparados.push(Promise.resolve()
       .then(() => executarCiclo(cfg.empresaId, cfg.fonteId))
@@ -1124,7 +1243,7 @@ function iniciarAgendamento() {
 }
 
 module.exports = {
-  iniciarAgendamento, executarCiclo, executarAgora, processarExecucao, gerarTextoCliente, conferirStatus, verificarVazamento,
+  iniciarAgendamento, executarCiclo, executarAgora, executarAvulsa, JOB_ID_SERVICO, instanciaServico, processarExecucao, gerarTextoCliente, conferirStatus, verificarVazamento,
   normalizarTextoSoftExpert, montarAtributosPosicionamento, fontesDaAnalise, referenciasDaAnalise, simularMontagemReferencias, simularReferenciasNoRodape, enviarExecucao, situacaoNaOrigem, nomesDeOutrosClientes,
   listarElegiveisNaOrigem, getConfig, salvarConfig, listarGruposAviso, listarExecucoes, getAuditoria, getPainel, limparLogs, SQL_ELEGIVEIS, MAX_TENTATIVAS,
   _test: { tick: _tick },

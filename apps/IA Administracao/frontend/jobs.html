@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jobs - IAHub</title>
+  <script>
+    // Embutida na IA Gestão (aba Jobs) ou dentro de um sistema (menu): sem
+    // cabeçalho próprio; o tema vem de quem embute (?tema=dark).
+    (function () {
+      const p = new URLSearchParams(location.search);
+      if (p.get('embedded') === '1') document.documentElement.classList.add('embedded');
+      if (p.get('tema') === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    })();
+  </script>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    body { background:var(--bg-base); }
+    .pagina { max-width:1500px; margin:0 auto; padding:20px 24px 40px; }
+    html.embedded .pagina { padding:12px 16px 24px; max-width:none; }
+    .dica { font-size:11.5px; color:var(--text-lo); }
+    .cab { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+    .cab-titulo { flex:1; min-width:220px; }
+    .cab-titulo h1 { font-size:18px; font-weight:700; color:var(--text-hi); margin:0; }
+    .cab-titulo p { font-size:12.5px; color:var(--text-md); margin:2px 0 0; }
+    .cab .btn { height:32px; padding:0 14px; font-size:12.5px; }
+    .auto { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-md); }
+    .erro-banner { display:none; background:color-mix(in srgb, var(--error) 10%, var(--bg-card)); color:var(--error-text); border:1px solid var(--error); border-radius:8px; padding:10px 12px; font-size:13px; margin-bottom:10px; }
+    .avisos { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
+    .avisos:empty { display:none; }
+    .aviso { border-radius:8px; padding:8px 12px; font-size:12.5px; border:1px solid; }
+    .aviso.erro { background:color-mix(in srgb, var(--error) 10%, var(--bg-card)); border-color:var(--error); color:var(--error-text); }
+    .aviso.alerta { background:color-mix(in srgb, var(--warning) 12%, var(--bg-card)); border-color:var(--warning); color:var(--warning-text); }
+
+    /* Blocos recolhíveis (mesmo padrão dos parâmetros da Jaade): fechado mostra o resumo. */
+    .grupo { border:1px solid var(--border); border-radius:8px; background:var(--bg-card); padding:12px 14px; display:flex; flex-direction:column; gap:12px; margin-bottom:12px; min-width:0; }
+    .grupo h3 { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--accent); margin:0; }
+    .grupo-toggle { display:flex; align-items:center; gap:6px; width:100%; border:none; background:none; padding:0; cursor:pointer; color:inherit; font:inherit; letter-spacing:inherit; text-transform:inherit; text-align:left; }
+    .grupo-toggle:hover { color:var(--text-hi); }
+    .grupo-seta { flex-shrink:0; transition:transform .15s; }
+    .grupo.recolhido .grupo-seta { transform:rotate(-90deg); }
+    .grupo.recolhido > :not(h3):not(.grupo-resumo) { display:none; }
+    .grupo-resumo { display:none; font-size:12.5px; color:var(--text-md); line-height:1.5; }
+    .grupo.recolhido .grupo-resumo { display:block; }
+
+    .kpis { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:8px; }
+    .kpi { background:var(--bg-base); border:1px solid var(--border); border-radius:var(--radius); padding:9px 12px; min-width:0; }
+    .kpi-rot { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-md); }
+    .kpi-val { font-size:18px; font-weight:800; color:var(--text-hi); font-variant-numeric:tabular-nums; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .kpi-pe { font-size:11px; color:var(--text-lo); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .kpi-val.ok { color:var(--success-text); } .kpi-val.ruim { color:var(--error-text); } .kpi-val.atencao { color:var(--warning-text); }
+
+    .abas { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:12px; overflow-x:auto; }
+    .aba { padding:10px 18px; font-size:13px; font-weight:600; color:var(--text-md); background:none; border:none; border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap; }
+    .aba:hover { color:var(--text-hi); }
+    .aba.ativa { color:var(--accent); border-bottom-color:var(--accent); }
+    .painel-aba { display:none; } .painel-aba.ativa { display:block; }
+
+    /* Controle de cada job (linha compacta) */
+    .job-linha { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 0; border-bottom:1px solid var(--border); }
+    .job-linha:last-child { border-bottom:0; padding-bottom:0; }
+    .job-linha:first-child { padding-top:0; }
+    .job-nome { font-size:13.5px; font-weight:800; color:var(--text-hi); }
+    .job-desc { font-size:12px; color:var(--text-md); flex-basis:100%; }
+    .job-linha .esp { flex:1; }
+    .job-linha .btn { height:28px; padding:0 12px; font-size:12px; }
+
+    /* Barra de filtros + agrupamento (padrão das grades do IAHub) */
+    .filter-bar { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:10px 14px; margin-bottom:10px; box-shadow:var(--shadow-sm); }
+    .filter-bar-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .filter-bar-row .form-control { height:32px; padding:4px 8px; font-size:12.5px; width:auto; }
+    .filter-bar-row .btn { height:32px; padding:0 12px; font-size:12.5px; }
+    .grupo-area { display:none; padding-top:12px; border-top:1px solid var(--border); margin-top:10px; }
+    .gp-chips-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; position:relative; }
+    .gp-label { font-size:11px; color:var(--text-lo); white-space:nowrap; }
+    .grupo-status { font-size:12px; color:var(--text-lo); }
+    .grade { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+    .mais { text-align:center; padding:10px; }
+
+    .tabulator { border:none !important; background:transparent !important; font-size:13px; }
+    .tabulator .tabulator-header { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important; border-right:none !important; color:var(--text-lo) !important; font-size:11px !important; font-weight:700 !important; text-transform:uppercase; letter-spacing:.05em; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-base) !important; color:var(--text-hi) !important; border:1px solid var(--border) !important; border-radius:4px !important; font-size:11px !important; padding:3px 6px !important; width:100% !important; }
+    .tabulator .tabulator-tableholder { background:var(--bg-card) !important; }
+    .tabulator .tabulator-row { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-row.clicavel { cursor:pointer; }
+    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator .tabulator-row .tabulator-cell { border-right:none !important; color:var(--text-md); padding:8px 10px !important; }
+    .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important; border-bottom:1px solid var(--border) !important; font-size:12px !important; font-weight:700 !important; color:var(--text-lo) !important; }
+    .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
+    .tabulator .tabulator-placeholder-contents { color:var(--text-lo) !important; font-size:13px !important; font-weight:400 !important; }
+
+    .pill { display:inline-block; font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; padding:2px 9px; border-radius:20px; background:var(--bg-hover); color:var(--text-md); white-space:nowrap; }
+    .pill.ok { background:color-mix(in srgb, var(--success) 18%, transparent); color:var(--success-text); }
+    .pill.ruim { background:color-mix(in srgb, var(--error) 18%, transparent); color:var(--error-text); }
+    .pill.atencao { background:color-mix(in srgb, var(--warning) 20%, transparent); color:var(--warning-text); }
+    .pill.info { background:var(--accent-glow); color:var(--accent); }
+    .forte { color:var(--text-hi); font-weight:700; }
+    .sub { color:var(--text-lo); font-size:11.5px; }
+    .texto-erro { color:var(--error-text); font-size:12px; overflow-wrap:anywhere; white-space:normal; }
+    .celula-quebra { white-space:normal; line-height:1.35; }
+    .acoes { display:flex; gap:5px; flex-wrap:wrap; }
+    .acoes .btn { height:26px; padding:0 9px; font-size:11.5px; }
+
+    /* Configuração */
+    .config-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; align-items:start; }
+    .config-grid > .grupo { margin-bottom:0; }
+    .exp { font-size:12px; color:var(--text-md); margin:0; }
+    .campo label.rot { display:block; font-size:12px; font-weight:700; color:var(--text-hi); margin-bottom:4px; }
+    .campo .form-control { height:34px; font-size:13px; }
+    .campo .dica { font-size:11.5px; color:var(--text-lo); margin-top:3px; }
+    .linha-campos { display:flex; gap:14px; flex-wrap:wrap; }
+    .opcao-modo { display:flex; gap:10px; align-items:flex-start; padding:9px 12px; border:1px solid var(--border); border-radius:8px; cursor:pointer; }
+    .opcao-modo.marcada { border-color:var(--accent); background:var(--accent-glow); }
+    .opcao-modo strong { display:block; font-size:13px; color:var(--text-hi); }
+    .opcao-modo span { font-size:12px; color:var(--text-md); }
+    .limite-linha { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-hi); }
+    .limite-linha span { flex:1; }
+    .limite-linha .form-control { width:90px; height:32px; }
+    .rodape-bloco { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .rodape-bloco .quem { font-size:11.5px; color:var(--text-lo); flex:1; }
+
+    /* Alertas: uma linha por grupo, uma coluna por tipo (mesmo modelo dos Avisos da Jaade) */
+    .aviso-lista { border:1px solid var(--border); border-radius:8px; background:var(--bg-card); overflow:hidden; }
+    .aviso-lista #cfg-al-grupos { max-height:240px; overflow-y:auto; }
+    .aviso-cab, .aviso-item { display:grid; grid-template-columns:minmax(0,1fr) 84px 70px; align-items:center; gap:6px; padding:5px 10px; }
+    .aviso-cab { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; color:var(--text-lo); background:var(--bg-base); border-bottom:1px solid var(--border); }
+    .aviso-cab span:not(:first-child), .aviso-item input { justify-self:center; }
+    .aviso-item { border-bottom:1px solid var(--border); font-size:13px; }
+    .aviso-item:last-child { border-bottom:none; }
+    .aviso-item:hover { background:var(--bg-hover); }
+    .aviso-item input { width:16px; height:16px; cursor:pointer; margin:0; }
+    .aviso-nome { min-width:0; font-weight:700; color:var(--text-hi); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .aviso-meta { font-weight:400; font-size:11.5px; color:var(--text-lo); }
+    .aviso-item.indisponivel .aviso-nome { color:var(--warning-text); }
+    #cfg-al-grupos > .dica { padding:8px 10px; margin:0; font-size:12px; color:var(--text-lo); }
+
+    /* Detalhe da execução */
+    .modal-fundo { position:fixed; inset:0; background:rgba(15,23,42,.55); display:none; align-items:flex-start; justify-content:center; padding:4vh 16px; z-index:50; overflow:auto; }
+    .modal-fundo.aberto { display:flex; }
+    .modal { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; width:min(1000px, 100%); box-shadow:var(--shadow-md); }
+    .modal-cab { display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--border); }
+    .modal-cab h2 { flex:1; font-size:15px; font-weight:800; color:var(--text-hi); margin:0; }
+    .modal-cab .btn { height:30px; padding:0 12px; font-size:12px; }
+    .modal-corpo { padding:14px 16px; }
+    .det-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:8px 14px; margin-bottom:12px; }
+    .det-grid div { min-width:0; }
+    .det-grid .r { font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-md); font-weight:700; }
+    .det-grid .v { font-size:13px; color:var(--text-hi); overflow-wrap:anywhere; }
+    .det-titulo { font-size:12px; font-weight:800; color:var(--text-hi); margin:12px 0 6px; display:flex; align-items:center; gap:8px; }
+    pre.log { background:#0b1220; color:#d7e0ee; border-radius:8px; padding:10px 12px; font-size:11.5px; line-height:1.45; max-height:52vh; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; margin:0; }
+    pre.resumo { background:var(--bg-base); color:var(--text-hi); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:11.5px; max-height:200px; overflow:auto; white-space:pre-wrap; margin:0; }
+
+    @media (max-width:1100px) { .kpis { grid-template-columns:repeat(3, minmax(0, 1fr)); } }
+    @media (max-width:860px) { .config-grid { grid-template-columns:1fr; } .det-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+    @media (max-width:760px) { .pagina { padding:12px 16px 32px; } .kpis { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+  </style>
+</head>
+<body>
+<div class="pagina">
+  <div class="cab">
+    <div class="cab-titulo">
+      <h1 id="titulo">Jobs</h1>
+      <p id="subtitulo">Serviço de jobs do IAHub (IAHub-Jobs): o que roda, onde, quando e o que aconteceu.</p>
+    </div>
+    <label class="auto"><input type="checkbox" id="auto" checked> Atualizar sozinho</label>
+    <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
+  </div>
+
+  <div id="erro" class="erro-banner" role="alert"></div>
+  <section class="grupo" data-grupo="avisos" id="bloco-avisos" hidden>
+    <h3><button type="button" class="grupo-toggle" data-alternar="avisos" aria-expanded="true"><svg class="grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span id="titulo-avisos">Avisos</span></button></h3>
+    <div class="grupo-resumo" id="resumo-avisos"></div>
+    <div id="avisos" class="avisos"></div>
+  </section>
+
+  <section class="grupo" data-grupo="situacao">
+    <h3><button type="button" class="grupo-toggle" data-alternar="situacao" aria-expanded="true"><svg class="grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span>Situação</span></button></h3>
+    <div class="grupo-resumo" id="resumo-situacao"></div>
+    <div class="kpis">
+      <div class="kpi"><div class="kpi-rot">Serviço</div><div class="kpi-val" id="k-servico">—</div><div class="kpi-pe" id="k-servico-pe"></div></div>
+      <div class="kpi"><div class="kpi-rot">Onde rodam</div><div class="kpi-val" id="k-modo">—</div><div class="kpi-pe" id="k-modo-pe"></div></div>
+      <div class="kpi"><div class="kpi-rot">Em execução</div><div class="kpi-val" id="k-execucao">—</div><div class="kpi-pe" id="k-execucao-pe"></div></div>
+      <div class="kpi"><div class="kpi-rot">Na fila</div><div class="kpi-val" id="k-fila">—</div><div class="kpi-pe">na hora, esperando vaga</div></div>
+      <div class="kpi"><div class="kpi-rot">Falhas (24 h)</div><div class="kpi-val" id="k-falhas">—</div><div class="kpi-pe" id="k-falhas-pe"></div></div>
+      <div class="kpi"><div class="kpi-rot">Pausados</div><div class="kpi-val" id="k-pausados">—</div><div class="kpi-pe">job ou empresa</div></div>
+    </div>
+  </section>
+
+  <div class="abas" role="tablist">
+    <button class="aba ativa" type="button" data-aba="jobs">Jobs</button>
+    <button class="aba" type="button" data-aba="execucoes">Execuções e logs</button>
+    <button class="aba" type="button" data-aba="eventos">Eventos</button>
+    <button class="aba" type="button" data-aba="config">Configuração</button>
+  </div>
+
+  <!-- Jobs -->
+  <section class="painel-aba ativa" id="aba-jobs">
+    <section class="grupo" data-grupo="controle-jobs">
+      <h3><button type="button" class="grupo-toggle" data-alternar="controle-jobs" aria-expanded="true"><svg class="grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span>Jobs</span></button></h3>
+      <div class="grupo-resumo" id="resumo-controle-jobs"></div>
+      <div id="lista-jobs"><span class="sub">Carregando...</span></div>
+    </section>
+    <section class="grupo" data-grupo="filtros-inst">
+      <h3><button type="button" class="grupo-toggle" data-alternar="filtros-inst" aria-expanded="true"><svg class="grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span>Agrupamento</span></button></h3>
+      <div class="grupo-resumo" id="resumo-filtros-inst"></div>
+      <div class="filter-bar-row">
+        <button class="btn btn-ghost" type="button" data-agrupamento="inst">+ Mostrar agrupamento</button>
+        <span class="grupo-status" id="grupo-status-inst">Sem agrupamento ativo</span>
+        <span class="sub">Filtros: no cabeçalho de cada coluna.</span>
+      </div>
+      <div class="grupo-area" id="grupo-area-inst">
+        <div class="gp-chips-row" id="gp-chips-inst"><span class="gp-label">Agrupar por:</span></div>
+        <div id="dz-inst"></div>
+      </div>
+    </section>
+    <div class="grade"><div id="tabela-inst"></div></div>
+  </section>
+
+  <!-- Execuções -->
+  <section class="painel-aba" id="aba-execucoes">
+    <section class="grupo" data-grupo="filtros-ex">
+      <h3><button type="button" class="grupo-toggle" data-alternar="filtros-ex" aria-expanded="true"><svg class="grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span>Filtros e agrupamento</span></button></h3>
+      <div class="grupo-resumo" id="resumo-filtros-ex"></div>
+      <div class="filter-bar-row">
+        <select id="f-ex-job" class="form-control" aria-label="Job"><option value="">Todos os jobs</option></select>
+        <select id="f-ex-empresa" class="form-control" aria-label="Empresa"><option value="">Todas as empresas</option></select>
+        <select id="f-ex-resultado" class="form-control" aria-label="Resultado">
+          <option value="">Todos os resultados</option>
+          <option value="andamento">Em andamento</option>
+          <option value="falha">Falhas (erro/tempo esgotado)</option>
+          <option value="ok">Concluída com trabalho</option>
+          <option value="vazio">Concluída sem trabalho</option>
+          <option value="aviso">Concluída com aviso</option>
+          <option value="interrompido">Interrompida</option>
+        </select>
+        <input type="date" id="f-ex-de" class="form-control" aria-label="De">
+        <input type="date" id="f-ex-ate" class="form-control" aria-label="Até">
+        <button class="btn" type="button" id="btn-ex-filtrar">Filtrar</button>
+        <button class="btn btn-ghost" type="button" data-agrupamento="ex">+ Mostrar agrupamento</button>
+        <span class="grupo-status" id="grupo-status-ex">Sem agrupamento ativo</span>
+      </div>
+      <div class="grupo-area" id="grupo-area-ex">
+        <div class="gp-chips-row" id="gp-chips-ex"><span class="gp-label">Agrupar por:</span></div>
+        <div id="dz-ex"></div>
+      </div>
+    </section>
+    <div class="grade"><div id="tabela-ex"></div></div>
+    <div class="mais" id="mais-ex" hidden><button class="btn btn-ghost" type="button" id="btn-mais-ex">Carregar mais</button></div>
+  </section>
+
+  <!-- Eventos -->
+  <section class="painel-aba" id="aba-eventos">
+    <section class="grupo" data-grupo="filtros-ev">
+      <h3><button type="button" class="grupo-toggle" data-alternar="filtros-ev" aria-expanded="true"><svg class="grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span>Filtros e agrupamento</span></button></h3>
+      <div class="grupo-resumo" id="resumo-filtros-ev"></div>
+      <div class="filter-bar-row">
+        <select id="f-ev-nivel" class="form-control" aria-label="Nível">
+          <option value="">Todos os níveis</option>
+          <option value="problema">Só avisos e erros</option>
+          <option value="erro">Só erros</option>
+          <option value="info">Só informações</option>
+        </select>
+        <select id="f-ev-job" class="form-control" aria-label="Job"><option value="">Todos os jobs</option></select>
+        <input type="date" id="f-ev-de" class="form-control" aria-label="De">
+        <input type="date" id="f-ev-ate" class="form-control" aria-label="Até">
+        <button class="btn" type="button" id="btn-ev-filtrar">Filtrar</button>
+        <button class="btn btn-ghost" type="button" data-agrupamento="ev">+ Mostrar agrupamento</button>
+        <span class="grupo-status" id="grupo-status-ev">Sem agrupamento ativo</span>
+      </div>
+      <div class="grupo-area" id="grupo-area-ev">
+        <div class="gp-chips-row" id="gp-chips-ev"><span class="gp-label">Agrupar por:</span></div>
+        <div id="dz-ev"></div>
+      </div>
+    </section>
+    <div class="grade"><div id="tabela-ev"></div></div>
+    <div class="mais" id="mais-ev" hidden><button class="btn btn-ghost" type="button" id="btn-mais-ev">Carregar mais</button></div>
+  </section>
+
+  <!-- Configuração -->
+  <section class="painel-aba" id="aba-config">
+    <div class="config-grid">
+      <section class="grupo" data-grupo="modo">
+        <h3><button type="button" class="grupo-toggle" data-alternar="modo" aria-expanded="true"><svg class="grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span>Onde os jobs rodam</span></button></h3>
+        <div class="grupo-resumo" id="resumo-modo"></div>
+        <p class="exp">Vale na hora, sem reiniciar. No modo Serviço, se o IAHub-Jobs parar de dar sinal, o site reassume sozinho e devolve quando ele voltar.</p>
+        <label class="opcao-modo" id="op-site"><input type="radio" name="modo" value="site"><div><strong>Site</strong><span>Os jobs rodam dentro do site (como era antes). O serviço, se estiver no ar, só atende o Executar agora desta tela.</span></div></label>
+        <label class="opcao-modo" id="op-servico"><input type="radio" name="modo" value="servico"><div><strong>Serviço IAHub-Jobs</strong><span>Cada execução num processo próprio, fora do site: reiniciar o site não corta nada, e o serviço pode ser parado sem afetar o resto.</span></div></label>
+        <div class="rodape-bloco"><span class="quem" id="quem-modo"></span><button class="btn btn-primary" type="button" id="btn-salvar-modo">Aplicar</button></div>
+      </section>
+
+      <section class="grupo" data-grupo="capacidade">
+        <h3><button type="button" class="grupo-toggle" data-alternar="capacidade" aria-expanded="true"><svg class="grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span>Capacidade</span></button></h3>
+        <div class="grupo-resumo" id="resumo-capacidade"></div>
+        <p class="exp">Cada execução é um processo (~100–150 MB). Acima do limite, a próxima espera vaga (a mais atrasada primeiro) e nada se perde.</p>
+        <div class="campo">
+          <label class="rot" for="cfg-max">Execuções simultâneas no servidor</label>
+          <input type="number" min="1" max="100" id="cfg-max" class="form-control" style="width:120px">
+          <div class="dica">Soma de todos os jobs e empresas. Não é o "Chamados analisados ao mesmo tempo" da Jaade, que continua valendo dentro de cada leitura.</div>
+        </div>
+        <div class="campo">
+          <label class="rot">Limite por job (vazio = só o geral)</label>
+          <div id="limites-job"></div>
+        </div>
+        <div class="rodape-bloco"><span class="quem" id="quem-capacidade"></span><button class="btn btn-primary" type="button" id="btn-salvar-capacidade">Salvar capacidade</button></div>
+      </section>
+
+      <section class="grupo" data-grupo="alertas" style="grid-column:1 / -1">
+        <h3><button type="button" class="grupo-toggle" data-alternar="alertas" aria-expanded="true"><svg class="grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span>Alertas por WhatsApp</span></button></h3>
+        <div class="grupo-resumo" id="resumo-alertas"></div>
+        <div class="config-grid">
+          <div>
+            <div class="campo">
+              <label class="rot" for="cfg-al-empresa">Empresa do canal de WhatsApp</label>
+              <select id="cfg-al-empresa" class="form-control"><option value="">— sem alerta —</option></select>
+              <div class="dica">O alerta sai pelo canal desta empresa, aos grupos dela no IA Command.</div>
+            </div>
+            <div class="linha-campos">
+              <div class="campo">
+                <label class="rot" for="cfg-al-falhas">Falhas seguidas para alertar</label>
+                <input type="number" min="1" max="20" id="cfg-al-falhas" class="form-control" style="width:110px">
+              </div>
+              <div class="campo">
+                <label class="rot" for="cfg-al-semsinal">Minutos sem sinal</label>
+                <input type="number" min="1" max="60" id="cfg-al-semsinal" class="form-control" style="width:110px">
+              </div>
+            </div>
+            <div class="dica">Minutos sem sinal: também é quando o site reassume os jobs se o serviço travar (parada limpa reassume na hora).</div>
+          </div>
+          <div class="campo">
+            <div class="aviso-lista">
+              <div class="aviso-cab"><span>Grupo</span><span title="Job com falhas seguidas e a volta ao normal">Falha de job</span><span title="Serviço sem sinal e a volta">Serviço</span></div>
+              <div id="cfg-al-grupos"><div class="dica">Escolha a empresa.</div></div>
+            </div>
+            <div class="dica"><b>Falha de job</b>: N falhas seguidas e quando volta ao normal. <b>Serviço</b>: sem sinal e quando volta.</div>
+          </div>
+        </div>
+        <div class="rodape-bloco"><span class="quem" id="quem-alerta"></span>
+          <button class="btn btn-ghost" type="button" id="btn-grupos-alerta">Atualizar grupos</button>
+          <button class="btn btn-ghost" type="button" id="btn-testar-alerta">Enviar alerta de teste</button>
+          <button class="btn btn-primary" type="button" id="btn-salvar-alerta">Salvar alertas</button>
+        </div>
+      </section>
+    </div>
+  </section>
+</div>
+
+<div class="modal-fundo" id="modal" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="det-titulo">
+    <div class="modal-cab">
+      <h2 id="det-titulo">Execução</h2>
+      <button class="btn btn-danger" type="button" id="det-encerrar" hidden>Encerrar execução</button>
+      <button class="btn btn-ghost" type="button" id="det-fechar">Fechar</button>
+    </div>
+    <div class="modal-corpo" id="det-corpo"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/js/grid-group-panel.js?v=20260617-grid-guard-v2"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const params = new URLSearchParams(location.search);
+  const SISTEMA = params.get('sistema') || '';
+  const NOMES_SISTEMA = { 'ia-service': 'IA Service', 'ia-command': 'IA Command', 'ia-recruit': 'IA Recruit' };
+  const API = '/api/iahub/jobs';
+  const RESULTADOS = {
+    ok: ['Concluída', 'ok'], vazio: ['Sem trabalho', ''], aviso: ['Com aviso', 'atencao'],
+    erro: ['Erro', 'ruim'], timeout: ['Tempo esgotado', 'ruim'], interrompido: ['Interrompida', 'atencao'],
+  };
+  const SITUACOES = {
+    executando: ['Executando', 'info'], pausada: ['Pausada', 'atencao'], retentativa: ['Aguardando nova tentativa', 'ruim'],
+    na_fila: ['Na fila', 'atencao'], no_site: ['Rodando pelo site', ''], agendada: ['Agendada', 'ok'],
+  };
+  const NIVEIS = { info: ['Info', ''], aviso: ['Aviso', 'atencao'], erro: ['Erro', 'ruim'] };
+  const ORIGENS = { agendado: 'Agendada', manual: 'Executar agora' };
+  let painel = null;
+  let empresas = [];
+  let exCursor = null;
+  let evCursor = null;
+  let detalheId = null;
+  let configCarregada = false;
+  let gruposAlerta = null;
+  let gruposAlertaErro = null;
+  const selAlerta = { falha: new Set(), servico: new Set() };
+  const tabelas = {};
+  const paineisGrupo = {};
+
+  const dataHora = (iso) => { if (!iso) return '—'; const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' }); };
+  const duracao = (ms) => {
+    if (ms == null) return '—';
+    const s = Math.round(ms / 1000);
+    if (s < 60) return `${s} s`;
+    const m = Math.floor(s / 60);
+    return m < 60 ? `${m} min ${s % 60} s` : `${Math.floor(m / 60)} h ${m % 60} min`;
+  };
+  const relativo = (iso) => {
+    if (!iso) return '';
+    const dif = Date.parse(iso) - Date.now();
+    const abs = Math.abs(dif);
+    const txt = abs < 60000 ? `${Math.round(abs / 1000)} s` : abs < 3600000 ? `${Math.round(abs / 60000)} min` : `${Math.round(abs / 3600000)} h`;
+    return dif >= 0 ? `em ${txt}` : `há ${txt}`;
+  };
+  const pill = ([texto, classe]) => `<span class="pill ${classe || ''}">${esc(texto)}</span>`;
+  const rotuloResultado = (r, fim) => (!fim && !r ? 'Em andamento' : (RESULTADOS[r] || [r || '—'])[0]);
+  const pillResultado = (r, fim) => (!fim && !r ? pill(['Em andamento', 'info']) : pill(RESULTADOS[r] || [r || '—', '']));
+  const nomeJob = (id) => painel?.jobs.find(j => j.id === id)?.nome || id;
+
+  function erro(msg) {
+    $('erro').textContent = msg || '';
+    $('erro').style.display = msg ? 'block' : 'none';
+  }
+
+  async function api(caminho, opts = {}) {
+    const r = await fetch(`${API}${caminho}`, { cache: 'no-store', headers: { 'Content-Type': 'application/json' }, ...opts });
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 401) throw new Error('Sessão expirada: entre de novo no IAHub.');
+    if (r.status === 403) throw new Error('Acesso restrito a administradores do IAHub.');
+    if (!r.ok) throw new Error(d.error || `Erro ${r.status}`);
+    return d;
+  }
+  const qs = (o) => new URLSearchParams(Object.entries(o).filter(([, v]) => v !== '' && v != null)).toString();
+
+  // ── Blocos recolhíveis (a escolha fica neste navegador) ─────────────────
+  function alternarGrupo(id, recolher) {
+    const grupo = document.querySelector(`.grupo[data-grupo="${id}"]`);
+    if (!grupo) return;
+    const recolhido = typeof recolher === 'boolean' ? recolher : !grupo.classList.contains('recolhido');
+    grupo.classList.toggle('recolhido', recolhido);
+    grupo.querySelector('.grupo-toggle').setAttribute('aria-expanded', String(!recolhido));
+    try { localStorage.setItem(`iahub-jobs-grupo-${id}`, recolhido ? '1' : '0'); } catch (_) { /* só conveniência */ }
+    ajustarAlturas();
+  }
+
+  // A grade visível ocupa o que sobra da janela: fechar blocos acima dá mais linhas.
+  const GRADE_DA_ABA = { 'aba-jobs': ['inst', 'tabela-inst'], 'aba-execucoes': ['ex', 'tabela-ex'], 'aba-eventos': ['ev', 'tabela-ev'] };
+  function ajustarAlturas() {
+    requestAnimationFrame(() => {
+      for (const [aba, [chave, el]] of Object.entries(GRADE_DA_ABA)) {
+        const t = tabelas[chave];
+        if (!t || !$(aba).classList.contains('ativa')) continue;
+        const topo = $(el).getBoundingClientRect().top;
+        const mais = aba === 'aba-execucoes' ? !$('mais-ex').hidden : aba === 'aba-eventos' ? !$('mais-ev').hidden : false;
+        t.setHeight(Math.max(260, Math.floor(window.innerHeight - topo - (mais ? 64 : 16))));
+      }
+    });
+  }
+  window.addEventListener('resize', ajustarAlturas);
+  document.addEventListener('click', (ev) => { const b = ev.target.closest('[data-alternar]'); if (b) alternarGrupo(b.dataset.alternar); });
+  for (const g of document.querySelectorAll('.grupo[data-grupo]')) {
+    try { if (localStorage.getItem(`iahub-jobs-grupo-${g.dataset.grupo}`) === '1') alternarGrupo(g.dataset.grupo, true); } catch (_) { /* só conveniência */ }
+  }
+
+  // ── Grades (Tabulator + agrupamento, mesmo padrão das grades do IAHub) ──
+  const placeholder = (t) => `<div style="padding:30px;text-align:center">${esc(t)}</div>`;
+
+  function criarGrade(chave, seletor, opcoes) {
+    paineisGrupo[chave] = createGroupPanel({
+      chipsRowId: `gp-chips-${chave}`, dropZoneId: `dz-${chave}`,
+      storageKey: `iahub_jobs_${chave}_group`,
+      getTable: () => tabelas[chave],
+      onChange: (campos) => {
+        $(`grupo-status-${chave}`).textContent = campos.length ? `${campos.length} campo(s) agrupado(s)` : 'Sem agrupamento ativo';
+        resumirFiltros();
+      },
+    });
+    tabelas[chave] = new Tabulator(seletor, {
+      layout: 'fitColumns', movableColumns: true, index: 'id',
+      groupBy: paineisGrupo[chave].getActiveFields(), groupStartOpen: true,
+      ...opcoes,
+    });
+    tabelas[chave].on('tableBuilt', () => { paineisGrupo[chave].refresh(); paineisGrupo[chave].applyToTable(); });
+    tabelas[chave].on('dataFiltered', () => setTimeout(resumirFiltros));
+  }
+
+  // Resumo de uma linha quando o bloco de filtros está fechado.
+  function resumirFiltros() {
+    const texto = (sel) => { const o = $(sel); return o && o.value ? o.options[o.selectedIndex].text : null; };
+    const cab = (chave) => {
+      const f = tabelas[chave]?.getHeaderFilters?.() || [];
+      return f.length ? `${f.length} filtro(s) de coluna` : null;
+    };
+    const agrup = (chave) => { const s = $(`grupo-status-${chave}`)?.textContent; return s && !s.startsWith('Sem') ? s : null; };
+    const montar = (partes, vazio) => partes.filter(Boolean).join(' · ') || vazio;
+    if ($('resumo-filtros-inst')) $('resumo-filtros-inst').textContent = montar([agrup('inst'), cab('inst')], 'Sem agrupamento nem filtro de coluna.');
+    if ($('resumo-filtros-ex')) {
+      $('resumo-filtros-ex').textContent = montar([texto('f-ex-job'), texto('f-ex-empresa'), texto('f-ex-resultado'),
+        $('f-ex-de').value ? `de ${$('f-ex-de').value.split('-').reverse().join('/')}` : null,
+        $('f-ex-ate').value ? `até ${$('f-ex-ate').value.split('-').reverse().join('/')}` : null, agrup('ex'), cab('ex')], 'Todas as execuções, sem filtro.');
+    }
+    if ($('resumo-filtros-ev')) {
+      $('resumo-filtros-ev').textContent = montar([texto('f-ev-nivel'), texto('f-ev-job'),
+        $('f-ev-de').value ? `de ${$('f-ev-de').value.split('-').reverse().join('/')}` : null,
+        $('f-ev-ate').value ? `até ${$('f-ev-ate').value.split('-').reverse().join('/')}` : null, agrup('ev'), cab('ev')], 'Todos os eventos, sem filtro.');
+    }
+  }
+  for (const id of ['f-ex-job', 'f-ex-empresa', 'f-ex-resultado', 'f-ex-de', 'f-ex-ate', 'f-ev-nivel', 'f-ev-job', 'f-ev-de', 'f-ev-ate']) {
+    document.getElementById(id).addEventListener('change', resumirFiltros);
+  }
+
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-agrupamento]');
+    if (!b) return;
+    const chave = b.dataset.agrupamento;
+    const area = $(`grupo-area-${chave}`);
+    const visivel = area.style.display !== 'block';
+    area.style.display = visivel ? 'block' : 'none';
+    b.textContent = visivel ? '− Ocultar agrupamento' : '+ Mostrar agrupamento';
+    if (visivel) setTimeout(() => paineisGrupo[chave]?.refresh(), 50);
+    ajustarAlturas();
+  });
+
+  criarGrade('inst', '#tabela-inst', {
+    height: 400, placeholder: placeholder('Nenhuma empresa com job ligado.'),
+    columns: [
+      { title: 'Job', field: 'jobNome', width: 170, headerFilter: true, formatter: c => `<span class="forte">${esc(c.getValue())}</span>` },
+      { title: 'Empresa / instância', field: 'rotulo', minWidth: 220, headerFilter: true,
+        formatter: c => { const d = c.getRow().getData(); return `<div class="celula-quebra"><span class="forte">${esc(d.rotulo)}</span>${d.inativa ? ' <span class="pill">desligado</span>' : ''}<div class="sub">${esc(d.instancia)}</div></div>`; } },
+      { title: 'Situação', field: 'situacaoRotulo', width: 210, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true },
+        formatter: c => { const d = c.getRow().getData(); return `<div class="celula-quebra">${pill(SITUACOES[d.situacao] || [d.situacao, ''])}${d.extraSituacao ? `<div class="sub">${esc(d.extraSituacao)}</div>` : ''}</div>`; } },
+      { title: 'Próxima', field: 'proximaEm', width: 165, groupable: false, sorter: 'string',
+        formatter: c => (c.getValue() ? `<div class="celula-quebra">${dataHora(c.getValue())}<div class="sub">${relativo(c.getValue())}</div></div>` : '—') },
+      { title: 'Última execução', field: 'ultimaResultado', width: 150, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true },
+        formatter: c => { const u = c.getRow().getData().ultima; return u ? pillResultado(u.resultado, u.fim) : '<span class="sub">nunca rodou pelo serviço</span>'; } },
+      { title: 'Última em', field: 'ultimaInicio', width: 165, groupable: false, sorter: 'string',
+        formatter: c => { const u = c.getRow().getData().ultima; return u ? `<div class="celula-quebra">${dataHora(u.inicio)}<div class="sub">${duracao(u.duracaoMs)}</div></div>` : '—'; } },
+      { title: 'Erro da última', field: 'ultimaErro', minWidth: 140, headerFilter: true, groupable: false,
+        formatter: c => (c.getValue() ? `<div class="texto-erro">${esc(c.getValue())}</div>` : '') },
+      { title: 'Falhas seg.', field: 'falhasSeguidas', width: 105, hozAlign: 'center', groupable: false, sorter: 'number',
+        formatter: c => (c.getValue() ? pill([String(c.getValue()), 'ruim']) : '0') },
+      { title: 'Ações', field: '_acoes', width: 300, frozen: window.innerWidth > 760, headerSort: false, groupable: false, formatter: c => acoesInstancia(c.getRow().getData()) },
+    ],
+  });
+
+  criarGrade('ex', '#tabela-ex', {
+    height: 400, placeholder: placeholder('Nenhuma execução com esses filtros.'),
+    rowFormatter: (row) => row.getElement().classList.add('clicavel'),
+    columns: [
+      { title: '#', field: 'id', width: 70, sorter: 'number', groupable: false },
+      { title: 'Início', field: 'inicio', width: 165, sorter: 'string', groupable: false, formatter: c => dataHora(c.getValue()) },
+      { title: 'Job', field: 'jobNome', minWidth: 160, headerFilter: true },
+      { title: 'Empresa / instância', field: 'rotulo', minWidth: 200, headerFilter: true },
+      { title: 'Origem', field: 'origemRotulo', width: 130, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true } },
+      { title: 'Duração', field: 'duracaoMs', width: 110, sorter: 'number', groupable: false, formatter: c => { const d = c.getRow().getData(); return d.fim ? duracao(d.duracaoMs) : duracao(Date.now() - Date.parse(d.inicio)); } },
+      { title: 'Resultado', field: 'resultadoRotulo', width: 140, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true },
+        formatter: c => { const d = c.getRow().getData(); return pillResultado(d.resultado, d.fim); } },
+      { title: 'Detalhe', field: 'detalhe', minWidth: 240, headerFilter: true, groupable: false,
+        formatter: c => { const d = c.getRow().getData(); return d.erro ? `<div class="texto-erro">${esc(c.getValue())}</div>` : `<span class="sub">${esc(c.getValue())}</span>`; } },
+    ],
+  });
+  tabelas.ex.on('rowClick', (_e, row) => abrirDetalhe(row.getData().id));
+
+  criarGrade('ev', '#tabela-ev', {
+    height: 400, placeholder: placeholder('Nenhum evento com esses filtros.'),
+    columns: [
+      { title: 'Quando', field: 'momento', width: 165, sorter: 'string', groupable: false, formatter: c => dataHora(c.getValue()) },
+      { title: 'Nível', field: 'nivelRotulo', width: 100, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true },
+        formatter: c => pill(NIVEIS[c.getRow().getData().nivel] || [c.getValue(), '']) },
+      { title: 'Job', field: 'jobNome', minWidth: 150, headerFilter: true },
+      { title: 'Empresa / instância', field: 'rotulo', minWidth: 170, headerFilter: true },
+      { title: 'O que aconteceu', field: 'texto', minWidth: 320, headerFilter: true, groupable: false, formatter: c => `<div class="celula-quebra">${esc(c.getValue())}</div>` },
+      { title: 'Usuário', field: 'usuario', width: 130, headerFilter: true },
+    ],
+  });
+
+  // ── Painel (situação + jobs) ────────────────────────────────────────────
+  async function carregarPainel() {
+    try {
+      painel = await api(`/painel?${qs({ sistema: SISTEMA })}`);
+      erro('');
+      desenharSituacao();
+      desenharJobs();
+      preencherFiltrosJob();
+      if (!configCarregada && $('aba-config').classList.contains('ativa')) carregarConfig();
+    } catch (err) {
+      erro(err.message);
+    }
+  }
+
+  function desenharSituacao() {
+    const p = painel;
+    const s = p.servico;
+    let servTxt;
+    if (s.ativo) {
+      servTxt = 'No ar';
+      $('k-servico').className = 'kpi-val ok';
+      $('k-servico-pe').textContent = `desde ${dataHora(s.iniciadoEm)}`;
+    } else {
+      servTxt = s.parando ? 'Parando' : s.paradoEm && !s.batimentoEm ? 'Parado' : s.batimentoEm ? 'Sem sinal' : 'Não instalado';
+      $('k-servico').className = `kpi-val ${p.modo === 'servico' ? 'ruim' : 'atencao'}`;
+      $('k-servico-pe').textContent = s.batimentoEm ? `último sinal ${dataHora(s.batimentoEm)}` : s.paradoEm ? `parado em ${dataHora(s.paradoEm)}` : 'nunca deu sinal neste servidor';
+    }
+    $('k-servico').textContent = servTxt;
+    let modoTxt = 'Site';
+    if (p.modo === 'servico') {
+      modoTxt = p.servicoNoComando ? 'Serviço' : 'Site (reassumiu)';
+      $('k-modo').className = `kpi-val ${p.servicoNoComando ? 'ok' : 'ruim'}`;
+      $('k-modo-pe').textContent = p.servicoNoComando ? 'IAHub-Jobs no comando' : 'serviço escolhido, mas sem sinal';
+    } else {
+      $('k-modo').className = 'kpi-val';
+      $('k-modo-pe').textContent = 'escolha na Configuração';
+    }
+    $('k-modo').textContent = modoTxt;
+    const r = p.resumo;
+    $('k-execucao').textContent = r.emExecucao;
+    $('k-execucao-pe').textContent = `limite ${r.limite} no servidor`;
+    $('k-fila').textContent = r.naFila;
+    $('k-fila').className = `kpi-val ${r.naFila ? 'atencao' : ''}`;
+    $('k-falhas').textContent = r.falhas24h;
+    $('k-falhas').className = `kpi-val ${r.falhas24h ? 'ruim' : 'ok'}`;
+    $('k-falhas-pe').textContent = `de ${r.execucoes24h} execução(ões)`;
+    $('k-pausados').textContent = r.pausadas;
+    $('k-pausados').className = `kpi-val ${r.pausadas ? 'atencao' : ''}`;
+    $('resumo-situacao').textContent = [`Serviço: ${servTxt}`, `Roda no ${modoTxt}`, `${r.emExecucao} executando`, `${r.naFila} na fila`,
+      `${r.falhas24h} falha(s) em 24 h`, r.pausadas ? `${r.pausadas} pausado(s)` : null].filter(Boolean).join(' · ');
+
+    const avisos = [];
+    if (p.modo === 'servico' && !p.servicoNoComando) avisos.push(['erro', 'O serviço IAHub-Jobs foi escolhido, mas não está dando sinal: o site reassumiu os jobs. Verifique o serviço no servidor (services.msc e logs\\jobs-error.log).']);
+    for (const a of p.alertasAbertos || []) avisos.push(['erro', `Alerta em aberto desde ${dataHora(a.abertoEm)}: ${a.texto}`]);
+    const c = p.config;
+    if (!c.alertaEmpresaId || !(c.alertaGruposFalha || []).length || !(c.alertaGruposServico || []).length) {
+      avisos.push(['alerta', 'Alertas por WhatsApp incompletos: escolha a empresa e os grupos de "Falha de job" e de "Serviço" em Configuração. A reserva por e-mail/Telegram da empresa fica em IA Gestão › Parâmetros.']);
+    }
+    $('avisos').innerHTML = avisos.map(([cl, t]) => `<div class="aviso ${cl}">${esc(t)}</div>`).join('');
+    // Sem aviso o bloco some; com aviso, fechado mostra só a contagem.
+    const antes = $('bloco-avisos').hidden;
+    $('bloco-avisos').hidden = !avisos.length;
+    const erros = avisos.filter(([cl]) => cl === 'erro').length;
+    $('titulo-avisos').textContent = `Avisos (${avisos.length})`;
+    $('resumo-avisos').textContent = erros ? `${erros} problema(s) e ${avisos.length - erros} pendência(s) de configuração — abra para ver.` : `${avisos.length} pendência(s) de configuração — abra para ver.`;
+    if (antes !== $('bloco-avisos').hidden) ajustarAlturas();
+  }
+
+  function desenharJobs() {
+    // Controles do job inteiro (linha compacta por job).
+    $('lista-jobs').innerHTML = painel.jobs.length ? painel.jobs.map((j) => {
+      const pills = [
+        j.pausado ? pill([`Pausado${j.pausaPor ? ` por ${j.pausaPor}` : ''}`, 'atencao']) : '',
+        j.limite ? pill([`Máx. ${j.limite} juntas`, 'info']) : '',
+        j.emExecucao ? pill([`${j.emExecucao} executando`, 'info']) : '',
+        j.falhas24h ? pill([`${j.falhas24h} falha(s) em 24 h`, 'ruim']) : '',
+      ].join(' ');
+      return `<div class="job-linha">
+        <span class="job-nome">${esc(j.nome)}</span> ${pills}
+        <span class="esp"></span>
+        <button class="btn btn-ghost" type="button" data-acao="historico-job" data-job="${esc(j.id)}">Execuções</button>
+        <button class="btn ${j.pausado ? 'btn-primary' : 'btn-ghost'}" type="button" data-acao="${j.pausado ? 'retomar' : 'pausar'}" data-job="${esc(j.id)}" data-inst="*">${j.pausado ? 'Retomar job' : 'Pausar job'}</button>
+        <div class="job-desc">${esc(j.descricao)} · ${j.instancias.length} empresa(s)/instância(s) · tempo máximo por execução ${duracao(j.timeoutMs)}${j.erroInstancias ? ` · <span class="texto-erro">${esc(j.erroInstancias)}</span>` : ''}</div>
+      </div>`;
+    }).join('') : `<span class="sub">Nenhum job ${SISTEMA ? `do ${esc(NOMES_SISTEMA[SISTEMA] || SISTEMA)} ` : ''}no catálogo.</span>`;
+    $('resumo-controle-jobs').textContent = painel.jobs.map(j => `${j.nome}: ${j.instancias.length} empresa(s)${j.pausado ? ', PAUSADO' : ''}${j.emExecucao ? `, ${j.emExecucao} executando` : ''}`).join(' · ') || 'Nenhum job.';
+
+    // Grade das empresas/instâncias de todos os jobs.
+    const linhas = painel.jobs.flatMap(j => j.instancias.map(i => ({
+      ...i,
+      id: `${j.id}|${i.instancia}`,
+      jobId: j.id,
+      jobNome: j.nome,
+      situacaoRotulo: (SITUACOES[i.situacao] || [i.situacao])[0],
+      extraSituacao: extraSituacao(i),
+      ultimaResultado: i.ultima ? rotuloResultado(i.ultima.resultado, i.ultima.fim) : 'Nunca rodou',
+      ultimaInicio: i.ultima?.inicio || '',
+      ultimaErro: i.ultima?.erro && ['erro', 'timeout', 'interrompido'].includes(i.ultima.resultado) ? i.ultima.erro.split('\n')[0].slice(0, 200) : '',
+    })));
+    tabelas.inst.replaceData(linhas);
+  }
+
+  function extraSituacao(i) {
+    let extra = '';
+    if (i.situacao === 'executando' && i.execucaoAberta) extra = `${ORIGENS[i.execucaoAberta.origem] || i.execucaoAberta.origem} · ${duracao(Date.now() - Date.parse(i.execucaoAberta.inicio))}`;
+    else if (i.situacao === 'pausada' && i.pausaPor) extra = `por ${i.pausaPor}${i.pausaPropria ? '' : ' (job inteiro)'}`;
+    else if (i.situacao === 'retentativa') extra = `nova tentativa ${relativo(i.aguardarAte)}`;
+    if (i.pedidoPendente) extra = `${extra ? `${extra} · ` : ''}Executar agora pedido`;
+    return extra;
+  }
+
+  function acoesInstancia(i) {
+    return `<div class="acoes">${[
+      i.execucaoAberta ? `<button class="btn btn-ghost" type="button" data-acao="detalhe" data-id="${i.execucaoAberta.id}">Ver log</button>` : '',
+      i.execucaoAberta ? `<button class="btn btn-danger" type="button" data-acao="encerrar" data-id="${i.execucaoAberta.id}">Encerrar</button>`
+        : `<button class="btn btn-ghost" type="button" data-acao="executar" data-job="${esc(i.jobId)}" data-inst="${esc(i.instancia)}" ${i.pedidoPendente ? 'disabled' : ''}>Executar agora</button>`,
+      i.ultima ? `<button class="btn btn-ghost" type="button" data-acao="detalhe" data-id="${i.ultima.id}">Última</button>` : '',
+      i.pausaPropria
+        ? `<button class="btn btn-primary" type="button" data-acao="retomar" data-job="${esc(i.jobId)}" data-inst="${esc(i.instancia)}">Retomar</button>`
+        : `<button class="btn btn-ghost" type="button" data-acao="pausar" data-job="${esc(i.jobId)}" data-inst="${esc(i.instancia)}">Pausar</button>`,
+    ].join('')}</div>`;
+  }
+
+  // ── Ações ───────────────────────────────────────────────────────────────
+  async function acao(btn) {
+    const { acao: tipo, job, inst, id } = btn.dataset;
+    try {
+      if (tipo === 'detalhe') return abrirDetalhe(Number(id));
+      if (tipo === 'historico-job') {
+        $('f-ex-job').value = job;
+        trocarAba('execucoes');
+        return;
+      }
+      if (tipo === 'executar') {
+        btn.disabled = true;
+        await api('/executar', { method: 'POST', body: JSON.stringify({ jobId: job, instancia: inst }) });
+      } else if (tipo === 'encerrar') {
+        if (!confirm(`Encerrar a execução #${id}? O processo é finalizado no meio e o job limpa o que deixou (ex.: a Jaade fecha a leitura como interrompida).`)) return;
+        await api(`/execucoes/${id}/encerrar`, { method: 'POST' });
+      } else if (tipo === 'pausar' || tipo === 'retomar') {
+        if (tipo === 'pausar' && inst === '*' && !confirm(`Pausar "${nomeJob(job)}" para TODAS as empresas? Nenhuma execução agendada roda até retomar (a que já está rodando termina).`)) return;
+        await api('/controle', { method: 'PUT', body: JSON.stringify({ jobId: job, instancia: inst, pausado: tipo === 'pausar' }) });
+      }
+      await carregarPainel();
+    } catch (err) {
+      erro(err.message);
+      btn.disabled = false;
+    }
+  }
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-acao]');
+    if (!b) return;
+    ev.stopPropagation();
+    acao(b);
+  });
+
+  // ── Execuções ───────────────────────────────────────────────────────────
+  function preencherFiltrosJob() {
+    for (const sel of [$('f-ex-job'), $('f-ev-job')]) {
+      const atual = sel.value;
+      sel.innerHTML = '<option value="">Todos os jobs</option>' + painel.jobs.map(j => `<option value="${esc(j.id)}">${esc(j.nome)}</option>`).join('');
+      sel.value = atual;
+    }
+  }
+
+  async function carregarEmpresas() {
+    if (empresas.length) return;
+    try {
+      empresas = (await api('/empresas')).empresas;
+      const opcoes = empresas.map(e => `<option value="${e.id}">${esc(e.nome)}</option>`).join('');
+      $('f-ex-empresa').innerHTML = '<option value="">Todas as empresas</option>' + opcoes;
+      $('cfg-al-empresa').innerHTML = '<option value="">— sem alerta —</option>' + opcoes;
+    } catch (err) {
+      erro(err.message);
+    }
+  }
+
+  const dataIso = (v, fimDoDia) => (v ? new Date(`${v}T${fimDoDia ? '23:59:59.999' : '00:00:00'}`).toISOString() : '');
+
+  function resumoCurto(r) {
+    if (!r || typeof r !== 'object') return '—';
+    const partes = [];
+    if (r.elegiveis != null) partes.push(`${r.elegiveis} elegível(is)`);
+    if (r.novos) partes.push(`${r.novos} novo(s)`);
+    if (r.processados) partes.push(`${r.processados} analisado(s)`);
+    if (r.enviados) partes.push(`${r.enviados} enviado(s)`);
+    if (r.loteId) partes.push(`lote #${r.loteId}`);
+    if (r.motivo) partes.push(r.motivo);
+    if ((r.erros || []).length) partes.push(`${r.erros.length} erro(s)`);
+    return partes.join(' · ') || '—';
+  }
+
+  async function carregarExecucoes(reiniciar) {
+    if (reiniciar) exCursor = null;
+    try {
+      const { execucoes } = await api(`/execucoes?${qs({
+        sistema: SISTEMA, job: $('f-ex-job').value, empresa_id: $('f-ex-empresa').value, resultado: $('f-ex-resultado').value,
+        de: dataIso($('f-ex-de').value), ate: dataIso($('f-ex-ate').value, true), antes_id: exCursor, limite: 200,
+      })}`);
+      const linhas = execucoes.map(e => ({
+        ...e,
+        jobNome: nomeJob(e.jobId),
+        rotulo: e.rotulo || e.instancia,
+        origemRotulo: ORIGENS[e.origem] || e.origem,
+        resultadoRotulo: rotuloResultado(e.resultado, e.fim),
+        detalhe: e.erro ? e.erro.split('\n')[0].slice(0, 200) : resumoCurto(e.resumo),
+      }));
+      if (reiniciar) tabelas.ex.replaceData(linhas); else tabelas.ex.addData(linhas);
+      exCursor = execucoes.length ? execucoes[execucoes.length - 1].id : exCursor;
+      $('mais-ex').hidden = execucoes.length < 200;
+      ajustarAlturas();
+    } catch (err) {
+      erro(err.message);
+    }
+  }
+
+  // ── Detalhe + log ───────────────────────────────────────────────────────
+  async function abrirDetalhe(id) {
+    detalheId = id;
+    $('modal').classList.add('aberto');
+    $('modal').setAttribute('aria-hidden', 'false');
+    $('det-corpo').innerHTML = '<div class="sub" style="padding:20px;text-align:center">Carregando...</div>';
+    await atualizarDetalhe(true);
+  }
+
+  async function atualizarDetalhe(rolarFim) {
+    if (!detalheId) return;
+    try {
+      const { execucao: e } = await api(`/execucoes/${detalheId}`);
+      if (e.id !== detalheId) return;
+      const logEl = document.getElementById('det-log');
+      const noFim = !logEl || logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 20;
+      $('det-titulo').textContent = `Execução #${e.id} · ${nomeJob(e.jobId)}`;
+      $('det-encerrar').hidden = !!e.fim;
+      $('det-encerrar').dataset.id = e.id;
+      $('det-corpo').innerHTML = `
+        <div class="det-grid">
+          <div><div class="r">Empresa / instância</div><div class="v">${esc(e.rotulo || e.instancia)}</div></div>
+          <div><div class="r">Resultado</div><div class="v">${pillResultado(e.resultado, e.fim)}</div></div>
+          <div><div class="r">Origem</div><div class="v">${esc(ORIGENS[e.origem] || e.origem)}</div></div>
+          <div><div class="r">Processo</div><div class="v">${esc(e.dono || '—')}</div></div>
+          <div><div class="r">Início</div><div class="v">${dataHora(e.inicio)}</div></div>
+          <div><div class="r">Fim</div><div class="v">${e.fim ? dataHora(e.fim) : 'em andamento'}</div></div>
+          <div><div class="r">Duração</div><div class="v">${e.fim ? duracao(e.duracaoMs) : duracao(Date.now() - Date.parse(e.inicio))}</div></div>
+          <div><div class="r">Instância</div><div class="v">${esc(e.instancia)}</div></div>
+        </div>
+        ${e.erro ? `<div class="det-titulo">Erro</div><pre class="resumo texto-erro">${esc(e.erro)}</pre>` : ''}
+        ${e.resumo ? `<div class="det-titulo">Resumo</div><pre class="resumo">${esc(JSON.stringify(e.resumo, null, 2))}</pre>` : ''}
+        <div class="det-titulo">Log da execução ${e.fim ? '' : pill(['ao vivo', 'info'])}</div>
+        <pre class="log" id="det-log">${esc(e.log || (e.fim ? 'Esta execução não escreveu nada no log.' : 'Aguardando a primeira linha...'))}</pre>`;
+      const novoLog = document.getElementById('det-log');
+      if (rolarFim || noFim) novoLog.scrollTop = novoLog.scrollHeight;
+      $('det-corpo').dataset.fim = e.fim ? '1' : '';
+    } catch (err) {
+      $('det-corpo').innerHTML = `<div class="texto-erro">${esc(err.message)}</div>`;
+    }
+  }
+
+  function fecharDetalhe() {
+    detalheId = null;
+    $('modal').classList.remove('aberto');
+    $('modal').setAttribute('aria-hidden', 'true');
+  }
+
+  // ── Eventos ─────────────────────────────────────────────────────────────
+  async function carregarEventos(reiniciar) {
+    if (reiniciar) evCursor = null;
+    try {
+      const { eventos } = await api(`/eventos?${qs({
+        sistema: SISTEMA, nivel: $('f-ev-nivel').value, job: $('f-ev-job').value,
+        de: dataIso($('f-ev-de').value), ate: dataIso($('f-ev-ate').value, true), antes_id: evCursor, limite: 300,
+      })}`);
+      const linhas = eventos.map(ev => ({
+        ...ev,
+        nivelRotulo: (NIVEIS[ev.nivel] || [ev.nivel])[0],
+        jobNome: ev.jobId ? nomeJob(ev.jobId) : 'Serviço',
+        rotulo: ev.instancia ? (ev.rotulo || ev.instancia) : '',
+        usuario: ev.usuario || '',
+      }));
+      if (reiniciar) tabelas.ev.replaceData(linhas); else tabelas.ev.addData(linhas);
+      evCursor = eventos.length ? eventos[eventos.length - 1].id : evCursor;
+      $('mais-ev').hidden = eventos.length < 300;
+      ajustarAlturas();
+    } catch (err) {
+      erro(err.message);
+    }
+  }
+
+  // ── Configuração ────────────────────────────────────────────────────────
+  function quem(cfg) {
+    return cfg.atualizadoPor ? `Última alteração por ${cfg.atualizadoPor} em ${dataHora(cfg.atualizadoEm)}.` : '';
+  }
+
+  function marcarModo(valor) {
+    for (const r of document.querySelectorAll('input[name=modo]')) r.checked = r.value === valor;
+    $('op-site').classList.toggle('marcada', valor === 'site');
+    $('op-servico').classList.toggle('marcada', valor === 'servico');
+  }
+
+  function nomesGrupos(tipo) {
+    const ids = [...selAlerta[tipo]];
+    if (!ids.length) return 'nenhum grupo';
+    return ids.map(id => gruposAlerta?.find(g => String(g.id) === id)?.nome || 'grupo indisponível').join(', ');
+  }
+
+  function resumirConfig() {
+    if (!painel) return;
+    const c = painel.config;
+    $('resumo-modo').textContent = c.modo === 'servico' ? 'Serviço IAHub-Jobs' : 'Site';
+    const limites = painel.jobs.map(j => `${j.nome}: ${j.limite ? `máx. ${j.limite}` : 'só o geral'}`);
+    $('resumo-capacidade').textContent = [`${$('cfg-max').value || c.maxSimultaneos} simultâneas no servidor`, ...limites].join(' · ');
+    const empresa = empresas.find(e => String(e.id) === String($('cfg-al-empresa').value))?.nome;
+    $('resumo-alertas').textContent = empresa
+      ? [`Canal: ${empresa}`, `Falha de job: ${nomesGrupos('falha')}`, `Serviço: ${nomesGrupos('servico')}`, `a partir de ${$('cfg-al-falhas').value} falha(s)`, `${$('cfg-al-semsinal').value} min sem sinal`].join(' · ')
+      : 'Sem alerta (nenhuma empresa escolhida).';
+  }
+
+  async function carregarConfig() {
+    if (!painel) return;
+    configCarregada = true;
+    await carregarEmpresas();
+    const c = painel.config;
+    marcarModo(c.modo);
+    $('cfg-max').value = c.maxSimultaneos;
+    $('limites-job').innerHTML = painel.jobs.map(j => `<div class="limite-linha"><span>${esc(j.nome)}</span>
+      <input type="number" min="1" max="100" class="form-control" data-limite-job="${esc(j.id)}" value="${j.limite ?? ''}" placeholder="—" aria-label="Limite de ${esc(j.nome)}"></div>`).join('')
+      || '<span class="sub">Nenhum job.</span>';
+    $('cfg-al-empresa').value = c.alertaEmpresaId ?? '';
+    $('cfg-al-falhas').value = c.alertaFalhas;
+    $('cfg-al-semsinal').value = c.alertaSemSinalMin;
+    selAlerta.falha = new Set((c.alertaGruposFalha || []).map(String));
+    selAlerta.servico = new Set((c.alertaGruposServico || []).map(String));
+    for (const id of ['quem-modo', 'quem-capacidade', 'quem-alerta']) $(id).textContent = quem(c);
+    await carregarGrupos();
+  }
+
+  async function carregarGrupos() {
+    const empresaId = $('cfg-al-empresa').value;
+    if (!empresaId) { gruposAlerta = []; gruposAlertaErro = null; desenharGrupos(); return; }
+    gruposAlerta = null;
+    desenharGrupos();
+    try {
+      const r = await api(`/alerta/grupos?${qs({ empresa_id: empresaId })}`);
+      gruposAlerta = Array.isArray(r) ? r : [];
+      gruposAlertaErro = null;
+    } catch (err) {
+      gruposAlerta = [];
+      gruposAlertaErro = err.message;
+    }
+    desenharGrupos();
+  }
+
+  function desenharGrupos() {
+    const el = $('cfg-al-grupos');
+    if (!$('cfg-al-empresa').value) el.innerHTML = '<div class="dica">Escolha a empresa do canal.</div>';
+    else if (gruposAlerta === null) el.innerHTML = '<div class="dica">Carregando grupos…</div>';
+    else if (gruposAlertaErro) el.innerHTML = `<div class="dica">${esc(gruposAlertaErro)}</div>`;
+    else {
+      const conhecidos = new Set(gruposAlerta.map(g => String(g.id)));
+      // Marcado aqui, mas inativado ou excluído no IA Command: aparece para poder desmarcar.
+      const sumidos = [...new Set([...selAlerta.falha, ...selAlerta.servico])].filter(id => !conhecidos.has(id));
+      const caixa = (tipo, id, nome) => `<input type="checkbox" value="${esc(id)}" data-tipo-alerta="${tipo}" aria-label="${tipo === 'falha' ? 'Falha de job' : 'Serviço'}: ${esc(nome)}" ${selAlerta[tipo].has(String(id)) ? 'checked' : ''}>`;
+      const linha = (id, nome, meta, classe = '') => `
+        <div class="aviso-item ${classe}">
+          <span class="aviso-nome" title="${esc(nome)}">${esc(nome)} <span class="aviso-meta">· ${esc(meta)}</span></span>
+          ${caixa('falha', id, nome)}${caixa('servico', id, nome)}
+        </div>`;
+      el.innerHTML = !gruposAlerta.length && !sumidos.length
+        ? '<div class="dica">Nenhum grupo ativo nesta empresa. Cadastre em IA Command › Grupos.</div>'
+        : gruposAlerta.map(g => linha(g.id, g.nome, `${Number(g.membros_count || 0)} membro(s)`)).join('')
+          + sumidos.map(id => linha(id, 'Grupo indisponível', 'inativado ou excluído; não recebe', 'indisponivel')).join('');
+    }
+    resumirConfig();
+  }
+
+  $('cfg-al-grupos').addEventListener('change', (ev) => {
+    const cx = ev.target.closest('[data-tipo-alerta]');
+    if (!cx) return;
+    if (cx.checked) selAlerta[cx.dataset.tipoAlerta].add(String(cx.value));
+    else selAlerta[cx.dataset.tipoAlerta].delete(String(cx.value));
+    resumirConfig();
+  });
+  $('aba-config').addEventListener('input', resumirConfig);
+
+  async function salvar(corpo, botao) {
+    botao.disabled = true;
+    try {
+      await api('/config', { method: 'PUT', body: JSON.stringify(corpo) });
+      configCarregada = false;
+      await carregarPainel();
+      await carregarConfig();
+      erro('');
+    } catch (err) {
+      erro(err.message);
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
+  // ── Navegação e atualização ─────────────────────────────────────────────
+  function trocarAba(nome) {
+    for (const b of document.querySelectorAll('.aba')) b.classList.toggle('ativa', b.dataset.aba === nome);
+    for (const s of document.querySelectorAll('.painel-aba')) s.classList.toggle('ativa', s.id === `aba-${nome}`);
+    // Grade criada em aba escondida precisa redesenhar ao aparecer.
+    if (nome === 'jobs') tabelas.inst.redraw(true);
+    if (nome === 'execucoes') { tabelas.ex.redraw(true); carregarEmpresas().then(() => carregarExecucoes(true)); }
+    if (nome === 'eventos') { tabelas.ev.redraw(true); carregarEventos(true); }
+    if (nome === 'config') carregarConfig();
+    resumirFiltros();
+    ajustarAlturas();
+  }
+
+  document.querySelector('.abas').addEventListener('click', (ev) => { const b = ev.target.closest('.aba'); if (b) trocarAba(b.dataset.aba); });
+  $('btn-atualizar').addEventListener('click', () => { carregarPainel(); if ($('aba-execucoes').classList.contains('ativa')) carregarExecucoes(true); if ($('aba-eventos').classList.contains('ativa')) carregarEventos(true); });
+  $('btn-ex-filtrar').addEventListener('click', () => carregarExecucoes(true));
+  $('btn-mais-ex').addEventListener('click', () => carregarExecucoes(false));
+  $('btn-ev-filtrar').addEventListener('click', () => carregarEventos(true));
+  $('btn-mais-ev').addEventListener('click', () => carregarEventos(false));
+  $('det-fechar').addEventListener('click', fecharDetalhe);
+  $('modal').addEventListener('click', (ev) => { if (ev.target === $('modal')) fecharDetalhe(); });
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && detalheId) fecharDetalhe(); });
+  $('det-encerrar').addEventListener('click', async () => {
+    const id = $('det-encerrar').dataset.id;
+    if (!confirm(`Encerrar a execução #${id}?`)) return;
+    try { await api(`/execucoes/${id}/encerrar`, { method: 'POST' }); await atualizarDetalhe(); } catch (err) { erro(err.message); }
+  });
+  for (const r of document.querySelectorAll('input[name=modo]')) r.addEventListener('change', () => marcarModo(r.value));
+  $('btn-salvar-modo').addEventListener('click', (ev) => {
+    const modo = document.querySelector('input[name=modo]:checked')?.value;
+    if (!modo || modo === painel.config.modo) return;
+    const msg = modo === 'servico'
+      ? 'Passar os jobs para o serviço IAHub-Jobs agora? O site deixa de agendar no próximo ciclo (segundos).'
+      : 'Voltar os jobs para o site agora? O serviço termina o que estiver rodando e deixa de agendar.';
+    if (confirm(msg)) salvar({ modo }, ev.currentTarget);
+  });
+  $('btn-salvar-capacidade').addEventListener('click', async (ev) => {
+    const botao = ev.currentTarget;
+    botao.disabled = true;
+    try {
+      await api('/config', { method: 'PUT', body: JSON.stringify({ maxSimultaneos: Number($('cfg-max').value) }) });
+      for (const inp of document.querySelectorAll('[data-limite-job]')) {
+        const job = painel.jobs.find(j => j.id === inp.dataset.limiteJob);
+        const novo = inp.value === '' ? null : Number(inp.value);
+        if ((job?.limite ?? null) !== novo) await api('/controle', { method: 'PUT', body: JSON.stringify({ jobId: inp.dataset.limiteJob, instancia: '*', limite: novo }) });
+      }
+      configCarregada = false;
+      await carregarPainel();
+      await carregarConfig();
+      erro('');
+    } catch (err) {
+      erro(err.message);
+    } finally {
+      botao.disabled = false;
+    }
+  });
+  $('cfg-al-empresa').addEventListener('change', () => { selAlerta.falha.clear(); selAlerta.servico.clear(); carregarGrupos(); });
+  $('btn-grupos-alerta').addEventListener('click', carregarGrupos);
+  $('btn-salvar-alerta').addEventListener('click', (ev) => salvar({
+    alertaEmpresaId: $('cfg-al-empresa').value || null,
+    alertaGruposFalha: [...selAlerta.falha],
+    alertaGruposServico: [...selAlerta.servico],
+    alertaFalhas: Number($('cfg-al-falhas').value),
+    alertaSemSinalMin: Number($('cfg-al-semsinal').value),
+  }, ev.currentTarget));
+  $('btn-testar-alerta').addEventListener('click', async (ev) => {
+    const botao = ev.currentTarget;
+    botao.disabled = true;
+    try { await api('/alerta/testar', { method: 'POST' }); alert('Alerta de teste enviado aos grupos salvos (Falha de job e Serviço).'); erro(''); } catch (err) { erro(err.message); } finally { botao.disabled = false; }
+  });
+
+  if (SISTEMA) {
+    $('titulo').textContent = `Jobs do ${NOMES_SISTEMA[SISTEMA] || SISTEMA}`;
+    $('subtitulo').textContent = 'Os jobs deste sistema no serviço IAHub-Jobs. A visão de todos os sistemas fica na IA Gestão › Jobs.';
+  }
+
+  // Atualização automática: painel a cada 5 s; detalhe aberto e em andamento a cada 3 s.
+  setInterval(() => {
+    if (!$('auto').checked || document.hidden) return;
+    if ($('aba-jobs').classList.contains('ativa')) carregarPainel();
+  }, 5000);
+  setInterval(() => {
+    if (detalheId && !document.hidden && $('det-corpo').dataset.fim !== '1') atualizarDetalhe();
+  }, 3000);
+
+  tabelas.inst.on('tableBuilt', () => { carregarPainel().then(ajustarAlturas); resumirFiltros(); });
+})();
+</script>
+</body>
+</html>

@@ -35,7 +35,9 @@ function literal(fonte, marcador) {
 // Seções do menu com as rotinas em ordem (subgrupos achatados na seção).
 function secoesDoMenu(arquivo) {
   const menu = literal(fs.readFileSync(path.join(RAIZ, arquivo), 'utf8'), 'const MENU');
-  const rotinas = (itens) => itens.flatMap(i => (i.items ? rotinas(i.items) : [i.rotina || i.id]));
+  // somenteAdmin (ex.: Jobs): tela só de administrador do IAHub, não é rotina
+  // liberável por empresa — não entra na tela de permissões.
+  const rotinas = (itens) => itens.flatMap(i => (i.items ? rotinas(i.items) : i.somenteAdmin ? [] : [i.rotina || i.id]));
   return menu.map(sec => rotinas(sec.items || []));
 }
 

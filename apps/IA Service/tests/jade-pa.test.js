@@ -18,6 +18,10 @@ const dbTmpPath = path.join(os.tmpdir(), `ia-service-jade-pa-${Date.now()}-${Mat
 process.env.SVC_DATA_CRYPTO_KEY = crypto.randomBytes(32).toString('base64');
 const database = require('../backend/database');
 database.inicializarDB(dbTmpPath);
+// Banco do serviço de jobs também temporário: nunca o apps/IAHUB/data/jobs.db real.
+const jobsDb = require('../../../modules/jobs/database');
+jobsDb.inicializarDB(path.join(os.tmpdir(), `iahub-jobs-jade-${Date.now()}-${Math.random().toString(36).slice(2)}.db`));
+const jobsRepo = require('../../../modules/jobs/repositorio');
 
 function stub(relativo, exports) {
   const p = require.resolve(relativo);
@@ -1320,3 +1324,229 @@ function enviarReal({ xml, operacao = 'executeActivity' }) {
   require.cache[p] = cache;
   return novo.enviarOperacao({ origem: 'https://se.teste', apiKey: 'x', authorizationMode: 'bearer', encoding: 'utf8', xml, operacao, timeoutMs: 1 });
 }
+
+// ── Serviço de jobs (IAHub-Jobs, 2026-11-24) ────────────────────────────────
+
+test('serviço de jobs: "está na hora" segue a mesma regra da trava do ciclo', async () => {
+  const cfg = await ligar();
+  const agora = new Date();
+  assert.equal(repo.cicloDevido(cfg, agora), true);
+  assert.equal(repo.cicloDevido({ ...cfg, ativo: false }, agora), false);
+  assert.equal(repo.cicloDevido({ ...cfg, proximoCicloEm: new Date(agora.getTime() + 60000).toISOString() }, agora), false);
+  assert.equal(repo.cicloDevido({ ...cfg, cicloTravaAte: new Date(agora.getTime() + 60000).toISOString() }, agora), false);
+  assert.equal(repo.cicloDevido({ ...cfg, proximoCicloEm: null, ultimoCicloEm: new Date(agora.getTime() - 1000).toISOString() }, agora), false);
+  assert.equal(repo.cicloDevido({ ...cfg, proximoCicloEm: null, ultimoCicloEm: null }, agora), true);
+  // Devida pela função = a trava aceita.
+  assert.equal(repo.tentarTravarCiclo(EMPRESA, fonte.id, { travaMs: 60000, agora }), true);
+  assert.equal(repo.cicloDevido(repo.getConfig(EMPRESA, fonte.id), agora), false);
+});
+
+test('serviço de jobs: leitura interrompida fecha o lote com o motivo e solta a trava; sem trava não faz nada', async () => {
+  await ligar();
+  assert.equal(repo.liberarCicloInterrompido(EMPRESA, fonte.id, { motivo: 'x' }), false);
+  assert.equal(jade.getConfig(EMPRESA, fonte.id).ultimoCicloResumo, null);
+
+  repo.tentarTravarCiclo(EMPRESA, fonte.id, { travaMs: 20 * 60000 });
+  const lote = repo.criarLote(EMPRESA, fonte.id, 'agendado');
+  assert.ok(repo.loteEmAndamento(EMPRESA, fonte.id));
+  const antes = jade.getConfig(EMPRESA, fonte.id).leiturasHoje.total;
+  assert.equal(repo.liberarCicloInterrompido(EMPRESA, fonte.id, { motivo: 'Passou do tempo máximo.' }), true);
+  const cfg = jade.getConfig(EMPRESA, fonte.id);
+  assert.equal(cfg.cicloTravaAte, null);
+  assert.equal(repo.loteEmAndamento(EMPRESA, fonte.id), null);
+  assert.deepEqual(cfg.ultimoCicloResumo.erros, ['Leitura interrompida: Passou do tempo máximo.']);
+  assert.equal(cfg.leiturasHoje.total, antes + 1);
+  assert.equal(cfg.leiturasHoje.semChamados, jade.getConfig(EMPRESA, fonte.id).leiturasHoje.semChamados);
+  // Agendada: a próxima leitura segue o intervalo (não dispara em laço).
+  assert.ok(Date.parse(cfg.proximoCicloEm) > Date.now());
+  const l = getDB().prepare('SELECT fim, resumo FROM jade_pa_lotes WHERE id = ?').get(lote);
+  assert.ok(l.fim);
+  assert.equal(JSON.parse(l.resumo).interrompida, true);
+});
+
+test('serviço de jobs: job da Jaade lista a fonte ligada, roda agendada e avulsa e limpa a interrupção', async () => {
+  const job = require('../backend/jobs/jade-pa-job');
+  job.preparar();
+  await ligar();
+  const inst = jade.instanciaServico(EMPRESA, fonte.id);
+  assert.equal(job.id, jade.JOB_ID_SERVICO);
+  const insts = job.instancias(new Date());
+  assert.deepEqual(insts.map(i => [i.instancia, i.devida]), [[inst, true]]);
+  assert.equal(insts[0].proximaEm, new Date(0).toISOString());
+  assert.equal(job.empresaDaInstancia(inst), EMPRESA);
+  assert.match(job.descreverInstancia(inst).rotulo, / · SE ITSM$/);
+  assert.equal(job.instanciaValida(inst), true);
+  assert.equal(job.instanciaValida('1:fonte-que-nao-existe'), false);
+  assert.equal(job.instanciaValida('abc'), false);
+
+  chamadoNaOrigem('037201');
+  respostasIA = [RESPOSTA_OK];
+  const r = await job.executar(inst, { origem: 'agendado' });
+  assert.equal(r.resultado, 'ok');
+  assert.equal(r.resumo.novos, 1);
+  assert.ok(r.resumo.loteId);
+  // Fora da hora: a trava da Jaade recusa e o job responde vazio.
+  assert.equal((await job.executar(inst, { origem: 'agendado' })).resultado, 'vazio');
+  // Avulsa (Executar agora) roda fora da hora e espera o fim.
+  origem.chamados.delete('037201');
+  const avulsa = await job.executar(inst, { origem: 'manual' });
+  assert.equal(avulsa.resultado, 'vazio');
+  assert.equal(avulsa.resumo.elegiveis, 0);
+  assert.equal(jade.getConfig(EMPRESA, fonte.id).ultimoCicloResumo.origem, 'manual');
+
+  repo.tentarTravarCiclo(EMPRESA, fonte.id, { travaMs: 60000, avulsa: true, dono: 'jobs:42' });
+  job.aoInterromper(inst, { origem: 'manual', motivo: 'teste', execId: 42 });
+  assert.equal(jade.getConfig(EMPRESA, fonte.id).cicloTravaAte, null);
+});
+
+test('trava da Jaade: interrupção antiga não libera a leitura de outro dono', async () => {
+  await ligar();
+  const inst = jade.instanciaServico(EMPRESA, fonte.id);
+  const job = require('../backend/jobs/jade-pa-job');
+  assert.equal(repo.tentarTravarCiclo(EMPRESA, fonte.id, { travaMs: 60000, avulsa: true, dono: 'site:novo' }), true);
+  const lote = repo.criarLote(EMPRESA, fonte.id, 'manual', 'site:novo');
+  job.aoInterromper(inst, { origem: 'manual', motivo: 'filho não iniciou', execId: 42 });
+  assert.ok(jade.getConfig(EMPRESA, fonte.id).cicloTravaAte);
+  assert.equal(getDB().prepare('SELECT fim FROM jade_pa_lotes WHERE id = ?').get(lote).fim, null);
+  assert.equal(repo.renovarTrava(EMPRESA, fonte.id, 60000, 'jobs:42'), false);
+  assert.equal(repo.liberarCiclo(EMPRESA, fonte.id, {}, { avulsa: true, dono: 'jobs:42' }), false);
+  assert.equal(repo.liberarCicloInterrompido(EMPRESA, fonte.id, { motivo: 'limpeza', avulsa: true, dono: 'site:novo' }), true);
+});
+
+test('trava da Jaade: órfã não antecipa a liberação de filho possivelmente vivo', async () => {
+  await ligar();
+  const inst = jade.instanciaServico(EMPRESA, fonte.id);
+  const job = require('../backend/jobs/jade-pa-job');
+  assert.equal(repo.tentarTravarCiclo(EMPRESA, fonte.id, { travaMs: 60000, avulsa: true, dono: 'jobs:43' }), true);
+  job.aoInterromper(inst, { origem: 'manual', motivo: 'órfã', execId: 43, orfa: true });
+  assert.equal(repo.tentarTravarCiclo(EMPRESA, fonte.id, { travaMs: 60000, avulsa: true, dono: 'site:novo' }), false);
+  assert.equal(repo.liberarCicloInterrompido(EMPRESA, fonte.id, { motivo: 'fim do teste', avulsa: true, dono: 'jobs:43' }), true);
+});
+
+test('trava da Jaade: dono antigo não renova nem libera uma trava que foi substituída', async () => {
+  await ligar();
+  const passado = new Date(Date.now() - 120000);
+  assert.equal(repo.tentarTravarCiclo(EMPRESA, fonte.id, { travaMs: 60000, avulsa: true, dono: 'site:antigo', agora: passado }), true);
+  assert.equal(repo.renovarTrava(EMPRESA, fonte.id, 60000, 'site:antigo'), false);
+  assert.equal(repo.tentarTravarCiclo(EMPRESA, fonte.id, { travaMs: 60000, avulsa: true, dono: 'site:novo' }), true);
+  assert.equal(repo.renovarTrava(EMPRESA, fonte.id, 60000, 'site:antigo'), false);
+  assert.equal(repo.liberarCicloInterrompido(EMPRESA, fonte.id, { motivo: 'antiga', dono: 'site:antigo' }), false);
+  assert.equal(repo.liberarCicloInterrompido(EMPRESA, fonte.id, { motivo: 'fim', avulsa: true, dono: 'site:novo' }), true);
+});
+
+test('perda da trava entre operações impede novas gravações no SoftExpert', async () => {
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995', devolucaoAtiva: true });
+  chamadoNaOrigem('038201');
+  respostasIA = [DEVOLVER];
+  const original = soapReal.enviarOperacao;
+  soapReal.enviarOperacao = async args => {
+    const resultado = await original(args);
+    if (args.operacao === 'newChildEntityRecord') {
+      getDB().prepare('UPDATE jade_pa_config SET ciclo_dono = ? WHERE empresa_id = ? AND fonte_id = ?').run('site:outro', EMPRESA, fonte.id);
+    }
+    return resultado;
+  };
+  try {
+    await jade.executarCiclo(EMPRESA, fonte.id, { dono: 'site:antigo' });
+    assert.deepEqual(envios.map(e => e.operacao), ['newChildEntityRecord']);
+    assert.equal(getDB().prepare('SELECT ciclo_dono FROM jade_pa_config WHERE empresa_id = ? AND fonte_id = ?').get(EMPRESA, fonte.id).ciclo_dono, 'site:outro');
+    // Perder a trava não é falha do SoftExpert: devolução não gasta tentativa
+    // e a auditoria não diz "o SoftExpert não confirmou".
+    const ex = execs().find(e => e.numeroChamado === '038201');
+    assert.equal(ex.estado, 'devolvendo');
+    assert.equal(ex.tentativasDevolucao, 0);
+    const eventos = jade.getAuditoria(EMPRESA, fonte.id, ex.id).eventos;
+    assert.ok(eventos.some(e => e.situacao === 'aviso' && /Envio interrompido/.test(e.resumo)));
+    assert.ok(!eventos.some(e => /não confirmou a abertura/.test(e.resumo)));
+  } finally {
+    soapReal.enviarOperacao = original;
+  }
+});
+
+test('trava da Jaade: quem pega a trava fecha o lote que a leitura anterior deixou aberto', async () => {
+  await ligar();
+  const passado = new Date(Date.now() - 120000);
+  assert.equal(repo.tentarTravarCiclo(EMPRESA, fonte.id, { travaMs: 60000, avulsa: true, dono: 'jobs:1', agora: passado }), true);
+  const antigo = repo.criarLote(EMPRESA, fonte.id, 'agendado', 'jobs:1');
+  // O processo morreu sem fechar; a trava venceu e outra leitura assume.
+  assert.equal(repo.tentarTravarCiclo(EMPRESA, fonte.id, { travaMs: 60000, avulsa: true, dono: 'jobs:2' }), true);
+  const l = getDB().prepare('SELECT fim, resumo FROM jade_pa_lotes WHERE id = ?').get(antigo);
+  assert.ok(l.fim);
+  assert.equal(JSON.parse(l.resumo).interrompida, true);
+  // O lote da leitura nova não é tocado.
+  const novo = repo.criarLote(EMPRESA, fonte.id, 'agendado', 'jobs:2');
+  assert.equal(getDB().prepare('SELECT fim FROM jade_pa_lotes WHERE id = ?').get(novo).fim, null);
+});
+
+function _limparJobs() {
+  for (const t of ['jobs_pedidos', 'jobs_execucoes', 'jobs_servico', 'jobs_concessoes', 'jobs_config', 'jobs_controle', 'jobs_eventos', 'jobs_alertas']) jobsDb.getDB().prepare(`DELETE FROM ${t}`).run();
+}
+
+test('serviço de jobs: no comando, "Executar agora" vira pedido e a tela acompanha; sem sinal, o próprio site executa', async () => {
+  _limparJobs();
+  await ligar();
+  const inst = jade.instanciaServico(EMPRESA, fonte.id);
+  // Modo Site (padrão): nada muda, a tela da Jaade nem vê o serviço.
+  assert.equal(jade.getPainel(EMPRESA, fonte.id).servicoJobs, null);
+
+  // Modo Serviço sem sinal: o site reassume — Executar agora roda aqui mesmo.
+  jobsRepo.salvarConfigJobs({ modo: 'servico' });
+  let painel = jade.getPainel(EMPRESA, fonte.id);
+  assert.equal(painel.servicoJobs.modo, 'servico');
+  assert.equal(painel.servicoJobs.noComando, false);
+  const local = jade.executarAgora(EMPRESA, fonte.id);
+  assert.equal(local.aguardandoServico, undefined);
+  assert.equal(jobsRepo.pedidoAberto(jade.JOB_ID_SERVICO, inst), null);
+  for (let i = 0; i < 200 && repo.loteEmAndamento(EMPRESA, fonte.id); i++) await new Promise(r => setTimeout(r, 10));
+
+  // Serviço dando sinal: só o pedido; nada roda no site.
+  jobsRepo.registrarBatimento('S1');
+  const r = jade.executarAgora(EMPRESA, fonte.id);
+  assert.deepEqual(r, { iniciado: true, loteId: null, aguardandoServico: true });
+  assert.equal(repo.loteEmAndamento(EMPRESA, fonte.id), null);
+  assert.ok(jobsRepo.pedidoAberto(jade.JOB_ID_SERVICO, inst));
+  painel = jade.getPainel(EMPRESA, fonte.id);
+  assert.equal(painel.servicoJobs.noComando, true);
+  assert.equal(painel.loteEmAndamento.aguardandoServico, true);
+  assert.equal(painel.loteEmAndamento.origem, 'manual');
+
+  // Serviço atendeu: execução aberta (processo subindo) ainda conta como em andamento.
+  const p = jobsRepo.pedidoAberto(jade.JOB_ID_SERVICO, inst);
+  const ficha = jobsRepo.tomarConcessao(jade.JOB_ID_SERVICO, inst, 'S1', { duracaoMs: 30000, ignorarEspera: true });
+  const exec = jobsRepo.abrirExecucao({ jobId: jade.JOB_ID_SERVICO, instancia: inst, ficha, origem: 'manual', dono: 'S1' });
+  jobsRepo.atenderPedido(p.id, { execucaoId: exec });
+  assert.ok(jade.getPainel(EMPRESA, fonte.id).loteEmAndamento);
+  jobsRepo.fecharExecucao(exec, { resultado: 'vazio' });
+  painel = jade.getPainel(EMPRESA, fonte.id);
+  assert.equal(painel.loteEmAndamento, null);
+  assert.equal(painel.servicoJobs.ultimaExecucao.resultado, 'vazio');
+  _limparJobs();
+});
+
+test('serviço de jobs: agendador do site fica em espera com o serviço no comando, reassume sem sinal e respeita a pausa da tela Jobs', async () => {
+  _limparJobs();
+  await ligar();
+  chamadoNaOrigem('037301');
+  respostasIA = [RESPOSTA_OK];
+  const inst = jade.instanciaServico(EMPRESA, fonte.id);
+
+  jobsRepo.salvarConfigJobs({ modo: 'servico' });
+  jobsRepo.registrarBatimento('S1');
+  assert.deepEqual(jade._test.tick(), []);
+
+  // Pausa na tela Jobs vale também quando o site agenda.
+  jobsRepo.registrarParada('S1');
+  jobsRepo.salvarControle(jade.JOB_ID_SERVICO, inst, { pausado: true }, { usuario: 'ana' });
+  assert.deepEqual(jade._test.tick(), []);
+  const painel = jade.getPainel(EMPRESA, fonte.id);
+  assert.equal(painel.servicoJobs.pausa.por, 'ana');
+  assert.equal(painel.servicoJobs.pausa.doJob, false);
+
+  // Retomado e serviço parado: o site reassume e lê.
+  jobsRepo.salvarControle(jade.JOB_ID_SERVICO, inst, { pausado: false }, { usuario: 'ana' });
+  const disparados = jade._test.tick();
+  assert.equal(disparados.length, 1);
+  await Promise.all(disparados);
+  assert.ok(execs().some(e => e.numeroChamado === '037301'));
+  _limparJobs();
+});

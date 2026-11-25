@@ -24,7 +24,38 @@ function podeAlertar(chave) {
   return true;
 }
 
+// Empresas atendidas pelo canal: o alerta vai à reserva (e-mail/Telegram) de
+// cada uma, configurada em IAHub › Parâmetros por Empresa › Alertas.
+function _empresasDoCanal(channelId) {
+  if (!channelId) return [];
+  try {
+    return require('./channel-store').listarEmpresasDoCanal(channelId).map(e => Number(e.empresa_id)).filter(Boolean);
+  } catch (_) {
+    return [];
+  }
+}
+
+/**
+ * Alerta operacional fora do WhatsApp (o canal pode estar fora). Com
+ * opts.channelId, vai à reserva de cada empresa do canal (Parâmetros por
+ * Empresa); se nenhuma entregar, ao Telegram global do .env (como antes).
+ */
 async function alertarOperacionalTelegram(mensagem, opts = {}) {
+  const chaveCooldown = opts.chave ? String(opts.chave) : '';
+  const empresas = _empresasDoCanal(opts.channelId);
+  if (empresas.length) {
+    if (chaveCooldown && !podeAlertar(chaveCooldown)) return { ok: false, skipped: 'cooldown' };
+    const reserva = require('../../../IAHUB/backend/parametros/alertas-reserva');
+    let entregue = false;
+    for (const empresaId of empresas) {
+      const r = await reserva.enviar(empresaId, mensagem, { assunto: 'IAHub · WhatsApp com problema', whatsappFalhou: true, usarEnv: false });
+      if (r.enviado) entregue = true;
+    }
+    if (entregue) return { ok: true };
+    const env = await reserva.enviarEnv(mensagem);
+    if (!env.enviado) process.stdout.write(`[${new Date().toISOString()}] [WARN] Alerta operacional não entregue (empresas do canal sem reserva e ${env.motivo}).\n`);
+    return { ok: env.enviado };
+  }
   if (!telegramConfigurado()) {
     if (!avisouTelegramNaoConfigurado) {
       avisouTelegramNaoConfigurado = true;
@@ -74,7 +105,7 @@ function alertarEventoWorkerWhatsapp({ channelId, event, payload, canal }) {
       `🟡 IAHub — WhatsApp aguardando QR Code\n` +
       `Canal: ${canalDesc}\n` +
       `Um novo QR Code foi gerado. Abra o painel do IA Command e escaneie o QR para reconectar o atendimento.`,
-      { chave: `wa:${channelId}:qr` }
+      { chave: `wa:${channelId}:qr`, channelId }
     );
   }
 
@@ -83,7 +114,7 @@ function alertarEventoWorkerWhatsapp({ channelId, event, payload, canal }) {
       `🔴 IAHub — WhatsApp parado\n` +
       `Canal: ${canalDesc}\n` +
       `O worker informou status stopped. Verifique o painel do IA Command; pode ser necessario iniciar o servico ou escanear um novo QR Code.`,
-      { chave: `wa:${channelId}:stopped` }
+      { chave: `wa:${channelId}:stopped`, channelId }
     );
   }
 
@@ -92,7 +123,7 @@ function alertarEventoWorkerWhatsapp({ channelId, event, payload, canal }) {
       `🟡 IAHub — Atenção no WhatsApp\n` +
       `Canal: ${canalDesc}\n` +
       `${msg}`,
-      { chave: `wa:${channelId}:log:${msg.slice(0, 60)}` }
+      { chave: `wa:${channelId}:log:${msg.slice(0, 60)}`, channelId }
     );
   }
 

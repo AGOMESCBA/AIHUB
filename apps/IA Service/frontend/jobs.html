@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+  <title>Jobs - IA Service</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="/app/ia-service/css/iaservice-mobile.css">
+  <style>
+    :root { --accent:#1d4ed8; --accent-light:#3b82f6; --accent-glow:rgba(29,78,216,.1); }
+    .sidebar-logo .logo-icon { background:var(--accent) !important; }
+    .page-content { padding:16px 20px; }
+    .jobs-frame { width:100%; height:calc(100vh - 92px); min-height:600px; border:0; display:block; background:transparent; }
+    .sem-acesso { padding:32px; text-align:center; color:var(--text-md); font-size:14px; }
+  </style>
+  <link rel="stylesheet" href="/iaservice/assets/conexao-servidor.css">
+  <script src="/iaservice/assets/conexao-servidor.js"></script>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Service</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebarDrawer()" aria-hidden="true"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Service ›</span> Jobs</span>
+    </div>
+    <div class="page-content" id="conteudo">
+      <!-- A tela é a mesma da IA Gestão › Jobs, filtrada nos jobs do IA Service. -->
+    </div>
+  </div>
+</div>
+<script src="/js/auth.js"></script>
+<script src="/app/ia-service/js/mobile-viewport.js"></script>
+<script src="/app/ia-service/js/sidebar.js"></script>
+<script>
+(async function () {
+  await window._iahubRotinasReady?.catch?.(() => {});
+  const conteudo = document.getElementById('conteudo');
+  // Controla o servidor inteiro: só administrador do IAHub (a API também confere).
+  if (window._iahubUser?.role !== 'admin') {
+    conteudo.innerHTML = '<div class="sem-acesso">🔒 A tela Jobs é restrita a administradores do IAHub.</div>';
+    return;
+  }
+  let tema = '';
+  try { tema = localStorage.getItem('ias_theme') === 'dark' ? 'dark' : ''; } catch (_) { /* sem localStorage: tema claro */ }
+  const frame = document.createElement('iframe');
+  frame.className = 'jobs-frame';
+  frame.title = 'Jobs do IA Service';
+  frame.src = `/iahub/jobs?embedded=1&sistema=ia-service${tema ? `&tema=${tema}` : ''}`;
+  conteudo.appendChild(frame);
+})();
+</script>
+</body>
+</html>

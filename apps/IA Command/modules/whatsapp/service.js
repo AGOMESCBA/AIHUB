@@ -732,7 +732,8 @@ class IACWhatsAppService extends EventEmitter {
         alertarOperacionalTelegram(
           `🔴 IAHub — WhatsApp desconectado (LOGOUT)\n` +
           `Canal: ${this._channelName || this._channelId}\n` +
-          `O vínculo com o celular foi revogado. Escaneie um novo QR Code no painel para retomar o atendimento.`
+          `O vínculo com o celular foi revogado. Escaneie um novo QR Code no painel para retomar o atendimento.`,
+          { channelId: this._channelId }
         );
         return;
       }
@@ -779,7 +780,8 @@ class IACWhatsAppService extends EventEmitter {
       alertarOperacionalTelegram(
         `🔴 IAHub — WhatsApp fora do ar\n` +
         `Canal: ${this._channelName || this._channelId}\n` +
-        `Reconexão automática falhou ${WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS} vezes. Novas tentativas continuarão; verifique o painel.`
+        `Reconexão automática falhou ${WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS} vezes. Novas tentativas continuarão; verifique o painel.`,
+        { channelId: this._channelId }
       );
     }
 

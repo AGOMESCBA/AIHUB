@@ -1605,6 +1605,14 @@ const MIGRATIONS = [
       ALTER TABLE jade_pa_config ADD COLUMN leituras_sem_chamados INTEGER NOT NULL DEFAULT 0;
     `,
   },
+  {
+    version: 70,
+    descricao: 'Jaade: identifica a execução proprietária da trava e dos lotes.',
+    sql: `
+      ALTER TABLE jade_pa_config ADD COLUMN ciclo_dono TEXT DEFAULT NULL;
+      ALTER TABLE jade_pa_lotes ADD COLUMN ciclo_dono TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

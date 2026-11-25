@@ -15,6 +15,8 @@ $ErrorActionPreference = "Stop"
 $SCRIPT_DIR   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PROJECT_PATH = "C:\Web\iahub"
 $SERVICE_NAME = "iahub"
+# Servico de jobs (6-instalar-servico-jobs.ps1): para e sobe junto, se instalado.
+$JOBS_SERVICE_NAME = "IAHub-Jobs"
 $PARENT_PATH  = "C:\Web"
 $BACKUP_ROOT  = "C:\Web\backups"
 $STOPPED_SERVICES = @()
@@ -202,6 +204,7 @@ function Stop-IaHubServices {
 
     $services = @(Get-Service -ErrorAction SilentlyContinue | Where-Object {
         $_.Name -eq $SERVICE_NAME -or
+        $_.Name -eq $JOBS_SERVICE_NAME -or
         $_.Name -like "IACommand-*" -or
         $_.Name -like "IACommand_*" -or
         $_.Name -like "IAHub-IACommand-*" -or
@@ -241,7 +244,7 @@ function Start-IaHubServices {
         $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
         if (!$svc) { continue }
 
-        if ($serviceName -eq $SERVICE_NAME) {
+        if ($serviceName -eq $SERVICE_NAME -or $serviceName -eq $JOBS_SERVICE_NAME) {
             Invoke-Nssm -Arguments @("set", $serviceName, "AppEnvironmentExtra", "NODE_OPTIONS=--use-system-ca")
         }
 

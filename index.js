@@ -625,7 +625,24 @@ require('./apps/IA Service/backend/services/chat-interno-realtime').iniciar(io, 
 // Limpeza diária de anexos de chamados encerrados (só simula, salvo SVC_LIMPEZA_ANEXOS_MODO=apagar).
 require('./apps/IA Service/backend/services/limpeza-anexos-encerrados-service').iniciarAgendamento();
 // Jaade no Primeiro Atendimento: só roda nas fontes em que foi ligada (Base Histórica → Jaade).
+// Quem agenda (site ou serviço IAHub-Jobs) é escolhido na tela Jobs; com o
+// serviço no comando, o agendador do site fica em espera e reassume se ele sumir.
 require('./apps/IA Service/backend/services/jade-pa-service').iniciarAgendamento();
+
+// ── Serviço de jobs (IAHub-Jobs): tela, API e vigia do serviço ───────────────
+// A tela abre na IA Gestão e dentro dos sistemas (menu Jobs): endereço próprio,
+// só administrador do IAHub, sem depender do sistema selecionado na sessão.
+app.get('/iahub/jobs', requireAdminPage, (_req, res) => {
+  res.sendFile(path.join(__dirname, 'apps', 'IA Administracao', 'frontend', 'jobs.html'));
+});
+require('./modules/jobs/routes').registrar(app, { requireAuth, requireAdmin });
+
+// ── Parâmetros por Empresa (IA Gestão): tela e API, só administrador ─────────
+app.get('/iahub/parametros', requireAdminPage, (_req, res) => {
+  res.sendFile(path.join(__dirname, 'apps', 'IA Administracao', 'frontend', 'parametros.html'));
+});
+require('./apps/IAHUB/backend/parametros/routes').registrar(app, { requireAuth, requireAdmin });
+require('./modules/jobs/vigia').iniciar();
 
 // ── Master Crypto AI ─────────────────────────────────────────────────────────
 const masterCryptoService = require('./apps/Master Crypto/backend/service-manager');
