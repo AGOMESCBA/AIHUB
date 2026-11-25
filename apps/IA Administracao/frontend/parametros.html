@@ -183,6 +183,7 @@
       <div><label class="rot-campo" for="empresa">Empresa</label><select id="empresa" class="form-control"></select></div>
       <div><label class="rot-campo" for="busca">Buscar</label><input id="busca" class="form-control" type="search" placeholder="Nome, descrição ou chave…" autocomplete="off"></div>
       <div><label class="rot-campo">&nbsp;</label><button class="btn btn-ghost" type="button" id="btn-historico" style="height:38px">🕘 Histórico</button></div>
+      <div><label class="rot-campo">&nbsp;</label><a class="btn btn-ghost" id="btn-guia" href="/iahub/guia-jobs#e3-1" target="_blank" rel="noopener" style="height:38px;display:inline-flex;align-items:center" title="Guia de uso: Jobs e Parâmetros por Empresa">❔ Guia</a></div>
     </div>
     <div class="filtros" id="filtros">
       <button class="chip-filtro ativo" type="button" data-filtro="todos">Todos<span class="n" id="n-todos"></span></button>
@@ -687,6 +688,10 @@
     }
   })();
 })();
+</script>
+<script>
+  // Guia no mesmo tema da tela (escuro dentro do IA Service).
+  (function () { const a = document.getElementById("btn-guia"); if (a && document.documentElement.getAttribute("data-theme") === "dark") a.href = a.href.replace("#", "?tema=dark#"); })();
 </script>
 </body>
 </html>

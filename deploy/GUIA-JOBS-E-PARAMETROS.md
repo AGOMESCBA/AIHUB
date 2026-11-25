@@ -88,7 +88,7 @@ PowerShell **como Administrador**:
 C:\Web\iahub\deploy\6-instalar-servico-jobs.ps1
 ```
 
-Confira em `services.msc`: **"IAHub - Jobs"** = Em execução, inicialização Automática.
+Confira em `services.msc`: **"IAHub - Jobs"** = Em execução, inicialização Automática. (Ou instale pelo botão **⬇ Instalar serviço** na aba "Serviço e log" da tela Jobs.)
 Neste momento ele **ainda não roda a Jaade** — só fica pronto (a tela Jobs mostra "Serviço: No ar").
 
 ---
@@ -107,7 +107,7 @@ Neste momento ele **ainda não roda a Jaade** — só fica pronto (a tela Jobs m
 
 ## 6. Desligar / voltar ao funcionamento de hoje (a qualquer hora)
 
-Qualquer uma destas resolve, **sem reinstalar e sem pacote novo**:
+Qualquer uma destas resolve, **sem reinstalar e sem pacote novo** (também pelos botões da aba "Serviço e log"):
 
 | Situação | O que fazer | Resultado |
 |---|---|---|
@@ -119,7 +119,22 @@ Qualquer uma destas resolve, **sem reinstalar e sem pacote novo**:
 
 ---
 
-## 7. Onde olhar quando algo der errado
+## 7. Controlar o serviço pela tela (aba "Serviço e log")
+
+IA Gestão › Jobs › **Serviço e log** — mesmo modelo da tela de serviços do WhatsApp:
+
+| Botão | O que faz | Muda onde os jobs rodam? |
+|---|---|---|
+| ▶ Iniciar | Liga o serviço no Windows | Não (escolha em Configuração) |
+| ■ Parar | Termina as execuções (até 45 s) e desliga | **Sim: volta para o Site** |
+| ⬇ Instalar serviço | Faz o mesmo que o `6-instalar-servico-jobs.ps1` | Não |
+| 🗑 Desinstalar | Para e remove o serviço do Windows | **Sim: volta para o Site** |
+
+À esquerda, o **log ao vivo** do serviço (azul = serviço, verde = concluído, amarelo = aviso, vermelho = erro), com Limpar, Copiar e Salvar log. Instalar/desinstalar exigem o NSSM no servidor (como o WhatsApp).
+
+---
+
+## 8. Onde olhar quando algo der errado
 
 - **Tela Jobs › Execuções e logs:** cada execução com resultado, erro e **log completo** (clique na linha).
 - **Tela Jobs › Eventos:** tudo que o serviço e as pessoas fizeram (com usuário).

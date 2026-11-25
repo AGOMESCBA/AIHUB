@@ -638,6 +638,10 @@ app.get('/iahub/jobs', requireAdminPage, (_req, res) => {
 require('./modules/jobs/routes').registrar(app, { requireAuth, requireAdmin });
 
 // ── Parâmetros por Empresa (IA Gestão): tela e API, só administrador ─────────
+// Guia de uso de Jobs e Parâmetros (mesmo padrão do guia do IA Command).
+app.get('/iahub/guia-jobs', requireAdminPage, (_req, res) => {
+  res.sendFile(path.join(__dirname, 'apps', 'IA Administracao', 'frontend', 'guia-jobs.html'));
+});
 app.get('/iahub/parametros', requireAdminPage, (_req, res) => {
   res.sendFile(path.join(__dirname, 'apps', 'IA Administracao', 'frontend', 'parametros.html'));
 });

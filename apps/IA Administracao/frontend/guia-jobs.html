@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Guia - Jobs e Parâmetros por Empresa</title>
+  <script>if (new URLSearchParams(location.search).get('tema') === 'dark') document.documentElement.setAttribute('data-theme', 'dark');</script>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    /* Mesmo visual do Guia de Uso do IA Command (apps/IA Command/frontend/guia). */
+    :root { --accent: #7c3aed; --accent-2: #a78bfa; --accent-light: #a78bfa; --accent-glow: rgba(124,58,237,.10); --shadow-sm: 0 1px 2px rgba(17,12,34,.04), 0 1px 1px rgba(17,12,34,.03); --shadow-md: 0 4px 14px rgba(76,29,149,.08), 0 1px 3px rgba(17,12,34,.04); --shadow-lg: 0 12px 32px rgba(76,29,149,.14), 0 2px 6px rgba(17,12,34,.06); }
+    body { overflow: hidden; -webkit-font-smoothing: antialiased; }
+    .guia-layout { display: flex; height: 100vh; overflow: hidden; }
+    .guia-nav { width: 284px; min-width: 284px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+    .guia-nav-header { padding: 22px 20px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .guia-nav-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+    .logo-icon { width: 32px; height: 32px; min-width: 32px; background: linear-gradient(145deg, var(--accent), var(--accent-2)); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 900; color: #fff; box-shadow: var(--shadow-md); }
+    .guia-nav-logo span { font-size: 15.5px; font-weight: 800; letter-spacing: -.01em; background: linear-gradient(135deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .guia-nav-subtitle { font-size: 11px; color: var(--text-lo); margin-top: 2px; padding-left: 42px; }
+    .guia-nav-body { overflow-y: auto; flex: 1; padding: 14px 0; }
+    .guia-nav-body::-webkit-scrollbar { width: 4px; }
+    .guia-nav-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .nav-fase-hdr { display: flex; align-items: center; gap: 8px; padding: 12px 16px 6px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--text-lo); cursor: pointer; user-select: none; }
+    .nav-fase-hdr:hover { color: var(--text-md); }
+    .nav-fase-num { width: 20px; height: 20px; border-radius: 50%; background: var(--bg-hover); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: var(--text-md); flex-shrink: 0; }
+    .nav-etapa { display: flex; align-items: center; gap: 10px; padding: 7px 16px 7px 44px; font-size: 12.5px; color: var(--text-md); cursor: pointer; transition: background .15s ease, color .15s ease; text-decoration: none; border-radius: 0 20px 20px 0; margin-right: 8px; }
+    .nav-etapa:hover { background: var(--bg-hover); color: var(--text-hi); }
+    .nav-etapa.active { background: var(--accent-glow); color: var(--accent); font-weight: 700; }
+    .nav-etapa-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-hi); flex-shrink: 0; transition: background .15s ease, transform .15s ease; }
+    .nav-etapa.active .nav-etapa-dot { background: var(--accent); transform: scale(1.3); }
+    .guia-nav-footer { padding: 14px 16px; border-top: 1px solid var(--border); flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+    .nav-back-btn, .nav-pdf-btn { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 8px; font-size: 12px; cursor: pointer; transition: background .15s ease, color .15s ease, border-color .15s ease, transform .1s ease; width: 100%; text-decoration: none; }
+    .nav-back-btn { color: var(--text-md); border: none; background: none; }
+    .nav-back-btn:hover { background: var(--bg-hover); color: var(--text-hi); }
+    .nav-pdf-btn { font-weight: 800; color: #fff; border: none; background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: var(--shadow-sm); }
+    .nav-pdf-btn:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+    .guia-content { flex: 1; overflow-y: auto; background: var(--bg-base); padding: 32px 44px 60px; }
+    .guia-content::-webkit-scrollbar { width: 6px; }
+    .guia-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .guia-hero { position: relative; background: linear-gradient(135deg, #5b21b6 0%, #7c3aed 55%, #a78bfa 100%); border-radius: 18px; padding: 36px 40px; margin-bottom: 40px; color: #fff; overflow: hidden; box-shadow: var(--shadow-lg); }
+    .guia-hero::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(circle at 88% 12%, rgba(255,255,255,.16) 0%, transparent 45%), radial-gradient(circle at 8% 92%, rgba(255,255,255,.10) 0%, transparent 40%); pointer-events: none; }
+    .guia-hero h1 { position: relative; font-size: 24px; font-weight: 800; letter-spacing: -.01em; margin-bottom: 9px; }
+    .guia-hero p { position: relative; font-size: 14px; opacity: .92; max-width: 760px; line-height: 1.75; }
+    .guia-hero-meta { position: relative; display: flex; gap: 10px; margin-top: 22px; flex-wrap: wrap; }
+    .guia-hero-badge { background: rgba(255,255,255,.16); backdrop-filter: blur(2px); border: 1px solid rgba(255,255,255,.22); border-radius: 20px; padding: 5px 14px; font-size: 12px; font-weight: 700; }
+    .fase-section { margin-bottom: 52px; scroll-margin-top: 24px; }
+    .fase-header { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; padding-bottom: 14px; border-bottom: 2px solid var(--border); }
+    .fase-badge { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 12px; font-size: 14px; font-weight: 900; color: #fff; flex-shrink: 0; box-shadow: var(--shadow-sm); }
+    .f1 { background: linear-gradient(135deg, #7c3aed, #a78bfa); }
+    .f2 { background: linear-gradient(135deg, #0891b2, #0e7490); }
+    .f3 { background: linear-gradient(135deg, #059669, #15803d); }
+    .f4 { background: linear-gradient(135deg, #d97706, #b45309); }
+    .f5 { background: linear-gradient(135deg, #dc2626, #b91c1c); }
+    .f6 { background: linear-gradient(135deg, #6b7280, #374151); }
+    .fase-titulo h2 { font-size: 17.5px; font-weight: 800; letter-spacing: -.005em; color: var(--text-hi); margin-bottom: 2px; }
+    .fase-titulo p { font-size: 12px; color: var(--text-lo); }
+    .etapa-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 16px; overflow: hidden; scroll-margin-top: 24px; box-shadow: var(--shadow-sm); transition: box-shadow .2s ease; }
+    .etapa-card.open { box-shadow: var(--shadow-md); }
+    .etapa-card-header { display: flex; align-items: center; gap: 12px; padding: 17px 20px; border-bottom: 1px solid var(--border); background: var(--bg-hover); cursor: pointer; user-select: none; }
+    .etapa-num { font-size: 11px; font-weight: 800; color: var(--accent); background: var(--accent-glow); padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+    .etapa-titulo { flex: 1; font-size: 14px; font-weight: 800; letter-spacing: -.003em; color: var(--text-hi); }
+    .etapa-arrow { font-size: 12px; color: var(--text-lo); transition: transform .25s ease; }
+    .etapa-card.open .etapa-arrow { transform: rotate(180deg); }
+    .etapa-body { max-height: 0; overflow: hidden; transition: max-height .35s cubic-bezier(.4,0,.2,1); }
+    .etapa-card.open .etapa-body { max-height: 8000px; }
+    .etapa-body-inner { padding: 24px 24px 28px; }
+    .etapa-desc { font-size: 13.5px; color: var(--text-md); line-height: 1.75; margin-bottom: 16px; }
+    .campo-secao { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: var(--text-lo); margin: 18px 0 7px; }
+    .campo-lista { display: flex; flex-direction: column; gap: 2px; margin-bottom: 16px; }
+    .campo-item { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 6px; background: var(--bg-card); transition: border-color .15s ease; }
+    .campo-item:hover { border-color: var(--border-hi); }
+    .campo-obrigatorio { border-left: 3px solid var(--accent); }
+    .campo-nome { font-size: 13px; font-weight: 800; color: var(--text-hi); margin-bottom: 3px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .campo-req { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); background: var(--accent-glow); padding: 1px 7px; border-radius: 10px; }
+    .campo-desc { font-size: 12.5px; color: var(--text-md); line-height: 1.62; }
+    .step-list { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+    .step-item { display: flex; gap: 14px; align-items: flex-start; }
+    .step-num { width: 24px; height: 24px; min-width: 24px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+    .step-body { font-size: 13px; color: var(--text-md); line-height: 1.65; flex: 1; }
+    .step-body strong { color: var(--text-hi); }
+    .callout { display: flex; gap: 12px; border-radius: 10px; padding: 14px 16px; margin: 14px 0; font-size: 13px; line-height: 1.6; color: var(--text-md); box-shadow: var(--shadow-sm); }
+    .callout-icon { font-weight: 900; flex-shrink: 0; margin-top: 1px; }
+    .callout.info { background: rgba(124,58,237,.08); border-left: 3px solid var(--accent); }
+    .callout.warning { background: rgba(217,119,6,.08); border-left: 3px solid #d97706; }
+    .callout.success { background: rgba(5,150,105,.08); border-left: 3px solid #059669; }
+    .callout.danger { background: rgba(220,38,38,.08); border-left: 3px solid #dc2626; }
+    .guia-table-wrap { overflow-x: auto; margin: 14px 0; border-radius: 12px; box-shadow: var(--shadow-sm); }
+    .guia-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .guia-table th { text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--text-lo); border-bottom: 2px solid var(--border); background: var(--bg-hover); }
+    .guia-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text-md); vertical-align: top; }
+    .tag { display: inline-block; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 10px; background: var(--accent-glow); color: var(--accent); white-space: nowrap; }
+    .tag-green { background: rgba(5,150,105,.10); color: #059669; }
+    .tag-orange { background: rgba(217,119,6,.10); color: #d97706; }
+    .tag-red { background: rgba(220,38,38,.10); color: #dc2626; }
+    .tag-blue { background: rgba(2,132,199,.10); color: #0284c7; }
+    .tag-gray { background: var(--bg-hover); color: var(--text-md); }
+    .code-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: var(--text-lo); margin: 16px 0 6px; }
+    .code-block { background: #1e1e2e; border-radius: 10px; padding: 16px 18px; margin: 12px 0; font-family: Consolas, "Courier New", monospace; font-size: 12.5px; line-height: 1.6; color: #cdd6f4; overflow-x: auto; white-space: pre; box-shadow: var(--shadow-sm); }
+    .diagrama-wrap { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 24px; margin: 16px 0; overflow-x: auto; box-shadow: var(--shadow-sm); }
+    .diagrama-titulo { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: var(--text-lo); margin-bottom: 16px; }
+    .fluxo { display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap; }
+    .fluxo-caixa { flex: 1; min-width: 180px; border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: var(--bg-base); }
+    .fluxo-caixa strong { display: block; font-size: 13px; color: var(--text-hi); margin-bottom: 4px; }
+    .fluxo-caixa span { font-size: 12px; color: var(--text-md); line-height: 1.55; }
+    .fluxo-seta { display: flex; align-items: center; font-size: 20px; color: var(--accent); font-weight: 900; }
+    code { font-family: Consolas, "Courier New", monospace; font-size: 12px; background: var(--bg-hover); padding: 1px 5px; border-radius: 4px; }
+    @media (max-width: 900px) { body { overflow: auto; } .guia-layout { display: block; height: auto; overflow: visible; } .guia-nav { width: 100%; min-width: 0; height: auto; } .guia-nav-body { display: none; } .guia-content { padding: 22px 16px; overflow: visible; } .fluxo-seta { transform: rotate(90deg); justify-content: center; width: 100%; } }
+    @media print { @page { size: A4; margin: 16mm 14mm; } body { overflow: visible !important; } .guia-layout { display: block !important; height: auto !important; overflow: visible !important; } .guia-nav { display: none !important; } .guia-content { overflow: visible !important; padding: 0 !important; height: auto !important; } .guia-hero { print-color-adjust: exact; -webkit-print-color-adjust: exact; } .etapa-body { max-height: none !important; overflow: visible !important; } .etapa-card { page-break-inside: auto; } .etapa-card-header { page-break-after: avoid; } .campo-item, .callout, .step-item, .diagrama-wrap, .code-block, .guia-table-wrap tr { page-break-inside: avoid; } .fase-section { margin-bottom: 20px !important; } .fase-header { page-break-after: avoid; } .etapa-arrow, .nav-pdf-btn, .nav-back-btn { display: none !important; } }
+  </style>
+</head>
+<body>
+<div class="guia-layout">
+  <nav class="guia-nav">
+    <div class="guia-nav-header">
+      <div class="guia-nav-logo"><div class="logo-icon">IA</div><span>IAHub</span></div>
+      <div class="guia-nav-subtitle">Jobs e Parâmetros por Empresa</div>
+    </div>
+    <div class="guia-nav-body">
+      <div class="nav-fase-hdr" onclick="scrollFase('f1')"><div class="nav-fase-num">1</div>Visão Geral</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-1',event)"><div class="nav-etapa-dot"></div>Resumo em 30 segundos</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-2',event)"><div class="nav-etapa-dot"></div>O que é o serviço de jobs</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-3',event)"><div class="nav-etapa-dot"></div>Site × Serviço e a retomada</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-4',event)"><div class="nav-etapa-dot"></div>O que são os Parâmetros por Empresa</a>
+      <div class="nav-fase-hdr" onclick="scrollFase('f2')"><div class="nav-fase-num">2</div>Instalação</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e2-1',event)"><div class="nav-etapa-dot"></div>Atualizar o servidor</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e2-2',event)"><div class="nav-etapa-dot"></div>Instalar o serviço IAHub-Jobs</a>
+      <div class="nav-fase-hdr" onclick="scrollFase('f3')"><div class="nav-fase-num">3</div>Parâmetros por Empresa</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e3-1',event)"><div class="nav-etapa-dot"></div>Como usar a tela</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e3-2',event)"><div class="nav-etapa-dot"></div>Como a reserva funciona</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e3-3',event)"><div class="nav-etapa-dot"></div>E-mail</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e3-4',event)"><div class="nav-etapa-dot"></div>Telegram</a>
+      <div class="nav-fase-hdr" onclick="scrollFase('f4')"><div class="nav-fase-num">4</div>Tela Jobs</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e4-1',event)"><div class="nav-etapa-dot"></div>Situação e avisos</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e4-2',event)"><div class="nav-etapa-dot"></div>Aba Jobs — situações e ações</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e4-3',event)"><div class="nav-etapa-dot"></div>Execuções e logs</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e4-4',event)"><div class="nav-etapa-dot"></div>Eventos</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e4-5',event)"><div class="nav-etapa-dot"></div>Configuração e alertas</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e4-6',event)"><div class="nav-etapa-dot"></div>Serviço e log (instalar, iniciar, parar)</a>
+      <div class="nav-fase-hdr" onclick="scrollFase('f5')"><div class="nav-fase-num">5</div>Operação</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e5-1',event)"><div class="nav-etapa-dot"></div>Passar a Jaade para o serviço</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e5-2',event)"><div class="nav-etapa-dot"></div>Desligar e voltar ao site</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e5-3',event)"><div class="nav-etapa-dot"></div>Quando algo cai</a>
+      <div class="nav-fase-hdr" onclick="scrollFase('f6')"><div class="nav-fase-num">6</div>Checklist</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e6-1',event)"><div class="nav-etapa-dot"></div>Ordem de configuração</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e6-2',event)"><div class="nav-etapa-dot"></div>Problemas comuns</a>
+    </div>
+    <div class="guia-nav-footer">
+      <button class="nav-pdf-btn" onclick="exportarPDF()">&#128196; Baixar guia em PDF</button>
+      <button class="nav-back-btn" onclick="fecharGuia()">&larr; Fechar o guia</button>
+    </div>
+  </nav>
+
+  <main class="guia-content" id="guia-content">
+    <div class="guia-hero">
+      <h1>Guia — Jobs e Parâmetros por Empresa</h1>
+      <p>Como instalar, configurar e operar o serviço de jobs do IAHub (IAHub-Jobs), a tela Jobs e os Parâmetros por Empresa (alertas por e-mail e Telegram). Leia em ordem pelas fases para um setup sem retrabalho. Versão 1.2.0.</p>
+      <div class="guia-hero-meta">
+        <div class="guia-hero-badge">Liga e desliga na hora</div>
+        <div class="guia-hero-badge">Site reassume sozinho</div>
+        <div class="guia-hero-badge">Um processo por execução</div>
+        <div class="guia-hero-badge">Alertas WhatsApp · e-mail · Telegram</div>
+        <div class="guia-hero-badge">Senhas cifradas</div>
+      </div>
+    </div>
+
+    <!-- ═══ FASE 1 ═══════════════════════════════════════════════════════════ -->
+    <section class="fase-section" id="f1">
+      <div class="fase-header">
+        <div class="fase-badge f1">1</div>
+        <div class="fase-titulo"><h2>Visão Geral</h2><p>Entenda o que mudou antes de configurar</p></div>
+      </div>
+
+      <article class="etapa-card open" id="e1-1">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-1')">
+          <span class="etapa-num">1.1</span><span class="etapa-titulo">Resumo em 30 segundos</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <div class="step-list">
+            <div class="step-item"><div class="step-num">1</div><div class="step-body"><strong>Nada muda sozinho.</strong> Depois de atualizar, tudo continua rodando como hoje — a Jaade continua dentro do site.</div></div>
+            <div class="step-item"><div class="step-num">2</div><div class="step-body">O serviço de jobs só passa a ser usado quando <strong>você escolhe na tela</strong> (IA Gestão › Jobs › Configuração).</div></div>
+            <div class="step-item"><div class="step-num">3</div><div class="step-body"><strong>Liga e desliga na hora, quantas vezes quiser, sem reiniciar nada.</strong> Voltar para "Site" = funcionamento de hoje.</div></div>
+            <div class="step-item"><div class="step-num">4</div><div class="step-body">Se o serviço parar ou travar, <strong>o site reassume sozinho</strong> e você recebe alerta.</div></div>
+          </div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card" id="e1-2">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-2')">
+          <span class="etapa-num">1.2</span><span class="etapa-titulo">O que é o serviço de jobs (IAHub-Jobs)</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <p class="etapa-desc">Jobs são as tarefas que rodam sozinhas de tempos em tempos — hoje, a <strong>Jaade no Primeiro Atendimento</strong>, que lê os chamados em "Aguardar Retorno JAADE" a cada intervalo. Até a versão 1.1 elas rodavam dentro do site; agora podem rodar num <strong>serviço do Windows separado</strong>, o <strong>IAHub-Jobs</strong>.</p>
+          <div class="guia-table-wrap"><table class="guia-table">
+            <thead><tr><th>Vantagem</th><th>O que significa na prática</th></tr></thead>
+            <tbody>
+              <tr><td>Isolamento</td><td>Uma leitura pesada ou travada não deixa o site lento nem o derruba.</td></tr>
+              <tr><td>Reinício sem corte</td><td>Reiniciar o site (ou fazer deploy) não interrompe uma leitura em andamento.</td></tr>
+              <tr><td>Um processo por execução</td><td>Cada leitura de cada empresa roda separada: se uma travar, só ela é encerrada.</td></tr>
+              <tr><td>Nunca duas ao mesmo tempo</td><td>A mesma empresa nunca tem duas leituras juntas, nem entre site e serviço.</td></tr>
+              <tr><td>Tempo máximo e nova tentativa</td><td>Execução presa é encerrada (2 h na Jaade); falha espera 30 s, 1 min, 2 min… (até 15 min) antes de tentar de novo.</td></tr>
+              <tr><td>Nada falha calado</td><td>Tudo fica na tela Jobs (execuções com log e eventos) e as falhas viram alerta.</td></tr>
+            </tbody>
+          </table></div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card" id="e1-3">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-3')">
+          <span class="etapa-num">1.3</span><span class="etapa-titulo">Site × Serviço e a retomada automática</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <div class="diagrama-wrap">
+            <div class="diagrama-titulo">Quem agenda os jobs</div>
+            <div class="fluxo">
+              <div class="fluxo-caixa"><strong>Modo Site (padrão)</strong><span>Como era até a 1.1: o site agenda a Jaade. O serviço, se instalado, só atende o "Executar agora" da tela Jobs.</span></div>
+              <div class="fluxo-seta">⇄</div>
+              <div class="fluxo-caixa"><strong>Modo Serviço</strong><span>O IAHub-Jobs agenda. O site fica de reserva, conferindo se o serviço está vivo.</span></div>
+              <div class="fluxo-seta">→</div>
+              <div class="fluxo-caixa"><strong>Serviço sumiu?</strong><span>Parada limpa: o site reassume <strong>na hora</strong>. Travou sem parar: reassume em até "Minutos sem sinal" (5 min). Quando o serviço volta, ele reassume.</span></div>
+            </div>
+          </div>
+          <div class="callout info"><span class="callout-icon">ℹ</span><span>A troca de modo vale em segundos e não exige reiniciar nada. Durante a troca, a trava da Jaade impede duas leituras da mesma empresa.</span></div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card" id="e1-4">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-4')">
+          <span class="etapa-num">1.4</span><span class="etapa-titulo">O que são os Parâmetros por Empresa</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <p class="etapa-desc">Cadastro central, no IAHub, das configurações de <strong>cada empresa</strong> usadas pelas aplicações — no lugar do <code>.env</code>, que vale para todos e só o servidor altera. Cada parâmetro se explica na própria tela: o que faz, exemplos, as opções e o que cada uma significa, e um passo a passo quando precisa.</p>
+          <p class="etapa-desc">O primeiro grupo é o de <strong>Alertas operacionais</strong>: o "plano B" por e-mail e Telegram para quando o WhatsApp não puder avisar (o próprio WhatsApp ou o site fora do ar).</p>
+        </div></div>
+      </article>
+    </section>
+
+    <!-- ═══ FASE 2 ═══════════════════════════════════════════════════════════ -->
+    <section class="fase-section" id="f2">
+      <div class="fase-header">
+        <div class="fase-badge f2">2</div>
+        <div class="fase-titulo"><h2>Instalação</h2><p>Atualização do servidor e instalação do serviço (uma vez)</p></div>
+      </div>
+
+      <article class="etapa-card" id="e2-1">
+        <div class="etapa-card-header" onclick="toggleEtapa('e2-1')">
+          <span class="etapa-num">2.1</span><span class="etapa-titulo">Atualizar o servidor</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <div class="step-list">
+            <div class="step-item"><div class="step-num">1</div><div class="step-body">Copie <code>iahub-deploy-&lt;data&gt;.zip</code> para <code>C:\Web\iahub\deploy\</code> no servidor.</div></div>
+            <div class="step-item"><div class="step-num">2</div><div class="step-body">Abra o <strong>PowerShell como Administrador</strong> e rode o comando abaixo.</div></div>
+            <div class="step-item"><div class="step-num">3</div><div class="step-body">Pronto. As tabelas novas são criadas sozinhas. <strong>A Jaade continua no site, como hoje.</strong></div></div>
+          </div>
+          <div class="code-label">PowerShell (Administrador)</div>
+          <div class="code-block">C:\Web\iahub\deploy\3-atualizar.ps1 -Zip C:\Web\iahub\deploy\iahub-deploy-&lt;data&gt;.zip</div>
+          <div class="callout success"><span class="callout-icon">✓</span><span>O atualizador para e sobe também o serviço IAHub-Jobs (se instalado) e nunca mexe em banco, <code>.env</code>, anexos ou sessões.</span></div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card" id="e2-2">
+        <div class="etapa-card-header" onclick="toggleEtapa('e2-2')">
+          <span class="etapa-num">2.2</span><span class="etapa-titulo">Instalar o serviço IAHub-Jobs (uma vez por servidor)</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <div class="code-label">PowerShell (Administrador)</div>
+          <div class="code-block">C:\Web\iahub\deploy\6-instalar-servico-jobs.ps1</div>
+          <div class="step-list">
+            <div class="step-item"><div class="step-num">1</div><div class="step-body">Confira em <code>services.msc</code>: <strong>"IAHub - Jobs"</strong> = Em execução, inicialização Automática.</div></div>
+            <div class="step-item"><div class="step-num">2</div><div class="step-body">Na tela Jobs, o indicador <strong>Serviço</strong> mostra "No ar".</div></div>
+          </div>
+          <div class="callout info"><span class="callout-icon">ℹ</span><span>Instalado, ele <strong>ainda não roda a Jaade</strong> — só fica pronto. Rodar de novo o script reinstala (útil se algo for alterado no serviço).</span></div>
+          <div class="campo-secao">Como o serviço se comporta</div>
+          <div class="campo-lista">
+            <div class="campo-item"><div class="campo-nome">Reinício automático</div><div class="campo-desc">Caiu, o Windows sobe de novo em 5 s; se cair logo ao subir, as tentativas são espaçadas.</div></div>
+            <div class="campo-item"><div class="campo-nome">Parada controlada</div><div class="campo-desc">Ao parar, ele espera as execuções por até 45 s, encerra o resto e registra tudo. O deploy aguarda até 90 s.</div></div>
+            <div class="campo-item"><div class="campo-nome">Logs</div><div class="campo-desc"><code>C:\Web\iahub\logs\jobs-output.log</code> e <code>jobs-error.log</code> (com rotação automática).</div></div>
+          </div>
+        </div></div>
+      </article>
+    </section>
+
+    <!-- ═══ FASE 3 ═══════════════════════════════════════════════════════════ -->
+    <section class="fase-section" id="f3">
+      <div class="fase-header">
+        <div class="fase-badge f3">3</div>
+        <div class="fase-titulo"><h2>Parâmetros por Empresa</h2><p>IA Gestão › aba Parâmetros — alertas por e-mail e Telegram</p></div>
+      </div>
+
+      <article class="etapa-card" id="e3-1">
+        <div class="etapa-card-header" onclick="toggleEtapa('e3-1')">
+          <span class="etapa-num">3.1</span><span class="etapa-titulo">Como usar a tela</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <div class="campo-lista">
+            <div class="campo-item"><div class="campo-nome">Empresa</div><div class="campo-desc">Escolha no topo. Cada empresa tem seus próprios valores.</div></div>
+            <div class="campo-item"><div class="campo-nome">Buscar e filtros</div><div class="campo-desc"><span class="tag">Todos</span> <span class="tag">Personalizados</span> (diferentes do padrão) <span class="tag tag-orange">Pendentes</span> (obrigatórios vazios) <span class="tag tag-red">Com problema</span> (valor inválido) <span class="tag tag-blue">Não salvos</span>.</div></div>
+            <div class="campo-item"><div class="campo-nome">Cartão de cada parâmetro</div><div class="campo-desc">Explicação, campo, <strong>exemplos clicáveis</strong> (preenchem o campo), opções com significado, <strong>"Como obter / passo a passo"</strong>, valor padrão, quem alterou e quando, Histórico e Restaurar padrão.</div></div>
+            <div class="campo-item"><div class="campo-nome">Salvar</div><div class="campo-desc">Nada é aplicado até clicar <strong>Salvar alterações</strong> na barra de baixo (ou Ctrl+S). Com algum campo inválido, nada é salvo e a tela mostra onde corrigir.</div></div>
+            <div class="campo-item"><div class="campo-nome">Enviar teste</div><div class="campo-desc">Em cada canal (E-mail, Telegram). Usa o que está <strong>salvo</strong> — salve antes de testar.</div></div>
+            <div class="campo-item"><div class="campo-nome">Histórico</div><div class="campo-desc">Toda alteração com valor anterior, novo e usuário. Senhas aparecem só como "•••• (alterado)".</div></div>
+          </div>
+          <div class="callout warning"><span class="callout-icon">!</span><span>Senhas e tokens ficam <strong>cifrados</strong> e nunca aparecem de novo na tela. Para trocar, digite o novo; em branco mantém o atual.</span></div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card" id="e3-2">
+        <div class="etapa-card-header" onclick="toggleEtapa('e3-2')">
+          <span class="etapa-num">3.2</span><span class="etapa-titulo">Como a reserva funciona</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <div class="guia-table-wrap"><table class="guia-table">
+            <thead><tr><th>Parâmetro</th><th>Opção</th><th>O que significa</th></tr></thead>
+            <tbody>
+              <tr><td rowspan="3"><strong>Quando usar a reserva</strong></td><td><span class="tag tag-green">Só quando o WhatsApp falhar</span> (recomendado)</td><td>O aviso vai pelo WhatsApp; e-mail/Telegram só se o WhatsApp não entregar. Evita mensagem repetida.</td></tr>
+              <tr><td><span class="tag">Sempre, junto com o WhatsApp</span></td><td>Todo alerta vai também por e-mail/Telegram (útil para ter histórico na caixa de e-mail).</td></tr>
+              <tr><td><span class="tag tag-red">Nunca</span></td><td>Desliga a reserva da empresa. Se o WhatsApp falhar, o alerta fica só na tela Jobs.</td></tr>
+              <tr><td rowspan="3"><strong>Ordem dos canais</strong></td><td><span class="tag tag-green">E-mail, depois Telegram</span> (recomendado)</td><td>Tenta o e-mail; só usa o Telegram se o e-mail falhar.</td></tr>
+              <tr><td><span class="tag">Telegram, depois e-mail</span></td><td>O contrário.</td></tr>
+              <tr><td><span class="tag">Os dois sempre</span></td><td>Manda pelos dois ao mesmo tempo (aviso duplicado, mais chance de alguém ver).</td></tr>
+            </tbody>
+          </table></div>
+          <div class="callout info"><span class="callout-icon">ℹ</span><span>Se a empresa não tiver nenhum canal de reserva ligado, o IAHub usa o Telegram do <code>.env</code> do servidor (<code>IAC_TELEGRAM_*</code>) como última reserva — que pode ser removido quando todas as empresas estiverem configuradas.</span></div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card" id="e3-3">
+        <div class="etapa-card-header" onclick="toggleEtapa('e3-3')">
+          <span class="etapa-num">3.3</span><span class="etapa-titulo">E-mail (reserva recomendada)</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <div class="campo-lista">
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Usar e-mail <span class="campo-req">liga o canal</span></div><div class="campo-desc">Desligado, nada é enviado por e-mail (os campos ficam guardados).</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Servidor SMTP <span class="campo-req">obrigatório</span></div><div class="campo-desc">Só o endereço, sem <code>http://</code> e sem porta. Ex.: <code>smtp.gmail.com</code>, <code>smtp.office365.com</code>, <code>mail.suaempresa.com.br</code>.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Porta <span class="campo-req">obrigatório</span></div><div class="campo-desc"><code>587</code> = STARTTLS (padrão; Gmail e 365) · <code>465</code> = SSL/TLS (comum em hospedagens) · <code>25</code> = sem criptografia (só rede interna).</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Segurança da conexão <span class="campo-req">obrigatório</span></div><div class="campo-desc">Tem que combinar com a porta: STARTTLS com 587, SSL/TLS com 465, Nenhuma com 25.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Usuário <span class="campo-req">obrigatório</span></div><div class="campo-desc">A conta que envia. Ex.: <code>alertas@suaempresa.com.br</code>. Prefira uma conta só para alertas.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Senha <span class="campo-req">obrigatório</span></div><div class="campo-desc"><strong>Gmail:</strong> use "senha de app" — Conta Google › Segurança › Verificação em duas etapas (ligada) › Senhas de app. <strong>Microsoft 365:</strong> a conta precisa de "SMTP autenticado" liberado pelo administrador do 365.</div></div>
+            <div class="campo-item"><div class="campo-nome">Remetente (De)</div><div class="campo-desc">Opcional. Ex.: <code>IAHub Alertas &lt;alertas@suaempresa.com.br&gt;</code>. Em branco, usa o Usuário.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Destinatários <span class="campo-req">obrigatório</span></div><div class="campo-desc">Um por linha ou separados por vírgula (até 20). Dica: uma lista de distribuição (ex.: <code>ti@</code>) evita trocar aqui quando a equipe muda.</div></div>
+          </div>
+          <div class="callout success"><span class="callout-icon">✓</span><span>Salve e clique <strong>Enviar teste</strong> na seção E-mail. Se não chegar, a mensagem de erro do servidor aparece ao lado do botão.</span></div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card" id="e3-4">
+        <div class="etapa-card-header" onclick="toggleEtapa('e3-4')">
+          <span class="etapa-num">3.4</span><span class="etapa-titulo">Telegram (opcional)</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <div class="step-list">
+            <div class="step-item"><div class="step-num">1</div><div class="step-body">No Telegram, fale com <strong>@BotFather</strong>, envie <code>/newbot</code>, escolha nome e usuário (terminado em "bot") e copie o <strong>token</strong>.</div></div>
+            <div class="step-item"><div class="step-num">2</div><div class="step-body">Mande uma mensagem para o bot (ou coloque o bot num grupo e escreva algo no grupo).</div></div>
+            <div class="step-item"><div class="step-num">3</div><div class="step-body">Abra no navegador <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> e pegue o número em <code>"chat":{"id": ...}</code>.</div></div>
+            <div class="step-item"><div class="step-num">4</div><div class="step-body">Na tela: <strong>Usar Telegram</strong> = Ligado, cole o <strong>Token</strong> e o <strong>Chat</strong>, salve e clique <strong>Enviar teste</strong>.</div></div>
+          </div>
+          <div class="guia-table-wrap"><table class="guia-table">
+            <thead><tr><th>Chat que recebe</th><th>Significado</th></tr></thead>
+            <tbody>
+              <tr><td><code>123456789</code> (positivo)</td><td>Uma pessoa. Ela precisa ter mandado mensagem para o bot antes.</td></tr>
+              <tr><td><code>-1001234567890</code> (negativo)</td><td>Um grupo ou canal. Adicione o bot ao grupo antes (em canal, como administrador).</td></tr>
+            </tbody>
+          </table></div>
+        </div></div>
+      </article>
+    </section>
+
+    <!-- ═══ FASE 4 ═══════════════════════════════════════════════════════════ -->
+    <section class="fase-section" id="f4">
+      <div class="fase-header">
+        <div class="fase-badge f4">4</div>
+        <div class="fase-titulo"><h2>Tela Jobs</h2><p>IA Gestão › aba Jobs (e IA Service › Configuração › Jobs)</p></div>
+      </div>
+
+      <article class="etapa-card" id="e4-1">
+        <div class="etapa-card-header" onclick="toggleEtapa('e4-1')">
+          <span class="etapa-num">4.1</span><span class="etapa-titulo">Situação e avisos</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <p class="etapa-desc">Todos os blocos abrem e fecham pela setinha; fechados, mostram um resumo de uma linha e a grade ocupa o espaço liberado.</p>
+          <div class="guia-table-wrap"><table class="guia-table">
+            <thead><tr><th>Indicador</th><th>O que mostra</th></tr></thead>
+            <tbody>
+              <tr><td>Serviço</td><td><span class="tag tag-green">No ar</span> · <span class="tag tag-orange">Parado</span> (parada limpa) · <span class="tag tag-red">Sem sinal</span> (travou ou caiu) · <span class="tag tag-gray">Não instalado</span>.</td></tr>
+              <tr><td>Onde rodam</td><td><span class="tag tag-green">Serviço</span> (IAHub-Jobs no comando) · <span class="tag">Site</span> · <span class="tag tag-red">Site (reassumiu)</span> (escolheu Serviço, mas ele está sem sinal).</td></tr>
+              <tr><td>Em execução</td><td>Quantas execuções rodam agora e o limite do servidor.</td></tr>
+              <tr><td>Na fila</td><td>Já está na hora, mas esperando vaga (limite atingido). A mais atrasada roda primeiro.</td></tr>
+              <tr><td>Falhas (24 h)</td><td>Erros e tempo esgotado nas últimas 24 h.</td></tr>
+              <tr><td>Pausados</td><td>Jobs ou empresas pausados nesta tela.</td></tr>
+            </tbody>
+          </table></div>
+          <div class="callout warning"><span class="callout-icon">!</span><span>O bloco <strong>Avisos</strong> só aparece quando há algo a resolver: serviço sem sinal, alerta em aberto ou alertas sem destino configurado.</span></div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card" id="e4-2">
+        <div class="etapa-card-header" onclick="toggleEtapa('e4-2')">
+          <span class="etapa-num">4.2</span><span class="etapa-titulo">Aba Jobs — situações e ações</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <p class="etapa-desc">Uma linha por empresa de cada job. A grade segue o padrão do IAHub: filtro no cabeçalho de cada coluna, colunas que se arrastam e "+ Mostrar agrupamento" para agrupar por Job, Empresa, Situação…</p>
+          <div class="guia-table-wrap"><table class="guia-table">
+            <thead><tr><th>Situação</th><th>Significado</th></tr></thead>
+            <tbody>
+              <tr><td><span class="tag">Executando</span></td><td>Rodando agora (mostra se foi agendada ou "Executar agora" e há quanto tempo).</td></tr>
+              <tr><td><span class="tag tag-green">Agendada</span></td><td>Tudo certo; roda na "Próxima".</td></tr>
+              <tr><td><span class="tag tag-orange">Na fila</span></td><td>Na hora, esperando vaga.</td></tr>
+              <tr><td><span class="tag tag-gray">Rodando pelo site</span></td><td>Modo Site (ou site reassumiu): o site está agendando esta empresa.</td></tr>
+              <tr><td><span class="tag tag-orange">Pausada</span></td><td>Pausada nesta tela (por quem). Nada agendado roda; "Executar agora" funciona.</td></tr>
+              <tr><td><span class="tag tag-red">Aguardando nova tentativa</span></td><td>Falhou; espera antes de tentar de novo (30 s, 1 min, 2 min… até 15 min).</td></tr>
+            </tbody>
+          </table></div>
+          <div class="guia-table-wrap"><table class="guia-table">
+            <thead><tr><th>Ação</th><th>O que faz</th></tr></thead>
+            <tbody>
+              <tr><td>Executar agora</td><td>Pede uma execução imediata ao serviço (precisa estar no ar). Roda mesmo pausada.</td></tr>
+              <tr><td>Encerrar</td><td>Encerra a execução em andamento (e o que ela abriu). O job limpa o que deixou — a Jaade fecha a leitura como interrompida. Não conta como falha.</td></tr>
+              <tr><td>Ver log / Última</td><td>Abre a execução com resumo, erro e log completo (ao vivo se estiver rodando).</td></tr>
+              <tr><td>Pausar / Retomar</td><td>Só esta empresa. "Pausar job", no bloco Jobs, pausa todas as empresas do job.</td></tr>
+            </tbody>
+          </table></div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card" id="e4-3">
+        <div class="etapa-card-header" onclick="toggleEtapa('e4-3')">
+          <span class="etapa-num">4.3</span><span class="etapa-titulo">Execuções e logs</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <p class="etapa-desc">Histórico de execuções do serviço com filtros por job, empresa, resultado e período. Clique na linha para ver o <strong>log completo</strong>.</p>
+          <div class="guia-table-wrap"><table class="guia-table">
+            <thead><tr><th>Resultado</th><th>Significado</th><th>Conta como falha?</th></tr></thead>
+            <tbody>
+              <tr><td><span class="tag tag-green">Concluída</span></td><td>Terminou e fez trabalho (ex.: analisou chamados).</td><td>Não</td></tr>
+              <tr><td><span class="tag tag-gray">Sem trabalho</span></td><td>Terminou e não havia nada a fazer.</td><td>Não</td></tr>
+              <tr><td><span class="tag tag-orange">Com aviso</span></td><td>Terminou, mas algum item deu erro (veja o resumo).</td><td>Não</td></tr>
+              <tr><td><span class="tag tag-red">Erro</span></td><td>O job falhou ou o processo morreu.</td><td>Sim</td></tr>
+              <tr><td><span class="tag tag-red">Tempo esgotado</span></td><td>Passou do tempo máximo e foi encerrado.</td><td>Sim</td></tr>
+              <tr><td><span class="tag tag-orange">Interrompida</span></td><td>Encerrada pela tela, pela parada do serviço ou assumida por outro processo.</td><td>Não</td></tr>
+            </tbody>
+          </table></div>
+          <div class="callout info"><span class="callout-icon">ℹ</span><span>Execuções ficam 30 dias; das "Sem trabalho" ficam só as últimas 50 por empresa. No modo Site, as leituras não aparecem aqui (continuam na tela da Jaade).</span></div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card" id="e4-4">
+        <div class="etapa-card-header" onclick="toggleEtapa('e4-4')">
+          <span class="etapa-num">4.4</span><span class="etapa-titulo">Eventos</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <p class="etapa-desc">Tudo que o serviço e as pessoas fizeram, com o <strong>usuário</strong> de cada ação: serviço iniciado/parado, falhas, alertas enviados ou não, pausas, mudanças de configuração, site sem resposta, processo que não encerra. Filtre por "Só avisos e erros" para ver só o que importa. Ficam 90 dias.</p>
+        </div></div>
+      </article>
+
+      <article class="etapa-card" id="e4-5">
+        <div class="etapa-card-header" onclick="toggleEtapa('e4-5')">
+          <span class="etapa-num">4.5</span><span class="etapa-titulo">Configuração e alertas por WhatsApp</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <div class="campo-lista">
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Onde os jobs rodam</div><div class="campo-desc"><strong>Site</strong> (como era) ou <strong>Serviço IAHub-Jobs</strong>. Para escolher Serviço, ele precisa estar no ar. Vale na hora.</div></div>
+            <div class="campo-item"><div class="campo-nome">Execuções simultâneas no servidor</div><div class="campo-desc">Padrão 20. Cada execução é um processo (~100–150 MB). Não é o "Chamados analisados ao mesmo tempo" da Jaade, que continua valendo dentro de cada leitura.</div></div>
+            <div class="campo-item"><div class="campo-nome">Limite por job</div><div class="campo-desc">Ex.: Jaade no máximo 10 juntas, deixando vaga para outros jobs. Vazio = só o geral.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Empresa do canal de WhatsApp</div><div class="campo-desc">Por qual WhatsApp/grupos os alertas saem. A reserva por e-mail/Telegram usada é a <strong>desta mesma empresa</strong> (Fase 3).</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Grade de grupos</div><div class="campo-desc"><strong>Falha de job</strong> = job com N falhas seguidas e quando volta ao normal. <strong>Serviço</strong> = serviço sem sinal, site fora e a volta. Grupos vêm do IA Command › Grupos.</div></div>
+            <div class="campo-item"><div class="campo-nome">Falhas seguidas para alertar</div><div class="campo-desc">Padrão 3. Um alerta por situação, até normalizar.</div></div>
+            <div class="campo-item"><div class="campo-nome">Minutos sem sinal</div><div class="campo-desc">Padrão 5. Quando avisar que o serviço (ou o site) sumiu — e quando o site reassume se o serviço travar.</div></div>
+          </div>
+          <div class="callout success"><span class="callout-icon">✓</span><span>Salve e clique <strong>Enviar alerta de teste</strong>. Alerta que não chegar é reenviado (no máximo a cada 5 min).</span></div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card" id="e4-6">
+        <div class="etapa-card-header" onclick="toggleEtapa('e4-6')">
+          <span class="etapa-num">4.6</span><span class="etapa-titulo">Serviço e log — instalar, iniciar, parar, desinstalar</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <p class="etapa-desc">Mesmo modelo da tela de serviços do WhatsApp: à esquerda o <strong>log do serviço ao vivo</strong> (colorido por tipo); à direita o <strong>painel de controle</strong> do serviço do Windows "IAHub - Jobs".</p>
+          <div class="guia-table-wrap"><table class="guia-table">
+            <thead><tr><th>Botão</th><th>O que faz</th><th>Muda onde os jobs rodam?</th></tr></thead>
+            <tbody>
+              <tr><td><span class="tag tag-green">▶ Iniciar</span></td><td>Liga o serviço no Windows.</td><td>Não — escolha "Serviço" em Configuração.</td></tr>
+              <tr><td><span class="tag tag-orange">■ Parar</span></td><td>Parada controlada: termina as execuções em até 45 s e desliga.</td><td><strong>Sim: volta para o Site</strong> (como antes).</td></tr>
+              <tr><td><span class="tag">⬇ Instalar serviço</span></td><td>Registra o serviço no Windows (o mesmo que o script <code>6-instalar-servico-jobs.ps1</code>) com inicialização Automática.</td><td>Não.</td></tr>
+              <tr><td><span class="tag tag-red">🗑 Desinstalar</span></td><td>Para (se estiver rodando) e remove o serviço do Windows. Para usar de novo, é só Instalar.</td><td><strong>Sim: volta para o Site.</strong></td></tr>
+            </tbody>
+          </table></div>
+          <div class="guia-table-wrap"><table class="guia-table">
+            <thead><tr><th>Cor no log</th><th>Significado</th></tr></thead>
+            <tbody>
+              <tr><td><span class="tag tag-blue">⚙ azul</span></td><td>Serviço: início, parada, troca de modo, execução começando.</td></tr>
+              <tr><td><span class="tag tag-green">✓ verde</span></td><td>Execução terminada / ação concluída.</td></tr>
+              <tr><td><span class="tag tag-orange">⚠ amarelo</span></td><td>Aviso: limite atingido, job adiado, alerta.</td></tr>
+              <tr><td><span class="tag tag-red">✖ vermelho</span></td><td>Erro: falha de execução, erro do processo, falha ao instalar/iniciar.</td></tr>
+              <tr><td><span class="tag tag-gray">ℹ cinza</span></td><td>O que o próprio job escreveu (ex.: a Jaade).</td></tr>
+            </tbody>
+          </table></div>
+          <div class="campo-lista">
+            <div class="campo-item"><div class="campo-nome">Limpar · Copiar · Salvar log</div><div class="campo-desc">Limpa o log da tela (as execuções, com seus logs, continuam em "Execuções e logs"), copia para a área de transferência ou baixa um .txt. O filtro do topo vale para copiar e salvar.</div></div>
+            <div class="campo-item"><div class="campo-nome">Informações</div><div class="campo-desc">Estado no Windows, inicialização (Automática/Manual), número do processo, último sinal do serviço, onde os jobs rodam e se o NSSM está instalado.</div></div>
+          </div>
+          <div class="callout warning"><span class="callout-icon">!</span><span>Instalar e desinstalar exigem o NSSM no servidor e que o site rode como serviço do Windows (conta Sistema) — é como o IAHub roda em produção. Se faltar permissão, a tela mostra a mensagem e o log registra a falha. O log guarda 7 dias (até 20 mil linhas).</span></div>
+        </div></div>
+      </article>
+    </section>
+
+    <!-- ═══ FASE 5 ═══════════════════════════════════════════════════════════ -->
+    <section class="fase-section" id="f5">
+      <div class="fase-header">
+        <div class="fase-badge f5">5</div>
+        <div class="fase-titulo"><h2>Operação</h2><p>Ligar, desligar e o que acontece quando algo cai</p></div>
+      </div>
+
+      <article class="etapa-card" id="e5-1">
+        <div class="etapa-card-header" onclick="toggleEtapa('e5-1')">
+          <span class="etapa-num">5.1</span><span class="etapa-titulo">Passar a Jaade para o serviço</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <div class="step-list">
+            <div class="step-item"><div class="step-num">1</div><div class="step-body">Na tela da Jaade (IA Service › Base Histórica › Jaade), deixe em <strong>Simulação</strong> para o primeiro teste.</div></div>
+            <div class="step-item"><div class="step-num">2</div><div class="step-body">IA Gestão › Jobs › <strong>Configuração</strong> › Onde os jobs rodam › <strong>Serviço IAHub-Jobs</strong> › Aplicar.</div></div>
+            <div class="step-item"><div class="step-num">3</div><div class="step-body">Acompanhe em <strong>Jobs</strong> (situação de cada empresa) e <strong>Execuções e logs</strong>.</div></div>
+            <div class="step-item"><div class="step-num">4</div><div class="step-body">Teste: <strong>parar</strong> o "IAHub - Jobs" no services.msc → a tela mostra "Site (reassumiu)" e chega o alerta; iniciando de novo, ele reassume.</div></div>
+            <div class="step-item"><div class="step-num">5</div><div class="step-body">Teste: <strong>reiniciar o site</strong> no meio de uma leitura → a leitura continua no serviço.</div></div>
+            <div class="step-item"><div class="step-num">6</div><div class="step-body">Tudo certo? Volte a Jaade para <strong>Produção</strong>.</div></div>
+          </div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card" id="e5-2">
+        <div class="etapa-card-header" onclick="toggleEtapa('e5-2')">
+          <span class="etapa-num">5.2</span><span class="etapa-titulo">Desligar e voltar ao funcionamento de hoje (a qualquer hora)</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <div class="guia-table-wrap"><table class="guia-table">
+            <thead><tr><th>Situação</th><th>O que fazer</th><th>Resultado</th></tr></thead>
+            <tbody>
+              <tr><td>Quero voltar como era</td><td>Jobs › Configuração › Onde os jobs rodam › <strong>Site</strong> › Aplicar</td><td>O site volta a agendar em segundos. O serviço termina o que estiver rodando.</td></tr>
+              <tr><td>O serviço deu problema</td><td>Parar <strong>IAHub - Jobs</strong> no services.msc</td><td>O site reassume na hora (ou em até "Minutos sem sinal" se travar sem parar).</td></tr>
+              <tr><td>Parar só a Jaade</td><td>Jobs › <strong>Pausar job</strong> (ou pausar uma empresa)</td><td>Nada agendado roda até Retomar — vale no site e no serviço.</td></tr>
+            </tbody>
+          </table></div>
+          <div class="callout success"><span class="callout-icon">✓</span><span>Sem reinstalar e sem pacote novo. Única regra: para <strong>ir</strong> para "Serviço" ele precisa estar no ar; para <strong>voltar</strong> para "Site", sempre pode.</span></div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card" id="e5-3">
+        <div class="etapa-card-header" onclick="toggleEtapa('e5-3')">
+          <span class="etapa-num">5.3</span><span class="etapa-titulo">Quando algo cai — o que o sistema faz sozinho</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <div class="guia-table-wrap"><table class="guia-table">
+            <thead><tr><th>O que aconteceu</th><th>O que o sistema faz</th><th>Aviso</th></tr></thead>
+            <tbody>
+              <tr><td>Serviço parado (deploy, services.msc)</td><td>Termina as execuções em até 45 s; o site reassume na hora.</td><td>Após "Minutos sem sinal", alerta <em>Serviço</em>; outro quando volta.</td></tr>
+              <tr><td>Serviço travado ou caiu</td><td>O Windows sobe de novo; se não voltar, o site reassume em até "Minutos sem sinal". Execução que morreu é registrada e limpa.</td><td>Alerta <em>Serviço</em>.</td></tr>
+              <tr><td>Site fora do ar</td><td>Os jobs continuam rodando no serviço.</td><td>O serviço avisa <strong>direto por e-mail/Telegram</strong> (o WhatsApp sai pelo site).</td></tr>
+              <tr><td>Job falhando</td><td>Nova tentativa com espera crescente (até 15 min).</td><td>Alerta <em>Falha de job</em> na N-ª falha seguida; outro quando volta ao normal.</td></tr>
+              <tr><td>Execução presa</td><td>Encerrada no tempo máximo, com tudo que ela abriu.</td><td>Conta como falha.</td></tr>
+              <tr><td>Processo que não encerra nem forçado</td><td>A execução fica bloqueada (nunca roda outra junto).</td><td>Evento e alerta <em>Serviço</em>.</td></tr>
+              <tr><td>Migração pendente (deploy pela metade)</td><td>O job espera o site atualizar o banco.</td><td>Após 10 min, alerta <em>Serviço</em>.</td></tr>
+            </tbody>
+          </table></div>
+        </div></div>
+      </article>
+    </section>
+
+    <!-- ═══ FASE 6 ═══════════════════════════════════════════════════════════ -->
+    <section class="fase-section" id="f6">
+      <div class="fase-header">
+        <div class="fase-badge f6">6</div>
+        <div class="fase-titulo"><h2>Checklist</h2><p>Ordem de configuração e diagnóstico</p></div>
+      </div>
+
+      <article class="etapa-card" id="e6-1">
+        <div class="etapa-card-header" onclick="toggleEtapa('e6-1')">
+          <span class="etapa-num">6.1</span><span class="etapa-titulo">Ordem de configuração</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <div class="step-list">
+            <div class="step-item"><div class="step-num">1</div><div class="step-body"><strong>Atualizar o servidor</strong> (<a href="#" onclick="abrirEtapa('e2-1',event)">2.1</a>). Nada muda ainda.</div></div>
+            <div class="step-item"><div class="step-num">2</div><div class="step-body"><strong>E-mail de alerta da empresa</strong> em Parâmetros (<a href="#" onclick="abrirEtapa('e3-3',event)">3.3</a>) e Enviar teste.</div></div>
+            <div class="step-item"><div class="step-num">3</div><div class="step-body"><strong>Grupos de WhatsApp</strong> em Jobs › Configuração (<a href="#" onclick="abrirEtapa('e4-5',event)">4.5</a>) e Enviar alerta de teste.</div></div>
+            <div class="step-item"><div class="step-num">4</div><div class="step-body"><strong>Instalar o serviço</strong> (<a href="#" onclick="abrirEtapa('e2-2',event)">2.2</a>).</div></div>
+            <div class="step-item"><div class="step-num">5</div><div class="step-body"><strong>Passar a Jaade para o serviço</strong> em Simulação e testar (<a href="#" onclick="abrirEtapa('e5-1',event)">5.1</a>).</div></div>
+            <div class="step-item"><div class="step-num">6</div><div class="step-body"><strong>Jaade em Produção.</strong> Qualquer problema: <a href="#" onclick="abrirEtapa('e5-2',event)">5.2</a>.</div></div>
+          </div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card" id="e6-2">
+        <div class="etapa-card-header" onclick="toggleEtapa('e6-2')">
+          <span class="etapa-num">6.2</span><span class="etapa-titulo">Problemas comuns e diagnóstico</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <div class="guia-table-wrap"><table class="guia-table">
+            <thead><tr><th>Sintoma</th><th>Causa provável</th><th>Como resolver</th></tr></thead>
+            <tbody>
+              <tr><td>Não deixa escolher "Serviço IAHub-Jobs"</td><td>Serviço não instalado ou parado</td><td>Instale (2.2) ou inicie "IAHub - Jobs" no services.msc.</td></tr>
+              <tr><td>"Onde rodam" mostra "Site (reassumiu)"</td><td>Serviço sem sinal</td><td>Veja <code>logs\jobs-error.log</code> e o services.msc. Os jobs seguem pelo site enquanto isso.</td></tr>
+              <tr><td>"Enviar teste" do e-mail falha com autenticação</td><td>Senha normal no Gmail, ou SMTP autenticado desligado no 365</td><td>Use senha de app (Gmail) ou peça a liberação do SMTP autenticado (365).</td></tr>
+              <tr><td>E-mail falha por conexão/tempo</td><td>Porta e Segurança não combinam, ou firewall</td><td>587+STARTTLS ou 465+SSL/TLS; libere a saída na porta no servidor.</td></tr>
+              <tr><td>Telegram "chat not found"</td><td>Ninguém falou com o bot, ou o bot não está no grupo</td><td>Mande mensagem ao bot / adicione-o ao grupo e pegue o chat de novo.</td></tr>
+              <tr><td>Alerta não chega por WhatsApp</td><td>Sem grupos marcados, grupo sem membros com acesso à empresa, ou canal desconectado</td><td>Confira a grade de grupos (4.5) e o IA Command › Grupos. A reserva por e-mail cobre isso.</td></tr>
+              <tr><td>Empresa aparece "Aguardando nova tentativa"</td><td>Falhas seguidas</td><td>Abra "Última" e veja o erro e o log. Corrija e use "Executar agora" (fura a espera).</td></tr>
+              <tr><td>Muitas empresas "Na fila"</td><td>Limite de execuções atingido</td><td>Aumente "Execuções simultâneas" ou o limite do job em Configuração.</td></tr>
+              <tr><td>Evento "migração pendente"</td><td>O site ainda não aplicou a atualização do banco</td><td>Reinicie o serviço "iahub" (site); o job volta sozinho.</td></tr>
+            </tbody>
+          </table></div>
+          <div class="callout info"><span class="callout-icon">ℹ</span><span>Onde olhar: tela Jobs (Execuções e logs, Eventos), <code>C:\Web\iahub\logs\jobs-output.log</code> / <code>jobs-error.log</code> e a Auditoria da IA Gestão (toda alteração com usuário).</span></div>
+        </div></div>
+      </article>
+    </section>
+  </main>
+</div>
+<script>
+function toggleEtapa(id){const c=document.getElementById(id);if(c)c.classList.toggle('open');}
+function abrirEtapa(id,e){if(e)e.preventDefault();const c=document.getElementById(id);if(!c)return;if(!c.classList.contains('open'))c.classList.add('open');c.scrollIntoView({behavior:'smooth',block:'start'});document.querySelectorAll('.nav-etapa').forEach(a=>a.classList.remove('active'));if(e&&e.currentTarget&&e.currentTarget.classList.contains('nav-etapa'))e.currentTarget.classList.add('active');}
+function scrollFase(id){const el=document.getElementById(id);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}
+function exportarPDF(){window.print();}
+// Aberto em nova aba a partir das telas Jobs/Parâmetros: fechar volta para elas.
+function fecharGuia(){window.close();setTimeout(()=>history.back(),150);}
+// Link direto para uma etapa: /iahub/guia-jobs#e3-3
+if(location.hash){const alvo=location.hash.slice(1);setTimeout(()=>abrirEtapa(alvo),100);}
+const gc=document.getElementById('guia-content');
+const etapas=document.querySelectorAll('.etapa-card');
+const navLinks=document.querySelectorAll('.nav-etapa');
+if(gc){gc.addEventListener('scroll',()=>{let cur='';etapas.forEach(s=>{if(s.offsetTop-gc.scrollTop<180)cur=s.id;});navLinks.forEach(a=>{const fn=a.getAttribute('onclick')||'';const m=fn.match(/'([^']+)'/);a.classList.toggle('active',m&&m[1]===cur);});});}
+</script>
+</body>
+</html>

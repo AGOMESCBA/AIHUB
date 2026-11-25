@@ -107,6 +107,18 @@ const MIGRACOES = [
       ALTER TABLE jobs_servico ADD COLUMN parado_em TEXT;
     `,
   },
+  {
+    version: 3,
+    descricao: 'Log do serviço de jobs (aba Serviço da tela Jobs, mesmo modelo do log do WhatsApp): linhas do supervisor, dos processos filhos e das ações da tela, com tipo para a cor.',
+    sql: `
+      CREATE TABLE jobs_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        momento TEXT NOT NULL,
+        tipo TEXT NOT NULL,
+        texto TEXT NOT NULL
+      );
+    `,
+  },
 ];
 
 let _db = null;

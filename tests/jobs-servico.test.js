@@ -126,7 +126,7 @@ test('banco: abrir duas vezes o mesmo arquivo não reaplica migração', () => {
   const arquivo = path.join(os.tmpdir(), `iahub-jobs-dupla-${Date.now()}.db`);
   const db1 = jobsDb.inicializarDB(arquivo);
   const db2 = jobsDb.inicializarDB(arquivo);
-  assert.equal(db2.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get().n, 2);
+  assert.equal(db2.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get().n, 3);
   db1.close();
   db2.close();
   jobsDb.inicializarDB(path.join(os.tmpdir(), `iahub-jobs-${Date.now()}-${Math.random().toString(36).slice(2)}.db`));
@@ -831,4 +831,122 @@ test('processo que não encerra nem forçado: evento e alerta, execução segue 
   filhos.lista[0].terminar({ resultado: 'ok' });
   await esperar(() => !sup.emCurso.size);
   await sup.parar({ prazoMs: 0 });
+});
+
+// ── Aba Serviço: log e controle do serviço Windows (2026-11-25) ─────────────
+
+test('log do serviço: grava, lê só as novas, limpa e poda (tipo inválido vira info)', () => {
+  repo.limparLog();
+  repo.registrarLog('system', 'Supervisor iniciado');
+  repo.registrarLog('qualquer', 'linha');
+  const todas = repo.listarLog();
+  assert.deepEqual(todas.map(l => l.tipo), ['system', 'info']);
+  repo.registrarLog('error', 'caiu');
+  const novas = repo.listarLog({ aposId: todas[1].id });
+  assert.deepEqual(novas.map(l => l.texto), ['caiu']);
+  repo.registrarLog('info', 'velha', { agora: new Date(Date.now() - 8 * 86400000) });
+  assert.equal(repo.podarLog(), 1);
+  assert.equal(repo.limparLog(), 3);
+  assert.deepEqual(repo.listarLog(), []);
+});
+
+test('filho real: cada linha vai ao log do serviço (stderr como erro), não direto ao console', async () => {
+  const linhas = [];
+  const h = iniciarFilhoReal({ moduloCatalogo: CATALOGO_TESTE, jobId: 'teste.loga', instancia: 'i1', origem: 'manual', aoLinha: (nivel, texto) => linhas.push([nivel, texto]) });
+  await h.fim;
+  assert.deepEqual(linhas, [
+    ['info', '[teste.loga i1] linha um'],
+    ['erro', '[teste.loga i1] linha de erro'],
+    ['info', '[teste.loga i1] linha dois'],
+  ].filter(l => linhas.some(x => x[1] === l[1])));
+  assert.ok(linhas.some(([n, t]) => n === 'erro' && /linha de erro/.test(t)));
+  assert.ok(linhas.some(([n, t]) => n === 'info' && /linha dois/.test(t)));
+});
+
+test('serviço Windows: mensagens claras para os erros comuns', () => {
+  const { _traduzir } = require('../modules/jobs/servico-windows');
+  assert.match(_traduzir({ saida: '[SC] StartService FALHA 5:\nAcesso negado.' }, 'iniciar o serviço'), /Sem permissão.*conta Sistema/);
+  assert.match(_traduzir({ saida: '[SC] StartService FAILED 1056: An instance of the service is already running.' }, 'iniciar'), /já está em execução/);
+  assert.match(_traduzir({ saida: '[SC] ControlService FAILED 1062: The service has not been started.' }, 'parar'), /já está parado/);
+});
+
+test('serviço Windows: consulta de estado (só leitura) responde sem travar', { skip: process.platform !== 'win32' }, async () => {
+  const s = await require('../modules/jobs/servico-windows').status();
+  assert.equal(s.nome, 'IAHub-Jobs');
+  assert.ok(['nao_instalado', 'parado', 'rodando', 'iniciando', 'parando', 'pausado', 'erro', 'desconhecido'].includes(s.estado));
+});
+
+test('API do serviço: parar/desinstalar devolvem os jobs ao Site; tudo vai ao log, à Auditoria e aos eventos', async () => {
+  const express = require('express');
+  const auditoria = [];
+  const chamadas = [];
+  const caminhoAuth = require.resolve('../apps/IAHUB/backend/auth/database');
+  const caminhoSw = require.resolve('../modules/jobs/servico-windows');
+  const origAuth = require.cache[caminhoAuth];
+  const origSw = require.cache[caminhoSw];
+  let falharInstalar = false;
+  const estado = { suportado: true, instalado: true, estado: 'rodando', nome: 'IAHub-Jobs' };
+  require.cache[caminhoAuth] = { id: caminhoAuth, filename: caminhoAuth, loaded: true, exports: { registrarAuditoria: (r) => auditoria.push(r) } };
+  require.cache[caminhoSw] = {
+    id: caminhoSw, filename: caminhoSw, loaded: true,
+    exports: {
+      status: async () => estado,
+      parar: async () => { chamadas.push('parar'); return { ...estado, estado: 'parando' }; },
+      iniciar: async () => { chamadas.push('iniciar'); return estado; },
+      desinstalar: async () => { chamadas.push('desinstalar'); return { ...estado, instalado: false, estado: 'nao_instalado' }; },
+      instalar: async () => { chamadas.push('instalar'); if (falharInstalar) throw Object.assign(new Error('NSSM não encontrado no servidor.'), { status: 400 }); return estado; },
+    },
+  };
+  delete require.cache[require.resolve('../modules/jobs/routes')];
+  const rotas = require('../modules/jobs/routes');
+  require.cache[caminhoAuth] = origAuth; if (!origAuth) delete require.cache[caminhoAuth];
+  require.cache[caminhoSw] = origSw; if (!origSw) delete require.cache[caminhoSw];
+
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => { req.session = { authenticated: true, role: 'admin', user: 'ana' }; next(); });
+  rotas.registrar(app, { requireAuth: (a, b, c) => c(), requireAdmin: (a, b, c) => c() });
+  const srv = app.listen(0);
+  const base = `http://127.0.0.1:${srv.address().port}/api/iahub/jobs`;
+  const chamar = async (metodo, caminho) => { const r = await fetch(base + caminho, { method: metodo }); return { status: r.status, corpo: await r.json() }; };
+  try {
+    repo.limparLog();
+    repo.salvarConfigJobs({ modo: 'servico' });
+    const st = await chamar('GET', '/servico');
+    assert.equal(st.corpo.windows.estado, 'rodando');
+    assert.equal(st.corpo.modo, 'servico');
+
+    const p = await chamar('POST', '/servico/parar');
+    assert.equal(p.status, 200);
+    assert.equal(p.corpo.modo, 'site', 'parar pela tela volta os jobs ao Site');
+    assert.equal(repo.getConfigJobs().modo, 'site');
+    assert.ok(auditoria.some(a => a.acao === 'jobs_servico_parar' && a.usuario === 'ana'));
+
+    // Iniciar não muda o modo.
+    await chamar('POST', '/servico/iniciar');
+    assert.equal(repo.getConfigJobs().modo, 'site');
+
+    repo.salvarConfigJobs({ modo: 'servico' });
+    await chamar('POST', '/servico/desinstalar');
+    assert.equal(repo.getConfigJobs().modo, 'site');
+
+    falharInstalar = true;
+    const i = await chamar('POST', '/servico/instalar');
+    assert.equal(i.status, 400);
+    assert.match(i.corpo.error, /NSSM/);
+    assert.ok(repo.listarEventos().some(e => e.tipo === 'servico_instalar_falhou'));
+    assert.equal((await chamar('POST', '/servico/explodir')).status, 404);
+    assert.deepEqual(chamadas, ['parar', 'iniciar', 'desinstalar', 'instalar']);
+
+    const log = (await chamar('GET', '/log')).corpo;
+    assert.ok(log.linhas.some(l => l.tipo === 'warning' && /parada do serviço pedida.*por ana.*voltaram para o Site/i.test(l.texto)));
+    assert.ok(log.linhas.some(l => l.tipo === 'error' && /Falha ao instalar/.test(l.texto)));
+    const depois = (await chamar('GET', `/log?apos=${log.ultimoId}`)).corpo;
+    assert.equal(depois.linhas.length, 0);
+    assert.equal(depois.ultimoId, log.ultimoId);
+    await chamar('POST', '/log/limpar');
+    assert.deepEqual((await chamar('GET', '/log')).corpo.linhas.map(l => l.texto), ['Log limpo por ana.']);
+  } finally {
+    srv.close();
+  }
 });

@@ -64,7 +64,7 @@ function esperaRetentativa(falhas, { esperaBaseMs, esperaMaxMs }, aleatorio = Ma
 const _hora = () => new Date().toTimeString().slice(0, 8);
 
 /** Processo filho real; guarda o que ele escreve (log da execução) e repassa ao log do serviço. */
-function iniciarFilhoReal({ moduloCatalogo, jobId, instancia, origem, execId, aoNaoEncerrar = null }) {
+function iniciarFilhoReal({ moduloCatalogo, jobId, instancia, origem, execId, aoNaoEncerrar = null, aoLinha = null }) {
   const filho = fork(EXECUTOR, [moduloCatalogo, jobId, instancia, origem, String(execId)], {
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     windowsHide: true,
@@ -76,7 +76,9 @@ function iniciarFilhoReal({ moduloCatalogo, jobId, instancia, origem, execId, ao
     resto = linhas.pop();
     for (const l of linhas) {
       log += `${_hora()} ${l}\n`;
-      saida.write(`[${jobId} ${instancia}] ${l}\n`);
+      // Com aoLinha, o log do serviço (arquivo + aba Serviço) recebe a linha.
+      if (aoLinha) aoLinha(saida === process.stderr ? 'erro' : 'info', `[${jobId} ${instancia}] ${l}`);
+      else saida.write(`[${jobId} ${instancia}] ${l}\n`);
     }
     if (log.length > MAX_LOG_MEMORIA * 2) log = log.slice(-MAX_LOG_MEMORIA);
   };
@@ -335,7 +337,8 @@ class Supervisor {
     const reg = { def, instancia, origem, ficha, execId, empresaId, motivoEncerramento: null, logSalvo: '' };
     this.emCurso.set(this._chave(def.id, instancia), reg);
     try {
-      reg.filho = this.iniciarFilho({ moduloCatalogo: this.moduloCatalogo, jobId: def.id, instancia, origem, execId, aoNaoEncerrar: (pid) => this._processoNaoEncerra(reg, pid) });
+      reg.filho = this.iniciarFilho({ moduloCatalogo: this.moduloCatalogo, jobId: def.id, instancia, origem, execId, aoNaoEncerrar: (pid) => this._processoNaoEncerra(reg, pid),
+        aoLinha: (nivel, texto) => (nivel === 'erro' ? this.log.error(texto) : this.log.log(texto)) });
     } catch (err) {
       reg.filho = { encerrar() {}, fim: Promise.resolve({ mensagem: null, codigo: null, erro: err }) };
     }

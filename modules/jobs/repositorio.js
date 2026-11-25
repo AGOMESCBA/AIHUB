@@ -170,7 +170,9 @@ function podarHistorico({ agora = new Date(), dias = 30, vaziasPorInstancia = 50
         FROM jobs_execucoes WHERE resultado = 'vazio') WHERE n > ?)`).run(vaziasPorInstancia).changes;
   const pedidos = db.prepare('DELETE FROM jobs_pedidos WHERE atendido_em IS NOT NULL AND solicitado_em < ?').run(limite).changes;
   const eventos = db.prepare('DELETE FROM jobs_eventos WHERE momento < ?').run(_iso(new Date(agora.getTime() - diasEventos * 86400000))).changes;
-  return { antigas, vazias, pedidos, eventos };
+  let log = 0;
+  try { log = podarLog({ agora }); } catch (_) { /* tabela ainda não migrada */ }
+  return { antigas, vazias, pedidos, eventos, log };
 }
 
 // ── Pedidos da tela (executar agora / encerrar) ─────────────────────────────
@@ -311,6 +313,39 @@ function listarAlertasAbertos() {
   return getDB().prepare('SELECT chave, aberto_em AS abertoEm, texto FROM jobs_alertas ORDER BY aberto_em').all();
 }
 
+// ── Log do serviço (aba Serviço) ────────────────────────────────────────────
+
+const TIPOS_LOG = new Set(['info', 'success', 'warning', 'error', 'system']);
+const MAX_LINHAS_LOG = 20000;
+
+function registrarLog(tipo, texto, { agora = new Date() } = {}) {
+  getDB().prepare('INSERT INTO jobs_log (momento, tipo, texto) VALUES (?, ?, ?)')
+    .run(_iso(agora), TIPOS_LOG.has(tipo) ? tipo : 'info', String(texto).slice(0, 4000));
+}
+
+/** Linhas depois de `aposId` (acompanhar ao vivo); sem `aposId`, as últimas `limite`. */
+function listarLog({ aposId = null, limite = 500 } = {}) {
+  const lim = Math.min(Math.max(Number(limite) || 500, 1), 2000);
+  const db = getDB();
+  if (aposId != null && aposId !== '') {
+    return db.prepare('SELECT id, momento, tipo, texto FROM jobs_log WHERE id > ? ORDER BY id LIMIT ?').all(Number(aposId), lim);
+  }
+  return db.prepare('SELECT * FROM (SELECT id, momento, tipo, texto FROM jobs_log ORDER BY id DESC LIMIT ?) ORDER BY id').all(lim);
+}
+
+function limparLog() {
+  return getDB().prepare('DELETE FROM jobs_log').run().changes;
+}
+
+/** Retenção do log: 7 dias e no máximo MAX_LINHAS_LOG linhas. */
+function podarLog({ agora = new Date() } = {}) {
+  const db = getDB();
+  const velhas = db.prepare('DELETE FROM jobs_log WHERE momento < ?').run(_iso(new Date(agora.getTime() - 7 * 86400000))).changes;
+  const corte = db.prepare('SELECT id FROM jobs_log ORDER BY id DESC LIMIT 1 OFFSET ?').get(MAX_LINHAS_LOG);
+  const excesso = corte ? db.prepare('DELETE FROM jobs_log WHERE id <= ?').run(corte.id).changes : 0;
+  return velhas + excesso;
+}
+
 // ── Batimento do serviço ────────────────────────────────────────────────────
 
 function registrarBatimento(dono, { agora = new Date(), iniciando = false, parando = false } = {}) {
@@ -348,5 +383,6 @@ module.exports = {
   getConfigJobs, salvarConfigJobs, listarControles, salvarControle, pausa,
   registrarEvento, listarEventos,
   abrirAlerta, fecharAlerta, listarAlertasAbertos,
+  registrarLog, listarLog, limparLog, podarLog,
   registrarBatimento, registrarParada, estadoServico,
 };

@@ -154,6 +154,42 @@
     pre.log { background:#0b1220; color:#d7e0ee; border-radius:8px; padding:10px 12px; font-size:11.5px; line-height:1.45; max-height:52vh; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; margin:0; }
     pre.resumo { background:var(--bg-base); color:var(--text-hi); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:11.5px; max-height:200px; overflow:auto; white-space:pre-wrap; margin:0; }
 
+    /* Aba Serviço e log — mesmo visual da tela de serviços do WhatsApp */
+    .sv-layout { display:grid; grid-template-columns:minmax(0,1fr) 290px; gap:12px; align-items:stretch; }
+    .sv-terminal-wrap { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); display:flex; flex-direction:column; min-height:420px; overflow:hidden; }
+    .sv-terminal-cab { display:flex; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+    .sv-terminal-tit { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--accent); flex:1; }
+    .sv-terminal-cab .form-control { width:auto; height:30px; padding:2px 8px; font-size:12px; }
+    .sv-terminal { flex:1; overflow-y:auto; padding:10px 16px; font-family:ui-monospace,'Cascadia Code',Consolas,monospace; font-size:12px; line-height:1.75; background:var(--bg-base); scrollbar-width:thin; scrollbar-color:rgba(124,58,237,.25) transparent; }
+    .log-line { display:flex; gap:10px; padding:1px 0; }
+    .log-ts { color:var(--text-lo); flex-shrink:0; user-select:none; font-size:11px; padding-top:1px; }
+    .log-icon { flex-shrink:0; font-size:12px; }
+    .log-msg { overflow-wrap:anywhere; white-space:pre-wrap; }
+    .log-msg.info { color:var(--text-md); }
+    .log-msg.success { color:#22c55e; }
+    .log-msg.error { color:#ef4444; }
+    .log-msg.warning { color:#f59e0b; }
+    .log-msg.system { color:#60a5fa; }
+    .sv-vazio { color:var(--text-lo); font-size:12px; padding:12px 0; }
+    .sv-painel { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; display:flex; flex-direction:column; gap:10px; }
+    .sv-badge { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:800; padding:4px 14px; border-radius:20px; background:var(--bg-hover); color:var(--text-md); }
+    .sv-badge.ok { background:color-mix(in srgb, var(--success) 18%, transparent); color:var(--success-text); }
+    .sv-badge.atencao { background:color-mix(in srgb, var(--warning) 20%, transparent); color:var(--warning-text); }
+    .sv-badge.ruim { background:color-mix(in srgb, var(--error) 18%, transparent); color:var(--error-text); }
+    .sv-nome { text-align:center; border-bottom:1px solid var(--border); padding-bottom:10px; }
+    .sv-nome strong { display:block; font-size:13px; font-weight:800; color:var(--text-hi); }
+    .sv-nome span { font-size:11px; color:var(--text-lo); }
+    .sv-secao { display:flex; flex-direction:column; gap:6px; }
+    .sv-secao-2 { flex-direction:row; }
+    .sv-secao .btn { height:32px; font-size:12.5px; width:100%; justify-content:center; }
+    .sv-painel .btn:disabled { opacity:.4; cursor:not-allowed; filter:grayscale(.6); }
+    .sv-btn-alerta { background:color-mix(in srgb, var(--warning) 18%, var(--bg-card)); color:var(--warning-text); border:1px solid color-mix(in srgb, var(--warning) 40%, transparent); }
+    .sv-sep { height:1px; background:var(--border); }
+    .sv-lbl { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text-lo); }
+    .sv-stat { display:flex; justify-content:space-between; gap:8px; font-size:12px; color:var(--text-md); }
+    .sv-stat strong { color:var(--text-hi); text-align:right; overflow-wrap:anywhere; }
+    .sv-dica { font-size:11.5px; color:var(--text-lo); line-height:1.5; margin:0; }
+    @media (max-width:860px) { .sv-layout { grid-template-columns:1fr; } .sv-terminal-wrap { min-height:360px; } }
     @media (max-width:1100px) { .kpis { grid-template-columns:repeat(3, minmax(0, 1fr)); } }
     @media (max-width:860px) { .config-grid { grid-template-columns:1fr; } .det-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
     @media (max-width:760px) { .pagina { padding:12px 16px 32px; } .kpis { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
@@ -166,6 +202,7 @@
       <h1 id="titulo">Jobs</h1>
       <p id="subtitulo">Serviço de jobs do IAHub (IAHub-Jobs): o que roda, onde, quando e o que aconteceu.</p>
     </div>
+    <a class="btn btn-ghost" id="btn-guia" href="/iahub/guia-jobs#e4-1" target="_blank" rel="noopener" title="Guia de uso: Jobs e Parâmetros por Empresa">❔ Guia</a>
     <label class="auto"><input type="checkbox" id="auto" checked> Atualizar sozinho</label>
     <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
   </div>
@@ -194,6 +231,7 @@
     <button class="aba ativa" type="button" data-aba="jobs">Jobs</button>
     <button class="aba" type="button" data-aba="execucoes">Execuções e logs</button>
     <button class="aba" type="button" data-aba="eventos">Eventos</button>
+    <button class="aba" type="button" data-aba="servico">Serviço e log</button>
     <button class="aba" type="button" data-aba="config">Configuração</button>
   </div>
 
@@ -278,6 +316,61 @@
     </section>
     <div class="grade"><div id="tabela-ev"></div></div>
     <div class="mais" id="mais-ev" hidden><button class="btn btn-ghost" type="button" id="btn-mais-ev">Carregar mais</button></div>
+  </section>
+
+  <!-- Serviço e log (mesmo modelo da tela de serviços do WhatsApp) -->
+  <section class="painel-aba" id="aba-servico">
+    <div class="sv-layout">
+      <div class="sv-terminal-wrap">
+        <div class="sv-terminal-cab">
+          <span class="sv-terminal-tit">Log do serviço — ao vivo</span>
+          <select id="sv-filtro" class="form-control" aria-label="Filtrar o log">
+            <option value="">Tudo</option>
+            <option value="error">Só erros</option>
+            <option value="warning">Avisos e erros</option>
+            <option value="system">Serviço (início, parada, execuções)</option>
+          </select>
+          <label class="auto"><input type="checkbox" id="sv-rolar" checked> Rolagem automática</label>
+        </div>
+        <div class="sv-terminal" id="sv-terminal"><div class="sv-vazio">Carregando o log…</div></div>
+      </div>
+
+      <aside class="sv-painel">
+        <div style="text-align:center"><span id="sv-badge" class="sv-badge">—</span></div>
+        <div class="sv-nome">
+          <strong>IAHub - Jobs</strong>
+          <span>Serviço do Windows <code>IAHub-Jobs</code></span>
+        </div>
+        <div class="sv-secao">
+          <button class="btn btn-primary" type="button" data-sv="iniciar">▶ Iniciar</button>
+          <button class="btn sv-btn-alerta" type="button" data-sv="parar">■ Parar</button>
+        </div>
+        <div class="sv-sep"></div>
+        <div class="sv-lbl">Instalação</div>
+        <div class="sv-secao">
+          <button class="btn btn-ghost" type="button" data-sv="instalar">⬇ Instalar serviço</button>
+          <button class="btn btn-danger" type="button" data-sv="desinstalar">🗑 Desinstalar</button>
+        </div>
+        <div class="sv-sep"></div>
+        <div class="sv-stat"><span>Estado</span><strong id="sv-estado">—</strong></div>
+        <div class="sv-stat"><span>Inicialização</span><strong id="sv-inicio">—</strong></div>
+        <div class="sv-stat"><span>Processo</span><strong id="sv-pid">—</strong></div>
+        <div class="sv-stat"><span>Último sinal</span><strong id="sv-sinal">—</strong></div>
+        <div class="sv-stat"><span>Onde rodam</span><strong id="sv-modo">—</strong></div>
+        <div class="sv-stat"><span>NSSM</span><strong id="sv-nssm">—</strong></div>
+        <div class="sv-sep"></div>
+        <div class="sv-lbl">Log</div>
+        <div class="sv-secao sv-secao-2">
+          <button class="btn btn-ghost" type="button" id="sv-limpar">🗑 Limpar</button>
+          <button class="btn btn-ghost" type="button" id="sv-copiar">📋 Copiar</button>
+        </div>
+        <div class="sv-secao">
+          <button class="btn btn-ghost" type="button" id="sv-salvar">💾 Salvar log</button>
+          <button class="btn btn-ghost" type="button" id="sv-atualizar">⟳ Atualizar status</button>
+        </div>
+        <p class="sv-dica">Parar ou desinstalar por aqui devolve os jobs para o <strong>Site</strong> (como antes). Iniciar não muda onde eles rodam — isso é em Configuração.</p>
+      </aside>
+    </div>
   </section>
 
   <!-- Configuração -->
@@ -447,6 +540,11 @@
         const topo = $(el).getBoundingClientRect().top;
         const mais = aba === 'aba-execucoes' ? !$('mais-ex').hidden : aba === 'aba-eventos' ? !$('mais-ev').hidden : false;
         t.setHeight(Math.max(260, Math.floor(window.innerHeight - topo - (mais ? 64 : 16))));
+      }
+      // Aba Serviço: o terminal do log ocupa o que sobra da janela.
+      if ($('aba-servico').classList.contains('ativa')) {
+        const wrap = document.querySelector('.sv-terminal-wrap');
+        wrap.style.height = `${Math.max(420, Math.floor(window.innerHeight - wrap.getBoundingClientRect().top - 16))}px`;
       }
     });
   }
@@ -968,6 +1066,143 @@
   }
 
   // ── Navegação e atualização ─────────────────────────────────────────────
+  // ── Aba Serviço e log ───────────────────────────────────────────────────
+  const ICONES_LOG = { info: 'ℹ', success: '✓', warning: '⚠', error: '✖', system: '⚙' };
+  const ESTADOS_SV = {
+    rodando: ['● Em execução', 'ok'], parado: ['○ Parado', 'atencao'], iniciando: ['◐ Iniciando…', 'atencao'],
+    parando: ['◐ Parando…', 'atencao'], pausado: ['‖ Pausado', 'atencao'], nao_instalado: ['Não instalado', 'ruim'],
+    nao_suportado: ['Só no Windows', ''], erro: ['Erro ao consultar', 'ruim'], desconhecido: ['Desconhecido', ''],
+  };
+  let svUltimoId = 0;
+  let svLinhas = [];
+  let svCarregado = false;
+  let svOcupado = false;
+  let svStatus = null;
+
+  const horaLog = (iso) => {
+    const d = new Date(iso);
+    const hoje = new Date().toDateString() === d.toDateString();
+    return hoje ? d.toLocaleTimeString('pt-BR') : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' });
+  };
+  function passaFiltroLog(l) {
+    const f = $('sv-filtro').value;
+    if (!f) return true;
+    if (f === 'error') return l.tipo === 'error';
+    if (f === 'warning') return l.tipo === 'warning' || l.tipo === 'error';
+    return l.tipo === 'system' || l.tipo === 'success';
+  }
+  function linhaLogHtml(l) {
+    return `<div class="log-line"><span class="log-ts">${esc(horaLog(l.momento))}</span><span class="log-icon">${ICONES_LOG[l.tipo] || 'ℹ'}</span><span class="log-msg ${esc(l.tipo)}">${esc(l.texto)}</span></div>`;
+  }
+  function desenharLog() {
+    const t = $('sv-terminal');
+    const visiveis = svLinhas.filter(passaFiltroLog);
+    t.innerHTML = visiveis.length ? visiveis.map(linhaLogHtml).join('')
+      : '<div class="sv-vazio">Nenhuma entrada de log. Inicie o serviço para ver o log em tempo real.</div>';
+    if ($('sv-rolar').checked) t.scrollTop = t.scrollHeight;
+  }
+  async function carregarLog(inicio) {
+    try {
+      const r = await api(`/log?${qs({ apos: inicio ? '' : svUltimoId, limite: inicio ? 800 : 500 })}`);
+      if (inicio) svLinhas = r.linhas; else svLinhas.push(...r.linhas);
+      if (svLinhas.length > 3000) svLinhas = svLinhas.slice(-3000);
+      svUltimoId = r.ultimoId || svUltimoId;
+      if (inicio || r.linhas.length) {
+        const t = $('sv-terminal');
+        if (inicio) desenharLog();
+        else {
+          const novas = r.linhas.filter(passaFiltroLog);
+          if (novas.length) {
+            t.querySelector('.sv-vazio')?.remove();
+            t.insertAdjacentHTML('beforeend', novas.map(linhaLogHtml).join(''));
+            if ($('sv-rolar').checked) t.scrollTop = t.scrollHeight;
+          }
+        }
+      }
+    } catch (err) {
+      erro(err.message);
+    }
+  }
+  async function carregarServico() {
+    try {
+      svStatus = await api('/servico');
+      desenharServico();
+    } catch (err) {
+      erro(err.message);
+    }
+  }
+  function desenharServico() {
+    const s = svStatus;
+    if (!s) return;
+    const w = s.windows;
+    const [txt, cls] = ESTADOS_SV[w.estado] || [w.estado, ''];
+    $('sv-badge').textContent = txt;
+    $('sv-badge').className = `sv-badge ${cls}`;
+    $('sv-estado').textContent = w.instalado ? txt.replace(/^[●○◐‖]\s*/, '') : txt;
+    $('sv-inicio').textContent = !w.instalado ? '—' : w.inicializacao === 'automatica' ? 'Automática' : w.inicializacao === 'manual' ? 'Manual' : (w.inicializacao || '—');
+    $('sv-pid').textContent = w.pid ? `pid ${w.pid}` : '—';
+    $('sv-sinal').textContent = s.sinal.batimentoEm ? dataHora(s.sinal.batimentoEm) : (s.sinal.paradoEm ? `parado em ${dataHora(s.sinal.paradoEm)}` : 'nunca');
+    $('sv-modo').textContent = s.modo === 'servico' ? 'Serviço' : 'Site';
+    $('sv-nssm').textContent = w.nssm === undefined ? '—' : w.nssm ? 'Encontrado' : 'Não encontrado';
+    const pode = {
+      iniciar: w.instalado && ['parado', 'pausado'].includes(w.estado),
+      parar: w.instalado && ['rodando', 'iniciando', 'pausado'].includes(w.estado),
+      instalar: w.suportado && !w.instalado && w.estado !== 'erro',
+      desinstalar: w.instalado,
+    };
+    for (const b of document.querySelectorAll('[data-sv]')) b.disabled = svOcupado || !pode[b.dataset.sv];
+  }
+  async function acaoServico(acao) {
+    const modoServico = svStatus?.modo === 'servico';
+    const confirmar = {
+      instalar: 'Instalar o serviço do Windows "IAHub - Jobs"? Ele fica pronto, mas os jobs continuam no Site até você escolher Serviço em Configuração.',
+      iniciar: 'Iniciar o serviço "IAHub - Jobs"?',
+      parar: `Parar o serviço "IAHub - Jobs"? Ele termina as execuções em andamento (até 45 s).${modoServico ? '\n\nOs jobs voltam para o Site (como antes).' : ''}`,
+      desinstalar: `Desinstalar o serviço "IAHub - Jobs" do Windows? Ele é parado antes (até 45 s).${modoServico ? '\n\nOs jobs voltam para o Site (como antes).' : ''}\n\nPara usar de novo, é só Instalar.`,
+    }[acao];
+    if (!confirm(confirmar)) return;
+    svOcupado = true;
+    desenharServico();
+    $('sv-badge').textContent = { instalar: 'Instalando…', iniciar: 'Iniciando…', parar: 'Parando…', desinstalar: 'Desinstalando…' }[acao];
+    try {
+      const r = await api(`/servico/${acao}`, { method: 'POST' });
+      svStatus = { ...svStatus, windows: r.windows, modo: r.modo };
+      erro('');
+    } catch (err) {
+      erro(err.message);
+    } finally {
+      svOcupado = false;
+      await carregarServico();
+      carregarLog(false);
+      carregarPainel();
+    }
+    // Parada controlada demora: acompanha o estado por alguns segundos.
+    if (acao === 'parar' || acao === 'iniciar') {
+      for (let i = 0; i < 12 && ['parando', 'iniciando'].includes(svStatus?.windows?.estado); i++) {
+        await new Promise(r => setTimeout(r, 5000));
+        await carregarServico();
+      }
+    }
+  }
+  document.addEventListener('click', (ev) => { const b = ev.target.closest('[data-sv]'); if (b) acaoServico(b.dataset.sv); });
+  $('sv-filtro').addEventListener('change', desenharLog);
+  $('sv-atualizar').addEventListener('click', () => { carregarServico(); carregarLog(false); });
+  $('sv-limpar').addEventListener('click', async () => {
+    if (!confirm('Limpar o log do serviço? (as execuções, com seus logs, continuam em "Execuções e logs")')) return;
+    try { await api('/log/limpar', { method: 'POST' }); svUltimoId = 0; await carregarLog(true); } catch (err) { erro(err.message); }
+  });
+  const textoLog = () => svLinhas.filter(passaFiltroLog).map(l => `${horaLog(l.momento)}  ${ICONES_LOG[l.tipo] || ''}  ${l.texto}`).join('\n');
+  $('sv-copiar').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(textoLog()); $('sv-copiar').textContent = '✓ Copiado'; setTimeout(() => { $('sv-copiar').textContent = '📋 Copiar'; }, 1500); } catch (_) { erro('O navegador não deixou copiar; use Salvar log.'); }
+  });
+  $('sv-salvar').addEventListener('click', () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([textoLog()], { type: 'text/plain;charset=utf-8' }));
+    a.download = `log-iahub-jobs-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
   function trocarAba(nome) {
     for (const b of document.querySelectorAll('.aba')) b.classList.toggle('ativa', b.dataset.aba === nome);
     for (const s of document.querySelectorAll('.painel-aba')) s.classList.toggle('ativa', s.id === `aba-${nome}`);
@@ -976,6 +1211,7 @@
     if (nome === 'execucoes') { tabelas.ex.redraw(true); carregarEmpresas().then(() => carregarExecucoes(true)); }
     if (nome === 'eventos') { tabelas.ev.redraw(true); carregarEventos(true); }
     if (nome === 'config') carregarConfig();
+    if (nome === 'servico') { carregarServico(); if (!svCarregado) { svCarregado = true; carregarLog(true); } }
     resumirFiltros();
     ajustarAlturas();
   }
@@ -1047,13 +1283,22 @@
   setInterval(() => {
     if (!$('auto').checked || document.hidden) return;
     if ($('aba-jobs').classList.contains('ativa')) carregarPainel();
+    if ($('aba-servico').classList.contains('ativa') && !svOcupado) carregarServico();
   }, 5000);
+  // Log ao vivo (aba Serviço): só as linhas novas, a cada 2 s.
+  setInterval(() => {
+    if ($('auto').checked && !document.hidden && svCarregado && $('aba-servico').classList.contains('ativa')) carregarLog(false);
+  }, 2000);
   setInterval(() => {
     if (detalheId && !document.hidden && $('det-corpo').dataset.fim !== '1') atualizarDetalhe();
   }, 3000);
 
   tabelas.inst.on('tableBuilt', () => { carregarPainel().then(ajustarAlturas); resumirFiltros(); });
 })();
+</script>
+<script>
+  // Guia no mesmo tema da tela (escuro dentro do IA Service).
+  (function () { const a = document.getElementById("btn-guia"); if (a && document.documentElement.getAttribute("data-theme") === "dark") a.href = a.href.replace("#", "?tema=dark#"); })();
 </script>
 </body>
 </html>

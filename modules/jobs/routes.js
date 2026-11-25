@@ -5,6 +5,7 @@ const repo = require('./repositorio');
 const painel = require('./painel');
 const catalogo = require('./catalogo');
 const alerta = require('./alerta');
+const servicoWindows = require('./servico-windows');
 const { registrarAuditoria } = require('../../apps/IAHUB/backend/auth/database');
 const empresasDb = require('../../apps/IAHUB/backend/empresas/database');
 
@@ -182,6 +183,53 @@ function registrar(app, { requireAuth, requireAdmin }) {
       .map(([k, v]) => `${NOMES[k]}: ${k === 'modo' ? (v === 'servico' ? 'Serviço IAHub-Jobs' : 'Site') : Array.isArray(v) ? `${v.length} grupo(s)` : v ?? '—'}`);
     if (descricao.length) registrarAcao(req, mudanca.modo !== undefined && mudanca.modo !== atual.modo ? 'modo_alterado' : 'config_alterada', `Configuração alterada — ${descricao.join('; ')}.`);
     return { config: salvo };
+  }));
+
+  // ── Aba Serviço: controle do serviço Windows e log (modelo do WhatsApp) ──
+  app.get(`${BASE}/servico`, guarda, semCache, rota(async () => ({
+    windows: await servicoWindows.status(),
+    sinal: repo.estadoServico(),
+    modo: repo.getConfigJobs().modo,
+  })));
+
+  // Parar e desinstalar pela tela devolvem os jobs ao Site ("voltar como
+  // hoje"); instalar e iniciar não mudam o modo (escolha em Configuração).
+  app.post(`${BASE}/servico/:acao`, guarda, rota(async (req) => {
+    const acao = req.params.acao;
+    const usuario = _usuario(req);
+    const acoes = {
+      instalar: ['instalar', servicoWindows.instalar, 'Serviço instalado'],
+      desinstalar: ['desinstalar', servicoWindows.desinstalar, 'Serviço desinstalado'],
+      iniciar: ['iniciar', servicoWindows.iniciar, 'Serviço iniciado'],
+      parar: ['parar', servicoWindows.parar, 'Parada do serviço pedida (ele termina as execuções em até 45 s)'],
+    };
+    if (!acoes[acao]) throw _erro(404, 'Ação desconhecida.');
+    const [nome, fn, texto] = acoes[acao];
+    const voltarAoSite = (acao === 'parar' || acao === 'desinstalar') && repo.getConfigJobs().modo === 'servico';
+    if (voltarAoSite) repo.salvarConfigJobs({ modo: 'site' }, { usuario });
+    try {
+      repo.registrarLog('system', `${texto.split(' (')[0]} pela tela por ${usuario}…`);
+      const windows = await fn();
+      repo.registrarLog(acao === 'parar' || acao === 'desinstalar' ? 'warning' : 'success', `${texto} por ${usuario}.${voltarAoSite ? ' Os jobs voltaram para o Site.' : ''}`);
+      registrarAcao(req, `servico_${nome}`, `${texto} pela tela.${voltarAoSite ? ' Jobs devolvidos ao Site.' : ''}`);
+      return { windows, modo: repo.getConfigJobs().modo };
+    } catch (err) {
+      repo.registrarLog('error', `Falha ao ${nome} o serviço (${usuario}): ${err.message}`);
+      repo.registrarEvento({ nivel: 'erro', tipo: `servico_${nome}_falhou`, texto: `Falha ao ${nome} o serviço: ${err.message}`, usuario });
+      throw err.status ? err : _erro(500, err.message);
+    }
+  }));
+
+  app.get(`${BASE}/log`, guarda, semCache, rota((req) => {
+    const linhas = repo.listarLog({ aposId: req.query.apos ?? null, limite: req.query.limite || 500 });
+    return { linhas, ultimoId: linhas.length ? linhas[linhas.length - 1].id : (req.query.apos ? Number(req.query.apos) : 0) };
+  }));
+
+  app.post(`${BASE}/log/limpar`, guarda, rota((req) => {
+    const removidas = repo.limparLog();
+    repo.registrarLog('system', `Log limpo por ${_usuario(req)}.`);
+    registrarAcao(req, 'log_limpo', `Log do serviço limpo (${removidas} linha(s)).`);
+    return { removidas };
   }));
 
   app.get(`${BASE}/alerta/grupos`, guarda, semCache, rota(async (req) => {
