@@ -13,6 +13,15 @@ const root = path.resolve(__dirname, '../../..');
 const workerSource = fs.readFileSync(path.join(__dirname, '../modules/whatsapp/windows-service/worker.js'), 'utf8');
 const routesSource = fs.readFileSync(path.join(__dirname, '../modules/whatsapp/windows-service/service-routes.js'), 'utf8');
 
+// Token interno falso: hub e worker do teste usam o mesmo valor.
+const TOKEN_TESTE = 'token-interno-teste';
+const internalTokenReal = require('../modules/whatsapp/windows-service/internal-token');
+const internalTokenFake = {
+  obterToken: () => TOKEN_TESTE,
+  tokenConfere: (informado, esperado = TOKEN_TESTE) => internalTokenReal.tokenConfere(informado, esperado),
+  cabecalhosWorker: (extra = {}) => ({ ...extra, 'X-Worker-Token': TOKEN_TESTE }),
+};
+
 async function workerFixture(t) {
   let server;
   let svc;
@@ -61,6 +70,7 @@ async function workerFixture(t) {
       if (normalized.endsWith('/whatsapp/service.js')) return FakeService;
       if (normalized.endsWith('/whatsapp/channel-store.js')) return channels;
       if (normalized.endsWith('/whatsapp/log-contact.js')) return {};
+      if (normalized.endsWith('/windows-service/internal-token.js')) return internalTokenFake;
       throw new Error(`require nao isolado: ${name}`);
     },
     Buffer, URL, setTimeout, clearTimeout, console,
@@ -73,13 +83,25 @@ async function workerFixture(t) {
     svc, port, starts: () => starts, hubPosts: () => hubPosts,
     async getQr() {
       const res = await fetch(`http://127.0.0.1:${port}/command`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cmd: 'get-qr' }),
+        method: 'POST', headers: internalTokenFake.cabecalhosWorker({ 'Content-Type': 'application/json' }), body: JSON.stringify({ cmd: 'get-qr' }),
       });
       assert.equal(res.status, 200);
       return res.json();
     },
   };
 }
+
+test('worker recusa chamada local sem o token interno ou com token errado', async t => {
+  const f = await workerFixture(t);
+  for (const headers of [{}, { 'X-Worker-Token': 'outro-token' }]) {
+    for (const [method, rota] of [['GET', '/health'], ['GET', '/buffer'], ['POST', '/send-direct-message'], ['POST', '/command']]) {
+      const res = await fetch(`http://127.0.0.1:${f.port}${rota}`, {
+        method, headers: { 'Content-Type': 'application/json', ...headers }, body: method === 'POST' ? '{}' : undefined,
+      });
+      assert.equal(res.status, 401, `${method} ${rota} sem token válido deve dar 401`);
+    }
+  }
+});
 
 test('worker retorna a imagem pelo HTTP mesmo sem entrega do callback ao hub', async t => {
   const f = await workerFixture(t);
@@ -132,6 +154,7 @@ test('painel exibe e renova QR por HTTP, preserva imagem no polling e limpa por 
       };
       if (name === '../channel-store') return channels;
       if (name === '../../permissions') return { requireRotina: () => noop };
+      if (name === './internal-token') return internalTokenFake;
       throw new Error(`require nao isolado: ${name}`);
     },
   });

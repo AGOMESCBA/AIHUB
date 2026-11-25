@@ -12,6 +12,7 @@ const http       = require('http');
 const nssm       = require('./nssm-manager');
 const channels   = require('../channel-store');
 const { requireRotina } = require('../../permissions');
+const { cabecalhosWorker } = require('./internal-token');
 
 // Porta base para alocação automática de workers (3101, 3102, ...)
 const WORKER_PORT_BASE = 3101;
@@ -34,7 +35,7 @@ module.exports = function registrarRotasWindowsService(app, { requireAuth, requi
   async function _workerHealth(workerPort) {
     return new Promise((resolve) => {
       const req = http.request(
-        { hostname: '127.0.0.1', port: workerPort, path: '/health', method: 'GET', timeout: 2000 },
+        { hostname: '127.0.0.1', port: workerPort, path: '/health', method: 'GET', headers: cabecalhosWorker(), timeout: 2000 },
         (res) => {
           let body = '';
           res.setEncoding?.('utf8'); res.on('data', d => { body += d; });
@@ -52,7 +53,7 @@ module.exports = function registrarRotasWindowsService(app, { requireAuth, requi
   async function _workerBuffer(workerPort) {
     return new Promise((resolve) => {
       const req = http.request(
-        { hostname: '127.0.0.1', port: workerPort, path: '/buffer', method: 'GET', timeout: 3000 },
+        { hostname: '127.0.0.1', port: workerPort, path: '/buffer', method: 'GET', headers: cabecalhosWorker(), timeout: 3000 },
         (res) => {
           let body = '';
           res.setEncoding?.('utf8'); res.on('data', d => { body += d; });
@@ -76,7 +77,7 @@ module.exports = function registrarRotasWindowsService(app, { requireAuth, requi
           port: workerPort,
           path: '/command',
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+          headers: cabecalhosWorker({ 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }),
           timeout: 5000,
         },
         (res) => {

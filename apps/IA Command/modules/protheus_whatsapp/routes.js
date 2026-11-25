@@ -21,6 +21,7 @@ const webLoginScope = require('./web-login-scope');
 const { getDB } = require('../database');
 const whatsappChannels = require('../whatsapp/channel-store');
 const whatsappResponseConfig = require('../whatsapp/whatsapp-response-config');
+const { cabecalhosWorker } = require('../whatsapp/windows-service/internal-token');
 
 const PROTHEUS_SECRET = process.env.IAC_PROTHEUS_CHAT_SECRET || '';
 const LAUNCH_TICKET_TTL_MS = 5 * 60 * 1000;
@@ -872,9 +873,9 @@ function workerJson(workerPort, rota, payload = null, timeoutMs = 30000) {
         port: workerPort,
         path: rota,
         method: payload ? 'POST' : 'GET',
-        headers: payload
+        headers: cabecalhosWorker(payload
           ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
-          : undefined,
+          : {}),
         timeout: timeoutMs,
       },
       (res) => {

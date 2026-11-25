@@ -3,8 +3,7 @@ const { requireRotina } = require('./permissions');
 const { requireEmpresaContext } = require('./empresa-context');
 const channels = require('./whatsapp/channel-store');
 const { alertarEventoWorkerWhatsapp } = require('./whatsapp/operational-alerts');
-
-const WORKER_TOKEN = process.env.IAC_HUB_INTERNAL_TOKEN || '';
+const internalToken = require('./whatsapp/windows-service/internal-token');
 
 module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, io }) {
   const canDashboard = requireRotina('iac-dashboard');
@@ -12,8 +11,10 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, i
   // IMPORTANTE: worker-event é chamado pelo processo Windows Service (sem sessão de usuário).
   // Deve ser registrado ANTES do app.use que aplica requireAuth a todo /api/ia-command/*.
   // Segurança via X-Worker-Token (token de segredo), não via sessão de usuário.
+  // Sempre exigido: sem IAC_HUB_INTERNAL_TOKEN no .env vale o token gerado em
+  // data/ (ver windows-service/internal-token.js).
   app.post('/api/ia-command/whatsapp/worker-event', (req, res) => {
-    if (WORKER_TOKEN && req.headers['x-worker-token'] !== WORKER_TOKEN) {
+    if (!internalToken.tokenConfere(req.headers['x-worker-token'])) {
       return res.status(401).json({ error: 'Token inválido.' });
     }
     const { channelId, event, payload } = req.body || {};

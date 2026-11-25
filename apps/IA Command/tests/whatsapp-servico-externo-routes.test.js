@@ -157,8 +157,35 @@ function canal(id, porta) {
     {
       delete process.env.IAC_WHATSAPP_SERVICO_EXTERNO_SECRET;
       process.env.SVC_WHATSAPP_OTP_SECRET = 'svc-secret';
-      const ret = segredoAutorizado({ headers: { 'x-servico-externo-secret': 'svc-secret' } });
+      const local = { remoteAddress: '127.0.0.1' };
+      const ret = segredoAutorizado({ headers: { 'x-servico-externo-secret': 'svc-secret' }, socket: local });
       assert.strictEqual(ret.ok, true, 'rota deve aceitar fallback SVC_WHATSAPP_OTP_SECRET usado pelo IA Service');
+
+      const ipv6 = segredoAutorizado({ headers: { 'x-servico-externo-secret': 'svc-secret' }, socket: { remoteAddress: '::ffff:127.0.0.1' } });
+      assert.strictEqual(ipv6.ok, true, 'loopback em IPv6 mapeado também é chamada interna');
+
+      // Pelo nginx: chega de 127.0.0.1, mas com os cabeçalhos que ele sempre põe.
+      const viaNginx = segredoAutorizado({
+        headers: { 'x-servico-externo-secret': 'svc-secret', 'x-real-ip': '203.0.113.9', 'x-forwarded-for': '203.0.113.9' },
+        socket: local,
+      });
+      assert.deepStrictEqual([viaNginx.ok, viaNginx.status], [false, 403], 'segredo certo vindo da internet deve ser recusado');
+
+      const soForwarded = segredoAutorizado({ headers: { 'x-servico-externo-secret': 'svc-secret', 'x-forwarded-for': '10.0.0.5' }, socket: local });
+      assert.strictEqual(soForwarded.ok, false, 'qualquer cabeçalho de proxy basta para recusar');
+
+      const externo = segredoAutorizado({ headers: { 'x-servico-externo-secret': 'svc-secret' }, socket: { remoteAddress: '198.51.100.7' } });
+      assert.deepStrictEqual([externo.ok, externo.status], [false, 403], 'acesso direto à porta 3000 de fora deve ser recusado');
+
+      const semSocket = segredoAutorizado({ headers: { 'x-servico-externo-secret': 'svc-secret' } });
+      assert.strictEqual(semSocket.ok, false, 'sem origem conhecida não é chamada interna');
+
+      const errado = segredoAutorizado({ headers: { 'x-servico-externo-secret': 'outro' }, socket: local });
+      assert.deepStrictEqual([errado.ok, errado.status], [false, 403], 'segredo errado continua recusado');
+
+      delete process.env.SVC_WHATSAPP_OTP_SECRET;
+      const semConfig = segredoAutorizado({ headers: {}, socket: local });
+      assert.deepStrictEqual([semConfig.ok, semConfig.status], [false, 503], 'sem segredo configurado a rota fica fechada');
     }
 
     console.log('whatsapp-servico-externo-routes.test.js: ok');

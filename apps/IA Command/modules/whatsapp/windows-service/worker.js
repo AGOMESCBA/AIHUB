@@ -9,6 +9,9 @@
  *   IAC_APP_DIR             — caminho absoluto da raiz do IAHub (ex: "C:\Apps\iahub")
  *   IAC_HUB_CALLBACK_URL    — URL do endpoint /worker-event no processo principal
  *   IAC_HUB_INTERNAL_TOKEN  — token de segredo para autenticar o POST ao hub
+ *                             (opcional: sem ele vale o token gerado em data/,
+ *                             ver internal-token.js; exigido também nas rotas
+ *                             HTTP locais deste worker)
  */
 
 // ── Validação de variáveis de ambiente ────────────────────────────────────────
@@ -16,7 +19,6 @@ const IAC_APP_DIR    = process.env.IAC_APP_DIR;
 const IAC_CHANNEL_ID = process.env.IAC_CHANNEL_ID;
 const IAC_PORT       = parseInt(process.env.IAC_WORKER_PORT || '0', 10);
 const IAC_HUB_URL    = process.env.IAC_HUB_CALLBACK_URL || 'http://localhost:3000/api/ia-command/whatsapp/worker-event';
-const IAC_HUB_TOKEN  = process.env.IAC_HUB_INTERNAL_TOKEN || '';
 
 if (!IAC_APP_DIR)    { console.error('[worker] FATAL: IAC_APP_DIR não definido.');    process.exit(1); }
 if (!IAC_CHANNEL_ID) { console.error('[worker] FATAL: IAC_CHANNEL_ID não definido.'); process.exit(1); }
@@ -35,6 +37,8 @@ const dbModule       = req('apps/IA Command/modules/database/index.js');
 const IACService     = req('apps/IA Command/modules/whatsapp/service.js');
 const channelStore   = req('apps/IA Command/modules/whatsapp/channel-store.js');
 const { formatarContatoParaLog, formatarAcaoEnvioParaLog } = req('apps/IA Command/modules/whatsapp/log-contact.js');
+const internalToken  = req('apps/IA Command/modules/whatsapp/windows-service/internal-token.js');
+const IAC_HUB_TOKEN  = internalToken.obterToken();
 
 // ── Log local ─────────────────────────────────────────────────────────────────
 function log(tipo, msg) {
@@ -143,6 +147,13 @@ function _normalizarArquivoWhatsApp(arquivo) {
 // ── Servidor HTTP local do worker ─────────────────────────────────────────────
 const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', 'application/json');
+
+  // Escuta só em 127.0.0.1, mas qualquer processo da máquina alcançaria a
+  // porta: toda rota exige o mesmo token interno do hub.
+  if (!internalToken.tokenConfere(req.headers['x-worker-token'], IAC_HUB_TOKEN)) {
+    res.writeHead(401);
+    return res.end(JSON.stringify({ erro: 'Não autorizado.' }));
+  }
 
   if (req.method === 'GET' && req.url === '/health') {
     res.writeHead(200);
