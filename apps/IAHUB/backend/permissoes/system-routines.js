@@ -39,6 +39,11 @@ function systemActiveFromRotinas(systemCode, rotinas) {
     return rotinas.some(rotina => String(rotina).startsWith('svc-'));
   }
 
+  // Rotinas do IA Talk (apps/IA Talk/backend/acesso/papeis.js) começam com "talk-".
+  if (systemCode === 'ia-talk') {
+    return rotinas.some(rotina => String(rotina).startsWith('talk-'));
+  }
+
   return false;
 }
 

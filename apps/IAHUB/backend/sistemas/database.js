@@ -60,6 +60,21 @@ const DEFAULT_SYSTEMS = [
     badge: 'IA Service',
     active: true,
   },
+  {
+    code: 'ia-talk',
+    name: 'IA Talk',
+    description: 'Conectando empresas e clientes em um só lugar.',
+    // Processo próprio (apps/IA Talk). Em produção o nginx encaminha /app/ia-talk/;
+    // IA_TALK_URL só serve para apontar outro endereço em desenvolvimento.
+    url: process.env.IA_TALK_URL || '/app/ia-talk/',
+    image_url: '',
+    accent: '#4f46e5',
+    badge: 'IA Talk',
+    active: true,
+    // Publicado desligado: só aparece para a empresa que for ligada em
+    // IA Gestão › Empresas › Sistemas (o "botão"). Ver inicializarSistemas.
+    liberar_empresas_por_padrao: false,
+  },
 ];
 
 function listarSystems() {
@@ -178,11 +193,15 @@ function inicializarSistemas() {
   const empresas = empresasDb.listar();
   const usuarios = usuariosDb.listar();
 
+  // Sistema novo entra ligado em todas as empresas, salvo os que declaram
+  // liberar_empresas_por_padrao: false (publicados desligados, ligados por empresa
+  // na IA Gestão). Só vale ao criar o vínculo: nunca altera um vínculo existente.
+  const padraoPorSistema = new Map(DEFAULT_SYSTEMS.map(s => [s.code, s.liberar_empresas_por_padrao !== false]));
   for (const empresa of empresas) {
     for (const system of systems) {
       ensureCrudRow(COMPANY_SYSTEMS_FILE, r =>
         Number(r.company_id) === Number(empresa.id) && r.system_code === system.code,
-        { company_id: Number(empresa.id), system_code: system.code, active: true }
+        { company_id: Number(empresa.id), system_code: system.code, active: padraoPorSistema.get(system.code) ?? true }
       );
     }
   }
