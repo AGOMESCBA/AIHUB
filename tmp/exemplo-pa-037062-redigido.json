@@ -1,8 +1,0 @@
-{
-  "caso": "037062",
-  "entrada": "Resumo manual redigido de caso real, sem anexos nem consulta ao histórico; não é uma execução completa do PA.",
-  "decisao": "responder",
-  "texto": "Olá! Em breve seu chamado será direcionado a um atendente. Enquanto isso, segue abaixo uma análise preliminar feita pela atendente de IA Jaade.\n\nPara liberar o acesso ao menu Configurador no Protheus, é importante verificar as permissões configuradas no sistema. Isso pode envolver ajustes no perfil de usuário, grupo de usuários ou diretamente no vínculo do menu. \n\nORIENTAÇÕES PRELIMINARES:\n1. Verifique se o usuário em questão possui o perfil adequado para acessar o menu Configurador. Isso pode ser feito acessando o módulo de Administração de Usuários e conferindo as permissões atribuídas ao perfil.\n2. Confirme se o grupo de usuários ao qual o usuário pertence tem as permissões necessárias para acessar o menu. Isso pode ser ajustado nas configurações de grupos de usuários.\n3. Verifique se há alguma restrição específica no vínculo do menu que possa estar impedindo o acesso.\n\nCaso essas verificações não resolvam o problema, por favor, nos envie mais detalhes sobre o comportamento observado ao tentar acessar o menu, como mensagens de erro ou qualquer outra informação relevante. Isso nos ajudará a entender melhor a situação e fornecer uma orientação mais precisa.\n\nFicamos no aguardo do seu retorno.\nJaade, atendente de IA.",
-  "provider": "openai",
-  "model": "gpt-4o"
-}
