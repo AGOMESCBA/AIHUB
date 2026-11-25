@@ -57,6 +57,21 @@
     .topo-blocos .kpis { grid-template-columns:repeat(auto-fit, minmax(118px, 1fr)); }
     .topo-blocos .aviso { font-size:13px; line-height:1.5; padding:9px 12px; }
     @media (max-width:1100px) { .topo-blocos { flex-direction:column; } .topo-blocos > #bloco-avisos, .topo-blocos > #bloco-avisos.recolhido { flex:none; } }
+    /* Jobs e Agrupamento lado a lado (mesmo molde de Avisos e Situação). */
+    .linha-blocos { display:flex; gap:12px; align-items:stretch; margin-bottom:12px; }
+    .linha-blocos > .grupo { margin-bottom:0; min-width:0; flex:1 1 0; }
+    .linha-blocos > [data-grupo="filtros-inst"] { flex:0 1 36%; }
+    @media (max-width:1100px) { .linha-blocos { flex-direction:column; } .linha-blocos > [data-grupo="filtros-inst"] { flex:none; } }
+    .btn-ampliar { margin-left:auto; }
+    /* Grade ampliada: some tudo acima da grade, menos a barra de filtros (que tem o botão de voltar).
+       Não mexe no abrir/fechar de cada bloco. */
+    body.grade-ampliada .cab, body.grade-ampliada .topo-blocos, body.grade-ampliada .abas,
+    body.grade-ampliada [data-grupo="controle-jobs"] { display:none !important; }
+    body.grade-ampliada .linha-blocos > [data-grupo="filtros-inst"] { flex:1 1 auto; }
+    body.grade-ampliada .grupo[data-grupo^="filtros"] > h3,
+    body.grade-ampliada .grupo[data-grupo^="filtros"] > .grupo-resumo { display:none !important; }
+    body.grade-ampliada .grupo[data-grupo^="filtros"] > .filter-bar-row { display:flex !important; }
+    body.grade-ampliada .grupo[data-grupo^="filtros"] { padding:8px 12px; }
     .kpi { background:var(--bg-base); border:1px solid var(--border); border-radius:var(--radius); padding:7px 10px; min-width:0; }
     .kpi-rot { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-md); }
     .kpi-val { font-size:16px; font-weight:800; color:var(--text-hi); font-variant-numeric:tabular-nums; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -74,7 +89,7 @@
     .job-linha:last-child { border-bottom:0; padding-bottom:0; }
     .job-linha:first-child { padding-top:0; }
     .job-nome { font-size:13.5px; font-weight:800; color:var(--text-hi); }
-    .job-desc { font-size:12px; color:var(--text-md); flex-basis:100%; }
+    .job-meta { font-size:12px; color:var(--text-lo); cursor:help; }
     .job-linha .esp { flex:1; }
     .job-linha .btn { height:28px; padding:0 12px; font-size:12px; }
 
@@ -113,8 +128,18 @@
     .sub { color:var(--text-lo); font-size:11.5px; }
     .texto-erro { color:var(--error-text); font-size:12px; overflow-wrap:anywhere; white-space:normal; }
     .celula-quebra { white-space:normal; line-height:1.35; }
-    .acoes { display:flex; gap:5px; flex-wrap:wrap; }
-    .acoes .btn { height:26px; padding:0 9px; font-size:11.5px; }
+    /* Ações da grade em ícones (mesmo padrão .btn-icon das grades do IA Command). */
+    .acoes { display:flex; gap:2px; flex-wrap:nowrap; align-items:center; }
+    .btn-icon { width:28px; height:28px; background:none; border:1px solid transparent; cursor:pointer; padding:0; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; transition:background .15s, color .15s; color:var(--text-md); flex-shrink:0; }
+    .btn-icon svg { width:15px; height:15px; display:block; }
+    .btn-icon:hover { background:var(--bg-hover); color:var(--text-hi); }
+    .btn-icon.primary { color:var(--accent); }
+    .btn-icon.danger { color:#dc2626; }
+    .btn-icon.danger:hover { background:color-mix(in srgb, #dc2626 12%, transparent); color:#dc2626; }
+    .btn-icon.destaque { background:var(--accent); color:#fff; }
+    .btn-icon.destaque:hover { background:var(--accent); color:#fff; filter:brightness(1.1); }
+    .btn-icon:disabled { opacity:.4; cursor:not-allowed; }
+    .btn-icon:disabled:hover { background:transparent; color:var(--text-md); }
 
     /* Configuração */
     .config-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; align-items:start; }
@@ -221,6 +246,7 @@
       <p id="subtitulo">Serviço de jobs do IAHub (IAHub-Jobs): o que roda, onde, quando e o que aconteceu.</p>
     </div>
     <a class="btn btn-ghost" id="btn-guia" href="/iahub/guia-jobs#e4-1" target="_blank" rel="noopener" title="Guia de uso: Jobs e Parâmetros por Empresa">❔ Guia</a>
+    <button class="btn btn-ghost" type="button" id="btn-todos" title="Recolhe ou abre todos os blocos desta tela (cada bloco continua com o seu abrir/fechar)">⇳ Recolher tudo</button>
     <label class="auto"><input type="checkbox" id="auto" checked> Atualizar sozinho</label>
     <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
   </div>
@@ -258,6 +284,8 @@
 
   <!-- Jobs -->
   <section class="painel-aba ativa" id="aba-jobs">
+    <!-- Jobs e Agrupamento na mesma linha (cada um com seu bloco recolhível). -->
+    <div class="linha-blocos">
     <section class="grupo" data-grupo="controle-jobs">
       <h3><button type="button" class="grupo-toggle" data-alternar="controle-jobs" aria-expanded="true"><svg class="grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span>Jobs</span></button></h3>
       <div class="grupo-resumo" id="resumo-controle-jobs"></div>
@@ -267,15 +295,16 @@
       <h3><button type="button" class="grupo-toggle" data-alternar="filtros-inst" aria-expanded="true"><svg class="grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg><span>Agrupamento</span></button></h3>
       <div class="grupo-resumo" id="resumo-filtros-inst"></div>
       <div class="filter-bar-row">
-        <button class="btn btn-ghost" type="button" data-agrupamento="inst">+ Mostrar agrupamento</button>
-        <span class="grupo-status" id="grupo-status-inst">Sem agrupamento ativo</span>
-        <span class="sub">Filtros: no cabeçalho de cada coluna.</span>
+        <button class="btn btn-ghost" type="button" data-agrupamento="inst" title="Filtros: no cabeçalho de cada coluna da grade.">+ Mostrar agrupamento</button>
+        <span class="grupo-status" id="grupo-status-inst" title="Filtros: no cabeçalho de cada coluna da grade.">Sem agrupamento ativo</span>
+        <button class="btn btn-ghost btn-ampliar" type="button" data-ampliar title="Mostra só a grade (Esc volta)">⤢ Ampliar grade</button>
       </div>
       <div class="grupo-area" id="grupo-area-inst">
         <div class="gp-chips-row" id="gp-chips-inst"><span class="gp-label">Agrupar por:</span></div>
         <div id="dz-inst"></div>
       </div>
     </section>
+    </div>
     <div class="grade"><div id="tabela-inst"></div></div>
   </section>
 
@@ -301,6 +330,7 @@
         <button class="btn" type="button" id="btn-ex-filtrar">Filtrar</button>
         <button class="btn btn-ghost" type="button" data-agrupamento="ex">+ Mostrar agrupamento</button>
         <span class="grupo-status" id="grupo-status-ex">Sem agrupamento ativo</span>
+        <button class="btn btn-ghost btn-ampliar" type="button" data-ampliar title="Mostra só a grade (Esc volta)">⤢ Ampliar grade</button>
       </div>
       <div class="grupo-area" id="grupo-area-ex">
         <div class="gp-chips-row" id="gp-chips-ex"><span class="gp-label">Agrupar por:</span></div>
@@ -329,6 +359,7 @@
         <button class="btn" type="button" id="btn-ev-filtrar">Filtrar</button>
         <button class="btn btn-ghost" type="button" data-agrupamento="ev">+ Mostrar agrupamento</button>
         <span class="grupo-status" id="grupo-status-ev">Sem agrupamento ativo</span>
+        <button class="btn btn-ghost btn-ampliar" type="button" data-ampliar title="Mostra só a grade (Esc volta)">⤢ Ampliar grade</button>
       </div>
       <div class="grupo-area" id="grupo-area-ev">
         <div class="gp-chips-row" id="gp-chips-ev"><span class="gp-label">Agrupar por:</span></div>
@@ -548,8 +579,39 @@
     grupo.classList.toggle('recolhido', recolhido);
     grupo.querySelector('.grupo-toggle').setAttribute('aria-expanded', String(!recolhido));
     try { localStorage.setItem(`iahub-jobs-grupo-${id}`, recolhido ? '1' : '0'); } catch (_) { /* só conveniência */ }
+    atualizarBotaoTodos();
     ajustarAlturas();
   }
+
+  // Recolher/Expandir tudo: vale para os blocos visíveis (topo + aba atual); cada bloco segue com o seu abrir/fechar.
+  function gruposVisiveis() {
+    return [...document.querySelectorAll('.topo-blocos > .grupo[data-grupo], .painel-aba.ativa .grupo[data-grupo]')].filter(g => !g.hidden);
+  }
+  function atualizarBotaoTodos() {
+    const algumAberto = gruposVisiveis().some(g => !g.classList.contains('recolhido'));
+    $('btn-todos').textContent = algumAberto ? '⇳ Recolher tudo' : '⇕ Expandir tudo';
+  }
+  $('btn-todos').addEventListener('click', () => {
+    const grupos = gruposVisiveis();
+    const recolher = grupos.some(g => !g.classList.contains('recolhido'));
+    for (const g of grupos) alternarGrupo(g.dataset.grupo, recolher);
+  });
+
+  // Ampliar grade: some tudo acima da grade (Esc ou o mesmo botão volta). Não é guardado: ao reabrir, a tela vem normal.
+  function ampliarGrade(ligar) {
+    const ligado = typeof ligar === 'boolean' ? ligar : !document.body.classList.contains('grade-ampliada');
+    document.body.classList.toggle('grade-ampliada', ligado);
+    for (const b of document.querySelectorAll('[data-ampliar]')) {
+      b.textContent = ligado ? '⤡ Voltar' : '⤢ Ampliar grade';
+      b.title = ligado ? 'Volta a mostrar os blocos e as abas (Esc)' : 'Mostra só a grade (Esc volta)';
+    }
+    if (ligado) window.scrollTo(0, 0);
+    ajustarAlturas();
+  }
+  document.addEventListener('click', (ev) => { if (ev.target.closest('[data-ampliar]')) ampliarGrade(); });
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && !detalheId && document.body.classList.contains('grade-ampliada')) ampliarGrade(false);
+  });
 
   // A grade visível ocupa o que sobra da janela: fechar blocos acima dá mais linhas.
   const GRADE_DA_ABA = { 'aba-jobs': ['inst', 'tabela-inst'], 'aba-execucoes': ['ex', 'tabela-ex'], 'aba-eventos': ['ev', 'tabela-ev'] };
@@ -655,7 +717,7 @@
         formatter: c => (c.getValue() ? `<div class="texto-erro">${esc(c.getValue())}</div>` : '') },
       { title: 'Falhas seg.', field: 'falhasSeguidas', width: 105, hozAlign: 'center', groupable: false, sorter: 'number',
         formatter: c => (c.getValue() ? pill([String(c.getValue()), 'ruim']) : '0') },
-      { title: 'Ações', field: '_acoes', width: 300, frozen: window.innerWidth > 760, headerSort: false, groupable: false, formatter: c => acoesInstancia(c.getRow().getData()) },
+      { title: 'Ações', field: '_acoes', width: 150, frozen: window.innerWidth > 760, headerSort: false, groupable: false, formatter: c => acoesInstancia(c.getRow().getData()) },
     ],
   });
 
@@ -755,7 +817,7 @@
     const erros = avisos.filter(([cl]) => cl === 'erro').length;
     $('titulo-avisos').textContent = `Avisos (${avisos.length})`;
     $('resumo-avisos').textContent = erros ? `${erros} problema(s) e ${avisos.length - erros} pendência(s) de configuração — abra para ver.` : `${avisos.length} pendência(s) de configuração — abra para ver.`;
-    if (antes !== $('bloco-avisos').hidden) ajustarAlturas();
+    if (antes !== $('bloco-avisos').hidden) { atualizarBotaoTodos(); ajustarAlturas(); }
   }
 
   function desenharJobs() {
@@ -768,11 +830,12 @@
         j.falhas24h ? pill([`${j.falhas24h} falha(s) em 24 h`, 'ruim']) : '',
       ].join(' ');
       return `<div class="job-linha">
-        <span class="job-nome">${esc(j.nome)}</span> ${pills}
+        <span class="job-nome" title="${esc(j.descricao)}">${esc(j.nome)}</span> ${pills}
+        <span class="job-meta" title="${esc(j.descricao)}">${j.instancias.length} empresa(s) · máx. ${duracao(j.timeoutMs)}</span>
         <span class="esp"></span>
         <button class="btn btn-ghost" type="button" data-acao="historico-job" data-job="${esc(j.id)}">Execuções</button>
         <button class="btn ${j.pausado ? 'btn-primary' : 'btn-ghost'}" type="button" data-acao="${j.pausado ? 'retomar' : 'pausar'}" data-job="${esc(j.id)}" data-inst="*">${j.pausado ? 'Retomar job' : 'Pausar job'}</button>
-        <div class="job-desc">${esc(j.descricao)} · ${j.instancias.length} empresa(s)/instância(s) · tempo máximo por execução ${duracao(j.timeoutMs)}${j.erroInstancias ? ` · <span class="texto-erro">${esc(j.erroInstancias)}</span>` : ''}</div>
+        ${j.erroInstancias ? `<div class="texto-erro" style="flex-basis:100%">${esc(j.erroInstancias)}</div>` : ''}
       </div>`;
     }).join('') : `<span class="sub">Nenhum job ${SISTEMA ? `do ${esc(NOMES_SISTEMA[SISTEMA] || SISTEMA)} ` : ''}no catálogo.</span>`;
     $('resumo-controle-jobs').textContent = painel.jobs.map(j => `${j.nome}: ${j.instancias.length} empresa(s)${j.pausado ? ', PAUSADO' : ''}${j.emExecucao ? `, ${j.emExecucao} executando` : ''}`).join(' · ') || 'Nenhum job.';
@@ -801,15 +864,28 @@
     return extra;
   }
 
+  // Ícones das ações (traço no estilo das grades do IA Command); o nome da ação vai no title e no aria-label.
+  const ICONES = {
+    executar: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.52.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>',
+    pausar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="8" y1="5" x2="8" y2="19"/><line x1="16" y1="5" x2="16" y2="19"/></svg>',
+    retomar: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.52.85l10-6.5a1 1 0 0 0 0-1.7l-10-6.5A1 1 0 0 0 8 5.5z"/></svg>',
+    log: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>',
+    ultima: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/><polyline points="12 7 12 12 15 14"/></svg>',
+    encerrar: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+  };
+  const botaoIcone = (icone, titulo, classe, dados, desligado) =>
+    `<button class="btn-icon ${classe}" type="button" title="${esc(titulo)}" aria-label="${esc(titulo)}" ${dados}${desligado ? ' disabled' : ''}>${ICONES[icone]}</button>`;
+
   function acoesInstancia(i) {
+    const alvo = `data-job="${esc(i.jobId)}" data-inst="${esc(i.instancia)}"`;
     return `<div class="acoes">${[
-      i.execucaoAberta ? `<button class="btn btn-ghost" type="button" data-acao="detalhe" data-id="${i.execucaoAberta.id}">Ver log</button>` : '',
-      i.execucaoAberta ? `<button class="btn btn-danger" type="button" data-acao="encerrar" data-id="${i.execucaoAberta.id}">Encerrar</button>`
-        : `<button class="btn btn-ghost" type="button" data-acao="executar" data-job="${esc(i.jobId)}" data-inst="${esc(i.instancia)}" ${i.pedidoPendente ? 'disabled' : ''}>Executar agora</button>`,
-      i.ultima ? `<button class="btn btn-ghost" type="button" data-acao="detalhe" data-id="${i.ultima.id}">Última</button>` : '',
+      i.execucaoAberta ? botaoIcone('log', 'Ver log da execução em andamento', '', `data-acao="detalhe" data-id="${i.execucaoAberta.id}"`) : '',
+      i.execucaoAberta ? botaoIcone('encerrar', 'Encerrar a execução', 'danger', `data-acao="encerrar" data-id="${i.execucaoAberta.id}"`)
+        : botaoIcone('executar', i.pedidoPendente ? 'Executar agora (já pedido, aguardando)' : 'Executar agora', 'primary', `data-acao="executar" ${alvo}`, i.pedidoPendente),
+      i.ultima ? botaoIcone('ultima', 'Ver a última execução', '', `data-acao="detalhe" data-id="${i.ultima.id}"`) : '',
       i.pausaPropria
-        ? `<button class="btn btn-primary" type="button" data-acao="retomar" data-job="${esc(i.jobId)}" data-inst="${esc(i.instancia)}">Retomar</button>`
-        : `<button class="btn btn-ghost" type="button" data-acao="pausar" data-job="${esc(i.jobId)}" data-inst="${esc(i.instancia)}">Pausar</button>`,
+        ? botaoIcone('retomar', 'Retomar (está pausada)', 'destaque', `data-acao="retomar" ${alvo}`)
+        : botaoIcone('pausar', 'Pausar esta empresa', '', `data-acao="pausar" ${alvo}`),
     ].join('')}</div>`;
   }
 
@@ -1240,6 +1316,7 @@
     if (nome === 'config') carregarConfig();
     if (nome === 'servico') { carregarServico(); if (!svCarregado) { svCarregado = true; carregarLog(true); } }
     resumirFiltros();
+    atualizarBotaoTodos();
     ajustarAlturas();
   }
 

@@ -126,6 +126,53 @@
 
     .adm-tab-content { display:none; }
     .adm-tab-content.active { display:block; }
+
+    /* ── Início: painel de cards (mesmo padrão da tela inicial do ELO Gestão) ── */
+    .ini-wrap { max-width:1440px; margin:0 auto; padding:20px 24px 32px; }
+    .ini-cab { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:18px; }
+    .ini-cab h1 { font-size:22px; font-weight:700; letter-spacing:-.01em; color:var(--text-hi); margin:0; }
+    .ini-cab p { margin:4px 0 0; font-size:13.5px; color:var(--text-md); max-width:680px; }
+    .ini-acoes { display:flex; align-items:center; gap:8px; }
+    .ini-chip { border:1px solid var(--border); background:var(--bg-card); border-radius:99px; padding:4px 12px; font-size:12px; font-weight:600; color:var(--text-md); }
+    .ini-chip-btn { cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+    .ini-chip-btn:hover { border-color:#c4b5fd; color:#6d28d9; }
+    .ini-grupos { display:flex; flex-direction:column; gap:12px; }
+    .ini-grupo { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-sm); }
+    .ini-grupo-cab { display:flex; align-items:center; gap:12px; width:100%; padding:12px 16px; border:none; background:none; border-radius:12px; text-align:left; cursor:pointer; font:inherit; color:inherit; }
+    .ini-grupo-cab:hover { background:var(--bg-hover); }
+    .ini-grupo-icone { width:34px; height:34px; border-radius:9px; background:#f5f3ff; display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+    .ini-grupo-txt { flex:1; min-width:0; }
+    .ini-grupo-tit { display:block; font-size:14px; font-weight:700; color:var(--text-hi); }
+    .ini-grupo-tit .n { margin-left:8px; border-radius:99px; background:var(--bg-hover); padding:1px 8px; font-size:11px; font-weight:600; color:var(--text-md); }
+    .ini-grupo-desc { display:block; font-size:12px; color:var(--text-md); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ini-seta { color:var(--text-lo); transition:transform .15s; flex-shrink:0; }
+    .ini-grupo.fechado .ini-seta { transform:rotate(-90deg); }
+    .ini-cards { display:grid; gap:12px; border-top:1px solid var(--border); padding:16px; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); }
+    .ini-grupo.fechado .ini-cards { display:none; }
+    .ini-card { display:flex; align-items:flex-start; gap:12px; border:1px solid var(--border); border-radius:10px; background:var(--bg-card); padding:13px 14px; text-align:left; cursor:pointer; font:inherit; color:inherit; transition:border-color .15s, background .15s; }
+    .ini-card:hover { border-color:#c4b5fd; background:#faf7ff; }
+    .ini-card:focus-visible { outline:2px solid #7c3aed; outline-offset:2px; }
+    .ini-card-icone { width:38px; height:38px; border-radius:9px; background:var(--bg-hover); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+    .ini-card:hover .ini-card-icone { background:#fff; }
+    .ini-card-txt { flex:1; min-width:0; }
+    .ini-card-tit { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:14px; font-weight:700; color:var(--text-hi); }
+    .ini-card-tit .seta { color:var(--text-lo); transition:transform .15s, color .15s; }
+    .ini-card:hover .ini-card-tit .seta { transform:translateX(3px); color:#7c3aed; }
+    .ini-card-desc { display:block; margin-top:2px; font-size:12px; line-height:1.45; color:var(--text-md); }
+    .ini-ind { display:inline-flex; align-items:center; gap:6px; margin-top:8px; font-size:11.5px; font-weight:700; border-radius:99px; padding:2px 9px; background:var(--bg-hover); color:var(--text-md); }
+    .ini-ind:empty { display:none; }
+    .ini-ind.ok { background:#dcfce7; color:#15803d; }
+    .ini-ind.atencao { background:#fef3c7; color:#b45309; }
+    .ini-ind.ruim { background:#fee2e2; color:#b91c1c; }
+    .ini-ind .ponto { width:7px; height:7px; border-radius:99px; background:currentColor; }
+    @media (max-width:640px) { .ini-wrap { padding:14px 16px 24px; } .ini-cards { grid-template-columns:1fr; } }
+    :root[data-theme="dark"] .ini-grupo-icone { background:rgba(124,58,237,.18); }
+    :root[data-theme="dark"] .ini-card:hover { background:rgba(124,58,237,.10); border-color:rgba(167,139,250,.5); }
+    :root[data-theme="dark"] .ini-card:hover .ini-card-icone { background:var(--bg-card); }
+    :root[data-theme="dark"] .ini-chip-btn:hover { border-color:rgba(167,139,250,.5); color:#c4b5fd; }
+    :root[data-theme="dark"] .ini-ind.ok { background:rgba(34,197,94,.15); color:#4ade80; }
+    :root[data-theme="dark"] .ini-ind.atencao { background:rgba(245,158,11,.15); color:#fbbf24; }
+    :root[data-theme="dark"] .ini-ind.ruim { background:rgba(239,68,68,.15); color:#f87171; }
     .platform-frame-wrap { height:calc(100vh - 166px);min-height:680px;background:var(--bg-base); }
     .platform-frame { width:100%;height:100%;border:0;display:block;background:transparent; }
 
@@ -394,7 +441,8 @@
       <div class="card">
 
         <div class="tabs-header" style="padding:0 24px">
-          <button class="tab-btn active" id="adm-btn-sistema"   onclick="mudarAbaAdmin('sistema',   this)">⚙️ Identidade</button>
+          <button class="tab-btn active" id="adm-btn-inicio"    onclick="mudarAbaAdmin('inicio',    this)">🏠 Início</button>
+          <button class="tab-btn"        id="adm-btn-sistema"   onclick="mudarAbaAdmin('sistema',   this)">⚙️ Identidade</button>
           <button class="tab-btn"        id="adm-btn-empresas"  onclick="mudarAbaAdmin('empresas',  this)">🏢 Empresas</button>
           <button class="tab-btn"        id="adm-btn-usuarios"  onclick="mudarAbaAdmin('usuarios',  this)">👤 Usuários</button>
           <button class="tab-btn"        id="adm-btn-seguranca" onclick="mudarAbaAdmin('seguranca', this)">🔒 Segurança</button>
@@ -1040,7 +1088,24 @@
           </div>
         </div>
 
-        <div id="adm-tab-sistema" class="adm-tab-content active">
+        <!-- ── Aba: Início (painel de cards; as abas acima continuam) ───────────── -->
+        <div id="adm-tab-inicio" class="adm-tab-content active">
+          <div class="ini-wrap">
+            <div class="ini-cab">
+              <div>
+                <h1>Gestão que organiza tudo.</h1>
+                <p>Empresas, pessoas, acessos e a plataforma do IAHub em um só lugar. Escolha um card ou use as abas acima.</p>
+              </div>
+              <div class="ini-acoes">
+                <span class="ini-chip" id="ini-total"></span>
+                <button type="button" class="ini-chip ini-chip-btn" id="ini-expandir" onclick="iniAlternarTodos()"></button>
+              </div>
+            </div>
+            <div class="ini-grupos" id="ini-grupos" aria-label="Acesso rápido"></div>
+          </div>
+        </div>
+
+        <div id="adm-tab-sistema" class="adm-tab-content">
           <div id="adm-sistema-config-parking" class="system-config-parking"></div>
           <div class="system-page">
             <div class="admin-grid-head system-head">
@@ -1459,6 +1524,7 @@ function montarMenuAdmin() {
   const nav = document.querySelector('.sidebar-nav');
   if (!nav) return;
   const itens = [
+    ['inicio', 'Início', '🏠'],
     ['sistema', 'Identidade', '⚙'],
     ['empresas', 'Empresas', '🏢'],
     ['usuarios', 'Usuarios', '👤'],
@@ -1477,7 +1543,7 @@ function montarMenuAdmin() {
     </div>
     <div class="nav-section-body open">
       ${itens.map(([id, label, icon]) => `
-        <a href="#${id}" class="nav-item sub ${id === 'sistema' ? 'active' : ''}" data-admin-tab="${id}">
+        <a href="#${id}" class="nav-item sub ${id === 'inicio' ? 'active' : ''}" data-admin-tab="${id}">
           <span class="nav-icon">${icon}</span>
           <span class="nav-label">${label}</span>
         </a>`).join('')}
@@ -1498,6 +1564,133 @@ function toggleSenha(id) {
   if (input) input.type = input.type === 'password' ? 'text' : 'password';
 }
 
+// ── Início: painel de cards (padrão do ELO Gestão; as abas continuam) ───────
+// [aba, título, ícone, descrição]. O indicador vivo de cada card fica em ini-ind-<aba>.
+const INI_GRUPOS = [
+  { code: 'organizacao', titulo: 'Organização', icone: '🏢', desc: 'Identidade do IAHub, empresas atendidas e sistemas liberados.', itens: [
+    ['sistema', 'Identidade', '⚙️', 'Nome, logotipo, rodapé e imagens da tela de login.'],
+    ['empresas', 'Empresas', '🏢', 'Cadastro das empresas clientes e seus dados.'],
+    ['sistemas', 'Sistemas', '▦', 'Quais sistemas aparecem no IAHub para cada empresa e usuário.'],
+  ] },
+  { code: 'pessoas', titulo: 'Pessoas e acesso', icone: '👤', desc: 'Quem entra e com que regras.', itens: [
+    ['usuarios', 'Usuários', '👤', 'Contas, perfis, empresas e rotinas de cada pessoa.'],
+    ['seguranca', 'Segurança', '🔒', 'Tempo de sessão, bloqueio por tentativas e política de senha.'],
+  ] },
+  { code: 'plataforma', titulo: 'Plataforma e automação', icone: '⚙️', desc: 'Inteligência artificial, parâmetros por empresa e serviços automáticos.', itens: [
+    ['platform', 'IAHub Platform', '🧠', 'IA, agente local, pesquisa e WhatsApp de cada empresa.'],
+    ['parametros', 'Parâmetros', '🎛', 'Parâmetros por empresa, como os alertas por e-mail e Telegram.'],
+    ['jobs', 'Jobs', '⏱', 'Serviço de jobs: o que roda, onde, logs e controle do serviço.'],
+  ] },
+  { code: 'controle', titulo: 'Controle', icone: '📋', desc: 'Rastreabilidade e manutenção de dados.', itens: [
+    ['auditoria', 'Auditoria', '📋', 'Quem fez o quê e quando: acessos, trocas de empresa e alterações.'],
+    ['reset', 'Reset de Dados', '🗑', 'Apaga dados por tipo e empresa (use com cuidado).'],
+  ] },
+];
+
+function _iniFechados() {
+  try { return new Set(JSON.parse(localStorage.getItem('adm-inicio-fechados') || '[]')); } catch (_) { return new Set(); }
+}
+function _iniGuardar(fechados) {
+  try { localStorage.setItem('adm-inicio-fechados', JSON.stringify([...fechados])); } catch (_) { /* só conveniência */ }
+}
+
+function iniDesenhar() {
+  const fechados = _iniFechados();
+  const total = INI_GRUPOS.reduce((s, g) => s + g.itens.length, 0);
+  document.getElementById('ini-total').textContent = `${total} rotinas disponíveis`;
+  const seta = '<svg class="ini-seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+  document.getElementById('ini-grupos').innerHTML = INI_GRUPOS.map(g => `
+    <section class="ini-grupo ${fechados.has(g.code) ? 'fechado' : ''}" data-grupo="${g.code}">
+      <button type="button" class="ini-grupo-cab" aria-expanded="${!fechados.has(g.code)}" onclick="iniAlternar('${g.code}')">
+        <span class="ini-grupo-icone">${g.icone}</span>
+        <span class="ini-grupo-txt">
+          <span class="ini-grupo-tit">${g.titulo}<span class="n">${g.itens.length}</span></span>
+          <span class="ini-grupo-desc">${g.desc}</span>
+        </span>
+        ${seta}
+      </button>
+      <div class="ini-cards">
+        ${g.itens.map(([aba, titulo, icone, desc]) => `
+          <button type="button" class="ini-card" onclick="iniAbrir('${aba}')">
+            <span class="ini-card-icone">${icone}</span>
+            <span class="ini-card-txt">
+              <span class="ini-card-tit">${titulo}<span class="seta" aria-hidden="true">→</span></span>
+              <span class="ini-card-desc">${desc}</span>
+              <span class="ini-ind" id="ini-ind-${aba}"></span>
+            </span>
+          </button>`).join('')}
+      </div>
+    </section>`).join('');
+  _iniBotaoTodos();
+}
+
+function _iniBotaoTodos() {
+  const todosFechados = INI_GRUPOS.every(g => _iniFechados().has(g.code));
+  document.getElementById('ini-expandir').textContent = todosFechados ? '⇕ Expandir tudo' : '⇳ Recolher tudo';
+}
+
+function iniAlternar(code) {
+  const fechados = _iniFechados();
+  if (fechados.has(code)) fechados.delete(code); else fechados.add(code);
+  _iniGuardar(fechados);
+  const sec = document.querySelector(`.ini-grupo[data-grupo="${code}"]`);
+  sec.classList.toggle('fechado', fechados.has(code));
+  sec.querySelector('.ini-grupo-cab').setAttribute('aria-expanded', String(!fechados.has(code)));
+  _iniBotaoTodos();
+}
+
+function iniAlternarTodos() {
+  const todosFechados = INI_GRUPOS.every(g => _iniFechados().has(g.code));
+  _iniGuardar(todosFechados ? new Set() : new Set(INI_GRUPOS.map(g => g.code)));
+  iniDesenhar();
+  iniIndicadores();
+}
+
+// Abre a aba do card (as abas e o menu lateral acompanham).
+function iniAbrir(aba) {
+  mudarAbaAdmin(aba, document.getElementById('adm-btn-' + aba));
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function _iniInd(aba, texto, classe = '') {
+  const el = document.getElementById(`ini-ind-${aba}`);
+  if (!el) return;
+  el.className = `ini-ind ${classe}`;
+  el.innerHTML = texto ? `<span class="ponto"></span>${esc(texto)}` : '';
+}
+
+// Indicadores vivos: só leitura, nas APIs que as abas já usam. Falhou, o card fica sem indicador.
+async function iniIndicadores() {
+  const json = async (url) => { const r = await fetch(url, { cache: 'no-store' }); if (!r.ok) throw new Error(r.status); return r.json(); };
+  json('/api/iahub/jobs/painel').then((p) => {
+    if (p.modo === 'servico' && !p.servicoNoComando) return _iniInd('jobs', 'Serviço sem sinal · site reassumiu', 'ruim');
+    const onde = p.modo === 'servico' ? 'Serviço no comando' : (p.servico.ativo ? 'No site · serviço no ar' : 'Rodando no site');
+    const extra = [p.resumo.emExecucao ? `${p.resumo.emExecucao} executando` : null, p.resumo.falhas24h ? `${p.resumo.falhas24h} falha(s) em 24 h` : null].filter(Boolean).join(' · ');
+    _iniInd('jobs', extra ? `${onde} · ${extra}` : onde, p.resumo.falhas24h ? 'atencao' : 'ok');
+  }).catch(() => _iniInd('jobs', ''));
+  // A empresa atual vem do auth.js (assíncrono): espera ele terminar.
+  await Promise.resolve(window._iahubRotinasReady).catch(() => {});
+  const empresaId = window._iahubEmpresa?.id;
+  if (empresaId && empresaId !== '—') {
+    json(`/api/iahub/parametros?empresa_id=${encodeURIComponent(empresaId)}`).then((d) => {
+      const v = (c) => d.parametros.find(p => p.chave === c)?.valor === true;
+      const canais = [v('alertas.email.ativo') ? 'e-mail' : null, v('alertas.telegram.ativo') ? 'Telegram' : null].filter(Boolean);
+      _iniInd('parametros', canais.length ? `Alertas por ${canais.join(' e ')} (${window._iahubEmpresa.nome || 'empresa atual'})` : 'Sem reserva de alertas nesta empresa', canais.length ? 'ok' : 'atencao');
+    }).catch(() => _iniInd('parametros', ''));
+  }
+  json('/api/empresas').then((l) => _iniInd('empresas', `${(Array.isArray(l) ? l : []).length} empresa(s) cadastrada(s)`)).catch(() => _iniInd('empresas', ''));
+  json('/api/usuarios').then((l) => {
+    const lista = Array.isArray(l) ? l : (l.usuarios || []);
+    const ativos = lista.filter(u => u.ativo !== false).length;
+    _iniInd('usuarios', `${ativos} usuário(s) ativo(s)`);
+  }).catch(() => _iniInd('usuarios', ''));
+  json('/api/seguranca/auditoria?limite=50').then((l) => {
+    const ult = (Array.isArray(l) ? l : []).slice().sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')))[0];
+    if (!ult?.ts) return _iniInd('auditoria', '');
+    _iniInd('auditoria', `Último: ${new Date(ult.ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · ${ult.usuario || '—'}`);
+  }).catch(() => _iniInd('auditoria', ''));
+}
+
 // ── Navegação entre abas ─────────────────────────────────────────────────────
 const _admCarregado = new Set();
 
@@ -1505,6 +1698,7 @@ function mudarAbaAdmin(aba, btn) {
   document.querySelectorAll('.adm-tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('[id^="adm-btn-"]').forEach(el => el.classList.remove('active'));
   if (aba === 'sistema') admSisRestaurarHubConfigNaAba();
+  if (aba === 'inicio') iniIndicadores();
   document.getElementById('adm-tab-' + aba).classList.add('active');
   btn?.classList.add('active');
   document.querySelectorAll('[data-admin-tab]').forEach(el => {
@@ -3539,6 +3733,8 @@ document.addEventListener('DOMContentLoaded', () => {
   montarMenuAdmin();
   _admCarregado.add('sistema');
   sisCarregarConfig();
+  iniDesenhar();
+  iniIndicadores();
   Object.entries(EMP_FIELD_ERRORS).forEach(([campo, cfg]) => {
     const field = document.getElementById(cfg.field);
     field?.addEventListener('input', () => empLimparErroCampo(campo));
