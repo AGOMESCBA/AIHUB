@@ -1,0 +1,13 @@
+.inicio-home { flex:none; width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--border); border-radius:8px; background:var(--bg-card); color:var(--text-md); cursor:pointer; font-size:19px; }
+.inicio-home:hover, .inicio-home:focus-visible { color:var(--accent); border-color:var(--accent); }
+#mdi-empty { display:block; overflow:auto; pointer-events:auto; user-select:auto; padding:24px; }
+#mdi-empty h1 { margin:0 0 18px; font-size:22px; color:var(--text-hi); }
+.inicio-grupo { margin-bottom:16px; border:1px solid var(--border); border-radius:12px; background:var(--bg-card); box-shadow:var(--shadow-sm); }
+.inicio-grupo h2 { margin:0; padding:16px; font-size:15px; color:var(--text-hi); border-bottom:1px solid var(--border); }
+.inicio-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; padding:16px; }
+.inicio-card { display:flex; align-items:center; gap:12px; min-width:0; padding:13px; border:1px solid var(--border); border-radius:10px; color:var(--text-hi); text-decoration:none; background:var(--bg-card); }
+.inicio-card:hover, .inicio-card:focus-visible { border-color:var(--accent); background:var(--bg-hover); }
+.inicio-card-icon { display:grid; place-items:center; flex:none; width:38px; height:38px; border-radius:9px; background:var(--bg-hover); font-size:18px; }
+.inicio-card-text { display:flex; flex:1; min-width:0; flex-direction:column; gap:3px; }
+.inicio-card-text small { color:var(--text-md); }
+@media(max-width:640px) { #mdi-empty { padding:16px; } .inicio-cards { grid-template-columns:1fr; } }

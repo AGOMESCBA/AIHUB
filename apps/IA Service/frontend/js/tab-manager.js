@@ -43,7 +43,8 @@
       );
       _restoring = false;
       if (targetActive && _tabs.has(targetActive)) _activateTab(targetActive);
-      else if (_tabs.size > 0) _activateTab([..._tabs.keys()][0]);
+      else if (targetActive && _tabs.size > 0) _activateTab([..._tabs.keys()][0]);
+      else mostrarInicio();
       _saveState();
     } catch(_) { _restoring = false; }
   }
@@ -638,6 +639,17 @@
     setTimeout(_updateScrollBtns, 320);
   }
 
+  function mostrarInicio() {
+    _tabs.forEach(({ chip, frame }) => { chip.classList.remove('active'); frame.classList.remove('active'); });
+    _active = null;
+    const empty = document.getElementById('mdi-empty');
+    if (empty) empty.style.display = '';
+    _syncSidebarActive(null);
+    _setTopbarTitle(null);
+    _saveState();
+    window.closeSidebarDrawer?.();
+  }
+  window.mostrarInicio = mostrarInicio;
   window.openTab       = openTab;
   window.closeTab      = closeTab;
   window.scrollMdiTabs = scrollMdiTabs;

@@ -126,6 +126,7 @@
   </style>
   <link rel="stylesheet" href="/iaservice/assets/conexao-servidor.css">
   <script src="/iaservice/assets/conexao-servidor.js"></script>
+  <link rel="stylesheet" href="/js/inicio-sistemas.css">
 </head>
 <body>
 <div class="layout" id="layout">
@@ -150,6 +151,7 @@
           <line x1="3" y1="18" x2="21" y2="18"/>
         </svg>
       </button>
+      <button class="inicio-home" type="button" onclick="window.mostrarInicio()" title="Início" aria-label="Início">⌂</button>
       <span class="topbar-title" id="shell-title">IA Service</span>
       <button class="isvc-msg-btn" id="shell-mensagens" type="button" title="Mensagens da equipe" aria-label="Mensagens da equipe" hidden>
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.6 8.6 0 0 1-3.9-.9L3 20.5l1.6-4.6A8.4 8.4 0 1 1 21 11.5Z"/></svg>
@@ -178,6 +180,7 @@
 <script src="/js/auth.js"></script>
 <script src="./js/mobile-viewport.js"></script>
 <script src="./js/sidebar.js"></script>
+<script src="/js/inicio-sistemas.js"></script>
 <script src="./js/tab-manager.js"></script>
 <script>
   // Interceptação de clique no menu — mesmo padrão do shell.html do IA

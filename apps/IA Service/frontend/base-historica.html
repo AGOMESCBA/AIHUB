@@ -1599,6 +1599,9 @@
     hideError();
     btn.disabled = true;
     rotulo.textContent = 'Executando…';
+    // Hora da última leitura antes do clique: se não mudar, nada rodou (ex.: o serviço
+    // IAHub-Jobs recusou o pedido ou parou de dar sinal) e o resumo da tela é o da leitura anterior.
+    const ultimaAntes = jadePainel?.config?.ultimoCicloEm || null;
     try {
       const { loteId } = await api(`/api/ia-service/base-historica/fontes/${fonteId}/jade-pa/executar?empresa_id=${empresaIdAtual()}`, { method: 'POST' });
       if (loteId) jadeLotesAbertos.add(`l${loteId}`);
@@ -1610,6 +1613,11 @@
       const r = jadePainel?.config.ultimoCicloResumo || {};
       if (jadePainel?.loteEmAndamento) {
         showInfo('A leitura continua em execução; acompanhe pelo relógio e pela grade.');
+      } else if ((jadePainel?.config?.ultimoCicloEm || null) === ultimaAntes) {
+        const sj = jadePainel?.servicoJobs;
+        showInfo(sj?.modo === 'servico'
+          ? 'A leitura não chegou a rodar: o serviço IAHub-Jobs não atendeu o pedido. Veja o motivo em Jobs › Eventos e tente de novo.'
+          : 'A leitura não chegou a rodar. Tente de novo em instantes.');
       } else {
         const partes = [`${r.elegiveis ?? 0} elegível(is)`, `${r.novos ?? 0} novo(s)`, `${(r.processados || []).length} analisado(s)`];
         if (r.enviados) partes.push(`${r.enviados.length} enviado(s) ao SoftExpert`);

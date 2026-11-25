@@ -5,7 +5,7 @@
     {
       id: 'operacao', label: 'Operação', icon: '⚡', defaultOpen: false,
       items: [
-        { id: 'iac-dashboard',           label: 'Dashboard',            href: '/app/ia-command/dashboard.html',          icon: '⊞' },
+        { id: 'iac-dashboard',           label: 'Visão geral',          href: '/app/ia-command/dashboard.html',          icon: '⊞' },
         { id: 'iac-whatsapp-services',   label: 'WhatsApp Services',    href: '/app/ia-command/whatsapp-services.html',  icon: '📡' },
         { id: 'iac-monitor-whatsapp',    label: 'Monitor WhatsApp',      href: '/app/ia-command/monitor.html',            icon: '💬' },
       ],

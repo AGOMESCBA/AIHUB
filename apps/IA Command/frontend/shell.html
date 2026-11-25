@@ -146,6 +146,7 @@
     .nav-item.active, .nav-section-hdr.open { color: #7c3aed !important; }
     .nav-item.active { border-left-color: #7c3aed !important; }
   </style>
+  <link rel="stylesheet" href="/js/inicio-sistemas.css">
 </head>
 <body class="iac-shell-responsive">
 <div class="layout" id="layout">
@@ -172,6 +173,7 @@
           <line x1="3" y1="18" x2="21" y2="18"/>
         </svg>
       </button>
+      <button class="inicio-home" type="button" onclick="window.mostrarInicio()" title="Início" aria-label="Início">⌂</button>
       <span class="topbar-title" id="shell-title">IA Command</span>
       <div class="iac-actions">
         <a class="shell-nav-btn" href="/iahub.html" title="Voltar ao IAHub">
@@ -237,6 +239,7 @@
     } catch (_) {}
   })();
 </script>
+<script src="/js/inicio-sistemas.js"></script>
 <script src="./js/tab-manager.js?v=20260907-help-actions"></script>
 <script>
   function removerAjudaAntigaCabecalhoEmpresa() {

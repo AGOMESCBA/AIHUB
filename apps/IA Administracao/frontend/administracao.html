@@ -441,7 +441,7 @@
       <div class="card">
 
         <div class="tabs-header" style="padding:0 24px">
-          <button class="tab-btn active" id="adm-btn-inicio"    onclick="mudarAbaAdmin('inicio',    this)">🏠 Início</button>
+          <button class="tab-btn active" id="adm-btn-inicio" title="Início" aria-label="Início" onclick="mudarAbaAdmin('inicio', this)">⌂</button>
           <button class="tab-btn"        id="adm-btn-sistema"   onclick="mudarAbaAdmin('sistema',   this)">⚙️ Identidade</button>
           <button class="tab-btn"        id="adm-btn-empresas"  onclick="mudarAbaAdmin('empresas',  this)">🏢 Empresas</button>
           <button class="tab-btn"        id="adm-btn-usuarios"  onclick="mudarAbaAdmin('usuarios',  this)">👤 Usuários</button>
@@ -1523,19 +1523,7 @@ function toggleSidebar() {
 function montarMenuAdmin() {
   const nav = document.querySelector('.sidebar-nav');
   if (!nav) return;
-  const itens = [
-    ['inicio', 'Início', '🏠'],
-    ['sistema', 'Identidade', '⚙'],
-    ['empresas', 'Empresas', '🏢'],
-    ['usuarios', 'Usuarios', '👤'],
-    ['sistemas', 'Sistemas', '▦'],
-    ['platform', 'IAHub Platform', '⚙'],
-    ['parametros', 'Parâmetros', '🎛'],
-    ['jobs', 'Jobs', '⏱'],
-    ['seguranca', 'Seguranca', '🔒'],
-    ['auditoria', 'Auditoria', '📋'],
-    ['reset', 'Reset de Dados', '🗑'],
-  ];
+  const itens = [['inicio', 'Início', '🏠'], ...INI_GRUPOS.flatMap(grupo => grupo.itens)];
   nav.innerHTML = `
     <div class="nav-section-hdr open">
       <span class="nav-icon">▦</span>
@@ -2415,7 +2403,7 @@ const _USU_ROTINAS_BASE = [
     id: 'ia-command', label: 'IA Command', icon: 'terminal',
     secoes: [
       { id: 'operacao', label: 'Operação', itens: [
-        { id: 'iac-dashboard', label: 'Dashboard', icon: 'chart' },
+        { id: 'iac-dashboard', label: 'Visão geral', icon: 'chart' },
         { id: 'iac-whatsapp-services', label: 'WhatsApp Services', icon: 'message' },
         { id: 'iac-monitor-whatsapp', label: 'Monitor WhatsApp', icon: 'message' },
       ] },
