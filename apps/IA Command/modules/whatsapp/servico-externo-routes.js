@@ -7,6 +7,7 @@ const http = require('http');
 const channels = require('./channel-store');
 const recipientGroups = require('./recipient-group-store');
 const { formatarContatoParaLog } = require('./log-contact');
+const { cabecalhosWorker } = require('./windows-service/internal-token');
 
 // Socket.IO do processo principal (para registrar no monitor quando nenhum canal está conectado).
 let _io = null;
@@ -26,9 +27,9 @@ function workerJson(workerPort, rota, payload = null, timeoutMs = 30000) {
         port: workerPort,
         path: rota,
         method: payload ? 'POST' : 'GET',
-        headers: payload
+        headers: cabecalhosWorker(payload
           ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
-          : undefined,
+          : {}),
         timeout: timeoutMs,
       },
       (res) => {
@@ -251,6 +252,17 @@ async function enviarGrupoServicoExterno({ empresaId, grupoIds = [], texto, fina
   return { total: membros.length, enviados, falhas };
 }
 
+// Os consumidores (IA Service, Jaade, IAHub-Jobs) chamam 127.0.0.1 direto. O
+// nginx sempre acrescenta X-Real-IP/X-Forwarded-For, então chamada vinda da
+// internet é recusada mesmo com o segredo certo (deploy/nginx*.conf).
+const ENDERECOS_LOCAIS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+
+function chamadaDiretaNoServidor(req) {
+  const h = req.headers || {};
+  if (h['x-forwarded-for'] || h['x-real-ip'] || h.forwarded) return false;
+  return ENDERECOS_LOCAIS.has(String(req.socket?.remoteAddress || ''));
+}
+
 function segredoAutorizado(req) {
   const segredoEsperado = String(
     process.env.IAC_WHATSAPP_SERVICO_EXTERNO_SECRET
@@ -258,6 +270,7 @@ function segredoAutorizado(req) {
     || ''
   ).trim();
   if (!segredoEsperado) return { ok: false, status: 503, error: 'Envio server-to-server nao configurado.' };
+  if (!chamadaDiretaNoServidor(req)) return { ok: false, status: 403, error: 'Nao autorizado.' };
 
   const informado = Buffer.from(String(req.headers['x-servico-externo-secret'] || ''), 'utf8');
   const esperado = Buffer.from(segredoEsperado, 'utf8');
@@ -342,4 +355,5 @@ module.exports._test = {
   primeiroCanalConectado,
   canaisGlobaisConectados,
   segredoAutorizado,
+  chamadaDiretaNoServidor,
 };

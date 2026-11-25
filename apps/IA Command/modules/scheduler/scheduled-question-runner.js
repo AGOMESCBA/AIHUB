@@ -1,6 +1,7 @@
 const whatsappManager = require('../whatsapp/service-manager');
 const channels        = require('../whatsapp/channel-store');
 const http            = require('http');
+const { cabecalhosWorker } = require('../whatsapp/windows-service/internal-token');
 const interpretationLog = require('../ai/interpretation-log');
 const responseFormatter = require('../erp/core/response-formatter');
 const messageTemplates = require('../whatsapp/message-templates');
@@ -594,7 +595,7 @@ function _postWorker(workerPort, path, payload, timeoutMs = 330000) {
     const req  = http.request({
       hostname: '127.0.0.1', port: workerPort, path,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+      headers: cabecalhosWorker({ 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }),
       timeout: timeoutMs,
     }, (res) => {
       let b = '';

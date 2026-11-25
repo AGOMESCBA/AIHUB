@@ -1,6 +1,7 @@
 'use strict';
 
 const http = require('http');
+const { cabecalhosWorker } = require('../whatsapp/windows-service/internal-token');
 const specFeedbackStore = require('../ai/spec-feedback-store');
 const whatsappManager = require('../whatsapp/service-manager');
 const channels = require('../whatsapp/channel-store');
@@ -90,7 +91,7 @@ function postWorker(workerPort, payload, timeoutMs = 30000) {
       port: workerPort,
       path: '/send-message',
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+      headers: cabecalhosWorker({ 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }),
       timeout: timeoutMs,
     }, (res) => {
       let raw = '';
