@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Empresas · IA Talk</title>
+  <!-- TELA MODELO da C0. Toda tela de lista + detalhe do IA Talk segue esta
+       estrutura (ver docs/guia-antigravity.md §6). Referências visuais:
+       Histórico de Interpretações (IA Command) e Jobs (IA Gestão). -->
+  <script src="/app/ia-talk/js/talk-ui.js"></script>
+  <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
+</head>
+<body class="tlk-pagina">
+<main class="tlk-conteudo">
+
+  <!-- ── Lista ──────────────────────────────────────────────────────── -->
+  <section id="vista-lista" aria-labelledby="titulo-lista">
+    <div class="head-row">
+      <div>
+        <div class="page-kicker">Administração da plataforma</div>
+        <h1 class="head-title" id="titulo-lista">Empresas <span class="head-count" id="contador" aria-live="polite"></span></h1>
+      </div>
+      <div class="head-actions">
+        <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
+        <button class="btn btn-primary" type="button" id="btn-nova">+ Nova empresa</button>
+      </div>
+    </div>
+    <p class="head-sub">Cada empresa tem o próprio link de entrada (<code>/app/ia-talk/apelido</code>), usuários, canais e aplicações. Os dados de uma empresa nunca aparecem para outra.</p>
+
+    <div class="filter-bar">
+      <form class="filter-bar-row" id="filtros" role="search">
+        <label class="sr-only" for="f-busca">Buscar</label>
+        <input class="form-control tlk-busca" id="f-busca" name="busca" type="search" placeholder="Buscar por nome, apelido ou CNPJ" autocomplete="off">
+        <label class="sr-only" for="f-situacao">Situação</label>
+        <select class="form-control" id="f-situacao" name="situacao">
+          <option value="">Todas as situações</option><option value="ativa">Ativas</option><option value="inativa">Inativas</option>
+        </select>
+        <label class="sr-only" for="f-vinculo">Vínculo com o IAHub</label>
+        <select class="form-control" id="f-vinculo" name="vinculo_hub">
+          <option value="">Com e sem IAHub</option><option value="com">Integradas ao IAHub</option><option value="sem">Só IA Talk</option>
+        </select>
+        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area">+ Mostrar agrupamento</button>
+        <span class="grupo-status" id="grupo-status">Sem agrupamento ativo</span>
+      </form>
+      <div class="grupo-area" id="grupo-area">
+        <div class="gp-chips-row" id="gp-chips"><span class="gp-label">Agrupar por:</span></div>
+        <div id="dz"></div>
+      </div>
+    </div>
+
+    <div class="grade">
+      <div id="estado-lista" hidden></div>
+      <div id="tabela"></div>
+      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais">Carregar mais</button></div>
+    </div>
+  </section>
+
+  <!-- ── Detalhe / formulário ──────────────────────────────────────── -->
+  <section id="vista-detalhe" hidden aria-labelledby="titulo-detalhe">
+    <div class="editor-bar">
+      <div class="editor-title"><strong id="titulo-detalhe">Nova empresa</strong><span id="sub-detalhe"></span></div>
+      <button class="btn btn-ghost" type="button" id="btn-voltar">← Voltar à lista</button>
+    </div>
+    <div class="tlk-cartao">
+      <div class="tlk-abas" role="tablist" aria-label="Seções da empresa">
+        <button class="tlk-aba" type="button" role="tab" id="aba-dados" aria-controls="painel-dados" aria-selected="true">Dados gerais</button>
+        <button class="tlk-aba" type="button" role="tab" id="aba-hub" aria-controls="painel-hub" aria-selected="false">Vínculo com o IAHub</button>
+      </div>
+      <div class="tlk-painel-aba" id="painel-dados" role="tabpanel" aria-labelledby="aba-dados">
+        <div class="tlk-alerta tlk-alerta--erro" id="alerta-form" role="alert" hidden></div>
+        <form id="form" novalidate>
+          <div class="tlk-form">
+            <div class="tlk-campo tlk-largo">
+              <label for="c-nome">Nome da empresa</label>
+              <input class="form-control" id="c-nome" name="nome" type="text" maxlength="120" required autocomplete="organization">
+            </div>
+            <div class="tlk-campo">
+              <label for="c-apelido">Apelido do link</label>
+              <input class="form-control" id="c-apelido" name="apelido" type="text" maxlength="40" required pattern="[a-z0-9-]{3,40}" autocomplete="off" spellcheck="false">
+              <span class="form-hint" id="dica-link">Endereço de entrada: /app/ia-talk/…</span>
+            </div>
+            <div class="tlk-campo">
+              <label for="c-documento">CNPJ</label>
+              <input class="form-control" id="c-documento" name="documento" type="text" maxlength="18" inputmode="numeric" autocomplete="off">
+            </div>
+            <div class="tlk-campo">
+              <label for="c-situacao">Situação</label>
+              <select class="form-control" id="c-situacao" name="situacao">
+                <option value="ativa">Ativa</option><option value="inativa">Inativa (ninguém entra pelo link)</option>
+              </select>
+            </div>
+            <div class="tlk-campo">
+              <label for="c-logo">Endereço da logomarca</label>
+              <input class="form-control" id="c-logo" name="logo_url" type="url" maxlength="500" placeholder="https://…" autocomplete="off">
+              <span class="form-hint">Aparece na página de entrada da empresa.</span>
+            </div>
+          </div>
+          <div class="tlk-acoes-form">
+            <button class="btn btn-ghost" type="button" id="btn-cancelar">Cancelar</button>
+            <button class="btn btn-primary" type="submit" id="btn-salvar">Salvar</button>
+          </div>
+        </form>
+      </div>
+      <div class="tlk-painel-aba" id="painel-hub" role="tabpanel" aria-labelledby="aba-hub" hidden>
+        <div class="meta-grid" id="meta-hub"></div>
+        <p class="form-hint">O vínculo é feito pelo IAHub (card do IA Talk). Uma empresa sem vínculo usa o IA Talk de forma independente.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<style>.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}</style>
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/app/ia-talk/ui/js/grid-group-panel.js"></script>
+<script src="/app/ia-talk/js/talk-api.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const { esc, pill, dataHora } = TalkUI;
+  let tabela = null;
+  let painelGrupo = null;
+  let proximoCursor = null;
+  let total = 0;
+  let atual = null; // empresa aberta no detalhe (null = nova)
+
+  // ── Lista ───────────────────────────────────────────────────────────
+  function filtrosAtuais() {
+    return { busca: $('f-busca').value.trim(), situacao: $('f-situacao').value, vinculo_hub: $('f-vinculo').value, limite: 50 };
+  }
+
+  function criarTabela() {
+    painelGrupo = createGroupPanel({
+      chipsRowId: 'gp-chips', dropZoneId: 'dz', storageKey: 'talk_empresas_grupo', getTable: () => tabela,
+      onChange: (campos) => { $('grupo-status').textContent = campos.length ? `${campos.length} campo(s) agrupado(s)` : 'Sem agrupamento ativo'; },
+    });
+    tabela = new Tabulator('#tabela', {
+      layout: 'fitDataFill', movableColumns: true, index: 'id', height: 'calc(100vh - 290px)',
+      responsiveLayout: 'collapse', responsiveLayoutCollapseStartOpen: false, placeholder: 'Nenhuma empresa com estes filtros.',
+      groupBy: painelGrupo.getActiveFields(), groupStartOpen: true,
+      rowFormatter: (row) => row.getElement().classList.add('clicavel'),
+      columns: [
+        // No celular, colunas que não cabem vão para o detalhe recolhido da linha (botão desta coluna).
+        { formatter: 'responsiveCollapse', width: 34, minWidth: 34, hozAlign: 'center', headerSort: false, resizable: false, groupable: false, responsive: 0 },
+        { title: 'Empresa', field: 'nome', minWidth: 220, cssClass: 'tlk-forte', headerFilter: 'input', responsive: 0 },
+        { title: 'Apelido', field: 'apelido', headerFilter: 'input', formatter: (c) => `<code>${esc(c.getValue())}</code>`, responsive: 1 },
+        { title: 'Situação', field: 'situacao', formatter: (c) => pill(c.getValue()), headerFilter: 'list', headerFilterParams: { values: { ativa: 'Ativa', inativa: 'Inativa' }, clearable: true }, responsive: 0 },
+        { title: 'IAHub', field: 'vinculo_hub', formatter: (c) => (c.getValue() ? esc(c.getValue().nome) : '<span class="text-muted">Só IA Talk</span>'), sorter: (a, b) => String(a?.nome || '').localeCompare(String(b?.nome || '')), responsive: 2 },
+        { title: 'CNPJ', field: 'documento', formatter: (c) => esc(c.getValue() || '—'), responsive: 3 },
+        { title: 'Atualizada em', field: 'atualizado_em', formatter: (c) => dataHora(c.getValue()), sorter: 'string', responsive: 3 },
+      ],
+    });
+    tabela.on('tableBuilt', () => { painelGrupo.refresh(); painelGrupo.applyToTable(); });
+    tabela.on('rowClick', (_e, row) => abrirDetalhe(row.getData()));
+  }
+
+  async function carregar({ continuar = false } = {}) {
+    const estado = $('estado-lista');
+    if (!continuar) {
+      $('tabela').hidden = true;
+      $('mais').hidden = true;
+      TalkUI.estado(estado, 'carregando', { titulo: 'Carregando empresas…' });
+    }
+    try {
+      const pagina = await TalkApi.get('/empresas', { ...filtrosAtuais(), cursor: continuar ? proximoCursor : undefined });
+      proximoCursor = pagina.proximo_cursor;
+      total = pagina.total ?? pagina.itens.length;
+      if (!continuar && !pagina.itens.length) {
+        const comFiltro = Object.entries(filtrosAtuais()).some(([k, v]) => k !== 'limite' && v);
+        TalkUI.estado(estado, 'vazio', comFiltro
+          ? { titulo: 'Nenhuma empresa encontrada', texto: 'Mude a busca ou os filtros para ver outras empresas.' }
+          : { titulo: 'Nenhuma empresa cadastrada', texto: 'Cadastre a primeira empresa para gerar o link de entrada dela.', acao: { rotulo: '+ Nova empresa', aoClicar: () => abrirDetalhe(null) } });
+        $('contador').textContent = '';
+        return;
+      }
+      estado.hidden = true;
+      $('tabela').hidden = false;
+      if (continuar) await tabela.addData(pagina.itens); else await tabela.replaceData(pagina.itens);
+      tabela.redraw(); // a grade estava oculta durante o carregamento
+      $('mais').hidden = !proximoCursor;
+      $('contador').textContent = `${tabela.getDataCount()} de ${total}`;
+    } catch (err) {
+      if (continuar) return TalkUI.toast(err.message, 'erro');
+      TalkUI.estadoDoErro(estado, err, () => carregar());
+      $('contador').textContent = '';
+    }
+  }
+
+  let espera = null;
+  $('f-busca').addEventListener('input', () => { clearTimeout(espera); espera = setTimeout(() => carregar(), 350); });
+  $('f-situacao').addEventListener('change', () => carregar());
+  $('f-vinculo').addEventListener('change', () => carregar());
+  $('filtros').addEventListener('submit', (e) => { e.preventDefault(); carregar(); });
+  $('btn-atualizar').addEventListener('click', () => carregar());
+  $('btn-mais').addEventListener('click', () => carregar({ continuar: true }));
+  $('btn-agrupar').addEventListener('click', () => {
+    const area = $('grupo-area');
+    const abrir = !area.classList.contains('aberta');
+    area.classList.toggle('aberta', abrir);
+    $('btn-agrupar').setAttribute('aria-expanded', String(abrir));
+    $('btn-agrupar').textContent = abrir ? '− Ocultar agrupamento' : '+ Mostrar agrupamento';
+  });
+  $('btn-nova').addEventListener('click', () => abrirDetalhe(null));
+
+  // ── Detalhe ─────────────────────────────────────────────────────────
+  function mostrar(vista) {
+    $('vista-lista').hidden = vista !== 'lista';
+    $('vista-detalhe').hidden = vista !== 'detalhe';
+    window.scrollTo(0, 0);
+  }
+
+  function atualizarDicaLink() {
+    const ap = $('c-apelido').value.trim().toLowerCase() || '…';
+    $('dica-link').textContent = `Endereço de entrada: ${location.origin}/app/ia-talk/${ap}`;
+  }
+  $('c-apelido').addEventListener('input', atualizarDicaLink);
+
+  function abrirDetalhe(empresa) {
+    atual = empresa;
+    const form = $('form');
+    form.reset();
+    TalkUI.limparErros(form);
+    $('alerta-form').hidden = true;
+    $('titulo-detalhe').textContent = empresa ? empresa.nome : 'Nova empresa';
+    $('sub-detalhe').textContent = empresa ? `Cadastrada em ${dataHora(empresa.criado_em)} · atualizada ${TalkUI.relativo(empresa.atualizado_em)}` : 'Preencha os dados e salve.';
+    if (empresa) {
+      form.nome.value = empresa.nome;
+      form.apelido.value = empresa.apelido || '';
+      form.documento.value = empresa.documento || '';
+      form.situacao.value = empresa.situacao;
+      form.logo_url.value = empresa.logo_url && !empresa.logo_url.startsWith('data:') ? empresa.logo_url : '';
+    }
+    const v = empresa?.vinculo_hub;
+    $('meta-hub').innerHTML = v
+      ? `<div class="meta-item"><span>Empresa no IAHub</span><strong>${esc(v.nome)}</strong></div><div class="meta-item"><span>Código no IAHub</span><strong>${esc(v.empresa_hub_id)}</strong></div>`
+      : '<div class="meta-item"><span>Vínculo</span><strong>Sem vínculo: usa só o IA Talk</strong></div>';
+    $('aba-hub').hidden = !empresa;
+    $('aba-dados').click();
+    atualizarDicaLink();
+    mostrar('detalhe');
+    form.nome.focus();
+  }
+
+  const voltar = () => { atual = null; mostrar('lista'); };
+  $('btn-voltar').addEventListener('click', voltar);
+  $('btn-cancelar').addEventListener('click', voltar);
+
+  $('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const corpo = {
+      nome: form.nome.value.trim(), apelido: form.apelido.value.trim().toLowerCase(), documento: form.documento.value.trim() || null,
+      situacao: form.situacao.value, logo_url: form.logo_url.value.trim() || null,
+    };
+    const botao = $('btn-salvar');
+    botao.disabled = true;
+    botao.textContent = 'Salvando…';
+    $('alerta-form').hidden = true;
+    try {
+      const salva = atual ? await TalkApi.put(`/empresas/${encodeURIComponent(atual.id)}`, corpo) : await TalkApi.post('/empresas', corpo);
+      TalkUI.toast(atual ? 'Empresa atualizada.' : 'Empresa cadastrada.', 'ok');
+      voltar();
+      await carregar();
+      if (!atual) tabela.selectRow?.(salva.id);
+    } catch (err) {
+      if (!TalkUI.errosNoFormulario(form, err)) {
+        $('alerta-form').textContent = err.status === 409 ? `${err.message}` : err.message;
+        $('alerta-form').hidden = false;
+      }
+    } finally {
+      botao.disabled = false;
+      botao.textContent = 'Salvar';
+    }
+  });
+
+  TalkUI.abas(document.querySelector('.tlk-abas'));
+  criarTabela();
+  carregar().then(async () => {
+    // Link direto: empresas.html?id=emp_... abre o detalhe (usado pelas pendências do painel).
+    const id = new URLSearchParams(location.search).get('id');
+    if (!id) return;
+    try { abrirDetalhe(await TalkApi.get(`/empresas/${encodeURIComponent(id)}`)); } catch (err) { TalkUI.toast(err.message, 'erro'); }
+  });
+})();
+</script>
+</body>
+</html>

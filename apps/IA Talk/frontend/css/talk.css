@@ -1,0 +1,141 @@
+/* IA Talk — complementa /app/ia-talk/ui/css/iahub.css (packages/ui).
+   Regra: usar SEMPRE as variáveis do iahub.css (--bg-card, --text-hi, --border,
+   --accent...). Cor literal só nos "pills"/badges semânticos, com versão
+   escura em :root[data-theme="dark"]. Padrões copiados das telas de
+   referência: Histórico de Interpretações (IA Command) e Jobs (IA Gestão). */
+
+:root {
+  --accent:       #4f46e5;
+  --accent-light: #6366f1;
+  --accent-glow:  rgba(79,70,229,.10);
+  --talk-gradiente: linear-gradient(135deg, #2563eb, #6366f1);
+  --tlk-ok-bg: #dcfce7;      --tlk-ok: #15803d;
+  --tlk-aviso-bg: #fef3c7;   --tlk-aviso: #92400e;
+  --tlk-erro-bg: #fee2e2;    --tlk-erro: #b91c1c;
+  --tlk-info-bg: #dbeafe;    --tlk-info: #1d4ed8;
+  --tlk-neutro-bg: var(--bg-hover); --tlk-neutro: var(--text-md);
+}
+:root[data-theme="dark"] {
+  --accent:       #818cf8;
+  --accent-light: #a5b4fc;
+  --accent-glow:  rgba(129,140,248,.16);
+  --tlk-ok-bg: rgba(74,222,128,.16);    --tlk-ok: #a3ecc0;
+  --tlk-aviso-bg: rgba(251,191,36,.16); --tlk-aviso: #f0d191;
+  --tlk-erro-bg: rgba(248,113,113,.18); --tlk-erro: #f3b0b0;
+  --tlk-info-bg: rgba(91,141,239,.18);  --tlk-info: #b7cdf7;
+}
+
+.sidebar-logo .logo-icon { background: var(--talk-gradiente) !important; }
+.sidebar-logo .logo-icon svg { width: 20px; height: 20px; stroke: #fff; }
+
+/* ── Página (dentro de cada aba) ─────────────────────────────────────── */
+body.tlk-pagina { background: var(--bg-base); }
+.tlk-conteudo { padding: 18px max(16px, env(safe-area-inset-right, 0px)) 28px max(16px, env(safe-area-inset-left, 0px)); max-width: 1680px; }
+.page-kicker { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-lo); font-weight: 700; margin-bottom: 3px; }
+.head-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; flex-wrap: wrap; }
+.head-title { font-size: 20px; font-weight: 800; color: var(--text-hi); display: flex; align-items: baseline; gap: 8px; line-height: 1.2; text-wrap: balance; }
+.head-count { font-size: 12px; color: var(--text-lo); font-weight: 500; font-variant-numeric: tabular-nums; }
+.head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.head-sub { font-size: 13px; color: var(--text-md); margin: -6px 0 12px; max-width: 75ch; }
+
+/* ── Barra de filtros + agrupamento (padrão Jobs) ────────────────────── */
+.filter-bar { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 10px; box-shadow: var(--shadow-sm); }
+.filter-bar-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.filter-bar-row .form-control { height: 32px; padding: 4px 8px; font-size: 12.5px; width: auto; min-width: 0; }
+.filter-bar-row .btn { height: 32px; padding: 0 12px; font-size: 12.5px; }
+.filter-bar-row .tlk-busca { flex: 1 1 220px; max-width: 360px; }
+.grupo-area { display: none; padding-top: 12px; border-top: 1px solid var(--border); margin-top: 10px; }
+.grupo-area.aberta { display: block; }
+.gp-chips-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; position: relative; }
+.gp-label { font-size: 11px; color: var(--text-lo); white-space: nowrap; }
+.grupo-status { font-size: 12px; color: var(--text-lo); }
+
+/* ── Grade Tabulator (mesmo tema da tela Jobs) ───────────────────────── */
+.grade { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); }
+.tabulator { border: none !important; background: transparent !important; font-size: 13px; }
+.tabulator .tabulator-header { background: var(--bg-card) !important; border-bottom: 1px solid var(--border) !important; }
+.tabulator .tabulator-header .tabulator-col { background: var(--bg-card) !important; border-right: none !important; color: var(--text-lo) !important; font-size: 11px !important; font-weight: 700 !important; text-transform: uppercase; letter-spacing: .05em; }
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background: var(--bg-base) !important; color: var(--text-hi) !important; border: 1px solid var(--border) !important; border-radius: 4px !important; font-size: 11px !important; padding: 3px 6px !important; width: 100% !important; }
+.tabulator .tabulator-tableholder { background: var(--bg-card) !important; }
+.tabulator .tabulator-row { background: var(--bg-card) !important; border-bottom: 1px solid var(--border) !important; }
+.tabulator .tabulator-row.clicavel { cursor: pointer; }
+.tabulator .tabulator-row:hover { background: var(--bg-hover) !important; }
+.tabulator .tabulator-row .tabulator-cell { border-right: none !important; color: var(--text-md); padding: 8px 10px !important; }
+.tabulator .tabulator-row .tabulator-cell.tlk-forte { color: var(--text-hi); font-weight: 700; }
+.tabulator .tabulator-row.tabulator-group { background: var(--bg-base) !important; border-bottom: 1px solid var(--border) !important; font-size: 12px !important; font-weight: 700 !important; color: var(--text-lo) !important; }
+.tabulator .tabulator-placeholder { background: var(--bg-card) !important; }
+.tabulator .tabulator-placeholder-contents { color: var(--text-lo) !important; font-size: 13px !important; font-weight: 400 !important; }
+.tabulator .tabulator-footer { background: var(--bg-card) !important; border-top: 1px solid var(--border) !important; color: var(--text-md) !important; }
+.tlk-mais { text-align: center; padding: 10px; }
+
+/* ── Pills de estado (um vocabulário para canais, mensagens, entregas) ── */
+.tlk-pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; white-space: nowrap; line-height: 1.6; }
+.tlk-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .85; }
+.tlk-pill--ok { background: var(--tlk-ok-bg); color: var(--tlk-ok); }
+.tlk-pill--aviso { background: var(--tlk-aviso-bg); color: var(--tlk-aviso); }
+.tlk-pill--erro { background: var(--tlk-erro-bg); color: var(--tlk-erro); }
+.tlk-pill--info { background: var(--tlk-info-bg); color: var(--tlk-info); }
+.tlk-pill--neutro { background: var(--tlk-neutro-bg); color: var(--tlk-neutro); border: 1px solid var(--border); }
+
+/* ── Estados da tela: carregando, vazio, erro, sem permissão ─────────── */
+.tlk-estado { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; padding: 48px 20px; color: var(--text-md); min-height: 240px; }
+.tlk-estado-icone { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--bg-hover); color: var(--text-lo); }
+.tlk-estado-icone svg { width: 22px; height: 22px; }
+.tlk-estado--erro .tlk-estado-icone { background: var(--tlk-erro-bg); color: var(--tlk-erro); }
+.tlk-estado--sem_permissao .tlk-estado-icone { background: var(--tlk-aviso-bg); color: var(--tlk-aviso); }
+.tlk-estado-titulo { font-size: 15px; font-weight: 700; color: var(--text-hi); }
+.tlk-estado-texto { font-size: 13px; max-width: 52ch; }
+.tlk-estado .btn { margin-top: 6px; }
+.tlk-girando { width: 22px; height: 22px; border: 2.5px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: tlk-girar .8s linear infinite; }
+@keyframes tlk-girar { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tlk-girando { animation-duration: 2.4s; } }
+
+/* ── Detalhe / formulário (padrão Histórico de Interpretações) ────────── */
+.editor-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px; box-shadow: var(--shadow-sm); flex-wrap: wrap; }
+.editor-title strong { display: block; color: var(--text-hi); font-size: 16px; }
+.editor-title span { color: var(--text-lo); font-size: 12px; }
+.tlk-cartao { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; }
+.tlk-abas { display: flex; gap: 2px; border-bottom: 1px solid var(--border); background: var(--bg-card); padding: 0 16px; overflow-x: auto; }
+.tlk-aba { padding: 10px 16px; border: none; background: transparent; color: var(--text-lo); font-size: 13px; font-weight: 800; border-bottom: 2px solid transparent; cursor: pointer; margin-bottom: -1px; white-space: nowrap; font-family: inherit; }
+.tlk-aba[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.tlk-aba:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tlk-painel-aba { padding: 18px; }
+.tlk-painel-aba[hidden] { display: none; }
+.meta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.meta-item { background: var(--bg-base); border: 1px solid var(--border); border-radius: 8px; padding: 10px; min-width: 0; }
+.meta-item span { display: block; font-size: 11px; color: var(--text-lo); margin-bottom: 4px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.meta-item strong { display: block; color: var(--text-hi); font-size: 13px; word-break: break-word; }
+.tlk-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; max-width: 880px; }
+.tlk-form .tlk-largo { grid-column: 1 / -1; }
+.tlk-campo { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.tlk-campo label { font-size: 12px; font-weight: 700; color: var(--text-md); }
+.tlk-campo .form-hint { font-size: 11.5px; color: var(--text-lo); }
+.tlk-campo-erro { font-size: 12px; color: var(--error); font-weight: 600; }
+.tlk-campo.com-erro .form-control { border-color: var(--error); box-shadow: 0 0 0 3px rgba(220,38,38,.10); }
+.tlk-acoes-form { display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border); padding-top: 14px; margin-top: 18px; max-width: 880px; flex-wrap: wrap; }
+.tlk-alerta { border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.5; margin-bottom: 12px; border: 1px solid transparent; }
+.tlk-alerta--erro { background: var(--tlk-erro-bg); color: var(--tlk-erro); }
+.tlk-alerta--aviso { background: var(--tlk-aviso-bg); color: var(--tlk-aviso); }
+.tlk-alerta--info { background: var(--tlk-info-bg); color: var(--tlk-info); }
+
+/* ── Avisos rápidos (toast) ──────────────────────────────────────────── */
+.tlk-toasts { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 8px; z-index: 900; max-width: min(380px, calc(100vw - 32px)); }
+.tlk-toast { background: var(--bg-card); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 8px; box-shadow: var(--shadow-md); padding: 10px 14px; font-size: 13px; color: var(--text-hi); }
+.tlk-toast--ok { border-left-color: var(--success); }
+.tlk-toast--erro { border-left-color: var(--error); }
+
+/* ── Shell: empresa ativa no topo ────────────────────────────────────── */
+.tlk-empresa { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--text-hi); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; max-width: 260px; }
+.tlk-empresa:hover { border-color: var(--accent); }
+.tlk-empresa img { width: 20px; height: 20px; border-radius: 5px; flex: none; }
+.tlk-empresa span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tlk-menu-empresas { position: absolute; top: 52px; right: 16px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-md); padding: 6px; min-width: 240px; z-index: 800; }
+.tlk-menu-empresas button { display: block; width: 100%; text-align: left; padding: 8px 10px; border: none; background: transparent; border-radius: 6px; color: var(--text-hi); font: inherit; font-size: 13px; cursor: pointer; }
+.tlk-menu-empresas button:hover, .tlk-menu-empresas button[aria-current="true"] { background: var(--bg-active); color: var(--accent); }
+
+@media (max-width: 760px) {
+  .tlk-form { grid-template-columns: minmax(0, 1fr); }
+  .head-title { font-size: 18px; }
+  .tlk-empresa span { display: none; }
+}

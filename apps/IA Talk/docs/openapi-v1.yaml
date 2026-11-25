@@ -1,0 +1,225 @@
+openapi: 3.1.0
+info:
+  title: IA Talk — API v1
+  version: 1.0.0-c0
+  description: |
+    API para sistemas autorizados enviarem mensagens de WhatsApp e acompanharem estados.
+    Rascunho congelado na C0; a G5 completa exemplos e o guia em pt-BR (docs/integrador/).
+    Aceitar a mensagem (202) NÃO confirma a entrega: acompanhe o estado ou os webhooks.
+servers:
+  - url: https://app.c3isystems.com.br/app/ia-talk/api/v1
+  - url: http://127.0.0.1:3051/app/ia-talk/api/v1
+    description: Servidor simulado (token de teste tk_teste_qualquer)
+security:
+  - tokenAplicacao: []
+paths:
+  /mensagens:
+    post:
+      summary: Enviar mensagem
+      operationId: enviarMensagem
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NovaMensagem' }
+            examples:
+              texto:
+                value: { canal: cn_01H, para: '+5565999990000', tipo: texto, texto: '*Faturamento* de hoje: R$ 12.300,00' }
+              documento:
+                value: { canal: cn_01H, para: '+5565999990000', tipo: documento, legenda: Relatório de novembro, arquivo: { nome: vendas.pdf, mime: application/pdf, base64: JVBERi0xLjcK } }
+      responses:
+        '202':
+          description: Aceita para envio (não é prova de entrega)
+          headers:
+            Idempotent-Replayed: { schema: { type: string, enum: ['true'] }, description: Presente quando a resposta repete um pedido anterior com a mesma chave }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensagemAceita' }
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '409': { $ref: '#/components/responses/Erro' }
+        '422': { $ref: '#/components/responses/Erro' }
+        '429': { $ref: '#/components/responses/Limite' }
+  /mensagens/{id}:
+    get:
+      summary: Consultar estado de uma mensagem
+      operationId: consultarMensagem
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, example: msg_01H } }
+      responses:
+        '200':
+          description: Mensagem
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Mensagem' }
+        '404': { $ref: '#/components/responses/Erro' }
+  /canais/{id}/estado:
+    get:
+      summary: Consultar estado e capacidades de um canal autorizado
+      operationId: estadoCanal
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, example: cn_01H } }
+      responses:
+        '200':
+          description: Estado do canal
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EstadoCanal' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+  /eventos:
+    get:
+      summary: Recuperar eventos (o que o webhook não entregou)
+      operationId: listarEventos
+      parameters:
+        - { name: depois, in: query, schema: { type: string }, description: proximo_cursor da chamada anterior }
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        '200':
+          description: Eventos em ordem de criação (retenção de 7 dias)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [itens, proximo_cursor, tem_mais]
+                properties:
+                  itens: { type: array, items: { $ref: '#/components/schemas/Evento' } }
+                  proximo_cursor: { type: string }
+                  tem_mais: { type: boolean }
+webhooks:
+  evento:
+    post:
+      summary: Evento enviado pelo IA Talk à URL da aplicação
+      description: |
+        Pelo menos uma vez: deduplique por X-Talk-Evento-Id. Valide
+        X-Talk-Assinatura = sha256=HMAC-SHA256(segredo, "<X-Talk-Timestamp>.<corpo cru>")
+        e recuse timestamp com mais de 300 s. Responda 2xx em até 10 s.
+      parameters:
+        - { name: X-Talk-Evento-Id, in: header, required: true, schema: { type: string } }
+        - { name: X-Talk-Timestamp, in: header, required: true, schema: { type: integer } }
+        - { name: X-Talk-Assinatura, in: header, required: true, schema: { type: string, pattern: '^sha256=[0-9a-f]{64}$' } }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Evento' }
+      responses:
+        '200': { description: Recebido }
+components:
+  securitySchemes:
+    tokenAplicacao:
+      type: http
+      scheme: bearer
+      description: Token da aplicação, gerado na tela Aplicações e tokens (mostrado uma vez).
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Valor único por envio (ex. UUID), válido por 24 h. Mesmo valor + mesmo corpo = mesma mensagem; outro corpo = 409.
+      schema: { type: string, minLength: 8, maxLength: 120 }
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: Identificador do seu sistema (ex. número do chamado); volta em todos os eventos.
+      schema: { type: string, maxLength: 120 }
+  responses:
+    Erro:
+      description: Erro no formato padrão
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+    Limite:
+      description: Limite de requisições
+      headers:
+        Retry-After: { schema: { type: integer }, description: Segundos até tentar de novo }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+  schemas:
+    Erro:
+      type: object
+      required: [erro]
+      properties:
+        erro:
+          type: object
+          required: [codigo, mensagem]
+          properties:
+            codigo:
+              type: string
+              enum: [requisicao_invalida, nao_autenticado, sem_permissao, canal_nao_autorizado, nao_encontrado, conflito, idempotencia_conflito, recurso_nao_suportado, canal_desconectado, fora_da_janela_24h, limite_excedido, erro_interno, indisponivel]
+            mensagem: { type: string }
+            campos: { type: object, additionalProperties: { type: string } }
+            detalhe: {}
+    EstadoSaida:
+      type: string
+      enum: [aceita, aguardando, encaminhada, enviada, entregue, lida, falhou, desconhecida]
+    NovaMensagem:
+      type: object
+      required: [canal, para, tipo]
+      properties:
+        canal: { type: string, description: ID de um canal autorizado para a aplicação }
+        para: { type: string, description: Número com DDI e DDD, ex. +5565999990000 }
+        tipo: { type: string, enum: [texto, imagem, documento, audio, video] }
+        texto: { type: string, description: Obrigatório em tipo texto. Marcação do WhatsApp (*negrito*, _itálico_, ~riscado~, ```mono```) }
+        legenda: { type: string }
+        arquivo:
+          type: object
+          description: Obrigatório fora de texto. Informe exatamente um entre base64, url (só https) ou midia_id.
+          properties:
+            nome: { type: string }
+            mime: { type: string }
+            base64: { type: string }
+            url: { type: string, format: uri }
+            midia_id: { type: string }
+        metadados: { type: object, additionalProperties: { type: string }, maxProperties: 20 }
+    MensagemAceita:
+      type: object
+      required: [id, estado, canal, criada_em]
+      properties:
+        id: { type: string }
+        estado: { type: string, enum: [aceita] }
+        canal: { type: string }
+        criada_em: { type: string, format: date-time }
+        correlacao_id: { type: [string, 'null'] }
+        aviso: { type: string }
+    Mensagem:
+      type: object
+      required: [id, estado, canal, para_mascarado, tipo, correlacao_id, criada_em, atualizada_em, historico_estados]
+      properties:
+        id: { type: string }
+        estado: { $ref: '#/components/schemas/EstadoSaida' }
+        canal: { type: string }
+        para_mascarado: { type: string, example: '+55 65 9••••-0000' }
+        tipo: { type: string }
+        correlacao_id: { type: [string, 'null'] }
+        criada_em: { type: string, format: date-time }
+        atualizada_em: { type: string, format: date-time }
+        historico_estados:
+          type: array
+          items:
+            type: object
+            properties:
+              estado: { $ref: '#/components/schemas/EstadoSaida' }
+              em: { type: string, format: date-time }
+              detalhe: { type: [string, 'null'] }
+    EstadoCanal:
+      type: object
+      required: [id, estado, estado_desde, capacidades]
+      properties:
+        id: { type: string }
+        estado: { type: string, enum: [parado, iniciando, qr_pendente, conectado, reconectando, desconectado, erro] }
+        estado_desde: { type: string, format: date-time }
+        capacidades: { type: object }
+    Evento:
+      type: object
+      required: [id, tipo, em, dados]
+      properties:
+        id: { type: string }
+        tipo: { type: string, enum: [mensagem.recebida, mensagem.estado_alterado, canal.estado_alterado, conversa.responsavel_alterado] }
+        em: { type: string, format: date-time }
+        dados: { type: object }

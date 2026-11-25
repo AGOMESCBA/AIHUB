@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+  <title>IA Talk</title>
+  <script src="/app/ia-talk/js/talk-ui.js"></script>
+  <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
+  <style>
+    /* Barra de abas internas — copiada de apps/IA Service/frontend/shell.html
+       (mesmo padrão do IA Command), usando --accent do IA Talk. */
+    .mdi-tabbar-wrap { display:flex; align-items:stretch; background:var(--bg-hover); border-bottom:1px solid var(--border); flex-shrink:0; }
+    .mdi-tabbar { flex:1; min-width:0; display:flex; align-items:flex-end; overflow-x:auto; scrollbar-width:thin; scrollbar-color:var(--border-hi) transparent; scroll-behavior:smooth; padding:6px 8px 0; gap:3px; }
+    .mdi-tab { display:flex; align-items:center; gap:7px; padding:7px 10px 8px 13px; font-size:13px; font-weight:500; color:var(--text-md); background:var(--bg-hover); border:1px solid var(--border); border-bottom:none; border-radius:7px 7px 0 0; cursor:pointer; white-space:nowrap; flex:0 0 clamp(200px, 15vw, 260px); max-width:260px; min-width:0; user-select:none; margin-bottom:-1px; position:relative; transition:color var(--transition), background var(--transition); }
+    .mdi-tab:hover { background:var(--bg-card); color:var(--text-hi); }
+    .mdi-tab.active { background:var(--bg-card); color:var(--accent); font-weight:600; border-top:2px solid var(--accent); box-shadow:0 -2px 10px var(--accent-glow), var(--shadow-sm); z-index:1; }
+    .mdi-tab:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+    .mdi-tab.dragging { opacity:.55; cursor:grabbing; }
+    .mdi-tab-icon { font-size:14px; flex-shrink:0; }
+    .mdi-tab-label { flex:1; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+    .mdi-tab-close { flex-shrink:0; width:20px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:4px; font-size:16px; line-height:1; color:var(--text-lo); }
+    .mdi-tab-close:hover { background:var(--accent-glow); color:var(--accent); }
+    .mdi-scroll-btn { display:none; align-items:center; justify-content:center; width:30px; flex-shrink:0; background:var(--bg-card); border:none; border-bottom:1px solid var(--border); cursor:pointer; font-size:12px; color:var(--text-md); }
+    .mdi-scroll-btn:hover { color:var(--accent); }
+    .mdi-content { flex:1; position:relative; overflow:hidden; background:var(--bg-base); }
+    .mdi-iframe { position:absolute; inset:0; width:100%; height:100%; border:0; display:none; background:var(--bg-base); }
+    .mdi-iframe.active { display:block; }
+    .mdi-empty { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; padding:24px; }
+    .mdi-empty[hidden] { display:none; }
+    .mdi-empty-title { font-size:15px; font-weight:700; color:var(--text-hi); }
+    .mdi-empty-sub { font-size:13px; color:var(--text-lo); max-width:46ch; }
+    .tlk-topbar { padding:0 16px; gap:8px; position:relative; }
+    .tlk-topbar .topbar-title { font-weight:800; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .topbar-menu-btn { flex-shrink:0; background:none; border:none; cursor:pointer; width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:7px; color:var(--text-md); }
+    .topbar-menu-btn:hover { background:var(--bg-hover); color:var(--text-hi); }
+    .tlk-icone-btn { width:34px; height:34px; display:inline-grid; place-items:center; border:1px solid var(--border); border-radius:8px; background:var(--bg-card); color:var(--text-md); cursor:pointer; }
+    .tlk-icone-btn:hover { color:var(--accent); border-color:var(--accent); }
+    .tlk-icone-btn svg { width:17px; height:17px; }
+    .tlk-faixa-simulado { background:var(--tlk-aviso-bg); color:var(--tlk-aviso); font-size:12px; font-weight:700; text-align:center; padding:4px 12px; }
+    .tlk-faixa-simulado[hidden] { display:none; }
+  </style>
+</head>
+<body>
+<div class="layout" id="layout">
+  <nav class="sidebar" id="sidebar" aria-label="Menu do IA Talk">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14h4.5"/></svg></div>
+      <span class="logo-text">IA Talk</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer">
+      <button class="nav-item sub sidebar-logout-btn" type="button" id="btn-sair" title="Sair do IA Talk">
+        <span class="nav-icon" aria-hidden="true">↩</span><span class="nav-label">Sair</span>
+      </button>
+    </div>
+  </nav>
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebarDrawer()" aria-hidden="true"></div>
+
+  <div class="main">
+    <div class="tlk-faixa-simulado" id="faixa-simulado" hidden></div>
+    <div class="topbar tlk-topbar">
+      <button class="topbar-menu-btn" type="button" onclick="toggleSidebar()" title="Menu" aria-label="Abrir ou fixar o menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title" id="shell-title">IA Talk</span>
+      <button class="tlk-icone-btn" type="button" id="btn-tema" title="Alternar tema claro/escuro" aria-label="Alternar tema claro ou escuro">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <button class="tlk-empresa" type="button" id="btn-empresa" aria-haspopup="true" aria-expanded="false" hidden></button>
+      <div class="tlk-menu-empresas" id="menu-empresas" role="menu" hidden></div>
+    </div>
+
+    <div class="mdi-tabbar-wrap">
+      <button class="mdi-scroll-btn" id="mdi-scroll-left" type="button" title="Rolar abas para a esquerda">◀</button>
+      <div class="mdi-tabbar" id="mdi-tabbar" role="tablist" aria-label="Rotinas abertas"></div>
+      <button class="mdi-scroll-btn" id="mdi-scroll-right" type="button" title="Rolar abas para a direita">▶</button>
+    </div>
+
+    <div class="mdi-content" id="mdi-content">
+      <div class="mdi-empty" id="mdi-empty">
+        <div class="mdi-empty-title" id="vazio-titulo">Carregando o IA Talk…</div>
+        <div class="mdi-empty-sub" id="vazio-sub"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/app/ia-talk/js/talk-api.js"></script>
+<script src="/app/ia-talk/js/talk-sidebar.js"></script>
+<script src="/app/ia-talk/js/talk-abas.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const { esc } = TalkUI;
+
+  $('btn-tema').addEventListener('click', () => {
+    const escuro = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (escuro) document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', 'dark');
+    try { localStorage.setItem('talk_tema', escuro ? 'light' : 'dark'); } catch (_) { /* sem localStorage */ }
+    TalkAbas.propagarTema();
+  });
+
+  function montarEmpresa(sessao) {
+    const btn = $('btn-empresa');
+    const menu = $('menu-empresas');
+    const e = sessao.empresa;
+    btn.hidden = false;
+    btn.innerHTML = `${e.logo_url ? `<img src="${esc(e.logo_url)}" alt="">` : ''}<span>${esc(e.nome)}</span>`;
+    btn.title = `Empresa ativa: ${e.nome}`;
+    const outras = sessao.empresas_disponiveis || [];
+    if (outras.length < 2) { btn.disabled = true; return; }
+    menu.innerHTML = outras.map(o => `<button type="button" role="menuitem" data-id="${esc(o.id)}" aria-current="${o.id === e.id}">${esc(o.nome)}</button>`).join('');
+    btn.addEventListener('click', () => { menu.hidden = !menu.hidden; btn.setAttribute('aria-expanded', String(!menu.hidden)); });
+    document.addEventListener('click', (ev) => { if (!ev.target.closest('#btn-empresa, #menu-empresas')) { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); } });
+    menu.addEventListener('click', async (ev) => {
+      const id = ev.target.closest('button[data-id]')?.dataset.id;
+      if (!id || id === e.id) return;
+      try {
+        await TalkApi.post('/sessao/empresa', { empresa_id: id });
+        location.reload(); // nova empresa = todas as abas recarregadas com o novo contexto
+      } catch (err) { TalkUI.toast(err.message, 'erro'); }
+    });
+  }
+
+  $('btn-sair').addEventListener('click', async () => {
+    try {
+      const r = await TalkApi.post('/sair');
+      location.href = r?.redirecionar || '/app/ia-talk/';
+    } catch (_) { location.href = '/app/ia-talk/'; }
+  });
+
+  window.addEventListener('talk:sessao-expirada', (ev) => {
+    $('vazio-titulo').textContent = 'Sua sessão terminou';
+    $('vazio-sub').textContent = ev.detail?.mensagem || 'Entre de novo pelo link da sua empresa.';
+  });
+
+  (async function iniciar() {
+    let simulado = '';
+    try { simulado = sessionStorage.getItem('talk_simular') || ''; } catch (_) { /* sem sessionStorage */ }
+    if (simulado) { $('faixa-simulado').hidden = false; $('faixa-simulado').textContent = `Cenário simulado ativo: ${simulado}`; }
+    try {
+      const sessao = await TalkApi.get('/sessao');
+      window._talkSessao = sessao;
+      TalkMenu.iniciar(sessao.rotinas);
+      montarEmpresa(sessao);
+      $('vazio-titulo').textContent = 'Nenhuma rotina aberta';
+      $('vazio-sub').textContent = 'Escolha uma opção no menu lateral para começar.';
+      const painel = TalkMenu.MENU[0].items[0];
+      TalkAbas.iniciar({ inicial: sessao.rotinas.includes(painel.id) ? { url: TalkMenu.hrefDo(painel), rotulo: painel.label, icone: painel.icon } : null });
+    } catch (err) {
+      TalkMenu.iniciar([]);
+      $('vazio-titulo').textContent = err.status === 404 ? 'O login do IA Talk ainda não está disponível' : 'Não foi possível abrir o IA Talk';
+      $('vazio-sub').textContent = err.status === 404
+        ? 'A entrada por telefone e pelo IAHub chega na etapa C1. Para ver as telas agora, use o servidor simulado.'
+        : err.message;
+    }
+  })();
+})();
+</script>
+</body>
+</html>

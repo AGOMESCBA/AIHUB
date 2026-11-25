@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Em construção · IA Talk</title>
+  <script src="/app/ia-talk/js/talk-ui.js"></script>
+  <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
+</head>
+<body class="tlk-pagina">
+<main class="tlk-conteudo"><div id="estado"></div></main>
+<script>
+  // Marcador das telas ainda não entregues (ver etapa no menu: talk-sidebar.js).
+  const p = new URLSearchParams(location.search);
+  const tela = p.get('tela') || 'Esta tela';
+  const etapa = p.get('etapa');
+  TalkUI.estado(document.getElementById('estado'), 'vazio', {
+    titulo: `${tela} está em construção`,
+    texto: etapa ? `Ela chega na etapa ${etapa} do plano do IA Talk.` : 'Ela chega numa próxima etapa do plano do IA Talk.',
+  });
+</script>
+</body>
+</html>
