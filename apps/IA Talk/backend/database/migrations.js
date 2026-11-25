@@ -157,4 +157,29 @@ module.exports = [
       CREATE INDEX idx_aplicacao_tokens_aplicacao ON aplicacao_tokens (aplicacao_id);
     `,
   },
+  {
+    versao: 3,
+    descricao: 'C1 — entrada pelo IAHub (ticket de uso único) e link de primeiro acesso',
+    sql: `
+      ALTER TABLE empresas ADD COLUMN hub_empresa_nome TEXT;
+
+      -- Ticket assinado pelo IAHub: cada jti vale uma única vez.
+      CREATE TABLE tickets_hub_usados (
+        jti       TEXT PRIMARY KEY,
+        usado_em  TEXT NOT NULL,
+        expira_em TEXT NOT NULL
+      );
+
+      -- Link de uso único gerado no servidor (primeiro administrador, suporte).
+      CREATE TABLE links_acesso (
+        id          TEXT PRIMARY KEY,
+        token_hash  TEXT NOT NULL UNIQUE,
+        usuario_id  TEXT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+        empresa_id  TEXT NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        criado_em   TEXT NOT NULL,
+        expira_em   TEXT NOT NULL,
+        usado_em    TEXT
+      );
+    `,
+  },
 ];

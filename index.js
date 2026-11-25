@@ -600,6 +600,8 @@ require('./modules/permissoes/routes')(app, { requireAuth });
 
 // ── Módulo Sistemas ───────────────────────────────────────────────────────────
 require('./modules/sistemas/routes')(app, { requireAuth, requireAdmin });
+// Entrada no IA Talk pelo card (ticket assinado; o IA Talk é um processo próprio).
+require('./apps/IAHUB/backend/ia-talk-entrada').registrar(app, { requireAuth });
 
 // ── Módulo Segurança ──────────────────────────────────────────────────────────
 require('./modules/seguranca/routes')(app, { requireAuth });

@@ -106,7 +106,12 @@ Rótulos e cores: `TalkUI.pill()` em `frontend/js/talk-ui.js`.
 | `GET /empresa/:apelido` | — | `{ nome, apelido, logo_url, metodos: ['telefone'] }`. Empresa inativa/inexistente: 404 |
 | `POST /login/codigo` | `{ apelido, telefone }` | `{ desafio_id, expira_em, enviado_por: 'whatsapp'\|'email', destino_mascarado }`. Resposta igual para número não cadastrado (não revela cadastro) |
 | `POST /login/confirmar` | `{ desafio_id, codigo }` | `{ ok: true, redirecionar }` + cookie. Código errado: 400 com `campos.codigo` e `detalhe.tentativas_restantes`. Mais de 5: 429 |
-| `GET /entrar-hub?ticket=…` | — | Redireciona para o shell com sessão criada. Ticket inválido/vencido: 401 |
+| `GET /entrar-hub?ticket=…` | — | Redireciona para o shell com sessão criada. Ticket inválido/vencido/reusado: 401 (página de erro). Na primeira entrada cadastra a empresa do IAHub e o usuário |
+| `GET /link/:token` | — | Link de uso único (15 min) gerado no servidor (`backend/cli/primeiro-acesso.js`). Redireciona para o shell; usado/vencido: 401 |
+
+Card do IAHub: `GET /api/ia-talk/entrar` (no IAHub) confere empresa, usuário e sistema, assina o ticket (Ed25519, 60 s, uso único;
+chaves em `apps/IAHUB/data/ia-talk/`) e redireciona para `…/api/publico/entrar-hub`. Em desenvolvimento, `IA_TALK_URL` no `.env`
+aponta o endereço do Talk (ex.: `http://127.0.0.1:3050/app/ia-talk/`).
 
 Página de entrada (G1): `frontend/entrar.html`, servida em `/app/ia-talk/<apelido>` (já no simulado; no servidor real, C1). A tela lê o apelido do último trecho do endereço; aberta direto como `entrar.html`, usa `?apelido=`. No simulado o código é sempre `123456`; `?simular=email` mostra o envio pelo e-mail de reserva.
 

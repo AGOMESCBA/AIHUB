@@ -19,6 +19,7 @@ const PREFIXOS = Object.freeze({
   auditoria: 'aud',
   desafio: 'dsf',
   sessao: 'ses',
+  link: 'lnk',
 });
 
 function novoId(tipo) {

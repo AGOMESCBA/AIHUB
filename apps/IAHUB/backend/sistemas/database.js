@@ -64,9 +64,9 @@ const DEFAULT_SYSTEMS = [
     code: 'ia-talk',
     name: 'IA Talk',
     description: 'Conectando empresas e clientes em um só lugar.',
-    // Processo próprio (apps/IA Talk). Em produção o nginx encaminha /app/ia-talk/;
-    // IA_TALK_URL só serve para apontar outro endereço em desenvolvimento.
-    url: process.env.IA_TALK_URL || '/app/ia-talk/',
+    // Processo próprio (apps/IA Talk): o card passa por esta rota do Hub, que assina
+    // o ticket de entrada e redireciona (apps/IAHUB/backend/ia-talk-entrada.js).
+    url: '/api/ia-talk/entrar',
     image_url: '',
     accent: '#4f46e5',
     badge: 'IA Talk',
