@@ -174,6 +174,15 @@ Canal compartilhado: `empresa_dona` configura; `empresas_vinculadas` usam o
 número (como hoje no IA Command). `padrao: true` = canal que envia o código de
 login daquela empresa.
 
+**Quem pode ser vinculada (26/11, regra do IA Command):** `GET /canais/empresas-vinculaveis` →
+`{ itens: [{ id, nome }] }`. Entrada pelo IAHub: empresas com o **IA Talk liberado** em que a pessoa
+também tem a rotina `talk-canais` (administrador do IAHub dispensa a rotina, não a liberação) — lista
+calculada e assinada pelo IAHub na entrada; liberou uma empresa nova, entra de novo no Talk. Sessão
+local da plataforma: empresas ativas do Talk. Demais: só a própria empresa. `id` `hub:<n>` = empresa
+do IAHub que ainda não existe no Talk: no `PUT` ela é criada já ligada ao IAHub (nunca duplica com a
+entrada pelo card). Empresa nova fora da lista → 403; as já vinculadas continuam editáveis. Empresa
+sem nenhum canal padrão recebe este como padrão.
+
 ### Socket.IO
 
 Conexão: `TalkApi.socket()` (path `/app/ia-talk/socket.io`, namespace `/talk`; no real, autenticado pelo cookie da sessão).

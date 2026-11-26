@@ -24,7 +24,7 @@
         <h1 class="head-title" id="titulo-lista">Auditoria <span class="head-count" id="contador" aria-live="polite"></span></h1>
       </div>
       <div class="head-actions">
-        <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
+        <button class="btn btn-ghost" type="button" id="btn-atualizar" title="Atualizar: recarrega os registros de auditoria com os filtros atuais" aria-label="Atualizar: recarrega os registros de auditoria com os filtros atuais"><span data-ico="atualizar" data-giro="1"></span> Atualizar</button>
       </div>
     </div>
     <p class="head-sub">Registro imutável de acessos e alterações realizadas na empresa ativa. Endereços IP são exibidos sempre mascarados.</p>
@@ -60,7 +60,7 @@
           <input class="form-control" id="f-ate" name="ate" type="date">
         </div>
 
-        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area">+ Mostrar agrupamento</button>
+        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area" title="Mostrar agrupamento: abre o painel para agrupar registros por coluna" aria-label="Mostrar agrupamento: abre o painel para agrupar registros por coluna"><span data-ico="agrupar"></span> Mostrar agrupamento</button>
         <span class="grupo-status" id="grupo-status">Sem agrupamento ativo</span>
       </form>
 
@@ -73,7 +73,7 @@
     <div class="grade">
       <div id="estado-lista" hidden></div>
       <div id="tabela"></div>
-      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais">Carregar mais</button></div>
+      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais" title="Carregar mais: busca a próxima página de registros de auditoria" aria-label="Carregar mais: busca a próxima página de registros de auditoria"><span data-ico="seta_baixo"></span> Carregar mais</button></div>
     </div>
   </section>
 
@@ -87,7 +87,7 @@
         </div>
         <span id="sub-detalhe"></span>
       </div>
-      <button class="btn btn-ghost" type="button" id="btn-voltar">← Voltar à lista</button>
+      <button class="btn btn-ghost" type="button" id="btn-voltar" title="Voltar à lista: fecha os detalhes e retorna à lista de auditoria" aria-label="Voltar à lista: fecha os detalhes e retorna à lista de auditoria"><span data-ico="voltar"></span> Voltar à lista</button>
     </div>
 
     <div class="tlk-cartao">
@@ -112,6 +112,7 @@
 <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script src="/app/ia-talk/ui/js/grid-group-panel.js"></script>
 <script src="/app/ia-talk/js/talk-api.js"></script>
+<script src="/app/ia-talk/js/talk-icones.js"></script>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -257,8 +258,12 @@
 
   $('btn-agrupar').addEventListener('click', () => {
     const aberto = $('grupo-area').classList.toggle('open');
-    $('btn-agrupar').setAttribute('aria-expanded', String(aberto));
-    $('btn-agrupar').textContent = aberto ? '− Ocultar agrupamento' : '+ Mostrar agrupamento';
+    const btn = $('btn-agrupar');
+    btn.setAttribute('aria-expanded', String(aberto));
+    const dica = aberto
+      ? 'Ocultar agrupamento: recolhe o painel de agrupamento de colunas'
+      : 'Mostrar agrupamento: abre o painel para agrupar registros por coluna';
+    TalkIcones.definirBotao(btn, { icone: aberto ? 'menos' : 'agrupar', texto: aberto ? 'Ocultar agrupamento' : 'Mostrar agrupamento', title: dica, ariaLabel: dica });
   });
 
   $('btn-atualizar').addEventListener('click', () => carregar());

@@ -139,3 +139,6 @@ body.tlk-pagina { background: var(--bg-base); }
   .head-title { font-size: 18px; }
   .tlk-empresa span { display: none; }
 }
+.tlk-ico-giro { display: inline-block; }
+.tlk-btn-girando .tlk-ico-giro { animation: tlk-girar .8s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .tlk-btn-girando .tlk-ico-giro { animation-duration: 2.4s; } }

@@ -37,9 +37,24 @@ function carregarOuCriarChaves(dir = pastaChaves()) {
   return crypto.createPrivateKey(fs.readFileSync(privada, 'utf8'));
 }
 
+const ROTINA_CANAIS_TALK = 'talk-canais';
+
+// Empresas que esta pessoa pode colocar num canal do Talk — mesma regra do IA
+// Command (apps/IA Command/modules/whatsapp/routes.js, userCanAccessEmpresa):
+// a empresa tem o sistema liberado e a pessoa tem o sistema e a rotina de
+// canais nela; administrador do IAHub dispensa a rotina, não a liberação.
+function empresasParaCanais(usuario) {
+  const admin = usuario.role === 'admin';
+  return empresasDb.listar()
+    .filter(e => sistemasDb.hasUserSystem(usuario.id, e.id, 'ia-talk'))
+    .filter(e => admin || (permissoesDb.getRotinas(usuario.id, e.id) || []).includes(ROTINA_CANAIS_TALK))
+    .map(e => ({ id: Number(e.id), nome: e.razao_social || e.nome || '' }));
+}
+
 // rotinas: as rotinas talk-* liberadas na IA Gestão (Usuários › Permissões) para
 // este usuário nesta empresa; null = administrador do IAHub (todas).
-function assinarTicket({ usuario, empresa, rotinas = null }, { chavePrivada, agoraSeg = Math.floor(Date.now() / 1000) }) {
+// empresasCanais: ver empresasParaCanais (o Talk só vincula empresas desta lista).
+function assinarTicket({ usuario, empresa, rotinas = null, empresasCanais = [] }, { chavePrivada, agoraSeg = Math.floor(Date.now() / 1000) }) {
   const payload = {
     v: 1,
     jti: crypto.randomBytes(16).toString('base64url'),
@@ -48,6 +63,7 @@ function assinarTicket({ usuario, empresa, rotinas = null }, { chavePrivada, ago
     usuario: { id: String(usuario.id), nome: usuario.nome || usuario.usuario || '', email: usuario.email || null, celular: usuario.celular || null, admin: usuario.role === 'admin' },
     empresa: { id: Number(empresa.id), nome: empresa.razao_social || empresa.nome || '' },
     rotinas: usuario.role === 'admin' ? null : (Array.isArray(rotinas) ? rotinas.filter(r => String(r).startsWith('talk-')) : []),
+    empresas_canais: (Array.isArray(empresasCanais) ? empresasCanais : []).map(e => ({ id: Number(e.id), nome: String(e.nome || '') })),
   };
   const corpo = Buffer.from(JSON.stringify(payload), 'utf8');
   return `${corpo.toString('base64url')}.${crypto.sign(null, corpo, chavePrivada).toString('base64url')}`;
@@ -71,10 +87,11 @@ function registrar(app, { requireAuth }) {
     const empresa = empresasDb.buscarPorId(empresaId);
     if (!usuario || !empresa) return voltar('Não foi possível identificar o usuário ou a empresa.');
     const rotinas = permissoesDb.getRotinas(req.session.user_id, empresaId) || [];
-    const ticket = assinarTicket({ usuario: { ...usuario, role: req.session.role || usuario.role }, empresa, rotinas }, { chavePrivada: carregarOuCriarChaves() });
+    const pessoa = { ...usuario, role: req.session.role || usuario.role };
+    const ticket = assinarTicket({ usuario: pessoa, empresa, rotinas, empresasCanais: empresasParaCanais(pessoa) }, { chavePrivada: carregarOuCriarChaves() });
     res.set('Cache-Control', 'no-store');
     res.redirect(`${baseTalk()}/api/publico/entrar-hub?ticket=${encodeURIComponent(ticket)}`);
   });
 }
 
-module.exports = { registrar, assinarTicket, carregarOuCriarChaves, VALIDADE_SEG };
+module.exports = { registrar, assinarTicket, carregarOuCriarChaves, empresasParaCanais, VALIDADE_SEG };

@@ -23,8 +23,8 @@
         <h1 class="head-title" id="titulo-lista">Empresas <span class="head-count" id="contador" aria-live="polite"></span></h1>
       </div>
       <div class="head-actions">
-        <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
-        <button class="btn btn-primary" type="button" id="btn-nova">+ Nova empresa</button>
+        <button class="btn btn-ghost" type="button" id="btn-atualizar" title="Atualizar: recarrega a lista de empresas cadastradas" aria-label="Atualizar: recarrega a lista de empresas cadastradas"><span data-ico="atualizar" data-giro="1"></span> Atualizar</button>
+        <button class="btn btn-primary" type="button" id="btn-nova" title="Nova empresa: abre o formulário para cadastrar uma nova empresa" aria-label="Nova empresa: abre o formulário para cadastrar uma nova empresa"><span data-ico="mais"></span> Nova empresa</button>
       </div>
     </div>
     <p class="head-sub">Cada empresa tem o próprio link de entrada (<code>/app/ia-talk/apelido</code>), usuários, canais e aplicações. Os dados de uma empresa nunca aparecem para outra.</p>
@@ -41,7 +41,7 @@
         <select class="form-control" id="f-vinculo" name="vinculo_hub">
           <option value="">Com e sem IAHub</option><option value="com">Integradas ao IAHub</option><option value="sem">Só IA Talk</option>
         </select>
-        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area">+ Mostrar agrupamento</button>
+        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area" title="Mostrar agrupamento: abre o painel para agrupar empresas por coluna" aria-label="Mostrar agrupamento: abre o painel para agrupar empresas por coluna"><span data-ico="agrupar"></span> Mostrar agrupamento</button>
         <span class="grupo-status" id="grupo-status">Sem agrupamento ativo</span>
       </form>
       <div class="grupo-area" id="grupo-area">
@@ -53,7 +53,7 @@
     <div class="grade">
       <div id="estado-lista" hidden></div>
       <div id="tabela"></div>
-      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais">Carregar mais</button></div>
+      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais" title="Carregar mais: busca a próxima página de empresas" aria-label="Carregar mais: busca a próxima página de empresas"><span data-ico="seta_baixo"></span> Carregar mais</button></div>
     </div>
   </section>
 
@@ -61,7 +61,7 @@
   <section id="vista-detalhe" hidden aria-labelledby="titulo-detalhe">
     <div class="editor-bar">
       <div class="editor-title"><strong id="titulo-detalhe">Nova empresa</strong><span id="sub-detalhe"></span></div>
-      <button class="btn btn-ghost" type="button" id="btn-voltar">← Voltar à lista</button>
+      <button class="btn btn-ghost" type="button" id="btn-voltar" title="Voltar à lista: fecha o detalhe sem salvar alterações pendentes" aria-label="Voltar à lista: fecha o detalhe sem salvar alterações pendentes"><span data-ico="voltar"></span> Voltar à lista</button>
     </div>
     <div class="tlk-cartao">
       <div class="tlk-abas" role="tablist" aria-label="Seções da empresa">
@@ -98,8 +98,8 @@
             </div>
           </div>
           <div class="tlk-acoes-form">
-            <button class="btn btn-ghost" type="button" id="btn-cancelar">Cancelar</button>
-            <button class="btn btn-primary" type="submit" id="btn-salvar">Salvar</button>
+            <button class="btn btn-ghost" type="button" id="btn-cancelar" title="Cancelar: descarta as alterações e volta à lista" aria-label="Cancelar: descarta as alterações e volta à lista"><span data-ico="cancelar"></span> Cancelar</button>
+            <button class="btn btn-primary" type="submit" id="btn-salvar" title="Salvar: grava os dados desta empresa" aria-label="Salvar: grava os dados desta empresa"><span data-ico="salvar"></span> Salvar</button>
           </div>
         </form>
       </div>
@@ -115,6 +115,7 @@
 <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script src="/app/ia-talk/ui/js/grid-group-panel.js"></script>
 <script src="/app/ia-talk/js/talk-api.js"></script>
+<script src="/app/ia-talk/js/talk-icones.js"></script>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -170,7 +171,7 @@
         const comFiltro = Object.entries(filtrosAtuais()).some(([k, v]) => k !== 'limite' && v);
         TalkUI.estado(estado, 'vazio', comFiltro
           ? { titulo: 'Nenhuma empresa encontrada', texto: 'Mude a busca ou os filtros para ver outras empresas.' }
-          : { titulo: 'Nenhuma empresa cadastrada', texto: 'Cadastre a primeira empresa para gerar o link de entrada dela.', acao: { rotulo: '+ Nova empresa', aoClicar: () => abrirDetalhe(null) } });
+          : { titulo: 'Nenhuma empresa cadastrada', texto: 'Cadastre a primeira empresa para gerar o link de entrada dela.', acao: { rotulo: 'Nova empresa', aoClicar: () => abrirDetalhe(null) } });
         $('contador').textContent = '';
         return;
       }
@@ -198,8 +199,12 @@
     const area = $('grupo-area');
     const abrir = !area.classList.contains('aberta');
     area.classList.toggle('aberta', abrir);
-    $('btn-agrupar').setAttribute('aria-expanded', String(abrir));
-    $('btn-agrupar').textContent = abrir ? '− Ocultar agrupamento' : '+ Mostrar agrupamento';
+    const btn = $('btn-agrupar');
+    btn.setAttribute('aria-expanded', String(abrir));
+    const dica = abrir
+      ? 'Ocultar agrupamento: recolhe o painel de agrupamento de colunas'
+      : 'Mostrar agrupamento: abre o painel para agrupar empresas por coluna';
+    TalkIcones.definirBotao(btn, { icone: abrir ? 'menos' : 'agrupar', texto: abrir ? 'Ocultar agrupamento' : 'Mostrar agrupamento', title: dica, ariaLabel: dica });
   });
   $('btn-nova').addEventListener('click', () => abrirDetalhe(null));
 
@@ -255,7 +260,7 @@
     };
     const botao = $('btn-salvar');
     botao.disabled = true;
-    botao.textContent = 'Salvando…';
+    TalkIcones.definirBotao(botao, { icone: 'salvar', texto: 'Salvando…' });
     $('alerta-form').hidden = true;
     try {
       const salva = atual ? await TalkApi.put(`/empresas/${encodeURIComponent(atual.id)}`, corpo) : await TalkApi.post('/empresas', corpo);
@@ -270,7 +275,7 @@
       }
     } finally {
       botao.disabled = false;
-      botao.textContent = 'Salvar';
+      TalkIcones.definirBotao(botao, { icone: 'salvar', texto: 'Salvar' });
     }
   });
 

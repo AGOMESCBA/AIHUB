@@ -26,8 +26,8 @@
         <h1 class="head-title" id="titulo-lista">Canais <span class="head-count" id="contador" aria-live="polite"></span></h1>
       </div>
       <div class="head-actions">
-        <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
-        <button class="btn btn-primary" type="button" id="btn-novo">+ Novo canal</button>
+        <button class="btn btn-ghost" type="button" id="btn-atualizar" title="Atualizar: recarrega a lista de canais e seus estados atuais" aria-label="Atualizar: recarrega a lista de canais e seus estados atuais"><span data-ico="atualizar" data-giro="1"></span> Atualizar</button>
+        <button class="btn btn-primary" type="button" id="btn-novo" title="Novo canal: abre o formulário para cadastrar uma nova conexão de WhatsApp" aria-label="Novo canal: abre o formulário para cadastrar uma nova conexão de WhatsApp"><span data-ico="mais"></span> Novo canal</button>
       </div>
     </div>
     <p class="head-sub">Conexões de WhatsApp cadastradas para envio e recebimento de mensagens. Clique em um canal para gerenciar conexão, QR Code, terminal ao vivo e empresas vinculadas.</p>
@@ -53,7 +53,7 @@
           <option value="wweb">WhatsApp Web</option>
           <option value="meta">Meta Cloud API</option>
         </select>
-        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area">+ Mostrar agrupamento</button>
+        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area" title="Mostrar agrupamento: abre o painel para agrupar canais por coluna" aria-label="Mostrar agrupamento: abre o painel para agrupar canais por coluna"><span data-ico="agrupar"></span> Mostrar agrupamento</button>
         <span class="grupo-status" id="grupo-status">Sem agrupamento ativo</span>
       </form>
       <div class="grupo-area" id="grupo-area">
@@ -65,7 +65,7 @@
     <div class="grade">
       <div id="estado-lista" hidden></div>
       <div id="tabela"></div>
-      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais">Carregar mais</button></div>
+      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais" title="Carregar mais: busca a próxima página de canais" aria-label="Carregar mais: busca a próxima página de canais"><span data-ico="seta_baixo"></span> Carregar mais</button></div>
     </div>
   </section>
 
@@ -76,7 +76,7 @@
         <strong id="titulo-novo">Novo canal</strong>
         <span>O canal nasce parado. Depois de salvar, conecte para gerar o QR Code.</span>
       </div>
-      <button class="btn btn-ghost" type="button" id="btn-voltar-novo">← Voltar à lista</button>
+      <button class="btn btn-ghost" type="button" id="btn-voltar-novo" title="Voltar à lista: fecha o cadastro sem criar o canal" aria-label="Voltar à lista: fecha o cadastro sem criar o canal"><span data-ico="voltar"></span> Voltar à lista</button>
     </div>
 
     <div class="tlk-cartao">
@@ -119,8 +119,8 @@
           </div>
 
           <div class="tlk-acoes-form">
-            <button class="btn btn-ghost" type="button" id="btn-cancelar-novo">Cancelar</button>
-            <button class="btn btn-primary" type="submit" id="btn-criar-canal">Criar canal</button>
+            <button class="btn btn-ghost" type="button" id="btn-cancelar-novo" title="Cancelar: descarta os dados preenchidos e volta à lista" aria-label="Cancelar: descarta os dados preenchidos e volta à lista"><span data-ico="cancelar"></span> Cancelar</button>
+            <button class="btn btn-primary" type="submit" id="btn-criar-canal" title="Criar canal: salva o novo canal parado para conectar em seguida" aria-label="Criar canal: salva o novo canal parado para conectar em seguida"><span data-ico="salvar"></span> Criar canal</button>
           </div>
         </form>
       </div>
@@ -142,7 +142,7 @@
           <span class="tlk-rt-dot" aria-hidden="true"></span>
           <span id="rt-texto">Conectando tempo real…</span>
         </span>
-        <button class="btn btn-ghost" type="button" id="btn-voltar">← Voltar à lista</button>
+        <button class="btn btn-ghost" type="button" id="btn-voltar" title="Voltar à lista: encerra o monitoramento deste canal e volta à lista" aria-label="Voltar à lista: encerra o monitoramento deste canal e volta à lista"><span data-ico="voltar"></span> Voltar à lista</button>
       </div>
     </div>
 
@@ -170,16 +170,16 @@
             <span class="form-hint">Com DDI e DDD. Para trocar o número de um canal já pareado, pare o canal e use "Limpar sessão" antes.</span>
           </div>
           <div class="tlk-acoes-form">
-            <button class="btn btn-ghost" type="button" id="btn-cancelar-numero">Cancelar</button>
-            <button class="btn btn-primary" type="submit" id="btn-salvar-numero">Salvar número</button>
+            <button class="btn btn-ghost" type="button" id="btn-cancelar-numero" title="Cancelar: fecha o formulário sem alterar o número" aria-label="Cancelar: fecha o formulário sem alterar o número"><span data-ico="cancelar"></span> Cancelar</button>
+            <button class="btn btn-primary" type="submit" id="btn-salvar-numero" title="Salvar número: vincula o número informado a este canal" aria-label="Salvar número: vincula o número informado a este canal"><span data-ico="salvar"></span> Salvar número</button>
           </div>
         </form>
 
         <div class="tlk-acoes-canal" role="group" aria-label="Ações de conexão do canal">
-          <button class="btn btn-primary" type="button" id="btn-conectar">Conectar</button>
-          <button class="btn btn-ghost" type="button" id="btn-novo-qr">↻ Novo QR</button>
-          <button class="btn btn-ghost" type="button" id="btn-reconectar">Reconectar</button>
-          <button class="btn btn-ghost" type="button" id="btn-desconectar">Desconectar</button>
+          <button class="btn btn-primary" type="button" id="btn-conectar" title="Conectar: inicia o canal e gera QR Code se ainda não houver sessão salva" aria-label="Conectar: inicia o canal e gera QR Code se ainda não houver sessão salva"><span data-ico="play"></span> Conectar</button>
+          <button class="btn btn-ghost" type="button" id="btn-novo-qr" title="Novo QR: gera um novo QR Code para parear o WhatsApp" aria-label="Novo QR: gera um novo QR Code para parear o WhatsApp"><span data-ico="qr"></span> Novo QR</button>
+          <button class="btn btn-ghost" type="button" id="btn-reconectar" title="Reconectar: reinicia a conexão do canal mantendo a sessão salva" aria-label="Reconectar: reinicia a conexão do canal mantendo a sessão salva"><span data-ico="atualizar"></span> Reconectar</button>
+          <button class="btn btn-ghost" type="button" id="btn-desconectar" title="Desconectar: encerra o canal mantendo a sessão salva" aria-label="Desconectar: encerra o canal mantendo a sessão salva"><span data-ico="stop"></span> Desconectar</button>
         </div>
 
         <div class="tlk-conectado-box" id="box-conectado" hidden>
@@ -203,7 +203,7 @@
             </ol>
             <div class="tlk-qr-rodape">
               <span class="tlk-qr-contagem" id="qr-contagem" aria-live="polite">Aguardando QR…</span>
-              <button class="btn btn-ghost" type="button" id="btn-qr-renovar">↻ Novo QR</button>
+              <button class="btn btn-ghost" type="button" id="btn-qr-renovar" title="Novo QR: gera um novo QR Code para parear o WhatsApp" aria-label="Novo QR: gera um novo QR Code para parear o WhatsApp"><span data-ico="qr"></span> Novo QR</button>
             </div>
           </div>
         </div>
@@ -214,13 +214,13 @@
               <strong>Limpar sessão salva</strong>
               <p>Use somente se precisar trocar o aparelho/número ou se a sessão estiver corrompida. A ação desconecta o canal e apaga a autenticação local.</p>
             </div>
-            <button class="btn btn-ghost" type="button" id="btn-pedir-limpar" style="color:var(--error);border-color:var(--error)">Limpar sessão</button>
+            <button class="btn btn-ghost" type="button" id="btn-pedir-limpar" style="color:var(--error);border-color:var(--error)" title="Limpar sessão: apaga a conexão; o celular terá de ler um novo QR Code" aria-label="Limpar sessão: apaga a conexão; o celular terá de ler um novo QR Code"><span data-ico="lixeira"></span> Limpar sessão</button>
           </div>
           <div class="tlk-confirm-inline" id="confirm-limpar" hidden>
             <span><strong>Confirmar limpeza de sessão?</strong> A sessão salva deste canal será apagada permanentemente. O celular terá de ler um novo QR Code para voltar a conectar.</span>
             <div class="tlk-confirm-acoes">
-              <button class="btn btn-ghost" type="button" id="btn-cancelar-limpar">Cancelar</button>
-              <button class="btn btn-perigo" type="button" id="btn-confirmar-limpar">Sim, limpar sessão</button>
+              <button class="btn btn-ghost" type="button" id="btn-cancelar-limpar" title="Cancelar: mantém a sessão salva sem alterações" aria-label="Cancelar: mantém a sessão salva sem alterações"><span data-ico="cancelar"></span> Cancelar</button>
+              <button class="btn btn-perigo" type="button" id="btn-confirmar-limpar" title="Confirmar limpeza: apaga a sessão salva deste canal permanentemente" aria-label="Confirmar limpeza: apaga a sessão salva deste canal permanentemente"><span data-ico="lixeira"></span> Sim, limpar sessão</button>
             </div>
           </div>
         </div>
@@ -229,12 +229,12 @@
       <!-- Aba 2: Terminal ao vivo (layout 3 colunas borda-a-borda no modelo whatsapp-services) -->
       <div class="tlk-painel-aba" id="painel-terminal" role="tabpanel" aria-labelledby="aba-terminal" hidden>
         <div class="tlk-term-layout" id="term-layout">
-          <!-- Esquerda: lista compacta de canais (recolhível para ampliar o log) -->
+          <!-- Esquerda: lista compacta de canais (recolhível para faixa de ~56 px com bolinhas) -->
           <aside class="tlk-term-sidebar" aria-label="Canais disponíveis no terminal">
             <div class="tlk-term-sidebar-topo">
               <label class="sr-only" for="term-busca-canais">Buscar canal</label>
               <input class="form-control" id="term-busca-canais" type="search" placeholder="Filtrar canal…" autocomplete="off">
-              <button class="btn btn-ghost btn-sm" type="button" id="btn-term-atualizar-lista" title="Atualizar lista de canais" aria-label="Atualizar lista de canais">↻</button>
+              <button class="btn btn-ghost btn-sm" type="button" id="btn-term-atualizar-lista" title="Atualizar lista: recarrega os canais e estados na barra lateral" aria-label="Atualizar lista: recarrega os canais e estados na barra lateral"><span data-ico="atualizar" data-giro="1"></span></button>
             </div>
             <div class="tlk-term-canais" id="term-lista-canais"></div>
           </aside>
@@ -243,7 +243,7 @@
           <section class="tlk-term-centro" aria-label="Log ao vivo do canal">
             <div class="tlk-term-barra">
               <div class="tlk-term-filtros">
-                <button class="btn btn-ghost btn-sm" type="button" id="btn-term-toggle-canais" aria-expanded="true" title="Mostrar ou ocultar lista de canais">☰ Canais</button>
+                <button class="btn btn-ghost btn-sm" type="button" id="btn-term-toggle-canais" aria-expanded="true" title="Canais: recolher a lista de canais para uma faixa compacta e ampliar o log" aria-label="Canais: recolher a lista de canais para uma faixa compacta e ampliar o log"><span data-ico="painel_lateral"></span> Canais</button>
                 <label class="sr-only" for="f-log-tipo">Filtrar tipo de log</label>
                 <select class="form-control" id="f-log-tipo">
                   <option value="">Todos os tipos</option>
@@ -258,14 +258,14 @@
                 <span class="grupo-status" id="term-contagem">0 linha(s)</span>
               </div>
               <div class="tlk-term-filtros">
-                <button class="btn btn-ghost btn-sm" type="button" id="btn-autoscroll" aria-pressed="true">↓ Auto-rolagem: ativa</button>
-                <button class="btn btn-ghost btn-sm" type="button" id="btn-recarregar-log">↻ Recarregar</button>
+                <button class="btn btn-ghost btn-sm" type="button" id="btn-autoscroll" aria-pressed="true" title="Auto-rolagem ativa: acompanha novas linhas automaticamente; clique para pausar" aria-label="Auto-rolagem ativa: acompanha novas linhas automaticamente; clique para pausar"><span data-ico="seta_baixo"></span> Auto-rolagem: ativa</button>
+                <button class="btn btn-ghost btn-sm" type="button" id="btn-recarregar-log" title="Recarregar: busca novamente o histórico recente do log deste canal" aria-label="Recarregar: busca novamente o histórico recente do log deste canal"><span data-ico="atualizar" data-giro="1"></span> Recarregar</button>
               </div>
             </div>
 
             <div class="tlk-term-pausa" id="aviso-pausa" hidden>
               <span>Auto-rolagem pausada porque você subiu o histórico. Novas linhas continuam chegando abaixo.</span>
-              <button class="btn btn-ghost btn-sm" type="button" id="btn-retomar-rolagem">↓ Ir para o fim e retomar</button>
+              <button class="btn btn-ghost btn-sm" type="button" id="btn-retomar-rolagem" title="Ir para o fim e retomar: desce até a linha mais recente e reativa a auto-rolagem" aria-label="Ir para o fim e retomar: desce até a linha mais recente e reativa a auto-rolagem"><span data-ico="seta_baixo"></span> Ir para o fim e retomar</button>
             </div>
 
             <div class="tlk-terminal" id="terminal" role="log" aria-live="polite" aria-label="Terminal ao vivo do canal"></div>
@@ -288,17 +288,17 @@
             <div class="tlk-term-sec">
               <div class="tlk-term-sec-lbl">Ações do canal</div>
               <div class="tlk-term-acoes">
-                <button class="btn btn-ghost" type="button" id="btn-term-conectar">▶ Conectar</button>
-                <button class="btn btn-ghost" type="button" id="btn-term-parar">■ Parar</button>
-                <button class="btn btn-ghost" type="button" id="btn-term-reconectar">↻ Reconectar</button>
-                <button class="btn btn-ghost" type="button" id="btn-term-novo-qr">Novo QR</button>
-                <button class="btn btn-ghost tlk-span-2" type="button" id="btn-term-limpar-sessao" style="color:var(--error);border-color:var(--error)">Remover sessão</button>
+                <button class="btn btn-ghost" type="button" id="btn-term-conectar" title="Conectar: inicia o canal e gera QR Code se ainda não houver sessão salva" aria-label="Conectar: inicia o canal e gera QR Code se ainda não houver sessão salva"><span data-ico="play"></span> Conectar</button>
+                <button class="btn btn-ghost" type="button" id="btn-term-parar" title="Parar: encerra o canal mantendo a sessão salva" aria-label="Parar: encerra o canal mantendo a sessão salva"><span data-ico="stop"></span> Parar</button>
+                <button class="btn btn-ghost" type="button" id="btn-term-reconectar" title="Reconectar: reinicia a conexão do canal mantendo a sessão salva" aria-label="Reconectar: reinicia a conexão do canal mantendo a sessão salva"><span data-ico="atualizar"></span> Reconectar</button>
+                <button class="btn btn-ghost" type="button" id="btn-term-novo-qr" title="Novo QR: gera um novo QR Code para parear o WhatsApp" aria-label="Novo QR: gera um novo QR Code para parear o WhatsApp"><span data-ico="qr"></span> Novo QR</button>
+                <button class="btn btn-ghost tlk-span-2" type="button" id="btn-term-limpar-sessao" style="color:var(--error);border-color:var(--error)" title="Remover sessão: apaga a conexão; o celular terá de ler um novo QR Code" aria-label="Remover sessão: apaga a conexão; o celular terá de ler um novo QR Code"><span data-ico="lixeira"></span> Remover sessão</button>
               </div>
               <div class="tlk-term-confirm" id="term-confirm-limpar" hidden>
                 <span><strong>Remover sessão salva?</strong> O canal será parado e o celular terá de ler um novo QR Code.</span>
                 <div class="tlk-term-confirm-btns">
-                  <button class="btn btn-ghost" type="button" id="btn-term-cancelar-limpar">Cancelar</button>
-                  <button class="btn btn-perigo" type="button" id="btn-term-confirmar-limpar">Sim, remover</button>
+                  <button class="btn btn-ghost" type="button" id="btn-term-cancelar-limpar" title="Cancelar: mantém a sessão salva sem alterações" aria-label="Cancelar: mantém a sessão salva sem alterações"><span data-ico="cancelar"></span> Cancelar</button>
+                  <button class="btn btn-perigo" type="button" id="btn-term-confirmar-limpar" title="Confirmar remoção: para o canal e apaga a sessão salva" aria-label="Confirmar remoção: para o canal e apaga a sessão salva"><span data-ico="lixeira"></span> Sim, remover</button>
                 </div>
               </div>
             </div>
@@ -319,8 +319,8 @@
             <div class="tlk-term-sec">
               <div class="tlk-term-sec-lbl">Log</div>
               <div class="tlk-term-log-btns">
-                <button class="btn btn-ghost" type="button" id="btn-limpar-term">Limpar</button>
-                <button class="btn btn-ghost" type="button" id="btn-copiar-term">Copiar</button>
+                <button class="btn btn-ghost" type="button" id="btn-limpar-term" title="Limpar: limpa apenas as linhas exibidas nesta tela sem apagar o histórico do servidor" aria-label="Limpar: limpa apenas as linhas exibidas nesta tela sem apagar o histórico do servidor"><span data-ico="limpar"></span> Limpar</button>
+                <button class="btn btn-ghost" type="button" id="btn-copiar-term" title="Copiar: copia as linhas visíveis do log para a área de transferência" aria-label="Copiar: copia as linhas visíveis do log para a área de transferência"><span data-ico="copiar"></span> Copiar</button>
               </div>
             </div>
           </aside>
@@ -354,11 +354,11 @@
           <div class="tlk-add-linha">
             <label class="sr-only" for="sel-nova-empresa">Adicionar empresa</label>
             <select class="form-control" id="sel-nova-empresa"></select>
-            <button class="btn btn-ghost" type="button" id="btn-add-empresa">+ Vincular empresa</button>
+            <button class="btn btn-ghost" type="button" id="btn-add-empresa" title="Vincular empresa: adiciona a empresa selecionada à lista deste número" aria-label="Vincular empresa: adiciona a empresa selecionada à lista deste número"><span data-ico="mais"></span> Vincular empresa</button>
           </div>
 
           <div class="tlk-acoes-form">
-            <button class="btn btn-primary" type="submit" id="btn-salvar-empresas">Salvar nome e vínculos</button>
+            <button class="btn btn-primary" type="submit" id="btn-salvar-empresas" title="Salvar nome e vínculos: grava o nome do canal e as empresas vinculadas" aria-label="Salvar nome e vínculos: grava o nome do canal e as empresas vinculadas"><span data-ico="salvar"></span> Salvar nome e vínculos</button>
           </div>
         </form>
       </div>
@@ -385,6 +385,7 @@
 <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script src="/app/ia-talk/ui/js/grid-group-panel.js"></script>
 <script src="/app/ia-talk/js/talk-api.js"></script>
+<script src="/app/ia-talk/js/talk-icones.js"></script>
 <script src="/app/ia-talk/socket.io/socket.io.js"></script>
 <script>
 (function () {
@@ -392,7 +393,13 @@
   const { esc, pill, dataHora, relativo } = TalkUI;
 
   const MAX_LOG_LINHAS = 500;
-  const POLL_FALLBACK_MS = 30000;
+  // Sem socket o Terminal ainda precisa parecer ao vivo: 5 s (era 30 s e a mensagem só aparecia no Recarregar).
+  const POLL_FALLBACK_MS = 5000;
+  const CHAVE_SIDEBAR_TERM = 'talk_term_canais_recolhida';
+  const ROTULO_ESTADO = {
+    conectado: 'Conectado', iniciando: 'Iniciando', qr_pendente: 'QR pendente',
+    reconectando: 'Reconectando', desconectado: 'Desconectado', parado: 'Parado', erro: 'Erro',
+  };
 
   let tabela = null;
   let painelGrupo = null;
@@ -403,6 +410,7 @@
   let canaisCatalogo = [];
   let empresasCatalogo = [];
   let vinculosEditados = [];
+  let sidebarRecolhida = null;
 
   let socket = null;
   let canalAssinadoId = null;
@@ -436,6 +444,48 @@
     return '';
   }
 
+  function classeDotEstado(estado) {
+    if (estado === 'conectado') return 'ok';
+    if (['qr_pendente', 'reconectando'].includes(estado)) return 'aviso';
+    if (estado === 'iniciando') return 'info';
+    if (['desconectado', 'erro'].includes(estado)) return 'erro';
+    return 'neutro';
+  }
+
+  function lerPreferenciaSidebar() {
+    try {
+      const v = localStorage.getItem(CHAVE_SIDEBAR_TERM);
+      if (v === '1') return true;
+      if (v === '0') return false;
+    } catch (_) { /* sem localStorage */ }
+    return null;
+  }
+
+  function salvarPreferenciaSidebar(recolhida) {
+    try { localStorage.setItem(CHAVE_SIDEBAR_TERM, recolhida ? '1' : '0'); } catch (_) { /* sem localStorage */ }
+  }
+
+  function aplicarEstadoSidebarTerminal(recolhida) {
+    sidebarRecolhida = !!recolhida;
+    const layout = $('term-layout');
+    if (layout) layout.classList.toggle('sidebar-recolhida', sidebarRecolhida);
+    const btn = $('btn-term-toggle-canais');
+    if (btn) {
+      btn.setAttribute('aria-expanded', String(!sidebarRecolhida));
+      const dica = sidebarRecolhida
+        ? 'Canais: expandir a lista completa de canais'
+        : 'Canais: recolher a lista de canais para uma faixa compacta e ampliar o log';
+      btn.title = dica;
+      btn.setAttribute('aria-label', dica);
+    }
+  }
+
+  function sincronizarSidebarTerminalInicial() {
+    const pref = lerPreferenciaSidebar();
+    const deveRecolher = pref !== null ? pref : canaisCatalogo.length <= 1;
+    aplicarEstadoSidebarTerminal(deveRecolher);
+  }
+
   function nomeProvedor(p) {
     return p === 'meta' ? 'Meta Cloud API' : 'WhatsApp Web';
   }
@@ -458,17 +508,15 @@
   }
 
   // ── Catálogo de empresas (para vincular na aba 3) ───────────────────
+  // Regra do IA Command no backend: empresas com o IA Talk liberado em que a pessoa
+  // também administra canais. id "hub:<n>" = ainda não existe no Talk (criada ao salvar).
   async function carregarEmpresasDisponiveis() {
-    const porId = new Map();
     try {
-      const sessao = await TalkApi.get('/sessao');
-      for (const e of sessao?.empresas_disponiveis || []) porId.set(e.id, { id: e.id, nome: e.nome });
-    } catch (_) {}
-    try {
-      const pag = await TalkApi.get('/empresas', { limite: 200 });
-      for (const e of pag?.itens || []) porId.set(e.id, { id: e.id, nome: e.nome });
-    } catch (_) {}
-    empresasCatalogo = [...porId.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+      const r = await TalkApi.get('/canais/empresas-vinculaveis');
+      empresasCatalogo = (r?.itens || []).map((e) => ({ id: e.id, nome: e.nome }));
+    } catch (_) {
+      empresasCatalogo = [];
+    }
   }
 
   // ── Lista ───────────────────────────────────────────────────────────
@@ -557,7 +605,7 @@
         const comFiltro = Object.entries(filtrosAtuais()).some(([k, v]) => k !== 'limite' && v);
         TalkUI.estado(estado, 'vazio', comFiltro
           ? { titulo: 'Nenhum canal encontrado', texto: 'Mude a busca ou os filtros para ver outros canais.' }
-          : { titulo: 'Nenhum canal cadastrado', texto: 'Cadastre o primeiro canal de WhatsApp para começar a conectar números.', acao: { rotulo: '+ Novo canal', aoClicar: abrirNovo } });
+          : { titulo: 'Nenhum canal cadastrado', texto: 'Cadastre o primeiro canal de WhatsApp para começar a conectar números.', acao: { rotulo: 'Novo canal', aoClicar: abrirNovo } });
         $('contador').textContent = '';
         return;
       }
@@ -579,14 +627,18 @@
   $('f-estado').addEventListener('change', () => carregarLista());
   $('f-provedor').addEventListener('change', () => carregarLista());
   $('filtros').addEventListener('submit', (e) => { e.preventDefault(); carregarLista(); });
-  $('btn-atualizar').addEventListener('click', () => carregarLista());
+  $('btn-atualizar').addEventListener('click', (e) => comGiro(e.currentTarget, () => carregarLista()));
   $('btn-mais').addEventListener('click', () => carregarLista({ continuar: true }));
   $('btn-agrupar').addEventListener('click', () => {
     const area = $('grupo-area');
     const abrir = !area.classList.contains('aberta');
     area.classList.toggle('aberta', abrir);
-    $('btn-agrupar').setAttribute('aria-expanded', String(abrir));
-    $('btn-agrupar').textContent = abrir ? '− Ocultar agrupamento' : '+ Mostrar agrupamento';
+    const btn = $('btn-agrupar');
+    btn.setAttribute('aria-expanded', String(abrir));
+    const dica = abrir
+      ? 'Ocultar agrupamento: recolhe o painel de agrupamento de colunas'
+      : 'Mostrar agrupamento: abre o painel para agrupar canais por coluna';
+    TalkIcones.definirBotao(btn, { icone: abrir ? 'menos' : 'agrupar', texto: abrir ? 'Ocultar agrupamento' : 'Mostrar agrupamento', title: dica, ariaLabel: dica });
   });
 
   // ── Navegação entre vistas ──────────────────────────────────────────
@@ -625,7 +677,7 @@
     $('alerta-novo').hidden = true;
     const btn = $('btn-criar-canal');
     btn.disabled = true;
-    btn.textContent = 'Criando…';
+    TalkIcones.definirBotao(btn, { icone: 'salvar', texto: 'Criando…' });
     try {
       const criado = await TalkApi.post('/canais', { nome: $('n-nome').value.trim(), numero: $('n-numero').value.trim(), provedor: 'wweb' });
       TalkUI.toast('Canal criado. Clique em Conectar para gerar o QR Code.', 'ok');
@@ -638,7 +690,7 @@
       }
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Criar canal';
+      TalkIcones.definirBotao(btn, { icone: 'salvar', texto: 'Criar canal' });
     }
   });
 
@@ -704,23 +756,28 @@
       return `${c.nome} ${c.numero_mascarado || ''} ${emps}`.toLowerCase().includes(termo);
     });
     if (!lista.length) {
-      cont.innerHTML = '<div class="tlk-lista-item-sub" style="padding:12px;text-align:center;">Nenhum canal encontrado.</div>';
+      cont.innerHTML = '<div class="tlk-lista-item-sub tlk-term-vazio-sidebar" style="padding:12px;text-align:center;">Nenhum canal encontrado.</div>';
       return;
     }
     cont.innerHTML = lista.map((c) => {
       const ativo = canalAtual?.id === c.id;
       const qtdEmp = (c.empresas_vinculadas || []).length;
       const fila = Number(c.fila_pendente || 0);
+      const estadoTxt = ROTULO_ESTADO[c.estado] || c.estado || '—';
+      const dica = `${c.nome} — ${estadoTxt}${c.numero_mascarado ? ` (${c.numero_mascarado})` : ''}`;
       return `
-        <button type="button" class="tlk-term-card ${classeEstadoCard(c.estado)} ${ativo ? 'ativo' : ''}" data-term-canal="${esc(c.id)}" aria-current="${ativo ? 'true' : 'false'}">
-          <div class="tlk-term-card-cab">
-            <span class="tlk-term-card-nome">${esc(c.nome)}</span>
-            ${pill(c.estado)}
-          </div>
-          <div class="tlk-term-card-num">${esc(c.numero_mascarado || 'Não cadastrado')}</div>
-          <div class="tlk-term-card-meta">
-            <span>${qtdEmp} empresa(s)</span>
-            <span>${fila > 0 ? `Fila: ${fila}` : 'Fila: 0'}</span>
+        <button type="button" class="tlk-term-card ${classeEstadoCard(c.estado)} ${ativo ? 'ativo' : ''}" data-term-canal="${esc(c.id)}" aria-current="${ativo ? 'true' : 'false'}" title="${esc(dica)}" aria-label="${esc(`Canal ${dica}`)}">
+          <span class="tlk-term-dot tlk-term-dot--${classeDotEstado(c.estado)}" aria-hidden="true"></span>
+          <div class="tlk-term-card-corpo">
+            <div class="tlk-term-card-cab">
+              <span class="tlk-term-card-nome">${esc(c.nome)}</span>
+              ${pill(c.estado)}
+            </div>
+            <div class="tlk-term-card-num">${esc(c.numero_mascarado || 'Não cadastrado')}</div>
+            <div class="tlk-term-card-meta">
+              <span>${qtdEmp} empresa(s)</span>
+              <span>${fila > 0 ? `Fila: ${fila}` : 'Fila: 0'}</span>
+            </div>
           </div>
         </button>`;
     }).join('');
@@ -786,7 +843,7 @@
     $('meta-canal').innerHTML = `
       <div class="meta-item"><span>Estado</span><strong>${pill(c.estado)}</strong></div>
       <div class="meta-item"><span>Número</span><strong><code>${esc(c.numero_mascarado || 'Não cadastrado')}</code>
-        <button class="btn btn-ghost btn-sm" type="button" data-acao="alterar-numero">${c.numero_mascarado ? 'Alterar' : 'Cadastrar'}</button></strong></div>
+        <button class="btn btn-ghost btn-sm" type="button" data-acao="alterar-numero" title="${c.numero_mascarado ? 'Alterar número: abre o formulário para trocar o número do WhatsApp deste canal' : 'Cadastrar número: informe o número do WhatsApp para liberar a conexão'}" aria-label="${c.numero_mascarado ? 'Alterar número: abre o formulário para trocar o número do WhatsApp deste canal' : 'Cadastrar número: informe o número do WhatsApp para liberar a conexão'}">${TalkIcones.svg('editar')} ${c.numero_mascarado ? 'Alterar' : 'Cadastrar'}</button></strong></div>
       <div class="meta-item"><span>Provedor</span><strong>${esc(nomeProvedor(c.provedor))}</strong></div>
       <div class="meta-item"><span>Fila pendente</span><strong>${Number(c.fila_pendente || 0)} mensagem(ns)</strong></div>
       <div class="meta-item"><span>Estado desde</span><strong>${esc(dataHora(c.estado_desde))}</strong></div>
@@ -875,7 +932,7 @@
               <input type="checkbox" data-padrao-idx="${idx}" ${v.padrao ? 'checked' : ''}>
               <span>Canal padrão</span>
             </label>
-            <button class="btn btn-ghost" type="button" data-remover-vinc="${idx}" ${vinculosEditados.length <= 1 ? 'disabled title="O canal precisa ter pelo menos uma empresa vinculada"' : ''}>Remover</button>
+            <button class="btn btn-ghost" type="button" data-remover-vinc="${idx}" ${vinculosEditados.length <= 1 ? 'disabled title="O canal precisa ter pelo menos uma empresa vinculada" aria-label="Remover vínculo indisponível: o canal precisa ter pelo menos uma empresa vinculada"' : `title="Remover vínculo: desvincula ${esc(v.nome)} deste número" aria-label="Remover vínculo: desvincula ${esc(v.nome)} deste número"`}>${TalkIcones.svg('lixeira')} Remover</button>
           </div>
         </div>`).join('');
     }
@@ -925,7 +982,15 @@
   function atualizarBotaoAutoScroll() {
     const btn = $('btn-autoscroll');
     btn.setAttribute('aria-pressed', String(autoScroll));
-    btn.textContent = autoScroll ? '↓ Auto-rolagem: ativa' : '⏸ Auto-rolagem: pausada';
+    const dica = autoScroll
+      ? 'Auto-rolagem ativa: acompanha novas linhas automaticamente; clique para pausar'
+      : 'Auto-rolagem pausada: clique para retomar a rolagem automática até o fim';
+    TalkIcones.definirBotao(btn, {
+      icone: autoScroll ? 'seta_baixo' : 'pausa',
+      texto: autoScroll ? 'Auto-rolagem: ativa' : 'Auto-rolagem: pausada',
+      title: dica,
+      ariaLabel: dica,
+    });
     $('aviso-pausa').hidden = autoScroll;
   }
 
@@ -1028,7 +1093,7 @@
     if (!id || id === canalAtual?.id) return;
     abrirDetalhe(id, { manterAba: 'terminal' });
   });
-  $('btn-term-atualizar-lista').addEventListener('click', async () => {
+  $('btn-term-atualizar-lista').addEventListener('click', (e) => comGiro(e.currentTarget, async () => {
     try {
       const pag = await TalkApi.get('/canais', { limite: 100 });
       canaisCatalogo = pag?.itens || [];
@@ -1037,9 +1102,9 @@
     } catch (err) {
       TalkUI.toast(err.message, 'erro');
     }
-  });
+  }));
 
-  async function carregarLogInicial(canalId) {
+  async function carregarLogInicial(canalId, { forcarFim = true } = {}) {
     const pag = await TalkApi.get(`/canais/${encodeURIComponent(canalId)}/log`, { limite: 200 });
     linhasLog = [];
     chavesLog = new Set();
@@ -1050,19 +1115,35 @@
       chavesLog.add(chave);
       linhasLog.push(l);
     }
-    renderizarTerminal({ forcarFim: true });
+    renderizarTerminal({ forcarFim });
   }
 
-  $('btn-recarregar-log').addEventListener('click', async () => {
+  // Ícone ↻ girando enquanto o botão recarrega (como o IA Command); mínimo de
+  // 600 ms para o giro ser percebido mesmo quando a resposta é instantânea.
+  async function comGiro(botao, fn) {
+    if (botao.classList.contains('tlk-btn-girando')) return;
+    botao.classList.add('tlk-btn-girando');
+    botao.disabled = true;
+    try {
+      await Promise.all([fn(), new Promise((r) => setTimeout(r, 600))]);
+    } finally {
+      botao.classList.remove('tlk-btn-girando');
+      botao.disabled = false;
+    }
+  }
+
+  $('btn-recarregar-log').addEventListener('click', (e) => comGiro(e.currentTarget, async () => {
     if (!canalAtual) return;
     try { await carregarLogInicial(canalAtual.id); } catch (err) { TalkUI.toast(err.message, 'erro'); }
-  });
+  }));
 
   // ── Tempo real (Socket.IO + fallback 30 s se o socket cair) ─────────
-  function atualizarIndicadorTempoReal(modo) {
+  function atualizarIndicadorTempoReal(modo, motivo) {
     const badge = $('rt-badge');
     badge.className = `tlk-rt-badge ${modo === 'socket' ? 'tlk-rt-badge--ok' : 'tlk-rt-badge--fallback'}`;
-    $('rt-texto').textContent = modo === 'socket' ? 'Tempo real ativo' : 'Sem socket · atualiza a cada 30 s';
+    $('rt-texto').textContent = modo === 'socket' ? 'Tempo real ativo' : 'Sem socket · atualiza a cada 5 s';
+    // Motivo no tooltip: diagnóstico em produção (IIS/ARR barrando WebSocket x sessão recusada).
+    badge.title = modo === 'socket' ? '' : `Tempo real indisponível${motivo ? ` (${motivo})` : ''}.`;
   }
 
   function pararFallback() {
@@ -1070,13 +1151,13 @@
     timerFallback = null;
   }
 
-  function iniciarFallback() {
-    atualizarIndicadorTempoReal('fallback');
+  function iniciarFallback(motivo) {
+    atualizarIndicadorTempoReal('fallback', motivo);
     if (timerFallback) return;
     timerFallback = setInterval(async () => {
       if (!canalAtual) return;
       try {
-        await sincronizarCanalViaApi(canalAtual.id, { comLog: true });
+        await sincronizarCanalViaApi(canalAtual.id, { comLog: true, forcarFim: false });
       } catch (_) {}
     }, POLL_FALLBACK_MS);
   }
@@ -1096,12 +1177,13 @@
       if (canalAssinadoId) socket.emit('canal:assinar', { canal_id: canalAssinadoId });
     });
 
-    socket.on('disconnect', () => {
-      if (canalAssinadoId) iniciarFallback();
+    socket.on('disconnect', (motivo) => {
+      if (canalAssinadoId) iniciarFallback(motivo);
     });
 
-    socket.on('connect_error', () => {
-      if (canalAssinadoId) iniciarFallback();
+    socket.on('connect_error', (err) => {
+      console.warn('[IA Talk] tempo real indisponível:', err?.message || err);
+      if (canalAssinadoId) iniciarFallback(err?.message);
     });
 
     socket.on('canal:estado', (ev) => {
@@ -1157,7 +1239,7 @@
   window.addEventListener('beforeunload', encerrarAssinaturaCanal);
 
   // ── Abrir detalhe (sempre carrega pela API antes do socket) ─────────
-  async function sincronizarCanalViaApi(canalId, { comLog = false } = {}) {
+  async function sincronizarCanalViaApi(canalId, { comLog = false, forcarFim = true } = {}) {
     const c = await TalkApi.get(`/canais/${encodeURIComponent(canalId)}`);
     canalAtual = c;
     renderizarCabecalhoEConexao();
@@ -1168,7 +1250,7 @@
     } else {
       aplicarQr({ qr: null });
     }
-    if (comLog) await carregarLogInicial(canalId);
+    if (comLog) await carregarLogInicial(canalId, { forcarFim });
     tabela?.updateRow?.(c.id, c).catch?.(() => {});
   }
 
@@ -1190,6 +1272,7 @@
       ]);
       if (pagCanais?.itens) canaisCatalogo = pagCanais.itens;
       canalAtual = c;
+      if (sidebarRecolhida === null) sincronizarSidebarTerminalInicial();
       vinculosEditados = (c.empresas_vinculadas || []).map((v) => ({ id: v.id, nome: v.nome, padrao: !!v.padrao }));
       renderizarCabecalhoEConexao();
       renderizarEmpresas();
@@ -1297,7 +1380,7 @@
     $('alerta-empresas').hidden = true;
     const btn = $('btn-salvar-empresas');
     btn.disabled = true;
-    btn.textContent = 'Salvando…';
+    TalkIcones.definirBotao(btn, { icone: 'salvar', texto: 'Salvando…' });
     try {
       const salvo = await TalkApi.put(`/canais/${encodeURIComponent(canalAtual.id)}`, {
         nome: $('e-nome').value.trim(),
@@ -1315,14 +1398,14 @@
       }
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Salvar nome e vínculos';
+      TalkIcones.definirBotao(btn, { icone: 'salvar', texto: 'Salvar nome e vínculos' });
     }
   });
 
   $('btn-term-toggle-canais').addEventListener('click', () => {
-    const layout = $('term-layout');
-    const oculta = layout.classList.toggle('sidebar-oculta');
-    $('btn-term-toggle-canais').setAttribute('aria-expanded', String(!oculta));
+    const proximo = !sidebarRecolhida;
+    aplicarEstadoSidebarTerminal(proximo);
+    salvarPreferenciaSidebar(proximo);
   });
 
   // ── Inicialização ───────────────────────────────────────────────────

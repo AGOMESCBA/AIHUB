@@ -15,8 +15,8 @@ const { Contexto } = require('../repositorios/base');
 const telefone = require('../seguranca/telefone');
 const { ipDe } = require('../acesso/middleware');
 
-function iniciarSessao(db, req, res, { usuarioId, empresaId, origem, rotinasHub = null }) {
-  const token = sessoes.criar(db, { usuarioId, empresaId, origem, ip: ipDe(req), rotinasHub });
+function iniciarSessao(db, req, res, { usuarioId, empresaId, origem, rotinasHub = null, empresasCanaisHub = null }) {
+  const token = sessoes.criar(db, { usuarioId, empresaId, origem, ip: ipDe(req), rotinasHub, empresasCanaisHub });
   res.cookie(sessoes.COOKIE, token, sessoes.opcoesCookie(req));
   db.prepare('UPDATE usuarios SET ultimo_acesso_em = ? WHERE id = ?').run(agora(), usuarioId);
   auditoria.registrar(db, new Contexto({ empresaId, usuarioId }), { acao: 'login', alvoTipo: 'sessao', resumo: `Entrou (${origem})`, ip: ipDe(req) });
@@ -33,20 +33,37 @@ function apelidoLivre(db, nome) {
   throw new Error('Não foi possível gerar um apelido livre.');
 }
 
+// Empresa do Talk ligada à empresa do IAHub (hub_empresa_id): acha ou cria. Usada na
+// entrada pelo card e ao vincular uma empresa do IAHub a um canal — o mesmo
+// hub_empresa_id nunca vira duas empresas.
+function empresaDoHub(db, { id: hubId, nome }) {
+  const t = agora();
+  let empresa = db.prepare('SELECT * FROM empresas WHERE hub_empresa_id = ?').get(Number(hubId));
+  if (!empresa) {
+    const id = novoId('empresa');
+    db.prepare(`INSERT INTO empresas (id, nome, apelido, situacao, hub_empresa_id, hub_empresa_nome, criado_em, atualizado_em)
+      VALUES (?, ?, ?, 'ativa', ?, ?, ?, ?)`).run(id, String(nome || `Empresa ${hubId}`), apelidoLivre(db, nome),
+      Number(hubId), nome || null, t, t);
+    empresa = db.prepare('SELECT * FROM empresas WHERE id = ?').get(id);
+  } else if (nome && nome !== empresa.hub_empresa_nome) {
+    db.prepare('UPDATE empresas SET hub_empresa_nome = ? WHERE id = ?').run(nome, empresa.id);
+  }
+  return empresa;
+}
+
+// Lista assinada pelo IAHub (empresas_canais): só ids numéricos positivos.
+function empresasCanaisDoTicket(dados) {
+  return (Array.isArray(dados.empresas_canais) ? dados.empresas_canais : [])
+    .filter(e => Number.isInteger(Number(e?.id)) && Number(e.id) > 0)
+    .map(e => ({ id: Number(e.id), nome: String(e.nome || '') }));
+}
+
 // Primeira entrada de uma empresa/usuário do IAHub: cria o vínculo. A empresa só
 // chega aqui se a IA Gestão ligou o IA Talk para ela (o IAHub confere antes de assinar).
 function provisionarDoHub(db, dados) {
   const t = agora();
-  let empresa = db.prepare('SELECT * FROM empresas WHERE hub_empresa_id = ?').get(Number(dados.empresa.id));
-  if (!empresa) {
-    const id = novoId('empresa');
-    db.prepare(`INSERT INTO empresas (id, nome, apelido, situacao, hub_empresa_id, hub_empresa_nome, criado_em, atualizado_em)
-      VALUES (?, ?, ?, 'ativa', ?, ?, ?, ?)`).run(id, String(dados.empresa.nome || `Empresa ${dados.empresa.id}`), apelidoLivre(db, dados.empresa.nome),
-      Number(dados.empresa.id), dados.empresa.nome || null, t, t);
-    empresa = db.prepare('SELECT * FROM empresas WHERE id = ?').get(id);
-  } else if (dados.empresa.nome && dados.empresa.nome !== empresa.hub_empresa_nome) {
-    db.prepare('UPDATE empresas SET hub_empresa_nome = ? WHERE id = ?').run(dados.empresa.nome, empresa.id);
-  }
+  const empresa = empresaDoHub(db, dados.empresa);
+  const empresasCanaisHub = empresasCanaisDoTicket(dados);
   if (empresa.situacao !== 'ativa') throw erro('sem_permissao', 'Esta empresa está inativa no IA Talk.');
 
   const u = dados.usuario;
@@ -72,7 +89,7 @@ function provisionarDoHub(db, dados) {
       db.prepare(`INSERT INTO membros (id, empresa_id, usuario_id, papel, criado_em, atualizado_em) VALUES (?, ?, ?, 'admin_empresa', ?, ?)`)
         .run(novoId('membro'), empresa.id, usuario.id, t, t);
     }
-    return { usuarioId: usuario.id, empresaId: empresa.id, rotinasHub: null };
+    return { usuarioId: usuario.id, empresaId: empresa.id, rotinasHub: null, empresasCanaisHub };
   }
   // Usuário comum: valem as rotinas talk-* liberadas na IA Gestão (por usuário e empresa).
   const rotinasHub = Array.isArray(dados.rotinas) ? dados.rotinas.filter(r => String(r).startsWith('talk-')) : [];
@@ -83,7 +100,7 @@ function provisionarDoHub(db, dados) {
     db.prepare(`INSERT INTO membros (id, empresa_id, usuario_id, papel, criado_em, atualizado_em) VALUES (?, ?, ?, 'atendente', ?, ?)`)
       .run(novoId('membro'), empresa.id, usuario.id, t, t);
   }
-  return { usuarioId: usuario.id, empresaId: empresa.id, rotinasHub };
+  return { usuarioId: usuario.id, empresaId: empresa.id, rotinasHub, empresasCanaisHub };
 }
 
 // Erro numa rota aberta pelo navegador (link, card): página simples em vez de JSON.
@@ -145,4 +162,4 @@ function criarRotasPublicas({ db, transportes = {}, chavePublicaHub = () => tick
   return r;
 }
 
-module.exports = { criarRotasPublicas, provisionarDoHub, apelidoLivre };
+module.exports = { criarRotasPublicas, provisionarDoHub, apelidoLivre, empresaDoHub };

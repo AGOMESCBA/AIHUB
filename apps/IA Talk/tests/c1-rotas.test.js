@@ -279,6 +279,46 @@ test('entrada pelo IAHub: ticket válido cria empresa e sessão; replay, vencido
   assert.equal((await navComum.ir('/api/admin/usuarios')).status, 403, 'rotina não liberada = sem acesso também no backend');
 });
 
+test('vincular empresas ao canal: regra do IA Command (lista assinada pelo IAHub), sem duplicar empresa', async () => {
+  const entrar = async (usuario, empresa, empresasCanais) => {
+    const nav = navegador();
+    const t = assinarTicket({ usuario, empresa, rotinas: ['talk-canais'], empresasCanais }, { chavePrivada: parHub.privateKey });
+    assert.equal((await nav.ir(`/api/publico/entrar-hub?ticket=${encodeURIComponent(t)}`)).status, 302);
+    return nav;
+  };
+  const dona = { id: 20, razao_social: 'Dona Hub' };
+  const nav = await entrar({ id: 90, nome: 'Gestor', role: 'usuario' }, dona, [{ id: 20, nome: 'Dona Hub' }, { id: 21, nome: 'Irmã Hub' }]);
+  const canal = (await nav.ir('/api/admin/canais', { metodo: 'POST', corpo: { nome: 'Compartilhado', provedor: 'wweb', numero: '5565911112222' } })).corpo;
+
+  // Lista: a própria empresa (já no Talk) e a irmã ainda não criada no Talk (hub:21).
+  const vinc = (await nav.ir('/api/admin/canais/empresas-vinculaveis')).corpo.itens;
+  const idDona = vinc.find(e => e.nome === 'Dona Hub').id;
+  assert.deepEqual(vinc.map(e => e.id).sort(), [idDona, 'hub:21'].sort());
+
+  // Fora da lista assinada: recusado (empresa de outro cliente já existente no Talk e id do IAHub não liberado).
+  const outra = db.prepare('SELECT id FROM empresas WHERE hub_empresa_id = 9').get().id;
+  for (const id of [outra, 'hub:22']) {
+    const r = await nav.ir(`/api/admin/canais/${canal.id}`, { metodo: 'PUT', corpo: { empresas_vinculadas: [{ id: idDona, padrao: true }, { id }] } });
+    assert.equal(r.status, 403, `não pode vincular ${id}`);
+  }
+
+  // Na lista: cria a empresa já ligada ao IAHub e vira padrão dela (não tinha canal).
+  const ok = await nav.ir(`/api/admin/canais/${canal.id}`, { metodo: 'PUT', corpo: { empresas_vinculadas: [{ id: idDona, padrao: true }, { id: 'hub:21', padrao: false }] } });
+  assert.equal(ok.status, 200);
+  const irma = ok.corpo.empresas_vinculadas.find(e => e.nome === 'Irmã Hub');
+  assert.equal(irma.padrao, true, 'sem outro canal, este vira o padrão (como no IA Command)');
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM empresas WHERE hub_empresa_id = 21').get().n, 1);
+
+  // Quem é da irmã entra depois pelo IAHub: acha a mesma empresa (sem cópia) e vê o canal.
+  const navIrma = await entrar({ id: 91, nome: 'Atendente Irmã', role: 'usuario' }, { id: 21, razao_social: 'Irmã Hub' }, []);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM empresas WHERE hub_empresa_id = 21').get().n, 1);
+  assert.ok((await navIrma.ir('/api/admin/canais')).corpo.itens.some(c => c.id === canal.id));
+
+  // Já vinculada continua editável mesmo fora da lista de quem salva (ex.: tirar o padrão da dona).
+  const denovo = await nav.ir(`/api/admin/canais/${canal.id}`, { metodo: 'PUT', corpo: { empresas_vinculadas: [{ id: idDona, padrao: true }, { id: irma.id, padrao: true }] } });
+  assert.equal(denovo.status, 200);
+});
+
 test('sair: revoga a sessão no servidor', async () => {
   const nav = navegador();
   await entrarComLink(nav, { nome: 'Ana Admin', telefone: '5565999990001', apelido: 'j2a' });

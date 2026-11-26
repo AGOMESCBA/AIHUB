@@ -241,4 +241,13 @@ module.exports = [
       ALTER TABLE sessoes ADD COLUMN rotinas_hub TEXT;
     `,
   },
+  {
+    versao: 6,
+    descricao: 'Empresas que a pessoa pode vincular a um canal (regra do IA Command, assinada pelo IAHub)',
+    sql: `
+      -- JSON [{ id, nome }] com ids de empresa do IAHub: IA Talk liberado e rotina talk-canais
+      -- (ou administrador do IAHub). NULL = sessão sem origem no Hub.
+      ALTER TABLE sessoes ADD COLUMN empresas_canais_hub TEXT;
+    `,
+  },
 ];

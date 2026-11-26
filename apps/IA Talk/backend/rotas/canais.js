@@ -15,6 +15,10 @@ const { ROTINAS } = require('../acesso/papeis');
 const { exigirRotina, ipDe } = require('../acesso/middleware');
 const telefone = require('../seguranca/telefone');
 const { CAPACIDADES_WWEB } = require('../provedores/wweb');
+const { empresaDoHub } = require('./publico');
+
+// Prefixo do id de uma empresa do IAHub que ainda não existe no Talk (criada ao salvar o vínculo).
+const PREFIXO_HUB = 'hub:';
 
 const SQL_VISIVEIS = `SELECT c.* FROM canais c
   WHERE c.empresa_dona_id = @empresa_id
@@ -24,6 +28,28 @@ function criarRotasCanais({ db, supervisor, log = console }) {
   const r = express.Router();
   const exigir = exigirRotina(ROTINAS.canais);
   const auditar = (req, acao, alvoId, resumo) => auditoria.registrar(db, req.contexto, { acao, alvoTipo: 'canal', alvoId, resumo, ip: ipDe(req) });
+
+  // Empresas que esta sessão pode colocar num canal — regra do IA Command: entrada
+  // pelo IAHub = lista assinada (IA Talk liberado + rotina de canais, ver
+  // apps/IAHUB/backend/ia-talk-entrada.js); sessão local da plataforma = empresas
+  // ativas do Talk; demais = só a própria empresa. Itens: { id, nome, hub_empresa_id }.
+  function empresasVinculaveis(req) {
+    const propria = db.prepare('SELECT id, nome, hub_empresa_id FROM empresas WHERE id = ?').get(req.contexto.empresaId);
+    let lista = [];
+    if (req.sessao.empresas_canais_hub) {
+      let hub = [];
+      try { hub = JSON.parse(req.sessao.empresas_canais_hub); } catch (_) { hub = []; }
+      lista = hub.map((h) => {
+        const e = db.prepare('SELECT id, nome, situacao FROM empresas WHERE hub_empresa_id = ?').get(Number(h.id));
+        if (e && e.situacao !== 'ativa') return null;
+        return { id: e ? e.id : `${PREFIXO_HUB}${Number(h.id)}`, nome: e ? e.nome : h.nome, hub_empresa_id: Number(h.id) };
+      }).filter(Boolean);
+    } else if (req.contexto.plataforma) {
+      lista = db.prepare("SELECT id, nome, hub_empresa_id FROM empresas WHERE situacao = 'ativa'").all();
+    }
+    if (propria && !lista.some(e => e.id === propria.id)) lista.push(propria);
+    return lista.sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+  }
 
   function canalPublico(c) {
     const dona = db.prepare('SELECT id, nome FROM empresas WHERE id = ?').get(c.empresa_dona_id);
@@ -72,6 +98,11 @@ function criarRotasCanais({ db, supervisor, log = console }) {
     const inicio = cursor?.o || 0;
     const itens = lista.slice(inicio, inicio + limite);
     res.json({ itens, proximo_cursor: inicio + itens.length < lista.length ? codificarCursor({ o: inicio + itens.length }) : null, total: lista.length });
+  });
+
+  // Antes de /canais/:id. id "hub:<n>" = empresa do IAHub ainda não criada no Talk.
+  r.get('/canais/empresas-vinculaveis', exigir, (req, res) => {
+    res.json({ itens: empresasVinculaveis(req).map(e => ({ id: e.id, nome: e.nome })) });
   });
 
   r.get('/canais/:id', exigir, (req, res) => res.json(canalPublico(acharVisivel(req, req.params.id))));
@@ -126,16 +157,28 @@ function criarRotasCanais({ db, supervisor, log = console }) {
         b.modo_teste !== undefined ? (b.modo_teste ? 1 : 0) : c.modo_teste,
         numeros ? JSON.stringify(numeros) : c.numeros_teste, agora(), c.id);
       if (Array.isArray(b.empresas_vinculadas)) {
-        const ids = b.empresas_vinculadas.map(v => String(v.id));
-        if (!ids.includes(c.empresa_dona_id)) throw erro('requisicao_invalida', 'A empresa dona precisa continuar usando o canal.');
-        const outras = ids.filter(id => id !== c.empresa_dona_id);
-        if (outras.length && !req.contexto.plataforma) throw erro('sem_permissao', 'Só a administração da plataforma vincula outras empresas a um número.');
-        for (const id of ids) if (!db.prepare("SELECT 1 FROM empresas WHERE id = ? AND situacao = 'ativa'").get(id)) throw erro('requisicao_invalida', 'Empresa inválida na lista.');
+        // Quem já está no canal continua (pode mudar o padrão ou sair); empresa nova
+        // só entra se estiver em empresasVinculaveis — como no IA Command.
+        const atuais = new Set(db.prepare('SELECT empresa_id FROM canal_empresas WHERE canal_id = ?').all(c.id).map(v => v.empresa_id));
+        const permitidas = new Map(empresasVinculaveis(req).map(e => [e.id, e]));
+        const vinculos = b.empresas_vinculadas.map((v) => {
+          const id = String(v?.id || '');
+          if (!atuais.has(id) && !permitidas.has(id)) {
+            throw erro('sem_permissao', 'Você só pode vincular empresas com o IA Talk liberado em que também administra canais.');
+          }
+          const hub = id.startsWith(PREFIXO_HUB) ? permitidas.get(id) : null;
+          const empresaId = hub ? empresaDoHub(db, { id: hub.hub_empresa_id, nome: hub.nome }).id : id;
+          if (!db.prepare("SELECT 1 FROM empresas WHERE id = ? AND situacao = 'ativa'").get(empresaId)) throw erro('requisicao_invalida', 'Empresa inválida na lista.');
+          return { empresaId, padrao: !!v.padrao };
+        });
+        if (!vinculos.some(v => v.empresaId === c.empresa_dona_id)) throw erro('requisicao_invalida', 'A empresa dona precisa continuar usando o canal.');
         db.prepare('DELETE FROM canal_empresas WHERE canal_id = ?').run(c.id);
-        for (const v of b.empresas_vinculadas) {
-          // Uma empresa tem no máximo um canal padrão (o que envia o código de login).
-          if (v.padrao) db.prepare('UPDATE canal_empresas SET padrao = 0 WHERE empresa_id = ?').run(String(v.id));
-          db.prepare('INSERT INTO canal_empresas (canal_id, empresa_id, padrao) VALUES (?, ?, ?)').run(c.id, String(v.id), v.padrao ? 1 : 0);
+        for (const v of vinculos) {
+          // Uma empresa tem no máximo um canal padrão (o que envia o código de login);
+          // sem nenhum, este vira o padrão dela (como no IA Command).
+          const temPadrao = db.prepare('SELECT 1 FROM canal_empresas WHERE empresa_id = ? AND padrao = 1').get(v.empresaId);
+          if (v.padrao) db.prepare('UPDATE canal_empresas SET padrao = 0 WHERE empresa_id = ?').run(v.empresaId);
+          db.prepare('INSERT OR IGNORE INTO canal_empresas (canal_id, empresa_id, padrao) VALUES (?, ?, ?)').run(c.id, v.empresaId, v.padrao || !temPadrao ? 1 : 0);
         }
       }
     })();

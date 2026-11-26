@@ -329,6 +329,12 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, l
     }
     return n;
   }
+  // Contrato real: empresas com IA Talk liberado em que a pessoa administra canais
+  // (regra do IA Command). Aqui: as ativas + uma do IAHub ainda não criada no Talk.
+  admin.get('/canais/empresas-vinculaveis', (req, res) => res.json({
+    itens: [...dados.empresas.filter(e => e.situacao === 'ativa').map(e => ({ id: e.id, nome: e.nome })), { id: 'hub:9001', nome: 'Empresa do IAHub (simulada)' }],
+  }));
+
   admin.get('/canais/:id', (req, res) => res.json(canalPublico(acharOu404(dados.canais, req.params.id, 'Canal'))));
   admin.post('/canais', (req, res) => {
     exigirCampos(req.body, {
@@ -353,6 +359,15 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, l
     if (req.body?.nome !== undefined) exigirCampos(req.body, { nome: obrigatorio('o nome') });
     if (req.body?.nome) c.nome = req.body.nome.trim();
     if (Array.isArray(req.body?.empresas_vinculadas)) {
+      // "hub:<n>": empresa do IAHub criada no Talk ao vincular (como o servidor real).
+      for (const v of req.body.empresas_vinculadas) {
+        if (!String(v.id).startsWith('hub:')) continue;
+        const n = String(v.id).slice(4);
+        const nova = { id: `emp_hub_${n}`, nome: 'Empresa do IAHub (simulada)', documento: null, apelido: `empresa-hub-${n}`, logo_url: null,
+          situacao: 'ativa', vinculo_hub: { empresa_hub_id: Number(n), nome: 'Empresa do IAHub (simulada)' }, criado_em: agora(), atualizado_em: agora() };
+        if (!dados.empresas.some(e => e.id === nova.id)) dados.empresas.push(nova);
+        v.id = nova.id;
+      }
       const padroes = new Map(req.body.empresas_vinculadas.map(v => [v.id, !!v.padrao]));
       c.empresas_vinculadas = dados.empresas.filter(e => padroes.has(e.id)).map(e => ({ id: e.id, nome: e.nome, padrao: padroes.get(e.id) }));
     }

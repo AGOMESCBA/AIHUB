@@ -26,7 +26,7 @@
         <span id="rt-texto">Conectando…</span>
       </span>
       <span class="tlk-atualizado" id="atualizado-em" aria-live="polite"></span>
-      <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
+      <button class="btn btn-ghost" type="button" id="btn-atualizar" title="Atualizar: recarrega os indicadores, pendências e estado dos canais" aria-label="Atualizar: recarrega os indicadores, pendências e estado dos canais"><span data-ico="atualizar" data-giro="1"></span> Atualizar</button>
     </div>
   </div>
   <p class="head-sub">Acompanhamento de canais, mensagens do dia, fila de envio e pendências operacionais da empresa ativa.</p>
@@ -84,7 +84,7 @@
         <h2 class="tlk-secao-titulo" id="tit-canais">
           Canais <span class="head-count" id="contador-canais"></span>
         </h2>
-        <button class="btn btn-ghost btn-sm" type="button" id="btn-ver-canais">Abrir canais →</button>
+        <button class="btn btn-ghost btn-sm" type="button" id="btn-ver-canais" title="Abrir canais: vai para a tela de gerenciamento de canais WhatsApp" aria-label="Abrir canais: vai para a tela de gerenciamento de canais WhatsApp">Abrir canais <span data-ico="avancar"></span></button>
       </div>
       <ul class="tlk-canais-lista" id="lista-canais"></ul>
       <div class="tlk-vazio-compacto" id="canais-vazio" hidden>
@@ -97,6 +97,7 @@
 
 <script src="/app/ia-talk/socket.io/socket.io.js"></script>
 <script src="/app/ia-talk/js/talk-api.js"></script>
+<script src="/app/ia-talk/js/talk-icones.js"></script>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -232,7 +233,7 @@
               <div class="tlk-pendencia-tipo">${esc(tipo)}</div>
             </div>
           </div>
-          ${p.link ? `<button class="btn btn-ghost btn-sm" type="button" data-link-idx="${idx}">Verificar →</button>` : ''}
+          ${p.link ? `<button class="btn btn-ghost btn-sm" type="button" data-link-idx="${idx}" title="Verificar: abre a tela de ${esc(tipo)} filtrada para esta pendência" aria-label="Verificar: abre a tela de ${esc(tipo)} filtrada para esta pendência">Verificar ${TalkIcones.svg('avancar')}</button>` : ''}
         </li>`;
       }).join('');
       ulPend.querySelectorAll('button[data-link-idx]').forEach((btn) => {
@@ -264,7 +265,7 @@
         <div class="tlk-canal-meta">Fila: <strong>${esc(c.fila_pendente ?? 0)}</strong></div>
         <div class="tlk-canal-meta">Última msg: ${esc(c.ultima_mensagem_em ? relativo(c.ultima_mensagem_em) : 'sem envio')}</div>
         <div>
-          <button class="btn btn-ghost btn-sm" type="button" data-canal-id="${esc(c.id)}">Abrir →</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-canal-id="${esc(c.id)}" title="Abrir canal: exibe conexão, QR Code e terminal ao vivo de ${esc(c.nome)}" aria-label="Abrir canal: exibe conexão, QR Code e terminal ao vivo de ${esc(c.nome)}">Abrir ${TalkIcones.svg('avancar')}</button>
         </div>
       </li>`).join('');
     ul.querySelectorAll('button[data-canal-id]').forEach((btn) => {

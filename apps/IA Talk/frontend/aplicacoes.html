@@ -24,8 +24,8 @@
         <h1 class="head-title" id="titulo-lista">Aplicações e tokens <span class="head-count" id="contador" aria-live="polite"></span></h1>
       </div>
       <div class="head-actions">
-        <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
-        <button class="btn btn-primary" type="button" id="btn-nova">+ Nova aplicação</button>
+        <button class="btn btn-ghost" type="button" id="btn-atualizar" title="Atualizar: recarrega a lista de aplicações e tokens" aria-label="Atualizar: recarrega a lista de aplicações e tokens"><span data-ico="atualizar" data-giro="1"></span> Atualizar</button>
+        <button class="btn btn-primary" type="button" id="btn-nova" title="Nova aplicação: cadastra um novo sistema consumidor da API v1" aria-label="Nova aplicação: cadastra um novo sistema consumidor da API v1"><span data-ico="mais"></span> Nova aplicação</button>
       </div>
     </div>
     <p class="head-sub">Sistemas autorizados a usar a API v1 do IA Talk nesta empresa. Cada aplicação recebe seus próprios tokens, escopos, canais e segredo de webhook.</p>
@@ -40,7 +40,7 @@
           <option value="ativa">Ativas</option>
           <option value="inativa">Inativas</option>
         </select>
-        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area">+ Mostrar agrupamento</button>
+        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area" title="Mostrar agrupamento: abre o painel para agrupar aplicações por coluna" aria-label="Mostrar agrupamento: abre o painel para agrupar aplicações por coluna"><span data-ico="agrupar"></span> Mostrar agrupamento</button>
         <span class="grupo-status" id="grupo-status">Sem agrupamento ativo</span>
       </form>
       <div class="grupo-area" id="grupo-area">
@@ -52,7 +52,7 @@
     <div class="grade">
       <div id="estado-lista" hidden></div>
       <div id="tabela"></div>
-      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais">Carregar mais</button></div>
+      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais" title="Carregar mais: busca a próxima página de aplicações" aria-label="Carregar mais: busca a próxima página de aplicações"><span data-ico="seta_baixo"></span> Carregar mais</button></div>
     </div>
   </section>
 
@@ -60,7 +60,7 @@
   <section id="vista-detalhe" hidden aria-labelledby="titulo-detalhe">
     <div class="editor-bar">
       <div class="editor-title"><strong id="titulo-detalhe">Nova aplicação</strong><span id="sub-detalhe"></span></div>
-      <button class="btn btn-ghost" type="button" id="btn-voltar">← Voltar à lista</button>
+      <button class="btn btn-ghost" type="button" id="btn-voltar" title="Voltar à lista: fecha o detalhe e oculta eventuais segredos exibidos" aria-label="Voltar à lista: fecha o detalhe e oculta eventuais segredos exibidos"><span data-ico="voltar"></span> Voltar à lista</button>
     </div>
 
     <div class="tlk-cartao">
@@ -109,8 +109,8 @@
           </div>
 
           <div class="tlk-acoes-form">
-            <button class="btn btn-ghost" type="button" id="btn-cancelar">Cancelar</button>
-            <button class="btn btn-primary" type="submit" id="btn-salvar">Salvar</button>
+            <button class="btn btn-ghost" type="button" id="btn-cancelar" title="Cancelar: descarta as alterações e volta à lista" aria-label="Cancelar: descarta as alterações e volta à lista"><span data-ico="cancelar"></span> Cancelar</button>
+            <button class="btn btn-primary" type="submit" id="btn-salvar" title="Salvar: grava os dados, escopos e canais autorizados desta aplicação" aria-label="Salvar: grava os dados, escopos e canais autorizados desta aplicação"><span data-ico="salvar"></span> Salvar</button>
           </div>
         </form>
       </div>
@@ -122,7 +122,7 @@
             <h2>Tokens da API v1</h2>
             <p>Para rotacionar sem parar a integração, gere um token novo, atualize no sistema consumidor e depois revogue o antigo.</p>
           </div>
-          <button class="btn btn-primary" type="button" id="btn-gerar-token">+ Gerar novo token</button>
+          <button class="btn btn-primary" type="button" id="btn-gerar-token" title="Gerar novo token: cria um token de acesso exibido uma única vez" aria-label="Gerar novo token: cria um token de acesso exibido uma única vez"><span data-ico="chave"></span> Gerar novo token</button>
         </div>
 
         <div class="tlk-segredo-unico" id="quadro-token-novo" role="alert" hidden>
@@ -130,8 +130,8 @@
           <div class="tlk-segredo-unico-aviso" id="aviso-token-novo">Copie o token agora. Ele não será mostrado de novo.</div>
           <div class="tlk-segredo-linha">
             <code class="tlk-segredo-valor" id="valor-token-novo"></code>
-            <button class="btn btn-primary" type="button" id="btn-copiar-token">Copiar token</button>
-            <button class="btn btn-ghost" type="button" id="btn-ocultar-token">Já copiei, ocultar</button>
+            <button class="btn btn-primary" type="button" id="btn-copiar-token" title="Copiar token: copia o novo token para a área de transferência" aria-label="Copiar token: copia o novo token para a área de transferência"><span data-ico="copiar"></span> Copiar token</button>
+            <button class="btn btn-ghost" type="button" id="btn-ocultar-token" title="Ocultar token: remove o valor da tela após copiar" aria-label="Ocultar token: remove o valor da tela após copiar"><span data-ico="olho_fechado"></span> Já copiei, ocultar</button>
           </div>
         </div>
 
@@ -160,7 +160,7 @@
             </div>
           </div>
           <div class="tlk-acoes-form">
-            <button class="btn btn-primary" type="submit" id="btn-salvar-webhook">Salvar webhook</button>
+            <button class="btn btn-primary" type="submit" id="btn-salvar-webhook" title="Salvar webhook: grava a URL de destino e ativa ou pausa a entrega automática" aria-label="Salvar webhook: grava a URL de destino e ativa ou pausa a entrega automática"><span data-ico="salvar"></span> Salvar webhook</button>
           </div>
         </form>
 
@@ -170,7 +170,7 @@
               <h2>Segredo de assinatura do webhook</h2>
               <p>Usado para conferir o cabeçalho <code>X-Talk-Assinatura</code> no sistema consumidor. Por segurança, o valor completo só aparece no momento da geração.</p>
             </div>
-            <button class="btn btn-ghost" type="button" id="btn-pedir-segredo">Gerar segredo</button>
+            <button class="btn btn-ghost" type="button" id="btn-pedir-segredo" title="Gerar segredo: cria ou rotaciona o segredo HMAC usado para assinar webhooks" aria-label="Gerar segredo: cria ou rotaciona o segredo HMAC usado para assinar webhooks"><span data-ico="chave"></span> Gerar segredo</button>
           </div>
 
           <div class="meta-grid" id="meta-segredo"></div>
@@ -178,8 +178,8 @@
           <div class="tlk-confirm-inline" id="confirm-segredo" hidden>
             <span><strong>Atenção:</strong> gerar um novo segredo substitui o segredo atual imediatamente. O sistema consumidor precisará atualizar o segredo para validar os próximos webhooks.</span>
             <div class="tlk-confirm-inline-acoes">
-              <button class="btn btn-ghost" type="button" id="btn-cancelar-segredo">Cancelar</button>
-              <button class="btn btn-perigo" type="button" id="btn-confirmar-segredo">Confirmar novo segredo</button>
+              <button class="btn btn-ghost" type="button" id="btn-cancelar-segredo" title="Cancelar: mantém o segredo atual do webhook sem alterações" aria-label="Cancelar: mantém o segredo atual do webhook sem alterações"><span data-ico="cancelar"></span> Cancelar</button>
+              <button class="btn btn-perigo" type="button" id="btn-confirmar-segredo" title="Confirmar novo segredo: substitui o segredo atual imediatamente" aria-label="Confirmar novo segredo: substitui o segredo atual imediatamente"><span data-ico="chave"></span> Confirmar novo segredo</button>
             </div>
           </div>
 
@@ -188,8 +188,8 @@
             <div class="tlk-segredo-unico-aviso" id="aviso-segredo-novo">Copie o segredo agora. Ele não será mostrado de novo.</div>
             <div class="tlk-segredo-linha">
               <code class="tlk-segredo-valor" id="valor-segredo-novo"></code>
-              <button class="btn btn-primary" type="button" id="btn-copiar-segredo">Copiar segredo</button>
-              <button class="btn btn-ghost" type="button" id="btn-ocultar-segredo">Já copiei, ocultar</button>
+              <button class="btn btn-primary" type="button" id="btn-copiar-segredo" title="Copiar segredo: copia o novo segredo HMAC para a área de transferência" aria-label="Copiar segredo: copia o novo segredo HMAC para a área de transferência"><span data-ico="copiar"></span> Copiar segredo</button>
+              <button class="btn btn-ghost" type="button" id="btn-ocultar-segredo" title="Ocultar segredo: remove o valor da tela após copiar" aria-label="Ocultar segredo: remove o valor da tela após copiar"><span data-ico="olho_fechado"></span> Já copiei, ocultar</button>
             </div>
           </div>
         </div>
@@ -203,6 +203,7 @@
 <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script src="/app/ia-talk/ui/js/grid-group-panel.js"></script>
 <script src="/app/ia-talk/js/talk-api.js"></script>
+<script src="/app/ia-talk/js/talk-icones.js"></script>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -299,13 +300,13 @@
           </div>
         </div>
         <div class="tlk-lista-item-acoes">
-          ${revogado ? '' : `<button class="btn btn-ghost" type="button" data-pedir-revogar="${esc(t.id)}">Revogar</button>`}
+          ${revogado ? '' : `<button class="btn btn-ghost" type="button" data-pedir-revogar="${esc(t.id)}" style="color:var(--error);border-color:var(--error)" title="Revogar token: invalida o token ${esc(t.prefixo)} imediatamente após confirmação" aria-label="Revogar token: invalida o token ${esc(t.prefixo)} imediatamente após confirmação">${TalkIcones.svg('ban')} Revogar</button>`}
         </div>
         ${revogado ? '' : `<div class="tlk-confirm-inline" id="conf-tok-${esc(t.id)}" hidden>
           <span><strong>Confirmar revogação?</strong> Qualquer sistema usando o token <code>${esc(t.prefixo)}…</code> perderá acesso na hora. Esta ação não pode ser desfeita.</span>
           <div class="tlk-confirm-inline-acoes">
-            <button class="btn btn-ghost" type="button" data-cancelar-revogar="${esc(t.id)}">Cancelar</button>
-            <button class="btn btn-perigo" type="button" data-confirmar-revogar="${esc(t.id)}">Revogar token</button>
+            <button class="btn btn-ghost" type="button" data-cancelar-revogar="${esc(t.id)}" title="Cancelar: mantém este token ativo" aria-label="Cancelar: mantém este token ativo">${TalkIcones.svg('cancelar')} Cancelar</button>
+            <button class="btn btn-perigo" type="button" data-confirmar-revogar="${esc(t.id)}" title="Revogar token: bloqueia o acesso deste token permanentemente" aria-label="Revogar token: bloqueia o acesso deste token permanentemente">${TalkIcones.svg('ban')} Revogar token</button>
           </div>
         </div>`}
       </div>`;
@@ -319,7 +320,15 @@
     $('meta-segredo').innerHTML = `
       <div class="meta-item"><span>Situação do segredo</span><strong>${wh.segredo_configurado ? 'Configurado (oculto por segurança)' : 'Não configurado'}</strong></div>
       <div class="meta-item"><span>Entrega automática</span><strong>${wh.ativo ? 'Ativa' : 'Desativada'}</strong></div>`;
-    $('btn-pedir-segredo').textContent = wh.segredo_configurado ? 'Rotacionar segredo' : 'Gerar segredo';
+    const dicaSegredo = wh.segredo_configurado
+      ? 'Rotacionar segredo: substitui o segredo HMAC atual após confirmação'
+      : 'Gerar segredo: cria o segredo HMAC para assinar entregas de webhook';
+    TalkIcones.definirBotao($('btn-pedir-segredo'), {
+      icone: 'chave',
+      texto: wh.segredo_configurado ? 'Rotacionar segredo' : 'Gerar segredo',
+      title: dicaSegredo,
+      ariaLabel: dicaSegredo,
+    });
   }
 
   // ── Lista ───────────────────────────────────────────────────────────
@@ -399,7 +408,7 @@
         const comFiltro = Object.entries(filtrosAtuais()).some(([k, v]) => k !== 'limite' && v);
         TalkUI.estado(estado, 'vazio', comFiltro
           ? { titulo: 'Nenhuma aplicação encontrada', texto: 'Mude a busca ou os filtros para ver outras aplicações.' }
-          : { titulo: 'Nenhuma aplicação cadastrada', texto: 'Cadastre uma aplicação para gerar tokens e integrar sistemas externos via API v1.', acao: { rotulo: '+ Nova aplicação', aoClicar: () => abrirDetalhe(null) } });
+          : { titulo: 'Nenhuma aplicação cadastrada', texto: 'Cadastre uma aplicação para gerar tokens e integrar sistemas externos via API v1.', acao: { rotulo: 'Nova aplicação', aoClicar: () => abrirDetalhe(null) } });
         $('contador').textContent = '';
         return;
       }
@@ -426,8 +435,12 @@
     const area = $('grupo-area');
     const abrir = !area.classList.contains('aberta');
     area.classList.toggle('aberta', abrir);
-    $('btn-agrupar').setAttribute('aria-expanded', String(abrir));
-    $('btn-agrupar').textContent = abrir ? '− Ocultar agrupamento' : '+ Mostrar agrupamento';
+    const btn = $('btn-agrupar');
+    btn.setAttribute('aria-expanded', String(abrir));
+    const dica = abrir
+      ? 'Ocultar agrupamento: recolhe o painel de agrupamento de colunas'
+      : 'Mostrar agrupamento: abre o painel para agrupar aplicações por coluna';
+    TalkIcones.definirBotao(btn, { icone: abrir ? 'menos' : 'agrupar', texto: abrir ? 'Ocultar agrupamento' : 'Mostrar agrupamento', title: dica, ariaLabel: dica });
   });
   $('btn-nova').addEventListener('click', () => abrirDetalhe(null));
 
@@ -505,7 +518,7 @@
 
     const botao = $('btn-salvar');
     botao.disabled = true;
-    botao.textContent = 'Salvando…';
+    TalkIcones.definirBotao(botao, { icone: 'salvar', texto: 'Salvando…' });
     try {
       const eraNova = !atual;
       const salva = atual
@@ -527,7 +540,7 @@
       }
     } finally {
       botao.disabled = false;
-      botao.textContent = 'Salvar';
+      TalkIcones.definirBotao(botao, { icone: 'salvar', texto: 'Salvar' });
     }
   });
 
@@ -536,7 +549,7 @@
     if (!atual) return;
     const btn = $('btn-gerar-token');
     btn.disabled = true;
-    btn.textContent = 'Gerando…';
+    TalkIcones.definirBotao(btn, { icone: 'chave', texto: 'Gerando…' });
     try {
       const res = await TalkApi.post(`/aplicacoes/${encodeURIComponent(atual.id)}/tokens`);
       atual.tokens = [res.registro, ...(atual.tokens || [])];
@@ -551,7 +564,7 @@
       TalkUI.toast(err.message, 'erro');
     } finally {
       btn.disabled = false;
-      btn.textContent = '+ Gerar novo token';
+      TalkIcones.definirBotao(btn, { icone: 'chave', texto: 'Gerar novo token' });
     }
   });
 
@@ -579,7 +592,7 @@
     if (confirmar && atual) {
       const btn = e.target.closest('button');
       btn.disabled = true;
-      btn.textContent = 'Revogando…';
+      TalkIcones.definirBotao(btn, { icone: 'ban', texto: 'Revogando…' });
       try {
         const atualizado = await TalkApi.del(`/aplicacoes/${encodeURIComponent(atual.id)}/tokens/${encodeURIComponent(confirmar)}`);
         atual.tokens = (atual.tokens || []).map((t) => (t.id === confirmar ? atualizado : t));
@@ -590,7 +603,7 @@
       } catch (err) {
         TalkUI.toast(err.message, 'erro');
         btn.disabled = false;
-        btn.textContent = 'Revogar token';
+        TalkIcones.definirBotao(btn, { icone: 'ban', texto: 'Revogar token' });
       }
     }
   });
@@ -602,7 +615,7 @@
     $('alerta-webhook').hidden = true;
     const btn = $('btn-salvar-webhook');
     btn.disabled = true;
-    btn.textContent = 'Salvando…';
+    TalkIcones.definirBotao(btn, { icone: 'salvar', texto: 'Salvando…' });
     try {
       const url = $('c-wh-url').value.trim() || null;
       const ativo = $('c-wh-ativo').checked;
@@ -618,7 +631,7 @@
       $('alerta-webhook').hidden = false;
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Salvar webhook';
+      TalkIcones.definirBotao(btn, { icone: 'salvar', texto: 'Salvar webhook' });
     }
   });
 

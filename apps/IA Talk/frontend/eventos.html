@@ -24,7 +24,7 @@
         <h1 class="head-title" id="titulo-lista">Eventos e webhooks <span class="head-count" id="contador" aria-live="polite"></span></h1>
       </div>
       <div class="head-actions">
-        <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
+        <button class="btn btn-ghost" type="button" id="btn-atualizar" title="Atualizar: recarrega a lista de eventos e entregas de webhook" aria-label="Atualizar: recarrega a lista de eventos e entregas de webhook"><span data-ico="atualizar" data-giro="1"></span> Atualizar</button>
       </div>
     </div>
     <p class="head-sub">Acompanhe os eventos enviados aos webhooks das aplicações conectadas, inspecione cada tentativa HTTP e solicite reentrega quando necessário.</p>
@@ -65,7 +65,7 @@
           <input class="form-control" id="f-ate" name="ate" type="date">
         </div>
 
-        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area">+ Mostrar agrupamento</button>
+        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area" title="Mostrar agrupamento: abre o painel para agrupar eventos por coluna" aria-label="Mostrar agrupamento: abre o painel para agrupar eventos por coluna"><span data-ico="agrupar"></span> Mostrar agrupamento</button>
         <span class="grupo-status" id="grupo-status">Sem agrupamento ativo</span>
       </form>
 
@@ -78,7 +78,7 @@
     <div class="grade">
       <div id="estado-lista" hidden></div>
       <div id="tabela"></div>
-      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais">Carregar mais</button></div>
+      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais" title="Carregar mais: busca a próxima página de eventos" aria-label="Carregar mais: busca a próxima página de eventos"><span data-ico="seta_baixo"></span> Carregar mais</button></div>
     </div>
   </section>
 
@@ -92,7 +92,7 @@
         </div>
         <span id="sub-detalhe"></span>
       </div>
-      <button class="btn btn-ghost" type="button" id="btn-voltar">← Voltar à lista</button>
+      <button class="btn btn-ghost" type="button" id="btn-voltar" title="Voltar à lista: fecha os detalhes e retorna à lista de eventos" aria-label="Voltar à lista: fecha os detalhes e retorna à lista de eventos"><span data-ico="voltar"></span> Voltar à lista</button>
     </div>
 
     <div class="tlk-cartao">
@@ -106,15 +106,15 @@
         </div>
 
         <div class="tlk-acoes-barra" id="acoes-evento">
-          <button class="btn btn-primary" type="button" id="btn-reentregar">Reentregar evento</button>
+          <button class="btn btn-primary" type="button" id="btn-reentregar" title="Reentregar evento: recoloca o webhook na fila de envio após confirmação" aria-label="Reentregar evento: recoloca o webhook na fila de envio após confirmação"><span data-ico="enviar"></span> Reentregar evento</button>
         </div>
 
         <div class="tlk-confirm-inline" id="confirm-reentregar" role="region" aria-live="polite" hidden>
           <div class="tlk-confirm-titulo">Confirmar nova entrega do webhook</div>
           <p class="tlk-confirm-texto">O evento voltará para a situação <strong>Pendente</strong> e será reenviado para o endereço de webhook configurado na aplicação. O sistema destinatário deve tratar o mesmo <code>id</code> de forma idempotente.</p>
           <div class="tlk-confirm-acoes">
-            <button class="btn btn-ghost" type="button" id="btn-confirm-cancelar">Cancelar</button>
-            <button class="btn btn-primary" type="button" id="btn-confirm-executar">Confirmar reentrega</button>
+            <button class="btn btn-ghost" type="button" id="btn-confirm-cancelar" title="Cancelar: fecha a confirmação sem reenviar o evento" aria-label="Cancelar: fecha a confirmação sem reenviar o evento"><span data-ico="cancelar"></span> Cancelar</button>
+            <button class="btn btn-primary" type="button" id="btn-confirm-executar" title="Confirmar reentrega: envia este evento novamente para o webhook da aplicação" aria-label="Confirmar reentrega: envia este evento novamente para o webhook da aplicação"><span data-ico="enviar"></span> Confirmar reentrega</button>
           </div>
         </div>
 
@@ -131,6 +131,7 @@
 <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script src="/app/ia-talk/ui/js/grid-group-panel.js"></script>
 <script src="/app/ia-talk/js/talk-api.js"></script>
+<script src="/app/ia-talk/js/talk-icones.js"></script>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -353,8 +354,12 @@
 
   $('btn-agrupar').addEventListener('click', () => {
     const aberto = $('grupo-area').classList.toggle('open');
-    $('btn-agrupar').setAttribute('aria-expanded', String(aberto));
-    $('btn-agrupar').textContent = aberto ? '− Ocultar agrupamento' : '+ Mostrar agrupamento';
+    const btn = $('btn-agrupar');
+    btn.setAttribute('aria-expanded', String(aberto));
+    const dica = aberto
+      ? 'Ocultar agrupamento: recolhe o painel de agrupamento de colunas'
+      : 'Mostrar agrupamento: abre o painel para agrupar eventos por coluna';
+    TalkIcones.definirBotao(btn, { icone: aberto ? 'menos' : 'agrupar', texto: aberto ? 'Ocultar agrupamento' : 'Mostrar agrupamento', title: dica, ariaLabel: dica });
   });
 
   $('btn-atualizar').addEventListener('click', () => carregar());
