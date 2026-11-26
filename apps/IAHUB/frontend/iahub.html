@@ -78,17 +78,16 @@
       overflow-y: auto; padding: 2px 8px 2px 2px;
       scrollbar-width: thin; scrollbar-color: rgba(37,99,235,.45) transparent;
     }
-    /* Cards compactos (2026-11-25): cabem 5–6 por linha em telas largas. */
+    /* 5 cards por linha ocupando a largura toda; com menos, ficam centralizados
+       na mesma largura (2026-11-26). */
     .systems-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+      --cards-por-linha: 5;
+      display: flex; flex-wrap: wrap; justify-content: center;
       gap: 14px;
     }
-    .systems-grid.few-systems {
-      grid-template-columns: repeat(auto-fit, minmax(330px, 380px));
-      justify-content: center;
-    }
-    .systems-grid.single-system {
-      grid-template-columns: minmax(320px, 380px);
+    .systems-grid > .system-card {
+      flex: 0 0 calc((100% - (var(--cards-por-linha) - 1) * 14px) / var(--cards-por-linha));
+      box-sizing: border-box; min-width: 0;
     }
     .system-card {
       position: relative; min-height: 214px; overflow: hidden;
@@ -149,11 +148,12 @@
       font-weight: 850; cursor: pointer; font-size: 13px;
     }
     .empty-state {
-      grid-column: 1 / -1; border: 1px dashed var(--border-hi); border-radius: 12px;
+      flex: 1 1 100%; border: 1px dashed var(--border-hi); border-radius: 12px;
       padding: 38px; text-align: center; color: var(--text-md); background: var(--bg-card);
     }
     .empty-title { color: var(--text-hi); font-weight: 900; margin-bottom: 8px; }
-    @media (max-width: 1180px) { .systems-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } }
+    @media (max-width: 1180px) { .systems-grid { --cards-por-linha: 4; } }
+    @media (max-width: 960px) { .systems-grid { --cards-por-linha: 3; } }
     @media (max-width: 720px) {
       .hub-topbar {
         height: auto;
@@ -212,9 +212,7 @@
       .systems-panel { padding: 16px; border-radius: 14px; }
       .systems-head { align-items: flex-start; flex-direction: column; gap: 12px; margin-bottom: 16px; }
       .systems-title { font-size: 22px; }
-      .systems-grid { grid-template-columns: 1fr; }
-      .systems-grid.few-systems { grid-template-columns: 1fr; }
-      .systems-grid.single-system { grid-template-columns: 1fr; }
+      .systems-grid { --cards-por-linha: 1; }
       .systems-frame { max-height: none; overflow: visible; }
       .system-card { min-height: 230px; }
       .hub-logout span { display: none; }
@@ -313,8 +311,8 @@
     }
 
     const SYSTEM_ICONS = {
-      'ia-admin': '<path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
-      'ia-command': '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9l3 3-3 3"/><path d="M12 15h5"/>',
+      'ia-admin': '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+      'ia-command': '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
       'master-crypto': '<path d="M22 7l-8.5 8.5-5-5L2 17"/><polyline points="16 7 22 7 22 13"/>',
       recrutamento: '<path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="8" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.8"/><path d="M16 4.2a4 4 0 0 1 0 7.6"/>',
       'ia-service': '<path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/>',
@@ -374,8 +372,6 @@
         ? `Empresa ativa: ${window._iahubEmpresa.nome}`
         : 'Escolha uma empresa para continuar.';
       count.textContent = total === 1 ? '1 sistema' : `${total} sistemas`;
-      grid.classList.toggle('single-system', total === 1);
-      grid.classList.toggle('few-systems', total > 1 && total <= 3);
 
       if (!total) {
         grid.innerHTML = `
