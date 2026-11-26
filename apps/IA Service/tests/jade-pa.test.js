@@ -320,6 +320,14 @@ test('lotes: leitura que tratou chamado vira lote numerado; leitura vazia não �
   assert.throws(() => jade.getLote(EMPRESA + 1, fonte.id, lote.id), { status: 404 });
   assert.equal(lote.chamados[0].situacao, 'ok');
   assert.ok(jade.getAuditoria(EMPRESA, fonte.id, lote.chamados[0].execucaoId).eventos.every(e => e.loteId === resumo.loteId));
+  // Cabeçalho da auditoria: texto curto do chamado (título; sem título, breve descrição).
+  const getChamadoOriginal = chamadoRepo.getChamado;
+  try {
+    chamadoRepo.getChamado = (_e, id) => (id === 'ch-037150' ? { id, titulo: ' ', breveDescricao: 'Erro ao gerar pedido' } : null);
+    assert.equal(jade.getAuditoria(EMPRESA, fonte.id, lote.chamados[0].execucaoId).descricaoChamado, 'Erro ao gerar pedido');
+  } finally {
+    chamadoRepo.getChamado = getChamadoOriginal;
+  }
   assert.equal(painel.loteEmAndamento, null);
 
   const vazio = await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });

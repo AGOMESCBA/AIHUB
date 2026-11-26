@@ -189,6 +189,8 @@
     .jade-modal-topo { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:16px 20px; border-bottom:1px solid var(--border); }
     .jade-modal-kicker { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--accent); }
     .jade-modal-titulo { font-size:19px; font-weight:800; color:var(--text-hi); margin-top:2px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .jade-modal-topo > div:first-child { min-width:0; flex:1; }
+    .jade-modal-desc { font-size:15px; font-weight:600; color:var(--text-md); max-width:60ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .jade-modal-sub { font-size:12.5px; color:var(--text-lo); margin-top:4px; }
     .jade-modal-acoes { display:flex; gap:8px; align-items:center; }
     .jade-modal-fechar { width:34px; height:34px; border:none; background:none; color:var(--text-lo); font-size:24px; line-height:1; cursor:pointer; border-radius:6px; }
@@ -1369,7 +1371,9 @@
 
   function desenharAuditoriaJade() {
     const { execucao: ex, eventos } = jadeAuditoria;
+    const descricao = jadeAuditoria.descricaoChamado;
     document.getElementById('jade-modal-titulo').innerHTML = `Chamado ${escapeHtml(ex.numeroChamado)}
+      ${descricao ? `<span class="jade-modal-desc" title="${escapeHtml(descricao)}">— ${escapeHtml(descricao)}</span>` : ''}
       <span class="status-badge ${JADE_CLASSE[ex.estado] || ''}">${escapeHtml(JADE_ESTADOS[ex.estado] || ex.estado)}</span>
       ${ex.alerta ? '<span class="warn" title="Precisa da triagem">⚠ precisa da triagem</span>' : ''}`;
     document.getElementById('jade-modal-sub').textContent = [

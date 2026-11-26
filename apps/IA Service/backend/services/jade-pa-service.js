@@ -1213,7 +1213,13 @@ function getAuditoria(empresaId, fonteId, execucaoId) {
   _fonteSoftExpert(empresaId, fonteId);
   const execucao = repo.getExecucao(execucaoId);
   if (!execucao || execucao.empresaId !== Number(empresaId) || execucao.fonteId !== fonteId) throw _erro(404, 'Registro da Jaade não encontrado.');
-  return { execucao, eventos: repo.listarEventos(empresaId, execucaoId) };
+  // Texto curto do chamado ao lado do número no cabeçalho (só existe depois da importação).
+  let descricaoChamado = null;
+  if (execucao.chamadoId) {
+    const c = chamadoRepo.getChamado(empresaId, execucao.chamadoId);
+    descricaoChamado = [c?.titulo, c?.breveDescricao, c?.assunto].map(v => String(v || '').trim()).find(Boolean) || null;
+  }
+  return { execucao, eventos: repo.listarEventos(empresaId, execucaoId), descricaoChamado };
 }
 
 // Sistema multiempresa (~20 empresas ao mesmo tempo, pedido do usuário,
