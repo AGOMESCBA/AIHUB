@@ -68,15 +68,28 @@ async function capturar(browser, { url, arquivo, largura, altura, tema = 'light'
       acao: async (page) => { await page.waitForSelector('#box-qr:not([hidden])'); await page.waitForTimeout(200); },
     });
 
-    // Aba 2: Terminal ao vivo (canal cn_suporte com linhas coloridas)
-    await capturar(browser, {
-      url: `${url}?id=cn_suporte`, arquivo: 'g2-canais-detalhe-terminal-1440.png', largura: 1440, altura: 900, tema: 'light',
-      acao: async (page) => {
-        await page.waitForSelector('#vista-detalhe:not([hidden])');
-        await page.click('#aba-terminal');
-        await page.waitForTimeout(1600);
-      },
-    });
+    // Aba 2: Terminal ao vivo (3 colunas no modelo IA Command) — 1440, 1024 e 390 px, claro e escuro
+    const capturasTerminal = [
+      { arquivo: 'g2-canais-detalhe-terminal-1440.png',      largura: 1440, altura: 900, tema: 'light' },
+      { arquivo: 'g2-canais-terminal-1440-escuro.png',       largura: 1440, altura: 900, tema: 'dark' },
+      { arquivo: 'g2-canais-terminal-1024-claro.png',        largura: 1024, altura: 768, tema: 'light' },
+      { arquivo: 'g2-canais-terminal-1024-escuro.png',       largura: 1024, altura: 768, tema: 'dark' },
+      { arquivo: 'g2-canais-terminal-390-claro.png',         largura: 390,  altura: 844, tema: 'light' },
+      { arquivo: 'g2-canais-terminal-390-escuro.png',        largura: 390,  altura: 844, tema: 'dark' },
+    ];
+    for (const ct of capturasTerminal) {
+      await capturar(browser, {
+        url: `${url}?id=cn_suporte&aba=terminal`,
+        arquivo: ct.arquivo,
+        largura: ct.largura,
+        altura: ct.altura,
+        tema: ct.tema,
+        acao: async (page) => {
+          await page.waitForSelector('#painel-terminal:not([hidden])');
+          await page.waitForTimeout(1400);
+        },
+      });
+    }
 
     // Aba 3: Empresas que usam o número (com marca Canal padrão)
     await capturar(browser, {

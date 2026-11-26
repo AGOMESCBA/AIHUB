@@ -5,8 +5,8 @@
 // supervisor decide se sobe de novo. Conversa com o supervisor por IPC.
 //
 // Recebe:  { cmd: 'iniciar', canal: { id, sessao_id, provedor }, dirSessoes }
-//          { cmd: 'parar' } · { cmd: 'limpar-sessao' } · { cmd: 'enviar', id, envelope }
-//          (testes) { cmd: 'simular-leitura' } · { cmd: 'simular-mensagem', dados }
+//          { cmd: 'parar' } · { cmd: 'limpar-sessao' } · { cmd: 'desvincular' } · { cmd: 'enviar', id, envelope }
+//          (testes) { cmd: 'simular-leitura', dados?: { numero } } · { cmd: 'simular-mensagem', dados }
 // Envia:   { evento: 'estado'|'qr'|'identidade'|'mensagem'|'status'|'log'|'enviado'|'parado'|'erro', dados }
 
 const { ProvedorSimulado } = require('../provedores/simulado');
@@ -35,6 +35,12 @@ async function tratar(m) {
       if (provedor) await provedor.parar();
       enviar('parado', {});
       setTimeout(() => process.exit(0), 200);
+    } else if (m.cmd === 'desvincular') {
+      // QR lido pelo número errado: sai do WhatsApp (o aparelho some do celular) e apaga a sessão.
+      if (provedor?.desvincular) await provedor.desvincular();
+      else { if (provedor) await provedor.parar(); provedor?.limparSessao?.(); }
+      enviar('parado', { sessao_limpa: true });
+      setTimeout(() => process.exit(0), 200);
     } else if (m.cmd === 'limpar-sessao') {
       if (provedor) await provedor.parar();
       provedor?.limparSessao?.();
@@ -50,7 +56,7 @@ async function tratar(m) {
       }
     } else if (m.cmd === 'simular-leitura' && provedor?.simularLeituraQr) {
       provedor.simularLeituraQr();
-      enviar('identidade', { numero: '5565900000000' });
+      enviar('identidade', { numero: m.dados?.numero || '5565900000000' });
     } else if (m.cmd === 'simular-mensagem' && provedor?.simularRecebimento) {
       provedor.simularRecebimento(m.dados);
     }

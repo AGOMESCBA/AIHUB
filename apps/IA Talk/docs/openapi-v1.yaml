@@ -1,21 +1,43 @@
 openapi: 3.1.0
 info:
-  title: IA Talk — API v1
-  version: 1.0.0-c0
+  title: IA Talk — API Oficial v1
+  version: 1.0.0
   description: |
-    API para sistemas autorizados enviarem mensagens de WhatsApp e acompanharem estados.
-    Rascunho congelado na C0; a G5 completa exemplos e o guia em pt-BR (docs/integrador/).
-    Aceitar a mensagem (202) NÃO confirma a entrega: acompanhe o estado ou os webhooks.
+    API REST oficial para sistemas autorizados enviarem mensagens de WhatsApp, consultarem
+    estados de entrega/canal e consumirem eventos via webhooks assinados ou polling.
+
+    **Regras fundamentais do contrato:**
+    - Aceitar uma mensagem (`HTTP 202`, estado `aceita`) **não** confirma entrega ao destinatário;
+      acompanhe a evolução por webhook ou por `GET /mensagens/{id}`.
+    - `Idempotency-Key` é obrigatório em `POST /mensagens` (validade de 24 h).
+    - Números de telefone entram completos no envio (`+5565999990000`) e sempre retornam
+      mascarados (`+55 65 9••••-0000`) nas consultas.
+    - Recursos não suportados pelo canal retornam `HTTP 422` (`recurso_nao_suportado`), sem
+      conversão silenciosa nem troca automática de canal.
+
+    Documentação completa em pt-BR: `apps/IA Talk/docs/integrador/README.md`.
 servers:
   - url: https://app.c3isystems.com.br/app/ia-talk/api/v1
+    description: Produção (ajustar domínio conforme ambiente instalado)
   - url: http://127.0.0.1:3051/app/ia-talk/api/v1
-    description: Servidor simulado (token de teste tk_teste_qualquer)
+    description: Servidor simulado local (aceita qualquer token com prefixo tk_teste_)
 security:
   - tokenAplicacao: []
+tags:
+  - name: Mensagens
+    description: Envio idempotente e consulta de estado de mensagens de saída
+  - name: Canais
+    description: Consulta de conectividade e capacidades reais de cada canal autorizado
+  - name: Eventos
+    description: Recuperação de eventos por cursor opaco (complemento aos webhooks)
 paths:
   /mensagens:
     post:
+      tags: [Mensagens]
       summary: Enviar mensagem
+      description: |
+        Enfileira uma mensagem para envio no canal especificado. Exige escopo `mensagens:enviar`
+        e que o canal esteja listado em `canais_autorizados` da aplicação.
       operationId: enviarMensagem
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -27,119 +49,355 @@ paths:
             schema: { $ref: '#/components/schemas/NovaMensagem' }
             examples:
               texto:
-                value: { canal: cn_01H, para: '+5565999990000', tipo: texto, texto: '*Faturamento* de hoje: R$ 12.300,00' }
-              documento:
-                value: { canal: cn_01H, para: '+5565999990000', tipo: documento, legenda: Relatório de novembro, arquivo: { nome: vendas.pdf, mime: application/pdf, base64: JVBERi0xLjcK } }
+                summary: Mensagem de texto com formatação WhatsApp
+                value:
+                  canal: cn_suporte
+                  para: '+5565999990000'
+                  tipo: texto
+                  texto: '*Resumo do dia:* 14 pedidos aprovados no ERP.'
+                  metadados:
+                    origem: erp-faturamento
+                    filial: '01'
+              documento_base64:
+                summary: Envio de documento PDF em Base64
+                value:
+                  canal: cn_suporte
+                  para: '+5565999990000'
+                  tipo: documento
+                  legenda: Relatório de novembro
+                  arquivo:
+                    nome: relatorio-novembro.pdf
+                    mime: application/pdf
+                    base64: JVBERi0xLjcKJSBFeGVtcGxvIGZpY3RpY2lvCg==
+              imagem_url:
+                summary: Envio de imagem via URL HTTPS pública
+                value:
+                  canal: cn_suporte
+                  para: '+5565999990000'
+                  tipo: imagem
+                  legenda: Gráfico de acompanhamento semanal
+                  arquivo:
+                    nome: grafico-semanal.png
+                    mime: image/png
+                    url: https://arquivos.exemplo.com.br/relatorios/grafico-semanal.png
       responses:
         '202':
-          description: Aceita para envio (não é prova de entrega)
+          description: Mensagem aceita na fila para envio (não confirma entrega)
           headers:
-            Idempotent-Replayed: { schema: { type: string, enum: ['true'] }, description: Presente quando a resposta repete um pedido anterior com a mesma chave }
+            Idempotent-Replayed:
+              schema: { type: string, enum: ['true'] }
+              description: Presente quando a resposta repete um pedido já aceito com a mesma Idempotency-Key e o mesmo corpo.
+            X-RateLimit-Limit: { $ref: '#/components/headers/RateLimitLimit' }
+            X-RateLimit-Remaining: { $ref: '#/components/headers/RateLimitRemaining' }
+            X-RateLimit-Reset: { $ref: '#/components/headers/RateLimitReset' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MensagemAceita' }
+              example:
+                id: msg_ex001
+                estado: aceita
+                canal: cn_suporte
+                criada_em: '2026-11-26T14:00:00.000Z'
+                correlacao_id: chamado-36901
+                aviso: 'Aceita para envio. Isto não confirma a entrega: acompanhe pelo estado ou pelo webhook.'
         '400': { $ref: '#/components/responses/Erro' }
         '401': { $ref: '#/components/responses/Erro' }
         '403': { $ref: '#/components/responses/Erro' }
-        '409': { $ref: '#/components/responses/Erro' }
-        '422': { $ref: '#/components/responses/Erro' }
+        '409':
+          description: Conflito de idempotência (mesma Idempotency-Key reutilizada com corpo diferente)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Erro' }
+              example:
+                erro:
+                  codigo: idempotencia_conflito
+                  mensagem: Esta Idempotency-Key já foi usada com outro conteúdo.
+        '413': { $ref: '#/components/responses/Erro' }
+        '422':
+          description: Recurso não suportado pelo canal, canal desconectado ou fora da janela de 24 h
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Erro' }
+              example:
+                erro:
+                  codigo: recurso_nao_suportado
+                  mensagem: Este canal não envia video.
         '429': { $ref: '#/components/responses/Limite' }
+        '500': { $ref: '#/components/responses/Erro' }
+        '503': { $ref: '#/components/responses/Erro' }
   /mensagens/{id}:
     get:
+      tags: [Mensagens]
       summary: Consultar estado de uma mensagem
+      description: |
+        Retorna o estado atual e a linha do tempo de estados de uma mensagem de saída
+        criada pela mesma empresa. Exige escopo `mensagens:ler`.
       operationId: consultarMensagem
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, example: msg_01H } }
+        - name: id
+          in: path
+          required: true
+          description: Identificador da mensagem retornado no POST /mensagens
+          schema: { type: string, example: msg_ex001 }
       responses:
         '200':
-          description: Mensagem
+          description: Detalhes e linha do tempo da mensagem
+          headers:
+            X-RateLimit-Limit: { $ref: '#/components/headers/RateLimitLimit' }
+            X-RateLimit-Remaining: { $ref: '#/components/headers/RateLimitRemaining' }
+            X-RateLimit-Reset: { $ref: '#/components/headers/RateLimitReset' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Mensagem' }
+              example:
+                id: msg_ex001
+                estado: lida
+                canal: cn_suporte
+                para_mascarado: '+55 65 9••••-0000'
+                tipo: texto
+                correlacao_id: chamado-36901
+                criada_em: '2026-11-26T14:00:00.000Z'
+                atualizada_em: '2026-11-26T14:00:04.200Z'
+                historico_estados:
+                  - { estado: aceita, em: '2026-11-26T14:00:00.000Z', detalhe: null }
+                  - { estado: encaminhada, em: '2026-11-26T14:00:00.900Z', detalhe: null }
+                  - { estado: enviada, em: '2026-11-26T14:00:01.800Z', detalhe: null }
+                  - { estado: entregue, em: '2026-11-26T14:00:02.700Z', detalhe: null }
+                  - { estado: lida, em: '2026-11-26T14:00:04.200Z', detalhe: null }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
         '404': { $ref: '#/components/responses/Erro' }
+        '429': { $ref: '#/components/responses/Limite' }
   /canais/{id}/estado:
     get:
+      tags: [Canais]
       summary: Consultar estado e capacidades de um canal autorizado
+      description: |
+        Informa conectividade atual e capacidades comprovadas pelo provedor do canal
+        (tipos de mídia aceitos, limite em bytes e recibos). Exige escopo `canais:ler`.
       operationId: estadoCanal
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, example: cn_01H } }
+        - name: id
+          in: path
+          required: true
+          description: Identificador do canal autorizado para a aplicação
+          schema: { type: string, example: cn_suporte }
       responses:
         '200':
-          description: Estado do canal
+          description: Estado atual e capacidades do canal
+          headers:
+            X-RateLimit-Limit: { $ref: '#/components/headers/RateLimitLimit' }
+            X-RateLimit-Remaining: { $ref: '#/components/headers/RateLimitRemaining' }
+            X-RateLimit-Reset: { $ref: '#/components/headers/RateLimitReset' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/EstadoCanal' }
+              example:
+                id: cn_suporte
+                estado: conectado
+                estado_desde: '2026-11-23T14:00:00.000Z'
+                capacidades:
+                  texto: true
+                  formatacao: whatsapp
+                  imagem: true
+                  documento: true
+                  audio: true
+                  video: false
+                  grupos: true
+                  modelos: false
+                  janela_24h: false
+                  recibos: { enviada: true, entregue: true, lida: true }
+                  qr: true
+                  max_midia_bytes: 16777216
+                  mimes_aceitos: [image/png, image/jpeg, image/webp, application/pdf]
+        '401': { $ref: '#/components/responses/Erro' }
         '403': { $ref: '#/components/responses/Erro' }
         '404': { $ref: '#/components/responses/Erro' }
+        '429': { $ref: '#/components/responses/Limite' }
   /eventos:
     get:
-      summary: Recuperar eventos (o que o webhook não entregou)
+      tags: [Eventos]
+      summary: Recuperar eventos por cursor opaco
+      description: |
+        Permite recuperar eventos dos últimos 7 dias em ordem de criação, complementando
+        a entrega por webhook (por exemplo, após manutenção ou queda do consumidor).
+        Exige escopo `eventos:ler`.
       operationId: listarEventos
       parameters:
-        - { name: depois, in: query, schema: { type: string }, description: proximo_cursor da chamada anterior }
-        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - name: depois
+          in: query
+          required: false
+          description: Valor exato de `proximo_cursor` recebido na chamada anterior (opaco; nunca construir manualmente).
+          schema: { type: string }
+        - name: limite
+          in: query
+          required: false
+          description: Quantidade máxima de itens por página (1 a 200; padrão 50).
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
       responses:
         '200':
-          description: Eventos em ordem de criação (retenção de 7 dias)
+          description: Página de eventos em ordem de criação
+          headers:
+            X-RateLimit-Limit: { $ref: '#/components/headers/RateLimitLimit' }
+            X-RateLimit-Remaining: { $ref: '#/components/headers/RateLimitRemaining' }
+            X-RateLimit-Reset: { $ref: '#/components/headers/RateLimitReset' }
           content:
             application/json:
               schema:
                 type: object
                 required: [itens, proximo_cursor, tem_mais]
                 properties:
-                  itens: { type: array, items: { $ref: '#/components/schemas/Evento' } }
-                  proximo_cursor: { type: string }
-                  tem_mais: { type: boolean }
+                  itens:
+                    type: array
+                    items: { $ref: '#/components/schemas/Evento' }
+                  proximo_cursor:
+                    type: string
+                    description: Cursor opaco para repassar em `depois` na próxima consulta.
+                  tem_mais:
+                    type: boolean
+                    description: Indica se há mais eventos disponíveis além desta página.
+              example:
+                itens:
+                  - id: evt_ex001
+                    tipo: mensagem.estado_alterado
+                    em: '2026-11-26T14:00:04.200Z'
+                    dados:
+                      mensagem_id: msg_ex001
+                      estado: lida
+                      correlacao_id: chamado-36901
+                proximo_cursor: eyJvIjoxfQ
+                tem_mais: false
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '429': { $ref: '#/components/responses/Limite' }
 webhooks:
   evento:
     post:
-      summary: Evento enviado pelo IA Talk à URL da aplicação
+      summary: Evento entregue pelo IA Talk à URL da aplicação
       description: |
-        Pelo menos uma vez: deduplique por X-Talk-Evento-Id. Valide
-        X-Talk-Assinatura = sha256=HMAC-SHA256(segredo, "<X-Talk-Timestamp>.<corpo cru>")
-        e recuse timestamp com mais de 300 s. Responda 2xx em até 10 s.
+        Entrega com garantia **pelo menos uma vez**:
+        1. Deduplique pelo cabeçalho `X-Talk-Evento-Id`.
+        2. Valide `X-Talk-Assinatura` (`sha256=HMAC-SHA256(segredo, "<X-Talk-Timestamp>.<corpo cru>")`)
+           usando comparação em tempo constante sobre o corpo cru (Buffer) antes de `JSON.parse`.
+        3. Rejeite timestamps com diferença maior que 300 segundos em relação ao relógio atual.
+        4. Responda `HTTP 2xx` em até 10 segundos (processe tarefas demoradas em fila própria).
       parameters:
-        - { name: X-Talk-Evento-Id, in: header, required: true, schema: { type: string } }
-        - { name: X-Talk-Timestamp, in: header, required: true, schema: { type: integer } }
-        - { name: X-Talk-Assinatura, in: header, required: true, schema: { type: string, pattern: '^sha256=[0-9a-f]{64}$' } }
+        - name: X-Talk-Evento-Id
+          in: header
+          required: true
+          description: Identificador único do evento para deduplicação idempotente.
+          schema: { type: string, example: evt_ex001 }
+        - name: X-Talk-Timestamp
+          in: header
+          required: true
+          description: Unix timestamp em segundos (UTC) da geração da assinatura.
+          schema: { type: integer, example: 1764165600 }
+        - name: X-Talk-Assinatura
+          in: header
+          required: true
+          description: Assinatura HMAC-SHA256 no formato `sha256=<64 hex minúsculos>`.
+          schema: { type: string, pattern: '^sha256=[0-9a-f]{64}$' }
       requestBody:
+        required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/Evento' }
+            examples:
+              estado_alterado:
+                summary: Alteração de estado de mensagem
+                value:
+                  id: evt_ex001
+                  tipo: mensagem.estado_alterado
+                  em: '2026-11-26T14:00:04.200Z'
+                  dados:
+                    mensagem_id: msg_ex001
+                    estado: lida
+                    correlacao_id: chamado-36901
+              mensagem_recebida:
+                summary: Mensagem recebida de um contato
+                value:
+                  id: evt_ex002
+                  tipo: mensagem.recebida
+                  em: '2026-11-26T14:02:15.000Z'
+                  dados:
+                    mensagem_id: msg_ex004
+                    canal: cn_suporte
+                    de_mascarado: '+55 65 9••••-0003'
+                    tipo: texto
+                    previa: Oi, preciso da segunda via do boleto
+              canal_estado_alterado:
+                summary: Mudança de conectividade de canal
+                value:
+                  id: evt_ex003
+                  tipo: canal.estado_alterado
+                  em: '2026-11-26T14:05:00.000Z'
+                  dados:
+                    canal_id: cn_financeiro
+                    estado: reconectando
+                    detalhe: Conexão perdida com o WhatsApp.
       responses:
-        '200': { description: Recebido }
+        '200':
+          description: Evento recebido e aceito pelo consumidor
 components:
   securitySchemes:
     tokenAplicacao:
       type: http
       scheme: bearer
-      description: Token da aplicação, gerado na tela Aplicações e tokens (mostrado uma vez).
+      description: |
+        Token da aplicação gerado em **Integrações › Aplicações e tokens** (exibido uma única vez).
+        Envie como `Authorization: Bearer <token>`.
+  headers:
+    RateLimitLimit:
+      description: Limite total de requisições na janela atual.
+      schema: { type: integer, example: 120 }
+    RateLimitRemaining:
+      description: Requisições restantes na janela atual.
+      schema: { type: integer, example: 119 }
+    RateLimitReset:
+      description: Unix timestamp (segundos) em que a janela de limite reinicia.
+      schema: { type: integer, example: 1764165660 }
   parameters:
     IdempotencyKey:
       name: Idempotency-Key
       in: header
       required: true
-      description: Valor único por envio (ex. UUID), válido por 24 h. Mesmo valor + mesmo corpo = mesma mensagem; outro corpo = 409.
-      schema: { type: string, minLength: 8, maxLength: 120 }
+      description: |
+        Chave única gerada pelo integrador para cada envio (ex.: UUID v4), válida por 24 h.
+        Mesma chave + mesmo corpo devolve a mesma resposta com `Idempotent-Replayed: true`.
+        Mesma chave + corpo diferente devolve HTTP 409 (`idempotencia_conflito`).
+      schema: { type: string, minLength: 8, maxLength: 120, example: 'envio-pedido-36901-01' }
     CorrelationId:
       name: X-Correlation-Id
       in: header
       required: false
-      description: Identificador do seu sistema (ex. número do chamado); volta em todos os eventos.
-      schema: { type: string, maxLength: 120 }
+      description: Identificador de rastreio do sistema integrador (ex.: número do chamado ou pedido); ecoa nas consultas e eventos.
+      schema: { type: string, maxLength: 120, example: 'chamado-36901' }
   responses:
     Erro:
-      description: Erro no formato padrão
+      description: Erro no formato padronizado do IA Talk
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Erro' }
+          example:
+            erro:
+              codigo: requisicao_invalida
+              mensagem: Confira os campos destacados.
+              campos:
+                para: Informe o número com DDI e DDD.
     Limite:
-      description: Limite de requisições
+      description: Limite de requisições excedido
       headers:
-        Retry-After: { schema: { type: integer }, description: Segundos até tentar de novo }
+        Retry-After:
+          schema: { type: integer, example: 30 }
+          description: Quantidade de segundos a aguardar antes de tentar novamente.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Erro' }
+          example:
+            erro:
+              codigo: limite_excedido
+              mensagem: Limite de requisições atingido. Tente novamente após o tempo indicado em Retry-After.
   schemas:
     Erro:
       type: object
@@ -151,7 +409,20 @@ components:
           properties:
             codigo:
               type: string
-              enum: [requisicao_invalida, nao_autenticado, sem_permissao, canal_nao_autorizado, nao_encontrado, conflito, idempotencia_conflito, recurso_nao_suportado, canal_desconectado, fora_da_janela_24h, limite_excedido, erro_interno, indisponivel]
+              enum:
+                - requisicao_invalida
+                - nao_autenticado
+                - sem_permissao
+                - canal_nao_autorizado
+                - nao_encontrado
+                - conflito
+                - idempotencia_conflito
+                - recurso_nao_suportado
+                - canal_desconectado
+                - fora_da_janela_24h
+                - limite_excedido
+                - erro_interno
+                - indisponivel
             mensagem: { type: string }
             campos: { type: object, additionalProperties: { type: string } }
             detalhe: {}
@@ -162,21 +433,35 @@ components:
       type: object
       required: [canal, para, tipo]
       properties:
-        canal: { type: string, description: ID de um canal autorizado para a aplicação }
-        para: { type: string, description: Número com DDI e DDD, ex. +5565999990000 }
-        tipo: { type: string, enum: [texto, imagem, documento, audio, video] }
-        texto: { type: string, description: Obrigatório em tipo texto. Marcação do WhatsApp (*negrito*, _itálico_, ~riscado~, ```mono```) }
-        legenda: { type: string }
+        canal:
+          type: string
+          description: ID de um canal listado em `canais_autorizados` da aplicação.
+        para:
+          type: string
+          description: Número de destino com DDI e DDD (12 ou 13 dígitos), ex. `+5565999990000`.
+        tipo:
+          type: string
+          enum: [texto, imagem, documento, audio, video]
+        texto:
+          type: string
+          description: Obrigatório quando `tipo` = `texto`. Suporta marcação do WhatsApp (`*negrito*`, `_itálico_`, `~riscado~`, ```` ```mono``` ````).
+        legenda:
+          type: string
+          description: Texto opcional acompanhando `imagem`, `documento` ou `video`.
         arquivo:
           type: object
-          description: Obrigatório fora de texto. Informe exatamente um entre base64, url (só https) ou midia_id.
+          description: Obrigatório quando `tipo` ≠ `texto`. Informe exatamente um entre `base64`, `url` (apenas HTTPS público) ou `midia_id`.
           properties:
             nome: { type: string }
             mime: { type: string }
             base64: { type: string }
             url: { type: string, format: uri }
             midia_id: { type: string }
-        metadados: { type: object, additionalProperties: { type: string }, maxProperties: 20 }
+        metadados:
+          type: object
+          additionalProperties: { type: string }
+          maxProperties: 20
+          description: Pares chave/valor livres para rastreamento interno (máximo 20 propriedades).
     MensagemAceita:
       type: object
       required: [id, estado, canal, criada_em]
@@ -195,7 +480,7 @@ components:
         estado: { $ref: '#/components/schemas/EstadoSaida' }
         canal: { type: string }
         para_mascarado: { type: string, example: '+55 65 9••••-0000' }
-        tipo: { type: string }
+        tipo: { type: string, enum: [texto, imagem, documento, audio, video] }
         correlacao_id: { type: [string, 'null'] }
         criada_em: { type: string, format: date-time }
         atualizada_em: { type: string, format: date-time }
@@ -203,10 +488,34 @@ components:
           type: array
           items:
             type: object
+            required: [estado, em]
             properties:
               estado: { $ref: '#/components/schemas/EstadoSaida' }
               em: { type: string, format: date-time }
               detalhe: { type: [string, 'null'] }
+    CapacidadesCanal:
+      type: object
+      properties:
+        texto: { type: boolean }
+        formatacao: { type: string, example: whatsapp }
+        imagem: { type: boolean }
+        documento: { type: boolean }
+        audio: { type: boolean }
+        video: { type: boolean }
+        grupos: { type: boolean }
+        modelos: { type: boolean }
+        janela_24h: { type: boolean }
+        recibos:
+          type: object
+          properties:
+            enviada: { type: boolean }
+            entregue: { type: boolean }
+            lida: { type: boolean }
+        qr: { type: boolean }
+        max_midia_bytes: { type: integer }
+        mimes_aceitos:
+          type: array
+          items: { type: string }
     EstadoCanal:
       type: object
       required: [id, estado, estado_desde, capacidades]
@@ -214,12 +523,14 @@ components:
         id: { type: string }
         estado: { type: string, enum: [parado, iniciando, qr_pendente, conectado, reconectando, desconectado, erro] }
         estado_desde: { type: string, format: date-time }
-        capacidades: { type: object }
+        capacidades: { $ref: '#/components/schemas/CapacidadesCanal' }
     Evento:
       type: object
       required: [id, tipo, em, dados]
       properties:
         id: { type: string }
-        tipo: { type: string, enum: [mensagem.recebida, mensagem.estado_alterado, canal.estado_alterado, conversa.responsavel_alterado] }
+        tipo:
+          type: string
+          enum: [mensagem.recebida, mensagem.estado_alterado, canal.estado_alterado, conversa.responsavel_alterado]
         em: { type: string, format: date-time }
         dados: { type: object }

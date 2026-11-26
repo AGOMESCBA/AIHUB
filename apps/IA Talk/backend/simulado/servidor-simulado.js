@@ -319,13 +319,25 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, l
     busca: [i => i.nome, i => i.numero], filtros: { estado: (i, v) => i.estado === v, provedor: (i, v) => i.provedor === v },
     ordenarPadrao: 'nome', mapa: canalPublico,
   })));
+  // Mesmo número (com ou sem o nono dígito) não entra em dois canais.
+  const numeroValido = (v) => (/^\d{12,13}$/.test(String(v || '').replace(/\D/g, '')) ? null : 'Informe o número com DDI e DDD (ex.: 5565999990000).');
+  const semNono = (n) => (n.length === 13 ? n.slice(0, 4) + n.slice(5) : n);
+  function numeroUnico(valor, idAtual = null) {
+    const n = String(valor).replace(/\D/g, '');
+    if (dados.canais.some(c => c.id !== idAtual && c.numero && semNono(String(c.numero).replace(/\D/g, '')) === semNono(n))) {
+      throw erro('conflito', 'Este número já está cadastrado em outro canal do IA Talk. Para várias empresas no mesmo número, vincule-as na aba Empresas desse canal.');
+    }
+    return n;
+  }
   admin.get('/canais/:id', (req, res) => res.json(canalPublico(acharOu404(dados.canais, req.params.id, 'Canal'))));
   admin.post('/canais', (req, res) => {
     exigirCampos(req.body, {
       nome: obrigatorio('o nome'),
       provedor: (v) => (v === 'wweb' ? null : v === 'meta' ? 'A Meta Cloud API ainda não está disponível (etapa G6).' : 'Escolha o provedor.'),
+      numero: numeroValido,
     });
-    const c = { id: novo('cn'), nome: req.body.nome.trim(), numero: '', provedor: 'wweb', estado: 'parado', estado_desde: agora(),
+    const numero = numeroUnico(req.body.numero);
+    const c = { id: novo('cn'), nome: req.body.nome.trim(), numero, provedor: 'wweb', estado: 'parado', estado_desde: agora(),
       empresa_dona: { id: empresaAtual().id, nome: empresaAtual().nome }, empresas_vinculadas: [{ id: empresaAtual().id, nome: empresaAtual().nome, padrao: true }],
       capacidades: dados.canais[0].capacidades, fila_pendente: 0, ultima_mensagem_em: null };
     dados.canais.push(c);
@@ -334,6 +346,10 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, l
   });
   admin.put('/canais/:id', (req, res) => {
     const c = acharOu404(dados.canais, req.params.id, 'Canal');
+    if (req.body?.numero !== undefined) {
+      exigirCampos(req.body, { numero: numeroValido });
+      c.numero = numeroUnico(req.body.numero, c.id);
+    }
     if (req.body?.nome !== undefined) exigirCampos(req.body, { nome: obrigatorio('o nome') });
     if (req.body?.nome) c.nome = req.body.nome.trim();
     if (Array.isArray(req.body?.empresas_vinculadas)) {

@@ -1,0 +1,1080 @@
+/* IA Talk · Etapa A0 — Estilos do protótipo da Central de Atendimento (Fase 2).
+   Usa exclusivamente tokens de /app/ia-talk/ui/css/iahub.css e /app/ia-talk/css/talk.css
+   (--bg-base, --bg-card, --bg-hover, --border, --text-hi/md/lo, --accent, --tlk-*)
+   para fidelidade total aos temas claro e escuro, zero rolagem horizontal e foco visível. */
+
+* { box-sizing: border-box; }
+
+[hidden] { display: none !important; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Foco visível em toda navegação por teclado */
+:where(button, a, input, select, textarea, [tabindex="0"]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Página de comparação (index.html) ───────────────────────────────── */
+.cmp-wrap {
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: 24px 20px 44px;
+}
+.cmp-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.cmp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.cmp-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow-sm);
+}
+.cmp-card--rec {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.cmp-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cmp-card h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-hi);
+}
+.cmp-mini-layout {
+  display: grid;
+  gap: 6px;
+  height: 76px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+}
+.cmp-mini-layout--a { grid-template-columns: 16% 24% 1fr 24%; }
+.cmp-mini-layout--b { grid-template-columns: 28% 1fr 22%; }
+.cmp-mini-col {
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-md);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 4px;
+  line-height: 1.2;
+}
+.cmp-mini-col--chat {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-card));
+  color: var(--accent);
+}
+.cmp-mini-col--gaveta {
+  border-style: dashed;
+}
+.cmp-lista {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--text-md);
+  line-height: 1.55;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cmp-acoes {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 4px;
+}
+.cmp-tabela-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  margin-bottom: 20px;
+}
+.cmp-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.cmp-tabela th,
+.cmp-tabela td {
+  padding: 11px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.cmp-tabela th {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-lo);
+  background: var(--bg-base);
+}
+.cmp-tabela tr:last-child td { border-bottom: none; }
+.cmp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ── Shell do protótipo (alternativa-a e alternativa-b) ──────────────── */
+html:has(body.cnt-body),
+body.cnt-body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg-base);
+  color: var(--text-hi);
+  overflow-x: hidden;
+}
+
+.cnt-app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 100vh;
+  max-width: 100vw;
+  overflow: hidden;
+}
+
+.cnt-topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
+.cnt-topbar-esq,
+.cnt-topbar-dir {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.cnt-marca {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-hi);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.cnt-badge-proto {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+.cnt-cenario-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-md);
+}
+.cnt-cenario-label select {
+  padding: 4px 8px;
+  font-size: 12px;
+  height: 30px;
+  width: auto;
+}
+
+/* Estado global (carregando / sem permissão) */
+.cnt-estado-global {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg-base);
+}
+
+/* ── Grid principal das áreas ────────────────────────────────────────── */
+.cnt-workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  overflow: hidden;
+}
+
+/* Alternativa A: 4 colunas fixas no desktop */
+.cnt-workspace--a {
+  grid-template-columns: 208px 282px minmax(0, 1fr) 292px;
+}
+
+/* Layout Híbrido (Escolhido):
+   >= 1280 px: 4 áreas fixas como na Alternativa A
+   761–1279 px: setores + conversas + conversa ampla + gaveta retrátil Contato/IA
+   <= 760 px: telas em sequência + folha deslizante */
+.cnt-workspace--hibrido {
+  grid-template-columns: 204px 276px minmax(0, 1fr) 288px;
+  transition: grid-template-columns .2s ease;
+}
+
+/* Alternativa B: 3 colunas (lista com filtros + conversa + gaveta retrátil) */
+.cnt-workspace--b {
+  grid-template-columns: 300px minmax(0, 1fr) 0px;
+  transition: grid-template-columns .2s ease;
+}
+.cnt-workspace--b.gaveta-aberta {
+  grid-template-columns: 300px minmax(0, 1fr) 296px;
+}
+
+/* Botões exclusivos de telas médias (761–1279 px) no modo híbrido */
+.cnt-so-medio,
+.cnt-so-mobile-ou-medio { display: none; }
+
+/* Híbrido abaixo de 1280 px: contato/IA vira gaveta retrátil sem cobrir a conversa */
+@media (max-width: 1279px) and (min-width: 761px) {
+  .cnt-so-medio,
+  .cnt-so-mobile-ou-medio { display: inline-flex; }
+
+  .cnt-workspace--hibrido {
+    grid-template-columns: 184px 236px minmax(0, 1fr) 0px;
+  }
+  .cnt-workspace--hibrido.gaveta-aberta {
+    grid-template-columns: 184px 236px minmax(0, 1fr) 252px;
+  }
+  .cnt-workspace--hibrido .cnt-col--setores {
+    padding: 10px 6px;
+  }
+  .cnt-workspace--hibrido .cnt-nav-btn {
+    padding: 7px 7px;
+    font-size: 12px;
+  }
+  .cnt-workspace--hibrido:not(.gaveta-aberta) .cnt-col--lateral {
+    border-left: none;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+/* Ajuste equilibrado para notebooks 1024px nas alternativas A e B */
+@media (max-width: 1180px) and (min-width: 761px) {
+  .cnt-workspace--a {
+    grid-template-columns: 184px 220px minmax(0, 1fr) 236px;
+  }
+  .cnt-workspace--a .cnt-col--setores {
+    padding: 10px 6px;
+  }
+  .cnt-workspace--a .cnt-nav-btn {
+    padding: 7px 7px;
+    font-size: 12px;
+  }
+  .cnt-workspace--b {
+    grid-template-columns: 256px minmax(0, 1fr) 0px;
+  }
+  .cnt-workspace--b.gaveta-aberta {
+    grid-template-columns: 256px minmax(0, 1fr) 252px;
+  }
+}
+
+.cnt-col {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+.cnt-col:last-child { border-right: none; }
+
+/* Gaveta recolhida na Alternativa B */
+.cnt-workspace--b:not(.gaveta-aberta) .cnt-col--lateral {
+  border-left: none;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ── Coluna 1 (Alternativa A): Setores e visões ──────────────────────── */
+.cnt-col--setores {
+  background: var(--bg-base);
+  padding: 12px 10px;
+  gap: 14px;
+  overflow-y: auto;
+}
+.cnt-nav-grupo-tit {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-lo);
+  padding: 0 8px 6px;
+}
+.cnt-nav-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cnt-nav-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-hi);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+.cnt-nav-btn:hover { background: var(--bg-hover); }
+.cnt-nav-btn.ativo {
+  background: var(--bg-active, color-mix(in srgb, var(--accent) 12%, transparent));
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent);
+  font-weight: 700;
+}
+.cnt-nav-nome {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cnt-contador {
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  text-align: center;
+  background: var(--bg-hover);
+  color: var(--text-md);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.cnt-nav-btn.ativo .cnt-contador {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+/* ── Coluna 2: Lista de conversas ────────────────────────────────────── */
+.cnt-lista-topo {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: none;
+  background: var(--bg-card);
+}
+.cnt-lista-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cnt-lista-titulo {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-hi);
+}
+.cnt-filtros-b {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cnt-visao-chips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.cnt-chip-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+  color: var(--text-md);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.cnt-chip-btn:hover { background: var(--bg-hover); color: var(--text-hi); }
+.cnt-chip-btn.ativo {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.cnt-conversas {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--bg-card);
+}
+.cnt-conv-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 12px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-hi);
+  transition: background var(--transition);
+}
+.cnt-conv-item:hover { background: var(--bg-hover); }
+.cnt-conv-item.ativa {
+  background: var(--bg-active, color-mix(in srgb, var(--accent) 9%, transparent));
+  border-left-color: var(--accent);
+}
+.cnt-conv-linha1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cnt-conv-nome {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cnt-conv-hora {
+  font-size: 11px;
+  color: var(--text-lo);
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.cnt-conv-previa {
+  font-size: 12.5px;
+  color: var(--text-md);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cnt-conv-rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 2px;
+}
+.cnt-conv-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.cnt-tag-mini {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  color: var(--text-md);
+  white-space: nowrap;
+}
+.cnt-tag-mini--alerta {
+  border-color: color-mix(in srgb, var(--tlk-erro) 45%, var(--border));
+  color: var(--tlk-erro);
+  background: var(--tlk-erro-bg);
+}
+.cnt-nao-lidas {
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #ffffff;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+
+/* ── Coluna 3: Conversa ativa ────────────────────────────────────────── */
+.cnt-col--chat {
+  background: var(--bg-base);
+}
+.cnt-chat-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.cnt-chat-ident {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.cnt-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-base));
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.cnt-chat-nome {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-hi);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cnt-chat-sub {
+  font-size: 11.5px;
+  color: var(--text-lo);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cnt-chat-acoes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  position: relative;
+}
+
+/* Popover de transferência em 1 clique */
+.cnt-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  width: 244px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-hi, var(--border));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md, 0 8px 24px rgba(0, 0, 0, .18));
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cnt-popover-tit {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-lo);
+  padding: 4px 8px;
+}
+.cnt-popover-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-hi);
+  font-size: 12.5px;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cnt-popover-item:hover { background: var(--bg-hover); }
+
+/* Banner de canal desconectado */
+.cnt-banner-desconectado {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--tlk-erro-bg);
+  border-bottom: 1px solid color-mix(in srgb, var(--tlk-erro) 35%, var(--border));
+  color: var(--text-hi);
+  font-size: 12.5px;
+}
+.cnt-banner-texto {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Mensagens e Notas Internas */
+.cnt-mensagens {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cnt-msg {
+  max-width: min(78%, 560px);
+  padding: 10px 13px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  border: 1px solid var(--border);
+  word-break: break-word;
+}
+.cnt-msg--cliente {
+  align-self: flex-start;
+  background: var(--bg-card);
+  border-bottom-left-radius: 4px;
+}
+.cnt-msg--atendente {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--accent) 13%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+  border-bottom-right-radius: 4px;
+}
+/* Nota interna: visual inconfundível (âmbar + borda tracejada + selo de equipe) */
+.cnt-msg--nota {
+  align-self: center;
+  width: min(92%, 580px);
+  max-width: 100%;
+  background: color-mix(in srgb, var(--tlk-aviso-bg) 82%, var(--bg-card));
+  border: 1.5px dashed color-mix(in srgb, var(--tlk-aviso) 55%, var(--border));
+  border-radius: 10px;
+}
+.cnt-msg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--text-lo);
+}
+.cnt-msg--nota .cnt-msg-head {
+  color: var(--tlk-aviso);
+  font-weight: 700;
+}
+.cnt-msg-nota-selo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tlk-aviso) 18%, var(--bg-card));
+  color: var(--tlk-aviso);
+}
+.cnt-msg-meta {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-lo);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Compositor (Mensagem ao cliente × Nota interna + Respostas rápidas com /) */
+.cnt-compositor {
+  flex: none;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  padding: 10px 14px 12px;
+  position: relative;
+}
+.cnt-compositor.modo-nota {
+  background: color-mix(in srgb, var(--tlk-aviso-bg) 55%, var(--bg-card));
+  border-top: 2px dashed color-mix(in srgb, var(--tlk-aviso) 55%, var(--border));
+}
+.cnt-modo-barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.cnt-modo-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+}
+.cnt-modo-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-md);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.cnt-modo-btn.ativo {
+  background: var(--bg-card);
+  color: var(--text-hi);
+  box-shadow: var(--shadow-sm);
+}
+.cnt-modo-btn--nota.ativo {
+  background: var(--tlk-aviso-bg);
+  color: var(--tlk-aviso);
+}
+
+/* Menu de respostas rápidas acionado por / (fundo opaco garantido por --bg-card) */
+.cnt-slash-menu {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: calc(100% + 6px);
+  z-index: 35;
+  background: var(--bg-card);
+  border: 1px solid var(--border-hi, var(--border));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md, 0 10px 28px rgba(0, 0, 0, .18));
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 6px;
+}
+.cnt-slash-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-hi);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cnt-slash-item:hover,
+.cnt-slash-item.selecionado {
+  background: var(--bg-hover);
+}
+.cnt-slash-item strong {
+  font-size: 12.5px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+.cnt-slash-item span {
+  font-size: 12px;
+  color: var(--text-md);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cnt-input-linha {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.cnt-textarea {
+  flex: 1 1 auto;
+  min-height: 44px;
+  max-height: 112px;
+  resize: none;
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.cnt-compositor-dica {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--text-lo);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Coluna 4 / Gaveta: Painel do contato e IA (sem cobrir conversa) ─── */
+.cnt-col--lateral {
+  background: var(--bg-card);
+  border-left: 1px solid var(--border);
+  border-right: none;
+}
+.cnt-lateral-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px 0 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-base);
+}
+.cnt-lateral-head .tlk-abas {
+  border-bottom: none;
+  padding: 0 8px;
+}
+.cnt-lateral-head .tlk-aba {
+  padding: 11px 10px;
+  font-size: 12.5px;
+}
+.cnt-lateral-corpo {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 14px;
+  background: var(--bg-card);
+}
+
+.cnt-contato-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cnt-info-bloco {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.cnt-info-bloco:last-child { border-bottom: none; padding-bottom: 0; }
+.cnt-info-tit {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-lo);
+}
+.cnt-info-linha {
+  font-size: 12.5px;
+  color: var(--text-hi);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.cnt-info-linha span {
+  font-size: 11px;
+  color: var(--text-lo);
+}
+.cnt-tags-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.cnt-hist-item {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  font-size: 12px;
+}
+.cnt-hist-item strong {
+  display: block;
+  color: var(--text-hi);
+  margin-bottom: 2px;
+}
+.cnt-hist-item span { color: var(--text-lo); }
+
+/* Assistente de IA no painel lateral */
+.cnt-ia-acoes {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 14px;
+}
+.cnt-ia-btn {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  font-size: 12.5px;
+}
+.cnt-ia-saida {
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, var(--bg-base));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cnt-ia-saida-tit {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--accent);
+}
+.cnt-ia-saida-texto {
+  font-size: 12.5px;
+  color: var(--text-hi);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* Botões exclusivos do mobile ocultos no desktop */
+.cnt-so-mobile { display: none; }
+.cnt-sheet-backdrop { display: none; }
+
+/* ── Celular (<= 760 px): telas em sequência + folha deslizante ──────── */
+@media (max-width: 760px) {
+  .cmp-grid { grid-template-columns: 1fr; }
+
+  .cnt-so-mobile,
+  .cnt-so-mobile-ou-medio { display: inline-flex; }
+  .cnt-so-desktop,
+  .cnt-so-medio { display: none !important; }
+
+  .cnt-topbar {
+    padding: 8px 10px;
+  }
+  .cnt-topbar-dir {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  /* No celular, apenas uma tela visível por vez (sequência) */
+  .cnt-workspace--a,
+  .cnt-workspace--b,
+  .cnt-workspace--b.gaveta-aberta,
+  .cnt-workspace--hibrido,
+  .cnt-workspace--hibrido.gaveta-aberta {
+    grid-template-columns: 1fr;
+  }
+
+  .cnt-col--setores,
+  .cnt-col--lista,
+  .cnt-col--chat {
+    display: none;
+    border-right: none;
+  }
+  .cnt-workspace[data-passo="setores"] .cnt-col--setores { display: flex; }
+  .cnt-workspace[data-passo="lista"]   .cnt-col--lista   { display: flex; }
+  .cnt-workspace[data-passo="chat"]    .cnt-col--chat    { display: flex; }
+
+  /* Contato e IA viram folha deslizante opaca no celular */
+  .cnt-sheet-backdrop.aberto {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(15, 23, 42, 0.52);
+  }
+  .cnt-col--lateral,
+  .cnt-workspace--b:not(.gaveta-aberta) .cnt-col--lateral,
+  .cnt-workspace--hibrido:not(.gaveta-aberta) .cnt-col--lateral {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 78vh;
+    z-index: 50;
+    background: var(--bg-card);
+    border-left: none;
+    border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.25);
+    transform: translateY(105%);
+    transition: transform .22s ease;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .cnt-col--lateral.sheet-aberta,
+  .cnt-workspace--b .cnt-col--lateral.sheet-aberta,
+  .cnt-workspace--hibrido .cnt-col--lateral.sheet-aberta {
+    transform: translateY(0);
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .cnt-chat-head {
+    padding: 8px 10px;
+  }
+  .cnt-mensagens {
+    padding: 12px 10px;
+  }
+  .cnt-msg {
+    max-width: 90%;
+  }
+  .cnt-compositor {
+    padding: 8px 10px 10px;
+  }
+  .cnt-input-linha {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cnt-input-linha .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

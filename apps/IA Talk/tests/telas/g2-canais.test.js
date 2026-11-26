@@ -51,10 +51,21 @@ test('G2 canais.html: lista mascarada, Meta indisponível no cadastro, QR + cont
     await page.waitForSelector('#vista-novo:not([hidden])');
     assert.equal(await page.isDisabled('input[name="provedor_opcao"][value="meta"]'), true);
     await page.fill('#n-nome', 'Comercial Sul');
+    // Número do WhatsApp obrigatório (como no IA Command); a recusa sem número fica no teste do backend.
+    assert.equal(await page.getAttribute('#n-numero', 'required'), '');
+    await page.fill('#n-numero', '5565988887777');
     await page.click('#btn-criar-canal');
     await page.waitForSelector('#vista-detalhe:not([hidden])');
     assert.equal(await page.textContent('#titulo-detalhe'), 'Comercial Sul');
     assert.match(await page.textContent('#detalhe-pill-estado'), /Parado/);
+    assert.match(await page.textContent('#meta-canal'), /\+55 65 9••••-7777/);
+    assert.equal((await page.content()).includes('5565988887777'), false, 'número completo nunca na tela depois de salvo');
+    // Trocar o número pela aba Conexão
+    await page.click('#meta-canal [data-acao="alterar-numero"]');
+    await page.fill('#c-numero', '5565988886666');
+    await page.click('#btn-salvar-numero');
+    await page.waitForFunction(() => document.getElementById('meta-canal')?.textContent?.includes('-6666'));
+    assert.equal(await page.isHidden('#form-numero'), true);
 
     // Conectar gera QR com contagem até expira_em
     await page.click('#btn-conectar');
@@ -88,6 +99,37 @@ test('G2 canais.html: lista mascarada, Meta indisponível no cadastro, QR + cont
     await page.waitForSelector('#aviso-pausa:not([hidden])');
     await page.click('#btn-retomar-rolagem');
     assert.equal(await page.isHidden('#aviso-pausa'), true);
+
+    // Layout 3 colunas no Terminal: lista esquerda, log no centro e painel de estado/ações à direita
+    assert.ok(await page.locator('#term-lista-canais .tlk-term-card').count() >= 3);
+    assert.match(await page.textContent('#term-status-box'), /Conectado/);
+    assert.match(await page.textContent('#term-ctrl-num'), /••••/);
+    assert.match(await page.textContent('#term-info-empresas'), /3 \(/);
+    assert.match(await page.textContent('#term-info-processo'), /WhatsApp Web/);
+    assert.notEqual((await page.textContent('#term-info-uptime')).trim(), '—');
+
+    // Copiar e Limpar do log no painel direito
+    await page.click('#btn-copiar-term');
+    await page.click('#btn-limpar-term');
+    assert.match(await page.textContent('#term-contagem'), /^0 linha/);
+    await page.click('#btn-recarregar-log');
+    await page.waitForFunction(() => document.querySelectorAll('#terminal .tlk-log-linha').length >= 1);
+
+    // Troca de canal pela lista esquerda mantendo na aba Terminal (ex.: cn_teste com QR no painel direito)
+    await page.click('button[data-term-canal="cn_teste"]');
+    await page.waitForFunction(() => document.getElementById('term-ctrl-nome')?.textContent === 'Teste homologação');
+    assert.equal(await page.isVisible('#painel-terminal'), true);
+    await page.waitForSelector('#term-qr-mini:not([hidden])');
+
+    // Verifica ausência de rolagem horizontal em 1440, 1024 e 390 px na aba Terminal
+    for (const w of [1440, 1024, 390]) {
+      await page.setViewportSize({ width: w, height: 844 });
+      const med = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth }));
+      assert.ok(med.sw <= med.iw + 1, `rolagem horizontal no Terminal em ${w}px: ${med.sw} > ${med.iw}`);
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.click('button[data-term-canal="cn_suporte"]');
+    await page.waitForFunction(() => document.getElementById('term-ctrl-nome')?.textContent === 'Suporte J2A');
 
     // Aba Empresas que usam o número: mostra marca "Canal padrão" e salva alterações
     await page.click('#aba-empresas');

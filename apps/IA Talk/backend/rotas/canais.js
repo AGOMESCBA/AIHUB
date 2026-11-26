@@ -43,6 +43,16 @@ function criarRotasCanais({ db, supervisor, log = console }) {
     if (!c) throw erro('nao_encontrado', 'Canal não encontrado.');
     return c;
   };
+  // Número do WhatsApp do canal (como no IA Command): obrigatório, válido e só em um canal.
+  function lerNumero(valor, canalIdAtual = null) {
+    const numero = telefone.normalizar(valor);
+    if (!telefone.valido(numero)) throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos: { numero: 'Informe o número com DDI e DDD (ex.: 5565999990000).' } });
+    const outro = db.prepare('SELECT id, numero FROM canais WHERE numero IS NOT NULL AND id IS NOT ?').all(canalIdAtual)
+      .find(c => telefone.mesmoNumero(c.numero, numero));
+    if (outro) throw erro('conflito', 'Este número já está cadastrado em outro canal do IA Talk. Para várias empresas no mesmo número, vincule-as na aba Empresas desse canal.');
+    return numero;
+  }
+
   const acharDono = (req, id) => {
     const c = acharVisivel(req, id);
     if (c.empresa_dona_id !== req.contexto.empresaId) throw erro('sem_permissao', 'Só a empresa dona do canal pode configurar e conectar o número.');
@@ -70,15 +80,17 @@ function criarRotasCanais({ db, supervisor, log = console }) {
     const nome = String(req.body?.nome || '').trim();
     const campos = {};
     if (!nome) campos.nome = 'Informe o nome.';
+    if (!telefone.valido(req.body?.numero)) campos.numero = 'Informe o número com DDI e DDD (ex.: 5565999990000).';
     if (req.body?.provedor === 'meta') campos.provedor = 'A Meta Cloud API ainda não está disponível (etapa G6).';
     else if (req.body?.provedor !== 'wweb') campos.provedor = 'Escolha o provedor.';
     if (Object.keys(campos).length) throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos });
     const empresaId = req.contexto.exigirEmpresa();
+    const numero = lerNumero(req.body.numero);
     const id = novoId('canal');
     const t = agora();
     db.transaction(() => {
-      db.prepare(`INSERT INTO canais (id, empresa_dona_id, nome, provedor, estado, estado_desde, sessao_id, criado_em, atualizado_em)
-        VALUES (?, ?, ?, 'wweb', 'parado', ?, ?, ?, ?)`).run(id, empresaId, nome, t, `talk_${crypto.randomBytes(8).toString('hex')}`, t, t);
+      db.prepare(`INSERT INTO canais (id, empresa_dona_id, nome, numero, provedor, estado, estado_desde, sessao_id, criado_em, atualizado_em)
+        VALUES (?, ?, ?, ?, 'wweb', 'parado', ?, ?, ?, ?)`).run(id, empresaId, nome, numero, t, `talk_${crypto.randomBytes(8).toString('hex')}`, t, t);
       const jaTemPadrao = db.prepare('SELECT 1 FROM canal_empresas WHERE empresa_id = ? AND padrao = 1').get(empresaId);
       db.prepare('INSERT INTO canal_empresas (canal_id, empresa_id, padrao) VALUES (?, ?, ?)').run(id, empresaId, jaTemPadrao ? 0 : 1);
       db.prepare("INSERT INTO canal_log (canal_id, em, tipo, mensagem) VALUES (?, ?, 'system', 'Canal cadastrado. Clique em Conectar para gerar o QR Code.')").run(id, t);
@@ -87,7 +99,8 @@ function criarRotasCanais({ db, supervisor, log = console }) {
     res.status(201).json(canalPublico(db.prepare('SELECT * FROM canais WHERE id = ?').get(id)));
   });
 
-  // nome; empresas_vinculadas [{ id, padrao }]; modo_teste e numeros_teste (só a plataforma).
+  // nome; numero (só com o canal parado e sem sessão); empresas_vinculadas [{ id, padrao }];
+  // modo_teste e numeros_teste (só a plataforma).
   r.put('/canais/:id', exigir, (req, res) => {
     const c = acharDono(req, req.params.id);
     const b = req.body || {};
@@ -95,14 +108,21 @@ function criarRotasCanais({ db, supervisor, log = console }) {
     if ((b.modo_teste !== undefined || b.numeros_teste !== undefined) && !req.contexto.plataforma) {
       throw erro('sem_permissao', 'Só a administração da plataforma altera o modo de teste.');
     }
+    let numeroCanal = c.numero;
+    if (b.numero !== undefined && !telefone.mesmoNumero(b.numero, c.numero || '')) {
+      numeroCanal = lerNumero(b.numero, c.id);
+      if (c.ligado || supervisor.temSessao(c.id)) {
+        throw erro('conflito', 'Para trocar o número, pare o canal e use "Remover sessão" antes. O novo número lerá um novo QR Code.');
+      }
+    }
     let numeros = null;
     if (b.numeros_teste !== undefined) {
       numeros = Array.isArray(b.numeros_teste) ? b.numeros_teste.map(telefone.normalizar) : null;
       if (!numeros || numeros.some(n => !telefone.valido(n))) throw erro('requisicao_invalida', 'Números de teste inválidos.', { campos: { numeros_teste: 'Use DDI e DDD (ex.: 5565999990000).' } });
     }
     db.transaction(() => {
-      db.prepare(`UPDATE canais SET nome = ?, modo_teste = ?, numeros_teste = ?, atualizado_em = ? WHERE id = ?`).run(
-        b.nome !== undefined ? String(b.nome).trim() : c.nome,
+      db.prepare(`UPDATE canais SET nome = ?, numero = ?, modo_teste = ?, numeros_teste = ?, atualizado_em = ? WHERE id = ?`).run(
+        b.nome !== undefined ? String(b.nome).trim() : c.nome, numeroCanal,
         b.modo_teste !== undefined ? (b.modo_teste ? 1 : 0) : c.modo_teste,
         numeros ? JSON.stringify(numeros) : c.numeros_teste, agora(), c.id);
       if (Array.isArray(b.empresas_vinculadas)) {
@@ -135,6 +155,7 @@ function criarRotasCanais({ db, supervisor, log = console }) {
 
   acao('conectar', async (c) => {
     if (c.provedor !== 'wweb') throw erro('recurso_nao_suportado', 'Provedor ainda não disponível.');
+    if (!c.numero) throw erro('requisicao_invalida', 'Cadastre o número do WhatsApp deste canal antes de conectar (Editar canal).', { campos: { numero: 'obrigatório' } });
     ligar(c.id, true);
     if (!supervisor.iniciar(c.id)) throw erro('conflito', 'Este canal já está conectado em outro processo do IA Talk.');
   }, 'Conectou');

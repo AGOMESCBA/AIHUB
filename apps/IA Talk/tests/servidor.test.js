@@ -45,3 +45,19 @@ test('servidor real: saúde, telas, componentes compartilhados e erro padrão', 
   const prototipo = await fetch(`${url}/app/ia-talk/prototipos/central/`);
   assert.equal(prototipo.status, 404, 'protótipos só no servidor simulado');
 });
+
+test('IP do visitante sem a porta que o IIS (ARR) anexa: saúde e limites por IP', async (t) => {
+  const { normalizarIp } = require('../backend/acesso/middleware');
+  assert.equal(normalizarIp('10.0.19.67:25614'), '10.0.19.67');
+  assert.equal(normalizarIp('::ffff:10.0.19.67'), '10.0.19.67');
+  assert.equal(normalizarIp('[2001:db8::1]:443'), '2001:db8::1');
+  assert.equal(normalizarIp('2001:db8::1'), '2001:db8::1', 'IPv6 sem porta fica intacto');
+  assert.equal(normalizarIp(''), null);
+
+  const db = abrirBanco({ arquivo: ':memory:' });
+  const { url, fechar } = await subir(criarApp({ db, log: { error() {} } }));
+  t.after(fechar);
+  const saude = await fetch(`${url}/app/ia-talk/api/saude`, { headers: { 'x-forwarded-for': '203.0.113.9:25614' } }).then(r => r.json());
+  assert.equal(saude.proxy, 'ok');
+  assert.equal(saude.seu_ip, '203.0.113.9');
+});

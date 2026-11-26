@@ -1,6 +1,7 @@
 'use strict';
 
-// Provedor WhatsApp Web (whatsapp-web.js — a mesma biblioteca do IA Command).
+// Provedor WhatsApp Web (whatsapp-web.js — a mesma biblioteca do IA Command,
+// mas na cópia corrigida de vendor/whatsapp-web.js: ver o LEIA-ME de lá).
 // Roda DENTRO do processo filho do canal (canais/runner.js), nunca no processo
 // principal do Talk. Receita de boot copiada do IA Command
 // (apps/IA Command/modules/whatsapp/service.js: PUPPETEER_ARGS, LocalAuth,
@@ -10,8 +11,16 @@
 // .wwebjs_auth do IA Command. Entra no número como mais um "aparelho conectado".
 
 const fs = require('fs');
+const BIBLIOTECA_WWEB = '../../vendor/whatsapp-web.js';
 const path = require('path');
 const QRCode = require('qrcode');
+const { RAIZ_REPO } = require('../config');
+
+// Cache de versões do WhatsApp Web: SEMPRE o mesmo do IA Command (<raiz>/.wwebjs_cache;
+// só cópias da página do WhatsApp Web, não é sessão). Sem caminho, a biblioteca usa
+// ./.wwebjs_cache relativo à pasta do serviço: o Talk não achava a versão compatível,
+// carregava a mais nova e falhava com "Cannot read properties of null (reading 'Socket')".
+const DIR_CACHE_VERSOES = path.join(RAIZ_REPO, '.wwebjs_cache');
 const { ProvedorBase, ErroProvedor, CAPACIDADES_VAZIAS, validarEnvelope } = require('./interface');
 
 const PUPPETEER_ARGS = [
@@ -59,6 +68,31 @@ function resolverChrome() {
 
 const digitos = (v) => String(v || '').split('@')[0].replace(/\D/g, '');
 
+// Remetente "@lid" (identificador interno do WhatsApp, não é o telefone): tenta
+// 1) client.getContactLidAndPhone (pede o telefone ao próprio WhatsApp Web) e
+// 2) como o IA Command (_resolverSender): msg.author, contact.number e contact.id,
+// descartando o que for o próprio LID. Devolve null se nenhum telefone aparecer.
+async function resolverTelefoneLid(msg, client) {
+  const lid = digitos(msg.from);
+  const candidatos = [];
+  try {
+    const [r] = (await client?.getContactLidAndPhone?.([msg.from])) || [];
+    candidatos.push(r?.pn);
+  } catch (_) { /* segue para o contato */ }
+  candidatos.push(msg.author);
+  try {
+    const contato = await msg.getContact();
+    candidatos.push(contato?.id?._serialized, contato?.number);
+  } catch (_) { /* sem contato */ }
+  for (const c of candidatos) {
+    const v = String(c || '');
+    if (!v || v.includes('@lid')) continue;
+    const d = digitos(v);
+    if (d && d !== lid) return d;
+  }
+  return null;
+}
+
 class ProvedorWweb extends ProvedorBase {
   // canal: { id, sessao_id }; dirSessoes: data/sessoes
   constructor({ canal, dirSessoes, log = () => {} }) {
@@ -76,14 +110,16 @@ class ProvedorWweb extends ProvedorBase {
   temSessao() { return fs.existsSync(this.pastaSessao()); }
 
   async iniciar() {
-    const { Client, LocalAuth } = require('whatsapp-web.js');
+    const { Client, LocalAuth } = require(BIBLIOTECA_WWEB);
     this._mudarEstado('iniciando');
     fs.mkdirSync(this.dirSessoes, { recursive: true });
     const puppeteer = { headless: true, args: PUPPETEER_ARGS };
     const chrome = resolverChrome();
     if (chrome) puppeteer.executablePath = chrome;
     const versao = String(process.env.IA_TALK_WA_WEB_VERSION || process.env.IAC_WA_WEB_VERSION || '').trim();
-    const opcoesVersao = versao ? { webVersion: versao, webVersionCache: { type: 'local', path: path.join(this.dirSessoes, '..', '.wwebjs_cache'), strict: true } } : {};
+    const opcoesVersao = versao
+      ? { webVersion: versao, webVersionCache: { type: 'local', path: DIR_CACHE_VERSOES, strict: true } }
+      : { webVersionCache: { type: 'local', path: DIR_CACHE_VERSOES } };
 
     this.client = new Client({
       authStrategy: new LocalAuth({ clientId: this.canal.sessao_id, dataPath: this.dirSessoes }),
@@ -92,6 +128,8 @@ class ProvedorWweb extends ProvedorBase {
       ...opcoesVersao,
     });
     const c = this.client;
+    if (chrome) this.log('info', `Chrome: ${chrome}`);
+    if (versao) this.log('info', `WhatsApp Web: versão fixada ${versao} (cache do IA Command).`);
     this.log('info', this.temSessao() ? 'Sessão salva encontrada. Conectando ao WhatsApp…' : 'Sem sessão salva: gerando QR Code.');
 
     c.on('qr', async (qr) => {
@@ -122,10 +160,12 @@ class ProvedorWweb extends ProvedorBase {
     if (msg.fromMe || msg.isStatus || TIPOS_IGNORADOS.has(msg.type)) return;
     if (this._aceitarApos && Number(msg.timestamp || 0) < this._aceitarApos) return;
     const grupo = String(msg.from || '').endsWith('@g.us');
-    let valor = digitos(grupo ? msg.from : msg.from);
+    let valor = digitos(msg.from);
     if (!grupo && String(msg.from || '').includes('@lid')) {
-      // Mesmo cuidado do IA Command (_resolverSender): @lid não é o telefone.
-      try { valor = digitos((await msg.getContact())?.number) || valor; } catch (_) { /* mantém o identificador */ }
+      const tel = await resolverTelefoneLid(msg, this.client);
+      // Sem telefone não há como conferir a lista de teste: fica registrado no log.
+      if (tel) valor = tel;
+      else this.log('warning', `Remetente sem telefone identificável (código interno do WhatsApp ••••${valor.slice(-4)}).`);
     }
     this.emit('mensagem', {
       id_provedor: msg.id?._serialized,
@@ -146,7 +186,7 @@ class ProvedorWweb extends ProvedorBase {
   async enviar(envelope) {
     validarEnvelope(envelope, CAPACIDADES);
     if (!this.client || this._estado !== 'conectado') throw new ErroProvedor('temporario', 'canal_desconectado', 'Canal não está conectado.');
-    const { MessageMedia } = require('whatsapp-web.js');
+    const { MessageMedia } = require(BIBLIOTECA_WWEB);
     let destino;
     if (envelope.destinatario.tipo === 'grupo') destino = envelope.destinatario.valor;
     else {
@@ -168,10 +208,18 @@ class ProvedorWweb extends ProvedorBase {
   }
 
   // Apaga a sessão salva (o celular terá de ler um novo QR). Só com o cliente parado.
+  // Sai do WhatsApp (remove este aparelho da lista do celular) e apaga a sessão.
+  async desvincular() {
+    const c = this.client;
+    if (c) await c.logout().catch(err => this.log('warning', `Não consegui sair do WhatsApp (${err.message}). Remova o aparelho pelo celular.`));
+    await this.parar();
+    fs.rmSync(this.pastaSessao(), { recursive: true, force: true });
+  }
+
   limparSessao() {
     if (this.client) throw new Error('Pare o canal antes de limpar a sessão.');
     fs.rmSync(this.pastaSessao(), { recursive: true, force: true });
   }
 }
 
-module.exports = { ProvedorWweb, CAPACIDADES_WWEB: CAPACIDADES, resolverChrome };
+module.exports = { ProvedorWweb, CAPACIDADES_WWEB: CAPACIDADES, resolverChrome, resolverTelefoneLid };

@@ -21,6 +21,12 @@ function variantesBrasil(valor) {
   return [...variantes];
 }
 
+// Mesmo número, com ou sem o nono dígito (o WhatsApp devolve qualquer um dos dois).
+function mesmoNumero(a, b) {
+  const va = variantesBrasil(a);
+  return va.length > 0 && variantesBrasil(b).some(v => va.includes(v));
+}
+
 // +55 65 9••••-0000
 function mascarar(valor) {
   const d = normalizar(valor);
@@ -34,4 +40,4 @@ function mascararEmail(valor) {
   return `${nome.slice(0, 1)}••@${dominio}`;
 }
 
-module.exports = { normalizar, valido, variantesBrasil, mascarar, mascararEmail };
+module.exports = { normalizar, valido, variantesBrasil, mesmoNumero, mascarar, mascararEmail };

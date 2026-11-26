@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Layout Híbrido (Escolhido) · Central de Atendimento · IA Talk</title>
+  <!-- Etapa A0 — Layout híbrido escolhido em 26/11/2026:
+       - >= 1280 px: quatro áreas fixas (Setores · Conversas · Conversa · Contato/IA)
+       - 761–1279 px: setores + conversas + conversa ampla + gaveta retrátil Contato/IA (sem cobrir a conversa)
+       - <= 760 px: telas em sequência (Setores -> Conversas -> Conversa) + folha deslizante Contato/IA -->
+  <script src="/app/ia-talk/js/talk-ui.js"></script>
+  <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
+  <link rel="stylesheet" href="/app/ia-talk/prototipos/central/prototipo.css">
+</head>
+<body class="cnt-body">
+<div class="cnt-app">
+
+  <header class="cnt-topbar">
+    <div class="cnt-topbar-esq">
+      <a class="btn btn-ghost btn-sm" href="/app/ia-talk/prototipos/central/index.html">← Comparação</a>
+      <span class="cnt-marca">
+        Central · Layout Híbrido
+        <span class="tlk-pill tlk-pill--ok">Escolhida</span>
+      </span>
+    </div>
+    <div class="cnt-topbar-dir">
+      <a class="btn btn-ghost btn-sm" href="/app/ia-talk/prototipos/central/alternativa-a.html">Alt. A</a>
+      <a class="btn btn-ghost btn-sm" href="/app/ia-talk/prototipos/central/alternativa-b.html">Alt. B</a>
+      <label class="cnt-cenario-label" for="sel-cenario">
+        <span>Estado:</span>
+        <select class="form-control" id="sel-cenario">
+          <option value="normal">Normal</option>
+          <option value="desconectado">Canal desconectado</option>
+          <option value="vazio">Vazio</option>
+          <option value="carregando">Carregando</option>
+          <option value="sem_permissao">Sem permissão</option>
+        </select>
+      </label>
+      <button class="btn btn-ghost btn-sm" type="button" id="btn-tema">🌙 Escuro</button>
+    </div>
+  </header>
+
+  <div class="cnt-estado-global" id="estado-global" hidden></div>
+
+  <main class="cnt-workspace cnt-workspace--hibrido" id="workspace" data-passo="lista">
+    <!-- 1. Setores e visões -->
+    <aside class="cnt-col cnt-col--setores" aria-label="Visões e setores">
+      <div>
+        <div class="cnt-nav-grupo-tit">Visões</div>
+        <ul class="cnt-nav-lista" id="lista-visoes"></ul>
+      </div>
+      <div>
+        <div class="cnt-nav-grupo-tit">Setores</div>
+        <ul class="cnt-nav-lista" id="lista-setores"></ul>
+      </div>
+    </aside>
+
+    <!-- 2. Lista de conversas -->
+    <section class="cnt-col cnt-col--lista" aria-label="Lista de conversas">
+      <div class="cnt-lista-topo">
+        <div class="cnt-lista-head">
+          <button class="btn btn-ghost btn-sm cnt-so-mobile" type="button" id="btn-mobile-setores">← Setores</button>
+          <h1 class="cnt-lista-titulo" id="titulo-lista-conv">Conversas</h1>
+        </div>
+        <label class="sr-only" for="campo-busca">Buscar conversa</label>
+        <input class="form-control" id="campo-busca" type="search" placeholder="Buscar cliente, empresa ou trecho…" autocomplete="off">
+      </div>
+      <div id="estado-lista-vazio" hidden></div>
+      <ul class="cnt-conversas" id="lista-conversas"></ul>
+    </section>
+
+    <!-- 3. Conversa ativa -->
+    <section class="cnt-col cnt-col--chat" aria-label="Conversa ativa">
+      <div id="estado-chat-vazio" hidden></div>
+
+      <div id="chat-ativo" style="display:flex;flex-direction:column;height:100%;min-height:0;">
+        <header class="cnt-chat-head">
+          <div class="cnt-chat-ident">
+            <button class="btn btn-ghost btn-sm cnt-so-mobile" type="button" id="btn-mobile-lista">← Fila</button>
+            <div class="cnt-avatar" id="chat-avatar" aria-hidden="true">MO</div>
+            <div style="min-width:0;">
+              <div class="cnt-chat-nome" id="chat-nome"></div>
+              <div class="cnt-chat-sub" id="chat-sub"></div>
+            </div>
+          </div>
+          <div class="cnt-chat-acoes">
+            <button class="btn btn-ghost btn-sm cnt-so-medio" type="button" id="btn-gaveta" aria-expanded="false" aria-controls="painel-lateral">Contato · IA</button>
+            <button class="btn btn-ghost btn-sm cnt-so-mobile" type="button" id="btn-abrir-sheet">Contato / IA</button>
+            <button class="btn btn-ghost btn-sm" type="button" id="btn-transferir" aria-expanded="false" aria-controls="popover-transferir">Transferir ▾</button>
+            <button class="btn btn-primary btn-sm" type="button" id="btn-encerrar">Encerrar</button>
+            <div class="cnt-popover" id="popover-transferir" role="menu" hidden></div>
+          </div>
+        </header>
+
+        <div class="cnt-banner-desconectado" id="banner-desconectado" role="alert" hidden>
+          <div class="cnt-banner-texto">
+            <span class="tlk-pill tlk-pill--erro">Desconectado</span>
+            <span>O canal <strong id="banner-canal-nome"></strong> está offline. Envios ao cliente estão pausados até reconectar; notas internas continuam disponíveis.</span>
+          </div>
+        </div>
+
+        <div class="cnt-mensagens" id="lista-mensagens" aria-live="polite"></div>
+
+        <footer class="cnt-compositor" id="compositor">
+          <div class="cnt-slash-menu" id="slash-menu" role="listbox" aria-label="Respostas rápidas" hidden></div>
+
+          <div class="cnt-modo-barra">
+            <div class="cnt-modo-tabs" role="group" aria-label="Tipo de envio">
+              <button class="cnt-modo-btn ativo" type="button" id="btn-modo-cliente" aria-pressed="true">Mensagem ao cliente</button>
+              <button class="cnt-modo-btn cnt-modo-btn--nota" type="button" id="btn-modo-nota" aria-pressed="false">🔒 Nota interna</button>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn btn-ghost btn-sm" type="button" id="btn-atalho-slash" title="Inserir resposta rápida">/ Respostas rápidas</button>
+              <button class="btn btn-ghost btn-sm" type="button" id="btn-melhorar-inline" title="Melhorar texto no painel de IA">✨ Melhorar texto</button>
+            </div>
+          </div>
+
+          <form class="cnt-input-linha" id="form-compositor">
+            <label class="sr-only" for="campo-msg">Mensagem ou nota interna</label>
+            <textarea class="form-control cnt-textarea" id="campo-msg" rows="2" placeholder="Digite uma mensagem ou '/' para respostas rápidas…"></textarea>
+            <button class="btn btn-primary" type="submit" id="btn-enviar">Enviar ao cliente</button>
+          </form>
+
+          <div class="cnt-compositor-dica">
+            <span>Enter envia · Shift+Enter quebra linha · Digite <code>/</code> para atalhos</span>
+            <span>Protótipo visual (não envia ao WhatsApp real)</span>
+          </div>
+        </footer>
+      </div>
+    </section>
+
+    <!-- 4. Contato e IA: fixo em >= 1280 px, gaveta retrátil em 761–1279 px, folha deslizante em <= 760 px -->
+    <div class="cnt-sheet-backdrop" id="sheet-backdrop"></div>
+    <aside class="cnt-col cnt-col--lateral" id="painel-lateral" aria-label="Contato e assistente de IA">
+      <div class="cnt-lateral-head">
+        <div class="tlk-abas" role="tablist" aria-label="Abas do painel lateral">
+          <button class="tlk-aba" type="button" role="tab" id="aba-contato" aria-controls="painel-contato" aria-selected="true">Contato</button>
+          <button class="tlk-aba" type="button" role="tab" id="aba-ia" aria-controls="painel-ia" aria-selected="false">✨ Assistente IA</button>
+        </div>
+        <button class="btn btn-ghost btn-sm cnt-so-mobile-ou-medio" type="button" id="btn-fechar-lateral" aria-label="Fechar painel">✕</button>
+      </div>
+
+      <div class="cnt-lateral-corpo" id="painel-contato" role="tabpanel" aria-labelledby="aba-contato"></div>
+
+      <div class="cnt-lateral-corpo" id="painel-ia" role="tabpanel" aria-labelledby="aba-ia" hidden>
+        <p class="form-hint" style="margin:0 0 10px;">A IA trabalha sempre ao lado da conversa, sem cobrir as mensagens. Nenhuma resposta é enviada automaticamente sem sua revisão.</p>
+        <div class="cnt-ia-acoes">
+          <button class="btn btn-ghost cnt-ia-btn" type="button" id="btn-ia-resumo">📝 Resumir conversa</button>
+          <button class="btn btn-ghost cnt-ia-btn" type="button" id="btn-ia-sugestao">💬 Sugerir resposta</button>
+          <button class="btn btn-ghost cnt-ia-btn" type="button" id="btn-ia-melhorar">✨ Melhorar texto do rascunho</button>
+        </div>
+        <div class="cnt-ia-saida" id="ia-saida" aria-live="polite" hidden>
+          <div class="cnt-ia-saida-tit" id="ia-saida-tit"></div>
+          <div class="cnt-ia-saida-texto" id="ia-saida-texto"></div>
+          <div>
+            <button class="btn btn-primary btn-sm" type="button" id="btn-ia-inserir">Inserir no rascunho</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+</div>
+
+<script src="/app/ia-talk/prototipos/central/dados.js"></script>
+<script src="/app/ia-talk/prototipos/central/central-ui.js"></script>
+<script>window.CentralPrototipo.iniciarCentral({ modo: 'hibrido' });</script>
+</body>
+</html>

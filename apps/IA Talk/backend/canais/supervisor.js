@@ -30,6 +30,7 @@ class SupervisorCanais {
     this.dono = `${os.hostname()}:${process.pid}:${crypto.randomBytes(4).toString('hex')}`;
     this.filhos = new Map();   // canalId -> { proc, ficha, encerrando }
     this.qrs = new Map();      // canalId -> { qr, expira_em }
+    this.bloqueados = new Set(); // canais com QR lido pelo número errado (ignora o filho até religar)
     this.tentativas = new Map();
     this.descartadas = new Map(); // canalId -> quantidade ainda não resumida no log
     this.pendentesEnvio = new Map();
@@ -86,6 +87,7 @@ class SupervisorCanais {
 
   // Modo de teste: só mensagens dos números da lista entram; das demais fica a contagem.
   _receber(canalId, m) {
+    if (this.bloqueados.has(canalId)) return;
     const canal = this.db.prepare('SELECT modo_teste, numeros_teste FROM canais WHERE id = ?').get(canalId);
     if (!canal) return;
     const lista = JSON.parse(canal.numeros_teste || '[]');
@@ -113,6 +115,7 @@ class SupervisorCanais {
   // ── Ciclo de vida dos filhos ─────────────────────────────────────────────
   iniciar(canalId) {
     if (this.filhos.has(canalId)) return true;
+    this.bloqueados.delete(canalId);
     const canal = this.db.prepare('SELECT id, sessao_id, provedor FROM canais WHERE id = ?').get(canalId);
     if (!canal) return false;
     const ficha = this._pegarConcessao(canalId);
@@ -120,7 +123,7 @@ class SupervisorCanais {
       this._log(canalId, 'warning', 'Este canal já está conectado em outro processo do IA Talk. Nada foi feito.');
       return false;
     }
-    const proc = fork(path.join(__dirname, 'runner.js'), [], { env: { ...process.env, ...this.envFilho }, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+    const proc = fork(path.join(__dirname, 'runner.js'), [], { cwd: config.RAIZ_REPO, env: { ...process.env, ...this.envFilho }, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
     const f = { proc, ficha, encerrando: false };
     this.filhos.set(canalId, f);
     proc.on('message', (m) => this._doFilho(canalId, m));
@@ -130,6 +133,7 @@ class SupervisorCanais {
   }
 
   _doFilho(canalId, { evento, dados = {} }) {
+    if (this.bloqueados.has(canalId) && evento !== 'log' && evento !== 'erro') return;
     if (evento === 'estado') {
       if (dados.estado === 'conectado') this.tentativas.delete(canalId);
       this._mudarEstado(canalId, dados.estado, dados.detalhe || null);
@@ -137,8 +141,7 @@ class SupervisorCanais {
       this.qrs.set(canalId, dados);
       this.emitir(canalId, 'canal:qr', { canal_id: canalId, ...dados });
     } else if (evento === 'identidade' && dados.numero) {
-      this.db.prepare('UPDATE canais SET numero = ? WHERE id = ?').run(dados.numero, canalId);
-      this._log(canalId, 'success', `Número conectado: ${telefone.mascarar(dados.numero)}.`);
+      this._conferirNumero(canalId, dados.numero);
     } else if (evento === 'mensagem') {
       this._receber(canalId, dados);
     } else if (evento === 'log') {
@@ -149,6 +152,25 @@ class SupervisorCanais {
     } else if (evento === 'erro') {
       this._log(canalId, 'error', dados.mensagem || 'Erro no processo do canal.');
     }
+  }
+
+  // Trava do número cadastrado: QR lido por outro celular → sai do WhatsApp
+  // (o aparelho some da lista daquele celular), apaga a sessão e não liga de novo.
+  _conferirNumero(canalId, numeroLido) {
+    const canal = this.db.prepare('SELECT numero FROM canais WHERE id = ?').get(canalId);
+    if (!canal) return;
+    if (!canal.numero) {
+      this.db.prepare('UPDATE canais SET numero = ? WHERE id = ?').run(numeroLido, canalId);
+    } else if (!telefone.mesmoNumero(canal.numero, numeroLido)) {
+      this.bloqueados.add(canalId);
+      this.db.prepare('UPDATE canais SET ligado = 0 WHERE id = ?').run(canalId);
+      const motivo = `O QR foi lido pelo número ${telefone.mascarar(numeroLido)}, mas este canal é do ${telefone.mascarar(canal.numero)}. Conexão desfeita; leia o QR com o celular certo.`;
+      this.limparSessao(canalId, { desvincular: true })
+        .catch(err => this._log(canalId, 'error', `Falha ao desfazer a conexão: ${err.message}`))
+        .finally(() => this._mudarEstado(canalId, 'erro', motivo));
+      return;
+    }
+    this._log(canalId, 'success', `Número conectado: ${telefone.mascarar(numeroLido)}.`);
   }
 
   _saiu(canalId, f, codigo) {
@@ -195,13 +217,19 @@ class SupervisorCanais {
     this.iniciar(canalId);
   }
 
-  // Apaga a sessão do Talk (não toca na do IA Command). Sobe um filho só para isso se preciso.
-  async limparSessao(canalId) {
-    if (this.filhos.has(canalId)) await this._encerrarFilho(canalId, 'limpar-sessao');
+  // Apaga a sessão do Talk (não toca na do IA Command). Com desvincular, sai do
+  // WhatsApp antes (o aparelho some da lista do celular).
+  async limparSessao(canalId, { desvincular = false } = {}) {
+    if (this.filhos.has(canalId)) await this._encerrarFilho(canalId, desvincular ? 'desvincular' : 'limpar-sessao');
     const canal = this.db.prepare('SELECT sessao_id FROM canais WHERE id = ?').get(canalId);
     if (canal) require('fs').rmSync(path.join(this.dirSessoes, `session-${canal.sessao_id}`), { recursive: true, force: true });
     this.qrs.delete(canalId);
     this._mudarEstado(canalId, 'parado', 'Sessão limpa. Conecte de novo para gerar um QR Code.');
+  }
+
+  temSessao(canalId) {
+    const canal = this.db.prepare('SELECT sessao_id FROM canais WHERE id = ?').get(canalId);
+    return !!canal && require('fs').existsSync(path.join(this.dirSessoes, `session-${canal.sessao_id}`));
   }
 
   enviar(canalId, envelope, { tempoMs = 60_000 } = {}) {

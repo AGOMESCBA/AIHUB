@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Protótipo A0 · Central de Atendimento · IA Talk</title>
+  <!-- Etapa A0 — Página de comparação entre Alternativa A e Alternativa B.
+       Apenas protótipo com dados simulados (não servido em produção). -->
+  <script src="/app/ia-talk/js/talk-ui.js"></script>
+  <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
+  <link rel="stylesheet" href="/app/ia-talk/prototipos/central/prototipo.css">
+</head>
+<body class="tlk-pagina">
+<main class="cmp-wrap">
+
+  <header class="cmp-top">
+    <div>
+      <div class="page-kicker">IA Talk · Fase 2 · Protótipo A0</div>
+      <h1 class="head-title">Central de Atendimento — Comparação de alternativas</h1>
+      <p class="head-sub">Explore as duas propostas de layout com dados 100% simulados (números sempre mascarados) antes de definir o desenho final da Fase 2. A escolha entre A e B é do usuário.</p>
+    </div>
+    <div class="head-actions">
+      <button class="btn btn-ghost" type="button" id="btn-tema">🌙 Escuro</button>
+    </div>
+  </header>
+
+  <section class="cmp-card cmp-card--rec" aria-label="Alternativa escolhida" style="margin-bottom:16px;">
+    <div class="cmp-card-head">
+      <h2>Layout Híbrido — Quatro áreas largas + gaveta abaixo de 1280 px</h2>
+      <span class="tlk-pill tlk-pill--ok">Escolhida</span>
+    </div>
+    <div class="cmp-mini-layout cmp-mini-layout--a" aria-hidden="true">
+      <div class="cmp-mini-col">Setores e visões</div>
+      <div class="cmp-mini-col">Lista de conversas</div>
+      <div class="cmp-mini-col cmp-mini-col--chat">Conversa ativa</div>
+      <div class="cmp-mini-col cmp-mini-col--gaveta">Contato / IA (fixo ≥1280 · gaveta &lt;1280)</div>
+    </div>
+    <ul class="cmp-lista">
+      <li><strong>≥ 1280 px (monitores desktop):</strong> quatro áreas fixas simultâneas como na Alternativa A, mantendo todo o contexto visível.</li>
+      <li><strong>761–1279 px (notebooks 1024 px):</strong> Contato/IA vira gaveta retrátil sem cobrir a conversa, evitando apertar o cabeçalho da conversa.</li>
+      <li><strong>≤ 760 px (celular):</strong> telas em sequência (<em>Setores → Conversas → Conversa</em>) com Contato/IA em folha deslizante.</li>
+    </ul>
+    <div class="cmp-acoes">
+      <a class="btn btn-primary" href="/app/ia-talk/prototipos/central/hibrido.html">Abrir Layout Híbrido (Escolhida)</a>
+      <a class="btn btn-ghost btn-sm" href="/app/ia-talk/prototipos/central/hibrido.html?gaveta=1&aba=ia">Abrir na aba IA</a>
+      <a class="btn btn-ghost btn-sm" href="/app/ia-talk/prototipos/central/hibrido.html?cenario=desconectado">Ver canal desconectado</a>
+    </div>
+  </section>
+
+  <section class="cmp-grid" aria-label="Alternativas originais de comparação">
+    <article class="cmp-card">
+      <div class="cmp-card-head">
+        <h2>Alternativa A — Quatro áreas</h2>
+        <span class="tlk-pill tlk-pill--neutro">Referência desktop largo</span>
+      </div>
+      <div class="cmp-mini-layout cmp-mini-layout--a" aria-hidden="true">
+        <div class="cmp-mini-col">Setores e visões</div>
+        <div class="cmp-mini-col">Lista de conversas</div>
+        <div class="cmp-mini-col cmp-mini-col--chat">Conversa ativa</div>
+        <div class="cmp-mini-col">Contato / IA</div>
+      </div>
+      <ul class="cmp-lista">
+        <li><strong>Ganho:</strong> contexto completo sempre visível (filas, conversas, histórico e painel do contato/IA lado a lado).</li>
+        <li><strong>Ideal para:</strong> operadores que alternam rápido entre várias conversas e setores simultaneamente.</li>
+        <li><strong>Custo:</strong> menos largura livre para a conversa em telas de 1024–1280 px.</li>
+      </ul>
+      <div class="cmp-acoes">
+        <a class="btn btn-primary" href="/app/ia-talk/prototipos/central/alternativa-a.html">Abrir Alternativa A</a>
+        <a class="btn btn-ghost btn-sm" href="/app/ia-talk/prototipos/central/alternativa-a.html?aba=ia">Abrir na aba IA</a>
+        <a class="btn btn-ghost btn-sm" href="/app/ia-talk/prototipos/central/alternativa-a.html?cenario=desconectado">Ver canal desconectado</a>
+      </div>
+    </article>
+
+    <article class="cmp-card">
+      <div class="cmp-card-head">
+        <h2>Alternativa B — Três áreas + gaveta</h2>
+        <span class="tlk-pill tlk-pill--neutro">Mais espaço para a conversa</span>
+      </div>
+      <div class="cmp-mini-layout cmp-mini-layout--b" aria-hidden="true">
+        <div class="cmp-mini-col">Filtros + Conversas</div>
+        <div class="cmp-mini-col cmp-mini-col--chat">Conversa ampla</div>
+        <div class="cmp-mini-col cmp-mini-col--gaveta">Gaveta Contato/IA</div>
+      </div>
+      <ul class="cmp-lista">
+        <li><strong>Ganho:</strong> área de leitura e resposta mais larga; setor e visão ficam no topo da lista.</li>
+        <li><strong>Ideal para:</strong> atendimento focado na conversa em notebooks menores (1024–1280 px).</li>
+        <li><strong>Custo:</strong> exige 1 clique no botão <em>Contato · IA</em> para abrir a gaveta lateral (que não cobre o texto).</li>
+      </ul>
+      <div class="cmp-acoes">
+        <a class="btn btn-primary" href="/app/ia-talk/prototipos/central/alternativa-b.html">Abrir Alternativa B</a>
+        <a class="btn btn-ghost btn-sm" href="/app/ia-talk/prototipos/central/alternativa-b.html?gaveta=1&aba=ia">Abrir com gaveta IA</a>
+        <a class="btn btn-ghost btn-sm" href="/app/ia-talk/prototipos/central/alternativa-b.html?cenario=desconectado">Ver canal desconectado</a>
+      </div>
+    </article>
+  </section>
+
+  <section aria-labelledby="tit-criterios">
+    <h2 class="tlk-detalhe-secao-titulo" id="tit-criterios" style="margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-lo);">Critérios de comparação</h2>
+    <div class="cmp-tabela-wrap">
+      <table class="cmp-tabela">
+        <thead>
+          <tr>
+            <th>Critério</th>
+            <th>Alternativa A (quatro áreas)</th>
+            <th>Alternativa B (três áreas + gaveta)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Colunas no desktop</strong></td>
+            <td>Setores/visões · Lista de conversas · Conversa · Painel Contato/IA</td>
+            <td>Lista com filtros de visão/setor no topo · Conversa · Gaveta retrátil Contato/IA</td>
+          </tr>
+          <tr>
+            <td><strong>Cliques para ver contato ou IA</strong></td>
+            <td>0 cliques (sempre visível ao lado da conversa)</td>
+            <td>1 clique (abre a gaveta redimensionando o grid sem cobrir a conversa)</td>
+          </tr>
+          <tr>
+            <td><strong>Troca de setor / visão</strong></td>
+            <td>1 clique direto na coluna lateral fixa com contadores individuais</td>
+            <td>1 clique nos chips de visão + select de setor no topo da lista</td>
+          </tr>
+          <tr>
+            <td><strong>Conforto em 1024 px</strong></td>
+            <td>Colunas estreitas, porém tudo acessível sem alternar contexto</td>
+            <td>Conversa fica bem ampla quando a gaveta está recolhida</td>
+          </tr>
+          <tr>
+            <td><strong>Celular (≤ 760 px)</strong></td>
+            <td>Telas em sequência: <em>Setores → Conversas → Conversa</em> + folha deslizante para Contato/IA</td>
+            <td>Telas em sequência: <em>Conversas (com filtros no topo) → Conversa</em> + folha deslizante para Contato/IA</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="cmp-card" aria-labelledby="tit-recursos">
+    <h2 id="tit-recursos" style="margin:0;font-size:15px;">Recursos interativos presentes nas duas alternativas</h2>
+    <ul class="cmp-lista">
+      <li><strong>Notas internas diferenciadas:</strong> caixa âmbar com borda tracejada e selo <em>🔒 Nota interna · só equipe</em>; alternador dedicado no compositor muda visual e botão para evitar envio acidental ao cliente.</li>
+      <li><strong>Respostas rápidas com <code>/</code>:</strong> digite <code>/</code> no campo de resposta (ou clique no botão <code>/</code>) para filtrar e aplicar modelos pelo teclado (<code>↑</code>, <code>↓</code>, <code>Enter</code>, <code>Esc</code>).</li>
+      <li><strong>Transferir e encerrar em até 1 clique:</strong> menu rápido de transferência por setor/atendente e botão de encerrar/reabrir direto no cabeçalho da conversa.</li>
+      <li><strong>Assistente de IA sem cobrir a conversa:</strong> resumo, sugestão de resposta e melhoria de texto funcionam no painel lateral (A) ou gaveta lateral (B), com inserção em 1 clique no rascunho.</li>
+      <li><strong>Todos os estados simuláveis no topo:</strong> Normal, Canal desconectado (bloqueia envio ao cliente mantendo notas internas), Vazio, Carregando e Sem permissão.</li>
+    </ul>
+    <div class="cmp-chips" aria-label="Atalhos rápidos para estados simulados">
+      <a class="btn btn-ghost btn-sm" href="/app/ia-talk/prototipos/central/alternativa-a.html?cenario=vazio">A · Estado vazio</a>
+      <a class="btn btn-ghost btn-sm" href="/app/ia-talk/prototipos/central/alternativa-a.html?cenario=carregando">A · Carregando</a>
+      <a class="btn btn-ghost btn-sm" href="/app/ia-talk/prototipos/central/alternativa-a.html?cenario=sem_permissao">A · Sem permissão</a>
+      <a class="btn btn-ghost btn-sm" href="/app/ia-talk/prototipos/central/alternativa-b.html?cenario=vazio">B · Estado vazio</a>
+      <a class="btn btn-ghost btn-sm" href="/app/ia-talk/prototipos/central/alternativa-b.html?cenario=sem_permissao">B · Sem permissão</a>
+    </div>
+  </section>
+
+</main>
+<script>
+(function () {
+  const btn = document.getElementById('btn-tema');
+  const atualizar = () => {
+    const escuro = document.documentElement.getAttribute('data-theme') === 'dark';
+    btn.textContent = escuro ? '☀️ Claro' : '🌙 Escuro';
+  };
+  btn.addEventListener('click', () => {
+    const escuro = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (escuro) document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', 'dark');
+    try { localStorage.setItem('talk_tema', escuro ? 'light' : 'dark'); } catch (_) {}
+    atualizar();
+  });
+  atualizar();
+})();
+</script>
+</body>
+</html>

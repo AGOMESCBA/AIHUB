@@ -78,12 +78,19 @@
       <h2>Canais de WhatsApp</h2>
       <p>Um canal é um número de WhatsApp. O IA Talk entra no número como <strong>mais um aparelho conectado</strong>, sem desconectar o celular nem outros sistemas que já usam o número.</p>
       <ol>
-        <li>Em <strong>Canais</strong>, clique em <strong>+ Novo canal</strong>, dê um nome e escolha <strong>WhatsApp Web</strong>.</li>
-        <li>Abra o canal e clique em <strong>Conectar</strong>. Um QR Code aparece em alguns segundos.</li>
-        <li>No celular do número: <strong>WhatsApp › Aparelhos conectados › Conectar aparelho</strong> e aponte para o QR.</li>
-        <li>O estado muda para <strong>Conectado</strong>. A aba <strong>Terminal ao vivo</strong> mostra o que acontece no canal.</li>
+        <li>Em <strong>Canais</strong>, clique em <strong>+ Novo canal</strong>, dê um nome, informe o <strong>número do WhatsApp</strong> (com DDD) e escolha <strong>WhatsApp Web</strong>. O mesmo número não pode estar em dois canais: para várias empresas usarem um número, vincule-as na aba <strong>Empresas</strong> do canal.</li>
+        <li>Abra o canal e clique em <strong>Conectar</strong>. Um QR Code aparece em alguns segundos com a contagem regressiva até expirar.</li>
+        <li>No celular do número, abra <strong>WhatsApp → Aparelhos conectados → Conectar aparelho</strong> e aponte a câmera para o QR. Se o QR for lido por outro número, o IA Talk desfaz a conexão na hora.</li>
+        <li>O estado muda para <strong>Conectado</strong> e o número passa a aparecer mascarado.</li>
       </ol>
-      <p><strong>Desconectar</strong> para o canal e mantém a sessão salva. <strong>Limpar sessão</strong> apaga a conexão: o celular terá de ler um novo QR (e você pode remover o aparelho "IA Talk" da lista do celular).</p>
+      <div class="dica">O QR Code expira após alguns segundos e <strong>se renova sozinho</strong> automaticamente enquanto o canal aguarda pareamento. Se preferir, clique em <strong>Novo QR</strong> para gerar outro na hora.</div>
+      <p><strong>Terminal ao vivo (três colunas):</strong> na aba <strong>Terminal ao vivo</strong> você acompanha e opera os canais em tempo real:</p>
+      <ul>
+        <li><strong>Esquerda:</strong> lista de canais com busca rápida, estado colorido e fila pendente para trocar de número sem sair do terminal.</li>
+        <li><strong>Centro:</strong> log em fonte monoespaçada colorido por tipo de evento, com filtro e auto-rolagem que pausa automaticamente quando você sobe o histórico.</li>
+        <li><strong>Direita:</strong> painel de estado e ações rápidas — mostra o número conectado, <strong>Conectar</strong>, <strong>Parar</strong>, <strong>Reconectar</strong>, <strong>Novo QR</strong>, <strong>Remover sessão</strong> (com confirmação na própria tela), empresas vinculadas, processo, <em>uptime</em> e os botões <strong>Limpar</strong> e <strong>Copiar</strong> do log.</li>
+      </ul>
+      <p><strong>Parar / Desconectar</strong> encerra o processo do canal mantendo a sessão salva. <strong>Limpar sessão / Remover sessão</strong> exige confirmação na própria tela e apaga a autenticação local: o celular terá de ler um novo QR Code (e você pode remover o aparelho "IA Talk" da lista do celular).</p>
       <div class="aviso">O WhatsApp aceita no máximo 4 aparelhos conectados por número. Confira no celular antes de conectar.</div>
     </section>
 

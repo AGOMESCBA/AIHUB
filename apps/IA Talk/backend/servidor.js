@@ -17,7 +17,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const config = require('./config');
 const { erro, middlewareErros } = require('./erros');
-const { carregarSessao } = require('./acesso/middleware');
+const { carregarSessao, ipDe } = require('./acesso/middleware');
 const { criarTransporteIaCommand, criarTransporteEmail } = require('./acesso/envio-codigo');
 const { criarRotasPublicas } = require('./rotas/publico');
 const { criarRotasAdmin } = require('./rotas/admin');
@@ -107,6 +107,8 @@ function criarApp({ db = null, log = console, transportes = null, chavePublicaHu
     limit: 600,
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: (req) => ipDe(req) || 'sem-ip', // sem a porta que o IIS anexa
+    validate: { ip: false },
     handler: (_req, res) => res.status(429).json({ erro: { codigo: 'limite_excedido', mensagem: 'Muitas requisições. Tente de novo em instantes.' } }),
   }));
   app.use(express.json({ limit: '20mb' }));
@@ -129,7 +131,7 @@ function criarApp({ db = null, log = console, transportes = null, chavePublicaHu
     // X-Forwarded-For (limites de login e a proteção do envio interno dependem disso).
     // Mostra só o IP de quem está chamando — o próprio visitante.
     const viaProxy = !!req.headers['x-forwarded-for'];
-    const ipVisto = String(req.ip || '').replace(/^::ffff:/, '');
+    const ipVisto = ipDe(req) || '';
     const proxy = viaProxy ? 'ok' : (['127.0.0.1', '::1'].includes(ipVisto) ? 'sem_ip_real' : 'direto');
     res.json({ servico: 'ia-talk', versao: VERSAO, banco, proxy, seu_ip: ipVisto, em: new Date().toISOString() });
   });

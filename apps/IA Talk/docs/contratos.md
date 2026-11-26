@@ -152,9 +152,9 @@ Corpo de aplicação: `{ nome, descricao?, escopos: ['mensagens:enviar'|'mensage
 | Rota | Efeito |
 |---|---|
 | `GET /canais` | Lista (forma `canal`). Filtros `busca`, `estado`, `provedor` |
-| `POST /canais` | `{ nome, provedor: 'wweb' }` (Meta → 400 até a G6). Nasce `parado` |
-| `GET/PUT /canais/:id` | `PUT { nome?, empresas_vinculadas?: [{ id, padrao }] }` |
-| `POST /canais/:id/conectar` | `parado` → `qr_pendente` (gera QR) |
+| `POST /canais` | `{ nome, numero, provedor: 'wweb' }` (Meta → 400 até a G6). Nasce `parado`. `numero` com DDI e DDD, obrigatório e único entre os canais (com ou sem o nono dígito) → 409 `conflito` |
+| `GET/PUT /canais/:id` | `PUT { nome?, numero?, empresas_vinculadas?: [{ id, padrao }] }`. Trocar `numero` só com o canal parado e sem sessão salva (senão 409) |
+| `POST /canais/:id/conectar` | `parado` → `qr_pendente` (gera QR). Canal sem `numero` → 400 |
 | `POST /canais/:id/desconectar` | → `parado` (mantém a sessão salva) |
 | `POST /canais/:id/reconectar` | → `reconectando` |
 | `POST /canais/:id/novo-qr` | Novo QR (o anterior deixa de valer) |
@@ -165,6 +165,9 @@ Corpo de aplicação: `{ nome, descricao?, escopos: ['mensagens:enviar'|'mensage
 Campos extras do canal (C2, aditivos): `modo_teste` (bool), `numeros_teste_mascarados`, `recebidas_descartadas`.
 `PUT /canais/:id` aceita `modo_teste` e `numeros_teste` (só administração da plataforma). Em modo de teste, só as
 mensagens dos números da lista entram no log/banco; das demais fica só a contagem.
+**Número cadastrado (26/11, como no IA Command):** o número sai só mascarado (`numero_mascarado`). Se o QR for lido
+por outro número, o Talk sai do WhatsApp (o aparelho some do celular), apaga a sessão, deixa o canal desligado e vai
+para `erro` com o motivo no log. Canal antigo sem número recebe o número lido no primeiro pareamento.
 Evento extra: `canal:mensagem` `{ canal_id, de_mascarado, tipo, em }` (mensagem aceita no modo de teste).
 
 Canal compartilhado: `empresa_dona` configura; `empresas_vinculadas` usam o

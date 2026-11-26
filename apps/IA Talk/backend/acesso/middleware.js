@@ -39,9 +39,17 @@ function exigirPlataforma(req, _res, next) {
   next();
 }
 
-// Endereço do cliente para auditoria e limites (nginx na mesma máquina = trust proxy loopback).
-function ipDe(req) {
-  return String(req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '') || null;
+// O IIS (ARR) pode repassar o IP com a porta ("10.0.0.5:25614" ou "[::1]:25614").
+// A porta muda a cada conexão: sem tirá-la, os limites por IP nunca somam.
+function normalizarIp(valor) {
+  const v = String(valor || '').trim().replace(/^::ffff:/, '');
+  const m = v.match(/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/) || v.match(/^\[([^\]]+)\]:\d+$/);
+  return (m ? m[1] : v).replace(/^::ffff:/, '') || null;
 }
 
-module.exports = { carregarSessao, exigirSessao, exigirRotina, exigirPlataforma, ipDe };
+// Endereço do cliente para auditoria e limites (proxy na mesma máquina = trust proxy loopback).
+function ipDe(req) {
+  return normalizarIp(req.ip || req.socket?.remoteAddress);
+}
+
+module.exports = { carregarSessao, exigirSessao, exigirRotina, exigirPlataforma, ipDe, normalizarIp };
