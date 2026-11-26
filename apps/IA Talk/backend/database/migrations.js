@@ -182,4 +182,63 @@ module.exports = [
       );
     `,
   },
+  {
+    versao: 4,
+    descricao: 'C2 — canais de WhatsApp, empresas que usam o número, concessão e log do canal',
+    sql: `
+      CREATE TABLE canais (
+        id                     TEXT PRIMARY KEY,
+        empresa_dona_id        TEXT NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        nome                   TEXT NOT NULL,
+        numero                 TEXT,
+        provedor               TEXT NOT NULL CHECK (provedor IN ('wweb', 'meta')),
+        estado                 TEXT NOT NULL DEFAULT 'parado',
+        estado_desde           TEXT NOT NULL,
+        estado_detalhe         TEXT,
+        ligado                 INTEGER NOT NULL DEFAULT 0 CHECK (ligado IN (0, 1)),
+        sessao_id              TEXT NOT NULL UNIQUE,
+        -- Modo de teste: só grava/aceita mensagens dos números da lista; das demais guarda a contagem.
+        modo_teste             INTEGER NOT NULL DEFAULT 1 CHECK (modo_teste IN (0, 1)),
+        numeros_teste          TEXT NOT NULL DEFAULT '[]',
+        recebidas_descartadas  INTEGER NOT NULL DEFAULT 0,
+        ultima_mensagem_em     TEXT,
+        criado_em              TEXT NOT NULL,
+        atualizado_em          TEXT NOT NULL
+      );
+
+      CREATE TABLE canal_empresas (
+        canal_id    TEXT NOT NULL REFERENCES canais(id) ON DELETE CASCADE,
+        empresa_id  TEXT NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        padrao      INTEGER NOT NULL DEFAULT 0 CHECK (padrao IN (0, 1)),
+        PRIMARY KEY (canal_id, empresa_id)
+      );
+      CREATE INDEX idx_canal_empresas_empresa ON canal_empresas (empresa_id);
+
+      -- Um único processo segura o número (ficha cresce a cada concessão).
+      CREATE TABLE canal_concessoes (
+        canal_id    TEXT PRIMARY KEY REFERENCES canais(id) ON DELETE CASCADE,
+        dono        TEXT,
+        ficha       INTEGER NOT NULL DEFAULT 0,
+        valida_ate  TEXT
+      );
+
+      CREATE TABLE canal_log (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        canal_id  TEXT NOT NULL REFERENCES canais(id) ON DELETE CASCADE,
+        em        TEXT NOT NULL,
+        tipo      TEXT NOT NULL,
+        mensagem  TEXT NOT NULL
+      );
+      CREATE INDEX idx_canal_log_canal ON canal_log (canal_id, id);
+    `,
+  },
+  {
+    versao: 5,
+    descricao: 'Rotinas do IAHub na sessão (permissões por usuário e empresa da IA Gestão)',
+    sql: `
+      -- JSON com as rotinas talk-* liberadas no IAHub para esta pessoa nesta empresa.
+      -- NULL = sessão sem origem no Hub (vale o papel do Talk) ou administrador do Hub.
+      ALTER TABLE sessoes ADD COLUMN rotinas_hub TEXT;
+    `,
+  },
 ];

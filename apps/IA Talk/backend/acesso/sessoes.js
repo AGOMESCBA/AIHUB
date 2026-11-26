@@ -17,12 +17,13 @@ const TETO_MS = 7 * 24 * 60 * 60 * 1000; // relogar ao menos 1 vez por semana
 
 const hashToken = (token) => hashSecreto(token, 'sessao');
 
-function criar(db, { usuarioId, empresaId, origem, ip = null }) {
+// rotinasHub: rotinas liberadas no IAHub (entrada pelo card de usuário comum); null = vale o papel.
+function criar(db, { usuarioId, empresaId, origem, ip = null, rotinasHub = null }) {
   const token = crypto.randomBytes(32).toString('base64url');
   const criada = agora();
-  db.prepare(`INSERT INTO sessoes (id, token_hash, usuario_id, empresa_id, origem, criada_em, ultimo_uso_em, expira_em, ip)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(novoId('sessao'), hashToken(token), usuarioId, empresaId, origem, criada, criada,
-    new Date(Date.now() + INATIVIDADE_MS).toISOString(), ip);
+  db.prepare(`INSERT INTO sessoes (id, token_hash, usuario_id, empresa_id, origem, criada_em, ultimo_uso_em, expira_em, ip, rotinas_hub)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(novoId('sessao'), hashToken(token), usuarioId, empresaId, origem, criada, criada,
+    new Date(Date.now() + INATIVIDADE_MS).toISOString(), ip, Array.isArray(rotinasHub) ? JSON.stringify(rotinasHub) : null);
   return token;
 }
 

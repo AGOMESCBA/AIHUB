@@ -13,6 +13,7 @@ const iahubData = require('./data-paths');
 const sistemasDb = require('./sistemas/database');
 const usuariosDb = require('./usuarios/database');
 const empresasDb = require('./empresas/database');
+const permissoesDb = require('./permissoes/database');
 
 const VALIDADE_SEG = 60;
 
@@ -36,7 +37,9 @@ function carregarOuCriarChaves(dir = pastaChaves()) {
   return crypto.createPrivateKey(fs.readFileSync(privada, 'utf8'));
 }
 
-function assinarTicket({ usuario, empresa }, { chavePrivada, agoraSeg = Math.floor(Date.now() / 1000) }) {
+// rotinas: as rotinas talk-* liberadas na IA Gestão (Usuários › Permissões) para
+// este usuário nesta empresa; null = administrador do IAHub (todas).
+function assinarTicket({ usuario, empresa, rotinas = null }, { chavePrivada, agoraSeg = Math.floor(Date.now() / 1000) }) {
   const payload = {
     v: 1,
     jti: crypto.randomBytes(16).toString('base64url'),
@@ -44,6 +47,7 @@ function assinarTicket({ usuario, empresa }, { chavePrivada, agoraSeg = Math.flo
     exp: agoraSeg + VALIDADE_SEG,
     usuario: { id: String(usuario.id), nome: usuario.nome || usuario.usuario || '', email: usuario.email || null, celular: usuario.celular || null, admin: usuario.role === 'admin' },
     empresa: { id: Number(empresa.id), nome: empresa.razao_social || empresa.nome || '' },
+    rotinas: usuario.role === 'admin' ? null : (Array.isArray(rotinas) ? rotinas.filter(r => String(r).startsWith('talk-')) : []),
   };
   const corpo = Buffer.from(JSON.stringify(payload), 'utf8');
   return `${corpo.toString('base64url')}.${crypto.sign(null, corpo, chavePrivada).toString('base64url')}`;
@@ -66,7 +70,8 @@ function registrar(app, { requireAuth }) {
     const usuario = usuariosDb.buscarPorId(req.session.user_id);
     const empresa = empresasDb.buscarPorId(empresaId);
     if (!usuario || !empresa) return voltar('Não foi possível identificar o usuário ou a empresa.');
-    const ticket = assinarTicket({ usuario: { ...usuario, role: req.session.role || usuario.role }, empresa }, { chavePrivada: carregarOuCriarChaves() });
+    const rotinas = permissoesDb.getRotinas(req.session.user_id, empresaId) || [];
+    const ticket = assinarTicket({ usuario: { ...usuario, role: req.session.role || usuario.role }, empresa, rotinas }, { chavePrivada: carregarOuCriarChaves() });
     res.set('Cache-Control', 'no-store');
     res.redirect(`${baseTalk()}/api/publico/entrar-hub?ticket=${encodeURIComponent(ticket)}`);
   });

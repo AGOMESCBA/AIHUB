@@ -35,4 +35,16 @@ function rotinasDe({ papel, plataforma = false }) {
   return [...new Set([...PAPEIS[0].rotinas, R.empresas])];
 }
 
-module.exports = { ROTINAS, PAPEIS, rotinasDe };
+// Rotinas que valem para a sessão. Entrada pelo IAHub de usuário comum: vale o
+// que a IA Gestão liberou (Usuários › Permissões, por usuário e empresa);
+// nas demais, o papel do Talk.
+function rotinasDaSessao(s) {
+  const plataforma = !!s.administrador_plataforma;
+  if (s.rotinas_hub && !plataforma) {
+    const validas = new Set(Object.values(ROTINAS).filter(r => r !== ROTINAS.empresas));
+    try { return JSON.parse(s.rotinas_hub).filter(r => validas.has(r)); } catch (_) { return []; }
+  }
+  return rotinasDe({ papel: s.papel, plataforma });
+}
+
+module.exports = { ROTINAS, PAPEIS, rotinasDe, rotinasDaSessao };

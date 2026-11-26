@@ -15,8 +15,8 @@ const { Contexto } = require('../repositorios/base');
 const telefone = require('../seguranca/telefone');
 const { ipDe } = require('../acesso/middleware');
 
-function iniciarSessao(db, req, res, { usuarioId, empresaId, origem }) {
-  const token = sessoes.criar(db, { usuarioId, empresaId, origem, ip: ipDe(req) });
+function iniciarSessao(db, req, res, { usuarioId, empresaId, origem, rotinasHub = null }) {
+  const token = sessoes.criar(db, { usuarioId, empresaId, origem, ip: ipDe(req), rotinasHub });
   res.cookie(sessoes.COOKIE, token, sessoes.opcoesCookie(req));
   db.prepare('UPDATE usuarios SET ultimo_acesso_em = ? WHERE id = ?').run(agora(), usuarioId);
   auditoria.registrar(db, new Contexto({ empresaId, usuarioId }), { acao: 'login', alvoTipo: 'sessao', resumo: `Entrou (${origem})`, ip: ipDe(req) });
@@ -72,11 +72,18 @@ function provisionarDoHub(db, dados) {
       db.prepare(`INSERT INTO membros (id, empresa_id, usuario_id, papel, criado_em, atualizado_em) VALUES (?, ?, ?, 'admin_empresa', ?, ?)`)
         .run(novoId('membro'), empresa.id, usuario.id, t, t);
     }
-  } else {
-    const membro = db.prepare("SELECT 1 FROM membros WHERE empresa_id = ? AND usuario_id = ? AND situacao = 'ativo'").get(empresa.id, usuario.id);
-    if (!membro) throw erro('sem_permissao', 'Seu usuário ainda não tem acesso ao IA Talk nesta empresa. Peça ao administrador da empresa.');
+    return { usuarioId: usuario.id, empresaId: empresa.id, rotinasHub: null };
   }
-  return { usuarioId: usuario.id, empresaId: empresa.id };
+  // Usuário comum: valem as rotinas talk-* liberadas na IA Gestão (por usuário e empresa).
+  const rotinasHub = Array.isArray(dados.rotinas) ? dados.rotinas.filter(r => String(r).startsWith('talk-')) : [];
+  if (!rotinasHub.length) throw erro('sem_permissao', 'Seu usuário ainda não tem acesso ao IA Talk nesta empresa. Peça ao administrador para liberar as rotinas na IA Gestão.');
+  const membro = db.prepare('SELECT * FROM membros WHERE empresa_id = ? AND usuario_id = ?').get(empresa.id, usuario.id);
+  if (membro && membro.situacao !== 'ativo') throw erro('sem_permissao', 'Seu acesso a esta empresa foi desativado no IA Talk. Fale com o administrador.');
+  if (!membro) {
+    db.prepare(`INSERT INTO membros (id, empresa_id, usuario_id, papel, criado_em, atualizado_em) VALUES (?, ?, ?, 'atendente', ?, ?)`)
+      .run(novoId('membro'), empresa.id, usuario.id, t, t);
+  }
+  return { usuarioId: usuario.id, empresaId: empresa.id, rotinasHub };
 }
 
 // Erro numa rota aberta pelo navegador (link, card): página simples em vez de JSON.

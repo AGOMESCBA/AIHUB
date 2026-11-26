@@ -28,13 +28,16 @@
     } catch (_) { /* outra origem: não ocorre no Talk */ }
   }
 
+  // Sem aba ativa = tela Início (cards do menu, packages/ui/frontend/js/inicio-sistemas.js).
   function atualizarVazio() {
-    $('mdi-empty').hidden = abas.length > 0;
+    $('mdi-empty').hidden = !!ativa;
     const tit = $('shell-title');
-    if (tit) tit.textContent = ativa ? ativa.rotulo : 'IA Talk';
+    if (tit) tit.textContent = ativa ? ativa.rotulo : 'Início';
     document.title = ativa ? `${ativa.rotulo} · IA Talk` : 'IA Talk';
     atualizarRolagem();
   }
+
+  function mostrarInicio() { ativar(null); }
 
   function ativar(aba) {
     ativa = aba;
@@ -132,7 +135,7 @@
     try { salvo = JSON.parse(sessionStorage.getItem(CHAVE) || 'null'); } catch (_) { /* nada salvo */ }
     if (salvo?.abas?.length) {
       salvo.abas.forEach(a => abrir(a.url, a.rotulo, a.icone, { ativarAba: false }));
-      ativar(abas.find(a => a.url === salvo.ativa) || abas[0]);
+      ativar(salvo.ativa ? (abas.find(a => a.url === salvo.ativa) || null) : null);
     } else if (inicial) {
       abrir(inicial.url, inicial.rotulo, inicial.icone);
     }
@@ -142,5 +145,6 @@
   function recarregarTodas() { abas.forEach(a => { a.iframe.src = a.url; }); }
   function propagarTema() { abas.forEach(a => tema(a.iframe)); }
 
-  window.TalkAbas = { iniciar, abrir, fechar: (url) => { const a = abas.find(x => x.url === url); if (a) fechar(a); }, recarregarTodas, propagarTema };
+  window.mostrarInicio = mostrarInicio; // mesmo nome dos outros produtos
+  window.TalkAbas = { iniciar, abrir, mostrarInicio, fechar: (url) => { const a = abas.find(x => x.url === url); if (a) fechar(a); }, recarregarTodas, propagarTema };
 })();

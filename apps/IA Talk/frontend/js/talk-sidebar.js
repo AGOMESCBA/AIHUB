@@ -11,7 +11,7 @@
       id: 'operacao', label: 'Operação', icon: '📡', defaultOpen: true,
       items: [
         { id: 'talk-painel', label: 'Painel', href: `${B}/painel.html`, icon: '📊', etapa: 'G3' },
-        { id: 'talk-canais', label: 'Canais', href: `${B}/canais.html`, icon: '📱', etapa: 'G2' },
+        { id: 'talk-canais', label: 'Canais', href: `${B}/canais.html`, icon: '📱', etapa: null },
         { id: 'talk-mensagens', label: 'Histórico de mensagens', href: `${B}/mensagens.html`, icon: '💬', etapa: 'G3' },
         { id: 'talk-eventos', label: 'Eventos e webhooks', href: `${B}/eventos.html`, icon: '🔔', etapa: 'G3' },
       ],
@@ -27,9 +27,9 @@
       items: [
         { id: 'talk-usuarios', label: 'Usuários e papéis', href: `${B}/usuarios.html`, icon: '👥', etapa: null },
         { id: 'talk-configuracoes', label: 'Configurações', href: `${B}/configuracoes.html`, icon: '🛠', etapa: null },
-        { id: 'talk-auditoria', label: 'Auditoria', href: `${B}/auditoria.html`, icon: '🧾', etapa: 'G3' },
+        { id: 'talk-auditoria', label: 'Auditoria', href: `${B}/auditoria.html`, icon: '🧾', etapa: null },
         // Só administração da plataforma. Tela modelo da C0 (pronta).
-        { id: 'talk-empresas', label: 'Empresas', href: `${B}/empresas.html`, icon: '🏢', etapa: null },
+        { id: 'talk-empresas', label: 'Empresas', href: `${B}/empresas.html`, icon: '🏢', etapa: null, somenteAdmin: true },
       ],
     },
   ];

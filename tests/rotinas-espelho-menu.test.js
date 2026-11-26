@@ -16,6 +16,7 @@ const SISTEMAS = {
   'ia-command': 'apps/IA Command/frontend/js/sidebar.js',
   'ia-service': 'apps/IA Service/frontend/js/sidebar.js',
   'master-crypto': 'apps/Master Crypto/frontend/js/sidebar.js',
+  'ia-talk': 'apps/IA Talk/frontend/js/talk-sidebar.js',
 };
 
 // Avalia só o literal do array (variáveis citadas nele, ex. radarHref, viram null).

@@ -264,9 +264,19 @@ test('entrada pelo IAHub: ticket válido cria empresa e sessão; replay, vencido
   const outroPar = crypto.generateKeyPairSync('ed25519');
   const falso = assinarTicket({ usuario: { id: 1, role: 'admin' }, empresa: { id: 9 } }, { chavePrivada: outroPar.privateKey });
   assert.equal((await navegador().ir(`/api/publico/entrar-hub?ticket=${encodeURIComponent(falso)}`)).status, 401, 'assinado por outra chave');
-  const comum = await navegador().ir(`/api/publico/entrar-hub?ticket=${encodeURIComponent(ticket({ usuario: { id: 88, role: 'usuario' } }))}`);
-  assert.equal(comum.status, 403, 'usuário comum sem vínculo no Talk');
-  assert.match(comum.corpo, /ainda não tem acesso/);
+  const semRotinas = await navegador().ir(`/api/publico/entrar-hub?ticket=${encodeURIComponent(ticket({ usuario: { id: 88, role: 'usuario' } }))}`);
+  assert.equal(semRotinas.status, 403, 'usuário comum sem rotinas do Talk na IA Gestão');
+  assert.match(semRotinas.corpo, /ainda não tem acesso/);
+
+  // Usuário comum com rotinas liberadas na IA Gestão: entra e vê só elas.
+  const comRotinas = assinarTicket(
+    { usuario: { id: 89, nome: 'Atendente Hub', role: 'usuario' }, empresa: { id: 9, razao_social: 'Plantivo Agro' }, rotinas: ['talk-painel', 'talk-canais', 'svc-radar', 'talk-empresas'] },
+    { chavePrivada: parHub.privateKey });
+  const navComum = navegador();
+  assert.equal((await navComum.ir(`/api/publico/entrar-hub?ticket=${encodeURIComponent(comRotinas)}`)).status, 302);
+  const sComum = (await navComum.ir('/api/admin/sessao')).corpo;
+  assert.deepEqual(sComum.rotinas.sort(), ['talk-canais', 'talk-painel'], 'só as rotinas talk-* liberadas; empresas nunca');
+  assert.equal((await navComum.ir('/api/admin/usuarios')).status, 403, 'rotina não liberada = sem acesso também no backend');
 });
 
 test('sair: revoga a sessão no servidor', async () => {

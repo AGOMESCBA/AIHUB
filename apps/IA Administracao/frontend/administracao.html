@@ -2513,6 +2513,28 @@ const _USU_ROTINAS_BASE = [
       ] },
     ],
   },
+  // IA Talk: espelho de apps/IA Talk/frontend/js/talk-sidebar.js. "Empresas" é só
+  // da administração da plataforma e não entra aqui. O ticket do card leva estas
+  // rotinas ao Talk (apps/IAHUB/backend/ia-talk-entrada.js).
+  {
+    id: 'ia-talk', label: 'IA Talk', icon: 'message',
+    secoes: [
+      { id: 'operacao', label: 'Operação', itens: [
+        { id: 'talk-painel', label: 'Painel', icon: 'chart' },
+        { id: 'talk-canais', label: 'Canais', icon: 'message' },
+        { id: 'talk-mensagens', label: 'Histórico de mensagens', icon: 'list' },
+        { id: 'talk-eventos', label: 'Eventos e webhooks', icon: 'clock' },
+      ] },
+      { id: 'integracoes', label: 'Integrações', itens: [
+        { id: 'talk-aplicacoes', label: 'Aplicações e tokens', icon: 'plug' },
+      ] },
+      { id: 'administracao', label: 'Administração', itens: [
+        { id: 'talk-usuarios', label: 'Usuários e papéis', icon: 'users' },
+        { id: 'talk-configuracoes', label: 'Configurações', icon: 'sliders' },
+        { id: 'talk-auditoria', label: 'Auditoria', icon: 'shield' },
+      ] },
+    ],
+  },
 ];
 
 const _USU_ICONS = {

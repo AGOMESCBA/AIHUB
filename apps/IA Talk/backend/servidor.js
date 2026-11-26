@@ -21,6 +21,8 @@ const { carregarSessao } = require('./acesso/middleware');
 const { criarTransporteIaCommand, criarTransporteEmail } = require('./acesso/envio-codigo');
 const { criarRotasPublicas } = require('./rotas/publico');
 const { criarRotasAdmin } = require('./rotas/admin');
+const { criarRotasCanais } = require('./rotas/canais');
+const { SupervisorCanais } = require('./canais/supervisor');
 
 const VERSAO = require('../package-versao.json').versao;
 
@@ -97,7 +99,7 @@ function montarPaginaEntrada(app) {
   });
 }
 
-function criarApp({ db = null, log = console, transportes = null, chavePublicaHub, testarEmail } = {}) {
+function criarApp({ db = null, log = console, transportes = null, chavePublicaHub, testarEmail, supervisor = null } = {}) {
   const app = express();
   aplicarSegurancaHttp(app);
   app.use(rateLimit({
@@ -113,16 +115,23 @@ function criarApp({ db = null, log = console, transportes = null, chavePublicaHu
     app.use(frameAncestorsPorEmpresa(db));
     const trans = transportes || { whatsapp: criarTransporteIaCommand(), email: criarTransporteEmail({ db }) };
     app.use(config.API_PUBLICA, criarRotasPublicas({ db, transportes: trans, log, ...(chavePublicaHub ? { chavePublicaHub } : {}) }));
+    app.use(config.API_ADMIN, criarRotasCanais({ db, supervisor: supervisor || new SupervisorCanais({ db, log }), log }));
     app.use(config.API_ADMIN, criarRotasAdmin({ db, log, ...(testarEmail ? { testarEmail } : {}) }));
   }
 
   const api = express.Router();
-  api.get('/saude', (_req, res) => {
+  api.get('/saude', (req, res) => {
     let banco = 'nao_configurado';
     if (db) {
       try { db.prepare('SELECT 1').get(); banco = 'ok'; } catch (_) { banco = 'erro'; }
     }
-    res.json({ servico: 'ia-talk', versao: VERSAO, banco, em: new Date().toISOString() });
+    // Diagnóstico do proxy (IIS/nginx): ele precisa repassar o IP real do visitante em
+    // X-Forwarded-For (limites de login e a proteção do envio interno dependem disso).
+    // Mostra só o IP de quem está chamando — o próprio visitante.
+    const viaProxy = !!req.headers['x-forwarded-for'];
+    const ipVisto = String(req.ip || '').replace(/^::ffff:/, '');
+    const proxy = viaProxy ? 'ok' : (['127.0.0.1', '::1'].includes(ipVisto) ? 'sem_ip_real' : 'direto');
+    res.json({ servico: 'ia-talk', versao: VERSAO, banco, proxy, seu_ip: ipVisto, em: new Date().toISOString() });
   });
   api.use((req, _res, next) => next(erro('nao_encontrado', `Rota não encontrada: ${req.method} ${req.path}`)));
   api.use(middlewareErros(log));
@@ -138,15 +147,27 @@ function iniciar({ porta = config.porta(), host = '127.0.0.1' } = {}) {
   require('dotenv').config({ path: path.join(config.RAIZ_REPO, '.env') });
   const { abrirBanco } = require('./database');
   const db = abrirBanco();
-  const app = criarApp({ db });
+  // Canais: o supervisor avisa as telas pelo Socket.IO (criado logo abaixo).
+  let emitir = () => {};
+  const supervisor = new SupervisorCanais({ db, emitir: (...a) => emitir(...a) });
+  const app = criarApp({ db, supervisor });
   const servidor = http.createServer(app);
+  const { Server } = require('socket.io');
+  const io = new Server(servidor, { path: config.SOCKET_PATH });
+  emitir = require('./tempo-real').configurarTempoReal(io.of(config.SOCKET_NAMESPACE), { db, supervisor });
   servidor.listen(porta, host, () => {
     console.log(`[IA Talk] ${VERSAO} em http://${host}:${porta}${config.BASE_PATH}/`);
+    supervisor.iniciarTodos(); // religa os canais que estavam conectados
   });
-  const sair = (sinal) => {
-    console.log(`[IA Talk] ${sinal} recebido: encerrando.`);
+  let saindo = false;
+  const sair = async (sinal) => {
+    if (saindo) return;
+    saindo = true;
+    console.log(`[IA Talk] ${sinal} recebido: encerrando (canais primeiro).`);
+    setTimeout(() => process.exit(0), 20_000).unref();
+    await supervisor.pararTodos().catch(() => {});
+    io.close();
     servidor.close(() => { try { db.close(); } catch (_) { /* já fechado */ } process.exit(0); });
-    setTimeout(() => process.exit(0), 5000).unref();
   };
   for (const sinal of ['SIGINT', 'SIGTERM', 'SIGBREAK']) process.on(sinal, () => sair(sinal));
   return { servidor, db };

@@ -4,7 +4,7 @@
 // (repositorios/base.js), e cada rota declara a rotina que exige.
 
 const sessoes = require('./sessoes');
-const { rotinasDe } = require('./papeis');
+const { rotinasDaSessao } = require('./papeis');
 const { erro } = require('../erros');
 
 function carregarSessao(db) {
@@ -14,7 +14,7 @@ function carregarSessao(db) {
     if (s) {
       req.sessao = s;
       req.contexto = sessoes.contextoDaSessao(s);
-      req.rotinas = rotinasDe({ papel: s.papel, plataforma: !!s.administrador_plataforma });
+      req.rotinas = rotinasDaSessao(s);
     }
     next();
   };

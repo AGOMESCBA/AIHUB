@@ -125,6 +125,10 @@ Página de entrada (G1): `frontend/entrar.html`, servida em `/app/ia-talk/<apeli
 
 Rotinas (menu): `talk-painel`, `talk-canais`, `talk-mensagens`, `talk-eventos`, `talk-aplicacoes`, `talk-usuarios`, `talk-configuracoes`, `talk-auditoria`, `talk-empresas` (só plataforma).
 
+De onde vêm as rotinas da sessão: entrada pelo card do IAHub de **usuário comum** = as rotinas `talk-*` liberadas na
+IA Gestão (Usuários › Permissões, por usuário e empresa; o ticket as leva). Administrador do IAHub e demais entradas
+(telefone, link) = papel do Talk. A tela Início do shell monta os cards a partir do menu já filtrado por essas rotinas.
+
 ### 3.3 Cadastros
 
 | Recurso | Rotas | Forma (`FORMAS`) | Filtros / busca |
@@ -157,6 +161,11 @@ Corpo de aplicação: `{ nome, descricao?, escopos: ['mensagens:enviar'|'mensage
 | `POST /canais/:id/limpar-sessao` | **Destrutiva**: exige `{ confirmar: true }`. Apaga a sessão; o celular lê QR de novo. A tela pede confirmação explícita, dizendo isso |
 | `GET /canais/:id/qr` | `{ canal_id, estado, qr: dataURL\|null, expira_em }` (só em `qr_pendente`) |
 | `GET /canais/:id/log` | Página de `{ em, tipo, mensagem }`, mais recente primeiro. `tipo` ∈ `info, success, warning, error, received, sent, system` (mesmas cores do terminal do IA Command) |
+
+Campos extras do canal (C2, aditivos): `modo_teste` (bool), `numeros_teste_mascarados`, `recebidas_descartadas`.
+`PUT /canais/:id` aceita `modo_teste` e `numeros_teste` (só administração da plataforma). Em modo de teste, só as
+mensagens dos números da lista entram no log/banco; das demais fica só a contagem.
+Evento extra: `canal:mensagem` `{ canal_id, de_mascarado, tipo, em }` (mensagem aceita no modo de teste).
 
 Canal compartilhado: `empresa_dona` configura; `empresas_vinculadas` usam o
 número (como hoje no IA Command). `padrao: true` = canal que envia o código de
