@@ -189,6 +189,7 @@
 
 <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script src="/app/ia-talk/ui/js/grid-group-panel.js"></script>
+<script src="/app/ia-talk/socket.io/socket.io.js"></script>
 <script src="/app/ia-talk/js/talk-api.js"></script>
 <script src="/app/ia-talk/js/talk-icones.js"></script>
 <script>
@@ -197,6 +198,7 @@
   const { esc, pill, dataHora } = TalkUI;
 
   const ESTADOS_ACAO_MANUAL = new Set(['desconhecida', 'falhou']);
+  const ESTADOS_FINAIS_MSG = new Set(['lida', 'falhou', 'desconhecida']);
   const TIPO_LABEL = { texto: 'Texto', imagem: 'Imagem', documento: 'Documento', audio: 'Áudio', video: 'Vídeo' };
   const DIR_LABEL = { entrada: '↓ Entrada', saida: '↑ Saída' };
   const COR_DOT = {
@@ -210,6 +212,7 @@
   let total = 0;
   let atual = null;
   let acaoPendente = null; // 'reenviar' | 'dar-como-falha'
+  let socket = null;
 
   function formatarBytes(bytes) {
     const n = Number(bytes);
@@ -219,11 +222,17 @@
     return `${(n / (1024 * 1024)).toFixed(2).replace('.', ',')} MB`;
   }
 
+  function rotuloAplicacao(m) {
+    if (m.aplicacao?.nome) return m.aplicacao.nome;
+    if (m.origem === 'teste_tela') return 'Envio de teste';
+    return 'Sem aplicação';
+  }
+
   function achatar(m) {
     return {
       ...m,
       canal_nome: m.canal?.nome || '—',
-      aplicacao_nome: m.aplicacao?.nome || 'Sem aplicação',
+      aplicacao_nome: rotuloAplicacao(m),
     };
   }
 
@@ -319,7 +328,8 @@
           title: 'Mensagem', field: 'previa', minWidth: 180, cssClass: 'tlk-forte', responsive: 0,
           formatter: (c) => {
             const d = c.getRow().getData();
-            return `<div>${esc(d.previa || '—')}</div><div style="font-size:11.5px;font-weight:500;color:var(--text-lo);font-family:var(--font-mono)">${esc(d.contato_mascarado || '—')}</div>`;
+            const seloTeste = d.origem === 'teste_tela' ? '<span class="tlk-pill tlk-pill--info tlk-selo-teste">Teste</span>' : '';
+            return `<div class="tlk-msg-previa-linha"><span>${esc(d.previa || '—')}</span>${seloTeste}</div><div style="font-size:11.5px;font-weight:500;color:var(--text-lo);font-family:var(--font-mono)">${esc(d.contato_mascarado || '—')}</div>`;
           },
         },
         { title: 'Estado', field: 'estado', width: 190, formatter: (c) => pill(c.getValue()), responsive: 1 },
@@ -425,13 +435,14 @@
   function renderizarDetalhe(m) {
     atual = m;
     $('titulo-detalhe').textContent = m.id;
-    $('detalhe-pill').innerHTML = pill(m.estado);
+    const seloTeste = m.origem === 'teste_tela' ? ' <span class="tlk-pill tlk-pill--info">Teste</span>' : '';
+    $('detalhe-pill').innerHTML = `${pill(m.estado)}${seloTeste}`;
     $('sub-detalhe').textContent = `${DIR_LABEL[m.direcao] || m.direcao} · ${m.canal?.nome || '—'} · ${dataHora(m.criada_em)}`;
 
     $('meta-mensagem').innerHTML = [
       ['Contato', `<code class="tlk-mono">${esc(m.contato_mascarado || '—')}</code>`],
       ['Canal', esc(m.canal?.nome || '—')],
-      ['Aplicação', esc(m.aplicacao?.nome || 'Sem aplicação')],
+      ['Aplicação', esc(rotuloAplicacao(m))],
       ['Direção', esc(DIR_LABEL[m.direcao] || m.direcao)],
       ['Tipo', esc(TIPO_LABEL[m.tipo] || m.tipo)],
       ['Correlação', m.correlacao_id ? `<code>${esc(m.correlacao_id)}</code>` : '—'],
@@ -580,6 +591,56 @@
   $('btn-confirm-cancelar').addEventListener('click', fecharConfirmacao);
   $('btn-confirm-executar').addEventListener('click', executarAcaoManual);
 
+  // ── Tempo real: atualiza estado da linha/detalhe via mensagem:estado ─
+  function iniciarTempoReal() {
+    if (socket || typeof window.io !== 'function') return;
+    try {
+      const sim = sessionStorage.getItem('talk_simular') || '';
+      if (sim.includes('vazio') || sim.includes('403') || sim.includes('500')) return;
+    } catch (_) { /* sem sessionStorage */ }
+    try {
+      socket = TalkApi.socket();
+    } catch (_) {
+      return;
+    }
+    socket.on('connect', () => {
+      socket.emit('painel:assinar', {});
+    });
+    socket.on('mensagem:estado', (ev) => {
+      if (!ev?.id || !ev?.estado) return;
+      const em = ev.em || new Date().toISOString();
+      if (tabela) {
+        const linha = tabela.getRow(ev.id);
+        if (linha) {
+          linha.update({ estado: ev.estado, atualizada_em: em });
+        }
+      }
+      if (atual && atual.id === ev.id) {
+        atual.estado = ev.estado;
+        atual.atualizada_em = em;
+        const hist = Array.isArray(atual.historico_estados) ? atual.historico_estados : [];
+        const ultimo = hist[hist.length - 1];
+        if (!ultimo || ultimo.estado !== ev.estado) {
+          hist.push({ estado: ev.estado, em, detalhe: null });
+          atual.historico_estados = hist;
+        }
+        renderizarDetalhe(atual);
+        if (ESTADOS_FINAIS_MSG.has(ev.estado)) {
+          TalkApi.get(`/mensagens/${encodeURIComponent(ev.id)}`)
+            .then((m) => { if (atual?.id === m.id) renderizarDetalhe(m); })
+            .catch(() => {});
+        }
+      }
+    });
+  }
+
+  window.addEventListener('beforeunload', () => {
+    if (socket) {
+      try { socket.disconnect(); } catch (_) { /* ignore */ }
+      socket = null;
+    }
+  });
+
   (async function iniciar() {
     const { canalId, aplicacaoId, abrirId } = lerFiltrosDaUrl();
     $('tabela').hidden = true;
@@ -587,6 +648,7 @@
     criarTabela();
     await carregarOpcoesFiltro(canalId, aplicacaoId);
     await carregar();
+    iniciarTempoReal();
     if (abrirId) abrirDetalhe(abrirId);
   })();
 })();

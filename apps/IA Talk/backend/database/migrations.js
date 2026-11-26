@@ -250,4 +250,72 @@ module.exports = [
       ALTER TABLE sessoes ADD COLUMN empresas_canais_hub TEXT;
     `,
   },
+  {
+    versao: 7,
+    descricao: 'C3 — envio de mensagens: fila (outbox), linha do tempo de estados e idempotência da API v1',
+    sql: `
+      -- Publicado desligado: só a administração da plataforma liga o envio de cada canal.
+      ALTER TABLE canais ADD COLUMN envio_habilitado INTEGER NOT NULL DEFAULT 0 CHECK (envio_habilitado IN (0, 1));
+
+      -- Gravada ANTES de sair (outbox): se o Talk cair, a fila continua de onde parou.
+      -- destino fica completo só aqui (para enviar); nas respostas sai sempre mascarado.
+      CREATE TABLE mensagens (
+        id                    TEXT PRIMARY KEY,
+        empresa_id            TEXT NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        canal_id              TEXT NOT NULL REFERENCES canais(id) ON DELETE CASCADE,
+        aplicacao_id          TEXT REFERENCES aplicacoes(id) ON DELETE SET NULL,
+        usuario_id            TEXT REFERENCES usuarios(id) ON DELETE SET NULL,
+        origem                TEXT NOT NULL CHECK (origem IN ('api', 'teste_tela')),
+        direcao               TEXT NOT NULL DEFAULT 'saida' CHECK (direcao IN ('saida', 'entrada')),
+        destino               TEXT NOT NULL,
+        tipo                  TEXT NOT NULL,
+        conteudo              TEXT,
+        previa                TEXT,
+        estado                TEXT NOT NULL,
+        tentativas            INTEGER NOT NULL DEFAULT 0,
+        proxima_tentativa_em  TEXT,
+        id_provedor           TEXT,
+        correlacao_id         TEXT,
+        metadados             TEXT NOT NULL DEFAULT '{}',
+        ultimo_erro           TEXT,
+        criada_em             TEXT NOT NULL,
+        atualizada_em         TEXT NOT NULL
+      );
+      CREATE INDEX idx_mensagens_fila ON mensagens (canal_id, estado, criada_em);
+      CREATE INDEX idx_mensagens_empresa ON mensagens (empresa_id, criada_em DESC, id DESC);
+      CREATE UNIQUE INDEX idx_mensagens_provedor ON mensagens (canal_id, id_provedor) WHERE id_provedor IS NOT NULL;
+
+      CREATE TABLE mensagem_estados (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        mensagem_id  TEXT NOT NULL REFERENCES mensagens(id) ON DELETE CASCADE,
+        estado       TEXT NOT NULL,
+        em           TEXT NOT NULL,
+        detalhe      TEXT
+      );
+      CREATE INDEX idx_mensagem_estados ON mensagem_estados (mensagem_id, id);
+
+      -- Idempotency-Key da API v1: mesma chave + mesmo corpo = mesma resposta (24 h).
+      CREATE TABLE idempotencia (
+        aplicacao_id  TEXT NOT NULL REFERENCES aplicacoes(id) ON DELETE CASCADE,
+        chave         TEXT NOT NULL,
+        impressao     TEXT NOT NULL,
+        mensagem_id   TEXT NOT NULL REFERENCES mensagens(id) ON DELETE CASCADE,
+        criado_em     TEXT NOT NULL,
+        PRIMARY KEY (aplicacao_id, chave)
+      );
+    `,
+  },
+  {
+    versao: 8,
+    descricao: 'Regras do canal na tela: envio e recebimento separados (antes uma chave só, modo_teste)',
+    sql: `
+      -- envio_modo: desligado | teste (só a lista) | qualquer. recebimento_modo: teste (só a lista) | todos.
+      -- modo_teste e envio_habilitado ficam só por compatibilidade (não são mais lidos).
+      ALTER TABLE canais ADD COLUMN envio_modo TEXT NOT NULL DEFAULT 'desligado' CHECK (envio_modo IN ('desligado', 'teste', 'qualquer'));
+      ALTER TABLE canais ADD COLUMN recebimento_modo TEXT NOT NULL DEFAULT 'teste' CHECK (recebimento_modo IN ('teste', 'todos'));
+      UPDATE canais SET
+        envio_modo = CASE WHEN envio_habilitado = 0 THEN 'desligado' WHEN modo_teste = 1 THEN 'teste' ELSE 'qualquer' END,
+        recebimento_modo = CASE WHEN modo_teste = 1 THEN 'teste' ELSE 'todos' END;
+    `,
+  },
 ];

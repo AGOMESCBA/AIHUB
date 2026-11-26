@@ -208,6 +208,126 @@
           </div>
         </div>
 
+        <!-- Regras do canal (C3): envio e recebimento separados; só a plataforma altera (contrato §4) -->
+        <section class="tlk-envio-teste tlk-regras" id="bloco-regras" aria-labelledby="titulo-regras">
+          <div class="tlk-envio-teste-cab">
+            <div>
+              <h2 id="titulo-regras">Regras do canal</h2>
+              <p>Para quem este canal envia mensagens e de quem ele registra as mensagens recebidas. O IA Talk nunca responde sozinho: só envia o que for pedido.</p>
+            </div>
+            <div id="regras-badge"></div>
+          </div>
+
+          <div class="tlk-alerta tlk-alerta--info" id="regras-somente-leitura" role="status" hidden>Só a administração da plataforma altera estas regras.</div>
+          <div class="tlk-alerta tlk-alerta--erro" id="alerta-regras" role="alert" hidden></div>
+
+          <form id="form-regras" novalidate>
+            <fieldset class="tlk-envio-fieldset" id="fieldset-regras">
+              <div class="tlk-form">
+                <div class="tlk-campo">
+                  <label for="r-envio">Envio de mensagens</label>
+                  <select class="form-control" id="r-envio" name="envio_modo">
+                    <option value="desligado">Desligado</option>
+                    <option value="teste">Só números de teste</option>
+                    <option value="qualquer">Qualquer número</option>
+                  </select>
+                  <span class="form-hint" id="r-envio-dica"></span>
+                </div>
+                <div class="tlk-campo">
+                  <label for="r-recebimento">Mensagens recebidas</label>
+                  <select class="form-control" id="r-recebimento" name="recebimento_modo">
+                    <option value="teste">Só números de teste</option>
+                    <option value="todos">Todos os números</option>
+                  </select>
+                  <span class="form-hint" id="r-recebimento-dica"></span>
+                </div>
+                <div class="tlk-campo tlk-largo">
+                  <label for="r-novo-numero">Números de teste</label>
+                  <ul class="tlk-regras-lista" id="r-lista" aria-live="polite"></ul>
+                  <div class="tlk-regras-incluir">
+                    <input class="form-control" id="r-novo-numero" name="numeros_teste_adicionar" inputmode="tel" autocomplete="off" placeholder="Ex.: 5565999990000">
+                    <button class="btn btn-ghost" type="button" id="btn-r-incluir" title="Incluir: põe o número digitado na lista de teste (vale ao salvar)" aria-label="Incluir: põe o número digitado na lista de teste (vale ao salvar)"><span data-ico="mais"></span> Incluir</button>
+                  </div>
+                  <span class="form-hint">Os números aparecem mascarados. Para incluir, digite com DDI e DDD. As mudanças valem ao salvar.</span>
+                </div>
+              </div>
+
+              <div class="tlk-alerta tlk-alerta--aviso tlk-regras-confirmar" id="regras-confirmar" role="alert" hidden>
+                <p id="regras-confirmar-texto"></p>
+                <div class="tlk-acoes-form">
+                  <button class="btn btn-ghost" type="button" id="btn-regras-cancelar" title="Cancelar: não salva as regras" aria-label="Cancelar: não salva as regras"><span data-ico="cancelar"></span> Cancelar</button>
+                  <button class="btn btn-perigo" type="button" id="btn-regras-confirmar" title="Confirmar: salva as regras liberando o canal" aria-label="Confirmar: salva as regras liberando o canal"><span data-ico="salvar"></span> Sim, liberar</button>
+                </div>
+              </div>
+
+              <div class="tlk-acoes-form">
+                <button class="btn btn-primary" type="submit" id="btn-salvar-regras" title="Salvar regras: grava envio, recebimento e lista de teste (fica na auditoria)" aria-label="Salvar regras: grava envio, recebimento e lista de teste (fica na auditoria)"><span data-ico="salvar"></span> Salvar regras</button>
+              </div>
+            </fieldset>
+          </form>
+        </section>
+
+        <!-- Etapa G11: Enviar mensagem de teste (C3, contrato §4) -->
+        <section class="tlk-envio-teste" id="bloco-envio-teste" aria-labelledby="titulo-envio-teste">
+          <div class="tlk-envio-teste-cab">
+            <div>
+              <h2 id="titulo-envio-teste">Enviar mensagem de teste</h2>
+              <p>Dispara um texto simples para um número autorizado da lista de teste e acompanha a entrega em tempo real.</p>
+            </div>
+            <div id="envio-teste-status-badge"></div>
+          </div>
+
+          <div class="tlk-alerta tlk-alerta--aviso" id="envio-teste-motivo" role="status" hidden></div>
+          <div class="tlk-alerta tlk-alerta--erro" id="alerta-envio-teste" role="alert" hidden></div>
+
+          <form id="form-envio-teste" novalidate>
+            <fieldset class="tlk-envio-fieldset" id="fieldset-envio-teste">
+              <div class="tlk-form">
+                <div class="tlk-campo tlk-largo">
+                  <label for="t-para">Para</label>
+                  <select class="form-control" id="t-para" name="para_indice"></select>
+                  <span class="form-hint">Apenas números cadastrados na lista de teste deste canal. O número completo nunca passa pelo navegador.</span>
+                </div>
+                <div class="tlk-campo tlk-largo">
+                  <div class="tlk-envio-label-linha">
+                    <label for="t-texto">Mensagem</label>
+                    <span class="tlk-contador-chars" id="t-contador" aria-live="polite">0 / 1000</span>
+                  </div>
+                  <textarea class="form-control" id="t-texto" name="texto" rows="3" placeholder="Escreva a mensagem de teste (até 1000 caracteres)…"></textarea>
+                </div>
+              </div>
+              <div class="tlk-acoes-form">
+                <button class="btn btn-primary" type="submit" id="btn-enviar-teste" title="Enviar teste: envia a mensagem de teste para o número selecionado da lista" aria-label="Enviar teste: envia a mensagem de teste para o número selecionado da lista"><span data-ico="enviar"></span> Enviar teste</button>
+              </div>
+            </fieldset>
+          </form>
+
+          <div class="tlk-envio-acompanhar" id="card-envio-teste" hidden>
+            <div class="tlk-envio-acompanhar-cab">
+              <div class="tlk-envio-acompanhar-info">
+                <strong>Acompanhamento do envio</strong>
+                <code id="envio-teste-id"></code>
+                <span id="envio-teste-para"></span>
+              </div>
+              <div id="envio-teste-pill"></div>
+            </div>
+
+            <div class="tlk-envio-aviso" role="status">
+              Aceita não é entrega. Acompanhe até Entregue/Lida.
+            </div>
+
+            <ol class="tlk-timeline" id="envio-teste-timeline" aria-live="polite"></ol>
+
+            <div class="tlk-envio-erro-motivo" id="envio-teste-falha" role="alert" hidden>
+              <div>
+                <strong>Motivo da falha:</strong>
+                <span id="envio-teste-falha-texto"></span>
+              </div>
+              <a class="btn btn-ghost btn-sm" id="btn-ver-em-mensagens" href="/app/ia-talk/mensagens.html" title="Ver na tela Mensagens: abre o detalhe completo desta mensagem no histórico" aria-label="Ver na tela Mensagens: abre o detalhe completo desta mensagem no histórico">Ver na tela Mensagens <span data-ico="externo"></span></a>
+            </div>
+          </div>
+        </section>
+
         <div class="tlk-zona-perigo">
           <div class="tlk-zona-perigo-cab">
             <div>
@@ -400,6 +520,11 @@
     conectado: 'Conectado', iniciando: 'Iniciando', qr_pendente: 'QR pendente',
     reconectando: 'Reconectando', desconectado: 'Desconectado', parado: 'Parado', erro: 'Erro',
   };
+  const ESTADOS_FINAIS_MSG = new Set(['lida', 'falhou', 'desconhecida']);
+  const COR_DOT_MSG = {
+    entregue: 'ok', lida: 'ok', enviada: 'info', encaminhada: 'info', recebida: 'info',
+    aguardando: 'aviso', falhou: 'erro', desconhecida: 'erro', aceita: 'neutro',
+  };
 
   let tabela = null;
   let painelGrupo = null;
@@ -418,6 +543,9 @@
   let timerQr = null;
   let timerUptime = null;
   let qrExpiraMs = 0;
+
+  let envioTesteAtual = null;
+  let timerEnvioTeste = null;
 
   let linhasLog = [];
   let chavesLog = new Set();
@@ -868,8 +996,328 @@
       if ($('term-qr-mini')) $('term-qr-mini').hidden = true;
       pararTimerQr();
     }
+    renderizarBlocoEnvioTeste();
+    renderizarRegras();
     renderizarPainelTerminal();
   }
+
+  // ── Regras do canal (C3, contrato §4) ───────────────────────────────
+  // A lista vem mascarada: a tela remove pela POSIÇÃO e inclui o número digitado.
+  let ehPlataforma = false;
+  let regrasRemover = new Set();
+  let regrasIncluir = [];
+  let regrasCanalId = null;
+  const DICAS_ENVIO = {
+    desligado: 'Nada sai por este canal. O que já estiver na fila espera.',
+    teste: 'Sai só para os números da lista de teste (API e tela).',
+    qualquer: 'A API pode enviar para qualquer número. O envio de teste da tela continua usando a lista.',
+  };
+  const DICAS_RECEBIMENTO = {
+    teste: 'Só as mensagens dos números da lista aparecem no Terminal; das demais fica só a contagem.',
+    todos: 'Todas as mensagens que chegam no número aparecem no Terminal, inclusive as de outros sistemas que usam o mesmo número.',
+  };
+
+  async function carregarPerfil() {
+    try { ehPlataforma = !!(await TalkApi.get('/sessao'))?.usuario?.administrador_plataforma; } catch (_) { ehPlataforma = false; }
+  }
+
+  const mascararDigitado = (n) => { const d = String(n).replace(/\D/g, ''); return d.length >= 12 ? `+${d.slice(0, 2)} ${d.slice(2, 4)} ${d.slice(4, 5)}••••-${d.slice(-4)}` : d; };
+
+  function renderizarRegras() {
+    const c = canalAtual;
+    if (!c || !$('bloco-regras')) return;
+    if (regrasCanalId !== c.id) {
+      regrasCanalId = c.id;
+      regrasRemover = new Set();
+      regrasIncluir = [];
+      $('r-envio').value = c.envio_modo || 'desligado';
+      $('r-recebimento').value = c.recebimento_modo || 'teste';
+      $('regras-confirmar').hidden = true;
+      $('alerta-regras').hidden = true;
+    }
+    $('r-envio-dica').textContent = DICAS_ENVIO[$('r-envio').value] || '';
+    $('r-recebimento-dica').textContent = DICAS_RECEBIMENTO[$('r-recebimento').value] || '';
+    const existentes = (c.numeros_teste_mascarados || []).map((num, idx) => {
+      const removido = regrasRemover.has(idx);
+      return `<li class="tlk-regras-item ${removido ? 'tlk-regras-item--removido' : ''}"><span>${esc(num)}</span>
+        <button class="btn btn-ghost btn-sm" type="button" data-r-alternar="${idx}" ${ehPlataforma ? '' : 'disabled'}
+          title="${removido ? 'Desfazer: mantém o número na lista' : 'Remover: tira o número da lista de teste (vale ao salvar)'}"
+          aria-label="${removido ? `Desfazer remoção de ${esc(num)}` : `Remover ${esc(num)} da lista de teste`}">${removido ? 'Desfazer' : TalkIcones.svg('cancelar')}</button></li>`;
+    });
+    const novos = regrasIncluir.map((n, i) => `<li class="tlk-regras-item tlk-regras-item--novo"><span>${esc(mascararDigitado(n))} <em>novo</em></span>
+        <button class="btn btn-ghost btn-sm" type="button" data-r-tirar-novo="${i}" title="Tirar: não inclui este número" aria-label="Não incluir ${esc(mascararDigitado(n))}">${TalkIcones.svg('cancelar')}</button></li>`);
+    $('r-lista').innerHTML = existentes.concat(novos).join('') || '<li class="tlk-regras-vazio">Nenhum número de teste.</li>';
+    $('fieldset-regras').disabled = !ehPlataforma;
+    $('regras-somente-leitura').hidden = ehPlataforma;
+    const rotulo = { desligado: ['neutro', 'Envio desligado'], teste: ['aviso', 'Envio só para teste'], qualquer: ['ok', 'Envio liberado'] }[c.envio_modo] || ['neutro', '—'];
+    $('regras-badge').innerHTML = `<span class="tlk-pill tlk-pill--${rotulo[0]}">${rotulo[1]}</span>`;
+  }
+
+  $('r-envio').addEventListener('change', renderizarRegras);
+  $('r-recebimento').addEventListener('change', renderizarRegras);
+  $('r-lista').addEventListener('click', (e) => {
+    const alt = e.target.closest('[data-r-alternar]');
+    const novo = e.target.closest('[data-r-tirar-novo]');
+    if (alt) { const i = Number(alt.dataset.rAlternar); if (regrasRemover.has(i)) regrasRemover.delete(i); else regrasRemover.add(i); }
+    if (novo) regrasIncluir.splice(Number(novo.dataset.rTirarNovo), 1);
+    if (alt || novo) renderizarRegras();
+  });
+  $('btn-r-incluir').addEventListener('click', () => {
+    const campo = $('r-novo-numero');
+    const d = campo.value.replace(/\D/g, '');
+    if (!/^\d{12,13}$/.test(d)) {
+      $('alerta-regras').textContent = 'Informe o número com DDI e DDD (ex.: 5565999990000).';
+      $('alerta-regras').hidden = false;
+      campo.focus();
+      return;
+    }
+    $('alerta-regras').hidden = true;
+    if (!regrasIncluir.includes(d)) regrasIncluir.push(d);
+    campo.value = '';
+    renderizarRegras();
+  });
+  $('r-novo-numero').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('btn-r-incluir').click(); } });
+
+  // Liberar mais (qualquer número / todos) pede confirmação dizendo o que muda.
+  function textoConfirmacaoRegras(c, envio, recebimento) {
+    const partes = [];
+    if (envio === 'qualquer' && c.envio_modo !== 'qualquer') partes.push('a API poderá enviar mensagens para qualquer número a partir deste canal');
+    if (recebimento === 'todos' && c.recebimento_modo !== 'todos') partes.push('todas as mensagens que chegam no número passarão a aparecer no Terminal, inclusive conversas de outros sistemas que usam o mesmo número');
+    return partes.length ? `Atenção: ${partes.join('; e ')}. A mudança fica registrada na auditoria.` : '';
+  }
+
+  async function salvarRegras() {
+    const c = canalAtual;
+    const btn = $('btn-salvar-regras');
+    btn.disabled = true;
+    $('alerta-regras').hidden = true;
+    try {
+      const corpo = { envio_modo: $('r-envio').value, recebimento_modo: $('r-recebimento').value };
+      if (regrasRemover.size) corpo.numeros_teste_remover = [...regrasRemover];
+      if (regrasIncluir.length) corpo.numeros_teste_adicionar = [...regrasIncluir];
+      const salvo = await TalkApi.put(`/canais/${encodeURIComponent(c.id)}`, corpo);
+      canalAtual = salvo;
+      regrasCanalId = null; // recarrega o formulário a partir do que foi gravado
+      renderizarCabecalhoEConexao();
+      tabela?.updateRow?.(salvo.id, salvo).catch?.(() => {});
+      TalkUI.toast('Regras do canal salvas.', 'ok');
+    } catch (err) {
+      $('alerta-regras').textContent = err.campos ? Object.values(err.campos).join(' ') : err.message;
+      $('alerta-regras').hidden = false;
+    } finally {
+      btn.disabled = false;
+      $('regras-confirmar').hidden = true;
+    }
+  }
+
+  $('form-regras').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!canalAtual || !ehPlataforma) return;
+    const aviso = textoConfirmacaoRegras(canalAtual, $('r-envio').value, $('r-recebimento').value);
+    if (aviso) {
+      $('regras-confirmar-texto').textContent = aviso;
+      $('regras-confirmar').hidden = false;
+      $('btn-regras-confirmar').focus();
+      return;
+    }
+    salvarRegras();
+  });
+  $('btn-regras-confirmar').addEventListener('click', () => salvarRegras());
+  $('btn-regras-cancelar').addEventListener('click', () => { $('regras-confirmar').hidden = true; });
+
+  // ── Etapa G11: Enviar mensagem de teste (C3, contrato §4) ───────────
+  function pararPollingEnvioTeste() {
+    if (timerEnvioTeste) clearInterval(timerEnvioTeste);
+    timerEnvioTeste = null;
+  }
+
+  function atualizarContadorEnvioTeste() {
+    const len = $('t-texto').value.length;
+    const el = $('t-contador');
+    el.textContent = `${len} / 1000`;
+    el.classList.toggle('tlk-contador-chars--excedido', len > 1000);
+  }
+  $('t-texto').addEventListener('input', atualizarContadorEnvioTeste);
+
+  function motivoBloqueioEnvioTeste(c) {
+    if (!c) return 'Carregando canal…';
+    if (!c.envio_habilitado) {
+      return 'Envio desligado neste canal. A administração da plataforma liga quando for liberado.';
+    }
+    if (c.estado !== 'conectado') {
+      return 'Conecte o canal para enviar.';
+    }
+    const lista = Array.isArray(c.numeros_teste_mascarados) ? c.numeros_teste_mascarados : [];
+    if (!lista.length) {
+      return 'Nenhum número de teste cadastrado neste canal.';
+    }
+    return null;
+  }
+
+  function renderizarBlocoEnvioTeste() {
+    if (!canalAtual) return;
+    const c = canalAtual;
+    const numeros = Array.isArray(c.numeros_teste_mascarados) ? c.numeros_teste_mascarados : [];
+    const sel = $('t-para');
+    const valorAntes = sel.value;
+
+    if (numeros.length) {
+      sel.innerHTML = numeros.map((num, idx) => `<option value="${idx}">${esc(num)}</option>`).join('');
+      if (valorAntes !== '' && Number(valorAntes) >= 0 && Number(valorAntes) < numeros.length) {
+        sel.value = valorAntes;
+      }
+    } else {
+      sel.innerHTML = '<option value="">Nenhum número de teste disponível</option>';
+    }
+
+    const motivo = motivoBloqueioEnvioTeste(c);
+    $('bloco-envio-teste').classList.toggle('tlk-envio-teste--desabilitado', !!motivo);
+    $('fieldset-envio-teste').disabled = !!motivo;
+    const boxMotivo = $('envio-teste-motivo');
+    if (motivo) {
+      boxMotivo.textContent = motivo;
+      boxMotivo.hidden = false;
+    } else {
+      boxMotivo.textContent = '';
+      boxMotivo.hidden = true;
+    }
+
+    $('envio-teste-status-badge').innerHTML = !c.envio_habilitado
+      ? '<span class="tlk-pill tlk-pill--neutro">Envio desligado</span>'
+      : c.estado !== 'conectado'
+        ? '<span class="tlk-pill tlk-pill--aviso">Aguardando conexão</span>'
+        : numeros.length
+          ? '<span class="tlk-pill tlk-pill--ok">Lista de teste ativa</span>'
+          : '<span class="tlk-pill tlk-pill--aviso">Sem números de teste</span>';
+
+    if (envioTesteAtual && envioTesteAtual.canal?.id && envioTesteAtual.canal.id !== c.id) {
+      pararPollingEnvioTeste();
+      envioTesteAtual = null;
+      $('card-envio-teste').hidden = true;
+    }
+    atualizarContadorEnvioTeste();
+  }
+
+  function renderizarAcompanhamentoEnvioTeste() {
+    const m = envioTesteAtual;
+    const card = $('card-envio-teste');
+    if (!m) {
+      card.hidden = true;
+      return;
+    }
+    card.hidden = false;
+    $('envio-teste-id').textContent = m.id || '—';
+    $('envio-teste-para').textContent = m.contato_mascarado ? `Para ${m.contato_mascarado}` : '';
+    $('envio-teste-pill').innerHTML = pill(m.estado);
+
+    const historico = Array.isArray(m.historico_estados) ? m.historico_estados : [];
+    $('envio-teste-timeline').innerHTML = historico.length
+      ? historico.map((h) => `
+          <li class="tlk-timeline-item">
+            <span class="tlk-timeline-dot tlk-timeline-dot--${COR_DOT_MSG[h.estado] || 'neutro'}" aria-hidden="true"></span>
+            <div class="tlk-timeline-head">
+              ${pill(h.estado)}
+              <span class="tlk-timeline-hora">${esc(dataHora(h.em))}</span>
+            </div>
+            ${h.detalhe ? `<div class="tlk-timeline-detalhe">${esc(h.detalhe)}</div>` : ''}
+          </li>`).join('')
+      : '<li class="tlk-timeline-item"><div class="tlk-timeline-detalhe">Aguardando atualizações de estado…</div></li>';
+
+    const boxFalha = $('envio-teste-falha');
+    if (m.estado === 'falhou') {
+      const itemFalha = [...historico].reverse().find((h) => h.estado === 'falhou' && h.detalhe)
+        || [...historico].reverse().find((h) => h.detalhe);
+      $('envio-teste-falha-texto').textContent = itemFalha?.detalhe || 'Falha ao enviar a mensagem pelo canal.';
+      const urlMsg = `${TalkApi.BASE}/mensagens.html?id=${encodeURIComponent(m.id)}`;
+      $('btn-ver-em-mensagens').href = urlMsg;
+      boxFalha.hidden = false;
+    } else {
+      boxFalha.hidden = true;
+    }
+  }
+
+  async function buscarEstadoEnvioTeste(msgId) {
+    if (!msgId || envioTesteAtual?.id !== msgId) return;
+    try {
+      const m = await TalkApi.get(`/mensagens/${encodeURIComponent(msgId)}`);
+      if (!envioTesteAtual || envioTesteAtual.id !== msgId) return;
+      envioTesteAtual = m;
+      renderizarAcompanhamentoEnvioTeste();
+      if (ESTADOS_FINAIS_MSG.has(m.estado)) pararPollingEnvioTeste();
+    } catch (_) { /* mantém próximo ciclo ou socket */ }
+  }
+
+  function iniciarPollingEnvioTeste(msgId) {
+    pararPollingEnvioTeste();
+    if (!msgId || !envioTesteAtual || ESTADOS_FINAIS_MSG.has(envioTesteAtual.estado)) return;
+    timerEnvioTeste = setInterval(() => buscarEstadoEnvioTeste(msgId), POLL_FALLBACK_MS);
+  }
+
+  function aplicarEstadoMensagemSocket(ev) {
+    if (!envioTesteAtual || !ev?.id || ev.id !== envioTesteAtual.id) return;
+    const em = ev.em || new Date().toISOString();
+    envioTesteAtual.estado = ev.estado;
+    envioTesteAtual.atualizada_em = em;
+    const hist = Array.isArray(envioTesteAtual.historico_estados) ? envioTesteAtual.historico_estados : [];
+    const ultimo = hist[hist.length - 1];
+    if (!ultimo || ultimo.estado !== ev.estado) {
+      hist.push({ estado: ev.estado, em, detalhe: null });
+      envioTesteAtual.historico_estados = hist;
+    }
+    renderizarAcompanhamentoEnvioTeste();
+    if (ESTADOS_FINAIS_MSG.has(ev.estado)) {
+      pararPollingEnvioTeste();
+      buscarEstadoEnvioTeste(ev.id);
+    }
+  }
+
+  $('btn-ver-em-mensagens').addEventListener('click', (e) => {
+    const url = $('btn-ver-em-mensagens').getAttribute('href');
+    if (!url) return;
+    try {
+      if (window.top && window.top !== window && window.top.TalkAbas?.abrir) {
+        e.preventDefault();
+        window.top.TalkAbas.abrir(url, 'Mensagens', '💬');
+      }
+    } catch (_) { /* segue link normal fora do shell */ }
+  });
+
+  $('form-envio-teste').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!canalAtual) return;
+    const form = e.currentTarget;
+    TalkUI.limparErros(form);
+    $('alerta-envio-teste').hidden = true;
+
+    const valorSelect = $('t-para').value;
+    const paraIndice = valorSelect === '' ? null : Number(valorSelect);
+    const texto = $('t-texto').value;
+
+    const btn = $('btn-enviar-teste');
+    btn.disabled = true;
+    TalkIcones.definirBotao(btn, { icone: 'enviar', texto: 'Enviando…' });
+    try {
+      const msg = await TalkApi.post(`/canais/${encodeURIComponent(canalAtual.id)}/enviar-teste`, {
+        para_indice: paraIndice,
+        texto,
+      });
+      pararPollingEnvioTeste();
+      envioTesteAtual = msg;
+      renderizarAcompanhamentoEnvioTeste();
+      if (!socket?.connected && !ESTADOS_FINAIS_MSG.has(msg.estado)) {
+        iniciarPollingEnvioTeste(msg.id);
+      }
+    } catch (err) {
+      if (!TalkUI.errosNoFormulario(form, err)) {
+        $('alerta-envio-teste').textContent = err.message;
+        $('alerta-envio-teste').hidden = false;
+      }
+    } finally {
+      btn.disabled = false;
+      const dica = 'Enviar teste: envia a mensagem de teste para o número selecionado da lista';
+      TalkIcones.definirBotao(btn, { icone: 'enviar', texto: 'Enviar teste', title: dica, ariaLabel: dica });
+    }
+  });
 
   // ── Número do canal (como no IA Command) ────────────────────────────
   function abrirFormNumero(focar = true) {
@@ -1153,6 +1601,9 @@
 
   function iniciarFallback(motivo) {
     atualizarIndicadorTempoReal('fallback', motivo);
+    if (envioTesteAtual && !ESTADOS_FINAIS_MSG.has(envioTesteAtual.estado)) {
+      iniciarPollingEnvioTeste(envioTesteAtual.id);
+    }
     if (timerFallback) return;
     timerFallback = setInterval(async () => {
       if (!canalAtual) return;
@@ -1173,6 +1624,7 @@
 
     socket.on('connect', () => {
       pararFallback();
+      pararPollingEnvioTeste();
       atualizarIndicadorTempoReal('socket');
       if (canalAssinadoId) socket.emit('canal:assinar', { canal_id: canalAssinadoId });
     });
@@ -1207,6 +1659,10 @@
       anexarLinhaLog(ev);
     });
 
+    socket.on('mensagem:estado', (ev) => {
+      aplicarEstadoMensagemSocket(ev);
+    });
+
     socket.on('erro', (ev) => {
       if (ev?.mensagem) TalkUI.toast(ev.mensagem, 'erro');
     });
@@ -1232,6 +1688,7 @@
     }
     canalAssinadoId = null;
     pararFallback();
+    pararPollingEnvioTeste();
     pararTimerQr();
     pararTimerUptime();
   }
@@ -1261,6 +1718,10 @@
     $('confirm-limpar').hidden = true;
     $('term-confirm-limpar').hidden = true;
     $('form-numero').hidden = true;
+    $('alerta-envio-teste').hidden = true;
+    TalkUI.limparErros($('form-envio-teste'));
+    envioTesteAtual = null;
+    $('card-envio-teste').hidden = true;
     autoScroll = true;
     atualizarBotaoAutoScroll();
 
@@ -1269,6 +1730,7 @@
         TalkApi.get(`/canais/${encodeURIComponent(canalId)}`),
         TalkApi.get('/canais', { limite: 100 }).catch(() => null),
         carregarEmpresasDisponiveis(),
+        carregarPerfil(),
       ]);
       if (pagCanais?.itens) canaisCatalogo = pagCanais.itens;
       canalAtual = c;

@@ -16,6 +16,11 @@ const { exigirRotina, ipDe } = require('../acesso/middleware');
 const telefone = require('../seguranca/telefone');
 const { CAPACIDADES_WWEB } = require('../provedores/wweb');
 const { empresaDoHub } = require('./publico');
+const mensagensRepo = require('../mensagens/repositorio');
+const regras = require('../canais/regras');
+const { aceitarEnvio } = require('../mensagens/servico');
+
+const TEXTO_TESTE_MAXIMO = 1000;
 
 // Prefixo do id de uma empresa do IAHub que ainda não existe no Talk (criada ao salvar o vínculo).
 const PREFIXO_HUB = 'hub:';
@@ -24,7 +29,7 @@ const SQL_VISIVEIS = `SELECT c.* FROM canais c
   WHERE c.empresa_dona_id = @empresa_id
      OR c.id IN (SELECT canal_id FROM canal_empresas WHERE empresa_id = @empresa_id)`;
 
-function criarRotasCanais({ db, supervisor, log = console }) {
+function criarRotasCanais({ db, supervisor, despachante = null, log = console }) {
   const r = express.Router();
   const exigir = exigirRotina(ROTINAS.canais);
   const auditar = (req, acao, alvoId, resumo) => auditoria.registrar(db, req.contexto, { acao, alvoTipo: 'canal', alvoId, resumo, ip: ipDe(req) });
@@ -58,8 +63,11 @@ function criarRotasCanais({ db, supervisor, log = console }) {
     return {
       id: c.id, nome: c.nome, numero_mascarado: c.numero ? telefone.mascarar(c.numero) : null, provedor: c.provedor,
       estado: c.estado, estado_desde: c.estado_desde, empresa_dona: dona, empresas_vinculadas: vinculadas,
-      capacidades: CAPACIDADES_WWEB, fila_pendente: 0, ultima_mensagem_em: c.ultima_mensagem_em,
-      modo_teste: !!c.modo_teste, numeros_teste_mascarados: JSON.parse(c.numeros_teste || '[]').map(telefone.mascarar),
+      capacidades: CAPACIDADES_WWEB, fila_pendente: mensagensRepo.contarFila(db, c.id), ultima_mensagem_em: c.ultima_mensagem_em,
+      // Regras do canal (ver canais/regras.js); envio_habilitado e modo_teste derivados, por compatibilidade.
+      envio_modo: c.envio_modo, recebimento_modo: c.recebimento_modo,
+      envio_habilitado: c.envio_modo !== 'desligado', modo_teste: c.recebimento_modo === 'teste' || c.envio_modo === 'teste',
+      numeros_teste_mascarados: JSON.parse(c.numeros_teste || '[]').map(telefone.mascarar),
       recebidas_descartadas: c.recebidas_descartadas,
     };
   }
@@ -131,14 +139,23 @@ function criarRotasCanais({ db, supervisor, log = console }) {
   });
 
   // nome; numero (só com o canal parado e sem sessão); empresas_vinculadas [{ id, padrao }];
-  // modo_teste e numeros_teste (só a plataforma).
+  // regras: envio_modo, recebimento_modo e numeros_teste (só a plataforma; aceita ainda
+  // os antigos envio_habilitado/modo_teste, traduzidos em canais/regras.js).
   r.put('/canais/:id', exigir, (req, res) => {
     const c = acharDono(req, req.params.id);
     const b = req.body || {};
     if (b.nome !== undefined && !String(b.nome).trim()) throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos: { nome: 'Informe o nome.' } });
-    if ((b.modo_teste !== undefined || b.numeros_teste !== undefined) && !req.contexto.plataforma) {
-      throw erro('sem_permissao', 'Só a administração da plataforma altera o modo de teste.');
+    const mexeNasRegras = ['envio_modo', 'recebimento_modo', 'numeros_teste', 'numeros_teste_adicionar', 'numeros_teste_remover', 'envio_habilitado', 'modo_teste'].some(k => b[k] !== undefined);
+    if (mexeNasRegras && !req.contexto.plataforma) {
+      throw erro('sem_permissao', 'Só a administração da plataforma altera as regras de envio e recebimento do canal.');
     }
+    const novas = regras.traduzirLegado(c, b);
+    if (b.envio_modo !== undefined) novas.envio_modo = b.envio_modo;
+    if (b.recebimento_modo !== undefined) novas.recebimento_modo = b.recebimento_modo;
+    const camposRegras = {};
+    if (!regras.ENVIO_MODOS.includes(novas.envio_modo)) camposRegras.envio_modo = 'Use desligado, teste ou qualquer.';
+    if (!regras.RECEBIMENTO_MODOS.includes(novas.recebimento_modo)) camposRegras.recebimento_modo = 'Use teste ou todos.';
+    if (Object.keys(camposRegras).length) throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos: camposRegras });
     let numeroCanal = c.numero;
     if (b.numero !== undefined && !telefone.mesmoNumero(b.numero, c.numero || '')) {
       numeroCanal = lerNumero(b.numero, c.id);
@@ -151,11 +168,19 @@ function criarRotasCanais({ db, supervisor, log = console }) {
       numeros = Array.isArray(b.numeros_teste) ? b.numeros_teste.map(telefone.normalizar) : null;
       if (!numeros || numeros.some(n => !telefone.valido(n))) throw erro('requisicao_invalida', 'Números de teste inválidos.', { campos: { numeros_teste: 'Use DDI e DDD (ex.: 5565999990000).' } });
     }
+    // Tela: a lista sai mascarada, então ela remove pela POSIÇÃO e inclui digitando o número.
+    if (b.numeros_teste_remover !== undefined || b.numeros_teste_adicionar !== undefined) {
+      const remover = new Set(Array.isArray(b.numeros_teste_remover) ? b.numeros_teste_remover : []);
+      const novos = (Array.isArray(b.numeros_teste_adicionar) ? b.numeros_teste_adicionar : []).map(telefone.normalizar);
+      if (novos.some(n => !telefone.valido(n))) throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos: { numeros_teste_adicionar: 'Informe o número com DDI e DDD (ex.: 5565999990000).' } });
+      numeros = (numeros || regras.listaDeTeste(c)).filter((_, i) => !remover.has(i));
+      for (const n of novos) if (!numeros.some(x => telefone.mesmoNumero(x, n))) numeros.push(n);
+    }
     db.transaction(() => {
-      db.prepare(`UPDATE canais SET nome = ?, numero = ?, modo_teste = ?, numeros_teste = ?, atualizado_em = ? WHERE id = ?`).run(
+      db.prepare(`UPDATE canais SET nome = ?, numero = ?, numeros_teste = ?, envio_modo = ?, recebimento_modo = ?, atualizado_em = ? WHERE id = ?`).run(
         b.nome !== undefined ? String(b.nome).trim() : c.nome, numeroCanal,
-        b.modo_teste !== undefined ? (b.modo_teste ? 1 : 0) : c.modo_teste,
-        numeros ? JSON.stringify(numeros) : c.numeros_teste, agora(), c.id);
+        numeros ? JSON.stringify(numeros) : c.numeros_teste,
+        novas.envio_modo, novas.recebimento_modo, agora(), c.id);
       if (Array.isArray(b.empresas_vinculadas)) {
         // Quem já está no canal continua (pode mudar o padrão ou sair); empresa nova
         // só entra se estiver em empresasVinculaveis — como no IA Command.
@@ -183,6 +208,16 @@ function criarRotasCanais({ db, supervisor, log = console }) {
       }
     })();
     auditar(req, 'canal.alterado', c.id, `Alterou o canal ${c.nome}`);
+    // Cada regra alterada vira uma linha própria na auditoria (de → para).
+    if (novas.envio_modo !== c.envio_modo) {
+      auditar(req, 'canal.regra_envio', c.id, `Envio do canal ${c.nome}: ${regras.TEXTOS.envio[c.envio_modo]} → ${regras.TEXTOS.envio[novas.envio_modo]}`);
+    }
+    if (novas.recebimento_modo !== c.recebimento_modo) {
+      auditar(req, 'canal.regra_recebimento', c.id, `Recebimento do canal ${c.nome}: ${regras.TEXTOS.recebimento[c.recebimento_modo]} → ${regras.TEXTOS.recebimento[novas.recebimento_modo]}`);
+    }
+    if (numeros && JSON.stringify(numeros) !== c.numeros_teste) {
+      auditar(req, 'canal.numeros_teste', c.id, `Lista de teste do canal ${c.nome}: ${numeros.length} número(s) (${numeros.map(telefone.mascarar).join(', ') || 'vazia'})`);
+    }
     res.json(canalPublico(db.prepare('SELECT * FROM canais WHERE id = ?').get(c.id)));
   });
 
@@ -221,6 +256,33 @@ function criarRotasCanais({ db, supervisor, log = console }) {
     const c = acharVisivel(req, req.params.id);
     const q = c.estado === 'qr_pendente' ? supervisor.qrAtual(c.id) : null;
     res.json({ canal_id: c.id, estado: c.estado, qr: q?.qr || null, expira_em: q?.expira_em || null });
+  });
+
+  // C3 — envio de teste pela tela: só para a lista de teste do canal, pela POSIÇÃO
+  // (para_indice): o número completo nunca passa pelo navegador.
+  r.post('/canais/:id/enviar-teste', exigir, (req, res) => {
+    const c = acharVisivel(req, req.params.id);
+    const { para_indice: indice, texto } = req.body || {};
+    const campos = {};
+    if (!Number.isInteger(indice) || indice < 0) campos.para_indice = 'Escolha um número da lista de teste.';
+    const corpo = String(texto ?? '').trim();
+    if (!corpo) campos.texto = 'Escreva a mensagem.';
+    else if (corpo.length > TEXTO_TESTE_MAXIMO) campos.texto = `Use no máximo ${TEXTO_TESTE_MAXIMO} caracteres.`;
+    if (Object.keys(campos).length) throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos });
+    const para = JSON.parse(c.numeros_teste || '[]')[indice];
+    if (!para) throw erro('sem_permissao', 'Em teste, só os números da lista de teste deste canal recebem mensagens.', { campos: { para_indice: 'Fora da lista de teste.' } });
+    let m;
+    try {
+      m = aceitarEnvio(db, { empresaId: req.contexto.empresaId, canalId: c.id, para, texto: corpo, origem: 'teste_tela',
+        usuarioId: req.contexto.usuarioId, exigirConectado: true });
+    } catch (err) {
+      // Contrato da tela (G11): desligado ou desconectado = 409.
+      if (['envio_desligado', 'canal_desconectado'].includes(err.codigo)) throw erro('conflito', err.message);
+      throw err;
+    }
+    auditar(req, 'canal.enviar_teste', c.id, `Enviou mensagem de teste para ${telefone.mascarar(para)} pelo canal ${c.nome}`);
+    setImmediate(() => despachante?.acordar());
+    res.status(202).json(mensagensRepo.paraDetalhe(db, m));
   });
 
   r.get('/canais/:id/log', exigir, (req, res) => {

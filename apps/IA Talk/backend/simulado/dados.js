@@ -71,13 +71,17 @@ function criarDados() {
     { id: 'cn_suporte', nome: 'Suporte J2A', numero: '5565999900001', provedor: 'wweb', estado: 'conectado', estado_desde: em(3 * DIA),
       empresa_dona: { id: 'emp_j2a', nome: 'J2A Consultoria' },
       empresas_vinculadas: [vinculo('emp_j2a', 'J2A Consultoria', true), vinculo('emp_plantivo', 'Plantivo Agro (exemplo)', true), vinculo('emp_horizonte', 'Construtora Horizonte (exemplo)', true)],
-      capacidades: capacidadesWweb, fila_pendente: 0, ultima_mensagem_em: em(4 * 60 * 1000) },
+      capacidades: capacidadesWweb, fila_pendente: 0, ultima_mensagem_em: em(4 * 60 * 1000),
+      // C3: envio ligado + modo de teste (números fictícios; só eles recebem o envio de teste).
+      envio_modo: 'teste', recebimento_modo: 'teste', numeros_teste: ['5565999990010', '5565999990011'], recebidas_descartadas: 3 },
     { id: 'cn_financeiro', nome: 'Financeiro', numero: '5565999900002', provedor: 'wweb', estado: 'reconectando', estado_desde: em(6 * 60 * 1000),
       empresa_dona: { id: 'emp_j2a', nome: 'J2A Consultoria' }, empresas_vinculadas: [vinculo('emp_j2a', 'J2A Consultoria', false)],
-      capacidades: capacidadesWweb, fila_pendente: 12, ultima_mensagem_em: em(40 * 60 * 1000) },
+      capacidades: capacidadesWweb, fila_pendente: 12, ultima_mensagem_em: em(40 * 60 * 1000),
+      envio_modo: 'desligado', recebimento_modo: 'teste', numeros_teste: [], recebidas_descartadas: 0 },
     { id: 'cn_teste', nome: 'Teste homologação', numero: '5565999900003', provedor: 'wweb', estado: 'qr_pendente', estado_desde: em(90 * 1000),
       empresa_dona: { id: 'emp_j2a', nome: 'J2A Consultoria' }, empresas_vinculadas: [vinculo('emp_j2a', 'J2A Consultoria', false)],
-      capacidades: capacidadesWweb, fila_pendente: 0, ultima_mensagem_em: null },
+      capacidades: capacidadesWweb, fila_pendente: 0, ultima_mensagem_em: null,
+      envio_modo: 'desligado', recebimento_modo: 'teste', numeros_teste: ['5565999990010'], recebidas_descartadas: 0 },
   ];
 
   const ESTADOS_ROTACAO = ['lida', 'entregue', 'lida', 'enviada', 'lida', 'aguardando', 'lida', 'falhou', 'lida', 'desconhecida', 'entregue', 'lida'];

@@ -160,9 +160,18 @@ Corpo de aplicação: `{ nome, descricao?, escopos: ['mensagens:enviar'|'mensage
 | `POST /canais/:id/novo-qr` | Novo QR (o anterior deixa de valer) |
 | `POST /canais/:id/limpar-sessao` | **Destrutiva**: exige `{ confirmar: true }`. Apaga a sessão; o celular lê QR de novo. A tela pede confirmação explícita, dizendo isso |
 | `GET /canais/:id/qr` | `{ canal_id, estado, qr: dataURL\|null, expira_em }` (só em `qr_pendente`) |
+| `POST /canais/:id/enviar-teste` | **C3.** `{ para_indice, texto }`: `para_indice` = posição (0, 1, …) em `numeros_teste_mascarados` — o número completo nunca passa pela tela; texto 1–1000. → `202` com `mensagemDetalhe` (`estado: 'aceita'`, `origem: 'teste_tela'`, `aplicacao: null`). `para_indice` ausente/não inteiro ou texto inválido → `400`; envio desligado ou canal não conectado → `409 conflito`; posição que não existe na lista → `403 sem_permissao` (com `campos.para_indice`). Os estados seguem pelo socket `mensagem:estado` (salas `painel` e `canal:<id>`) e por `GET /mensagens/:id` |
 | `GET /canais/:id/log` | Página de `{ em, tipo, mensagem }`, mais recente primeiro. `tipo` ∈ `info, success, warning, error, received, sent, system` (mesmas cores do terminal do IA Command) |
 
 Campos extras do canal (C2, aditivos): `modo_teste` (bool), `numeros_teste_mascarados`, `recebidas_descartadas`.
+C3 (aditivo): `envio_habilitado` (bool) — começa `false` em produção (publicado desligado); a tela mostra o envio
+desabilitado com o motivo enquanto estiver `false`.
+**Regras do canal (26/11, migração 8):** `envio_modo` ∈ `desligado | teste | qualquer` e `recebimento_modo` ∈ `teste | todos`,
+**independentes** (liberar o envio não passa a gravar as conversas de outros sistemas no mesmo número). `envio_habilitado`
+(= envio ≠ desligado) e `modo_teste` seguem na resposta só por compatibilidade. `PUT /canais/:id` (só a plataforma) aceita
+`envio_modo`, `recebimento_modo`, `numeros_teste_adicionar: [número digitado]` e `numeros_teste_remover: [posição]` (a lista
+sai mascarada; sem duplicar com/sem o nono dígito). Cada mudança vira uma linha na auditoria (`canal.regra_envio`,
+`canal.regra_recebimento`, `canal.numeros_teste`). Linha de comando equivalente: `cli/canal-teste.js --envio … --recebimento …`.
 `PUT /canais/:id` aceita `modo_teste` e `numeros_teste` (só administração da plataforma). Em modo de teste, só as
 mensagens dos números da lista entram no log/banco; das demais fica só a contagem.
 **Número cadastrado (26/11, como no IA Command):** o número sai só mascarado (`numero_mascarado`). Se o QR for lido
@@ -235,6 +244,15 @@ Especificação: `docs/openapi-v1.yaml`. Resumo:
 | `GET /v1/eventos?depois=<cursor>` | Recuperar o que o webhook não entregou: `{ itens, proximo_cursor, tem_mais }` |
 
 * Mesma chave + mesmo corpo → mesma resposta (`Idempotent-Replayed: true`). Mesma chave + outro corpo → 409 `idempotencia_conflito`.
+* **C3 (26/11), como está no servidor real:**
+  - Token `Authorization: Bearer tk_live_…` da tela Aplicações. Escopos: `mensagens:enviar` (POST), `mensagens:ler` (GET mensagem), `canais:ler` (estado do canal). O canal precisa estar em `canais_autorizados` da aplicação **e** a empresa da aplicação precisa usar o canal → senão 403 `canal_nao_autorizado`.
+  - **Só texto** por enquanto (até 4096 caracteres); outro `tipo` → 422 `recurso_nao_suportado`. `GET /canais/:id/estado` devolve as capacidades **reais de envio** (imagem/documento/áudio `false` até a C3b) e `envio_habilitado`.
+  - Envio desligado no canal → 422 `envio_desligado`. Canal parado → 422 `canal_desconectado`. Canal ligado mas reconectando → aceita e espera na fila (`aguardando`); sem sair em 24 h → `falhou`.
+  - Canal em modo de teste: só os números da lista → senão 403 `sem_permissao` (`campos.para`).
+  - `X-Correlation-Id` (até 128) vira `correlacao_id`. `metadados`: objeto JSON até 4 KB.
+  - Limite: 120 pedidos/min **por aplicação** (`X-RateLimit-*`, 429 + `Retry-After`).
+  - Ritmo de saída por canal: uma mensagem por vez, 3 a 5 s entre elas (protege o número no WhatsApp Web). Resultado incerto → `desconhecida` (nunca reenviada sozinha; recibo posterior do WhatsApp corrige para enviada/entregue/lida).
+* Tela (sessão): `GET /mensagens` (filtros do §5), `GET /mensagens/:id`, `POST /mensagens/:id/reenviar` (`falhou`/`desconhecida`), `POST /mensagens/:id/dar-como-falha` (só `desconhecida`), `GET /painel`. Socket: `painel:assinar` entra na sala do **painel da própria empresa**; `mensagem:estado` vai para a sala do canal e do painel da empresa dona da mensagem.
 * Limites: cabeçalhos `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`; acima → 429 + `Retry-After`.
 * Texto formatado: marcação do WhatsApp (`*negrito*`, `_itálico_`, `~riscado~`, ` ```mono``` `). Recurso que o canal não tem → 422 `recurso_nao_suportado` (sem converter nem trocar de canal).
 

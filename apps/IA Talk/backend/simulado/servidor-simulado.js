@@ -23,6 +23,7 @@ const config = require('../config');
 const { erro, corpoErro, middlewareErros } = require('../erros');
 const { codificarCursor, decodificarCursor, lerPaginacao } = require('../paginacao');
 const { EVENTOS_SOCKET, ESTADOS_COM_ACAO_MANUAL } = require('../contratos');
+const regras = require('../canais/regras');
 const { aplicarSegurancaHttp, montarEstaticos } = require('../servidor');
 const { criarDados, mascararTelefone, BASE_SIMULADA } = require('./dados');
 
@@ -117,8 +118,9 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, l
     return { ...resto, telefone_mascarado: mascararTelefone(telefone) };
   };
   const canalPublico = (c) => {
-    const { numero, ...resto } = c;
-    return { ...resto, numero_mascarado: mascararTelefone(numero) };
+    const { numero, numeros_teste, ...resto } = c;
+    return { ...resto, numero_mascarado: mascararTelefone(numero), numeros_teste_mascarados: (numeros_teste || []).map(mascararTelefone),
+      envio_habilitado: c.envio_modo !== 'desligado', modo_teste: c.recebimento_modo === 'teste' || c.envio_modo === 'teste' };
   };
   const auditar = (acao, resumo) => dados.auditoria.unshift({
     id: novo('aud'), em: agora(), usuario: { id: 'usr_ana', nome: 'Ana Ribeiro' }, aplicacao: null,
@@ -358,6 +360,31 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, l
     }
     if (req.body?.nome !== undefined) exigirCampos(req.body, { nome: obrigatorio('o nome') });
     if (req.body?.nome) c.nome = req.body.nome.trim();
+    // Regras do canal (como o servidor real, canais/regras.js). Sessão simulada é da plataforma.
+    const b = req.body || {};
+    if (['envio_modo', 'recebimento_modo', 'numeros_teste', 'numeros_teste_adicionar', 'numeros_teste_remover', 'envio_habilitado', 'modo_teste'].some(k => b[k] !== undefined)) {
+      if (!sessao.plataforma) throw erro('sem_permissao', 'Só a administração da plataforma altera as regras de envio e recebimento do canal.');
+      const novas = regras.traduzirLegado(c, b);
+      if (b.envio_modo !== undefined) novas.envio_modo = b.envio_modo;
+      if (b.recebimento_modo !== undefined) novas.recebimento_modo = b.recebimento_modo;
+      const campos = {};
+      if (!regras.ENVIO_MODOS.includes(novas.envio_modo)) campos.envio_modo = 'Use desligado, teste ou qualquer.';
+      if (!regras.RECEBIMENTO_MODOS.includes(novas.recebimento_modo)) campos.recebimento_modo = 'Use teste ou todos.';
+      let lista = c.numeros_teste || [];
+      if (b.numeros_teste !== undefined) {
+        lista = Array.isArray(b.numeros_teste) ? b.numeros_teste.map(n => String(n).replace(/\D/g, '')) : null;
+        if (!lista || lista.some(n => !/^\d{12,13}$/.test(n))) campos.numeros_teste = 'Use DDI e DDD (ex.: 5565999990000).';
+      }
+      if (b.numeros_teste_remover !== undefined || b.numeros_teste_adicionar !== undefined) {
+        const remover = new Set(Array.isArray(b.numeros_teste_remover) ? b.numeros_teste_remover : []);
+        const novos = (Array.isArray(b.numeros_teste_adicionar) ? b.numeros_teste_adicionar : []).map(n => String(n).replace(/\D/g, ''));
+        if (novos.some(n => !/^\d{12,13}$/.test(n))) campos.numeros_teste_adicionar = 'Informe o número com DDI e DDD (ex.: 5565999990000).';
+        lista = (lista || []).filter((_, i) => !remover.has(i));
+        for (const n of novos) if (!lista.includes(n)) lista.push(n);
+      }
+      if (Object.keys(campos).length) throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos });
+      Object.assign(c, novas, { numeros_teste: lista });
+    }
     if (Array.isArray(req.body?.empresas_vinculadas)) {
       // "hub:<n>": empresa do IAHub criada no Talk ao vincular (como o servidor real).
       for (const v of req.body.empresas_vinculadas) {
@@ -443,6 +470,38 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, l
   };
   admin.post('/mensagens/:id/reenviar', acaoManual('aceita', 'Reenvio pedido manualmente.'));
   admin.post('/mensagens/:id/dar-como-falha', acaoManual('falhou', 'Marcada como falha manualmente.'));
+
+  // C3 — envio de teste pela tela (contratos.md §4). Só canal conectado, com envio
+  // ligado e para número da lista de teste. Estados andam sozinhos a cada ~1,2 s;
+  // texto com a palavra "falha" termina em `falhou` (para testar a tela de erro).
+  admin.post('/canais/:id/enviar-teste', (req, res) => {
+    const c = acharOu404(dados.canais, req.params.id, 'Canal');
+    // para_indice: posição (0, 1, …) em numeros_teste_mascarados — a tela nunca tem o número completo.
+    exigirCampos(req.body, {
+      para_indice: (v) => (Number.isInteger(v) && v >= 0 ? null : 'Escolha um número da lista de teste.'),
+      texto: (v) => { const t = String(v || '').trim(); return !t ? 'Escreva a mensagem.' : (t.length > 1000 ? 'Use no máximo 1000 caracteres.' : null); },
+    });
+    if (c.envio_modo === 'desligado') throw erro('conflito', 'O envio está desligado neste canal. A administração da plataforma liga quando for liberado.');
+    if (c.estado !== 'conectado') throw erro('conflito', 'Conecte o canal antes de enviar.');
+    const para = (c.numeros_teste || [])[req.body.para_indice];
+    if (!para) throw erro('sem_permissao', 'Em teste, só os números da lista de teste deste canal recebem mensagens.', { campos: { para_indice: 'Fora da lista de teste.' } });
+    const t0 = agora();
+    const m = { id: novo('msg'), direcao: 'saida', canal: { id: c.id, nome: c.nome }, aplicacao: null, origem: 'teste_tela',
+      contato_mascarado: mascararTelefone(para), tipo: 'texto', previa: String(req.body.texto).trim().slice(0, 80), estado: 'aceita',
+      correlacao_id: null, criada_em: t0, atualizada_em: t0, historico_estados: [{ estado: 'aceita', em: t0, detalhe: 'Envio de teste pela tela.' }], metadados: {}, anexos: [] };
+    dados.mensagens.unshift(m);
+    const falhar = /falha/i.test(req.body.texto);
+    const passos = falhar ? ['aguardando', 'encaminhada', 'falhou'] : ['aguardando', 'encaminhada', 'enviada', 'entregue', 'lida'];
+    passos.forEach((estado, i) => setTimeout(() => {
+      m.estado = estado;
+      m.atualizada_em = agora();
+      m.historico_estados.push({ estado, em: m.atualizada_em, detalhe: estado === 'falhou' ? 'Número não encontrado no WhatsApp.' : null });
+      emitir(EVENTOS_SOCKET.servidor.estadoMensagem, { id: m.id, estado, em: m.atualizada_em }, 'painel');
+      emitir(EVENTOS_SOCKET.servidor.estadoMensagem, { id: m.id, estado, em: m.atualizada_em }, sala(c.id));
+    }, (i + 1) * 1200).unref?.());
+    auditar('canal.enviar_teste', `Enviou mensagem de teste pelo canal ${c.nome}`);
+    res.status(202).json(m);
+  });
 
   // Eventos (webhooks)
   admin.get('/eventos', (req, res) => res.json(listar(req, dados.eventos, {

@@ -56,10 +56,10 @@ test('G9 guia.html: seção Canais descreve Terminal em 3 colunas, passo a passo
   }
 });
 
-test('G9 talk-sidebar.js: talk-auditoria liberada (etapa: null) e painel/mensagens/eventos marcados como G3', () => {
+test('G9 talk-sidebar.js: talk-auditoria, painel e mensagens liberados (C3); eventos ainda G3 até a C4', () => {
   const src = fs.readFileSync(path.join(__dirname, '../../frontend/js/talk-sidebar.js'), 'utf8');
   assert.match(src, /id:\s*'talk-auditoria'[^\n]*etapa:\s*null/);
-  assert.match(src, /id:\s*'talk-painel'[^\n]*etapa:\s*'G3'/);
-  assert.match(src, /id:\s*'talk-mensagens'[^\n]*etapa:\s*'G3'/);
+  assert.match(src, /id:\s*'talk-painel'[^\n]*etapa:\s*null/);
+  assert.match(src, /id:\s*'talk-mensagens'[^\n]*etapa:\s*null/);
   assert.match(src, /id:\s*'talk-eventos'[^\n]*etapa:\s*'G3'/);
 });

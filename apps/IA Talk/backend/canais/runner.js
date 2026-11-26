@@ -7,6 +7,7 @@
 // Recebe:  { cmd: 'iniciar', canal: { id, sessao_id, provedor }, dirSessoes }
 //          { cmd: 'parar' } · { cmd: 'limpar-sessao' } · { cmd: 'desvincular' } · { cmd: 'enviar', id, envelope }
 //          (testes) { cmd: 'simular-leitura', dados?: { numero } } · { cmd: 'simular-mensagem', dados }
+//                   { cmd: 'simular-falha', dados: { tipo } }  (próximo envio falha: temporario|permanente|desconhecido)
 // Envia:   { evento: 'estado'|'qr'|'identidade'|'mensagem'|'status'|'log'|'enviado'|'parado'|'erro', dados }
 
 const { ProvedorSimulado } = require('../provedores/simulado');
@@ -52,8 +53,12 @@ async function tratar(m) {
         if (env.arquivo?.base64) env.arquivo = { ...env.arquivo, dados: Buffer.from(env.arquivo.base64, 'base64'), base64: undefined };
         enviar('enviado', { id: m.id, ok: true, ...(await provedor.enviar(env)) });
       } catch (err) {
-        enviar('enviado', { id: m.id, ok: false, tipo: err.tipo || 'desconhecido', codigo: err.codigo, mensagem: err.message });
+        // Recusa antes de sair (validação, recurso não suportado) = permanente; o resto, como o provedor disse.
+        const tipo = err.tipo || (err.codigo && err.status < 500 ? 'permanente' : 'desconhecido');
+        enviar('enviado', { id: m.id, ok: false, tipo, codigo: err.codigo, mensagem: err.message });
       }
+    } else if (m.cmd === 'simular-falha' && provedor) {
+      provedor.falhar = m.dados?.tipo || 'temporario';
     } else if (m.cmd === 'simular-leitura' && provedor?.simularLeituraQr) {
       provedor.simularLeituraQr();
       enviar('identidade', { numero: m.dados?.numero || '5565900000000' });

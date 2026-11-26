@@ -14,6 +14,7 @@ const STATUS_POR_CODIGO = Object.freeze({
   idempotencia_conflito: 409,
   recurso_nao_suportado: 422,
   canal_desconectado: 422,
+  envio_desligado: 422,
   canal_nao_autorizado: 403,
   fora_da_janela_24h: 422,
   limite_excedido: 429,

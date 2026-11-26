@@ -41,6 +41,11 @@ function configurarTempoReal(ns, { db, supervisor }) {
       if (q) socket.emit(S.qrCanal, { canal_id: c.id, ...q });
     });
     socket.on(C.sairCanal, ({ canal_id } = {}) => socket.leave(`canal:${canal_id}`));
+    // Painel/Mensagens: sala da empresa da sessão (nunca recebe mensagens de outra empresa).
+    socket.on(C.assinarPainel, () => {
+      if (!socket.data.rotinas.includes(ROTINAS.mensagens) && !socket.data.rotinas.includes(ROTINAS.painel)) return;
+      socket.join(`painel:${socket.data.empresaId}`);
+    });
   });
 
   const t = setInterval(async () => {
@@ -51,7 +56,11 @@ function configurarTempoReal(ns, { db, supervisor }) {
   }, REVALIDAR_MS);
   t.unref?.();
 
-  return (canalId, evento, dados) => ns.to(`canal:${canalId}`).emit(evento, dados);
+  // empresaId: também avisa o painel daquela empresa (estado das mensagens dela).
+  return (canalId, evento, dados, { empresaId } = {}) => {
+    ns.to(`canal:${canalId}`).emit(evento, dados);
+    if (empresaId) ns.to(`painel:${empresaId}`).emit(evento, dados);
+  };
 }
 
 module.exports = { configurarTempoReal };

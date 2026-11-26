@@ -10,9 +10,9 @@
     {
       id: 'operacao', label: 'Operação', icon: '📡', defaultOpen: true,
       items: [
-        { id: 'talk-painel', label: 'Painel', href: `${B}/painel.html`, icon: '📊', etapa: 'G3' },
+        { id: 'talk-painel', label: 'Painel', href: `${B}/painel.html`, icon: '📊', etapa: null },
         { id: 'talk-canais', label: 'Canais', href: `${B}/canais.html`, icon: '📱', etapa: null },
-        { id: 'talk-mensagens', label: 'Histórico de mensagens', href: `${B}/mensagens.html`, icon: '💬', etapa: 'G3' },
+        { id: 'talk-mensagens', label: 'Histórico de mensagens', href: `${B}/mensagens.html`, icon: '💬', etapa: null },
         { id: 'talk-eventos', label: 'Eventos e webhooks', href: `${B}/eventos.html`, icon: '🔔', etapa: 'G3' },
       ],
     },

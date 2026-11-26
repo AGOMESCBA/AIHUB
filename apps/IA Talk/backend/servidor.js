@@ -23,6 +23,9 @@ const { criarRotasPublicas } = require('./rotas/publico');
 const { criarRotasAdmin } = require('./rotas/admin');
 const { criarRotasCanais } = require('./rotas/canais');
 const { SupervisorCanais } = require('./canais/supervisor');
+const { Despachante } = require('./mensagens/despachante');
+const { criarRotasMensagens } = require('./rotas/mensagens');
+const { criarRotasV1 } = require('./rotas/v1');
 
 const VERSAO = require('../package-versao.json').versao;
 
@@ -99,7 +102,7 @@ function montarPaginaEntrada(app) {
   });
 }
 
-function criarApp({ db = null, log = console, transportes = null, chavePublicaHub, testarEmail, supervisor = null } = {}) {
+function criarApp({ db = null, log = console, transportes = null, chavePublicaHub, testarEmail, supervisor = null, despachante = null } = {}) {
   const app = express();
   aplicarSegurancaHttp(app);
   app.use(rateLimit({
@@ -117,7 +120,11 @@ function criarApp({ db = null, log = console, transportes = null, chavePublicaHu
     app.use(frameAncestorsPorEmpresa(db));
     const trans = transportes || { whatsapp: criarTransporteIaCommand(), email: criarTransporteEmail({ db }) };
     app.use(config.API_PUBLICA, criarRotasPublicas({ db, transportes: trans, log, ...(chavePublicaHub ? { chavePublicaHub } : {}) }));
-    app.use(config.API_ADMIN, criarRotasCanais({ db, supervisor: supervisor || new SupervisorCanais({ db, log }), log }));
+    const sup = supervisor || new SupervisorCanais({ db, log });
+    // Sem despachante (testes de rotas): a fila só grava; ninguém envia.
+    app.use(config.API_V1, criarRotasV1({ db, despachante, log }));
+    app.use(config.API_ADMIN, criarRotasCanais({ db, supervisor: sup, despachante, log }));
+    app.use(config.API_ADMIN, criarRotasMensagens({ db, despachante, log }));
     app.use(config.API_ADMIN, criarRotasAdmin({ db, log, ...(testarEmail ? { testarEmail } : {}) }));
   }
 
@@ -152,7 +159,9 @@ function iniciar({ porta = config.porta(), host = '127.0.0.1' } = {}) {
   // Canais: o supervisor avisa as telas pelo Socket.IO (criado logo abaixo).
   let emitir = () => {};
   const supervisor = new SupervisorCanais({ db, emitir: (...a) => emitir(...a) });
-  const app = criarApp({ db, supervisor });
+  // C3: fila de saída. Só envia o que foi pedido (API ou teste na tela); nunca responde sozinho.
+  const despachante = new Despachante({ db, supervisor, emitir: (...a) => emitir(...a) });
+  const app = criarApp({ db, supervisor, despachante });
   const servidor = http.createServer(app);
   const { Server } = require('socket.io');
   const io = new Server(servidor, { path: config.SOCKET_PATH });
@@ -160,6 +169,7 @@ function iniciar({ porta = config.porta(), host = '127.0.0.1' } = {}) {
   servidor.listen(porta, host, () => {
     console.log(`[IA Talk] ${VERSAO} em http://${host}:${porta}${config.BASE_PATH}/`);
     supervisor.iniciarTodos(); // religa os canais que estavam conectados
+    despachante.iniciar();
   });
   let saindo = false;
   const sair = async (sinal) => {
@@ -167,6 +177,7 @@ function iniciar({ porta = config.porta(), host = '127.0.0.1' } = {}) {
     saindo = true;
     console.log(`[IA Talk] ${sinal} recebido: encerrando (canais primeiro).`);
     setTimeout(() => process.exit(0), 20_000).unref();
+    despachante.parar();
     await supervisor.pararTodos().catch(() => {});
     io.close();
     servidor.close(() => { try { db.close(); } catch (_) { /* já fechado */ } process.exit(0); });

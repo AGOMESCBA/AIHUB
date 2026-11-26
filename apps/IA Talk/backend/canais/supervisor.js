@@ -12,6 +12,7 @@ const path = require('path');
 const { fork } = require('child_process');
 const config = require('../config');
 const telefone = require('../seguranca/telefone');
+const regras = require('./regras');
 
 const CONCESSAO_MS = 90_000;
 const RENOVAR_MS = 30_000;
@@ -85,14 +86,12 @@ class SupervisorCanais {
     this._log(canalId, tipo, msg);
   }
 
-  // Modo de teste: só mensagens dos números da lista entram; das demais fica a contagem.
+  // Regra de recebimento: 'teste' = só os números da lista entram; das demais fica a contagem.
   _receber(canalId, m) {
     if (this.bloqueados.has(canalId)) return;
-    const canal = this.db.prepare('SELECT modo_teste, numeros_teste FROM canais WHERE id = ?').get(canalId);
+    const canal = this.db.prepare('SELECT recebimento_modo, numeros_teste FROM canais WHERE id = ?').get(canalId);
     if (!canal) return;
-    const lista = JSON.parse(canal.numeros_teste || '[]');
-    const variantes = new Set(telefone.variantesBrasil(m.de?.valor));
-    const permitido = !canal.modo_teste || (m.de?.tipo === 'telefone' && lista.some(n => variantes.has(telefone.normalizar(n))));
+    const permitido = canal.recebimento_modo === 'todos' || (m.de?.tipo === 'telefone' && regras.naListaDeTeste(canal, m.de.valor));
     const agora = new Date().toISOString();
     if (!permitido) {
       this.db.prepare('UPDATE canais SET recebidas_descartadas = recebidas_descartadas + 1, ultima_mensagem_em = ? WHERE id = ?').run(agora, canalId);
@@ -107,7 +106,7 @@ class SupervisorCanais {
 
   _resumirDescartadas() {
     for (const [canalId, n] of this.descartadas) {
-      if (n > 0) this._log(canalId, 'system', `Modo de teste: ${n} mensagem(ns) de outros números ignorada(s) (conteúdo não gravado).`);
+      if (n > 0) this._log(canalId, 'system', `Recebimento só de números de teste: ${n} mensagem(ns) de outros números ignorada(s) (conteúdo não gravado).`);
     }
     this.descartadas.clear();
   }
@@ -146,6 +145,9 @@ class SupervisorCanais {
       this._receber(canalId, dados);
     } else if (evento === 'log') {
       this._log(canalId, dados.tipo || 'info', dados.mensagem);
+    } else if (evento === 'status') {
+      // Recibo do WhatsApp (enviada/entregue/lida): o despachante confere se a mensagem é do Talk.
+      this.aoStatus?.(canalId, dados);
     } else if (evento === 'enviado') {
       const p = this.pendentesEnvio.get(dados.id);
       if (p) { this.pendentesEnvio.delete(dados.id); clearTimeout(p.timer); p.resolver(dados); }
@@ -247,6 +249,9 @@ class SupervisorCanais {
   }
 
   qrAtual(canalId) { return this.qrs.get(canalId) || null; }
+
+  // Linha no Terminal do canal (usado pelo despachante de mensagens).
+  log(canalId, tipo, mensagem) { this._log(canalId, tipo, mensagem); }
 
   // Só para testes automáticos (provedor simulado).
   _comandoTeste(canalId, cmd, dados) { this.filhos.get(canalId)?.proc.send({ cmd, dados }); }

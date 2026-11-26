@@ -476,6 +476,19 @@
 .tlk-dir--entrada { color: var(--tlk-info); }
 .tlk-dir--saida   { color: var(--text-hi); }
 
+/* Etapa G11: selo "Teste" na grade de mensagens (origem: teste_tela) */
+.tlk-msg-previa-linha {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tlk-selo-teste {
+  font-size: 10px;
+  padding: 1px 7px;
+  line-height: 1.4;
+}
+
 /* ── Responsivo ──────────────────────────────────────────────────────── */
 @media (max-width: 960px) {
   .tlk-kpis {
