@@ -381,8 +381,8 @@
             </div>
             <div class="form-field">
               <label>Pedido de informação</label>
-              <select id="jade-devolucao" class="form-control"><option value="1">Sim, marca IA-INFORMACAO</option><option value="0">Não, sempre IA-RESPONDIDO</option></select>
-              <div class="form-hint">Quando o retorno é um pedido de evidências ao cliente, grava o status IA-INFORMACAO (o SoftExpert decide o caminho).</div>
+              <select id="jade-devolucao" class="form-control"><option value="1">Sim, marca IA-INFORMACAO</option><option value="0">Não, não publicar pedidos de informação</option></select>
+              <div class="form-hint">Quando ativado, pedidos de evidências seguem como IA-INFORMACAO. Quando desativado, esses pedidos não são publicados e ficam para a triagem.</div>
             </div>
           </section>
 
@@ -1224,7 +1224,7 @@
     const limite = Number(val('jade-limite').value);
     const somente = val('jade-somente').value.trim();
     const resumos = {
-      funcionamento: [texto('jade-modo'), val('jade-devolucao').value === '1' ? 'Marca IA-INFORMACAO se faltar informação' : 'Sempre IA-RESPONDIDO'],
+      funcionamento: [texto('jade-modo'), val('jade-devolucao').value === '1' ? 'Marca IA-INFORMACAO se faltar informação' : 'Não publica pedidos de informação'],
       ritmo: [`A cada ${val('jade-intervalo').value || '—'} min`, limite === 0 ? 'Sem limite diário' : `Até ${limite || '—'} por dia`, `${val('jade-paralelo').value || '—'} ao mesmo tempo`],
       integracao: [texto('jade-fonte'), `CDUSER ${val('jade-usuario').value || '—'}`, somente ? `Só: ${somente}` : 'Todos os chamados'],
       avisos: [`Sem PA: ${_nomesGruposAvisoJade('falha')}`, `Com PA: ${_nomesGruposAvisoJade('sucesso')}`],

@@ -132,12 +132,12 @@ Responda SOMENTE com um JSON válido, sem nada antes ou depois:
 {"decisao": "responder" | "devolver", "motivo": "frase curta, uso interno, explicando a decisão", "texto": "texto ao cliente"}
 
 Como decidir — a decisão é o tipo de conteúdo do texto e vai ao SoftExpert como status:
-- "responder": o texto é uma ORIENTAÇÃO PRELIMINAR (há evidência suficiente para indicar solução ou verificação concreta). Se faltar algo que ajudaria, peça no mesmo texto.
+- "responder": o texto é uma ORIENTAÇÃO PRELIMINAR (há evidência suficiente para indicar solução ou verificação concreta). Não peça informações, documentos ou retorno ao cliente; o consultor dará sequência.
 - "devolver": o texto é um PEDIDO DE EVIDÊNCIAS (sem base para indicar solução ou verificação concreta, o centro do texto é pedir ao cliente o que falta).
 Seja coerente: decisão e conteúdo nunca divergem.
 
 Escolha pela análise um dos dois tipos de conteúdo:
-- ORIENTAÇÃO PRELIMINAR: se existem evidências suficientes para orientar, apresente a possível solução ou verificação, as condições relevantes e como conferir o resultado. Se ainda houver dúvida, apresente-a como hipótese; não prometa que resolverá. Peça somente o que faltar caso os passos não resolvam.
+- ORIENTAÇÃO PRELIMINAR: se existem evidências suficientes para orientar, apresente a possível solução ou verificação, as condições relevantes e como conferir o resultado. Se ainda houver dúvida, apresente-a como hipótese; não prometa que resolverá. Não solicite informações, evidências ou retorno, mesmo se os passos não resolverem.
 - PEDIDO DE EVIDÊNCIAS: se não há informações suficientes para indicar uma solução ou verificação concreta com segurança, não invente uma causa ou procedimento. Explique brevemente o que falta para avançar e solicite as evidências mínimas e específicas deste chamado, considerando sua descrição, rotina, erro, anexos e o que já foi informado. Explique para que cada pedido servirá. Não peça novamente informação já disponível nem use uma lista genérica igual para todos os casos.
 Escolha o conteúdo de acordo com a análise, sem confundir ausência de histórico relacionado com ausência de evidências. Em ambos os casos use a abertura e o encerramento abaixo.
 
@@ -145,10 +145,10 @@ Como escrever — o campo do SoftExpert é TEXTO PURO: nada de markdown (#, **, 
 1. Comece exatamente com: "Olá! Em breve seu chamado será direcionado a um atendente. Enquanto isso, segue abaixo uma análise preliminar feita pela atendente de IA Jaade."
 2. Resuma o que o relato e os anexos disponíveis indicam, citando fatos concretos sem afirmar uma causa que não esteja demonstrada.
 3. Quando houver base para orientar, priorize passos específicos para resolver ou contornar e explique como verificar o resultado. Quando não houver, priorize o pedido de evidências específico, sem instruções técnicas inventadas.
-4. Peça somente o mínimo necessário para avançar; prefira um recorte pequeno e comparável a "envie tudo". Pode fazer uma pergunta direta quando ela acelerar a análise.
+4. Somente no pedido de evidências, peça o mínimo necessário para avançar.
 5. Ao pedir evidências, explique de forma cordial por que elas são necessárias para este caso.
 6. Títulos em MAIÚSCULAS numa linha própria são opcionais: use só se ajudarem a organizar um texto mais longo.
-7. Termine com "Ficamos no aguardo do seu retorno." e, na última linha, "Jaade, atendente de IA".
+7. Na orientação, termine com "Um consultor dará continuidade ao atendimento." No pedido de evidências, termine com "Ficamos no aguardo do seu retorno." Em ambos, na última linha, escreva "Jaade, atendente de IA".
 
 Regras:
 - Português do Brasil; tom de analista: cordial, seguro e direto, frases curtas, sem rodeios, sem repetir a mesma ideia e sem jargão interno do suporte.
@@ -470,10 +470,12 @@ async function gerarTextoCliente(empresaId, dados, { simularReferencias = false,
 }
 
 const SYSTEM_PROMPT_STATUS = `Você confere o tipo de um texto de suporte que será enviado a um cliente. Leia SOMENTE o texto e responda SOMENTE com um JSON válido:
-{"tipo": "orientacao" | "pedido_evidencias", "motivo": "frase curta citando o trecho que decidiu"}
+{"tipo": "orientacao" | "pedido_evidencias", "solicita_retorno": true | false, "motivo": "frase curta citando o trecho que decidiu"}
 
 - "orientacao": o texto indica ao cliente uma solução, um contorno ou uma verificação técnica concreta para resolver ou diagnosticar o problema (rotina, parâmetro, cadastro, configuração, permissão ou passo específico a conferir ou ajustar), mesmo que também peça alguma informação adicional.
 - "pedido_evidencias": o texto não traz solução, contorno nem verificação técnica concreta; seu objetivo principal é pedir ao cliente informações, evidências, mensagem de erro, prints, logs, exemplos ou detalhes para o atendimento poder avançar.
+
+Marque solicita_retorno como true se houver pedido ao cliente de informações, documentos, evidências ou resposta, inclusive condicional, ou indicação de que se aguarda seu retorno. Verificação técnica sem pedido de envio não é pedido de retorno.
 
 Pedir para o cliente observar ou informar algo ("verifique se aparece mensagem de erro", "nos envie o log", "informe se houve alteração recente") é pedido de evidências, não orientação. Hipóteses genéricas sem um passo concreto ("pode ser permissão ou configuração") também não são orientação.`;
 
@@ -487,8 +489,8 @@ async function conferirStatus(empresaId, texto) {
   const resultado = await aiProviderClient.chamarIA(keys, cfg, SYSTEM_PROMPT_STATUS, `Texto que será enviado ao cliente:\n"""\n${texto}\n"""`, [], { maxTokens: 300, timeoutMs: 60000 });
   const json = resultado.truncado ? null : _extrairJson(resultado.texto);
   const decisao = { orientacao: 'responder', pedido_evidencias: 'devolver' }[json?.tipo];
-  if (!decisao) throw new Error('A conferência do status não respondeu no formato esperado. Nada foi gravado.');
-  return { decisao, tipo: json.tipo, motivo: _limitar(json.motivo, 300), modelo: [resultado.provider, resultado.model].filter(Boolean).join(' · ') };
+  if (!decisao || typeof json.solicita_retorno !== 'boolean') throw new Error('A conferência do status não respondeu no formato esperado. Nada foi gravado.');
+  return { decisao, solicitaRetorno: json.solicita_retorno, tipo: json.tipo, motivo: _limitar(json.motivo, 300), modelo: [resultado.provider, resultado.model].filter(Boolean).join(' · ') };
 }
 
 // Trilha de auditoria (tela "fluxo" do chamado). Falha ao registrar nunca
@@ -592,21 +594,22 @@ async function processarExecucao(cfg, fonte, exec) {
     for (let versao = 1; versao <= 2; versao++) {
       gerado = await gerarTextoCliente(empresaId, { chamado, anexos, analise, fontes, referencias }, { aviso });
       conferencia = await conferirStatus(empresaId, gerado.texto);
-      if (conferencia.decisao === gerado.decisao) break;
-      divergencias.push(`Versão ${versao}: escrita como ${nome(gerado.decisao)}, lida como ${nome(conferencia.decisao)} (${conferencia.motivo})`);
-      aviso = `a versão anterior foi marcada como "${gerado.decisao}", mas o texto foi lido como ${nome(conferencia.decisao)}. Escolha o tipo de conteúdo pela análise e mantenha decisão e texto coerentes.`;
+      if (conferencia.decisao === gerado.decisao && !(gerado.decisao === 'responder' && conferencia.solicitaRetorno)) break;
+      divergencias.push(`Versão ${versao}: escrita como ${nome(gerado.decisao)}, lida como ${nome(conferencia.decisao)}${conferencia.solicitaRetorno && gerado.decisao === 'responder' ? ' com pedido de retorno ao cliente' : ''} (${conferencia.motivo})`);
+      aviso = `a versão anterior foi marcada como "${gerado.decisao}", mas o texto foi lido como ${nome(conferencia.decisao)}. Escolha o tipo de conteúdo pela análise e mantenha decisão e texto coerentes. Na orientação, não faça pedidos de informações ou retorno ao cliente.`;
     }
-    if (conferencia.decisao !== gerado.decisao) {
+    if (conferencia.decisao !== gerado.decisao || (gerado.decisao === 'responder' && conferencia.solicitaRetorno)) {
       throw Object.assign(new Error(`Status não confirmado: decisão e texto divergiram nas 2 versões (${divergencias.at(-1)}). Nada foi gravado.`),
         { recusas: [...gerado.recusas, ...divergencias] });
     }
     const recusas = [...gerado.recusas, ...divergencias];
-    // "Pedido de informação" desligado na tela: o pedido vai com o status IA-RESPONDIDO.
+    // Nunca publique pedido de evidências com status de atendimento.
+    if (gerado.decisao === 'devolver' && !cfg.devolucaoAtiva) throw new Error('Pedido de informação desativado: o retorno exige evidências e não pode ser enviado como IA-RESPONDIDO.');
     const devolver = gerado.decisao === 'devolver' && cfg.devolucaoAtiva;
-    const motivo = gerado.decisao === 'devolver' && !cfg.devolucaoAtiva ? `${gerado.motivo} (pedido de informação desligado: vai como IA-RESPONDIDO)` : gerado.motivo;
+    const motivo = gerado.motivo;
     _evento(exec, 'retorno', recusas.length ? 'aviso' : 'ok',
       `Retorno ao cliente escrito — status: ${devolver ? 'pedido de informação (IA-INFORMACAO)' : 'respondido (IA-RESPONDIDO)'}, conferido${recusas.length ? ` (${recusas.length} versão(ões) recusada(s) antes)` : ''}`,
-      { decisao: devolver ? 'Pedido de informação (IA-INFORMACAO)' : 'Respondido (IA-RESPONDIDO)', motivo, conferenciaStatus: `${conferencia.tipo} — ${conferencia.motivo} (${conferencia.modelo})`, referenciasAutorizadas: referencias.map(r => r.numero), referenciasSelecionadas: gerado.referenciasSelecionadas, modelo: [gerado.provider, gerado.model].filter(Boolean).join(' · '),
+      { regraSemPedido: 1, decisao: devolver ? 'Pedido de informação (IA-INFORMACAO)' : 'Respondido (IA-RESPONDIDO)', motivo, conferenciaStatus: `${conferencia.tipo} — ${conferencia.motivo} (${conferencia.modelo})`, referenciasAutorizadas: referencias.map(r => r.numero), referenciasSelecionadas: gerado.referenciasSelecionadas, modelo: [gerado.provider, gerado.model].filter(Boolean).join(' · '),
         recusas: recusas.length ? recusas : undefined, texto: gerado.texto });
     if (!(await _aindaElegivel(empresaId, fonte.id, exec.numeroChamado))) return descartar();
     if (cfg.modo !== 'publicar') _evento(exec, 'envio', 'info', 'Modo Simulação: o retorno não foi enviado ao SoftExpert.');
@@ -746,6 +749,15 @@ async function _publicar(cfg, fonte, exec) {
   if (chamado.fonteId !== fonte.id || (exec.chamadoId && chamado.id !== exec.chamadoId)) return _falhaDefinitiva(exec, 'A identidade do chamado mudou antes do envio.', 'envio');
   const fontes = fontesDaAnalise(empresaId, exec.atendimentoId, exec.mensagemAnaliseId);
   const textoCliente = String(exec.textoCliente || '');
+  // Textos preparados antes desta regra precisam de nova conferência antes do envio.
+  if (exec.decisao === 'responder') {
+    const eventos = repo.listarEventos(empresaId, exec.id);
+    const validado = eventos.some(e => e.etapa === 'retorno' && e.detalhes?.regraSemPedido === 1 && e.detalhes.decisao === 'Respondido (IA-RESPONDIDO)' && e.detalhes.texto === textoCliente);
+    if (!validado) {
+      const conferencia = await conferirStatus(empresaId, textoCliente);
+      if (conferencia.decisao !== 'responder' || conferencia.solicitaRetorno) return _falhaDefinitiva(exec, 'Retorno pendente contém pedido ao cliente ou não foi confirmado como orientação.', 'envio');
+    }
+  }
   // Retornos anteriormente enfileirados com qualquer bloco de referências
   // devem ser bloqueados também quando o número antes estava autorizado.
   if (textoCliente.includes(CABECALHO_REFERENCIAS) || /referências para consulta:/i.test(textoCliente)) return _falhaDefinitiva(exec, 'Citação automática de histórico suspensa.', 'envio');

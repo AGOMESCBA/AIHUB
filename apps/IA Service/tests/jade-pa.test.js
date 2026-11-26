@@ -90,6 +90,7 @@ const chamadasIA = [];
 // Conferência independente do status: por padrão concorda com a última decisão
 // escrita; `conferenciaStatus` força uma leitura (ex.: 'orientacao' sempre).
 let conferenciaStatus = null;
+let conferenciaSolicitaRetorno = null;
 let ultimaDecisao = null;
 const conferencias = [];
 stub('../backend/services/ai-provider-client', {
@@ -97,7 +98,8 @@ stub('../backend/services/ai-provider-client', {
     if (String(args[2]).startsWith('Você confere o tipo')) {
       conferencias.push(args[3]);
       const tipo = conferenciaStatus || (ultimaDecisao === 'devolver' ? 'pedido_evidencias' : 'orientacao');
-      return { texto: JSON.stringify({ tipo, motivo: 'leitura do teste' }), provider: 'teste', model: 'conferencia' };
+      const solicita = Array.isArray(conferenciaSolicitaRetorno) ? conferenciaSolicitaRetorno.shift() : conferenciaSolicitaRetorno;
+      return { texto: JSON.stringify({ tipo, solicita_retorno: solicita ?? (tipo === 'pedido_evidencias'), motivo: 'leitura do teste' }), provider: 'teste', model: 'conferencia' };
     }
     chamadasIA.push(args);
     const r = respostasIA.length ? respostasIA.shift() : null;
@@ -202,6 +204,7 @@ beforeEach(() => {
   chamadasIA.length = 0;
   conferencias.length = 0;
   conferenciaStatus = null;
+  conferenciaSolicitaRetorno = null;
   ultimaDecisao = null;
   comportamentoEnvio = 'ok';
   contratoDisponivel = true;
@@ -550,13 +553,14 @@ test('triagem atuou antes da Jaade: descartado sem análise', async () => {
   assert.equal(turnos.length, 0);
 });
 
-test('pedido de informação desligado vai como IA-RESPONDIDO; ligado mantém devolver', async () => {
-  await ligar({ devolucaoAtiva: false });
+test('pedido de informação desligado não é publicado; ligado mantém devolver', async () => {
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995', devolucaoAtiva: false });
   chamadoNaOrigem('037400');
   respostasIA = [DEVOLVER];
   await jade.executarCiclo(EMPRESA, fonte.id);
-  assert.equal(execs()[0].decisao, 'responder');
-  assert.match(execs()[0].motivo, /pedido de informação desligado: vai como IA-RESPONDIDO/);
+  assert.equal(execs()[0].estado, 'detectado');
+  assert.match(execs()[0].ultimoErro, /Pedido de informação desativado/);
+  assert.equal(envios.length, 0);
 
   getDB().prepare('DELETE FROM jade_pa_execucoes').run();
   await ligar({ devolucaoAtiva: true });
@@ -692,6 +696,44 @@ test('3 falhas de geração: falha com alerta e não volta a ser processado', as
   assert.equal(exec.estado, 'falha');
   assert.equal(exec.alerta, true);
   assert.equal(exec.tentativasGeracao, 3);
+});
+
+test('orientação com pedido ao cliente é reescrita e nunca publicada enquanto persistir', async () => {
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995' });
+  chamadoNaOrigem('037609');
+  conferenciaSolicitaRetorno = true;
+  respostasIA = [RESPOSTA_OK, RESPOSTA_OK];
+  await jade.executarCiclo(EMPRESA, fonte.id);
+  assert.equal(execs()[0].estado, 'detectado');
+  assert.equal(envios.length, 0);
+  assert.match(execs()[0].ultimoErro, /pedido de retorno ao cliente/);
+  assert.equal(conferencias.length, 2);
+});
+
+test('orientação mista é reescrita sem refazer a análise e publicada quando corrigida', async () => {
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995' });
+  chamadoNaOrigem('037608');
+  conferenciaSolicitaRetorno = [true, false];
+  respostasIA = [RESPOSTA_OK, RESPOSTA_OK];
+  await jade.executarCiclo(EMPRESA, fonte.id);
+  assert.equal(execs()[0].estado, 'devolvido');
+  assert.equal(turnos.length, 1);
+  assert.equal(conferencias.length, 2);
+  assert.match(chamadasIA[1][3], /não faça pedidos de informações ou retorno/);
+});
+
+test('texto antigo pendente com pedido não é publicado como respondido', async () => {
+  await ligar({ modo: 'simulacao' });
+  chamadoNaOrigem('037607');
+  respostasIA = [RESPOSTA_OK];
+  await jade.executarCiclo(EMPRESA, fonte.id);
+  repo.atualizar(execs()[0].id, { estado: 'pronto', textoCliente: 'Confira o parâmetro e envie o log.' });
+  conferenciaSolicitaRetorno = true;
+  await ligar({ modo: 'publicar', usuarioSoftexpert: '995' });
+  await jade.executarCiclo(EMPRESA, fonte.id, { forcar: true });
+  assert.equal(execs()[0].estado, 'falha');
+  assert.match(execs()[0].ultimoErro, /contém pedido ao cliente/);
+  assert.equal(envios.length, 0);
 });
 
 test('status conferido: texto lido como pedido de evidências com decisão "responder" nunca é gravado; 3 divergências = alerta', async () => {
