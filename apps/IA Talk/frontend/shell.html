@@ -42,6 +42,16 @@
     .tlk-icone-btn svg { width:17px; height:17px; }
     .tlk-faixa-simulado { background:var(--tlk-aviso-bg); color:var(--tlk-aviso); font-size:12px; font-weight:700; text-align:center; padding:4px 12px; }
     .tlk-faixa-simulado[hidden] { display:none; }
+    /* Botões do cabeçalho: mesmo padrão do IA Command (.shell-nav-btn), com a cor do IA Talk. */
+    .tlk-acoes { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+    .shell-nav-btn { height:34px; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:0 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-hi); font-size:13px; font-weight:800; text-decoration:none; white-space:nowrap; transition:border-color .15s, background .15s, color .15s, transform .15s; }
+    .shell-nav-btn[hidden] { display:none; }
+    .shell-nav-btn:hover { border-color:var(--accent); background:var(--accent-glow); color:var(--accent); transform:translateY(-1px); }
+    .shell-nav-btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; box-shadow:0 8px 18px var(--accent-glow); }
+    .shell-nav-btn.primary:hover { filter:brightness(.92); color:#fff; }
+    .tlk-topbar .topbar-title { display:flex; align-items:baseline; gap:4px; }
+    .tlk-topbar .topbar-user { font-weight:500; color:var(--text-md); font-size:13px; overflow:hidden; text-overflow:ellipsis; }
+    @media (max-width: 760px) { .shell-nav-btn span, .tlk-topbar .topbar-user { display:none; } }
   </style>
 </head>
 <body>
@@ -67,11 +77,22 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
       <button class="inicio-home" type="button" onclick="window.mostrarInicio()" title="Início" aria-label="Início"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V21h13V9.5"/><path d="M9.5 21v-7h5v7"/></svg></button>
-      <span class="topbar-title" id="shell-title">Início</span>
-      <button class="tlk-icone-btn" type="button" id="btn-tema" title="Alternar tema claro/escuro" aria-label="Alternar tema claro ou escuro">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-      </button>
-      <button class="tlk-empresa" type="button" id="btn-empresa" aria-haspopup="true" aria-expanded="false" hidden></button>
+      <!-- Cabeçalho igual ao do IA Command: título + usuário · IAHub · Guia · tema · empresa -->
+      <span class="topbar-title"><span id="shell-title">Início</span><span class="topbar-user" id="shell-usuario"></span></span>
+      <div class="tlk-acoes">
+        <a class="shell-nav-btn" id="btn-iahub" href="/iahub.html" title="Voltar ao IAHub" hidden>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+          <span>IAHub</span>
+        </a>
+        <a class="shell-nav-btn primary" id="_guia-btn" href="/app/ia-talk/guia.html" target="_blank" rel="noopener" title="Guia de uso">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"/></svg>
+          <span>Guia</span>
+        </a>
+        <button class="tlk-icone-btn" type="button" id="btn-tema" title="Alternar tema claro/escuro" aria-label="Alternar tema claro ou escuro">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <button class="tlk-empresa" type="button" id="btn-empresa" aria-haspopup="true" aria-expanded="false" hidden></button>
+      </div>
       <div class="tlk-menu-empresas" id="menu-empresas" role="menu" hidden></div>
     </div>
 
@@ -149,6 +170,9 @@
       window._talkSessao = sessao;
       TalkMenu.iniciar(sessao.rotinas);
       montarEmpresa(sessao);
+      $('shell-usuario').textContent = sessao.usuario?.nome ? ` - ${sessao.usuario.nome}` : '';
+      // Voltar ao IAHub: só para quem entrou pelo card (cliente externo não tem IAHub).
+      $('btn-iahub').hidden = !(sessao.origem === 'hub' || sessao.usuario?.administrador_plataforma);
       $('vazio-titulo').textContent = 'Nenhuma rotina aberta';
       $('vazio-sub').textContent = 'Escolha uma opção no menu lateral para começar.';
       // Abre na tela Início (cards do menu já filtrado pelas rotinas desta pessoa nesta empresa).

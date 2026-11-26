@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Guia de uso · IA Talk</title>
+  <script src="/app/ia-talk/js/talk-ui.js"></script>
+  <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
+  <style>
+    body { background: var(--bg-base); }
+    .guia { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 32px; max-width: 1180px; margin: 0 auto; padding: 28px max(16px, env(safe-area-inset-right, 0px)) 60px max(16px, env(safe-area-inset-left, 0px)); }
+    .guia-indice { position: sticky; top: 20px; align-self: start; font-size: 13px; }
+    .guia-indice b { display: block; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--text-lo); margin-bottom: 8px; }
+    .guia-indice a { display: block; padding: 5px 10px; color: var(--text-md); text-decoration: none; border-left: 2px solid var(--border); }
+    .guia-indice a:hover, .guia-indice a:focus-visible { color: var(--accent); border-left-color: var(--accent); outline: none; }
+    .guia-topo { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+    .guia-logo { width: 44px; height: 44px; border-radius: 12px; background: var(--talk-gradiente); display: grid; place-items: center; flex: none; }
+    .guia-logo svg { width: 24px; height: 24px; stroke: #fff; }
+    .guia h1 { margin: 0; font-size: 26px; color: var(--text-hi); }
+    .guia .sub { color: var(--text-md); margin: 2px 0 0; }
+    .guia section { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 22px; margin-top: 16px; box-shadow: var(--shadow-sm); scroll-margin-top: 16px; }
+    .guia h2 { margin: 0 0 8px; font-size: 17px; color: var(--text-hi); }
+    .guia p, .guia li { color: var(--text-md); line-height: 1.6; max-width: 78ch; font-size: 14px; }
+    .guia ol, .guia ul { padding-left: 20px; margin: 6px 0; }
+    .guia strong { color: var(--text-hi); }
+    .guia code { background: var(--bg-hover); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+    .guia .dica { border-left: 3px solid var(--accent); background: var(--accent-glow); padding: 10px 14px; border-radius: 6px; margin-top: 10px; color: var(--text-hi); font-size: 13.5px; }
+    .guia .aviso { border-left: 3px solid var(--warning); background: var(--tlk-aviso-bg); padding: 10px 14px; border-radius: 6px; margin-top: 10px; color: var(--tlk-aviso); font-size: 13.5px; }
+    @media (max-width: 860px) { .guia { grid-template-columns: minmax(0, 1fr); } .guia-indice { display: none; } }
+  </style>
+</head>
+<body>
+<div class="guia">
+  <nav class="guia-indice" aria-label="Índice do guia">
+    <b>Neste guia</b>
+    <a href="#o-que-e">O que é o IA Talk</a>
+    <a href="#entrar">Como entrar</a>
+    <a href="#inicio">Início e menu</a>
+    <a href="#canais">Canais de WhatsApp</a>
+    <a href="#teste">Modo de teste</a>
+    <a href="#aplicacoes">Aplicações e tokens</a>
+    <a href="#usuarios">Usuários e papéis</a>
+    <a href="#configuracoes">Configurações</a>
+    <a href="#auditoria">Auditoria</a>
+    <a href="#ajuda">Problemas comuns</a>
+  </nav>
+
+  <main>
+    <div class="guia-topo">
+      <div class="guia-logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14h4.5"/></svg></div>
+      <div><h1>Guia de uso do IA Talk</h1><p class="sub">Conectando empresas e clientes em um só lugar</p></div>
+    </div>
+
+    <section id="o-que-e">
+      <h2>O que é o IA Talk</h2>
+      <p>O IA Talk conecta os números de WhatsApp da empresa aos sistemas que enviam e recebem mensagens (IA Command, IA Service, alertas e sistemas de clientes). Cada empresa vê só os próprios canais, usuários, aplicações e registros.</p>
+      <p>Hoje o produto está na <strong>Fase 1</strong>: canais, envio e recebimento pelos sistemas, histórico e monitoramento. A central de atendimento com setores e filas é a Fase 2.</p>
+    </section>
+
+    <section id="entrar">
+      <h2>Como entrar</h2>
+      <ul>
+        <li><strong>Pelo IAHub:</strong> na tela de sistemas, clique no card <strong>IA Talk</strong>. Você entra direto na empresa selecionada no IAHub, com as permissões liberadas na IA Gestão.</li>
+        <li><strong>Pelo link da empresa:</strong> abra <code>/app/ia-talk/apelido-da-empresa</code>, informe o celular e digite o código de 6 dígitos que chega pelo WhatsApp (ou pelo e-mail de reserva). Não existe senha.</li>
+      </ul>
+      <div class="dica">O código vale por 5 minutos e só pode ser usado uma vez. Depois de 5 tentativas erradas, peça um novo.</div>
+    </section>
+
+    <section id="inicio">
+      <h2>Início e menu</h2>
+      <p>A tela <strong>Início</strong> mostra em cards todas as rotinas que você pode usar nesta empresa. Clique num card para abri-lo numa aba; várias abas podem ficar abertas ao mesmo tempo. O botão com a casinha volta para o Início.</p>
+      <p>No topo: <strong>IAHub</strong> volta para a tela de sistemas, <strong>Guia</strong> abre este guia, a lua alterna o tema claro/escuro e o botão da empresa troca a empresa ativa (quando você tem acesso a mais de uma).</p>
+      <div class="dica">Só aparecem as rotinas liberadas para você. Se faltar alguma, peça ao administrador para liberar em IA Gestão › Usuários › Permissões (grupo IA Talk).</div>
+    </section>
+
+    <section id="canais">
+      <h2>Canais de WhatsApp</h2>
+      <p>Um canal é um número de WhatsApp. O IA Talk entra no número como <strong>mais um aparelho conectado</strong>, sem desconectar o celular nem outros sistemas que já usam o número.</p>
+      <ol>
+        <li>Em <strong>Canais</strong>, clique em <strong>+ Novo canal</strong>, dê um nome e escolha <strong>WhatsApp Web</strong>.</li>
+        <li>Abra o canal e clique em <strong>Conectar</strong>. Um QR Code aparece em alguns segundos.</li>
+        <li>No celular do número: <strong>WhatsApp › Aparelhos conectados › Conectar aparelho</strong> e aponte para o QR.</li>
+        <li>O estado muda para <strong>Conectado</strong>. A aba <strong>Terminal ao vivo</strong> mostra o que acontece no canal.</li>
+      </ol>
+      <p><strong>Desconectar</strong> para o canal e mantém a sessão salva. <strong>Limpar sessão</strong> apaga a conexão: o celular terá de ler um novo QR (e você pode remover o aparelho "IA Talk" da lista do celular).</p>
+      <div class="aviso">O WhatsApp aceita no máximo 4 aparelhos conectados por número. Confira no celular antes de conectar.</div>
+    </section>
+
+    <section id="teste">
+      <h2>Modo de teste</h2>
+      <p>Todo canal novo nasce em <strong>modo de teste</strong>: o IA Talk só registra mensagens dos números de teste cadastrados para o canal e <strong>não responde ninguém</strong>. Das demais mensagens fica só a contagem, sem o conteúdo.</p>
+      <p>A lista de teste é ajustada pela administração da plataforma.</p>
+    </section>
+
+    <section id="aplicacoes">
+      <h2>Aplicações e tokens</h2>
+      <p>Cada sistema que envia ou recebe mensagens pelo IA Talk é uma <strong>aplicação</strong>, com os canais que pode usar e o que pode fazer (escopos).</p>
+      <ul>
+        <li><strong>Gerar token:</strong> o token aparece <strong>uma única vez</strong>. Copie e guarde no sistema que vai usá-lo.</li>
+        <li><strong>Trocar o token sem parar o sistema:</strong> gere um novo, atualize o sistema e só então revogue o antigo.</li>
+        <li><strong>Webhook:</strong> endereço que recebe os avisos do IA Talk. O segredo também aparece uma única vez.</li>
+      </ul>
+    </section>
+
+    <section id="usuarios">
+      <h2>Usuários e papéis</h2>
+      <p>Cadastre quem acessa a empresa pelo celular e escolha o papel: <strong>Administrador da empresa</strong>, <strong>Supervisor</strong>, <strong>Atendente</strong> ou <strong>Auditor</strong>. Inativar um usuário ou mudar o papel encerra as sessões abertas dele na hora.</p>
+      <p>Para quem entra pelo IAHub, as permissões vêm da IA Gestão.</p>
+    </section>
+
+    <section id="configuracoes">
+      <h2>Configurações</h2>
+      <ul>
+        <li><strong>Link de entrada:</strong> o endereço da empresa para entrar pelo celular.</li>
+        <li><strong>Sites autorizados:</strong> endereços que podem abrir o IA Talk dentro de outro sistema (iframe).</li>
+        <li><strong>E-mail de envio:</strong> conta que manda o código de acesso quando o WhatsApp não consegue. Use <strong>Testar</strong> para conferir servidor, porta, login e envio.</li>
+      </ul>
+    </section>
+
+    <section id="auditoria">
+      <h2>Auditoria</h2>
+      <p>Registra quem fez o quê: entradas, cadastros, tokens gerados e revogados, conexões de canal e alterações de configuração. Números e IPs aparecem mascarados.</p>
+    </section>
+
+    <section id="ajuda">
+      <h2>Problemas comuns</h2>
+      <ul>
+        <li><strong>"Sua sessão terminou":</strong> após 8 horas sem uso (ou 7 dias no total) é preciso entrar de novo.</li>
+        <li><strong>Não chegou o código:</strong> confira o celular cadastrado; o código pode ter ido para o e-mail de reserva (a tela avisa).</li>
+        <li><strong>QR Code expirou:</strong> clique em <strong>Novo QR</strong>.</li>
+        <li><strong>Canal "Reconectando":</strong> o IA Talk tenta de novo sozinho, com espera crescente. Se virar "Erro", clique em <strong>Reconectar</strong>.</li>
+        <li><strong>Falta uma rotina no menu:</strong> peça a liberação ao administrador (IA Gestão › Usuários › Permissões).</li>
+      </ul>
+    </section>
+  </main>
+</div>
+</body>
+</html>
