@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Eventos e webhooks · IA Talk</title>
+  <!-- Etapa G3 — Eventos e webhooks (docs/contratos.md §5).
+       Tela modelo: frontend/empresas.html e Histórico de Interpretações (IA Command).
+       Detalhe exibe linha do tempo de tentativas, corpo JSON enviado e ação Reentregar. -->
+  <script src="/app/ia-talk/js/talk-ui.js"></script>
+  <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g3.css">
+</head>
+<body class="tlk-pagina">
+<main class="tlk-conteudo">
+
+  <!-- ── Lista ──────────────────────────────────────────────────────── -->
+  <section id="vista-lista" aria-labelledby="titulo-lista">
+    <div class="head-row">
+      <div>
+        <div class="page-kicker">Operação</div>
+        <h1 class="head-title" id="titulo-lista">Eventos e webhooks <span class="head-count" id="contador" aria-live="polite"></span></h1>
+      </div>
+      <div class="head-actions">
+        <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
+      </div>
+    </div>
+    <p class="head-sub">Acompanhe os eventos enviados aos webhooks das aplicações conectadas, inspecione cada tentativa HTTP e solicite reentrega quando necessário.</p>
+
+    <div class="filter-bar">
+      <form class="filter-bar-row" id="filtros" role="search">
+        <label class="sr-only" for="f-busca">Buscar</label>
+        <input class="form-control tlk-busca" id="f-busca" name="busca" type="search" placeholder="Buscar por ID ou tipo de evento" autocomplete="off">
+
+        <label class="sr-only" for="f-situacao">Situação</label>
+        <select class="form-control" id="f-situacao" name="situacao">
+          <option value="">Todas as situações</option>
+          <option value="pendente">Pendente</option>
+          <option value="entregue">Entregue</option>
+          <option value="falhando">Falhando</option>
+          <option value="esgotado">Esgotado</option>
+        </select>
+
+        <label class="sr-only" for="f-tipo">Tipo de evento</label>
+        <select class="form-control" id="f-tipo" name="tipo">
+          <option value="">Todos os tipos</option>
+          <option value="mensagem.recebida">mensagem.recebida</option>
+          <option value="mensagem.estado_alterado">mensagem.estado_alterado</option>
+          <option value="canal.estado_alterado">canal.estado_alterado</option>
+        </select>
+
+        <label class="sr-only" for="f-aplicacao">Aplicação</label>
+        <select class="form-control" id="f-aplicacao" name="aplicacao_id">
+          <option value="">Todas as aplicações</option>
+        </select>
+
+        <div class="tlk-filtro-par">
+          <label for="f-de">De</label>
+          <input class="form-control" id="f-de" name="de" type="date">
+        </div>
+        <div class="tlk-filtro-par">
+          <label for="f-ate">Até</label>
+          <input class="form-control" id="f-ate" name="ate" type="date">
+        </div>
+
+        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area">+ Mostrar agrupamento</button>
+        <span class="grupo-status" id="grupo-status">Sem agrupamento ativo</span>
+      </form>
+
+      <div class="grupo-area" id="grupo-area">
+        <div class="gp-chips-row" id="gp-chips"><span class="gp-label">Agrupar por:</span></div>
+        <div id="dz"></div>
+      </div>
+    </div>
+
+    <div class="grade">
+      <div id="estado-lista" hidden></div>
+      <div id="tabela"></div>
+      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais">Carregar mais</button></div>
+    </div>
+  </section>
+
+  <!-- ── Detalhe em página ──────────────────────────────────────────── -->
+  <section id="vista-detalhe" hidden aria-labelledby="titulo-detalhe">
+    <div class="editor-bar">
+      <div class="editor-title">
+        <div class="tlk-titulo-linha">
+          <strong id="titulo-detalhe">Evento</strong>
+          <span id="detalhe-pill"></span>
+        </div>
+        <span id="sub-detalhe"></span>
+      </div>
+      <button class="btn btn-ghost" type="button" id="btn-voltar">← Voltar à lista</button>
+    </div>
+
+    <div class="tlk-cartao">
+      <div id="estado-detalhe" hidden></div>
+      <div class="tlk-detalhe-corpo" id="corpo-detalhe" hidden>
+        <div class="meta-grid" id="meta-evento"></div>
+
+        <div>
+          <h2 class="tlk-detalhe-secao-titulo">Linha do tempo de tentativas</h2>
+          <ol class="tlk-timeline" id="lista-tentativas"></ol>
+        </div>
+
+        <div class="tlk-acoes-barra" id="acoes-evento">
+          <button class="btn btn-primary" type="button" id="btn-reentregar">Reentregar evento</button>
+        </div>
+
+        <div class="tlk-confirm-inline" id="confirm-reentregar" role="region" aria-live="polite" hidden>
+          <div class="tlk-confirm-titulo">Confirmar nova entrega do webhook</div>
+          <p class="tlk-confirm-texto">O evento voltará para a situação <strong>Pendente</strong> e será reenviado para o endereço de webhook configurado na aplicação. O sistema destinatário deve tratar o mesmo <code>id</code> de forma idempotente.</p>
+          <div class="tlk-confirm-acoes">
+            <button class="btn btn-ghost" type="button" id="btn-confirm-cancelar">Cancelar</button>
+            <button class="btn btn-primary" type="button" id="btn-confirm-executar">Confirmar reentrega</button>
+          </div>
+        </div>
+
+        <div>
+          <h2 class="tlk-detalhe-secao-titulo">Corpo enviado (JSON)</h2>
+          <pre class="tlk-pre" id="detalhe-corpo"></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/app/ia-talk/ui/js/grid-group-panel.js"></script>
+<script src="/app/ia-talk/js/talk-api.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const { esc, pill, dataHora } = TalkUI;
+
+  let tabela = null;
+  let painelGrupo = null;
+  let proximoCursor = null;
+  let total = 0;
+  let atual = null;
+
+  function achatar(e) {
+    return {
+      ...e,
+      aplicacao_nome: e.aplicacao?.nome || '—',
+      situacao: e.entrega?.situacao || 'pendente',
+      tentativas: e.entrega?.tentativas ?? 0,
+      ultimo_status_http: e.entrega?.ultimo_status_http ?? null,
+      proxima_tentativa_em: e.entrega?.proxima_tentativa_em || null,
+    };
+  }
+
+  function pillHttp(status) {
+    if (status === null || status === undefined) return '<span class="tlk-pill tlk-pill--neutro">Sem resposta</span>';
+    const n = Number(status);
+    const cor = n >= 200 && n < 300 ? 'ok' : n >= 400 ? 'erro' : 'aviso';
+    return `<span class="tlk-pill tlk-pill--${cor}">HTTP ${esc(n)}</span>`;
+  }
+
+  function filtrosAtuais() {
+    return {
+      busca: $('f-busca').value.trim(),
+      situacao: $('f-situacao').value,
+      tipo: $('f-tipo').value,
+      aplicacao_id: $('f-aplicacao').value,
+      de: $('f-de').value,
+      ate: $('f-ate').value,
+      limite: 50,
+    };
+  }
+
+  function lerFiltrosDaUrl() {
+    const q = new URLSearchParams(location.search);
+    if (q.get('busca')) $('f-busca').value = q.get('busca');
+    if (q.get('situacao')) $('f-situacao').value = q.get('situacao');
+    if (q.get('tipo')) $('f-tipo').value = q.get('tipo');
+    if (q.get('de')) $('f-de').value = q.get('de');
+    if (q.get('ate')) $('f-ate').value = q.get('ate');
+    return { aplicacaoId: q.get('aplicacao_id') || '', abrirId: q.get('id') || '' };
+  }
+
+  async function carregarAplicacoes(appInicial) {
+    const resp = await TalkApi.get('/aplicacoes', { limite: 100 }).catch(() => ({ itens: [] }));
+    const sel = $('f-aplicacao');
+    for (const a of resp?.itens || []) {
+      const opt = document.createElement('option');
+      opt.value = a.id;
+      opt.textContent = a.nome;
+      sel.appendChild(opt);
+    }
+    if (appInicial) sel.value = appInicial;
+  }
+
+  function criarTabela() {
+    painelGrupo = createGroupPanel({
+      chipsRowId: 'gp-chips', dropZoneId: 'dz', storageKey: 'talk_eventos_grupo', getTable: () => tabela,
+      onChange: (campos) => { $('grupo-status').textContent = campos.length ? `${campos.length} campo(s) agrupado(s)` : 'Sem agrupamento ativo'; },
+    });
+    tabela = new Tabulator('#tabela', {
+      layout: 'fitDataFill', movableColumns: true, index: 'id', height: 'calc(100vh - 300px)',
+      responsiveLayout: 'collapse', responsiveLayoutCollapseStartOpen: false,
+      placeholder: 'Nenhum evento com estes filtros.',
+      groupBy: painelGrupo.getActiveFields(), groupStartOpen: true,
+      rowFormatter: (row) => row.getElement().classList.add('clicavel'),
+      columns: [
+        { formatter: 'responsiveCollapse', width: 34, minWidth: 34, hozAlign: 'center', headerSort: false, resizable: false, groupable: false, responsive: 0 },
+        {
+          title: 'Evento', field: 'tipo', minWidth: 205, cssClass: 'tlk-forte', responsive: 0,
+          formatter: (c) => {
+            const d = c.getRow().getData();
+            return `<div><code style="font-size:12px">${esc(d.tipo)}</code></div><div style="font-size:11.5px;font-weight:500;color:var(--text-lo);font-family:var(--font-mono)">${esc(d.id)}</div>`;
+          },
+        },
+        { title: 'Situação', field: 'situacao', width: 112, formatter: (c) => pill(c.getValue()), responsive: 0 },
+        { title: 'Aplicação', field: 'aplicacao_nome', minWidth: 130, responsive: 1 },
+        { title: 'Tentativas', field: 'tentativas', width: 105, hozAlign: 'right', responsive: 2 },
+        { title: 'Último HTTP', field: 'ultimo_status_http', width: 125, formatter: (c) => pillHttp(c.getValue()), responsive: 2 },
+        { title: 'Ocorrido em', field: 'em', width: 145, formatter: (c) => dataHora(c.getValue()), sorter: 'string', responsive: 1 },
+      ],
+    });
+    tabela.on('tableBuilt', () => { painelGrupo.refresh(); painelGrupo.applyToTable(); });
+    tabela.on('rowClick', (_e, row) => abrirDetalhe(row.getData().id));
+  }
+
+  async function carregar({ continuar = false } = {}) {
+    const estado = $('estado-lista');
+    if (!continuar) {
+      proximoCursor = null;
+      $('tabela').hidden = true;
+      $('mais').hidden = true;
+      TalkUI.estado(estado, 'carregando', { titulo: 'Carregando eventos…' });
+    }
+    try {
+      const params = filtrosAtuais();
+      if (continuar && proximoCursor) params.cursor = proximoCursor;
+      const pagina = await TalkApi.get('/eventos', params);
+      const linhas = (pagina.itens || []).map(achatar);
+      total = pagina.total ?? linhas.length;
+      proximoCursor = pagina.proximo_cursor || null;
+      $('contador').textContent = total ? `(${total})` : '';
+      $('mais').hidden = !proximoCursor;
+
+      if (!continuar && !linhas.length) {
+        $('tabela').hidden = true;
+        TalkUI.estado(estado, 'vazio', {
+          titulo: 'Nenhum evento encontrado',
+          texto: 'Nenhum evento de webhook corresponde aos filtros selecionados.',
+        });
+        return;
+      }
+      estado.hidden = true;
+      $('tabela').hidden = false;
+      if (continuar) await tabela.addData(linhas);
+      else await tabela.setData(linhas);
+    } catch (err) {
+      $('tabela').hidden = true;
+      $('mais').hidden = true;
+      TalkUI.estadoDoErro(estado, err, () => carregar({ continuar }));
+    }
+  }
+
+  function mostrarLista() {
+    $('vista-detalhe').hidden = true;
+    $('vista-lista').hidden = false;
+    $('confirm-reentregar').hidden = true;
+    atual = null;
+  }
+
+  function renderizarDetalhe(e) {
+    atual = e;
+    const sit = e.entrega?.situacao || 'pendente';
+    $('titulo-detalhe').textContent = e.tipo || e.id;
+    $('detalhe-pill').innerHTML = pill(sit);
+    $('sub-detalhe').textContent = `${e.id} · ${e.aplicacao?.nome || '—'} · ${dataHora(e.em)}`;
+
+    $('meta-evento').innerHTML = [
+      ['ID do evento', `<code class="tlk-mono">${esc(e.id)}</code>`],
+      ['Tipo', `<code>${esc(e.tipo)}</code>`],
+      ['Aplicação', esc(e.aplicacao?.nome || '—')],
+      ['Situação', pill(sit)],
+      ['Tentativas', esc(e.entrega?.tentativas ?? 0)],
+      ['Último HTTP', pillHttp(e.entrega?.ultimo_status_http)],
+      ['Ocorrido em', esc(dataHora(e.em))],
+      ['Próxima tentativa', esc(e.entrega?.proxima_tentativa_em ? dataHora(e.entrega.proxima_tentativa_em) : '—')],
+    ].map(([rot, val]) => `<div class="meta-item"><span>${esc(rot)}</span><strong>${val}</strong></div>`).join('');
+
+    const tentativas = Array.isArray(e.tentativas) ? e.tentativas : [];
+    $('lista-tentativas').innerHTML = tentativas.length
+      ? tentativas.map((t, idx) => {
+          const ok = Number(t.status_http) >= 200 && Number(t.status_http) < 300;
+          const dot = t.status_http == null ? 'neutro' : ok ? 'ok' : 'erro';
+          return `<li class="tlk-timeline-item">
+            <span class="tlk-timeline-dot tlk-timeline-dot--${dot}" aria-hidden="true"></span>
+            <div class="tlk-timeline-head">
+              <strong>Tentativa #${idx + 1}</strong>
+              ${pillHttp(t.status_http)}
+              <span class="tlk-timeline-hora">${esc(dataHora(t.em))}</span>
+            </div>
+            <div class="tlk-timeline-detalhe">Duração da resposta: ${esc(t.duracao_ms ?? '—')} ms</div>
+          </li>`;
+        }).join('')
+      : '<li class="tlk-timeline-item"><div class="tlk-timeline-detalhe">Nenhuma tentativa executada ainda.</div></li>';
+
+    $('detalhe-corpo').textContent = JSON.stringify(e.corpo ?? {}, null, 2);
+    $('confirm-reentregar').hidden = true;
+  }
+
+  async function abrirDetalhe(id) {
+    $('vista-lista').hidden = true;
+    $('vista-detalhe').hidden = false;
+    $('corpo-detalhe').hidden = true;
+    $('titulo-detalhe').textContent = id;
+    $('detalhe-pill').innerHTML = '';
+    $('sub-detalhe').textContent = '';
+    TalkUI.estado($('estado-detalhe'), 'carregando', { titulo: 'Carregando detalhes do evento…' });
+    try {
+      const e = await TalkApi.get(`/eventos/${encodeURIComponent(id)}`);
+      $('estado-detalhe').hidden = true;
+      $('corpo-detalhe').hidden = false;
+      renderizarDetalhe(e);
+    } catch (err) {
+      TalkUI.estadoDoErro($('estado-detalhe'), err, () => abrirDetalhe(id));
+    }
+  }
+
+  async function confirmarReentrega() {
+    if (!atual) return;
+    const btn = $('btn-confirm-executar');
+    btn.disabled = true;
+    try {
+      const atualizado = await TalkApi.post(`/eventos/${encodeURIComponent(atual.id)}/reentregar`, {});
+      const completo = { ...atual, ...atualizado, entrega: atualizado.entrega || atual.entrega };
+      renderizarDetalhe(completo);
+      if (tabela) {
+        const linha = tabela.getRow(completo.id);
+        if (linha) linha.update(achatar(completo));
+      }
+      TalkUI.toast('Evento recolocado na fila para reentrega.', 'ok');
+    } catch (err) {
+      TalkUI.toast(err?.message || 'Não foi possível solicitar a reentrega.', 'erro');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  let timerBusca = null;
+  $('f-busca').addEventListener('input', () => { clearTimeout(timerBusca); timerBusca = setTimeout(() => carregar(), 240); });
+  ['f-situacao', 'f-tipo', 'f-aplicacao', 'f-de', 'f-ate'].forEach((id) => $(id).addEventListener('change', () => carregar()));
+  $('filtros').addEventListener('submit', (e) => { e.preventDefault(); carregar(); });
+
+  $('btn-agrupar').addEventListener('click', () => {
+    const aberto = $('grupo-area').classList.toggle('open');
+    $('btn-agrupar').setAttribute('aria-expanded', String(aberto));
+    $('btn-agrupar').textContent = aberto ? '− Ocultar agrupamento' : '+ Mostrar agrupamento';
+  });
+
+  $('btn-atualizar').addEventListener('click', () => carregar());
+  $('btn-mais').addEventListener('click', () => carregar({ continuar: true }));
+  $('btn-voltar').addEventListener('click', mostrarLista);
+  $('btn-reentregar').addEventListener('click', () => { $('confirm-reentregar').hidden = false; $('btn-confirm-executar').focus(); });
+  $('btn-confirm-cancelar').addEventListener('click', () => { $('confirm-reentregar').hidden = true; });
+  $('btn-confirm-executar').addEventListener('click', confirmarReentrega);
+
+  (async function iniciar() {
+    const { aplicacaoId, abrirId } = lerFiltrosDaUrl();
+    $('tabela').hidden = true;
+    TalkUI.estado($('estado-lista'), 'carregando', { titulo: 'Carregando eventos…' });
+    criarTabela();
+    await carregarAplicacoes(aplicacaoId);
+    await carregar();
+    if (abrirId) abrirDetalhe(abrirId);
+  })();
+})();
+</script>
+</body>
+</html>

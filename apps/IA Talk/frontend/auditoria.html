@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Auditoria · IA Talk</title>
+  <!-- Etapa G3 — Auditoria (docs/contratos.md §5; backend real já pronto em GET /auditoria).
+       Tela modelo: frontend/empresas.html + referências admin-auditoria.html (IA Command)
+       e historico-acessos.html (IA Service). Somente leitura, sem modal. -->
+  <script src="/app/ia-talk/js/talk-ui.js"></script>
+  <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g3.css">
+</head>
+<body class="tlk-pagina">
+<main class="tlk-conteudo">
+
+  <!-- ── Lista ──────────────────────────────────────────────────────── -->
+  <section id="vista-lista" aria-labelledby="titulo-lista">
+    <div class="head-row">
+      <div>
+        <div class="page-kicker">Administração da empresa</div>
+        <h1 class="head-title" id="titulo-lista">Auditoria <span class="head-count" id="contador" aria-live="polite"></span></h1>
+      </div>
+      <div class="head-actions">
+        <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
+      </div>
+    </div>
+    <p class="head-sub">Registro imutável de acessos e alterações realizadas na empresa ativa. Endereços IP são exibidos sempre mascarados.</p>
+
+    <div class="filter-bar">
+      <form class="filter-bar-row" id="filtros" role="search">
+        <label class="sr-only" for="f-busca">Buscar</label>
+        <input class="form-control tlk-busca" id="f-busca" name="busca" type="search" placeholder="Buscar por resumo, ação ou usuário" autocomplete="off">
+
+        <label class="sr-only" for="f-acao">Tipo de ação</label>
+        <select class="form-control" id="f-acao" name="acao">
+          <option value="">Todas as ações</option>
+          <option value="login">Acessos (login)</option>
+          <option value="usuario.">Usuários (usuario.*)</option>
+          <option value="aplicacao.">Aplicações e tokens (aplicacao.*)</option>
+          <option value="canal.">Canais (canal.*)</option>
+          <option value="sites_autorizados.">Sites autorizados</option>
+          <option value="email_envio.">E-mail de envio</option>
+          <option value="empresa.">Empresa (empresa.*)</option>
+        </select>
+
+        <label class="sr-only" for="f-usuario">Usuário</label>
+        <select class="form-control" id="f-usuario" name="usuario_id">
+          <option value="">Todos os usuários</option>
+        </select>
+
+        <div class="tlk-filtro-par">
+          <label for="f-de">De</label>
+          <input class="form-control" id="f-de" name="de" type="date">
+        </div>
+        <div class="tlk-filtro-par">
+          <label for="f-ate">Até</label>
+          <input class="form-control" id="f-ate" name="ate" type="date">
+        </div>
+
+        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area">+ Mostrar agrupamento</button>
+        <span class="grupo-status" id="grupo-status">Sem agrupamento ativo</span>
+      </form>
+
+      <div class="grupo-area" id="grupo-area">
+        <div class="gp-chips-row" id="gp-chips"><span class="gp-label">Agrupar por:</span></div>
+        <div id="dz"></div>
+      </div>
+    </div>
+
+    <div class="grade">
+      <div id="estado-lista" hidden></div>
+      <div id="tabela"></div>
+      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais">Carregar mais</button></div>
+    </div>
+  </section>
+
+  <!-- ── Detalhe em página (somente leitura) ────────────────────────── -->
+  <section id="vista-detalhe" hidden aria-labelledby="titulo-detalhe">
+    <div class="editor-bar">
+      <div class="editor-title">
+        <div class="tlk-titulo-linha">
+          <strong id="titulo-detalhe">Registro de auditoria</strong>
+          <span class="tlk-pill tlk-pill--neutro">Somente leitura</span>
+        </div>
+        <span id="sub-detalhe"></span>
+      </div>
+      <button class="btn btn-ghost" type="button" id="btn-voltar">← Voltar à lista</button>
+    </div>
+
+    <div class="tlk-cartao">
+      <div class="tlk-detalhe-corpo">
+        <div>
+          <h2 class="tlk-detalhe-secao-titulo">Resumo da ação</h2>
+          <div class="tlk-previa-box" id="detalhe-resumo"></div>
+        </div>
+
+        <div>
+          <h2 class="tlk-detalhe-secao-titulo">Detalhes do registro</h2>
+          <div class="meta-grid" id="meta-auditoria"></div>
+        </div>
+
+        <p class="form-hint">Os registros de auditoria não podem ser editados ou removidos. Segredos, tokens completos e números completos nunca são gravados neste histórico.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/app/ia-talk/ui/js/grid-group-panel.js"></script>
+<script src="/app/ia-talk/js/talk-api.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const { esc, dataHora } = TalkUI;
+
+  let tabela = null;
+  let painelGrupo = null;
+  let proximoCursor = null;
+  let total = 0;
+
+  function achatar(item) {
+    return {
+      ...item,
+      ator_nome: item.usuario?.nome || item.aplicacao?.nome || 'Sistema',
+      categoria: String(item.acao || '').split('.')[0] || 'outro',
+    };
+  }
+
+  function filtrosAtuais() {
+    return {
+      busca: $('f-busca').value.trim(),
+      acao: $('f-acao').value,
+      usuario_id: $('f-usuario').value,
+      de: $('f-de').value,
+      ate: $('f-ate').value,
+      limite: 50,
+    };
+  }
+
+  async function carregarUsuarios() {
+    // O papel 'auditor' pode não ter permissão em /usuarios; falha silenciosamente mantendo o filtro opcional.
+    const resp = await TalkApi.get('/usuarios', { limite: 100 }).catch(() => null);
+    const sel = $('f-usuario');
+    const itens = resp?.itens || [];
+    if (!itens.length) {
+      sel.hidden = true;
+      return;
+    }
+    for (const u of itens) {
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = u.nome;
+      sel.appendChild(opt);
+    }
+  }
+
+  function criarTabela() {
+    painelGrupo = createGroupPanel({
+      chipsRowId: 'gp-chips', dropZoneId: 'dz', storageKey: 'talk_auditoria_grupo', getTable: () => tabela,
+      onChange: (campos) => { $('grupo-status').textContent = campos.length ? `${campos.length} campo(s) agrupado(s)` : 'Sem agrupamento ativo'; },
+    });
+    tabela = new Tabulator('#tabela', {
+      layout: 'fitDataFill', movableColumns: true, index: 'id', height: 'calc(100vh - 300px)',
+      responsiveLayout: 'collapse', responsiveLayoutCollapseStartOpen: false,
+      placeholder: 'Nenhum registro de auditoria com estes filtros.',
+      groupBy: painelGrupo.getActiveFields(), groupStartOpen: true,
+      rowFormatter: (row) => row.getElement().classList.add('clicavel'),
+      columns: [
+        { formatter: 'responsiveCollapse', width: 34, minWidth: 34, hozAlign: 'center', headerSort: false, resizable: false, groupable: false, responsive: 0 },
+        {
+          title: 'Resumo', field: 'resumo', minWidth: 185, cssClass: 'tlk-forte', responsive: 0,
+          formatter: (c) => {
+            const d = c.getRow().getData();
+            return `<div>${esc(d.resumo || '—')}</div><div style="font-size:11.5px;font-weight:500;color:var(--text-lo)"><code>${esc(d.acao)}</code></div>`;
+          },
+        },
+        { title: 'Quando', field: 'em', width: 145, formatter: (c) => dataHora(c.getValue()), sorter: 'string', responsive: 1 },
+        { title: 'Quem fez', field: 'ator_nome', minWidth: 140, responsive: 1 },
+        { title: 'Ação', field: 'acao', minWidth: 160, formatter: (c) => `<code>${esc(c.getValue())}</code>`, responsive: 2 },
+        { title: 'Alvo', field: 'alvo_tipo', width: 120, formatter: (c) => esc(c.getValue() || '—'), responsive: 3 },
+        { title: 'IP', field: 'ip_mascarado', width: 135, formatter: (c) => `<span class="tlk-mono">${esc(c.getValue() || '—')}</span>`, responsive: 2 },
+      ],
+    });
+    tabela.on('tableBuilt', () => { painelGrupo.refresh(); painelGrupo.applyToTable(); });
+    tabela.on('rowClick', (_e, row) => abrirDetalhe(row.getData()));
+  }
+
+  async function carregar({ continuar = false } = {}) {
+    const estado = $('estado-lista');
+    if (!continuar) {
+      proximoCursor = null;
+      $('tabela').hidden = true;
+      $('mais').hidden = true;
+      TalkUI.estado(estado, 'carregando', { titulo: 'Carregando registros de auditoria…' });
+    }
+    try {
+      const params = filtrosAtuais();
+      if (continuar && proximoCursor) params.cursor = proximoCursor;
+      const pagina = await TalkApi.get('/auditoria', params);
+      const linhas = (pagina.itens || []).map(achatar);
+      total = pagina.total ?? linhas.length;
+      proximoCursor = pagina.proximo_cursor || null;
+      $('contador').textContent = total ? `(${total})` : '';
+      $('mais').hidden = !proximoCursor;
+
+      if (!continuar && !linhas.length) {
+        $('tabela').hidden = true;
+        TalkUI.estado(estado, 'vazio', {
+          titulo: 'Nenhum registro de auditoria',
+          texto: 'Nenhuma ação registrada corresponde aos filtros selecionados.',
+        });
+        return;
+      }
+      estado.hidden = true;
+      $('tabela').hidden = false;
+      if (continuar) await tabela.addData(linhas);
+      else await tabela.setData(linhas);
+    } catch (err) {
+      $('tabela').hidden = true;
+      $('mais').hidden = true;
+      TalkUI.estadoDoErro(estado, err, () => carregar({ continuar }));
+    }
+  }
+
+  function abrirDetalhe(item) {
+    $('vista-lista').hidden = true;
+    $('vista-detalhe').hidden = false;
+    $('titulo-detalhe').textContent = item.acao || item.id;
+    $('sub-detalhe').textContent = `${item.id} · ${dataHora(item.em)}`;
+    $('detalhe-resumo').textContent = item.resumo || 'Sem descrição.';
+
+    $('meta-auditoria').innerHTML = [
+      ['ID do registro', `<code class="tlk-mono">${esc(item.id)}</code>`],
+      ['Data e hora', esc(dataHora(item.em))],
+      ['Ação', `<code>${esc(item.acao || '—')}</code>`],
+      ['Usuário', esc(item.usuario?.nome || '—')],
+      ['Aplicação', esc(item.aplicacao?.nome || '—')],
+      ['Tipo de alvo', esc(item.alvo_tipo || '—')],
+      ['ID do alvo', item.alvo_id ? `<code class="tlk-mono">${esc(item.alvo_id)}</code>` : '—'],
+      ['IP (mascarado)', `<code class="tlk-mono">${esc(item.ip_mascarado || '—')}</code>`],
+    ].map(([rot, val]) => `<div class="meta-item"><span>${esc(rot)}</span><strong>${val}</strong></div>`).join('');
+  }
+
+  function mostrarLista() {
+    $('vista-detalhe').hidden = true;
+    $('vista-lista').hidden = false;
+  }
+
+  let timerBusca = null;
+  $('f-busca').addEventListener('input', () => { clearTimeout(timerBusca); timerBusca = setTimeout(() => carregar(), 240); });
+  ['f-acao', 'f-usuario', 'f-de', 'f-ate'].forEach((id) => $(id).addEventListener('change', () => carregar()));
+  $('filtros').addEventListener('submit', (e) => { e.preventDefault(); carregar(); });
+
+  $('btn-agrupar').addEventListener('click', () => {
+    const aberto = $('grupo-area').classList.toggle('open');
+    $('btn-agrupar').setAttribute('aria-expanded', String(aberto));
+    $('btn-agrupar').textContent = aberto ? '− Ocultar agrupamento' : '+ Mostrar agrupamento';
+  });
+
+  $('btn-atualizar').addEventListener('click', () => carregar());
+  $('btn-mais').addEventListener('click', () => carregar({ continuar: true }));
+  $('btn-voltar').addEventListener('click', mostrarLista);
+
+  (async function iniciar() {
+    $('tabela').hidden = true;
+    TalkUI.estado($('estado-lista'), 'carregando', { titulo: 'Carregando registros de auditoria…' });
+    criarTabela();
+    await carregarUsuarios();
+    await carregar();
+  })();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Painel · IA Talk</title>
+  <!-- Etapa G3 — Painel operacional (docs/contratos.md §5).
+       Telas modelo: apps/IA Administracao/frontend/jobs.html e apps/IA Command/frontend/dashboard.html.
+       Hierarquia: resumo primeiro, depois pendências com link, depois canais. -->
+  <script src="/app/ia-talk/js/talk-ui.js"></script>
+  <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g3.css">
+</head>
+<body class="tlk-pagina">
+<main class="tlk-conteudo">
+
+  <div class="head-row">
+    <div>
+      <div class="page-kicker">Operação</div>
+      <h1 class="head-title" id="titulo-painel">Painel</h1>
+    </div>
+    <div class="head-actions">
+      <span class="tlk-rt-badge" id="rt-badge" title="Estado da atualização em tempo real">
+        <span class="tlk-rt-dot" aria-hidden="true"></span>
+        <span id="rt-texto">Conectando…</span>
+      </span>
+      <span class="tlk-atualizado" id="atualizado-em" aria-live="polite"></span>
+      <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
+    </div>
+  </div>
+  <p class="head-sub">Acompanhamento de canais, mensagens do dia, fila de envio e pendências operacionais da empresa ativa.</p>
+
+  <!-- Estado global (carregando / erro / sem permissão) -->
+  <div id="estado-painel" hidden></div>
+
+  <!-- Conteúdo principal -->
+  <div id="conteudo-painel" hidden>
+    <!-- 1. Resumo primeiro (faixa compacta de 4 indicadores, sem excesso de cartões) -->
+    <section class="tlk-kpis" aria-label="Resumo operacional">
+      <article class="tlk-kpi">
+        <div class="tlk-kpi-label">Canais conectados</div>
+        <div class="tlk-kpi-valor" id="kpi-canais">—</div>
+        <div class="tlk-kpi-sub" id="kpi-canais-sub"></div>
+      </article>
+      <article class="tlk-kpi">
+        <div class="tlk-kpi-label">Mensagens hoje</div>
+        <div class="tlk-kpi-valor" id="kpi-mensagens">—</div>
+        <div class="tlk-kpi-sub" id="kpi-mensagens-sub"></div>
+      </article>
+      <article class="tlk-kpi">
+        <div class="tlk-kpi-label">Fila de envio</div>
+        <div class="tlk-kpi-valor" id="kpi-fila">—</div>
+        <div class="tlk-kpi-sub" id="kpi-fila-sub"></div>
+      </article>
+      <article class="tlk-kpi">
+        <div class="tlk-kpi-label">Tempo médio de envio</div>
+        <div class="tlk-kpi-valor" id="kpi-tempo">—</div>
+        <div class="tlk-kpi-sub" id="kpi-tempo-sub"></div>
+      </article>
+    </section>
+
+    <!-- Estado vazio quando ainda não há canais nem movimentação -->
+    <div id="estado-vazio-painel" hidden></div>
+
+    <!-- 2. Pendências com link -->
+    <section class="tlk-secao" id="secao-pendencias" aria-labelledby="tit-pendencias">
+      <div class="tlk-secao-head">
+        <h2 class="tlk-secao-titulo" id="tit-pendencias">
+          Pendências <span class="head-count" id="contador-pendencias"></span>
+        </h2>
+        <span class="tlk-secao-sub">Itens que pedem verificação manual ou atenção no canal</span>
+      </div>
+      <ul class="tlk-pendencias" id="lista-pendencias"></ul>
+      <div class="tlk-vazio-compacto" id="pendencias-vazio" hidden>
+        <span class="tlk-pill tlk-pill--ok">Tudo em dia</span>
+        <span>Nenhuma pendência operacional no momento.</span>
+      </div>
+    </section>
+
+    <!-- 3. Canais -->
+    <section class="tlk-secao" id="secao-canais" aria-labelledby="tit-canais">
+      <div class="tlk-secao-head">
+        <h2 class="tlk-secao-titulo" id="tit-canais">
+          Canais <span class="head-count" id="contador-canais"></span>
+        </h2>
+        <button class="btn btn-ghost btn-sm" type="button" id="btn-ver-canais">Abrir canais →</button>
+      </div>
+      <ul class="tlk-canais-lista" id="lista-canais"></ul>
+      <div class="tlk-vazio-compacto" id="canais-vazio" hidden>
+        <span>Nenhum canal disponível para exibir.</span>
+      </div>
+    </section>
+  </div>
+
+</main>
+
+<script src="/app/ia-talk/socket.io/socket.io.js"></script>
+<script src="/app/ia-talk/js/talk-api.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const { esc, pill, dataHora, relativo } = TalkUI;
+
+  const GRAVIDADE = {
+    alta:  { rotulo: 'Alta',  classe: 'erro' },
+    media: { rotulo: 'Média', classe: 'aviso' },
+    baixa: { rotulo: 'Baixa', classe: 'info' },
+  };
+  const TIPO_PENDENCIA = {
+    mensagens_desconhecidas: 'Mensagens',
+    canal_com_problema: 'Canais',
+    webhook_falhando: 'Eventos e webhooks',
+  };
+  const PROVEDOR_LABEL = { wweb: 'WhatsApp Web', meta: 'WhatsApp Meta' };
+
+  let socket = null;
+  let timerFallback = null;
+  let carregado = false;
+
+  function cenarioSimulado() {
+    try { return sessionStorage.getItem('talk_simular') || ''; } catch (_) { return ''; }
+  }
+
+  function formatarDuracao(ms) {
+    if (ms === null || ms === undefined || Number.isNaN(Number(ms))) return '—';
+    const n = Number(ms);
+    if (n < 1000) return `${Math.round(n)} ms`;
+    return `${(n / 1000).toFixed(1).replace('.', ',')} s`;
+  }
+
+  function rotuloDoLink(url) {
+    if (url.includes('/mensagens.html')) return { rotulo: 'Mensagens', icone: '💬' };
+    if (url.includes('/canais.html'))    return { rotulo: 'Canais', icone: '📡' };
+    if (url.includes('/eventos.html'))   return { rotulo: 'Eventos', icone: '🔔' };
+    if (url.includes('/auditoria.html')) return { rotulo: 'Auditoria', icone: '🛡️' };
+    return { rotulo: 'IA Talk', icone: '📄' };
+  }
+
+  function abrirDestino(url) {
+    if (!url) return;
+    try {
+      if (window.top && window.top !== window && window.top.TalkAbas?.abrir) {
+        const meta = rotuloDoLink(url);
+        window.top.TalkAbas.abrir(url, meta.rotulo, meta.icone);
+        return;
+      }
+    } catch (_) { /* fora do shell */ }
+    window.location.href = url;
+  }
+
+  function atualizarBadgeTempoReal(modo) {
+    const badge = $('rt-badge');
+    const texto = $('rt-texto');
+    badge.classList.remove('tlk-rt-badge--ok', 'tlk-rt-badge--fallback');
+    if (modo === 'socket') {
+      badge.classList.add('tlk-rt-badge--ok');
+      texto.textContent = 'Tempo real ativo';
+    } else if (modo === 'fallback') {
+      badge.classList.add('tlk-rt-badge--fallback');
+      texto.textContent = 'Atualização a cada 30 s';
+    } else {
+      texto.textContent = 'Conectando…';
+    }
+  }
+
+  function renderizarPainel(dados) {
+    const c = dados.canais || { total: 0, conectados: 0, com_problema: 0 };
+    const m = dados.mensagens_hoje || { enviadas: 0, recebidas: 0, falhas: 0 };
+    const f = dados.fila || { aguardando: 0, desconhecidas: 0 };
+    const pendencias = Array.isArray(dados.pendencias) ? dados.pendencias : [];
+
+    // 1. KPIs
+    $('kpi-canais').innerHTML = `${esc(c.conectados)} <small>/ ${esc(c.total)}</small>`;
+    $('kpi-canais-sub').innerHTML = c.total === 0
+      ? '<span>Nenhum canal cadastrado</span>'
+      : c.com_problema > 0
+        ? `<span class="tlk-kpi-aviso">${esc(c.com_problema)} com atenção</span>`
+        : '<span class="tlk-kpi-ok">Todos operando</span>';
+
+    const totalHoje = (m.enviadas || 0) + (m.recebidas || 0);
+    $('kpi-mensagens').textContent = String(totalHoje);
+    const partesHoje = [`${m.enviadas || 0} enviadas`, `${m.recebidas || 0} recebidas`];
+    if (m.falhas > 0) partesHoje.push(`<span class="tlk-kpi-alerta">${esc(m.falhas)} falha(s)</span>`);
+    $('kpi-mensagens-sub').innerHTML = partesHoje.join(' · ');
+
+    $('kpi-fila').textContent = String(f.aguardando || 0);
+    $('kpi-fila-sub').innerHTML = f.desconhecidas > 0
+      ? `<span class="tlk-kpi-alerta">${esc(f.desconhecidas)} desconhecida(s)</span>`
+      : '<span>Sem resultado desconhecido</span>';
+
+    $('kpi-tempo').textContent = formatarDuracao(dados.tempo_medio_envio_ms);
+    $('kpi-tempo-sub').textContent = dados.tempo_medio_envio_ms === null || dados.tempo_medio_envio_ms === undefined
+      ? 'Sem envios medidos hoje'
+      : 'Do aceite à confirmação no canal';
+
+    $('atualizado-em').textContent = dados.atualizado_em ? `Atualizado ${dataHora(dados.atualizado_em)}` : '';
+
+    // Estado vazio completo (sem canais, sem mensagens e sem pendências)
+    const tudoVazio = c.total === 0 && totalHoje === 0 && f.aguardando === 0 && f.desconhecidas === 0 && pendencias.length === 0;
+    const boxVazio = $('estado-vazio-painel');
+    if (tudoVazio) {
+      TalkUI.estado(boxVazio, 'vazio', {
+        titulo: 'Operação ainda sem movimentação',
+        texto: 'Cadastre ou conecte um canal de WhatsApp para acompanhar mensagens, fila e pendências por aqui.',
+        acao: { rotulo: 'Abrir canais', aoClicar: () => abrirDestino(`${TalkApi.BASE}/canais.html`) },
+      });
+      $('secao-pendencias').hidden = true;
+      $('secao-canais').hidden = true;
+    } else {
+      boxVazio.hidden = true;
+      $('secao-pendencias').hidden = false;
+      $('secao-canais').hidden = false;
+    }
+
+    // 2. Pendências
+    $('contador-pendencias').textContent = pendencias.length ? `(${pendencias.length})` : '';
+    const ulPend = $('lista-pendencias');
+    if (!pendencias.length) {
+      ulPend.innerHTML = '';
+      $('pendencias-vazio').hidden = false;
+    } else {
+      $('pendencias-vazio').hidden = true;
+      ulPend.innerHTML = pendencias.map((p, idx) => {
+        const g = GRAVIDADE[p.gravidade] || GRAVIDADE.baixa;
+        const tipo = TIPO_PENDENCIA[p.tipo] || 'Operação';
+        return `<li class="tlk-pendencia tlk-pendencia--${esc(p.gravidade || 'baixa')}">
+          <div class="tlk-pendencia-info">
+            <span class="tlk-pill tlk-pill--${g.classe}">${esc(g.rotulo)}</span>
+            <div>
+              <div class="tlk-pendencia-msg">${esc(p.mensagem)}</div>
+              <div class="tlk-pendencia-tipo">${esc(tipo)}</div>
+            </div>
+          </div>
+          ${p.link ? `<button class="btn btn-ghost btn-sm" type="button" data-link-idx="${idx}">Verificar →</button>` : ''}
+        </li>`;
+      }).join('');
+      ulPend.querySelectorAll('button[data-link-idx]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const item = pendencias[Number(btn.dataset.linkIdx)];
+          if (item?.link) abrirDestino(item.link);
+        });
+      });
+    }
+  }
+
+  function renderizarCanais(lista) {
+    const ul = $('lista-canais');
+    const itens = Array.isArray(lista) ? lista : [];
+    $('contador-canais').textContent = itens.length ? `(${itens.length})` : '';
+    if (!itens.length) {
+      ul.innerHTML = '';
+      $('canais-vazio').hidden = false;
+      return;
+    }
+    $('canais-vazio').hidden = true;
+    ul.innerHTML = itens.map((c) => `
+      <li class="tlk-canal-row">
+        <div>
+          <div class="tlk-canal-nome">${esc(c.nome)}</div>
+          <div class="tlk-canal-num">${esc(c.numero_mascarado || '—')} · ${esc(PROVEDOR_LABEL[c.provedor] || c.provedor || '—')}</div>
+        </div>
+        <div>${pill(c.estado)}</div>
+        <div class="tlk-canal-meta">Fila: <strong>${esc(c.fila_pendente ?? 0)}</strong></div>
+        <div class="tlk-canal-meta">Última msg: ${esc(c.ultima_mensagem_em ? relativo(c.ultima_mensagem_em) : 'sem envio')}</div>
+        <div>
+          <button class="btn btn-ghost btn-sm" type="button" data-canal-id="${esc(c.id)}">Abrir →</button>
+        </div>
+      </li>`).join('');
+    ul.querySelectorAll('button[data-canal-id]').forEach((btn) => {
+      btn.addEventListener('click', () => abrirDestino(`${TalkApi.BASE}/canais.html?id=${encodeURIComponent(btn.dataset.canalId)}`));
+    });
+  }
+
+  async function carregarCanais() {
+    try {
+      const resp = await TalkApi.get('/canais', { limite: 20 });
+      renderizarCanais(resp?.itens || []);
+    } catch (err) {
+      if (err?.status === 403) {
+        $('secao-canais').hidden = true;
+      } else {
+        renderizarCanais([]);
+      }
+    }
+  }
+
+  async function carregar({ silencioso = false } = {}) {
+    const boxEstado = $('estado-painel');
+    if (!silencioso) {
+      $('conteudo-painel').hidden = true;
+      TalkUI.estado(boxEstado, 'carregando', { titulo: 'Carregando painel operacional…' });
+    }
+    try {
+      const dados = await TalkApi.get('/painel');
+      boxEstado.hidden = true;
+      $('conteudo-painel').hidden = false;
+      renderizarPainel(dados);
+      await carregarCanais();
+      if (!carregado) {
+        carregado = true;
+        const sim = cenarioSimulado();
+        if (!sim.includes('vazio')) iniciarTempoReal();
+        else atualizarBadgeTempoReal('fallback');
+      }
+    } catch (err) {
+      if (!silencioso) {
+        $('conteudo-painel').hidden = true;
+        TalkUI.estadoDoErro(boxEstado, err, () => carregar());
+      }
+    }
+  }
+
+  function pararFallback() {
+    if (timerFallback) { clearInterval(timerFallback); timerFallback = null; }
+  }
+
+  function iniciarFallback() {
+    atualizarBadgeTempoReal('fallback');
+    if (timerFallback) return;
+    timerFallback = setInterval(() => { carregar({ silencioso: true }); }, 30_000);
+  }
+
+  function iniciarTempoReal() {
+    if (socket || typeof window.io !== 'function') { iniciarFallback(); return; }
+    try {
+      socket = TalkApi.socket();
+    } catch (_) {
+      iniciarFallback();
+      return;
+    }
+    socket.on('connect', () => {
+      pararFallback();
+      atualizarBadgeTempoReal('socket');
+      socket.emit('painel:assinar', {});
+    });
+    socket.on('painel:atualizado', (dados) => {
+      if (dados && typeof dados === 'object') {
+        renderizarPainel(dados);
+        carregarCanais();
+      }
+    });
+    socket.on('mensagem:estado', () => {
+      carregar({ silencioso: true });
+    });
+    socket.on('disconnect', () => iniciarFallback());
+    socket.on('connect_error', () => iniciarFallback());
+  }
+
+  $('btn-atualizar').addEventListener('click', () => carregar());
+  $('btn-ver-canais').addEventListener('click', () => abrirDestino(`${TalkApi.BASE}/canais.html`));
+
+  window.addEventListener('beforeunload', () => {
+    pararFallback();
+    if (socket) {
+      try { socket.disconnect(); } catch (_) { /* ignore */ }
+      socket = null;
+    }
+  });
+
+  carregar();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Histórico de mensagens · IA Talk</title>
+  <!-- Etapa G3 — Histórico de mensagens (docs/contratos.md §5).
+       Tela modelo: frontend/empresas.html e Histórico de Interpretações (IA Command).
+       Ações "Reenviar" e "Dar como falha" só aparecem para desconhecida e falhou,
+       com confirmação na própria tela. Exportação CSV respeita os filtros atuais. -->
+  <script src="/app/ia-talk/js/talk-ui.js"></script>
+  <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g3.css">
+</head>
+<body class="tlk-pagina">
+<main class="tlk-conteudo">
+
+  <!-- ── Lista ──────────────────────────────────────────────────────── -->
+  <section id="vista-lista" aria-labelledby="titulo-lista">
+    <div class="head-row">
+      <div>
+        <div class="page-kicker">Operação</div>
+        <h1 class="head-title" id="titulo-lista">Histórico de mensagens <span class="head-count" id="contador" aria-live="polite"></span></h1>
+      </div>
+      <div class="head-actions">
+        <button class="btn btn-ghost" type="button" id="btn-exportar">⬇ Exportar CSV</button>
+        <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
+      </div>
+    </div>
+    <p class="head-sub">Consulte mensagens enviadas e recebidas, acompanhe a linha do tempo de entrega e trate manualmente casos com falha ou resultado desconhecido. Números de contato aparecem sempre mascarados.</p>
+
+    <div class="filter-bar">
+      <form class="filter-bar-row" id="filtros" role="search">
+        <label class="sr-only" for="f-busca">Buscar</label>
+        <input class="form-control tlk-busca" id="f-busca" name="busca" type="search" placeholder="Buscar por prévia, correlação ou ID" autocomplete="off">
+
+        <label class="sr-only" for="f-estado">Estado</label>
+        <select class="form-control" id="f-estado" name="estado">
+          <option value="">Todos os estados</option>
+          <option value="desconhecida|falhou">Falhas e desconhecidas</option>
+          <option value="desconhecida">Resultado desconhecido</option>
+          <option value="falhou">Falhou</option>
+          <option value="aguardando">Aguardando canal</option>
+          <option value="aceita">Aceita</option>
+          <option value="encaminhada">Encaminhada</option>
+          <option value="enviada">Enviada</option>
+          <option value="entregue">Entregue</option>
+          <option value="lida">Lida</option>
+          <option value="recebida">Recebida</option>
+        </select>
+
+        <label class="sr-only" for="f-direcao">Direção</label>
+        <select class="form-control" id="f-direcao" name="direcao">
+          <option value="">Entrada e saída</option>
+          <option value="saida">Saída</option>
+          <option value="entrada">Entrada</option>
+        </select>
+
+        <label class="sr-only" for="f-canal">Canal</label>
+        <select class="form-control" id="f-canal" name="canal_id">
+          <option value="">Todos os canais</option>
+        </select>
+
+        <label class="tlk-check-inline" for="f-apenas-falhas">
+          <input type="checkbox" id="f-apenas-falhas" name="apenas_falhas" value="1">
+          <span>Apenas falhas</span>
+        </label>
+
+        <button class="btn btn-ghost" type="button" id="btn-mais-filtros" aria-expanded="false" aria-controls="filtros-extra">Mais filtros</button>
+        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area">+ Mostrar agrupamento</button>
+        <span class="grupo-status" id="grupo-status">Sem agrupamento ativo</span>
+      </form>
+
+      <div class="tlk-filtros-extra" id="filtros-extra" hidden>
+        <label class="sr-only" for="f-provedor">Provedor</label>
+        <select class="form-control" id="f-provedor" name="provedor" form="filtros">
+          <option value="">Todos os provedores</option>
+          <option value="wweb">WhatsApp Web</option>
+          <option value="meta">WhatsApp Meta</option>
+        </select>
+
+        <label class="sr-only" for="f-aplicacao">Aplicação</label>
+        <select class="form-control" id="f-aplicacao" name="aplicacao_id" form="filtros">
+          <option value="">Todas as aplicações</option>
+          <option value="nenhuma">Sem aplicação</option>
+        </select>
+
+        <label class="sr-only" for="f-tipo">Tipo</label>
+        <select class="form-control" id="f-tipo" name="tipo" form="filtros">
+          <option value="">Todos os tipos</option>
+          <option value="texto">Texto</option>
+          <option value="imagem">Imagem</option>
+          <option value="documento">Documento</option>
+          <option value="audio">Áudio</option>
+          <option value="video">Vídeo</option>
+        </select>
+
+        <div class="tlk-filtro-par">
+          <label for="f-de">De</label>
+          <input class="form-control" id="f-de" name="de" type="date" form="filtros">
+        </div>
+        <div class="tlk-filtro-par">
+          <label for="f-ate">Até</label>
+          <input class="form-control" id="f-ate" name="ate" type="date" form="filtros">
+        </div>
+
+        <label class="sr-only" for="f-correlacao">Correlação</label>
+        <input class="form-control" id="f-correlacao" name="correlacao_id" type="search" placeholder="Correlação (ex.: chamado-…)" autocomplete="off" form="filtros">
+
+        <label class="sr-only" for="f-destinatario">Destinatário</label>
+        <input class="form-control" id="f-destinatario" name="destinatario" type="search" inputmode="numeric" placeholder="Destinatário (número completo)" autocomplete="off" form="filtros">
+
+        <button class="btn btn-ghost btn-sm" type="button" id="btn-limpar-filtros">Limpar filtros</button>
+      </div>
+
+      <div class="grupo-area" id="grupo-area">
+        <div class="gp-chips-row" id="gp-chips"><span class="gp-label">Agrupar por:</span></div>
+        <div id="dz"></div>
+      </div>
+    </div>
+
+    <div class="grade">
+      <div id="estado-lista" hidden></div>
+      <div id="tabela"></div>
+      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais">Carregar mais</button></div>
+    </div>
+  </section>
+
+  <!-- ── Detalhe em página ──────────────────────────────────────────── -->
+  <section id="vista-detalhe" hidden aria-labelledby="titulo-detalhe">
+    <div class="editor-bar">
+      <div class="editor-title">
+        <div class="tlk-titulo-linha">
+          <strong id="titulo-detalhe">Mensagem</strong>
+          <span id="detalhe-pill"></span>
+        </div>
+        <span id="sub-detalhe"></span>
+      </div>
+      <button class="btn btn-ghost" type="button" id="btn-voltar">← Voltar à lista</button>
+    </div>
+
+    <div class="tlk-cartao">
+      <div id="estado-detalhe" hidden></div>
+      <div class="tlk-detalhe-corpo" id="corpo-detalhe" hidden>
+        <div class="meta-grid" id="meta-mensagem"></div>
+
+        <div>
+          <h2 class="tlk-detalhe-secao-titulo">Conteúdo / Prévia</h2>
+          <div class="tlk-previa-box" id="detalhe-previa"></div>
+        </div>
+
+        <div id="bloco-anexos" hidden>
+          <h2 class="tlk-detalhe-secao-titulo">Anexos</h2>
+          <ul class="tlk-anexos" id="lista-anexos"></ul>
+        </div>
+
+        <div>
+          <h2 class="tlk-detalhe-secao-titulo">Linha do tempo de estados</h2>
+          <ol class="tlk-timeline" id="lista-timeline"></ol>
+        </div>
+
+        <!-- Ações manuais: SÓ aparecem para estado 'desconhecida' ou 'falhou' -->
+        <div class="tlk-acoes-barra" id="acoes-manuais" hidden>
+          <button class="btn btn-primary" type="button" id="btn-reenviar">Reenviar mensagem</button>
+          <button class="btn btn-danger" type="button" id="btn-dar-falha">Dar como falha</button>
+        </div>
+
+        <!-- Confirmação inline dentro da tela (sem window.confirm) -->
+        <div class="tlk-confirm-inline" id="confirm-acao" role="region" aria-live="polite" hidden>
+          <div class="tlk-confirm-titulo" id="confirm-titulo"></div>
+          <p class="tlk-confirm-texto" id="confirm-texto"></p>
+          <div class="tlk-confirm-acoes">
+            <button class="btn btn-ghost" type="button" id="btn-confirm-cancelar">Cancelar</button>
+            <button class="btn btn-primary" type="button" id="btn-confirm-executar">Confirmar</button>
+          </div>
+        </div>
+
+        <div id="bloco-metadados" hidden>
+          <h2 class="tlk-detalhe-secao-titulo">Metadados</h2>
+          <pre class="tlk-pre" id="detalhe-metadados"></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/app/ia-talk/ui/js/grid-group-panel.js"></script>
+<script src="/app/ia-talk/js/talk-api.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const { esc, pill, dataHora } = TalkUI;
+
+  const ESTADOS_ACAO_MANUAL = new Set(['desconhecida', 'falhou']);
+  const TIPO_LABEL = { texto: 'Texto', imagem: 'Imagem', documento: 'Documento', audio: 'Áudio', video: 'Vídeo' };
+  const DIR_LABEL = { entrada: '↓ Entrada', saida: '↑ Saída' };
+  const COR_DOT = {
+    entregue: 'ok', lida: 'ok', enviada: 'info', encaminhada: 'info', recebida: 'info',
+    aguardando: 'aviso', falhou: 'erro', desconhecida: 'erro', aceita: 'neutro',
+  };
+
+  let tabela = null;
+  let painelGrupo = null;
+  let proximoCursor = null;
+  let total = 0;
+  let atual = null;
+  let acaoPendente = null; // 'reenviar' | 'dar-como-falha'
+
+  function formatarBytes(bytes) {
+    const n = Number(bytes);
+    if (!Number.isFinite(n) || n <= 0) return '—';
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1).replace('.', ',')} KB`;
+    return `${(n / (1024 * 1024)).toFixed(2).replace('.', ',')} MB`;
+  }
+
+  function achatar(m) {
+    return {
+      ...m,
+      canal_nome: m.canal?.nome || '—',
+      aplicacao_nome: m.aplicacao?.nome || 'Sem aplicação',
+    };
+  }
+
+  function filtrosAtuais({ comLimite = true } = {}) {
+    const f = {
+      busca: $('f-busca').value.trim(),
+      estado: $('f-estado').value,
+      direcao: $('f-direcao').value,
+      canal_id: $('f-canal').value,
+      provedor: $('f-provedor').value,
+      aplicacao_id: $('f-aplicacao').value,
+      tipo: $('f-tipo').value,
+      de: $('f-de').value,
+      ate: $('f-ate').value,
+      correlacao_id: $('f-correlacao').value.trim(),
+      destinatario: $('f-destinatario').value.trim(),
+      apenas_falhas: $('f-apenas-falhas').checked ? '1' : '',
+    };
+    if (comLimite) f.limite = 50;
+    return f;
+  }
+
+  function lerFiltrosDaUrl() {
+    const q = new URLSearchParams(location.search);
+    const atribuirSelect = (id, valor) => {
+      if (!valor) return;
+      const sel = $(id);
+      if (![...sel.options].some((o) => o.value === valor)) {
+        const opt = document.createElement('option');
+        opt.value = valor;
+        opt.textContent = valor;
+        sel.appendChild(opt);
+      }
+      sel.value = valor;
+    };
+    if (q.get('busca')) $('f-busca').value = q.get('busca');
+    atribuirSelect('f-estado', q.get('estado'));
+    atribuirSelect('f-direcao', q.get('direcao'));
+    atribuirSelect('f-provedor', q.get('provedor'));
+    atribuirSelect('f-tipo', q.get('tipo'));
+    if (q.get('de')) $('f-de').value = q.get('de');
+    if (q.get('ate')) $('f-ate').value = q.get('ate');
+    if (q.get('correlacao_id')) $('f-correlacao').value = q.get('correlacao_id');
+    if (q.get('destinatario')) $('f-destinatario').value = q.get('destinatario');
+    if (q.get('apenas_falhas') === '1' || q.get('apenas_falhas') === 'true') $('f-apenas-falhas').checked = true;
+
+    const temExtra = ['provedor', 'aplicacao_id', 'tipo', 'de', 'ate', 'correlacao_id', 'destinatario'].some((k) => q.get(k));
+    if (temExtra) {
+      $('filtros-extra').hidden = false;
+      $('btn-mais-filtros').setAttribute('aria-expanded', 'true');
+    }
+    return { canalId: q.get('canal_id') || '', aplicacaoId: q.get('aplicacao_id') || '', abrirId: q.get('id') || '' };
+  }
+
+  async function carregarOpcoesFiltro(canalInicial, appInicial) {
+    const [canais, apps] = await Promise.all([
+      TalkApi.get('/canais', { limite: 100 }).catch(() => ({ itens: [] })),
+      TalkApi.get('/aplicacoes', { limite: 100 }).catch(() => ({ itens: [] })),
+    ]);
+    const selCanal = $('f-canal');
+    for (const c of canais?.itens || []) {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.nome;
+      selCanal.appendChild(opt);
+    }
+    if (canalInicial) selCanal.value = canalInicial;
+
+    const selApp = $('f-aplicacao');
+    for (const a of apps?.itens || []) {
+      const opt = document.createElement('option');
+      opt.value = a.id;
+      opt.textContent = a.nome;
+      selApp.appendChild(opt);
+    }
+    if (appInicial) selApp.value = appInicial;
+  }
+
+  function criarTabela() {
+    painelGrupo = createGroupPanel({
+      chipsRowId: 'gp-chips', dropZoneId: 'dz', storageKey: 'talk_mensagens_grupo', getTable: () => tabela,
+      onChange: (campos) => { $('grupo-status').textContent = campos.length ? `${campos.length} campo(s) agrupado(s)` : 'Sem agrupamento ativo'; },
+    });
+    tabela = new Tabulator('#tabela', {
+      layout: 'fitDataFill', movableColumns: true, index: 'id', height: 'calc(100vh - 300px)',
+      responsiveLayout: 'collapse', responsiveLayoutCollapseStartOpen: false,
+      placeholder: 'Nenhuma mensagem com estes filtros.',
+      groupBy: painelGrupo.getActiveFields(), groupStartOpen: true,
+      rowFormatter: (row) => row.getElement().classList.add('clicavel'),
+      columns: [
+        { formatter: 'responsiveCollapse', width: 34, minWidth: 34, hozAlign: 'center', headerSort: false, resizable: false, groupable: false, responsive: 0 },
+        {
+          title: 'Mensagem', field: 'previa', minWidth: 180, cssClass: 'tlk-forte', responsive: 0,
+          formatter: (c) => {
+            const d = c.getRow().getData();
+            return `<div>${esc(d.previa || '—')}</div><div style="font-size:11.5px;font-weight:500;color:var(--text-lo);font-family:var(--font-mono)">${esc(d.contato_mascarado || '—')}</div>`;
+          },
+        },
+        { title: 'Estado', field: 'estado', width: 190, formatter: (c) => pill(c.getValue()), responsive: 1 },
+        {
+          title: 'Direção', field: 'direcao', width: 105, responsive: 1,
+          formatter: (c) => `<span class="tlk-dir tlk-dir--${esc(c.getValue())}">${esc(DIR_LABEL[c.getValue()] || c.getValue())}</span>`,
+        },
+        { title: 'Canal', field: 'canal_nome', minWidth: 130, responsive: 1 },
+        { title: 'Aplicação', field: 'aplicacao_nome', minWidth: 125, responsive: 2 },
+        { title: 'Tipo', field: 'tipo', width: 105, formatter: (c) => esc(TIPO_LABEL[c.getValue()] || c.getValue()), responsive: 2 },
+        { title: 'Correlação', field: 'correlacao_id', minWidth: 120, formatter: (c) => (c.getValue() ? `<code>${esc(c.getValue())}</code>` : '<span class="text-muted">—</span>'), responsive: 3 },
+        { title: 'Criada em', field: 'criada_em', width: 145, formatter: (c) => dataHora(c.getValue()), sorter: 'string', responsive: 1 },
+      ],
+    });
+    tabela.on('tableBuilt', () => { painelGrupo.refresh(); painelGrupo.applyToTable(); });
+    tabela.on('rowClick', (_e, row) => abrirDetalhe(row.getData().id));
+  }
+
+  async function carregar({ continuar = false } = {}) {
+    const estado = $('estado-lista');
+    if (!continuar) {
+      proximoCursor = null;
+      $('tabela').hidden = true;
+      $('mais').hidden = true;
+      TalkUI.estado(estado, 'carregando', { titulo: 'Carregando mensagens…' });
+    }
+    try {
+      const params = filtrosAtuais({ comLimite: true });
+      if (continuar && proximoCursor) params.cursor = proximoCursor;
+      const pagina = await TalkApi.get('/mensagens', params);
+      const linhas = (pagina.itens || []).map(achatar);
+      total = pagina.total ?? linhas.length;
+      proximoCursor = pagina.proximo_cursor || null;
+      $('contador').textContent = total ? `(${total})` : '';
+      $('mais').hidden = !proximoCursor;
+
+      if (!continuar && !linhas.length) {
+        $('tabela').hidden = true;
+        TalkUI.estado(estado, 'vazio', {
+          titulo: 'Nenhuma mensagem encontrada',
+          texto: 'Ajuste os filtros ou aguarde novas mensagens nos canais ativos.',
+        });
+        return;
+      }
+      estado.hidden = true;
+      $('tabela').hidden = false;
+      if (continuar) await tabela.addData(linhas);
+      else await tabela.setData(linhas);
+    } catch (err) {
+      $('tabela').hidden = true;
+      $('mais').hidden = true;
+      TalkUI.estadoDoErro(estado, err, () => carregar({ continuar }));
+    }
+  }
+
+  // ── Exportação CSV usando exatamente os filtros atuais ────────────────
+  async function exportarCsv() {
+    const btn = $('btn-exportar');
+    btn.disabled = true;
+    try {
+      const url = `${TalkApi.BASE}/api/admin/mensagens/exportar${TalkApi.montarQuery(filtrosAtuais({ comLimite: false }))}`;
+      const headers = { Accept: 'text/csv' };
+      try {
+        const sim = sessionStorage.getItem('talk_simular');
+        if (sim) headers['X-Talk-Simular'] = sim;
+      } catch (_) { /* sem sessionStorage */ }
+
+      const resp = await fetch(url, { method: 'GET', headers, credentials: 'same-origin', cache: 'no-store' });
+      if (!resp.ok) {
+        const corpo = await resp.json().catch(() => null);
+        throw new TalkApi.ErroApi(resp.status, corpo?.erro);
+      }
+      const blob = await resp.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'mensagens.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1500);
+      TalkUI.toast('CSV exportado com os filtros atuais.', 'ok');
+    } catch (err) {
+      TalkUI.toast(err?.message || 'Não foi possível exportar o CSV.', 'erro');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ── Detalhe ───────────────────────────────────────────────────────────
+  function mostrarLista() {
+    $('vista-detalhe').hidden = true;
+    $('vista-lista').hidden = false;
+    fecharConfirmacao();
+    atual = null;
+  }
+
+  function fecharConfirmacao() {
+    acaoPendente = null;
+    $('confirm-acao').hidden = true;
+    $('confirm-acao').classList.remove('tlk-confirm-inline--perigo');
+  }
+
+  function renderizarDetalhe(m) {
+    atual = m;
+    $('titulo-detalhe').textContent = m.id;
+    $('detalhe-pill').innerHTML = pill(m.estado);
+    $('sub-detalhe').textContent = `${DIR_LABEL[m.direcao] || m.direcao} · ${m.canal?.nome || '—'} · ${dataHora(m.criada_em)}`;
+
+    $('meta-mensagem').innerHTML = [
+      ['Contato', `<code class="tlk-mono">${esc(m.contato_mascarado || '—')}</code>`],
+      ['Canal', esc(m.canal?.nome || '—')],
+      ['Aplicação', esc(m.aplicacao?.nome || 'Sem aplicação')],
+      ['Direção', esc(DIR_LABEL[m.direcao] || m.direcao)],
+      ['Tipo', esc(TIPO_LABEL[m.tipo] || m.tipo)],
+      ['Correlação', m.correlacao_id ? `<code>${esc(m.correlacao_id)}</code>` : '—'],
+      ['Criada em', esc(dataHora(m.criada_em))],
+      ['Atualizada em', esc(dataHora(m.atualizada_em))],
+    ].map(([rot, val]) => `<div class="meta-item"><span>${esc(rot)}</span><strong>${val}</strong></div>`).join('');
+
+    $('detalhe-previa').textContent = m.previa || 'Sem prévia de texto.';
+
+    // Anexos
+    const anexos = Array.isArray(m.anexos) ? m.anexos : [];
+    $('bloco-anexos').hidden = anexos.length === 0;
+    $('lista-anexos').innerHTML = anexos.map((a) => `
+      <li class="tlk-anexo">
+        <strong>${esc(a.nome || a.id)}</strong>
+        <span class="tlk-anexo-meta">${esc(a.mime || 'arquivo')} · ${esc(formatarBytes(a.tamanho))}</span>
+      </li>`).join('');
+
+    // Linha do tempo de estados
+    const historico = Array.isArray(m.historico_estados) ? m.historico_estados : [];
+    $('lista-timeline').innerHTML = historico.length
+      ? historico.map((h) => `
+          <li class="tlk-timeline-item">
+            <span class="tlk-timeline-dot tlk-timeline-dot--${COR_DOT[h.estado] || 'neutro'}" aria-hidden="true"></span>
+            <div class="tlk-timeline-head">
+              ${pill(h.estado)}
+              <span class="tlk-timeline-hora">${esc(dataHora(h.em))}</span>
+            </div>
+            ${h.detalhe ? `<div class="tlk-timeline-detalhe">${esc(h.detalhe)}</div>` : ''}
+          </li>`).join('')
+      : '<li class="tlk-timeline-item"><div class="tlk-timeline-detalhe">Sem eventos registrados na linha do tempo.</div></li>';
+
+    // Ações manuais: somente desconhecida ou falhou
+    const permiteAcao = ESTADOS_ACAO_MANUAL.has(m.estado);
+    $('acoes-manuais').hidden = !permiteAcao;
+    fecharConfirmacao();
+
+    // Metadados
+    const metaKeys = m.metadados && typeof m.metadados === 'object' ? Object.keys(m.metadados) : [];
+    $('bloco-metadados').hidden = metaKeys.length === 0;
+    if (metaKeys.length) $('detalhe-metadados').textContent = JSON.stringify(m.metadados, null, 2);
+  }
+
+  async function abrirDetalhe(id) {
+    $('vista-lista').hidden = true;
+    $('vista-detalhe').hidden = false;
+    $('corpo-detalhe').hidden = true;
+    $('titulo-detalhe').textContent = id;
+    $('detalhe-pill').innerHTML = '';
+    $('sub-detalhe').textContent = '';
+    TalkUI.estado($('estado-detalhe'), 'carregando', { titulo: 'Carregando detalhes da mensagem…' });
+    try {
+      const m = await TalkApi.get(`/mensagens/${encodeURIComponent(id)}`);
+      $('estado-detalhe').hidden = true;
+      $('corpo-detalhe').hidden = false;
+      renderizarDetalhe(m);
+    } catch (err) {
+      TalkUI.estadoDoErro($('estado-detalhe'), err, () => abrirDetalhe(id));
+    }
+  }
+
+  function abrirConfirmacao(tipo) {
+    if (!atual || !ESTADOS_ACAO_MANUAL.has(atual.estado)) return;
+    acaoPendente = tipo;
+    const caixa = $('confirm-acao');
+    const btnExec = $('btn-confirm-executar');
+    caixa.classList.toggle('tlk-confirm-inline--perigo', tipo === 'dar-como-falha');
+
+    if (tipo === 'reenviar') {
+      $('confirm-titulo').textContent = 'Confirmar reenvio manual';
+      $('confirm-texto').textContent = atual.estado === 'desconhecida'
+        ? 'O canal perdeu a conexão antes de confirmar o envio. Reenviar manualmente coloca uma nova tentativa na fila e pode gerar duplicidade se o provedor já entregou a mensagem.'
+        : 'Esta mensagem falhou na tentativa anterior. Confirmar colocará a mensagem novamente na fila de envio do canal.';
+      btnExec.textContent = 'Confirmar reenvio';
+      btnExec.className = 'btn btn-primary';
+    } else {
+      $('confirm-titulo').textContent = 'Confirmar marcação como falha';
+      $('confirm-texto').textContent = 'A mensagem será marcada manualmente como falha e sairá das pendências com resultado desconhecido. Nenhum reenvio automático será executado.';
+      btnExec.textContent = 'Confirmar como falha';
+      btnExec.className = 'btn btn-danger';
+    }
+    caixa.hidden = false;
+    btnExec.focus();
+  }
+
+  async function executarAcaoManual() {
+    if (!atual || !acaoPendente) return;
+    const btn = $('btn-confirm-executar');
+    const acao = acaoPendente;
+    btn.disabled = true;
+    try {
+      const atualizada = await TalkApi.post(`/mensagens/${encodeURIComponent(atual.id)}/${acao}`, {});
+      renderizarDetalhe(atualizada);
+      if (tabela) {
+        const linha = tabela.getRow(atualizada.id);
+        if (linha) linha.update(achatar(atualizada));
+      }
+      TalkUI.toast(acao === 'reenviar' ? 'Reenvio solicitado e colocado na fila.' : 'Mensagem marcada como falha.', 'ok');
+    } catch (err) {
+      TalkUI.toast(err?.message || 'Não foi possível concluir a ação.', 'erro');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ── Eventos de UI ─────────────────────────────────────────────────────
+  let timerBusca = null;
+  const agendarBusca = () => { clearTimeout(timerBusca); timerBusca = setTimeout(() => carregar(), 240); };
+
+  ['f-busca', 'f-correlacao', 'f-destinatario'].forEach((id) => $(id).addEventListener('input', agendarBusca));
+  ['f-estado', 'f-direcao', 'f-canal', 'f-provedor', 'f-aplicacao', 'f-tipo', 'f-de', 'f-ate', 'f-apenas-falhas']
+    .forEach((id) => $(id).addEventListener('change', () => carregar()));
+  $('filtros').addEventListener('submit', (e) => { e.preventDefault(); carregar(); });
+
+  $('btn-mais-filtros').addEventListener('click', () => {
+    const aberto = !$('filtros-extra').hidden;
+    $('filtros-extra').hidden = aberto;
+    $('btn-mais-filtros').setAttribute('aria-expanded', String(!aberto));
+  });
+
+  $('btn-limpar-filtros').addEventListener('click', () => {
+    $('filtros').reset();
+    ['f-provedor', 'f-aplicacao', 'f-tipo', 'f-de', 'f-ate', 'f-correlacao', 'f-destinatario'].forEach((id) => { $(id).value = ''; });
+    $('f-apenas-falhas').checked = false;
+    carregar();
+  });
+
+  $('btn-agrupar').addEventListener('click', () => {
+    const aberto = $('grupo-area').classList.toggle('open');
+    $('btn-agrupar').setAttribute('aria-expanded', String(aberto));
+    $('btn-agrupar').textContent = aberto ? '− Ocultar agrupamento' : '+ Mostrar agrupamento';
+  });
+
+  $('btn-atualizar').addEventListener('click', () => carregar());
+  $('btn-exportar').addEventListener('click', exportarCsv);
+  $('btn-mais').addEventListener('click', () => carregar({ continuar: true }));
+  $('btn-voltar').addEventListener('click', mostrarLista);
+  $('btn-reenviar').addEventListener('click', () => abrirConfirmacao('reenviar'));
+  $('btn-dar-falha').addEventListener('click', () => abrirConfirmacao('dar-como-falha'));
+  $('btn-confirm-cancelar').addEventListener('click', fecharConfirmacao);
+  $('btn-confirm-executar').addEventListener('click', executarAcaoManual);
+
+  (async function iniciar() {
+    const { canalId, aplicacaoId, abrirId } = lerFiltrosDaUrl();
+    $('tabela').hidden = true;
+    TalkUI.estado($('estado-lista'), 'carregando', { titulo: 'Carregando mensagens…' });
+    criarTabela();
+    await carregarOpcoesFiltro(canalId, aplicacaoId);
+    await carregar();
+    if (abrirId) abrirDetalhe(abrirId);
+  })();
+})();
+</script>
+</body>
+</html>

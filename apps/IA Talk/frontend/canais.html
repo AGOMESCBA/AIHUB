@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Canais · IA Talk</title>
+  <!-- Etapa G2 (Antigravity) — gestão de canais WhatsApp, QR Code em tempo real,
+       terminal ao vivo, empresas que usam o número e capacidades (somente leitura).
+       Telas modelo: apps/IA Command/frontend/whatsapp-services.html (QR/terminal),
+       apps/IA Command/frontend/admin-canais-whatsapp.html (cadastro/vínculos) e
+       apps/IA Talk/frontend/empresas.html (lista + detalhe). Contrato: docs/contratos.md §4. -->
+  <script src="/app/ia-talk/js/talk-ui.js"></script>
+  <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g2.css">
+</head>
+<body class="tlk-pagina">
+<main class="tlk-conteudo">
+
+  <!-- ── Lista de canais ────────────────────────────────────────────── -->
+  <section id="vista-lista" aria-labelledby="titulo-lista">
+    <div class="head-row">
+      <div>
+        <div class="page-kicker">Operação</div>
+        <h1 class="head-title" id="titulo-lista">Canais <span class="head-count" id="contador" aria-live="polite"></span></h1>
+      </div>
+      <div class="head-actions">
+        <button class="btn btn-ghost" type="button" id="btn-atualizar">↻ Atualizar</button>
+        <button class="btn btn-primary" type="button" id="btn-novo">+ Novo canal</button>
+      </div>
+    </div>
+    <p class="head-sub">Conexões de WhatsApp cadastradas para envio e recebimento de mensagens. Clique em um canal para gerenciar conexão, QR Code, terminal ao vivo e empresas vinculadas.</p>
+
+    <div class="filter-bar">
+      <form class="filter-bar-row" id="filtros" role="search">
+        <label class="sr-only" for="f-busca">Buscar</label>
+        <input class="form-control tlk-busca" id="f-busca" name="busca" type="search" placeholder="Buscar por nome ou número" autocomplete="off">
+        <label class="sr-only" for="f-estado">Estado</label>
+        <select class="form-control" id="f-estado" name="estado">
+          <option value="">Todos os estados</option>
+          <option value="conectado">Conectado</option>
+          <option value="qr_pendente">QR pendente</option>
+          <option value="reconectando">Reconectando</option>
+          <option value="iniciando">Iniciando</option>
+          <option value="desconectado">Desconectado</option>
+          <option value="parado">Parado</option>
+          <option value="erro">Erro</option>
+        </select>
+        <label class="sr-only" for="f-provedor">Provedor</label>
+        <select class="form-control" id="f-provedor" name="provedor">
+          <option value="">Todos os provedores</option>
+          <option value="wweb">WhatsApp Web</option>
+          <option value="meta">Meta Cloud API</option>
+        </select>
+        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area">+ Mostrar agrupamento</button>
+        <span class="grupo-status" id="grupo-status">Sem agrupamento ativo</span>
+      </form>
+      <div class="grupo-area" id="grupo-area">
+        <div class="gp-chips-row" id="gp-chips"><span class="gp-label">Agrupar por:</span></div>
+        <div id="dz"></div>
+      </div>
+    </div>
+
+    <div class="grade">
+      <div id="estado-lista" hidden></div>
+      <div id="tabela"></div>
+      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais">Carregar mais</button></div>
+    </div>
+  </section>
+
+  <!-- ── Novo canal ─────────────────────────────────────────────────── -->
+  <section id="vista-novo" hidden aria-labelledby="titulo-novo">
+    <div class="editor-bar">
+      <div class="editor-title">
+        <strong id="titulo-novo">Novo canal</strong>
+        <span>O canal nasce parado. Depois de salvar, conecte para gerar o QR Code.</span>
+      </div>
+      <button class="btn btn-ghost" type="button" id="btn-voltar-novo">← Voltar à lista</button>
+    </div>
+
+    <div class="tlk-cartao">
+      <div class="tlk-painel-aba">
+        <div class="tlk-alerta tlk-alerta--erro" id="alerta-novo" role="alert" hidden></div>
+        <form id="form-novo" novalidate>
+          <div class="tlk-form">
+            <div class="tlk-campo tlk-largo">
+              <label for="n-nome">Nome do canal</label>
+              <input class="form-control" id="n-nome" name="nome" type="text" maxlength="100" required placeholder="Ex.: Suporte Comercial">
+              <span class="form-hint">Identificação operacional exibida no painel, nos logs e na escolha de canais das aplicações.</span>
+            </div>
+
+            <div class="tlk-campo tlk-largo">
+              <label>Provedor de transporte</label>
+              <input type="hidden" name="provedor" value="wweb">
+              <div class="tlk-prov-grid">
+                <label class="tlk-prov-card">
+                  <input type="radio" name="provedor_opcao" value="wweb" checked>
+                  <div>
+                    <strong>WhatsApp Web <span class="tlk-pill tlk-pill--ok">Disponível</span></strong>
+                    <span>Conexão via QR Code com processo isolado por número. Disponível na Fase 1.</span>
+                  </div>
+                </label>
+                <label class="tlk-prov-card tlk-prov-card--indisponivel" aria-disabled="true">
+                  <input type="radio" name="provedor_opcao" value="meta" disabled>
+                  <div>
+                    <strong>Meta Cloud API <span class="tlk-pill tlk-pill--neutro">Indisponível · em breve</span></strong>
+                    <span>API oficial da Meta com modelos e janela de 24 h. Será habilitada na etapa G6.</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="tlk-acoes-form">
+            <button class="btn btn-ghost" type="button" id="btn-cancelar-novo">Cancelar</button>
+            <button class="btn btn-primary" type="submit" id="btn-criar-canal">Criar canal</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Detalhe do canal (4 abas) ──────────────────────────────────── -->
+  <section id="vista-detalhe" hidden aria-labelledby="titulo-detalhe">
+    <div class="editor-bar">
+      <div class="editor-title">
+        <div class="tlk-titulo-linha">
+          <strong id="titulo-detalhe">Canal</strong>
+          <div id="detalhe-pill-estado"></div>
+        </div>
+        <span id="sub-detalhe"></span>
+      </div>
+      <div class="tlk-editor-acoes">
+        <span class="tlk-rt-badge" id="rt-badge" aria-live="polite">
+          <span class="tlk-rt-dot" aria-hidden="true"></span>
+          <span id="rt-texto">Conectando tempo real…</span>
+        </span>
+        <button class="btn btn-ghost" type="button" id="btn-voltar">← Voltar à lista</button>
+      </div>
+    </div>
+
+    <div class="tlk-cartao">
+      <div class="tlk-abas" role="tablist" aria-label="Seções do canal">
+        <button class="tlk-aba" type="button" role="tab" id="aba-conexao" aria-controls="painel-conexao" aria-selected="true">Conexão</button>
+        <button class="tlk-aba" type="button" role="tab" id="aba-terminal" aria-controls="painel-terminal" aria-selected="false">Terminal ao vivo</button>
+        <button class="tlk-aba" type="button" role="tab" id="aba-empresas" aria-controls="painel-empresas" aria-selected="false">Empresas que usam o número</button>
+        <button class="tlk-aba" type="button" role="tab" id="aba-capacidades" aria-controls="painel-capacidades" aria-selected="false">Capacidades</button>
+      </div>
+
+      <!-- Aba 1: Conexão (QR grande + ações + limpar sessão inline) -->
+      <div class="tlk-painel-aba" id="painel-conexao" role="tabpanel" aria-labelledby="aba-conexao">
+        <div class="tlk-alerta tlk-alerta--erro" id="alerta-conexao" role="alert" hidden></div>
+
+        <div class="meta-grid" id="meta-canal"></div>
+
+        <div class="tlk-acoes-canal" role="group" aria-label="Ações de conexão do canal">
+          <button class="btn btn-primary" type="button" id="btn-conectar">Conectar</button>
+          <button class="btn btn-ghost" type="button" id="btn-novo-qr">↻ Novo QR</button>
+          <button class="btn btn-ghost" type="button" id="btn-reconectar">Reconectar</button>
+          <button class="btn btn-ghost" type="button" id="btn-desconectar">Desconectar</button>
+        </div>
+
+        <div class="tlk-conectado-box" id="box-conectado" hidden>
+          <div>
+            <strong>Canal conectado</strong> — pronto para enviar e receber mensagens normalmente.
+          </div>
+          <span id="conectado-desde"></span>
+        </div>
+
+        <div class="tlk-qr-box" id="box-qr" hidden>
+          <div class="tlk-qr-moldura">
+            <img id="qr-img" alt="QR Code para parear o WhatsApp deste canal">
+          </div>
+          <div class="tlk-qr-info">
+            <h2>Escaneie o QR Code no WhatsApp</h2>
+            <p>O QR Code renova automaticamente quando expira. Se preferir, solicite um novo código a qualquer momento.</p>
+            <ol class="tlk-qr-passos">
+              <li>Abra o WhatsApp no celular do número deste canal.</li>
+              <li>Toque em <strong>Aparelhos conectados → Conectar aparelho</strong>.</li>
+              <li>Aponte a câmera para o código ao lado.</li>
+            </ol>
+            <div class="tlk-qr-rodape">
+              <span class="tlk-qr-contagem" id="qr-contagem" aria-live="polite">Aguardando QR…</span>
+              <button class="btn btn-ghost" type="button" id="btn-qr-renovar">↻ Novo QR</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="tlk-zona-perigo">
+          <div class="tlk-zona-perigo-cab">
+            <div>
+              <strong>Limpar sessão salva</strong>
+              <p>Use somente se precisar trocar o aparelho/número ou se a sessão estiver corrompida. A ação desconecta o canal e apaga a autenticação local.</p>
+            </div>
+            <button class="btn btn-ghost" type="button" id="btn-pedir-limpar" style="color:var(--error);border-color:var(--error)">Limpar sessão</button>
+          </div>
+          <div class="tlk-confirm-inline" id="confirm-limpar" hidden>
+            <span><strong>Confirmar limpeza de sessão?</strong> A sessão salva deste canal será apagada permanentemente. O celular terá de ler um novo QR Code para voltar a conectar.</span>
+            <div class="tlk-confirm-acoes">
+              <button class="btn btn-ghost" type="button" id="btn-cancelar-limpar">Cancelar</button>
+              <button class="btn btn-perigo" type="button" id="btn-confirmar-limpar">Sim, limpar sessão</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Aba 2: Terminal ao vivo (cores IA Command + auto-rolagem que pausa) -->
+      <div class="tlk-painel-aba" id="painel-terminal" role="tabpanel" aria-labelledby="aba-terminal" hidden>
+        <div class="tlk-term-barra">
+          <div class="tlk-term-filtros">
+            <label class="sr-only" for="f-log-tipo">Filtrar tipo de log</label>
+            <select class="form-control" id="f-log-tipo">
+              <option value="">Todos os tipos</option>
+              <option value="info">Info</option>
+              <option value="success">Sucesso</option>
+              <option value="warning">Aviso</option>
+              <option value="error">Erro</option>
+              <option value="received">Recebida</option>
+              <option value="sent">Enviada</option>
+              <option value="system">Sistema</option>
+            </select>
+            <span class="grupo-status" id="term-contagem">0 linha(s)</span>
+          </div>
+          <div class="tlk-term-filtros">
+            <button class="btn btn-ghost" type="button" id="btn-autoscroll" aria-pressed="true">↓ Auto-rolagem: ativa</button>
+            <button class="btn btn-ghost" type="button" id="btn-recarregar-log">↻ Recarregar</button>
+            <button class="btn btn-ghost" type="button" id="btn-limpar-term">Limpar tela</button>
+          </div>
+        </div>
+
+        <div class="tlk-term-pausa" id="aviso-pausa" hidden>
+          <span>Auto-rolagem pausada porque você subiu o histórico. Novas linhas continuam chegando abaixo.</span>
+          <button class="btn btn-ghost" type="button" id="btn-retomar-rolagem">↓ Ir para o fim e retomar</button>
+        </div>
+
+        <div class="tlk-terminal" id="terminal" role="log" aria-live="polite" aria-label="Terminal ao vivo do canal"></div>
+      </div>
+
+      <!-- Aba 3: Empresas que usam o número (padrão = código de login) -->
+      <div class="tlk-painel-aba" id="painel-empresas" role="tabpanel" aria-labelledby="aba-empresas" hidden>
+        <div class="tlk-alerta tlk-alerta--erro" id="alerta-empresas" role="alert" hidden></div>
+
+        <form id="form-empresas" novalidate>
+          <div class="tlk-form" style="margin-bottom:18px">
+            <div class="tlk-campo">
+              <label for="e-nome">Nome do canal</label>
+              <input class="form-control" id="e-nome" name="nome" type="text" maxlength="100" required>
+            </div>
+            <div class="tlk-campo">
+              <label>Empresa dona da configuração</label>
+              <input class="form-control" id="e-dona" type="text" readonly>
+              <span class="form-hint">A empresa dona configura a conexão; as empresas vinculadas abaixo podem usar o número.</span>
+            </div>
+          </div>
+
+          <div style="margin-bottom:10px">
+            <strong style="font-size:14px;color:var(--text-hi)">Empresas vinculadas a este número</strong>
+            <p class="form-hint" style="margin:3px 0 0">Marcar <strong>Canal padrão</strong> define que o código de login por WhatsApp daquela empresa sai por este número.</p>
+          </div>
+
+          <div class="tlk-lista-bloco" id="lista-vinculos"></div>
+
+          <div class="tlk-add-linha">
+            <label class="sr-only" for="sel-nova-empresa">Adicionar empresa</label>
+            <select class="form-control" id="sel-nova-empresa"></select>
+            <button class="btn btn-ghost" type="button" id="btn-add-empresa">+ Vincular empresa</button>
+          </div>
+
+          <div class="tlk-acoes-form">
+            <button class="btn btn-primary" type="submit" id="btn-salvar-empresas">Salvar nome e vínculos</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Aba 4: Capacidades (somente leitura) -->
+      <div class="tlk-painel-aba" id="painel-capacidades" role="tabpanel" aria-labelledby="aba-capacidades" hidden>
+        <p class="head-sub" style="margin-top:0">Recursos comprovados pelo provedor deste canal (somente leitura). Qualquer chamada da API v1 para um recurso marcado como <strong>Não suportado</strong> é recusada com HTTP 422, sem simular nem trocar de canal.</p>
+
+        <div class="tlk-cap-grid" id="grid-capacidades"></div>
+
+        <div class="meta-grid" id="meta-capacidades"></div>
+
+        <div class="tlk-campo" style="max-width:820px">
+          <label>Tipos de mídia (MIME) aceitos por este canal</label>
+          <div class="tlk-chips" id="chips-mimes"></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/app/ia-talk/ui/js/grid-group-panel.js"></script>
+<script src="/app/ia-talk/js/talk-api.js"></script>
+<script src="/app/ia-talk/socket.io/socket.io.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const { esc, pill, dataHora, relativo } = TalkUI;
+
+  const MAX_LOG_LINHAS = 500;
+  const POLL_FALLBACK_MS = 30000;
+
+  let tabela = null;
+  let painelGrupo = null;
+  let proximoCursor = null;
+  let total = 0;
+
+  let canalAtual = null;
+  let empresasCatalogo = [];
+  let vinculosEditados = [];
+
+  let socket = null;
+  let canalAssinadoId = null;
+  let timerFallback = null;
+  let timerQr = null;
+  let qrExpiraMs = 0;
+
+  let linhasLog = [];
+  let chavesLog = new Set();
+  let autoScroll = true;
+
+  function nomeProvedor(p) {
+    return p === 'meta' ? 'Meta Cloud API' : 'WhatsApp Web';
+  }
+
+  function formatarBytes(b) {
+    const n = Number(b || 0);
+    if (!n) return '—';
+    if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(n % (1024 * 1024) === 0 ? 0 : 1)} MB`;
+    if (n >= 1024) return `${Math.round(n / 1024)} KB`;
+    return `${n} B`;
+  }
+
+  function formatarHoraLog(iso) {
+    if (!iso) return '--:--:--';
+    try {
+      return new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(iso));
+    } catch (_) {
+      return '--:--:--';
+    }
+  }
+
+  // ── Catálogo de empresas (para vincular na aba 3) ───────────────────
+  async function carregarEmpresasDisponiveis() {
+    const porId = new Map();
+    try {
+      const sessao = await TalkApi.get('/sessao');
+      for (const e of sessao?.empresas_disponiveis || []) porId.set(e.id, { id: e.id, nome: e.nome });
+    } catch (_) {}
+    try {
+      const pag = await TalkApi.get('/empresas', { limite: 200 });
+      for (const e of pag?.itens || []) porId.set(e.id, { id: e.id, nome: e.nome });
+    } catch (_) {}
+    empresasCatalogo = [...porId.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  }
+
+  // ── Lista ───────────────────────────────────────────────────────────
+  function filtrosAtuais() {
+    return {
+      busca: $('f-busca').value.trim(),
+      estado: $('f-estado').value,
+      provedor: $('f-provedor').value,
+      limite: 50,
+    };
+  }
+
+  function criarTabela() {
+    painelGrupo = createGroupPanel({
+      chipsRowId: 'gp-chips',
+      dropZoneId: 'dz',
+      storageKey: 'talk_canais_grupo',
+      getTable: () => tabela,
+      onChange: (campos) => {
+        $('grupo-status').textContent = campos.length ? `${campos.length} campo(s) agrupado(s)` : 'Sem agrupamento ativo';
+      },
+    });
+    tabela = new Tabulator('#tabela', {
+      layout: 'fitDataFill',
+      movableColumns: true,
+      index: 'id',
+      height: 'calc(100vh - 290px)',
+      responsiveLayout: 'collapse',
+      responsiveLayoutCollapseStartOpen: false,
+      placeholder: 'Nenhum canal com estes filtros.',
+      groupBy: painelGrupo.getActiveFields(),
+      groupStartOpen: true,
+      rowFormatter: (row) => row.getElement().classList.add('clicavel'),
+      columns: [
+        { formatter: 'responsiveCollapse', width: 34, minWidth: 34, hozAlign: 'center', headerSort: false, resizable: false, groupable: false, responsive: 0 },
+        { title: 'Canal', field: 'nome', minWidth: 160, cssClass: 'tlk-forte', headerFilter: 'input', responsive: 0 },
+        {
+          title: 'Estado', field: 'estado', minWidth: 130, formatter: (c) => pill(c.getValue()),
+          headerFilter: 'list',
+          headerFilterParams: {
+            values: { conectado: 'Conectado', qr_pendente: 'QR pendente', reconectando: 'Reconectando', iniciando: 'Iniciando', desconectado: 'Desconectado', parado: 'Parado', erro: 'Erro' },
+            clearable: true,
+          },
+          responsive: 0,
+        },
+        { title: 'Número', field: 'numero_mascarado', minWidth: 165, formatter: (c) => `<code>${esc(c.getValue() || 'Não pareado')}</code>`, responsive: 1 },
+        { title: 'Provedor', field: 'provedor', minWidth: 130, formatter: (c) => `<span class="tlk-chip">${esc(nomeProvedor(c.getValue()))}</span>`, responsive: 2 },
+        {
+          title: 'Empresas', field: 'empresas_vinculadas', minWidth: 180, headerSort: false, responsive: 2,
+          formatter: (c) => {
+            const lista = c.getValue() || [];
+            if (!lista.length) return '<span class="text-muted">Nenhuma</span>';
+            return esc(lista.map((e) => e.nome).join(', '));
+          },
+        },
+        {
+          title: 'Fila', field: 'fila_pendente', minWidth: 95, responsive: 3,
+          formatter: (c) => {
+            const n = Number(c.getValue() || 0);
+            return n > 0 ? `<span class="tlk-pill tlk-pill--aviso">${n} na fila</span>` : '<span class="text-muted">0</span>';
+          },
+        },
+        {
+          title: 'Última mensagem', field: 'ultima_mensagem_em', minWidth: 145, responsive: 3,
+          formatter: (c) => (c.getValue() ? esc(relativo(c.getValue())) : '<span class="text-muted">Sem tráfego</span>'),
+          sorter: 'string',
+        },
+      ],
+    });
+    tabela.on('tableBuilt', () => { painelGrupo.refresh(); painelGrupo.applyToTable(); });
+    tabela.on('rowClick', (_e, row) => abrirDetalhe(row.getData().id));
+  }
+
+  async function carregarLista({ continuar = false } = {}) {
+    const estado = $('estado-lista');
+    if (!continuar) {
+      $('tabela').hidden = true;
+      $('mais').hidden = true;
+      TalkUI.estado(estado, 'carregando', { titulo: 'Carregando canais…' });
+    }
+    try {
+      const pagina = await TalkApi.get('/canais', { ...filtrosAtuais(), cursor: continuar ? proximoCursor : undefined });
+      proximoCursor = pagina.proximo_cursor;
+      total = pagina.total ?? pagina.itens.length;
+      if (!continuar && !pagina.itens.length) {
+        const comFiltro = Object.entries(filtrosAtuais()).some(([k, v]) => k !== 'limite' && v);
+        TalkUI.estado(estado, 'vazio', comFiltro
+          ? { titulo: 'Nenhum canal encontrado', texto: 'Mude a busca ou os filtros para ver outros canais.' }
+          : { titulo: 'Nenhum canal cadastrado', texto: 'Cadastre o primeiro canal de WhatsApp para começar a conectar números.', acao: { rotulo: '+ Novo canal', aoClicar: abrirNovo } });
+        $('contador').textContent = '';
+        return;
+      }
+      estado.hidden = true;
+      $('tabela').hidden = false;
+      if (continuar) await tabela.addData(pagina.itens); else await tabela.replaceData(pagina.itens);
+      tabela.redraw();
+      $('mais').hidden = !proximoCursor;
+      $('contador').textContent = pagina.total != null ? `${tabela.getDataCount()} de ${total}` : `${tabela.getDataCount()}`;
+    } catch (err) {
+      if (continuar) return TalkUI.toast(err.message, 'erro');
+      TalkUI.estadoDoErro(estado, err, () => carregarLista());
+      $('contador').textContent = '';
+    }
+  }
+
+  let espera = null;
+  $('f-busca').addEventListener('input', () => { clearTimeout(espera); espera = setTimeout(() => carregarLista(), 350); });
+  $('f-estado').addEventListener('change', () => carregarLista());
+  $('f-provedor').addEventListener('change', () => carregarLista());
+  $('filtros').addEventListener('submit', (e) => { e.preventDefault(); carregarLista(); });
+  $('btn-atualizar').addEventListener('click', () => carregarLista());
+  $('btn-mais').addEventListener('click', () => carregarLista({ continuar: true }));
+  $('btn-agrupar').addEventListener('click', () => {
+    const area = $('grupo-area');
+    const abrir = !area.classList.contains('aberta');
+    area.classList.toggle('aberta', abrir);
+    $('btn-agrupar').setAttribute('aria-expanded', String(abrir));
+    $('btn-agrupar').textContent = abrir ? '− Ocultar agrupamento' : '+ Mostrar agrupamento';
+  });
+
+  // ── Navegação entre vistas ──────────────────────────────────────────
+  function mostrar(vista) {
+    $('vista-lista').hidden = vista !== 'lista';
+    $('vista-novo').hidden = vista !== 'novo';
+    $('vista-detalhe').hidden = vista !== 'detalhe';
+    window.scrollTo(0, 0);
+  }
+
+  // ── Novo canal ──────────────────────────────────────────────────────
+  function abrirNovo() {
+    encerrarAssinaturaCanal();
+    const form = $('form-novo');
+    form.reset();
+    TalkUI.limparErros(form);
+    $('alerta-novo').hidden = true;
+    mostrar('novo');
+    $('n-nome').focus();
+  }
+  $('btn-novo').addEventListener('click', abrirNovo);
+  $('btn-voltar-novo').addEventListener('click', () => mostrar('lista'));
+  $('btn-cancelar-novo').addEventListener('click', () => mostrar('lista'));
+
+  $('form-novo').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    TalkUI.limparErros(form);
+    $('alerta-novo').hidden = true;
+    const btn = $('btn-criar-canal');
+    btn.disabled = true;
+    btn.textContent = 'Criando…';
+    try {
+      const criado = await TalkApi.post('/canais', { nome: $('n-nome').value.trim(), provedor: 'wweb' });
+      TalkUI.toast('Canal criado. Clique em Conectar para gerar o QR Code.', 'ok');
+      await carregarLista();
+      await abrirDetalhe(criado.id);
+    } catch (err) {
+      if (!TalkUI.errosNoFormulario(form, err)) {
+        $('alerta-novo').textContent = err.message;
+        $('alerta-novo').hidden = false;
+      }
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Criar canal';
+    }
+  });
+
+  // ── Contagem regressiva do QR Code ──────────────────────────────────
+  function pararTimerQr() {
+    if (timerQr) clearInterval(timerQr);
+    timerQr = null;
+  }
+
+  function atualizarContagemQr() {
+    if (!qrExpiraMs) {
+      $('qr-contagem').textContent = 'Aguardando QR…';
+      return;
+    }
+    const restSeg = Math.ceil((qrExpiraMs - Date.now()) / 1000);
+    if (restSeg <= 0) {
+      $('qr-contagem').textContent = 'QR expirado — aguarde renovação ou clique em Novo QR';
+    } else {
+      $('qr-contagem').textContent = `Expira em ${restSeg} s`;
+    }
+  }
+
+  function aplicarQr({ qr, expira_em }) {
+    if (!qr || canalAtual?.estado !== 'qr_pendente') {
+      $('box-qr').hidden = true;
+      pararTimerQr();
+      return;
+    }
+    $('qr-img').src = qr;
+    $('box-qr').hidden = false;
+    qrExpiraMs = expira_em ? Date.parse(expira_em) : 0;
+    atualizarContagemQr();
+    pararTimerQr();
+    if (qrExpiraMs) timerQr = setInterval(atualizarContagemQr, 1000);
+  }
+
+  // ── Renderização das 4 abas do detalhe ──────────────────────────────
+  function renderizarCabecalhoEConexao() {
+    if (!canalAtual) return;
+    const c = canalAtual;
+    $('titulo-detalhe').textContent = c.nome;
+    $('detalhe-pill-estado').innerHTML = pill(c.estado);
+    $('sub-detalhe').textContent = `${nomeProvedor(c.provedor)} · ${c.numero_mascarado || 'Número ainda não pareado'} · atualizado ${relativo(c.estado_desde)}`;
+
+    $('meta-canal').innerHTML = `
+      <div class="meta-item"><span>Estado</span><strong>${pill(c.estado)}</strong></div>
+      <div class="meta-item"><span>Número</span><strong><code>${esc(c.numero_mascarado || 'Não pareado')}</code></strong></div>
+      <div class="meta-item"><span>Provedor</span><strong>${esc(nomeProvedor(c.provedor))}</strong></div>
+      <div class="meta-item"><span>Fila pendente</span><strong>${Number(c.fila_pendente || 0)} mensagem(ns)</strong></div>
+      <div class="meta-item"><span>Estado desde</span><strong>${esc(dataHora(c.estado_desde))}</strong></div>
+      <div class="meta-item"><span>Última mensagem</span><strong>${c.ultima_mensagem_em ? esc(relativo(c.ultima_mensagem_em)) : 'Sem tráfego'}</strong></div>`;
+
+    const conectado = c.estado === 'conectado';
+    const parado = c.estado === 'parado';
+    const qrPendente = c.estado === 'qr_pendente';
+    $('btn-conectar').disabled = conectado || qrPendente;
+    $('btn-desconectar').disabled = parado;
+    $('btn-reconectar').disabled = parado;
+    $('btn-novo-qr').disabled = !c.capacidades?.qr;
+
+    $('box-conectado').hidden = !conectado;
+    if (conectado) $('conectado-desde').textContent = `Desde ${dataHora(c.estado_desde)}`;
+    if (!qrPendente) {
+      $('box-qr').hidden = true;
+      pararTimerQr();
+    }
+  }
+
+  function renderizarEmpresas() {
+    if (!canalAtual) return;
+    $('e-nome').value = canalAtual.nome || '';
+    $('e-dona').value = canalAtual.empresa_dona?.nome || '—';
+
+    const lista = $('lista-vinculos');
+    if (!vinculosEditados.length) {
+      lista.innerHTML = '<div class="tlk-lista-item"><div class="tlk-lista-item-sub">Nenhuma empresa vinculada a este número.</div></div>';
+    } else {
+      lista.innerHTML = vinculosEditados.map((v, idx) => `
+        <div class="tlk-lista-item">
+          <div>
+            <div class="tlk-lista-item-titulo">
+              <span>${esc(v.nome)}</span>
+              ${v.padrao ? '<span class="tlk-pill tlk-pill--ok">Canal padrão (código de login)</span>' : ''}
+            </div>
+            <div class="tlk-lista-item-sub">${v.padrao ? 'O código de entrada por WhatsApp desta empresa sai por este canal.' : 'Usa este número para envio/recebimento quando autorizado.'}</div>
+          </div>
+          <div class="tlk-vinc-controles">
+            <label class="tlk-padrao-check">
+              <input type="checkbox" data-padrao-idx="${idx}" ${v.padrao ? 'checked' : ''}>
+              <span>Canal padrão</span>
+            </label>
+            <button class="btn btn-ghost" type="button" data-remover-vinc="${idx}" ${vinculosEditados.length <= 1 ? 'disabled title="O canal precisa ter pelo menos uma empresa vinculada"' : ''}>Remover</button>
+          </div>
+        </div>`).join('');
+    }
+
+    const jaVinculadas = new Set(vinculosEditados.map((v) => v.id));
+    const disponiveis = empresasCatalogo.filter((e) => !jaVinculadas.has(e.id));
+    const sel = $('sel-nova-empresa');
+    sel.innerHTML = disponiveis.length
+      ? '<option value="">Escolha outra empresa para vincular…</option>' + disponiveis.map((e) => `<option value="${esc(e.id)}">${esc(e.nome)}</option>`).join('')
+      : '<option value="">Todas as empresas disponíveis já estão vinculadas</option>';
+    sel.disabled = !disponiveis.length;
+    $('btn-add-empresa').disabled = !disponiveis.length;
+  }
+
+  function renderizarCapacidades() {
+    const cap = canalAtual?.capacidades;
+    if (!cap) return;
+    const simNao = (v) => (v ? '<span class="tlk-pill tlk-pill--ok">Suportado</span>' : '<span class="tlk-pill tlk-pill--neutro">Não suportado</span>');
+    const itens = [
+      ['Texto', cap.texto],
+      ['Imagem', cap.imagem],
+      ['Documento', cap.documento],
+      ['Áudio', cap.audio],
+      ['Vídeo', cap.video],
+      ['Grupos', cap.grupos],
+      ['Modelos (Meta)', cap.modelos],
+      ['Janela de 24 h', cap.janela_24h],
+      ['Pareamento por QR', cap.qr],
+      ['Recibo: enviada', cap.recibos?.enviada],
+      ['Recibo: entregue', cap.recibos?.entregue],
+      ['Recibo: lida', cap.recibos?.lida],
+    ];
+    $('grid-capacidades').innerHTML = itens.map(([rotulo, val]) => `
+      <div class="tlk-cap-item"><strong>${esc(rotulo)}</strong>${simNao(val)}</div>`).join('');
+
+    $('meta-capacidades').innerHTML = `
+      <div class="meta-item"><span>Formatação de texto</span><strong>${esc(cap.formatacao || 'Texto simples')}</strong></div>
+      <div class="meta-item"><span>Limite máximo por anexo</span><strong>${esc(formatarBytes(cap.max_midia_bytes))}</strong></div>`;
+
+    const mimes = Array.isArray(cap.mimes_aceitos) ? cap.mimes_aceitos : [];
+    $('chips-mimes').innerHTML = mimes.length
+      ? mimes.map((m) => `<span class="tlk-chip"><code>${esc(m)}</code></span>`).join('')
+      : '<span class="form-hint">Nenhum tipo de mídia habilitado.</span>';
+  }
+
+  // ── Terminal ao vivo ────────────────────────────────────────────────
+  function atualizarBotaoAutoScroll() {
+    const btn = $('btn-autoscroll');
+    btn.setAttribute('aria-pressed', String(autoScroll));
+    btn.textContent = autoScroll ? '↓ Auto-rolagem: ativa' : '⏸ Auto-rolagem: pausada';
+    $('aviso-pausa').hidden = autoScroll;
+  }
+
+  function renderizarTerminal({ forcarFim = false } = {}) {
+    const term = $('terminal');
+    const filtroTipo = $('f-log-tipo').value;
+    const visiveis = filtroTipo ? linhasLog.filter((l) => l.tipo === filtroTipo) : linhasLog;
+    $('term-contagem').textContent = `${visiveis.length} linha(s)`;
+
+    if (!visiveis.length) {
+      term.innerHTML = '<div class="tlk-term-vazio">Nenhuma linha de log para exibir com este filtro.</div>';
+      return;
+    }
+
+    term.innerHTML = visiveis.map((l) => `
+      <div class="tlk-log-linha">
+        <span class="tlk-log-ts">${esc(formatarHoraLog(l.em))}</span>
+        <span class="tlk-log-tag tlk-log--${esc(l.tipo)}">${esc(l.tipo)}</span>
+        <span class="tlk-log-msg tlk-log--${esc(l.tipo)}">${esc(l.mensagem)}</span>
+      </div>`).join('');
+
+    if (autoScroll || forcarFim) {
+      term.scrollTop = term.scrollHeight;
+    }
+  }
+
+  function anexarLinhaLog(linha) {
+    if (!linha || !linha.mensagem) return;
+    const chave = `${linha.em}|${linha.tipo}|${linha.mensagem}`;
+    if (chavesLog.has(chave)) return;
+    chavesLog.add(chave);
+    linhasLog.push({ em: linha.em, tipo: linha.tipo || 'info', mensagem: linha.mensagem });
+    if (linhasLog.length > MAX_LOG_LINHAS) {
+      const removida = linhasLog.shift();
+      chavesLog.delete(`${removida.em}|${removida.tipo}|${removida.mensagem}`);
+    }
+    renderizarTerminal();
+  }
+
+  $('terminal').addEventListener('scroll', () => {
+    const term = $('terminal');
+    const pertoDoFim = term.scrollHeight - term.scrollTop - term.clientHeight <= 24;
+    if (!pertoDoFim && autoScroll) {
+      autoScroll = false;
+      atualizarBotaoAutoScroll();
+    } else if (pertoDoFim && !autoScroll) {
+      autoScroll = true;
+      atualizarBotaoAutoScroll();
+    }
+  });
+
+  $('btn-autoscroll').addEventListener('click', () => {
+    autoScroll = !autoScroll;
+    atualizarBotaoAutoScroll();
+    if (autoScroll) $('terminal').scrollTop = $('terminal').scrollHeight;
+  });
+
+  $('btn-retomar-rolagem').addEventListener('click', () => {
+    autoScroll = true;
+    atualizarBotaoAutoScroll();
+    $('terminal').scrollTop = $('terminal').scrollHeight;
+  });
+
+  $('f-log-tipo').addEventListener('change', () => renderizarTerminal());
+  $('btn-limpar-term').addEventListener('click', () => {
+    linhasLog = [];
+    chavesLog = new Set();
+    renderizarTerminal();
+  });
+
+  async function carregarLogInicial(canalId) {
+    const pag = await TalkApi.get(`/canais/${encodeURIComponent(canalId)}/log`, { limite: 200 });
+    linhasLog = [];
+    chavesLog = new Set();
+    // API devolve mais recente primeiro; no terminal exibimos em ordem cronológica.
+    for (const l of [...(pag?.itens || [])].reverse()) {
+      const chave = `${l.em}|${l.tipo}|${l.mensagem}`;
+      if (chavesLog.has(chave)) continue;
+      chavesLog.add(chave);
+      linhasLog.push(l);
+    }
+    renderizarTerminal({ forcarFim: true });
+  }
+
+  $('btn-recarregar-log').addEventListener('click', async () => {
+    if (!canalAtual) return;
+    try { await carregarLogInicial(canalAtual.id); } catch (err) { TalkUI.toast(err.message, 'erro'); }
+  });
+
+  // ── Tempo real (Socket.IO + fallback 30 s se o socket cair) ─────────
+  function atualizarIndicadorTempoReal(modo) {
+    const badge = $('rt-badge');
+    badge.className = `tlk-rt-badge ${modo === 'socket' ? 'tlk-rt-badge--ok' : 'tlk-rt-badge--fallback'}`;
+    $('rt-texto').textContent = modo === 'socket' ? 'Tempo real ativo' : 'Sem socket · atualiza a cada 30 s';
+  }
+
+  function pararFallback() {
+    if (timerFallback) clearInterval(timerFallback);
+    timerFallback = null;
+  }
+
+  function iniciarFallback() {
+    atualizarIndicadorTempoReal('fallback');
+    if (timerFallback) return;
+    timerFallback = setInterval(async () => {
+      if (!canalAtual) return;
+      try {
+        await sincronizarCanalViaApi(canalAtual.id, { comLog: true });
+      } catch (_) {}
+    }, POLL_FALLBACK_MS);
+  }
+
+  function garantirSocket() {
+    if (socket) return socket;
+    try {
+      socket = TalkApi.socket();
+    } catch (_) {
+      iniciarFallback();
+      return null;
+    }
+
+    socket.on('connect', () => {
+      pararFallback();
+      atualizarIndicadorTempoReal('socket');
+      if (canalAssinadoId) socket.emit('canal:assinar', { canal_id: canalAssinadoId });
+    });
+
+    socket.on('disconnect', () => {
+      if (canalAssinadoId) iniciarFallback();
+    });
+
+    socket.on('connect_error', () => {
+      if (canalAssinadoId) iniciarFallback();
+    });
+
+    socket.on('canal:estado', (ev) => {
+      if (!canalAtual || ev?.canal_id !== canalAtual.id) return;
+      canalAtual.estado = ev.estado;
+      canalAtual.estado_desde = ev.em || canalAtual.estado_desde;
+      renderizarCabecalhoEConexao();
+      tabela?.updateRow?.(canalAtual.id, { estado: canalAtual.estado, estado_desde: canalAtual.estado_desde }).catch?.(() => {});
+      if (ev.estado === 'qr_pendente') {
+        TalkApi.get(`/canais/${encodeURIComponent(canalAtual.id)}/qr`).then(aplicarQr).catch(() => {});
+      }
+    });
+
+    socket.on('canal:qr', (ev) => {
+      if (!canalAtual || ev?.canal_id !== canalAtual.id) return;
+      aplicarQr(ev);
+    });
+
+    socket.on('canal:log', (ev) => {
+      if (!canalAtual || ev?.canal_id !== canalAtual.id) return;
+      anexarLinhaLog(ev);
+    });
+
+    socket.on('erro', (ev) => {
+      if (ev?.mensagem) TalkUI.toast(ev.mensagem, 'erro');
+    });
+
+    return socket;
+  }
+
+  function assinarCanal(canalId) {
+    encerrarAssinaturaCanal();
+    canalAssinadoId = canalId;
+    const s = garantirSocket();
+    if (s && s.connected) {
+      atualizarIndicadorTempoReal('socket');
+      s.emit('canal:assinar', { canal_id: canalId });
+    } else if (s) {
+      iniciarFallback();
+    }
+  }
+
+  function encerrarAssinaturaCanal() {
+    if (socket && canalAssinadoId) {
+      try { socket.emit('canal:sair', { canal_id: canalAssinadoId }); } catch (_) {}
+    }
+    canalAssinadoId = null;
+    pararFallback();
+    pararTimerQr();
+  }
+
+  window.addEventListener('beforeunload', encerrarAssinaturaCanal);
+
+  // ── Abrir detalhe (sempre carrega pela API antes do socket) ─────────
+  async function sincronizarCanalViaApi(canalId, { comLog = false } = {}) {
+    const c = await TalkApi.get(`/canais/${encodeURIComponent(canalId)}`);
+    canalAtual = c;
+    renderizarCabecalhoEConexao();
+    renderizarCapacidades();
+    if (c.estado === 'qr_pendente') {
+      const q = await TalkApi.get(`/canais/${encodeURIComponent(canalId)}/qr`);
+      aplicarQr(q);
+    } else {
+      aplicarQr({ qr: null });
+    }
+    if (comLog) await carregarLogInicial(canalId);
+    tabela?.updateRow?.(c.id, c).catch?.(() => {});
+  }
+
+  async function abrirDetalhe(canalId) {
+    encerrarAssinaturaCanal();
+    $('alerta-conexao').hidden = true;
+    $('alerta-empresas').hidden = true;
+    $('confirm-limpar').hidden = true;
+    autoScroll = true;
+    atualizarBotaoAutoScroll();
+
+    try {
+      const [c] = await Promise.all([
+        TalkApi.get(`/canais/${encodeURIComponent(canalId)}`),
+        carregarEmpresasDisponiveis(),
+      ]);
+      canalAtual = c;
+      vinculosEditados = (c.empresas_vinculadas || []).map((v) => ({ id: v.id, nome: v.nome, padrao: !!v.padrao }));
+      renderizarCabecalhoEConexao();
+      renderizarEmpresas();
+      renderizarCapacidades();
+
+      await carregarLogInicial(c.id);
+      if (c.estado === 'qr_pendente') {
+        const q = await TalkApi.get(`/canais/${encodeURIComponent(c.id)}/qr`);
+        aplicarQr(q);
+      } else {
+        aplicarQr({ qr: null });
+      }
+
+      $('aba-conexao').click();
+      mostrar('detalhe');
+      assinarCanal(c.id);
+    } catch (err) {
+      TalkUI.toast(err.message, 'erro');
+    }
+  }
+
+  $('btn-voltar').addEventListener('click', () => {
+    encerrarAssinaturaCanal();
+    canalAtual = null;
+    mostrar('lista');
+    carregarLista();
+  });
+
+  // ── Ações operacionais da aba Conexão ───────────────────────────────
+  async function executarAcaoCanal(acao, corpo, mensagemOk) {
+    if (!canalAtual) return;
+    $('alerta-conexao').hidden = true;
+    try {
+      const atualizado = await TalkApi.post(`/canais/${encodeURIComponent(canalAtual.id)}/${acao}`, corpo ?? {});
+      canalAtual = atualizado;
+      renderizarCabecalhoEConexao();
+      if (atualizado.estado === 'qr_pendente') {
+        const q = await TalkApi.get(`/canais/${encodeURIComponent(canalAtual.id)}/qr`);
+        aplicarQr(q);
+      } else {
+        aplicarQr({ qr: null });
+      }
+      TalkUI.toast(mensagemOk, 'ok');
+    } catch (err) {
+      $('alerta-conexao').textContent = err.message;
+      $('alerta-conexao').hidden = false;
+    }
+  }
+
+  $('btn-conectar').addEventListener('click', () => executarAcaoCanal('conectar', {}, 'Conexão iniciada. Aguarde o QR Code.'));
+  $('btn-desconectar').addEventListener('click', () => executarAcaoCanal('desconectar', {}, 'Canal desconectado (sessão preservada).'));
+  $('btn-reconectar').addEventListener('click', () => executarAcaoCanal('reconectar', {}, 'Reconexão solicitada.'));
+  $('btn-novo-qr').addEventListener('click', () => executarAcaoCanal('novo-qr', {}, 'Novo QR Code solicitado.'));
+  $('btn-qr-renovar').addEventListener('click', () => executarAcaoCanal('novo-qr', {}, 'Novo QR Code solicitado.'));
+
+  // Limpar sessão: confirmação explícita inline
+  $('btn-pedir-limpar').addEventListener('click', () => { $('confirm-limpar').hidden = false; });
+  $('btn-cancelar-limpar').addEventListener('click', () => { $('confirm-limpar').hidden = true; });
+  $('btn-confirmar-limpar').addEventListener('click', async () => {
+    $('confirm-limpar').hidden = true;
+    await executarAcaoCanal('limpar-sessao', { confirmar: true }, 'Sessão limpa. Conecte novamente para ler um novo QR Code.');
+  });
+
+  // ── Aba Empresas vinculadas ─────────────────────────────────────────
+  $('lista-vinculos').addEventListener('change', (e) => {
+    const idx = e.target.closest('[data-padrao-idx]')?.dataset.padraoIdx;
+    if (idx === undefined) return;
+    vinculosEditados[Number(idx)].padrao = e.target.checked;
+    renderizarEmpresas();
+  });
+
+  $('lista-vinculos').addEventListener('click', (e) => {
+    const idx = e.target.closest('[data-remover-vinc]')?.dataset.removerVinc;
+    if (idx === undefined || vinculosEditados.length <= 1) return;
+    vinculosEditados.splice(Number(idx), 1);
+    renderizarEmpresas();
+  });
+
+  $('btn-add-empresa').addEventListener('click', () => {
+    const id = $('sel-nova-empresa').value;
+    const emp = empresasCatalogo.find((e) => e.id === id);
+    if (!emp || vinculosEditados.some((v) => v.id === emp.id)) return;
+    vinculosEditados.push({ id: emp.id, nome: emp.nome, padrao: false });
+    renderizarEmpresas();
+  });
+
+  $('form-empresas').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!canalAtual) return;
+    const form = e.currentTarget;
+    TalkUI.limparErros(form);
+    $('alerta-empresas').hidden = true;
+    const btn = $('btn-salvar-empresas');
+    btn.disabled = true;
+    btn.textContent = 'Salvando…';
+    try {
+      const salvo = await TalkApi.put(`/canais/${encodeURIComponent(canalAtual.id)}`, {
+        nome: $('e-nome').value.trim(),
+        empresas_vinculadas: vinculosEditados.map((v) => ({ id: v.id, padrao: !!v.padrao })),
+      });
+      canalAtual = salvo;
+      vinculosEditados = (salvo.empresas_vinculadas || []).map((v) => ({ id: v.id, nome: v.nome, padrao: !!v.padrao }));
+      renderizarCabecalhoEConexao();
+      renderizarEmpresas();
+      TalkUI.toast('Canal e vínculos atualizados.', 'ok');
+    } catch (err) {
+      if (!TalkUI.errosNoFormulario(form, err)) {
+        $('alerta-empresas').textContent = err.message;
+        $('alerta-empresas').hidden = false;
+      }
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Salvar nome e vínculos';
+    }
+  });
+
+  // ── Inicialização ───────────────────────────────────────────────────
+  TalkUI.abas(document.querySelector('.tlk-abas'));
+  criarTabela();
+  carregarLista().then(async () => {
+    const id = new URLSearchParams(location.search).get('id');
+    if (id) await abrirDetalhe(id);
+  });
+})();
+</script>
+</body>
+</html>

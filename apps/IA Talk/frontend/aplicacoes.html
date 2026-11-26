@@ -438,6 +438,15 @@
     window.scrollTo(0, 0);
   }
 
+  function atualizarSubtituloDetalhe() {
+    if (!atual) {
+      $('sub-detalhe').textContent = 'Defina nome, escopos e canais autorizados. Depois de salvar, gere os tokens na aba Tokens de API.';
+      return;
+    }
+    const ativos = (atual.tokens || []).filter((t) => !t.revogado_em).length;
+    $('sub-detalhe').textContent = `Criada em ${dataHora(atual.criado_em)} · ${ativos} token(s) ativo(s)`;
+  }
+
   function abrirDetalhe(app) {
     atual = app;
     limparQuadrosSegredo();
@@ -448,9 +457,7 @@
     $('alerta-webhook').hidden = true;
 
     $('titulo-detalhe').textContent = app ? app.nome : 'Nova aplicação';
-    $('sub-detalhe').textContent = app
-      ? `Criada em ${dataHora(app.criado_em)} · ${(app.tokens || []).filter((t) => !t.revogado_em).length} token(s) ativo(s)`
-      : 'Defina nome, escopos e canais autorizados. Depois de salvar, gere os tokens na aba Tokens de API.';
+    atualizarSubtituloDetalhe();
 
     $('campo-situacao').hidden = !app;
     $('aba-tokens').hidden = !app;
@@ -536,6 +543,7 @@
       $('aviso-token-novo').textContent = res.aviso || 'Copie o token agora. Ele não será mostrado de novo.';
       $('valor-token-novo').textContent = res.token;
       $('quadro-token-novo').hidden = false;
+      atualizarSubtituloDetalhe();
       renderizarTokens();
       await carregar();
       TalkUI.toast('Token gerado. Copie-o agora.', 'ok');
@@ -575,6 +583,7 @@
       try {
         const atualizado = await TalkApi.del(`/aplicacoes/${encodeURIComponent(atual.id)}/tokens/${encodeURIComponent(confirmar)}`);
         atual.tokens = (atual.tokens || []).map((t) => (t.id === confirmar ? atualizado : t));
+        atualizarSubtituloDetalhe();
         renderizarTokens();
         await carregar();
         TalkUI.toast('Token revogado.', 'ok');
