@@ -64,7 +64,8 @@ class Atendimento {
     this.aoAviso = aoAviso;
     this._filas = new Map();       // canal → fila de mensagens (mantém a ordem na conferência com o IA Command)
     this._avisados = new Map();    // canal|motivo → quando avisou (no máximo 1 aviso a cada 10 min)
-    this._sinc = new Map();        // conversa → fila de marcar/desmarcar no IA Command (mantém a ordem)
+    this._sinc = new Map();
+    this._pendentesAvisados = new Set(); // pendentes antigos já avisados (1 aviso por mensagem)        // conversa → fila de marcar/desmarcar no IA Command (mantém a ordem)
     this.esperasSincronizacao = [0, 2000, 10000]; // novas tentativas ao avisar o IA Command
     this.aoMudar = aoMudar;
     this.aoItem = aoItem;
@@ -168,23 +169,69 @@ class Atendimento {
     if (!canal || !['atendimento', 'compartilhado'].includes(canal.uso) || !canal.atendimento_empresa_id || !canal.setor_padrao_id) return null;
     if (m?.de?.tipo !== 'telefone' || !telefone.valido(m.de.valor)) return null;
     if (canal.uso === 'atendimento') return this._gravarEntrada(canal, m);
-    const fila = (this._filas.get(canal.id) || Promise.resolve()).then(async () => {
-      const estado = this.iaCommand && canal.numero ? await this.iaCommand.mensagem(canal.numero, m.de.valor, m.tipo === 'texto' ? m.texto : '', { em: m.em }) : null;
-      const motivo = !estado ? 'sem_resposta' : !estado.canal_encontrado ? 'sem_canal' : !estado.repassar_ligado ? 'chave_desligada'
-        : (estado.autorizado && !estado.em_atendimento) ? 'do_assistente' : null;
-      if (!motivo) {
-        const gravada = this._gravarEntrada(canal, m);
-        if (gravada && m.id_provedor) {
-          const r = await this.iaCommand.recibo(canal.numero, m.de.valor, m.id_provedor, m.tipo === 'texto' ? m.texto : '');
-          if (!r?.registrado) this.aoAviso(canal.id, 'N\u00e3o foi poss\u00edvel confirmar ao IA Command o recebimento de uma mensagem.');
-        }
-        return gravada;
-      }
-      if (motivo !== 'do_assistente') this._avisarUmaVez(canal.id, motivo);
+    // Sem o ID final da mensagem não há como decidir com o IA Command: não grava (o IA Command,
+    // sem decisão, responde como sempre). Nunca usar o _serialized como plano B.
+    if (!m.id_provedor || !m.id_decisao) {
+      this.aoAviso(canal.id, 'Mensagem compartilhada sem identificador: não foi possível decidir com segurança.');
       return null;
-    });
-    this._filas.set(canal.id, fila.catch(() => {}));
+    }
+    this.db.prepare(`INSERT OR IGNORE INTO atendimento_entradas_pendentes (canal_id, mensagem_id, dados, criada_em) VALUES (?, ?, ?, ?)`)
+      .run(canal.id, String(m.id_provedor), JSON.stringify(m), agora());
+    return this._enfileirarPendente(canal.id, String(m.id_provedor));
+  }
+
+  _enfileirarPendente(canalId, mensagemId) {
+    const fila = (this._filas.get(canalId) || Promise.resolve()).then(() => this._processarPendente(canalId, mensagemId));
+    this._filas.set(canalId, fila.catch(() => {}));
     return fila;
+  }
+
+  async _processarPendente(canalId, mensagemId) {
+    const pendente = this.db.prepare('SELECT * FROM atendimento_entradas_pendentes WHERE canal_id = ? AND mensagem_id = ?').get(canalId, mensagemId);
+    if (!pendente) return null;
+    const canal = this.db.prepare('SELECT id, uso, numero, atendimento_empresa_id, setor_padrao_id FROM canais WHERE id = ?').get(canalId);
+    if (!canal || canal.uso !== 'compartilhado' || !canal.numero || !this.iaCommand) return null;
+    const m = JSON.parse(pendente.dados);
+    this.db.prepare('UPDATE atendimento_entradas_pendentes SET ultima_tentativa_em = ?, tentativas = tentativas + 1 WHERE canal_id = ? AND mensagem_id = ?').run(agora(), canalId, mensagemId);
+    let decisao;
+    try { decisao = await this.iaCommand.decisao(canal.numero, m.de.valor, m.id_decisao, m.tipo === 'texto' ? m.texto : ''); } catch (_) { decisao = null; }
+    if (decisao?.canal_encontrado && decisao.repassar_ligado === false) {
+      this.db.prepare('DELETE FROM atendimento_entradas_pendentes WHERE canal_id = ? AND mensagem_id = ?').run(canalId, mensagemId);
+      this._avisarUmaVez(canalId, 'chave_desligada');
+      return null;
+    }
+    if (!decisao?.canal_encontrado || !decisao.repassar_ligado || !decisao.dono) {
+      this._avisarUmaVez(canalId, !decisao ? 'sem_resposta' : !decisao.canal_encontrado ? 'sem_canal' : 'chave_desligada');
+      return null;
+    }
+    // aguardar: o assistente pegou a mensagem de quem não é autorizado e ainda não respondeu. Fica
+    // pendente (nova consulta a cada minuto); se ele não responder, o IA Command devolve "talk".
+    if (decisao.dono === 'assistente' && decisao.aguardar) return null;
+    if (decisao.dono === 'assistente') {
+      this.db.prepare('DELETE FROM atendimento_entradas_pendentes WHERE canal_id = ? AND mensagem_id = ?').run(canalId, mensagemId);
+      return null;
+    }
+    if (decisao.dono !== 'talk') return null;
+    const gravada = this._gravarEntrada(canal, m);
+    const jaGravada = gravada || this.db.prepare(`SELECT 1 FROM conversa_itens i JOIN conversas cv ON cv.id = i.conversa_id WHERE cv.canal_id = ? AND i.id_provedor = ?`).get(canalId, mensagemId);
+    if (jaGravada) this.db.prepare('DELETE FROM atendimento_entradas_pendentes WHERE canal_id = ? AND mensagem_id = ?').run(canalId, mensagemId);
+    return gravada;
+  }
+
+  async retomarPendentes() {
+    const itens = this.db.prepare('SELECT canal_id, mensagem_id, criada_em FROM atendimento_entradas_pendentes ORDER BY criada_em, rowid').all();
+    for (const item of itens) {
+      if (Date.now() - Date.parse(item.criada_em) >= 30 * 60 * 1000) {
+        // Fica guardada (não some); o aviso sai uma vez por mensagem, não a cada minuto.
+        const chave = `${item.canal_id}|${item.mensagem_id}`;
+        if (!this._pendentesAvisados.has(chave)) {
+          this._pendentesAvisados.add(chave);
+          this.aoAviso(item.canal_id, 'Há mensagem compartilhada pendente há mais de 30 minutos; confira a conexão com o IA Command.');
+        }
+        continue;
+      }
+      await this._enfileirarPendente(item.canal_id, item.mensagem_id).catch(() => null);
+    }
   }
 
   _avisarUmaVez(canalId, motivo) {
@@ -516,9 +563,11 @@ class Atendimento {
     this.pararBatimentos();
     const rodar = () => this.enviarBatimentos().catch(() => 0);
     const acertar = () => this.reconciliar().catch(() => null);
+    const retomar = () => this.retomarPendentes().catch(() => null);
     rodar();
     acertar();
-    this._timerBatimento = setInterval(rodar, intervaloMs);
+    retomar();
+    this._timerBatimento = setInterval(() => { rodar(); retomar(); }, intervaloMs);
     this._timerReconciliar = setInterval(acertar, reconciliarMs);
     this._timerBatimento.unref?.();
     this._timerReconciliar.unref?.();

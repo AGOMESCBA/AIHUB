@@ -70,7 +70,8 @@ function mensagem({ from, body = 'Qual o faturamento de hoje?', type = 'chat', c
   return {
     enviados,
     msg: {
-      fromMe: false, id: { _serialized: `wamid_${++seq}` }, timestamp: Math.floor(Date.now() / 1000), from, type, body,
+      // Como o whatsapp-web.js entrega: id.id é o ID final (igual nas duas cópias); _serialized traz o remetente.
+      fromMe: false, id: (() => { const k = `3EB0${String(++seq).padStart(6, "0")}`; return { fromMe: false, remote: from, id: k, _serialized: `false_${from}_${k}` }; })(), timestamp: Math.floor(Date.now() / 1000), from, type, body,
       getContact: async () => contato || { number: from.split('@')[0], id: { _serialized: from } },
       getChat: async () => ({ sendMessage: async (t) => { if (falhaEnvio) throw new Error('sem conexão'); enviados.push(t); } }),
     },
@@ -78,7 +79,8 @@ function mensagem({ from, body = 'Qual o faturamento de hoje?', type = 'chat', c
 }
 talk._test.definirEsperaRecibo(300); // em produção: 8 s
 // O Talk conferiu a mensagem e vai gravá-la (é o que ele faz ao receber a cópia): vale como recibo.
-const reciboDoTalk = (numero, msg) => talk.registrarRecibo(NUMERO_CANAL, numero, msg.id._serialized, msg.body);
+// O que o Talk real faz ao receber a cópia: pede a decisão (rota talk/decisao).
+const reciboDoTalk = (numero, msg) => talk.decidirMensagem(NUMERO_CANAL, numero, msg.id.id, msg.body);
 const limparEstado = () => { db.exec('DELETE FROM talk_atendimentos; DELETE FROM talk_recebimentos; DELETE FROM talk_recibos_mensagem; DELETE FROM talk_recibos_expirados; DELETE FROM talk_retorno_assistente;'); };
 const AVISO_NAO_AUTORIZADO = templates.render(1, 'numero_nao_autorizado', { numero: '5565911112222', canal_nome: 'Canal J2A' });
 
@@ -242,7 +244,7 @@ test('rotas internas: só de 127.0.0.1, sem proxy e com o segredo', async () => 
   const ok = { 'x-servico-externo-secret': 'segredo-falso-de-teste' };
   try {
     ligarChave(1);
-    for (const rota of ['POST /api/ia-command/whatsapp/talk/mensagem', 'POST /api/ia-command/whatsapp/talk/recibo', 'POST /api/ia-command/whatsapp/talk/batimento',
+    for (const rota of ['POST /api/ia-command/whatsapp/talk/mensagem', 'POST /api/ia-command/whatsapp/talk/decisao', 'POST /api/ia-command/whatsapp/talk/batimento',
       'POST /api/ia-command/whatsapp/talk/atendimento-iniciado', 'POST /api/ia-command/whatsapp/talk/atendimento-encerrado']) {
       const corpo = { canal: NUMERO_CANAL, numero: '5565911112222' };
       assert.equal((await chamar(rota, { body: corpo })).status, 403, `${rota}: sem segredo`);
@@ -398,7 +400,7 @@ test('migração 98 completa um banco que já tinha a 97 antiga (caso do banco d
 
 test('recibo é exclusivo do ID da mensagem, mesmo para o mesmo telefone e instante', async () => {
   limparEstado(); ligarChave(1);
-  talk.registrarRecibo(NUMERO_CANAL, '5565911112222', 'id-a', 'oi');
+  assert.equal(talk.decidirMensagem(NUMERO_CANAL, '5565911112222', 'id-a', 'oi').dono, 'talk');
   assert.equal(await talk.aguardarRecibo(CANAL, '5565911112222@c.us', 'id-a', { esperaMs: 0 }), true);
   assert.equal(await talk.aguardarRecibo(CANAL, '5565911112222@c.us', 'id-b', { esperaMs: 0 }), false);
 });
@@ -443,6 +445,121 @@ test('recibo tardio nao reativa atendimento apos o prazo', async () => {
   limparEstado(); ligarChave(1);
   const numero = '5565999995116';
   assert.equal(await talk.aguardarRecibo(CANAL, numero + '@c.us', 'id-tardio', { esperaMs: 0 }), false);
-  assert.deepEqual(talk.registrarRecibo(NUMERO_CANAL, numero, 'id-tardio', 'atendente'), { registrado: false, expirado: true });
+  // A cópia atrasada do Talk encontra o assistente como dono e não reativa nada.
+  assert.equal(talk.decidirMensagem(NUMERO_CANAL, numero, 'id-tardio', 'atendente').dono, 'assistente');
   assert.equal(talk.estadoDoNumero(NUMERO_CANAL, numero).em_atendimento, false);
+});
+
+
+test('duas conexoes SQLite concorrentes escolhem um unico dono por mensagem', async () => {
+  const { Worker } = require('node:worker_threads');
+  const fs = require('node:fs'); const os = require('node:os'); const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'talk-decisao-')); const arquivo = path.join(dir, 'test.db');
+  const banco = new Database(arquivo); banco.pragma('journal_mode = WAL');
+  banco.exec(MIGRACOES.find(m => m.version === 100).sql);
+  banco.exec(MIGRACOES.find(m => m.version === 100).sql); // reaplicacao sem alterar dados
+  MIGRACOES.find(m => m.version === 101).run(banco); // colunas da retomada pelo Talk
+  const sinal = new SharedArrayBuffer(4); const flag = new Int32Array(sinal);
+  const codigo = `
+    const { parentPort, workerData } = require('node:worker_threads');
+    const Database = require(workerData.sqlite);
+    const db = new Database(workerData.arquivo); db.pragma('busy_timeout = 5000');
+    require(workerData.banco).getDB = () => db;
+    const talk = require(workerData.modulo); const flag = new Int32Array(workerData.sinal);
+    parentPort.postMessage('pronto'); Atomics.wait(flag, 0, 0);
+    const resultados = [];
+    for (let i = 0; i < 40; i++) resultados.push(talk.escolherDono('c', '5565999995116', 'm'+i, workerData.dono));
+    db.close(); parentPort.postMessage(resultados);
+  `;
+  const comum = { sqlite: require.resolve('better-sqlite3'), banco: require.resolve('../modules/database'), modulo: require.resolve('../modules/whatsapp/talk-compartilhado'), arquivo, sinal };
+  const criar = dono => new Worker(codigo, { eval: true, workerData: { ...comum, dono } });
+  const a = criar('talk'), b = criar('assistente');
+  const pronto = w => new Promise((resolve, reject) => { w.once('message', resolve); w.once('error', reject); });
+  try {
+    await Promise.all([pronto(a), pronto(b)]);
+    const espera = w => new Promise((resolve, reject) => { w.once('message', resolve); w.once('error', reject); });
+    const pa = espera(a), pb = espera(b); Atomics.store(flag, 0, 1); Atomics.notify(flag, 0, 2);
+    const [ra, rb] = await Promise.all([pa, pb]);
+    assert.deepEqual(ra, rb);
+    assert.equal(banco.prepare('SELECT COUNT(*) AS n FROM talk_decisoes_mensagem').get().n, 40);
+  } finally { await Promise.all([a.terminate(), b.terminate()]); banco.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ── Itens finais: ID sem plano B, falha ao gravar o dono, retomada pelo Talk, ID no log ──
+const decisao = (numero, id) => db.prepare('SELECT dono, nao_autorizado, respondida_em FROM talk_decisoes_mensagem WHERE mensagem_id = ?').get(id);
+
+test('ID final no monitor; sem id.id não há decisão (nunca usa o _serialized) e o IA Command responde como sempre', async () => {
+  ligarChave(1);
+  const s = servico();
+  const m = mensagem({ from: '5565966660000@c.us' });
+  await s._handleMessage(m.msg);
+  assert.ok(s.logs.some(([, l]) => l.includes(`id …${m.msg.id.id.slice(-6)}`)), 'ID final no log');
+  const sem = mensagem({ from: '5565966661111@c.us' });
+  delete sem.msg.id.id; // só o _serialized
+  const s2 = servico();
+  await s2._handleMessage(sem.msg);
+  assert.equal(sem.enviados.length, 1, 'aviso de sempre');
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM talk_decisoes_mensagem WHERE mensagem_id LIKE ?').get('%5565966661111%').n, 0, 'sem decisão com o _serialized');
+});
+
+test('banco falha ao gravar o dono: tenta de novo; se não der, responde como sempre e registra erro no monitor', async () => {
+  ligarChave(1);
+  const real = db;
+  let falhas = 2; // as duas primeiras tentativas falham; a terceira grava
+  db = new Proxy(real, { get: (alvo, p) => (p === 'prepare'
+    ? (sql) => { if (/INSERT OR IGNORE INTO talk_decisoes_mensagem/.test(sql) && falhas-- > 0) throw new Error('database is locked'); return alvo.prepare(sql); }
+    : (typeof alvo[p] === 'function' ? alvo[p].bind(alvo) : alvo[p])) });
+  try {
+    const s = servico();
+    const m = mensagem({ from: '5565967770000@c.us' });
+    await s._handleMessage(m.msg);
+    assert.equal(decisao('', m.msg.id.id)?.dono, 'assistente', 'gravou na 3ª tentativa');
+    assert.ok(!s.logs.some(([tipo]) => tipo === 'error'));
+    falhas = 99; // banco fora de vez
+    const s2 = servico();
+    const m2 = mensagem({ from: '5565967771111@c.us' });
+    await s2._handleMessage(m2.msg);
+    assert.equal(m2.enviados.length, 1, 'responde como sempre (nunca fica mudo)');
+    assert.ok(s2.logs.some(([tipo, l]) => tipo === 'error' && /não foi possível gravar o dono/.test(l)));
+  } finally {
+    db = real;
+  }
+});
+
+test('assistente pegou a mensagem de quem não é autorizado e não respondeu: o Talk espera e depois assume', async () => {
+  ligarChave(1);
+  // Aviso de "não autorizado" falha (IA Command "caiu" antes de responder): fica sem respondida_em.
+  const s = servico();
+  const m = mensagem({ from: '5565968880000@c.us', falhaEnvio: true });
+  await s._handleMessage(m.msg);
+  const id = m.msg.id.id;
+  assert.equal(decisao('', id).dono, 'assistente');
+  assert.equal(decisao('', id).respondida_em, null);
+  // Logo depois: o Talk espera (não grava, não descarta).
+  assert.deepEqual(talk.decidirMensagem(NUMERO_CANAL, '5565968880000', id, 'oi'), { canal_encontrado: true, repassar_ligado: true, dono: 'assistente', aguardar: true });
+  // Passado o prazo sem resposta: o Talk assume.
+  db.prepare('UPDATE talk_decisoes_mensagem SET criado_em = ? WHERE mensagem_id = ?').run(new Date(Date.now() - talk.RETOMADA_MS - 1000).toISOString(), id);
+  assert.deepEqual(talk.decidirMensagem(NUMERO_CANAL, '5565968880000', id, 'oi'), { canal_encontrado: true, repassar_ligado: true, dono: 'talk', retomada: true });
+  assert.equal(decisao('', id).dono, 'talk');
+
+  // Aviso saiu: a decisão fica com o assistente para sempre (o Talk descarta).
+  const s2 = servico();
+  const ok = mensagem({ from: '5565968881111@c.us' });
+  await s2._handleMessage(ok.msg);
+  assert.ok(decisao('', ok.msg.id.id).respondida_em, 'marcada como respondida');
+  db.prepare('UPDATE talk_decisoes_mensagem SET criado_em = ? WHERE mensagem_id = ?').run(new Date(Date.now() - talk.RETOMADA_MS - 1000).toISOString(), ok.msg.id.id);
+  assert.equal(talk.decidirMensagem(NUMERO_CANAL, '5565968881111', ok.msg.id.id, 'oi').dono, 'assistente');
+
+  // Usuário do ERP: nunca é assumido pelo Talk (a conversa do ERP não vai para o atendente).
+  db.prepare("INSERT INTO talk_decisoes_mensagem (channel_id, numero, mensagem_id, dono, criado_em, nao_autorizado) VALUES (?, '556599995116', 'erp1', 'assistente', ?, 0)")
+    .run(CANAL, new Date(Date.now() - talk.RETOMADA_MS - 1000).toISOString());
+  assert.equal(talk.decidirMensagem(NUMERO_CANAL, '5565999995116', 'erp1', 'faturamento').dono, 'assistente');
+});
+
+test('migração 101 roda de novo sem erro', () => {
+  const m101 = MIGRACOES.find(m => m.version === 101);
+  m101.run(db);
+  m101.run(db);
+  const cols = db.prepare('PRAGMA table_info(talk_decisoes_mensagem)').all().map(c => c.name);
+  assert.ok(cols.includes('nao_autorizado') && cols.includes('respondida_em'));
 });

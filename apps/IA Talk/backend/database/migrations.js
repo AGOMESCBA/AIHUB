@@ -504,4 +504,18 @@ module.exports = [
       `);
     },
   },
+  {
+    versao: 11,
+    descricao: 'Mensagens pendentes de decisão no número compartilhado',
+    sql: `CREATE TABLE IF NOT EXISTS atendimento_entradas_pendentes (
+      canal_id TEXT NOT NULL REFERENCES canais(id) ON DELETE CASCADE,
+      mensagem_id TEXT NOT NULL,
+      dados TEXT NOT NULL,
+      criada_em TEXT NOT NULL,
+      ultima_tentativa_em TEXT,
+      tentativas INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (canal_id, mensagem_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_atendimento_entradas_pendentes ON atendimento_entradas_pendentes (criada_em);`,
+  },
 ];

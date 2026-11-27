@@ -82,7 +82,10 @@ function decodificar(buffer, nome) {
       texto = new TextDecoder(encoding).decode(buffer);
     }
   } catch (_) { throw erro('Não foi possível ler a codificação do log. Envie um arquivo textual válido.'); }
-  if (/[\x00-\x08\x0b\x0e-\x1f]/.test(texto)) throw erro('O arquivo não contém um log textual legível.');
+  // Alguns logs do AppServer contêm backspace no meio de mensagens textuais.
+  // Removê-lo evita rejeitar o arquivo e preserva as posições das linhas.
+  texto = texto.replace(/\x08/g, '');
+  if (/[\x00-\x07\x0b\x0e-\x1f]/.test(texto)) throw erro('O arquivo não contém um log textual legível.');
   if (!texto.trim()) throw erro('O arquivo está vazio.');
   return { texto: texto.replace(/^\uFEFF/, ''), encoding };
 }

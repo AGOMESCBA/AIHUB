@@ -104,10 +104,15 @@ class SupervisorCanais {
     // AGENTS.md (segurança): log sem texto de mensagem — só tipo, remetente mascarado e tamanho.
     // O conteúdo vai para a conversa (Fase 2), nunca para o Terminal.
     const tamanho = String(m.texto || '').length;
-    this._log(canalId, 'received', `Mensagem (${m.tipo}) recebida de ${telefone.mascarar(m.de.valor)}${tamanho ? ` (${tamanho} caractere${tamanho === 1 ? '' : 's'})` : ''}.`);
+    // ID final da mensagem: o IA Command mostra o mesmo no monitor dele (conferência do número compartilhado).
+    const idFinal = m.id_decisao ? ` [id …${String(m.id_decisao).slice(-6)}]` : '';
+    this._log(canalId, 'received', `Mensagem (${m.tipo}) recebida de ${telefone.mascarar(m.de.valor)}${tamanho ? ` (${tamanho} caractere${tamanho === 1 ? '' : 's'})` : ''}${idFinal}.`);
     this.emitir(canalId, 'canal:mensagem', { canal_id: canalId, de_mascarado: telefone.mascarar(m.de.valor), tipo: m.tipo, em: m.em });
     // C9: número em atendimento → a mensagem vira conversa (o atendimento confere o uso do canal).
-    try { this.aoReceber?.(canalId, m); } catch (err) { this._log(canalId, 'error', `Falha ao registrar a conversa: ${err.message}`); }
+    try {
+      const recebimento = this.aoReceber?.(canalId, m);
+      if (recebimento && typeof recebimento.catch === 'function') recebimento.catch(() => this._log(canalId, 'error', 'Falha ao registrar a conversa. Confira as mensagens pendentes.'));
+    } catch (_) { this._log(canalId, 'error', 'Falha ao registrar a conversa. Confira as mensagens pendentes.'); }
   }
 
   _resumirDescartadas() {

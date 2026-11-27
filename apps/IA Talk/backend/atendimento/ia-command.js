@@ -34,7 +34,7 @@ function criarClienteIaCommand({ env = process.env, fetchFn = fetch, timeoutMs =
     mensagem: (canal, numero, texto = '', { apenasConsulta = false, em = null } = {}) => chamar('POST', '/api/ia-command/whatsapp/talk/mensagem',
       { corpo: { canal, numero, texto: String(texto || ''), ...(apenasConsulta ? { apenas_consulta: true } : {}), ...(em ? { em } : {}) } }),
     // "Estou vivo" do Talk para o número (sem ele, o IA Command responde como sempre).
-    recibo: (canal, numero, mensagemId, texto = '') => chamar('POST', '/api/ia-command/whatsapp/talk/recibo', { corpo: { canal, numero, mensagem_id: mensagemId, texto } }),
+    decisao: (canal, numero, mensagemId, texto = '') => chamar('POST', '/api/ia-command/whatsapp/talk/decisao', { corpo: { canal, numero, mensagem_id: mensagemId, texto } }),
     batimento: (canal) => chamar('POST', '/api/ia-command/whatsapp/talk/batimento', { corpo: { canal } }),
     iniciado: (canal, numero, atividadeEm = null, reconciliacao = false) => chamar('POST', '/api/ia-command/whatsapp/talk/atendimento-iniciado', { corpo: { canal, numero, atividade_em: atividadeEm, reconciliacao } }),
     encerrado: (canal, numero) => chamar('POST', '/api/ia-command/whatsapp/talk/atendimento-encerrado', { corpo: { canal, numero } }),

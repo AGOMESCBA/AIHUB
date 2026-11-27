@@ -27,6 +27,10 @@ const VALIDADE_MS = 4 * 60 * 60 * 1000;
 const BATIMENTO_MS = 3 * 60 * 1000;
 const RECIBO_ESPERA_MS = 8000;
 const RECIBO_PASSO_MS = 400;
+// Decisão "assistente" de quem não é autorizado, sem resposta enviada: depois disto o Talk pode assumir.
+const RETOMADA_MS = 3 * 60 * 1000;
+// Tentativas de gravar o dono quando o banco está ocupado ou falha (além do busy_timeout do SQLite).
+const ESPERAS_DONO_MS = [0, 300, 700];
 // Palavras fixas (não passam pela IA): a mensagem inteira precisa ser uma delas.
 const GATILHOS = new Set([
   'atendente', 'atendimento', 'humano',
@@ -56,6 +60,7 @@ function _canal(channelId) {
 }
 const chaveLigada = (c) => Number(c?.chave) === 1;
 const talkVivo = (c, agoraMs = Date.now()) => !!c?.batimento && agoraMs - Date.parse(c.batimento) <= BATIMENTO_MS;
+function chaveAtiva(channelId) { try { return chaveLigada(_canal(channelId)); } catch (_) { return false; } }
 
 function _linha(channelId, numero) {
   const variantes = channelStore.variantesNumeroBrasil(numero);
@@ -141,28 +146,67 @@ function desvioAutorizado(channelId, sender, texto, agoraMs = Date.now()) {
   }
 }
 
-// Aguarda o recibo da mensagem identificada pelo provedor.
+// Aguarda a decisão da mensagem identificada pelo provedor.
 let esperaReciboMs = RECIBO_ESPERA_MS; // os testes encurtam
-async function aguardarRecibo(channelId, sender, mensagemId, { esperaMs = esperaReciboMs, passoMs = RECIBO_PASSO_MS } = {}) {
+function numeroDaDecisao(sender) {
+  const variantes = channelStore.variantesNumeroBrasil(digitos(sender));
+  return variantes.find(v => v.startsWith('55') && v.length === 12) || variantes[0] || '';
+}
+
+function escolherDono(channelId, sender, mensagemId, desejado, { naoAutorizado = false } = {}) {
+  const numero = numeroDaDecisao(sender);
+  if (!channelId || !numero || !mensagemId || !['talk', 'assistente'].includes(desejado)) return null;
+  const banco = db();
+  return banco.transaction(() => {
+    banco.prepare('INSERT OR IGNORE INTO talk_decisoes_mensagem (channel_id, numero, mensagem_id, dono, criado_em, nao_autorizado) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(String(channelId), numero, String(mensagemId), desejado, new Date().toISOString(), naoAutorizado ? 1 : 0);
+    return banco.prepare('SELECT dono FROM talk_decisoes_mensagem WHERE channel_id = ? AND numero = ? AND mensagem_id = ?')
+      .get(String(channelId), numero, String(mensagemId))?.dono || null;
+  })();
+}
+
+// Grava o dono com novas tentativas (banco ocupado/falha passageira). { dono } ou { dono: null, erro }.
+// Sem conseguir gravar, quem chama responde como sempre (nunca fica mudo) e registra o erro: é o único
+// caso em que a mesma mensagem pode ser atendida pelos dois (falha de banco; nunca mensagem perdida).
+async function registrarDono(channelId, sender, mensagemId, desejado, opcoes = {}) {
+  let erro = null;
+  for (const espera of ESPERAS_DONO_MS) {
+    if (espera) await new Promise(r => setTimeout(r, espera));
+    try {
+      const dono = escolherDono(channelId, sender, mensagemId, desejado, opcoes);
+      if (dono) return { dono };
+    } catch (e) { erro = e; }
+  }
+  return { dono: null, erro: erro || new Error('decisão não gravada') };
+}
+
+// A resposta do assistente a quem não é autorizado saiu: o Talk não assume mais esta mensagem.
+function marcarRespondida(channelId, sender, mensagemId) {
   try {
-    const variantes = channelStore.variantesNumeroBrasil(digitos(sender));
-    if (!variantes.length || !mensagemId) return false;
-    const consulta = db().prepare(`SELECT 1 FROM talk_recibos_mensagem WHERE channel_id = ? AND mensagem_id = ?
-        AND numero IN (${variantes.map(() => '?').join(', ')}) LIMIT 1`);
+    const numero = numeroDaDecisao(sender);
+    if (!numero || !mensagemId) return false;
+    return db().prepare(`UPDATE talk_decisoes_mensagem SET respondida_em = ? WHERE channel_id = ? AND numero = ? AND mensagem_id = ?
+        AND dono = 'assistente' AND respondida_em IS NULL`).run(new Date().toISOString(), String(channelId), numero, String(mensagemId)).changes > 0;
+  } catch (_) { return false; }
+}
+
+async function aguardarRecibo(channelId, sender, mensagemId, { esperaMs = esperaReciboMs, passoMs = RECIBO_PASSO_MS, naoAutorizado = false, aoFalhar = null } = {}) {
+  try {
+    const numero = numeroDaDecisao(sender);
+    if (!numero || !mensagemId) return false;
+    const consulta = db().prepare('SELECT dono FROM talk_decisoes_mensagem WHERE channel_id = ? AND numero = ? AND mensagem_id = ?');
     const fim = Date.now() + esperaMs;
     for (;;) {
-      if (consulta.get(String(channelId), String(mensagemId), ...variantes)) return true;
-      if (Date.now() >= fim) return db().transaction(() => {
-        if (consulta.get(String(channelId), String(mensagemId), ...variantes)) return true;
-        db().prepare('INSERT OR IGNORE INTO talk_recibos_expirados (channel_id, numero, mensagem_id, criado_em) VALUES (?, ?, ?, ?)')
-          .run(String(channelId), digitos(sender), String(mensagemId), new Date().toISOString());
-        return false;
-      })();
+      const dono = consulta.get(String(channelId), numero, String(mensagemId))?.dono;
+      if (dono) return dono === 'talk';
+      if (Date.now() >= fim) {
+        const r = await registrarDono(channelId, sender, mensagemId, 'assistente', { naoAutorizado });
+        if (!r.dono && aoFalhar) aoFalhar(r.erro);
+        return r.dono === 'talk';
+      }
       await new Promise(r => setTimeout(r, passoMs));
     }
-  } catch (_) {
-    return false;
-  }
+  } catch (_) { return false; }
 }
 
 // O aviso de passagem não saiu: desfaz, e a pessoa continua com o assistente.
@@ -196,24 +240,29 @@ function mensagemNoTalk(numeroCanal, numero, texto, { recibo = true, agoraMs = D
   return e;
 }
 
-// Só chamado depois de o Talk confirmar a gravação no seu banco.
-function registrarRecibo(numeroCanal, numero, mensagemId, texto = '') {
+function decidirMensagem(numeroCanal, numero, mensagemId, texto) {
   const canal = canalPorNumero(numeroCanal);
-  if (!canal || !chaveLigada(canal) || !mensagemId) return { registrado: false };
-  return db().transaction(() => {
-    const variantesNumero = channelStore.variantesNumeroBrasil(numero);
-    const expirado = variantesNumero.length && db().prepare(`SELECT 1 FROM talk_recibos_expirados WHERE channel_id = ? AND mensagem_id = ? AND numero IN (${variantesNumero.map(() => '?').join(', ')})`).get(canal.id, String(mensagemId), ...variantesNumero);
-    if (expirado) return { registrado: false, expirado: true };
-    const e = _estado(canal, numero, Date.now());
-    if (e.autorizado && pedeAtendimento(texto)) {
-      const variantes = channelStore.variantesNumeroBrasil(numero);
-      if (variantes.length) db().prepare(`DELETE FROM talk_retorno_assistente WHERE channel_id = ? AND numero IN (${variantes.map(() => '?').join(', ')})`).run(canal.id, ...variantes);
-      if (!e.em_atendimento) iniciar(canal.id, digitos(numero));
+  if (!canal) return { canal_encontrado: false, repassar_ligado: false, dono: null };
+  if (!chaveLigada(canal)) return { canal_encontrado: true, repassar_ligado: false, dono: null };
+  const estado = mensagemNoTalk(numeroCanal, numero, texto);
+  const desejado = VOLTAR.has(normalizarTexto(texto)) ? 'assistente' : (!estado.autorizado || estado.em_atendimento ? 'talk' : 'assistente');
+  let dono = escolherDono(canal.id, numero, mensagemId, desejado, { naoAutorizado: !estado.autorizado });
+  if (dono === 'talk' && estado.autorizado && !emAtendimento(canal.id, digitos(numero)) && pedeAtendimento(texto)) iniciar(canal.id, digitos(numero));
+  // O assistente ficou com a mensagem de quem NÃO é autorizado e ainda não respondeu: o Talk espera
+  // (aguardar) e, passados alguns minutos sem resposta (IA Command caiu), assume — essa pessoa só
+  // receberia o aviso de "não autorizado". Pergunta de usuário do ERP nunca é assumida pelo Talk.
+  if (dono === 'assistente') {
+    const d = db().prepare('SELECT nao_autorizado, respondida_em, criado_em FROM talk_decisoes_mensagem WHERE channel_id = ? AND numero = ? AND mensagem_id = ?')
+      .get(canal.id, numeroDaDecisao(numero), String(mensagemId));
+    if (d && Number(d.nao_autorizado) === 1 && !d.respondida_em) {
+      if (Date.now() - Date.parse(d.criado_em) < RETOMADA_MS) return { canal_encontrado: true, repassar_ligado: true, dono, aguardar: true };
+      const r = db().prepare(`UPDATE talk_decisoes_mensagem SET dono = 'talk' WHERE channel_id = ? AND numero = ? AND mensagem_id = ?
+          AND dono = 'assistente' AND respondida_em IS NULL`).run(canal.id, numeroDaDecisao(numero), String(mensagemId));
+      if (r.changes) dono = 'talk';
+      return { canal_encontrado: true, repassar_ligado: true, dono, retomada: dono === 'talk' };
     }
-    db().prepare('INSERT OR IGNORE INTO talk_recibos_mensagem (channel_id, numero, mensagem_id, criado_em) VALUES (?, ?, ?, ?)')
-      .run(canal.id, digitos(numero), String(mensagemId), new Date().toISOString());
-    return { registrado: true };
-  })();
+  }
+  return { canal_encontrado: true, repassar_ligado: true, dono };
 }
 
 function estadoDoNumero(numeroCanal, numero, agoraMs = Date.now()) {
@@ -256,7 +305,7 @@ function encerrarPorNumero(numeroCanal, numero) {
 
 module.exports = {
   VALIDADE_MS, BATIMENTO_MS, TEXTOS, normalizarTexto, pedeAtendimento,
-  repassarNaoAutorizado, desvioAutorizado, desfazerPassagem, aguardarRecibo,
-  mensagemNoTalk, registrarRecibo, estadoDoNumero, registrarBatimento, iniciarPorNumero, encerrarPorNumero,
+  repassarNaoAutorizado, desvioAutorizado, desfazerPassagem, aguardarRecibo, escolherDono, registrarDono, marcarRespondida, chaveAtiva, RETOMADA_MS,
+  mensagemNoTalk, decidirMensagem, estadoDoNumero, registrarBatimento, iniciarPorNumero, encerrarPorNumero,
   _test: { emAtendimento, iniciar, encerrar, canalPorNumero, definirEsperaRecibo: (ms) => { esperaReciboMs = ms; } },
 };

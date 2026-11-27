@@ -97,6 +97,17 @@ test('detecta UTF-8, Windows-1252 e UTF-16 com BOM preservando acentos', () => {
   }
 });
 
+test('aceita backspace em log textual para análise e busca, preservando as linhas', () => {
+  const conteudo = buffer('INFO: início\n[ERROR] Failed to load APPMAP ?\x08TLPP_ENV?\x08\n');
+  const r = localizarErros(conteudo, 'FIES.log');
+  assert.equal(r.cobertura.ocorrencias, 1);
+  assert.equal(r.grupos[0].linhas[0], 2);
+  assert.match(r.grupos[0].titulo, /TLPP_ENV/);
+  assert.doesNotMatch(r.grupos[0].titulo, /\x08/);
+  assert.equal(buscarNoLog(conteudo, 'FIES.log', 'TLPP_ENV').resultados[0].linha, 2);
+  assert.throws(() => localizarErros(buffer('ERROR: falha\x08\x00'), 'FIES.log'), /textual/);
+});
+
 test('recusa arquivo inválido, vazio, binário ou acima do limite', () => {
   assert.throws(() => localizarErros(buffer('error'), 'x.txt'), /extensão/);
   assert.throws(() => localizarErros(Buffer.alloc(0), 'x.log'), /vazio/);

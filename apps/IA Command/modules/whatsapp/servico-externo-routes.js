@@ -366,17 +366,14 @@ function registrarRotaServicoExterno(app) {
     }
   });
 
-  app.post('/api/ia-command/whatsapp/talk/recibo', (req, res) => {
+  app.post('/api/ia-command/whatsapp/talk/decisao', (req, res) => {
     const auth = segredoAutorizado(req);
     if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
     const { canal, numero } = lerCanalNumero(req);
     const id = String(req.body?.mensagem_id || '');
     if (!canal || !numero || !id || id.length > 512) return res.status(400).json({ error: 'canal, numero e mensagem_id sao obrigatorios.' });
-    try {
-      res.json(talkCompartilhado.registrarRecibo(canal, numero, id, String(req.body?.texto || '')));
-    } catch (_) {
-      res.status(500).json({ error: 'Falha ao registrar o recibo.' });
-    }
+    try { res.json(talkCompartilhado.decidirMensagem(canal, numero, id, String(req.body?.texto || ''))); }
+    catch (_) { res.status(500).json({ error: 'Falha ao decidir a mensagem.' }); }
   });
 
   // "Estou vivo" do Talk (a cada minuto): sem ele o IA Command responde como sempre.

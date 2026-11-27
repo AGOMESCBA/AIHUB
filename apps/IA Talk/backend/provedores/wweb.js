@@ -175,6 +175,8 @@ class ProvedorWweb extends ProvedorBase {
     }
     this.emit('mensagem', {
       id_provedor: msg.id?._serialized,
+      // Só o ID final (igual nas duas cópias): o _serialized traz o remetente, que pode vir @c.us num lado e @lid no outro.
+      id_decisao: msg.id?.id ? String(msg.id.id) : null,
       de: { tipo: tipoRemetente, valor, autor: grupo ? digitos(msg.author) : undefined },
       tipo: TIPO_MENSAGEM[msg.type] || 'outro',
       texto: msg.body || '',

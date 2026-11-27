@@ -1864,4 +1864,30 @@ MIGRATIONS.push({
   CREATE TABLE IF NOT EXISTS talk_recibos_expirados (channel_id TEXT NOT NULL, numero TEXT NOT NULL, mensagem_id TEXT NOT NULL, criado_em TEXT NOT NULL, PRIMARY KEY (channel_id, numero, mensagem_id));`,
 });
 
+MIGRATIONS.push({
+  version: 100,
+  descricao: 'IA Talk - decisao unica por mensagem',
+  sql: `CREATE TABLE IF NOT EXISTS talk_decisoes_mensagem (
+    channel_id TEXT NOT NULL,
+    numero TEXT NOT NULL,
+    mensagem_id TEXT NOT NULL,
+    dono TEXT NOT NULL CHECK (dono IN ('talk', 'assistente')),
+    criado_em TEXT NOT NULL,
+    PRIMARY KEY (channel_id, numero, mensagem_id)
+  );`,
+});
+
+// Retomada pelo Talk: decisão "assistente" de quem NÃO é autorizado e que não chegou a ser
+// respondida (o IA Command caiu antes do aviso) pode passar ao Talk depois de alguns minutos.
+MIGRATIONS.push({
+  version: 101,
+  descricao: 'IA Talk - decisao da mensagem: nao autorizado e hora da resposta do assistente',
+  sql: '-- Colunas criadas de forma idempotente em run.',
+  run(db) {
+    const colunas = db.prepare('PRAGMA table_info(talk_decisoes_mensagem)').all().map(c => c.name);
+    if (!colunas.includes('nao_autorizado')) db.exec('ALTER TABLE talk_decisoes_mensagem ADD COLUMN nao_autorizado INTEGER NOT NULL DEFAULT 0;');
+    if (!colunas.includes('respondida_em')) db.exec('ALTER TABLE talk_decisoes_mensagem ADD COLUMN respondida_em TEXT DEFAULT NULL;');
+  },
+});
+
 module.exports = MIGRATIONS;
