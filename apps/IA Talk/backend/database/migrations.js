@@ -318,4 +318,190 @@ module.exports = [
         recebimento_modo = CASE WHEN modo_teste = 1 THEN 'teste' ELSE 'todos' END;
     `,
   },
+  {
+    versao: 9,
+    descricao: 'Terminal mostra o texto enviado sem gravá-lo no log: a linha guarda só a referência da mensagem',
+    sql: `
+      -- O texto fica na mensagem (com controle por empresa); o log continua sem texto (AGENTS.md).
+      ALTER TABLE canal_log ADD COLUMN mensagem_id TEXT;
+    `,
+  },
+  {
+    versao: 10,
+    descricao: 'C9 — atendimento: setores, contatos, conversas, chamados do sistema de origem, retornos; origem das mensagens ampliada',
+    copiaAntes: true,
+    semChavesEstrangeiras: true,
+    executar(db) {
+      // 1) mensagens: o CHECK de origem só muda recriando a tabela (procedimento oficial do SQLite).
+      //    'atendimento' = resposta do atendente; 'automatica' = aviso de fora do horário.
+      const COLUNAS = `id, empresa_id, canal_id, aplicacao_id, usuario_id, origem, direcao, destino, tipo, conteudo, previa, estado,
+        tentativas, proxima_tentativa_em, id_provedor, correlacao_id, metadados, ultimo_erro, criada_em, atualizada_em`;
+      const antes = db.prepare('SELECT COUNT(*) AS n FROM mensagens').get().n;
+      db.exec(`
+        CREATE TABLE mensagens_v10 (
+          id                    TEXT PRIMARY KEY,
+          empresa_id            TEXT NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+          canal_id              TEXT NOT NULL REFERENCES canais(id) ON DELETE CASCADE,
+          aplicacao_id          TEXT REFERENCES aplicacoes(id) ON DELETE SET NULL,
+          usuario_id            TEXT REFERENCES usuarios(id) ON DELETE SET NULL,
+          origem                TEXT NOT NULL CHECK (origem IN ('api', 'teste_tela', 'atendimento', 'automatica')),
+          direcao               TEXT NOT NULL DEFAULT 'saida' CHECK (direcao IN ('saida', 'entrada')),
+          destino               TEXT NOT NULL,
+          tipo                  TEXT NOT NULL,
+          conteudo              TEXT,
+          previa                TEXT,
+          estado                TEXT NOT NULL,
+          tentativas            INTEGER NOT NULL DEFAULT 0,
+          proxima_tentativa_em  TEXT,
+          id_provedor           TEXT,
+          correlacao_id         TEXT,
+          metadados             TEXT NOT NULL DEFAULT '{}',
+          ultimo_erro           TEXT,
+          criada_em             TEXT NOT NULL,
+          atualizada_em         TEXT NOT NULL
+        );
+        INSERT INTO mensagens_v10 (${COLUNAS}) SELECT ${COLUNAS} FROM mensagens;
+      `);
+      const depois = db.prepare('SELECT COUNT(*) AS n FROM mensagens_v10').get().n;
+      if (depois !== antes) throw new Error(`Migração 10: ${antes} mensagens antes e ${depois} depois da cópia; nada foi gravado.`);
+      db.exec(`
+        DROP TABLE mensagens;
+        ALTER TABLE mensagens_v10 RENAME TO mensagens;
+        CREATE INDEX idx_mensagens_fila ON mensagens (canal_id, estado, criada_em);
+        CREATE INDEX idx_mensagens_empresa ON mensagens (empresa_id, criada_em DESC, id DESC);
+        CREATE UNIQUE INDEX idx_mensagens_provedor ON mensagens (canal_id, id_provedor) WHERE id_provedor IS NOT NULL;
+      `);
+
+      // 2) Atendimento (docs/contratos.md §8). Tudo publicado desligado: canal nasce 'integracao'.
+      db.exec(`
+        CREATE TABLE setores (
+          id             TEXT PRIMARY KEY,
+          empresa_id     TEXT NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+          codigo         TEXT NOT NULL,
+          nome           TEXT NOT NULL,
+          descricao      TEXT NOT NULL DEFAULT '',
+          situacao       TEXT NOT NULL DEFAULT 'ativo' CHECK (situacao IN ('ativo', 'inativo')),
+          horario        TEXT NOT NULL DEFAULT '{"ligado":false,"fuso":"America/Cuiaba","dias":[]}',
+          fora_horario   TEXT NOT NULL DEFAULT '{"ligado":false,"texto":""}',
+          versao         INTEGER NOT NULL DEFAULT 1,
+          criado_em      TEXT NOT NULL,
+          atualizado_em  TEXT NOT NULL,
+          UNIQUE (empresa_id, codigo)
+        );
+        CREATE UNIQUE INDEX idx_setores_nome ON setores (empresa_id, nome COLLATE NOCASE);
+
+        CREATE TABLE setor_membros (
+          setor_id    TEXT NOT NULL REFERENCES setores(id) ON DELETE CASCADE,
+          usuario_id  TEXT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+          PRIMARY KEY (setor_id, usuario_id)
+        );
+        CREATE INDEX idx_setor_membros_usuario ON setor_membros (usuario_id);
+
+        ALTER TABLE canais ADD COLUMN uso TEXT NOT NULL DEFAULT 'integracao' CHECK (uso IN ('integracao', 'atendimento', 'compartilhado'));
+        ALTER TABLE canais ADD COLUMN atendimento_empresa_id TEXT REFERENCES empresas(id) ON DELETE SET NULL;
+        ALTER TABLE canais ADD COLUMN setor_padrao_id TEXT REFERENCES setores(id) ON DELETE SET NULL;
+
+        -- Contato é por empresa: o mesmo telefone em duas empresas são dois contatos.
+        CREATE TABLE contatos (
+          id             TEXT PRIMARY KEY,
+          empresa_id     TEXT NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+          telefone       TEXT NOT NULL,
+          nome           TEXT NOT NULL,
+          nome_whatsapp  TEXT,
+          criado_em      TEXT NOT NULL,
+          atualizado_em  TEXT NOT NULL,
+          UNIQUE (empresa_id, telefone)
+        );
+
+        CREATE TABLE protocolos (
+          empresa_id  TEXT NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+          ano         INTEGER NOT NULL,
+          ultimo      INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (empresa_id, ano)
+        );
+
+        CREATE TABLE conversas (
+          id                           TEXT PRIMARY KEY,
+          empresa_id                   TEXT NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+          protocolo                    TEXT NOT NULL,
+          canal_id                     TEXT NOT NULL REFERENCES canais(id) ON DELETE CASCADE,
+          contato_id                   TEXT NOT NULL REFERENCES contatos(id) ON DELETE CASCADE,
+          setor_id                     TEXT NOT NULL REFERENCES setores(id),
+          responsavel_id               TEXT REFERENCES usuarios(id) ON DELETE SET NULL,
+          situacao                     TEXT NOT NULL DEFAULT 'aberta' CHECK (situacao IN ('aberta', 'encerrada')),
+          prioridade                   TEXT NOT NULL DEFAULT 'normal' CHECK (prioridade IN ('normal', 'alta')),
+          nao_lidas                    INTEGER NOT NULL DEFAULT 0,
+          etiquetas                    TEXT NOT NULL DEFAULT '[]',
+          motivo_encerramento          TEXT,
+          ultimo_aviso_fora_horario_em TEXT,
+          aberta_em                    TEXT NOT NULL,
+          atualizada_em                TEXT NOT NULL,
+          encerrada_em                 TEXT,
+          UNIQUE (empresa_id, protocolo)
+        );
+        -- No máximo uma conversa aberta por contato em cada número (vale até com duas mensagens chegando juntas).
+        CREATE UNIQUE INDEX idx_conversas_uma_aberta ON conversas (canal_id, contato_id) WHERE situacao = 'aberta';
+        CREATE INDEX idx_conversas_lista ON conversas (empresa_id, situacao, setor_id, atualizada_em DESC);
+        CREATE INDEX idx_conversas_contato ON conversas (contato_id, aberta_em);
+
+        -- Texto do atendimento fica aqui (nunca no log). Saída aponta para a mensagem da fila (estado vem dela).
+        CREATE TABLE conversa_itens (
+          id           TEXT PRIMARY KEY,
+          conversa_id  TEXT NOT NULL REFERENCES conversas(id) ON DELETE CASCADE,
+          categoria    TEXT NOT NULL CHECK (categoria IN ('mensagem', 'nota', 'evento')),
+          direcao      TEXT CHECK (direcao IN ('entrada', 'saida')),
+          autor_tipo   TEXT NOT NULL CHECK (autor_tipo IN ('contato', 'atendente', 'sistema', 'ia')),
+          autor_id     TEXT,
+          autor_nome   TEXT NOT NULL,
+          tipo         TEXT,
+          texto        TEXT,
+          mensagem_id  TEXT REFERENCES mensagens(id) ON DELETE SET NULL,
+          id_provedor  TEXT,
+          em           TEXT NOT NULL
+        );
+        CREATE INDEX idx_conversa_itens ON conversa_itens (conversa_id, em, id);
+        CREATE INDEX idx_conversa_itens_mensagem ON conversa_itens (mensagem_id) WHERE mensagem_id IS NOT NULL;
+
+        -- Chamado do sistema de origem ligado à conversa (§8.9). Cada aplicação só vê os seus.
+        CREATE TABLE conversa_referencias (
+          conversa_id   TEXT NOT NULL REFERENCES conversas(id) ON DELETE CASCADE,
+          aplicacao_id  TEXT NOT NULL REFERENCES aplicacoes(id) ON DELETE CASCADE,
+          sistema       TEXT NOT NULL,
+          ref_id        TEXT NOT NULL,
+          titulo        TEXT,
+          link          TEXT,
+          criado_em     TEXT NOT NULL,
+          PRIMARY KEY (conversa_id, aplicacao_id, sistema, ref_id)
+        );
+        CREATE INDEX idx_referencias_chamado ON conversa_referencias (aplicacao_id, sistema, ref_id);
+
+        CREATE TABLE respostas_rapidas (
+          id             TEXT PRIMARY KEY,
+          empresa_id     TEXT NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+          atalho         TEXT NOT NULL,
+          titulo         TEXT NOT NULL,
+          texto          TEXT NOT NULL,
+          setor_id       TEXT REFERENCES setores(id) ON DELETE SET NULL,
+          situacao       TEXT NOT NULL DEFAULT 'ativa' CHECK (situacao IN ('ativa', 'inativa')),
+          atualizado_em  TEXT NOT NULL,
+          UNIQUE (empresa_id, atalho)
+        );
+
+        -- Retornos para o sistema de origem: ficam até ele confirmar (pelo menos uma vez).
+        CREATE TABLE retornos (
+          id                  TEXT PRIMARY KEY,
+          aplicacao_id        TEXT NOT NULL REFERENCES aplicacoes(id) ON DELETE CASCADE,
+          empresa_id          TEXT NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+          tipo                TEXT NOT NULL,
+          em                  TEXT NOT NULL,
+          conversa_id         TEXT NOT NULL REFERENCES conversas(id) ON DELETE CASCADE,
+          conversa_protocolo  TEXT NOT NULL,
+          conversa_situacao   TEXT NOT NULL,
+          dados               TEXT NOT NULL DEFAULT '{}',
+          confirmado_em       TEXT
+        );
+        CREATE INDEX idx_retornos_pendentes ON retornos (aplicacao_id, em, id) WHERE confirmado_em IS NULL;
+      `);
+    },
+  },
 ];

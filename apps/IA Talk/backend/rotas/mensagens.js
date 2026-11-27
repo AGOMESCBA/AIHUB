@@ -15,6 +15,7 @@ const { ESTADOS_COM_ACAO_MANUAL } = require('../contratos');
 const repo = require('../mensagens/repositorio');
 const config = require('../config');
 const { SQL_VISIVEIS } = require('./canais');
+const repoAtd = require('../atendimento/repositorio');
 
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -88,6 +89,9 @@ function criarRotasMensagens({ db, despachante = null, log = console }) {
   r.get('/painel', exigirRotina(ROTINAS.painel), (req, res) => {
     const empresa = req.contexto.exigirEmpresa();
     const hoje = new Date().toISOString().slice(0, 10);
+    const retornosVencidos = (empresaId) => db.prepare(`SELECT a.id, a.nome, COUNT(*) AS n FROM retornos r JOIN aplicacoes a ON a.id = r.aplicacao_id
+        WHERE r.empresa_id = ? AND r.confirmado_em IS NULL AND r.em < ? GROUP BY a.id, a.nome ORDER BY a.nome`)
+      .all(empresaId, new Date(Date.now() - repoAtd.VALIDADE_RETORNO_MS).toISOString());
     const canais = db.prepare(`SELECT * FROM (${SQL_VISIVEIS.replace(/@empresa_id/g, '?')})`).all(empresa, empresa);
     const comProblema = canais.filter(c => !['conectado', 'parado'].includes(c.estado));
     const conta = (sql, ...p) => db.prepare(sql).get(...p).n;
@@ -104,6 +108,10 @@ function criarRotasMensagens({ db, despachante = null, log = console }) {
       ...(desconhecidas ? [{ tipo: 'mensagens_desconhecidas', gravidade: 'alta', mensagem: `${desconhecidas} mensagem(ns) com resultado desconhecido: confira e decida reenviar ou dar como falha.`, link: `${B}/mensagens.html?estado=desconhecida` }] : []),
       ...comProblema.map(c => ({ tipo: 'canal_com_problema', gravidade: c.estado === 'erro' ? 'alta' : 'media',
         mensagem: `O canal ${c.nome} está ${c.estado.replace('_', ' ')}.`, link: `${B}/canais.html?id=${encodeURIComponent(c.id)}` })),
+      // C9 §8.9: retorno que o sistema de origem não confirmou em 30 dias vence (fica guardado, não é mais entregue).
+      ...retornosVencidos(empresa).map(a => ({ tipo: 'retornos_vencidos', gravidade: 'media',
+        mensagem: `${a.n} retorno(s) para ${a.nome} venceram sem confirmação (mais de 30 dias). Confira a integração desse sistema.`,
+        link: `${B}/aplicacoes.html?id=${encodeURIComponent(a.id)}` })),
     ];
     res.json({
       canais: { total: canais.length, conectados: canais.filter(c => c.estado === 'conectado').length, com_problema: comProblema.length },

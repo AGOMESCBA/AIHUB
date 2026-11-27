@@ -26,6 +26,7 @@ const { EVENTOS_SOCKET, ESTADOS_COM_ACAO_MANUAL } = require('../contratos');
 const regras = require('../canais/regras');
 const { aplicarSegurancaHttp, montarEstaticos } = require('../servidor');
 const { criarDados, mascararTelefone, BASE_SIMULADA } = require('./dados');
+const { criarAtendimentoSimulado } = require('./atendimento');
 
 const CENARIOS_ERRO = {
   400: () => erro('requisicao_invalida', 'Confira os campos destacados.', { campos: { nome: 'Informe o nome.', apelido: 'Use só letras minúsculas, números e hífen (3 a 40).' } }),
@@ -98,7 +99,7 @@ function exigirCampos(corpo, regras) {
 const obrigatorio = (rotulo) => (v) => (String(v ?? '').trim() ? null : `Informe ${rotulo}.`);
 const APELIDO = /^[a-z0-9-]{3,40}$/;
 
-function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, log = console } = {}) {
+function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, intervaloConversaMs = 25000, log = console } = {}) {
   const dados = criarDados();
   const sessao = { empresaId: 'emp_j2a', usuarioId: 'usr_ana', plataforma: true };
   const idempotencia = new Map(); // Idempotency-Key -> { corpo, resposta }
@@ -126,6 +127,9 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, l
     id: novo('aud'), em: agora(), usuario: { id: 'usr_ana', nome: 'Ana Ribeiro' }, aplicacao: null,
     acao, alvo_tipo: acao.split('.')[0], alvo_id: null, resumo, ip_mascarado: '127.0.•••.•••',
   });
+
+  // C8 — Atendimento (setores, conversas, contatos, respostas rápidas): backend/simulado/atendimento.js.
+  const atendimento = criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar, exigirCampos, emitir, intervaloConversaMs });
 
   const app = express();
   aplicarSegurancaHttp(app);
@@ -347,7 +351,7 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, l
     const numero = numeroUnico(req.body.numero);
     const c = { id: novo('cn'), nome: req.body.nome.trim(), numero, provedor: 'wweb', estado: 'parado', estado_desde: agora(),
       empresa_dona: { id: empresaAtual().id, nome: empresaAtual().nome }, empresas_vinculadas: [{ id: empresaAtual().id, nome: empresaAtual().nome, padrao: true }],
-      capacidades: dados.canais[0].capacidades, fila_pendente: 0, ultima_mensagem_em: null };
+      capacidades: dados.canais[0].capacidades, fila_pendente: 0, ultima_mensagem_em: null, uso: 'integracao', atendimento: null };
     dados.canais.push(c);
     dados.logCanal[c.id] = [{ em: agora(), tipo: 'system', mensagem: 'Canal cadastrado. Clique em Conectar para gerar o QR Code.' }];
     res.status(201).json(canalPublico(c));
@@ -398,6 +402,7 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, l
       const padroes = new Map(req.body.empresas_vinculadas.map(v => [v.id, !!v.padrao]));
       c.empresas_vinculadas = dados.empresas.filter(e => padroes.has(e.id)).map(e => ({ id: e.id, nome: e.nome, padrao: padroes.get(e.id) }));
     }
+    atendimento.aplicarNoCanal(req, c);
     res.json(canalPublico(c));
   });
   const ACOES_CANAL = {
@@ -487,7 +492,7 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, l
     if (!para) throw erro('sem_permissao', 'Em teste, só os números da lista de teste deste canal recebem mensagens.', { campos: { para_indice: 'Fora da lista de teste.' } });
     const t0 = agora();
     const m = { id: novo('msg'), direcao: 'saida', canal: { id: c.id, nome: c.nome }, aplicacao: null, origem: 'teste_tela',
-      contato_mascarado: mascararTelefone(para), tipo: 'texto', previa: String(req.body.texto).trim().slice(0, 80), estado: 'aceita',
+      contato_mascarado: mascararTelefone(para), tipo: 'texto', previa: String(req.body.texto).trim().slice(0, 80), texto: String(req.body.texto).trim(), estado: 'aceita',
       correlacao_id: null, criada_em: t0, atualizada_em: t0, historico_estados: [{ estado: 'aceita', em: t0, detalhe: 'Envio de teste pela tela.' }], metadados: {}, anexos: [] };
     dados.mensagens.unshift(m);
     const falhar = /falha/i.test(req.body.texto);
@@ -498,6 +503,12 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, l
       m.historico_estados.push({ estado, em: m.atualizada_em, detalhe: estado === 'falhou' ? 'Número não encontrado no WhatsApp.' : null });
       emitir(EVENTOS_SOCKET.servidor.estadoMensagem, { id: m.id, estado, em: m.atualizada_em }, 'painel');
       emitir(EVENTOS_SOCKET.servidor.estadoMensagem, { id: m.id, estado, em: m.atualizada_em }, sala(c.id));
+      if (estado === 'enviada') {
+        // Como o servidor real: a linha do log só referencia a mensagem; o texto vem da mensagem.
+        const linha = { em: m.atualizada_em, tipo: 'sent', mensagem: `Mensagem (texto) enviada para ${m.contato_mascarado} (teste pela tela).`, mensagem_id: m.id };
+        (dados.logCanal[c.id] ||= []).push({ ...linha, texto: m.texto });
+        emitir(S.servidor.logCanal, { canal_id: c.id, ...linha }, sala(c.id));
+      }
     }, (i + 1) * 1200).unref?.());
     auditar('canal.enviar_teste', `Enviou mensagem de teste pelo canal ${c.nome}`);
     res.status(202).json(m);
@@ -526,6 +537,8 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, l
     filtros: { acao: (i, v) => i.acao.startsWith(v), usuario_id: (i, v) => i.usuario?.id === v, de: naData('em', (a, v) => a >= v), ate: naData('em', (a, v) => a <= v) },
     ordenarPadrao: 'em',
   })));
+
+  atendimento.rotas(admin);
 
   admin.use((req, _res, next) => next(erro('nao_encontrado', `Rota não encontrada: ${req.method} ${req.path}`)));
   admin.use(middlewareErros(log));
@@ -623,6 +636,7 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, l
     const itens = fila.slice(depois, depois + limite).map(e => ({ id: e.id, tipo: e.tipo, em: e.em, dados: { mensagem_id: 'msg_ex001', estado: 'lida' } }));
     res.json({ itens, proximo_cursor: codificarCursor({ o: depois + itens.length }), tem_mais: depois + itens.length < fila.length });
   });
+  atendimento.rotasV1(v1); // C8 §8.9: conversas e retornos do sistema de origem
   v1.use((req, _res, next) => next(erro('nao_encontrado', `Rota não encontrada: ${req.method} ${req.path}`)));
   v1.use(middlewareErros(log));
   app.use(config.API_V1, v1);
@@ -699,6 +713,7 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, l
     });
     socket.on(S.cliente.sairCanal, ({ canal_id } = {}) => socket.leave(sala(canal_id)));
     socket.on(S.cliente.assinarPainel, () => { socket.join('painel'); socket.emit(S.servidor.painelAtualizado, painel()); });
+    atendimento.socket(socket);
   });
 
   // Terminal "ao vivo": linhas periódicas em todos os canais assinados.
@@ -743,6 +758,7 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, l
     },
     fechar() {
       timers.forEach(clearInterval);
+      atendimento.parar();
       return new Promise((resolve) => { io.close(); servidor.close(() => resolve()); });
     },
   };
@@ -760,6 +776,6 @@ if (require.main === module) {
   const sim = criarServidorSimulado();
   sim.iniciar().then(({ address, port }) => {
     console.log(`[IA Talk · simulado] http://${address}:${port}${config.BASE_PATH}/`);
-    console.log('[IA Talk · simulado] Cenários: cabeçalho X-Talk-Simular ou ?simular=vazio,lento,400,401,403,404,409,422,429,500');
+    console.log('[IA Talk · simulado] Cenários: cabeçalho X-Talk-Simular ou ?simular=vazio,lento,atendente,400,401,403,404,409,422,429,500');
   });
 }

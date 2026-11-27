@@ -1803,4 +1803,65 @@ MIGRATIONS.push({
   },
 });
 
+MIGRATIONS.push({
+  version: 97,
+  descricao: 'IA Talk - numero compartilhado: chave por canal (nasce desligada) e atendimentos humanos em andamento',
+  sql: '-- Coluna e tabela criadas de forma idempotente em run.',
+  run(db) {
+    // 0 = comportamento de sempre (responde "numero nao autorizado"). So muda canal a canal, pelo botao.
+    const existe = db.prepare('PRAGMA table_info(whatsapp_channels)').all()
+      .some(coluna => coluna.name === 'repassar_nao_autorizados_talk');
+    if (!existe) db.exec('ALTER TABLE whatsapp_channels ADD COLUMN repassar_nao_autorizados_talk INTEGER NOT NULL DEFAULT 0;');
+    // Pessoa autorizada que pediu atendimento humano: o assistente fica em silencio para ela
+    // ate o IA Talk encerrar ou passarem 4 h sem mensagem (modules/whatsapp/talk-compartilhado.js).
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS talk_atendimentos (
+        channel_id           TEXT NOT NULL,
+        numero               TEXT NOT NULL,
+        iniciado_em          TEXT NOT NULL,
+        ultima_atividade_em  TEXT NOT NULL,
+        PRIMARY KEY (channel_id, numero)
+      );
+    `);
+  },
+});
+
+// A 97 pode já ter rodado em algum banco (rodou no de desenvolvimento): o que veio depois entra aqui.
+MIGRATIONS.push({
+  version: 98,
+  descricao: 'IA Talk - numero compartilhado: sinal de vida do Talk e recibo por mensagem',
+  sql: '-- Coluna e tabela criadas de forma idempotente em run.',
+  run(db) {
+    // "Estou vivo" do IA Talk (a cada minuto): sem sinal recente, o IA Command responde como sempre.
+    const temBatimento = db.prepare('PRAGMA table_info(whatsapp_channels)').all()
+      .some(coluna => coluna.name === 'talk_batimento_em');
+    if (!temBatimento) db.exec('ALTER TABLE whatsapp_channels ADD COLUMN talk_batimento_em TEXT DEFAULT NULL;');
+    // Recibo por mensagem: o Talk conferiu e vai gravar a mensagem deste numero. mensagem_em = hora
+    // da mensagem no WhatsApp (a mesma nos dois aparelhos). Sem recibo, o IA Command responde como sempre.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS talk_recebimentos (
+        channel_id   TEXT NOT NULL,
+        numero       TEXT NOT NULL,
+        mensagem_em  TEXT NOT NULL,
+        PRIMARY KEY (channel_id, numero)
+      );
+    `);
+  },
+});
+
+MIGRATIONS.push({
+  version: 99,
+  descricao: 'IA Talk - recibos identificados pela mensagem do provedor',
+  sql: `CREATE TABLE IF NOT EXISTS talk_recibos_mensagem (
+    channel_id TEXT NOT NULL,
+    numero TEXT NOT NULL,
+    mensagem_id TEXT NOT NULL,
+    criado_em TEXT NOT NULL,
+    PRIMARY KEY (channel_id, numero, mensagem_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_talk_recibos_criado_em ON talk_recibos_mensagem (criado_em);
+  CREATE TABLE IF NOT EXISTS talk_retorno_assistente (channel_id TEXT NOT NULL, numero TEXT NOT NULL, em TEXT NOT NULL, PRIMARY KEY (channel_id, numero));
+  CREATE TABLE IF NOT EXISTS talk_recibos_expirados (channel_id TEXT NOT NULL, numero TEXT NOT NULL, mensagem_id TEXT NOT NULL, criado_em TEXT NOT NULL, PRIMARY KEY (channel_id, numero, mensagem_id));`,
+});
+
 module.exports = MIGRATIONS;

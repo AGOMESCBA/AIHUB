@@ -102,6 +102,10 @@ test('C3: envio pela API v1 e pela tela até "lida", idempotência, falhas e aç
   assert.equal((await v1('tk_live_falso')('/mensagens', { metodo: 'POST', corpo, chave: 'pedido-0001' })).status, 401);
   r = await api('/mensagens', { metodo: 'POST', corpo });
   assert.equal(r.status, 400, 'sem Idempotency-Key');
+  assert.equal(r.corpo.erro.codigo, 'requisicao_invalida', 'código da tabela do contrato, não o interno da G8');
+  assert.ok(r.corpo.erro.campos['Idempotency-Key']);
+  r = await api('/mensagens', { metodo: 'POST', corpo, chave: 'curta' });
+  assert.equal(r.corpo.erro.codigo, 'requisicao_invalida', 'chave fora do formato (8 a 128)');
   r = await api('/mensagens', { metodo: 'POST', corpo: { ...corpo, canal: 'cn_outro' }, chave: 'pedido-0002' });
   assert.equal(r.corpo.erro.codigo, 'canal_nao_autorizado');
   r = await api('/mensagens', { metodo: 'POST', corpo: { ...corpo, para: '5565988887777' }, chave: 'pedido-0003' });
@@ -186,6 +190,21 @@ test('C3: envio pela API v1 e pela tela até "lida", idempotência, falhas e aç
   const log = (await nav.ir(`/api/admin/canais/${c.id}/log?tipo=sent`)).corpo.itens;
   assert.ok(log.length >= 3);
   assert.ok(log.every(l => !l.mensagem.includes('5565999990010')));
+
+  // Texto enviado no Terminal: vem da mensagem, só para a empresa que enviou; o log gravado não tem texto.
+  const linhaTeste = log.find(l => l.mensagem_id === idTeste);
+  assert.equal(linhaTeste?.texto, 'Teste pela tela');
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM canal_log WHERE instr(mensagem, 'Teste pela tela') > 0").get().n, 0, 'AGENTS.md: log sem texto');
+  assert.equal((await nav.ir(`/api/admin/mensagens/${idTeste}`)).corpo.texto, 'Teste pela tela', 'detalhe traz o texto completo');
+  const navOutra = navegador();
+  const acesso = primeiroAcesso({ db, nome: 'Vizinha', telefone: '5565999990009', empresa: 'Vizinha', apelido: 'vizinha' });
+  await navOutra.ir(acesso.link.slice(acesso.link.indexOf('/api/publico')));
+  const vizinha = db.prepare("SELECT id FROM empresas WHERE apelido = 'vizinha'").get().id;
+  db.prepare('INSERT INTO canal_empresas (canal_id, empresa_id, padrao) VALUES (?, ?, 0)').run(c.id, vizinha); // mesmo número, outra empresa
+  const logVizinha = (await navOutra.ir(`/api/admin/canais/${c.id}/log?tipo=sent`)).corpo.itens;
+  assert.ok(logVizinha.length >= 3, 'a vizinha vê as linhas do canal…');
+  assert.ok(logVizinha.every(l => l.texto === undefined && l.mensagem_id === undefined), '…mas nunca o texto de outra empresa');
+  assert.equal((await navOutra.ir(`/api/admin/mensagens/${idTeste}`)).status, 404);
 });
 
 test('C3: envio_habilitado só pela administração da plataforma; outra empresa não vê a mensagem', async () => {

@@ -1,0 +1,853 @@
+/* IA Talk · Etapa G13 — Central de Atendimento (frontend/atendimento.html).
+   Layout híbrido aprovado no A0 (26/11/2026):
+     >= 1280 px: quatro áreas fixas (Visões/Setores · Conversas · Conversa · Contato)
+     761–1279 px: setores + conversas + conversa ampla + gaveta retrátil Contato (sem cobrir conversa)
+     <= 760 px: telas em sequência (Setores -> Conversas -> Conversa) + folha deslizante Contato
+   Usa exclusivamente tokens de iahub.css e talk.css (suporte completo a temas claro e escuro). */
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+:where(button, a, input, select, textarea, [tabindex="0"]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+html:has(body.atd-body),
+body.atd-body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg-base);
+  color: var(--text-hi);
+  overflow-x: hidden;
+}
+
+.atd-app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  max-width: 100vw;
+  overflow: hidden;
+}
+
+.atd-estado-global {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg-base);
+}
+
+/* ── Grid híbrido principal ──────────────────────────────────────────── */
+.atd-workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 208px 286px minmax(0, 1fr) 292px;
+  overflow: hidden;
+  transition: grid-template-columns .2s ease;
+}
+
+.atd-so-medio,
+.atd-so-mobile,
+.atd-so-mobile-ou-medio { display: none; }
+.atd-sheet-backdrop { display: none; }
+
+@media (max-width: 1279px) and (min-width: 761px) {
+  .atd-so-medio,
+  .atd-so-mobile-ou-medio { display: inline-flex; }
+
+  .atd-workspace {
+    grid-template-columns: 184px 244px minmax(0, 1fr) 0px;
+  }
+  .atd-workspace.gaveta-aberta {
+    grid-template-columns: 184px 244px minmax(0, 1fr) 264px;
+  }
+  .atd-workspace .atd-col--setores { padding: 10px 6px; }
+  .atd-workspace .atd-nav-btn { padding: 7px 7px; font-size: 12px; }
+  .atd-workspace:not(.gaveta-aberta) .atd-col--lateral {
+    border-left: none;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+.atd-col {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+.atd-col:last-child { border-right: none; }
+
+/* ── Coluna 1: Visões e setores ──────────────────────────────────────── */
+.atd-col--setores {
+  background: var(--bg-base);
+  padding: 10px;
+  gap: 12px;
+  overflow-y: auto;
+}
+.atd-status-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.atd-rt-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-md);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.atd-rt-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-lo);
+  flex: none;
+}
+.atd-rt-badge--ok .atd-rt-dot { background: var(--success); }
+.atd-rt-badge--fallback .atd-rt-dot { background: var(--warning); }
+
+.atd-usuario-ativo {
+  font-size: 11.5px;
+  color: var(--text-lo);
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.atd-usuario-ativo strong { color: var(--text-hi); }
+
+.atd-nav-grupo-tit {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-lo);
+  padding: 0 8px 6px;
+}
+.atd-nav-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.atd-nav-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-hi);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+.atd-nav-btn:hover { background: var(--bg-hover); }
+.atd-nav-btn.ativo {
+  background: var(--bg-active, color-mix(in srgb, var(--accent) 12%, transparent));
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent);
+  font-weight: 700;
+}
+.atd-nav-nome {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.atd-contador {
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  text-align: center;
+  background: var(--bg-hover);
+  color: var(--text-md);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.atd-nav-btn.ativo .atd-contador {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+/* ── Coluna 2: Lista de conversas ────────────────────────────────────── */
+.atd-lista-topo {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: none;
+  background: var(--bg-card);
+}
+.atd-lista-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.atd-lista-titulo {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-hi);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.atd-conversas-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  background: var(--bg-card);
+}
+.atd-conversas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.atd-conv-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 12px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-hi);
+  transition: background var(--transition);
+}
+.atd-conv-item:hover { background: var(--bg-hover); }
+.atd-conv-item.ativa {
+  background: var(--bg-active, color-mix(in srgb, var(--accent) 9%, transparent));
+  border-left-color: var(--accent);
+}
+.atd-conv-linha1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.atd-conv-nome {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.atd-conv-hora {
+  font-size: 11px;
+  color: var(--text-lo);
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.atd-conv-previa {
+  font-size: 12.5px;
+  color: var(--text-md);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.atd-conv-rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 2px;
+}
+.atd-conv-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.atd-tag-mini {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  color: var(--text-md);
+  white-space: nowrap;
+}
+.atd-tag-mini--fila {
+  border-color: color-mix(in srgb, var(--tlk-aviso) 45%, var(--border));
+  color: var(--tlk-aviso);
+  background: var(--tlk-aviso-bg);
+}
+.atd-tag-mini--alta {
+  border-color: color-mix(in srgb, var(--tlk-erro) 45%, var(--border));
+  color: var(--tlk-erro);
+  background: var(--tlk-erro-bg);
+}
+.atd-nao-lidas {
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #ffffff;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+.atd-mais-wrap {
+  padding: 10px 12px;
+  text-align: center;
+}
+
+/* ── Coluna 3: Conversa ativa ────────────────────────────────────────── */
+.atd-col--chat { background: var(--bg-base); }
+.atd-chat-vazio {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.atd-chat-ativo {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.atd-chat-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.atd-chat-ident {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 200px;
+}
+.atd-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-base));
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.atd-chat-nome {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-hi);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.atd-chat-sub {
+  font-size: 11.5px;
+  color: var(--text-lo);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.atd-chat-acoes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  position: relative;
+}
+
+/* Popovers inline (Transferir e Encerrar) */
+.atd-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 35;
+  width: min(320px, calc(100vw - 24px));
+  background: var(--bg-card);
+  border: 1px solid var(--border-hi, var(--border));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md, 0 10px 28px rgba(0, 0, 0, .2));
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.atd-popover-tit {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-hi);
+  margin: 0;
+}
+.atd-popover-acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Banners de alerta e envio bloqueado */
+.atd-banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 14px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  border-bottom: 1px solid var(--border);
+}
+.atd-banner--erro {
+  background: var(--tlk-erro-bg);
+  color: var(--tlk-erro);
+}
+.atd-banner--aviso {
+  background: var(--tlk-aviso-bg);
+  color: var(--tlk-aviso);
+}
+
+/* Mensagens, Notas internas e Eventos do sistema */
+.atd-mensagens {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.atd-msg {
+  max-width: min(78%, 560px);
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  border: 1px solid var(--border);
+  word-break: break-word;
+}
+.atd-msg-texto {
+  white-space: pre-wrap;
+}
+.atd-msg--cliente {
+  align-self: flex-start;
+  background: var(--bg-card);
+  border-bottom-left-radius: 4px;
+}
+.atd-msg--atendente {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--accent) 13%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+  border-bottom-right-radius: 4px;
+}
+.atd-msg--nota {
+  align-self: center;
+  width: min(92%, 580px);
+  max-width: 100%;
+  background: color-mix(in srgb, var(--tlk-aviso-bg) 82%, var(--bg-card));
+  border: 1.5px dashed color-mix(in srgb, var(--tlk-aviso) 55%, var(--border));
+  border-radius: 10px;
+}
+.atd-msg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--text-lo);
+}
+.atd-msg--nota .atd-msg-head {
+  color: var(--tlk-aviso);
+  font-weight: 700;
+}
+.atd-nota-selo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tlk-aviso) 18%, var(--bg-card));
+  color: var(--tlk-aviso);
+}
+.atd-msg-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--text-lo);
+  font-variant-numeric: tabular-nums;
+}
+.atd-msg-meta .tlk-pill {
+  font-size: 10px;
+  padding: 1px 6px;
+}
+.atd-evento {
+  align-self: center;
+  max-width: 92%;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--text-lo);
+  text-align: center;
+}
+
+/* Compositor + menu "/" de respostas rápidas */
+.atd-compositor {
+  flex: none;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  padding: 10px 14px 12px;
+  position: relative;
+}
+.atd-compositor.modo-nota {
+  background: color-mix(in srgb, var(--tlk-aviso-bg) 55%, var(--bg-card));
+  border-top: 2px dashed color-mix(in srgb, var(--tlk-aviso) 55%, var(--border));
+}
+.atd-modo-barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.atd-modo-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+}
+.atd-modo-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-md);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.atd-modo-btn.ativo {
+  background: var(--bg-card);
+  color: var(--text-hi);
+  box-shadow: var(--shadow-sm);
+}
+.atd-modo-btn--nota.ativo {
+  background: var(--tlk-aviso-bg);
+  color: var(--tlk-aviso);
+}
+.atd-slash-menu {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: calc(100% + 6px);
+  z-index: 35;
+  background: var(--bg-card);
+  border: 1px solid var(--border-hi, var(--border));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md, 0 10px 28px rgba(0, 0, 0, .2));
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 6px;
+}
+.atd-slash-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-hi);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.atd-slash-item:hover,
+.atd-slash-item.selecionado { background: var(--bg-hover); }
+.atd-slash-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.atd-slash-item strong {
+  font-size: 12.5px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+.atd-slash-item span {
+  font-size: 12px;
+  color: var(--text-md);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.atd-input-linha {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.atd-textarea {
+  flex: 1 1 auto;
+  min-height: 44px;
+  max-height: 120px;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.atd-compositor-dica {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--text-lo);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.atd-contador-chars { font-variant-numeric: tabular-nums; font-weight: 600; }
+.atd-contador-chars--excedido { color: var(--tlk-erro); }
+
+/* ── Coluna 4 / Gaveta / Sheet: Contato, Etiquetas e Histórico ───────── */
+.atd-col--lateral {
+  background: var(--bg-card);
+  border-left: 1px solid var(--border);
+  border-right: none;
+}
+.atd-lateral-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-base);
+}
+.atd-lateral-head strong {
+  font-size: 13px;
+  color: var(--text-hi);
+}
+.atd-lateral-corpo {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.atd-info-bloco {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.atd-info-bloco:last-child { border-bottom: none; padding-bottom: 0; }
+.atd-info-tit {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-lo);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.atd-info-linha {
+  font-size: 12.5px;
+  color: var(--text-hi);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.atd-info-linha span { font-size: 11px; color: var(--text-lo); }
+
+.atd-etiquetas-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.atd-etiqueta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  color: var(--text-hi);
+}
+.atd-etiqueta-rm {
+  border: none;
+  background: transparent;
+  color: var(--text-lo);
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+}
+.atd-etiqueta-rm:hover { color: var(--tlk-erro); }
+.atd-etiqueta-form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.atd-etiqueta-form .form-control {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 30px;
+  font-size: 12px;
+  padding: 3px 8px;
+}
+.atd-hist-btn {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  color: var(--text-hi);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.atd-hist-btn:hover { background: var(--bg-hover); }
+.atd-hist-btn span { color: var(--text-lo); font-size: 11px; }
+
+/* ── Celular (<= 760 px): telas em sequência + folha deslizante ──────── */
+@media (max-width: 760px) {
+  .atd-so-mobile,
+  .atd-so-mobile-ou-medio { display: inline-flex; }
+  .atd-so-medio { display: none !important; }
+
+  .atd-workspace,
+  .atd-workspace.gaveta-aberta {
+    grid-template-columns: 1fr;
+  }
+  .atd-col--setores,
+  .atd-col--lista,
+  .atd-col--chat {
+    display: none;
+    border-right: none;
+  }
+  .atd-workspace[data-passo="setores"] .atd-col--setores { display: flex; }
+  .atd-workspace[data-passo="lista"]   .atd-col--lista   { display: flex; }
+  .atd-workspace[data-passo="chat"]    .atd-col--chat    { display: flex; }
+
+  .atd-sheet-backdrop.aberto {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(15, 23, 42, 0.52);
+  }
+  .atd-col--lateral,
+  .atd-workspace:not(.gaveta-aberta) .atd-col--lateral {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 78vh;
+    z-index: 50;
+    background: var(--bg-card);
+    border-left: none;
+    border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.25);
+    transform: translateY(105%);
+    transition: transform .22s ease;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .atd-col--lateral.sheet-aberta {
+    transform: translateY(0);
+    visibility: visible;
+    pointer-events: auto;
+  }
+  .atd-chat-head { padding: 8px 10px; }
+  .atd-mensagens { padding: 12px 10px; }
+  .atd-msg { max-width: 90%; }
+  .atd-compositor { padding: 8px 10px 10px; }
+  .atd-input-linha { flex-direction: column; align-items: stretch; }
+  .atd-input-linha .btn { width: 100%; justify-content: center; }
+}

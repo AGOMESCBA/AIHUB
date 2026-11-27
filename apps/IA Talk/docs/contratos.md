@@ -20,7 +20,7 @@ Exemplos completos de cada resposta: rode o servidor simulado e chame a rota
 | Base | Tudo sob `/app/ia-talk/`. API administrativa `/app/ia-talk/api/admin`, pública `/app/ia-talk/api/publico`, integradores `/app/ia-talk/api/v1`, Socket.IO path `/app/ia-talk/socket.io`, namespace `/talk`. |
 | Idioma | Campos, códigos e mensagens em **pt-BR**. `mensagem` é texto para a pessoa ler. |
 | JSON | `snake_case`. Datas ISO 8601 em UTC (`2026-11-25T14:00:00.000Z`). |
-| IDs | Aleatórios com prefixo: `emp_` empresa, `usr_` usuário, `app_` aplicação, `tok_` token, `cn_` canal, `msg_` mensagem, `evt_` evento, `aud_` auditoria, `dsf_` desafio de login. Nunca sequenciais. |
+| IDs | Aleatórios com prefixo: `emp_` empresa, `usr_` usuário, `app_` aplicação, `tok_` token, `cn_` canal, `msg_` mensagem, `evt_` evento, `aud_` auditoria, `dsf_` desafio de login; C8: `set_` setor, `cv_` conversa, `itm_` item de conversa, `ct_` contato, `rr_` resposta rápida. Nunca sequenciais (o `protocolo` da conversa é só número de exibição). |
 | Números de telefone | **Nunca** saem completos nas respostas administrativas: sempre `*_mascarado` (`+55 65 9••••-0000`). Entram completos (só dígitos, com DDI). |
 | Segredos | Token de aplicação e segredo de webhook aparecem **uma única vez**, na resposta de geração. Depois só `prefixo` / `segredo_configurado: true`. |
 
@@ -161,7 +161,7 @@ Corpo de aplicação: `{ nome, descricao?, escopos: ['mensagens:enviar'|'mensage
 | `POST /canais/:id/limpar-sessao` | **Destrutiva**: exige `{ confirmar: true }`. Apaga a sessão; o celular lê QR de novo. A tela pede confirmação explícita, dizendo isso |
 | `GET /canais/:id/qr` | `{ canal_id, estado, qr: dataURL\|null, expira_em }` (só em `qr_pendente`) |
 | `POST /canais/:id/enviar-teste` | **C3.** `{ para_indice, texto }`: `para_indice` = posição (0, 1, …) em `numeros_teste_mascarados` — o número completo nunca passa pela tela; texto 1–1000. → `202` com `mensagemDetalhe` (`estado: 'aceita'`, `origem: 'teste_tela'`, `aplicacao: null`). `para_indice` ausente/não inteiro ou texto inválido → `400`; envio desligado ou canal não conectado → `409 conflito`; posição que não existe na lista → `403 sem_permissao` (com `campos.para_indice`). Os estados seguem pelo socket `mensagem:estado` (salas `painel` e `canal:<id>`) e por `GET /mensagens/:id` |
-| `GET /canais/:id/log` | Página de `{ em, tipo, mensagem }`, mais recente primeiro. `tipo` ∈ `info, success, warning, error, received, sent, system` (mesmas cores do terminal do IA Command) |
+| `GET /canais/:id/log` | Página de `{ em, tipo, mensagem, mensagem_id?, texto? }`, mais recente primeiro. `texto` (e `mensagem_id`) só em linhas de mensagem enviada **pela empresa da sessão** — vem da mensagem, nunca do log (o log não guarda texto). O aviso `canal:log` traz só `mensagem_id`; a tela busca o texto em `GET /mensagens/:id` (detalhe traz `texto` completo; a lista, só a prévia). `tipo` ∈ `info, success, warning, error, received, sent, system` (mesmas cores do terminal do IA Command) |
 
 Campos extras do canal (C2, aditivos): `modo_teste` (bool), `numeros_teste_mascarados`, `recebidas_descartadas`.
 C3 (aditivo): `envio_habilitado` (bool) — começa `false` em produção (publicado desligado); a tela mostra o envio
@@ -282,3 +282,298 @@ Ordem garantida só dentro da mesma conversa.
 Capacidades: `texto, formatacao, imagem, documento, audio, video, grupos, modelos, janela_24h, recibos { enviada, entregue, lida }, qr, max_midia_bytes, mimes_aceitos`.
 Erros de envio: `ErroProvedor(tipo: temporario|permanente|desconhecido, codigo, mensagem)`.
 Detalhes e regras da Meta: `docs/guia-antigravity.md` §5.
+
+---
+
+## 8. C8 — Atendimento (Fase 2): setores, conversas e fila
+
+Combinado em 27/11/2026. Decisões do usuário: opções A e B; setor padrão por número;
+distribuição manual; mensagem de fora do horário por setor, publicada desligada; setores
+cadastrados pelo administrador da empresa e pela supervisão.
+
+Servidor simulado: `backend/simulado/atendimento.js`.
+Servidor real:
+- C9: conversas e roteador.
+- C10: setores e fila.
+- C11: responder e mídia.
+
+### 8.1 Uso do número (canal)
+
+| Campo do canal | Valores |
+|---|---|
+| `uso` | `integracao` (padrão; Fase 1: só API, as mensagens recebidas não viram conversa) · `atendimento` (opção A: quem escreve vira conversa) · `compartilhado` (opção B: o número também é do IA Command; quem está autorizado no IA Command fica com ele, os demais viram conversa no Talk) |
+| `atendimento` | `null` ou `{ empresa: { id, nome }, setor_padrao: { id, nome } }`. **Uma** empresa atende o número, e só ela vê as conversas, mesmo que outras empresas estejam vinculadas ao canal |
+
+`PUT /canais/:id` aceita três campos:
+
+| Campo | Regra | Quem pode mudar |
+|---|---|---|
+| `uso` | um dos valores acima | só a administração da plataforma |
+| `atendimento_empresa_id` | empresa vinculada ao canal; padrão: a dona | só a administração da plataforma |
+| `setor_padrao_id` | setor ativo da empresa que atende; obrigatório quando `uso` ≠ `integracao` | a plataforma ou quem tem `talk-setores` na empresa que atende |
+
+* Cada mudança fica na auditoria como `canal.uso`.
+* `recebimento_modo` continua valendo: em `teste`, só os números da lista viram conversa.
+* `envio_modo` vale também para as respostas.
+* **`compartilhado` (C9 parte 2, 27/11/2026):** a cada mensagem, o Talk pergunta ao IA Command (rota interna, 127.0.0.1 + segredo) se ela é dele. Só grava se a pessoa **não** é autorizada no IA Command ou está em atendimento humano. Se o IA Command não responde, não tem o número cadastrado ou está com a chave do canal desligada, o Talk **não grava** e avisa no Terminal (no máximo 1 vez a cada 10 min). A chave fica no IA Command (tela de canais: "Quem não está autorizado"), nasce **desligada**, e com ela desligada o IA Command funciona exatamente como antes.
+* **"Estou vivo" (27/11, auditoria 2):** o Talk avisa o IA Command a cada minuto, por número compartilhado conectado. Sem sinal há mais de 3 min, o IA Command responde **como sempre**, mesmo com a chave ligada: ninguém fica sem resposta com o Talk parado. Quem estava em atendimento volta ao assistente, e quem pede "atendente" recebe "O atendimento com a equipe não está disponível agora…".
+* **Recibo por mensagem:** o IA Command espera até 8 s por um recibo identificado pelo ID do provedor, canal e remetente. O Talk confirma apenas depois de gravar a mensagem; sem recibo, o Command segue seu fluxo normal. Com a chave desligada, não grava recibo nem marcação.
+* **Reconciliação:** ao iniciar e a cada 5 min, o Talk tenta sincronizar conversas abertas com atividade em 4 h e encerradas em 24 h, sem enviar mensagem automática. A sincronização preserva a hora real da atividade e o retorno explícito ao assistente; a fila é por pessoa no número.
+* **Decisão única por mensagem:** o Talk pergunta ao IA Command por `POST talk/mensagem`, que também marca a passagem se a pessoa autorizada pediu "atendente". Assim vale nas duas ordens de chegada da cópia da mensagem. Se o aviso de passagem não puder ser enviado, a passagem é desfeita.
+* **Marcar e desmarcar** (Talk → IA Command): fila por conversa, na ordem em que aconteceram, com 3 tentativas. Se falhar, fica um evento na conversa e um aviso no Terminal.
+* **Remetente sem telefone** (código interno do WhatsApp não resolvido): sai do provedor como `de.tipo: 'lid'` e **nunca** vira conversa.
+* **Passagem para o atendimento:** a pessoa autorizada escreve uma palavra fixa (`atendente`, `falar com atendente`…; a mensagem inteira) e o assistente avisa e fica em silêncio para ela. Ela volta ao assistente quando: o Talk encerra a conversa (o Talk manda "O atendimento foi encerrado. O assistente voltou a responder por aqui."), ela escreve `voltar ao assistente`, ou passam 4 h sem mensagem. Quando o Talk abre ou responde uma conversa com uma pessoa autorizada (chamado, resposta do atendente), marca o atendimento no IA Command, para a resposta dela ir ao atendente.
+* Estes campos são aditivos: entram em `FORMAS.canal` quando o servidor real os tiver (C9).
+
+### 8.2 Rotinas e quem vê o quê
+
+| Rotina | Tela | Papéis |
+|---|---|---|
+| `talk-atendimento` | Central de atendimento (conversas, contatos) | admin_empresa, supervisor, atendente |
+| `talk-setores` | Setores e respostas rápidas (cadastro) | admin_empresa, supervisor |
+
+* **Atendente:** vê as conversas dos setores de que é membro e as que estão com ele. Conversa fora disso → **404** (nunca 403).
+* **Supervisor e administrador da empresa:** veem todas as conversas da empresa.
+* **Setores e respostas rápidas:** ler pede `talk-atendimento` ou `talk-setores`; criar e alterar pede `talk-setores`.
+* **IA Gestão (IAHub › Permissões):** as duas rotinas entram na lista do IA Talk quando os menus forem publicados (C9).
+
+### 8.3 Setores e respostas rápidas
+
+| Rota | Detalhe |
+|---|---|
+| `GET /setores` | Forma `setor`. Filtros `situacao` (`ativo`\|`inativo`) e `busca` (nome, descrição) |
+| `GET /setores/:id` | Forma `setor` |
+| `POST /setores` | `{ nome, codigo?, descricao?, membros?: [usuario_id], horario?, fora_horario? }` → 201. `nome` de 1 a 60 caracteres, único na empresa (repetido → 409). `codigo`: 2 a 30 caracteres `a-z0-9-`, único (→ 409); sem ele, nasce do nome (`Fiscal e Tributos` → `fiscal-e-tributos`). `descricao` até 200 |
+| `PUT /setores/:id` | `{ versao, nome?, descricao?, membros?, horario?, fora_horario?, situacao? }`. **O `codigo` não muda depois de criado** (→ 400), porque os sistemas de origem usam ele. Versão antiga → 409. Setor não é excluído: é inativado. Inativar setor com conversa aberta, ou que seja setor padrão de um canal → 409, e a mensagem diz o que fazer |
+| `GET /respostas-rapidas` | Forma `respostaRapida`. Com `setor_id`, devolve as gerais (`setor: null`) **mais** as daquele setor, que é o que a Central oferece ao digitar `/`. Filtros `situacao` (`ativa`\|`inativa`) e `busca` |
+| `POST /respostas-rapidas` | `{ atalho, titulo, texto, setor_id? }` → 201. `atalho`: `/` seguido de 2 a 30 caracteres `a-z0-9-`, único (repetido → 409). `titulo` até 60, `texto` até 1000 |
+| `PUT /respostas-rapidas/:id` | Campos parciais e `situacao`. Resposta rápida não é excluída: é inativada |
+
+Campos do `setor`:
+- `membros: [{ id, nome }]`: usuários ativos.
+- `horario: { ligado, fuso: 'America/Cuiaba', dias: [{ dia, inicio: 'HH:MM', fim: 'HH:MM' }] }`, com `dia` de 0 (domingo) a 6.
+- `fora_horario: { ligado, texto }`: texto até 1000 caracteres; nasce **desligado**.
+- `conversas_abertas`, `na_fila`, `versao`.
+
+O texto da resposta rápida aceita `{nome_contato}` e `{nome_atendente}`. **A tela** faz a troca antes de enviar; o servidor envia o texto como recebeu.
+
+### 8.4 Conversas
+
+**Listas e leitura**
+
+| Rota | Detalhe |
+|---|---|
+| `GET /conversas` | Forma `conversaResumo`. `visao`: `minhas` \| `fila` \| `abertas` (padrão) \| `encerradas` \| `todas`. Filtros: `setor_id`, `canal_id`, `contato_id`, `responsavel_id` (`nenhum` = sem responsável), `etiqueta` e `busca` (nome do contato, protocolo, prévia; com 4 ou mais dígitos, procura no final do telefone). Ordem padrão: na `fila`, prioridade `alta` primeiro e, dentro de cada prioridade, por `aguardando_desde` (quem espera há mais tempo vem primeiro); nas demais, por `atualizada_em`, da mais recente para a mais antiga |
+| `GET /conversas/contadores` | Forma `contadoresAtendimento`: `minhas`, `fila`, `abertas` e `por_setor: [{ id, nome, abertas, na_fila }]`, só com os setores que a pessoa vê |
+| `GET /conversas/:id` | Forma `conversaDetalhe`. Além do resumo: `contato` completo (forma `contato`), `motivo_encerramento` e `envio: { pode_responder, motivo, limite_caracteres }`. Quando não é possível responder, `motivo` explica em pt-BR (encerrada, com outra pessoa, envio desligado, canal desconectado, só números de teste); a tela desabilita o campo e mostra o motivo |
+| `GET /conversas/:id/itens` | Página de `itemConversa`, **da mais recente para a mais antiga** (a tela inverte). Filtro `categoria` (vários valores com `\|`) |
+
+**Ações**
+
+| Rota | Detalhe |
+|---|---|
+| `POST /conversas/:id/assumir` | Conversa da fila passa a ser sua. Se já é sua → 200 sem mudar nada. Se está com outra pessoa → **409** (`"Bruno Lima já assumiu esta conversa."`). Assim, se dois atendentes clicam juntos, só um fica com ela |
+| `POST /conversas/:id/devolver` | Volta para a fila do setor. Pode o responsável ou a supervisão |
+| `POST /conversas/:id/transferir` | `{ setor_id?, responsavel_id?, nota? }`, com pelo menos um dos dois primeiros. Só setor → vai para a fila dele. Pessoa → precisa ser membro do setor de destino (senão 400 em `campos.responsavel_id`). `nota` vira nota interna. Auditoria `conversa.transferida` |
+| `POST /conversas/:id/encerrar` | `{ motivo? }`, até 200 caracteres. Zera `nao_lidas` |
+| `POST /conversas/:id/reabrir` | Só para conversa encerrada, e só se o contato não tiver outra aberta no mesmo canal (senão 409 com `detalhe.conversa_id`). Volta com você como responsável |
+| `POST /conversas/:id/marcar-lida` | Zera `nao_lidas` |
+| `PUT /conversas/:id/etiquetas` | `{ etiquetas: [texto] }`: até 10, com até 30 caracteres cada. Substitui a lista inteira |
+| `POST /conversas/:id/notas` | `{ texto }` até 2000 caracteres → 201 `itemConversa` com `categoria: 'nota'`. **Nunca vai para o contato** |
+| `POST /conversas/:id/responder` | `{ texto }` de 1 a 4096 caracteres → **202** `itemConversa` com `estado: 'aceita'` e `mensagem_id`. Detalhes abaixo |
+
+`POST /conversas/:id/responder`:
+- Passa pela fila de saída da C3, com os mesmos estados e o mesmo ritmo.
+- Responder uma conversa da fila já faz você assumi-la.
+
+| Situação | Resposta |
+|---|---|
+| Conversa encerrada ou com outra pessoa | 409 |
+| Envio desligado no canal | 422 `envio_desligado` |
+| Canal parado | 422 `canal_desconectado` |
+| Contato fora da lista de teste | 403 `sem_permissao` |
+
+Envio de mídia: C11.
+
+**Contatos**
+
+| Rota | Detalhe |
+|---|---|
+| `GET /contatos/:id` | Forma `contato`. O atendente só vê contato de conversa que ele vê. Histórico do contato: `GET /conversas?contato_id=…&visao=todas` |
+| `PUT /contatos/:id` | `{ nome }` de 1 a 80 caracteres. O nome que vem do WhatsApp fica guardado em `nome_whatsapp` |
+
+Campos do `conversaResumo`:
+
+| Campo | Conteúdo |
+|---|---|
+| `protocolo` | número de exibição, ex.: `2026-000123` |
+| `canal` | `{ id, nome }` |
+| `contato` | `{ id, nome, telefone_mascarado }` |
+| `setor` | `{ id, nome }` |
+| `responsavel` | `{ id, nome }` ou `null` |
+| `situacao` | `aberta` \| `encerrada` |
+| `na_fila` | conversa aberta e sem responsável |
+| `nao_lidas` | número de mensagens não lidas |
+| `ultima_mensagem` | `{ previa, direcao, autor_tipo, em }` ou `null` |
+| `aguardando_desde` | hora da 1ª mensagem do contato ainda sem resposta; `null` se já respondida. Numa conversa aberta pelo sistema de origem que ninguém respondeu, é a hora de abertura. É a base do tempo de espera |
+| `etiquetas` | lista de textos |
+| `prioridade` | `normal` ou `alta` |
+| `referencias` | chamados ligados à conversa: `[{ sistema, id, titulo, link, aplicacao { id, nome } }]` (§8.9) |
+
+Campos do `itemConversa`:
+
+| Campo | Conteúdo |
+|---|---|
+| `categoria` | `mensagem` \| `nota` \| `evento` |
+| `direcao` | `entrada` \| `saida` \| `null` |
+| `autor` | `{ tipo, id, nome }`, com `tipo` = `contato` \| `atendente` \| `sistema` \| `ia` |
+| `tipo` | texto ou mídia; só em mensagem |
+| `texto` | conteúdo do item |
+| `estado` | saída: os estados do §2; entrada: `recebida`; nota e evento: `null` |
+| `mensagem_id` | a mesma do Histórico de mensagens; pode ser `null` em itens antigos |
+| `em` | data e hora |
+
+Os eventos do sistema (`categoria: 'evento'`) registram a história da conversa: aberta no setor, assumida, transferida, devolvida, encerrada, reaberta.
+
+### 8.5 Socket.IO (Central)
+
+| Direção | Evento | Corpo |
+|---|---|---|
+| cliente → servidor | `atendimento:assinar` | `{}`. Recebe `atendimento:contadores` na hora |
+| cliente → servidor | `conversa:assinar` / `conversa:sair` | `{ conversa_id }`. Conversa que a pessoa não vê → `erro` `nao_encontrado` |
+| servidor → cliente | `atendimento:contadores` | forma `contadoresAtendimento` |
+| servidor → cliente | `conversa:atualizada` | forma `conversaResumo`. Vai quando a conversa é nova, muda de dono ou de setor, ou recebe mensagem |
+| servidor → cliente | `conversa:saiu` | `{ id }`. A conversa deixou de ser visível para quem recebe (ex.: transferida para um setor de que a pessoa não é membro) |
+| servidor → cliente | `conversa:item` | `{ conversa_id, item }`, só na sala da conversa |
+| servidor → cliente | `conversa:item_estado` | `{ conversa_id, item_id, estado, em }` |
+
+* No servidor real, cada aviso vai **só a quem pode ver** a conversa, por salas de setor e de pessoa.
+* Como nas outras telas, o estado inicial vem pela API e o socket só atualiza. Sem socket, a tela consulta a cada 5 s.
+
+### 8.6 Regras de entrada (C9, servidor real)
+
+* **Contato sem conversa aberta naquele canal:** nasce uma conversa nova no setor padrão do canal, na fila.
+* **Contato com conversa aberta:** a mensagem entra nela e `nao_lidas` aumenta em 1.
+* **Conversa encerrada não reabre sozinha:** uma nova mensagem abre uma conversa nova, com protocolo novo. O histórico do contato liga as duas.
+* **Grupos, status e listas de transmissão** não viram conversa.
+* **Fora do horário do setor, com `fora_horario.ligado`:** sai **uma** mensagem automática por conversa a cada 12 h (item com `autor.tipo: 'sistema'`), respeitando `envio_modo`. Nenhuma outra mensagem é enviada sozinha.
+* **Número `compartilhado`:** os números autorizados no IA Command continuam com ele, e o Talk não grava essas conversas. Os demais viram conversa.
+
+### 8.7 Privacidade
+
+* O texto das conversas fica no banco do Talk, porque ele é o atendimento. **Nunca vai para o log**, nem do canal nem do servidor.
+* O texto só sai para quem pode ver a conversa: em `GET /conversas/:id/itens`, em `conversa:item` e no detalhe da mensagem.
+* O telefone sai sempre mascarado. A busca usa o final do número (4 ou mais dígitos).
+* **Guarda do texto (decidido em 27/11/2026):** parâmetro por empresa na IA Gestão com os dias de guarda do texto das conversas encerradas. **Vazio = não apaga nada.** A limpeza só roda quando o parâmetro tiver valor (C9).
+
+### 8.8 Simulado
+
+* **Dados da J2A:**
+  - 3 setores: Suporte, Financeiro e Comercial;
+  - 8 contatos;
+  - 9 conversas: 3 na fila, 3 com responsável e 3 encerradas;
+  - 5 respostas rápidas.
+
+  O canal `cn_suporte` está em `compartilhado`, com o Suporte como setor padrão.
+* **Números de teste:** Mariana e João usam números da lista de teste do `cn_suporte`. Só para eles a resposta sai; nas demais conversas aparece o motivo.
+* **Visão de atendente:** com `?simular=atendente` (ou o cabeçalho `X-Talk-Simular: atendente`), o simulado responde como Carla Souza, atendente do Suporte.
+* **Mensagem chegando:** `POST /simulado/receber { contato_id?, texto? }` simula uma mensagem do contato (essa rota só existe no simulado). Além disso, chega uma mensagem sozinha a cada 25 s.
+* **Teste de falha:** uma resposta com a palavra "falha" termina no estado `falhou`.
+* **Sistema de origem (§8.9):**
+  - na API v1, qualquer token `tk_teste_…` fala como a aplicação "SoftExpert (simulado)";
+  - as conversas da Mariana (chamado 036988) e do João (036990, prioridade alta) vieram de chamados;
+  - há 2 retornos pendentes e 1 já confirmado.
+
+### 8.9 API v1 do sistema de origem (chamado → fila, retornos com confirmação)
+
+Decisões de 27/11/2026:
+- Quem chama o Talk é o **sistema de origem** (ex.: SoftExpert), direto. O IA Service não entra nesta integração.
+- O Talk **não manda a primeira mensagem** por padrão: o chamado entra na fila e o atendente decide quando escrever.
+- O retorno fica guardado no Talk até o sistema de origem **buscar e confirmar** ("OK"). Só então sai da fila de retornos.
+
+**Autenticação e escopos.** Mesmo token da API v1: `Authorization: Bearer tk_live_…`, criado na tela Aplicações. São dois escopos novos:
+- `conversas:criar`: `POST /v1/conversas`;
+- `conversas:ler`: `GET /v1/conversas`, `GET /v1/retornos` e `POST /v1/retornos/confirmar`.
+
+O canal precisa estar em `canais_autorizados` da aplicação e ter `uso` ≠ `integracao`; senão → 422 `recurso_nao_suportado`. A tela Aplicações ainda precisa mostrar os dois escopos novos.
+
+| Rota | Detalhe |
+|---|---|
+| `POST /v1/conversas` | Abre (ou acha) a conversa do chamado. Corpo abaixo |
+| `GET /v1/conversas/:id` | Forma `v1Conversa`. Só conversa com chamado **desta** aplicação; as demais → 404 |
+| `GET /v1/conversas?referencia=softexpert:036988` | Página de `v1Conversa` daquele chamado: a aberta e as anteriores, se ele já voltou à fila. Filtro `situacao` |
+| `GET /v1/retornos?limite=50&tipo=` | Retornos **ainda não confirmados** desta aplicação, do mais antigo para o mais novo: `{ itens: [v1Retorno], tem_mais }`. `limite` de 1 a 200 |
+| `POST /v1/retornos/confirmar` | `{ ids: [rt_…] }`, de 1 a 200 → `{ confirmados, desconhecidos }`. Confirmar de novo não muda nada |
+
+**Corpo de `POST /v1/conversas`:**
+
+```json
+{ "canal": "cn_…",
+  "contato": { "telefone": "5565999990000", "nome": "Mariana Oliveira" },
+  "referencia": { "sistema": "softexpert", "id": "036988", "titulo": "Relatório lento", "link": "https://…/036988" },
+  "setor": "suporte",
+  "prioridade": "alta",
+  "contexto": "Descrição do chamado…",
+  "mensagem_inicial": "Olá, Mariana! …" }
+```
+
+| Campo | Regra |
+|---|---|
+| `contato.telefone` | obrigatório; só dígitos, com DDI e DDD (12 ou 13 dígitos) |
+| `contato.nome` | opcional; até 80 caracteres |
+| `referencia.sistema` | obrigatório; 2 a 30 caracteres `a-z0-9-` |
+| `referencia.id` | obrigatório; até 64 caracteres |
+| `referencia.titulo` | opcional; até 200 caracteres |
+| `referencia.link` | opcional; precisa começar com `https://` |
+| `setor` | opcional; o **código** do setor (§8.3). Sem ele, vai para o setor padrão do canal |
+| `prioridade` | opcional; `normal` (padrão) ou `alta`. Alta passa na frente na fila |
+| `contexto` | opcional; até 4000 caracteres. Vira **nota interna** com `autor.tipo: 'sistema'` e nunca vai ao contato |
+| `mensagem_inicial` | opcional; até 4096 caracteres. Ver abaixo |
+
+`Idempotency-Key` é opcional nesta rota: a própria referência do chamado já evita duplicar.
+
+**O que acontece no `POST /v1/conversas`**, campo `resultado` da resposta:
+
+| Situação | `resultado` | HTTP |
+|---|---|---|
+| O chamado já tem conversa **aberta** | `existente`: devolve a mesma, com `Idempotent-Replayed: true`. Reenviar é seguro | 200 |
+| O contato já está em conversa aberta naquele número | `vinculada`: o chamado entra nela, com o evento "Chamado … vinculado". O `setor` pedido só vale para conversa nova | 200 |
+| Nenhum dos dois casos acima, inclusive chamado reenviado depois de encerrado | `criada`: conversa nova, na fila do setor | 201 |
+
+**`mensagem_inicial`:**
+- Só é enviada em conversa `criada`, e respeita as regras do canal (`envio_modo`, lista de teste, canal conectado).
+- Se não puder sair, a conversa fica na fila do mesmo jeito e a resposta diz por quê.
+- Campo da resposta: `mensagem_inicial: null | { estado: 'aceita' | 'nao_enviada', motivo, item_id }`.
+
+**Forma `v1Conversa`:**
+
+| Campo | Conteúdo |
+|---|---|
+| `id`, `protocolo`, `situacao`, `na_fila` | identificação e situação da conversa |
+| `canal` | id do canal |
+| `setor` | `{ codigo, nome }` |
+| `responsavel` | `{ id, nome }` ou `null` |
+| `prioridade` | `normal` ou `alta` |
+| `referencias` | só as desta aplicação: `[{ sistema, id, titulo, link }]` |
+| `aberta_em`, `atualizada_em`, `encerrada_em`, `motivo_encerramento` | datas e motivo |
+| `link` | endereço da conversa na Central |
+
+O telefone nunca volta, nem mascarado.
+
+**Forma `v1Retorno`:** `{ id, tipo, em, conversa: { id, protocolo, situacao }, referencias, dados }`.
+
+| `tipo` | `dados` |
+|---|---|
+| `conversa.criada` / `conversa.vinculada` | `{ setor { codigo, nome }, na_fila, referencia { sistema, id } }` |
+| `conversa.assumida` | `{ responsavel { id, nome } }` |
+| `conversa.transferida` | `{ setor, responsavel \| null }` |
+| `conversa.devolvida` | `{ setor }` |
+| `conversa.encerrada` | `{ motivo, responsavel, encerrada_em }` |
+| `conversa.reaberta` | `{ responsavel }` |
+
+**Regras dos retornos:**
+- Um retorno por aplicação que tem chamado ligado à conversa. Cada sistema só vê os seus, e conversa sem chamado não gera retorno.
+- **Pelo menos uma vez:** o mesmo retorno volta em todo `GET` até ser confirmado. O sistema de origem processa, chama `confirmar` e só então o retorno sai da fila.
+- Use o `id` do retorno para não gravar duas vezes.
+- Retorno sem confirmação por 30 dias vence e aparece como pendência no Painel (C9).
+- Webhook (C4) poderá avisar que há retorno novo, mas a confirmação continua sendo pelo `POST /v1/retornos/confirmar`.

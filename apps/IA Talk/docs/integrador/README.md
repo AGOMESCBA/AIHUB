@@ -2,6 +2,17 @@
 
 Documentação oficial para conectar ERPs, sistemas internos, robôs e serviços ao **IA Talk** usando a **API v1** e **webhooks assinados**.
 
+> **O que já funciona no servidor real (26/11/2026):**
+>
+> | Recurso | Situação |
+> |---|---|
+> | Token de aplicação, escopos e canais autorizados | ✅ disponível |
+> | `POST /mensagens` só com **texto**, idempotência, `GET /mensagens/:id`, `GET /canais/:id/estado` | ✅ disponível |
+> | Envio de imagem, documento e áudio | ⏳ etapa C3b — hoje responde 422 `recurso_nao_suportado` |
+> | Webhooks (avisos de estado e de mensagens recebidas) e `GET /eventos` | ⏳ etapa C4 — por enquanto, acompanhe por `GET /mensagens/:id` |
+>
+> As seções sobre mídia e webhooks descrevem o contrato combinado, ainda não entregue.
+
 > **Importante:** todos os exemplos deste guia usam valores fictícios (`tk_teste_exemplo_nao_usar`, `whsec_exemplo_ficticio_...`, `+5565999990000`). Nunca grave tokens ou segredos reais em repositórios, logs ou código-fonte.
 
 ---

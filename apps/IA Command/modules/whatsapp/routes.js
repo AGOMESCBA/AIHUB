@@ -146,6 +146,10 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
       numero: req.body?.numero,
       ativo: req.body?.ativo,
     });
+    // IA Talk (número compartilhado): só muda quando a tela manda o campo.
+    if (req.body?.repassar_nao_autorizados_talk !== undefined) {
+      channels.definirRepassarTalk(req.params.id, req.body.repassar_nao_autorizados_talk);
+    }
     if (existing.empresas.some(e => Number(e.empresa_id) === Number(empresaId))) {
       channels.vincularEmpresa(req.params.id, empresaId, {
         aliases: req.body?.aliases ?? existing.aliases,

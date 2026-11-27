@@ -26,6 +26,8 @@ const { SupervisorCanais } = require('./canais/supervisor');
 const { Despachante } = require('./mensagens/despachante');
 const { criarRotasMensagens } = require('./rotas/mensagens');
 const { criarRotasV1 } = require('./rotas/v1');
+const { criarRotasAtendimento } = require('./rotas/atendimento');
+const { Atendimento } = require('./atendimento/servico');
 
 const VERSAO = require('../package-versao.json').versao;
 
@@ -102,7 +104,7 @@ function montarPaginaEntrada(app) {
   });
 }
 
-function criarApp({ db = null, log = console, transportes = null, chavePublicaHub, testarEmail, supervisor = null, despachante = null } = {}) {
+function criarApp({ db = null, log = console, transportes = null, chavePublicaHub, testarEmail, supervisor = null, despachante = null, atendimento = null } = {}) {
   const app = express();
   aplicarSegurancaHttp(app);
   app.use(rateLimit({
@@ -122,9 +124,11 @@ function criarApp({ db = null, log = console, transportes = null, chavePublicaHu
     app.use(config.API_PUBLICA, criarRotasPublicas({ db, transportes: trans, log, ...(chavePublicaHub ? { chavePublicaHub } : {}) }));
     const sup = supervisor || new SupervisorCanais({ db, log });
     // Sem despachante (testes de rotas): a fila só grava; ninguém envia.
-    app.use(config.API_V1, criarRotasV1({ db, despachante, log }));
+    const atd = atendimento || new Atendimento({ db, despachante, log });
+    app.use(config.API_V1, criarRotasV1({ db, despachante, atendimento: atd, log }));
     app.use(config.API_ADMIN, criarRotasCanais({ db, supervisor: sup, despachante, log }));
     app.use(config.API_ADMIN, criarRotasMensagens({ db, despachante, log }));
+    app.use(config.API_ADMIN, criarRotasAtendimento({ db, atendimento: atd, log }));
     app.use(config.API_ADMIN, criarRotasAdmin({ db, log, ...(testarEmail ? { testarEmail } : {}) }));
   }
 
@@ -161,15 +165,25 @@ function iniciar({ porta = config.porta(), host = '127.0.0.1' } = {}) {
   const supervisor = new SupervisorCanais({ db, emitir: (...a) => emitir(...a) });
   // C3: fila de saída. Só envia o que foi pedido (API ou teste na tela); nunca responde sozinho.
   const despachante = new Despachante({ db, supervisor, emitir: (...a) => emitir(...a) });
-  const app = criarApp({ db, supervisor, despachante });
+  // C9: atendimento (conversas). Avisos pelo Socket.IO, só para quem pode ver cada conversa.
+  let avisosAtd = null;
+  const atendimento = new Atendimento({ db, despachante, iaCommand: require('./atendimento/ia-command').criarClienteIaCommand(),
+    aoAviso: (canalId, texto) => supervisor.log(canalId, 'warning', texto),
+    aoMudar: (...a) => avisosAtd?.aoMudar(...a), aoItem: (...a) => avisosAtd?.aoItem(...a), aoEstadoItem: (...a) => avisosAtd?.aoEstadoItem(...a) });
+  supervisor.aoReceber = (canalId, m) => atendimento.receber(canalId, m);
+  despachante.aoAvisar = (m) => atendimento.aoEstadoMensagem(m);
+  const app = criarApp({ db, supervisor, despachante, atendimento });
   const servidor = http.createServer(app);
   const { Server } = require('socket.io');
   const io = new Server(servidor, { path: config.SOCKET_PATH });
-  emitir = require('./tempo-real').configurarTempoReal(io.of(config.SOCKET_NAMESPACE), { db, supervisor });
+  const tempoReal = require('./tempo-real');
+  emitir = tempoReal.configurarTempoReal(io.of(config.SOCKET_NAMESPACE), { db, supervisor, atendimento });
+  avisosAtd = tempoReal.avisosDoAtendimento(io.of(config.SOCKET_NAMESPACE), { db, atendimento });
   servidor.listen(porta, host, () => {
     console.log(`[IA Talk] ${VERSAO} em http://${host}:${porta}${config.BASE_PATH}/`);
     supervisor.iniciarTodos(); // religa os canais que estavam conectados
     despachante.iniciar();
+    atendimento.iniciarBatimentos(); // número compartilhado: "estou vivo" para o IA Command
   });
   let saindo = false;
   const sair = async (sinal) => {
@@ -178,6 +192,7 @@ function iniciar({ porta = config.porta(), host = '127.0.0.1' } = {}) {
     console.log(`[IA Talk] ${sinal} recebido: encerrando (canais primeiro).`);
     setTimeout(() => process.exit(0), 20_000).unref();
     despachante.parar();
+    atendimento.pararBatimentos();
     await supervisor.pararTodos().catch(() => {});
     io.close();
     servidor.close(() => { try { db.close(); } catch (_) { /* já fechado */ } process.exit(0); });

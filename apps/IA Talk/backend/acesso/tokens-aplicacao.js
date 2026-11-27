@@ -30,7 +30,7 @@ function validar(db, token) {
      WHERE t.token_hash = ? AND t.revogado_em IS NULL`).get(hashToken(token));
   if (!t || t.situacao !== 'ativa' || t.empresa_situacao !== 'ativa') return null;
   db.prepare('UPDATE aplicacao_tokens SET ultimo_uso_em = ? WHERE id = ?').run(agora(), t.token_id);
-  return { aplicacaoId: t.id, empresaId: t.empresa_id, escopos: JSON.parse(t.escopos || '[]') };
+  return { aplicacaoId: t.id, empresaId: t.empresa_id, nome: t.nome, escopos: JSON.parse(t.escopos || '[]') };
 }
 
 module.exports = { gerar, validar, PREFIXO };

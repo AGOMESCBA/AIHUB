@@ -8,6 +8,7 @@ const channels = require('./channel-store');
 const recipientGroups = require('./recipient-group-store');
 const { formatarContatoParaLog } = require('./log-contact');
 const { cabecalhosWorker } = require('./windows-service/internal-token');
+const talkCompartilhado = require('./talk-compartilhado');
 
 // Socket.IO do processo principal (para registrar no monitor quando nenhum canal está conectado).
 let _io = null;
@@ -340,6 +341,80 @@ function registrarRotaServicoExterno(app) {
     if (!empresaId || !msg) return res.status(400).json({ error: 'empresaId e mensagem sao obrigatorios.' });
     await registrarNoCanal(empresaId, tipo, msg);
     res.json({ ok: true });
+  });
+
+  // IA Talk (número compartilhado, C9): o Talk pergunta se a mensagem de um número é dele
+  // (não autorizado aqui, ou autorizado em atendimento humano) e avisa quando encerra.
+  // Mesma proteção do envio externo: só de 127.0.0.1, sem proxy, com o segredo.
+  const lerCanalNumero = (req) => ({
+    canal: String(req.body?.canal || '').replace(/D/g, ''),
+    numero: String(req.body?.numero || '').replace(/D/g, ''),
+  });
+
+  // Decisão única por mensagem: a do Talk? (marca a passagem se a pessoa autorizada pediu "atendente").
+  app.post('/api/ia-command/whatsapp/talk/mensagem', (req, res) => {
+    const auth = segredoAutorizado(req);
+    if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+    const { canal, numero } = lerCanalNumero(req);
+    if (!canal || !numero) return res.status(400).json({ error: 'canal e numero sao obrigatorios.' });
+    try {
+      // A palavra de atendimento é a mensagem inteira; cortar mudaria a decisão.
+      // apenas_consulta: o Talk só quer saber o estado (não é mensagem recebida, não vale como recibo).
+      res.json(talkCompartilhado.mensagemNoTalk(canal, numero, String(req.body?.texto || ''), { recibo: req.body?.apenas_consulta !== true, mensagemEm: req.body?.em || null }));
+    } catch (err) {
+      res.status(500).json({ error: 'Falha ao consultar o numero.' });
+    }
+  });
+
+  app.post('/api/ia-command/whatsapp/talk/recibo', (req, res) => {
+    const auth = segredoAutorizado(req);
+    if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+    const { canal, numero } = lerCanalNumero(req);
+    const id = String(req.body?.mensagem_id || '');
+    if (!canal || !numero || !id || id.length > 512) return res.status(400).json({ error: 'canal, numero e mensagem_id sao obrigatorios.' });
+    try {
+      res.json(talkCompartilhado.registrarRecibo(canal, numero, id, String(req.body?.texto || '')));
+    } catch (_) {
+      res.status(500).json({ error: 'Falha ao registrar o recibo.' });
+    }
+  });
+
+  // "Estou vivo" do Talk (a cada minuto): sem ele o IA Command responde como sempre.
+  app.post('/api/ia-command/whatsapp/talk/batimento', (req, res) => {
+    const auth = segredoAutorizado(req);
+    if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+    const { canal } = lerCanalNumero(req);
+    if (!canal) return res.status(400).json({ error: 'canal e obrigatorio.' });
+    try {
+      res.json({ ok: true, ...talkCompartilhado.registrarBatimento(canal) });
+    } catch (err) {
+      res.status(500).json({ error: 'Falha ao registrar o sinal do IA Talk.' });
+    }
+  });
+
+  app.post('/api/ia-command/whatsapp/talk/atendimento-iniciado', (req, res) => {
+    const auth = segredoAutorizado(req);
+    if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+    const { canal, numero } = lerCanalNumero(req);
+    if (!canal || !numero) return res.status(400).json({ error: 'canal e numero sao obrigatorios.' });
+    try {
+      res.json({ ok: true, ...talkCompartilhado.iniciarPorNumero(canal, numero, Date.now(), req.body?.atividade_em || null, req.body?.reconciliacao === true) });
+    } catch (err) {
+      res.status(500).json({ error: 'Falha ao marcar o atendimento.' });
+    }
+  });
+
+  app.post('/api/ia-command/whatsapp/talk/atendimento-encerrado', (req, res) => {
+    const auth = segredoAutorizado(req);
+    if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+    const canal = String(req.body?.canal || '').replace(/\D/g, '');
+    const numero = String(req.body?.numero || '').replace(/\D/g, '');
+    if (!canal || !numero) return res.status(400).json({ error: 'canal e numero sao obrigatorios.' });
+    try {
+      res.json({ ok: true, ...talkCompartilhado.encerrarPorNumero(canal, numero) });
+    } catch (err) {
+      res.status(500).json({ error: 'Falha ao encerrar o atendimento.' });
+    }
   });
 }
 

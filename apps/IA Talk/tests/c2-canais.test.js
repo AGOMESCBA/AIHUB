@@ -103,7 +103,8 @@ test('canais: criar, conectar por QR, receber no modo de teste e desconectar', a
   log.itens.forEach(l => forma('logCanal', l));
   const textoLog = JSON.stringify(log);
   assert.match(textoLog, /9••••-5116/);
-  assert.match(textoLog, /Olá, teste do Talk/);
+  assert.match(textoLog, /recebida de \+55 65 9••••-5116 \(18 caracteres\)/);
+  assert.doesNotMatch(textoLog, /Olá, teste do Talk/, 'AGENTS.md: log sem texto de mensagem');
   assert.doesNotMatch(textoLog, /conversa de cliente/, 'mensagem de cliente fora da lista não é gravada');
   assert.doesNotMatch(textoLog, /5565999875116|5565911112222/, 'número nunca completo no log');
 

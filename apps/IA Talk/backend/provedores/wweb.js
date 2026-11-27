@@ -161,15 +161,21 @@ class ProvedorWweb extends ProvedorBase {
     if (this._aceitarApos && Number(msg.timestamp || 0) < this._aceitarApos) return;
     const grupo = String(msg.from || '').endsWith('@g.us');
     let valor = digitos(msg.from);
+    let tipoRemetente = grupo ? 'grupo' : 'telefone';
     if (!grupo && String(msg.from || '').includes('@lid')) {
       const tel = await resolverTelefoneLid(msg, this.client);
-      // Sem telefone não há como conferir a lista de teste: fica registrado no log.
+      // Sem telefone o remetente sai como 'lid' (nunca como telefone): o código interno do WhatsApp
+      // pode ter 12–13 dígitos e passaria por número; no número compartilhado isso poderia levar
+      // a conversa de um usuário do ERP para o Talk. Fica registrado no log.
       if (tel) valor = tel;
-      else this.log('warning', `Remetente sem telefone identificável (código interno do WhatsApp ••••${valor.slice(-4)}).`);
+      else {
+        tipoRemetente = 'lid';
+        this.log('warning', `Remetente sem telefone identificável (código interno do WhatsApp ••••${valor.slice(-4)}).`);
+      }
     }
     this.emit('mensagem', {
       id_provedor: msg.id?._serialized,
-      de: { tipo: grupo ? 'grupo' : 'telefone', valor, autor: grupo ? digitos(msg.author) : undefined },
+      de: { tipo: tipoRemetente, valor, autor: grupo ? digitos(msg.author) : undefined },
       tipo: TIPO_MENSAGEM[msg.type] || 'outro',
       texto: msg.body || '',
       em: new Date(Number(msg.timestamp || Date.now() / 1000) * 1000).toISOString(),

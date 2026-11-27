@@ -1089,3 +1089,25 @@ body.modo-terminal .tlk-aba {
 .tlk-regras-incluir .form-control { flex: 1 1 200px; min-width: 0; }
 .tlk-regras-confirmar { margin-top: 12px; }
 .tlk-regras-confirmar p { margin: 0 0 8px; }
+
+/* Terminal ao vivo ocupa a altura da janela: sem rolagem da página quando ele cabe (a
+   página rola nas demais abas e em janelas baixas/celular — ver body.tlk-pagina em talk.css). */
+@media (min-width: 761px) and (min-height: 600px) {
+  body.tlk-pagina.modo-terminal { overflow-y: hidden; }
+}
+
+/* Texto da mensagem enviada no Terminal: vem da mensagem (só para a empresa que enviou),
+   nunca do log. Clique abre o detalhe no Histórico de mensagens. */
+.tlk-log-texto {
+  display: block;
+  margin-top: 2px;
+  color: #e6edf3;
+  text-decoration: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tlk-log-texto:hover, .tlk-log-texto:focus-visible { text-decoration: underline; }

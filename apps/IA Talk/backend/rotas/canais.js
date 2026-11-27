@@ -19,6 +19,7 @@ const { empresaDoHub } = require('./publico');
 const mensagensRepo = require('../mensagens/repositorio');
 const regras = require('../canais/regras');
 const { aceitarEnvio } = require('../mensagens/servico');
+const { USOS_CANAL } = require('../contratos');
 
 const TEXTO_TESTE_MAXIMO = 1000;
 
@@ -69,7 +70,36 @@ function criarRotasCanais({ db, supervisor, despachante = null, log = console })
       envio_habilitado: c.envio_modo !== 'desligado', modo_teste: c.recebimento_modo === 'teste' || c.envio_modo === 'teste',
       numeros_teste_mascarados: JSON.parse(c.numeros_teste || '[]').map(telefone.mascarar),
       recebidas_descartadas: c.recebidas_descartadas,
+      // C9 (contratos.md §8.1): uso do número e quem atende.
+      uso: c.uso, atendimento: atendimentoDoCanal(c),
     };
+  }
+
+  function atendimentoDoCanal(c) {
+    if (c.uso === 'integracao' || !c.atendimento_empresa_id) return null;
+    const empresa = db.prepare('SELECT id, nome FROM empresas WHERE id = ?').get(c.atendimento_empresa_id);
+    const setor = c.setor_padrao_id ? db.prepare('SELECT id, nome FROM setores WHERE id = ?').get(c.setor_padrao_id) : null;
+    return { empresa: empresa || null, setor_padrao: setor || null };
+  }
+
+  // Uso do número (§8.1), aplicado dentro da transação do PUT (depois dos vínculos novos).
+  // 'compartilhado': o Talk só grava a conversa depois de conferir com o IA Command (atendimento/servico.js);
+  // enquanto a chave do canal estiver desligada lá, nada é gravado e o Terminal avisa.
+  function aplicarUso(c, b) {
+    const uso = b.uso ?? c.uso;
+    if (!USOS_CANAL.includes(uso)) throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos: { uso: `Use ${USOS_CANAL.join(', ')}.` } });
+    if (uso === 'integracao') {
+      db.prepare("UPDATE canais SET uso = 'integracao', atendimento_empresa_id = NULL, setor_padrao_id = NULL WHERE id = ?").run(c.id);
+      return 'só integração';
+    }
+    const empresaId = b.atendimento_empresa_id ?? c.atendimento_empresa_id ?? c.empresa_dona_id;
+    const usa = empresaId === c.empresa_dona_id || db.prepare('SELECT 1 FROM canal_empresas WHERE canal_id = ? AND empresa_id = ?').get(c.id, empresaId);
+    if (!usa) throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos: { atendimento_empresa_id: 'Escolha uma empresa vinculada a este canal.' } });
+    const setorId = b.setor_padrao_id ?? (c.atendimento_empresa_id === empresaId ? c.setor_padrao_id : null);
+    const setor = setorId && db.prepare("SELECT id, nome FROM setores WHERE id = ? AND empresa_id = ? AND situacao = 'ativo'").get(String(setorId), empresaId);
+    if (!setor) throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos: { setor_padrao_id: 'Escolha o setor ativo que recebe as conversas novas.' } });
+    db.prepare('UPDATE canais SET uso = ?, atendimento_empresa_id = ?, setor_padrao_id = ? WHERE id = ?').run(uso, empresaId, setor.id, c.id);
+    return `${uso}, conversas novas no setor ${setor.nome}`;
   }
 
   const acharVisivel = (req, id) => {
@@ -176,6 +206,9 @@ function criarRotasCanais({ db, supervisor, despachante = null, log = console })
       numeros = (numeros || regras.listaDeTeste(c)).filter((_, i) => !remover.has(i));
       for (const n of novos) if (!numeros.some(x => telefone.mesmoNumero(x, n))) numeros.push(n);
     }
+    const mexeNoUso = ['uso', 'atendimento_empresa_id', 'setor_padrao_id'].some(k => b[k] !== undefined);
+    if (mexeNoUso && !req.contexto.plataforma) throw erro('sem_permissao', 'Só a administração da plataforma muda o uso do número e quem atende.');
+    let resumoUso = null;
     db.transaction(() => {
       db.prepare(`UPDATE canais SET nome = ?, numero = ?, numeros_teste = ?, envio_modo = ?, recebimento_modo = ?, atualizado_em = ? WHERE id = ?`).run(
         b.nome !== undefined ? String(b.nome).trim() : c.nome, numeroCanal,
@@ -206,8 +239,10 @@ function criarRotasCanais({ db, supervisor, despachante = null, log = console })
           db.prepare('INSERT OR IGNORE INTO canal_empresas (canal_id, empresa_id, padrao) VALUES (?, ?, ?)').run(c.id, v.empresaId, v.padrao || !temPadrao ? 1 : 0);
         }
       }
+      if (mexeNoUso) resumoUso = aplicarUso(c, b);
     })();
     auditar(req, 'canal.alterado', c.id, `Alterou o canal ${c.nome}`);
+    if (resumoUso) auditar(req, 'canal.uso', c.id, `Uso do canal ${c.nome}: ${resumoUso}`);
     // Cada regra alterada vira uma linha própria na auditoria (de → para).
     if (novas.envio_modo !== c.envio_modo) {
       auditar(req, 'canal.regra_envio', c.id, `Envio do canal ${c.nome}: ${regras.TEXTOS.envio[c.envio_modo]} → ${regras.TEXTOS.envio[novas.envio_modo]}`);
@@ -288,11 +323,19 @@ function criarRotasCanais({ db, supervisor, despachante = null, log = console })
   r.get('/canais/:id/log', exigir, (req, res) => {
     const c = acharVisivel(req, req.params.id);
     const { limite, cursor } = lerPaginacao(req.query);
-    const linhas = db.prepare(`SELECT id, em, tipo, mensagem FROM canal_log WHERE canal_id = ? AND (? IS NULL OR id < ?)
-      AND (? IS NULL OR tipo = ?) ORDER BY id DESC LIMIT ?`).all(c.id, cursor?.id ?? null, cursor?.id ?? null, req.query.tipo || null, req.query.tipo || null, limite + 1);
+    // Texto da mensagem enviada: vem da própria mensagem e só para a empresa que enviou
+    // (o canal pode ser compartilhado). O log em si nunca guarda texto (AGENTS.md).
+    const linhas = db.prepare(`SELECT l.id, l.em, l.tipo, l.mensagem, l.mensagem_id,
+        CASE WHEN m.empresa_id = ? THEN m.conteudo END AS texto
+      FROM canal_log l LEFT JOIN mensagens m ON m.id = l.mensagem_id
+      WHERE l.canal_id = ? AND (? IS NULL OR l.id < ?) AND (? IS NULL OR l.tipo = ?) ORDER BY l.id DESC LIMIT ?`)
+      .all(req.contexto.empresaId, c.id, cursor?.id ?? null, cursor?.id ?? null, req.query.tipo || null, req.query.tipo || null, limite + 1);
     const mais = linhas.length > limite;
     const itens = linhas.slice(0, limite);
-    res.json({ itens: itens.map(({ em, tipo, mensagem }) => ({ em, tipo, mensagem })), proximo_cursor: mais ? codificarCursor({ id: itens[itens.length - 1].id }) : null });
+    res.json({
+      itens: itens.map(({ em, tipo, mensagem, mensagem_id: mid, texto }) => ({ em, tipo, mensagem, ...(mid && texto ? { mensagem_id: mid, texto } : {}) })),
+      proximo_cursor: mais ? codificarCursor({ id: itens[itens.length - 1].id }) : null,
+    });
   });
 
   r.use(middlewareErros(log));

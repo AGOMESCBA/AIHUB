@@ -71,6 +71,7 @@ class Despachante {
   // Avisa as telas (sala do canal e painel da empresa dona da mensagem).
   avisar(m) {
     this.emitir(m.canal_id, 'mensagem:estado', { id: m.id, estado: m.estado, em: m.atualizada_em }, { empresaId: m.empresa_id });
+    this.aoAvisar?.(m); // C9: resposta de conversa (o atendimento avisa quem está nela)
   }
 
   // Chamado a cada segundo e logo depois de uma mensagem nova entrar na fila.
@@ -123,7 +124,7 @@ class Despachante {
     const origem = m.origem === 'teste_tela' ? ' (teste pela tela)' : '';
     if (r.ok) {
       this.db.prepare('UPDATE mensagens SET id_provedor = ?, ultimo_erro = NULL WHERE id = ?').run(r.id_provedor || null, m.id);
-      this.supervisor.log?.(canalId, 'sent', `Mensagem (${m.tipo}) enviada para ${telefone.mascarar(m.destino)}${origem}.`);
+      this.supervisor.log?.(canalId, 'sent', `Mensagem (${m.tipo}) enviada para ${telefone.mascarar(m.destino)}${origem}.`, { mensagemId: m.id });
       if (r.id_provedor) this._aplicarRecibosOrfaos(canalId, r.id_provedor, m);
       return;
     }
@@ -133,14 +134,14 @@ class Despachante {
       const espera = this.esperas[m.tentativas];
       this._mudar(m, 'aguardando', { nova_tentativa: true, detalhe: `${detalhe} Nova tentativa em ${Math.round(espera / 1000)} s.`,
         campos: { proxima_tentativa_em: new Date(Date.now() + espera).toISOString() } });
-      this.supervisor.log?.(canalId, 'warning', `Envio para ${telefone.mascarar(m.destino)} adiado: ${detalhe}`);
+      this.supervisor.log?.(canalId, 'warning', `Envio para ${telefone.mascarar(m.destino)} adiado: ${detalhe}`, { mensagemId: m.id });
     } else if (r.tipo === 'desconhecido') {
       this._mudar(m, 'desconhecida', { detalhe: `${detalhe} Não será reenviada automaticamente.` });
-      this.supervisor.log?.(canalId, 'warning', `Envio para ${telefone.mascarar(m.destino)} sem confirmação: ${detalhe}`);
+      this.supervisor.log?.(canalId, 'warning', `Envio para ${telefone.mascarar(m.destino)} sem confirmação: ${detalhe}`, { mensagemId: m.id });
     } else {
       const esgotou = r.tipo === 'temporario' ? ` Esgotou ${m.tentativas + 1} tentativa(s).` : '';
       this._mudar(m, 'falhou', { detalhe: `${detalhe}${esgotou}` });
-      this.supervisor.log?.(canalId, 'error', `Envio para ${telefone.mascarar(m.destino)} falhou: ${detalhe}`);
+      this.supervisor.log?.(canalId, 'error', `Envio para ${telefone.mascarar(m.destino)} falhou: ${detalhe}`, { mensagemId: m.id });
     }
   }
 

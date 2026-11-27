@@ -1,0 +1,280 @@
+/* IA Talk · Etapa G14 — estilos de Setores e respostas rápidas (frontend/setores.html).
+   Usa exclusivamente variáveis de iahub.css e talk.css (tema claro e escuro). */
+
+.g14-abas-barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.g14-abas-barra .tlk-abas {
+  border-bottom: none;
+  padding: 0;
+}
+
+/* ── Cartões de listagem (setores e respostas rápidas) ──────────────── */
+.g14-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.g14-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color var(--transition);
+}
+.g14-card:hover {
+  border-color: var(--border-hi);
+}
+.g14-card--inativo {
+  opacity: .76;
+}
+.g14-card-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.g14-card-info {
+  min-width: 0;
+  flex: 1 1 280px;
+}
+.g14-card-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text-hi);
+}
+.g14-codigo {
+  font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-md);
+  border: 1px solid var(--border);
+}
+.g14-atalho {
+  font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--accent-glow);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.g14-card-desc {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--text-md);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.g14-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-lo);
+}
+.g14-card-meta strong {
+  color: var(--text-hi);
+}
+.g14-card-acoes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.g14-previa-texto {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--text-md);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.g14-var-destaque {
+  font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+  font-size: 11.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+/* ── Blocos internos do formulário de setor ─────────────────────────── */
+.g14-secao {
+  border-top: 1px solid var(--border);
+  margin-top: 20px;
+  padding-top: 18px;
+}
+.g14-secao-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.g14-secao-topo h2 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text-hi);
+}
+.g14-secao-topo p {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--text-md);
+  line-height: 1.45;
+}
+.g14-codigo-travado {
+  background: var(--bg-hover);
+  color: var(--text-md);
+  cursor: not-allowed;
+  font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+}
+
+/* ── Grade de horários (múltiplos intervalos por dia) ───────────────── */
+.g14-horario-controles {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 260px);
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 12px;
+}
+.g14-horario-atalhos {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.g14-dias-lista {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-card);
+}
+.g14-dia-row {
+  display: grid;
+  grid-template-columns: 126px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.g14-dia-row:last-child {
+  border-bottom: none;
+}
+.g14-dia-nome {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-hi);
+  padding-top: 6px;
+}
+.g14-dia-intervalos {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.g14-dia-fechado {
+  font-size: 12px;
+  color: var(--text-lo);
+  padding-top: 7px;
+}
+.g14-intervalo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.g14-intervalo input[type="time"] {
+  width: 118px;
+  min-width: 0;
+}
+.g14-intervalo-sep {
+  font-size: 12px;
+  color: var(--text-lo);
+}
+
+/* ── Contador de caracteres e prévia de resposta rápida ─────────────── */
+.g14-campo-rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.g14-contador {
+  font-size: 11.5px;
+  color: var(--text-lo);
+  font-variant-numeric: tabular-nums;
+}
+.g14-vars-barra {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.g14-previa-box {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px dashed var(--border-hi);
+  background: var(--bg-base);
+}
+.g14-previa-rotulo {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-lo);
+  margin-bottom: 4px;
+}
+.g14-previa-corpo {
+  font-size: 13px;
+  color: var(--text-hi);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .g14-horario-controles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .g14-dia-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .g14-dia-nome {
+    padding-top: 0;
+  }
+  .g14-intervalo input[type="time"] {
+    width: 110px;
+  }
+}

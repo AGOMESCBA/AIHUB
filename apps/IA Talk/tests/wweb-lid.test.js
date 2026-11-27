@@ -35,3 +35,21 @@ test('falhas do WhatsApp não derrubam a leitura: cai para o contato', async () 
 test('sem nenhuma pista → null (o provedor registra aviso mascarado)', async () => {
   assert.equal(await resolverTelefoneLid(msg(), null), null);
 });
+
+// Auditoria 3: pelo caminho real do provedor (_receber), não só pela função de resolução.
+test('provedor: LID não resolvido sai como "lid" (nunca como telefone), mesmo com 13 dígitos', async () => {
+  const { ProvedorWweb } = require('../backend/provedores/wweb');
+  const p = new ProvedorWweb({ canal: { id: 'cn_t', sessao_id: 's' }, dirSessoes: '.' });
+  p.client = { getContactLidAndPhone: async () => [{ lid: '1234567890123@lid', pn: undefined }] };
+  const recebidas = [];
+  p.on('mensagem', (m) => recebidas.push(m));
+  p.log = () => {};
+  await p._receber({ from: '1234567890123@lid', type: 'chat', body: 'oi', timestamp: Math.floor(Date.now() / 1000), id: { _serialized: 'x1' },
+    getContact: async () => ({ id: { _serialized: '1234567890123@lid' }, number: '1234567890123' }) });
+  assert.equal(recebidas.length, 1);
+  assert.deepEqual(recebidas[0].de, { tipo: 'lid', valor: '1234567890123', autor: undefined });
+  // Resolvido: sai como telefone.
+  p.client = { getContactLidAndPhone: async () => [{ lid: '1234567890123@lid', pn: '5565999875116@c.us' }] };
+  await p._receber({ from: '1234567890123@lid', type: 'chat', body: 'oi', timestamp: Math.floor(Date.now() / 1000), id: { _serialized: 'x2' }, getContact: async () => null });
+  assert.deepEqual(recebidas[1].de, { tipo: 'telefone', valor: '5565999875116', autor: undefined });
+});

@@ -95,7 +95,8 @@ function paraResumo(m) {
 }
 
 function paraDetalhe(db, m) {
-  return { ...paraResumo(m), historico_estados: historico(db, m.id), metadados: JSON.parse(m.metadados || '{}'), anexos: [], ultimo_erro: m.ultimo_erro };
+  // texto completo só no detalhe (rota restrita à empresa dona); a lista leva só a prévia.
+  return { ...paraResumo(m), texto: m.conteudo, historico_estados: historico(db, m.id), metadados: JSON.parse(m.metadados || '{}'), anexos: [], ultimo_erro: m.ultimo_erro };
 }
 
 function paraV1(db, m) {

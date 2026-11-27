@@ -11,6 +11,7 @@
       id: 'operacao', label: 'Operação', icon: '📡', defaultOpen: true,
       items: [
         { id: 'talk-painel', label: 'Painel', href: `${B}/painel.html`, icon: '📊', etapa: null },
+        { id: 'talk-atendimento', label: 'Atendimento', href: `${B}/atendimento.html`, icon: '🎧', etapa: null },
         { id: 'talk-canais', label: 'Canais', href: `${B}/canais.html`, icon: '📱', etapa: null },
         { id: 'talk-mensagens', label: 'Histórico de mensagens', href: `${B}/mensagens.html`, icon: '💬', etapa: null },
         { id: 'talk-eventos', label: 'Eventos e webhooks', href: `${B}/eventos.html`, icon: '🔔', etapa: 'G3' },
@@ -25,6 +26,7 @@
     {
       id: 'administracao', label: 'Administração', icon: '⚙', defaultOpen: false,
       items: [
+        { id: 'talk-setores', label: 'Setores e respostas', href: `${B}/setores.html`, icon: '🗂', etapa: null },
         { id: 'talk-usuarios', label: 'Usuários e papéis', href: `${B}/usuarios.html`, icon: '👥', etapa: null },
         { id: 'talk-configuracoes', label: 'Configurações', href: `${B}/configuracoes.html`, icon: '🛠', etapa: null },
         { id: 'talk-auditoria', label: 'Auditoria', href: `${B}/auditoria.html`, icon: '🧾', etapa: null },

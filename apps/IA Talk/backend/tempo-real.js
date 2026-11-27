@@ -10,6 +10,8 @@ const sessoes = require('./acesso/sessoes');
 const { rotinasDaSessao, ROTINAS } = require('./acesso/papeis');
 const { SQL_VISIVEIS } = require('./rotas/canais');
 const { EVENTOS_SOCKET } = require('./contratos');
+const { Atendimento } = require('./atendimento/servico');
+const repoAtd = require('./atendimento/repositorio');
 
 const REVALIDAR_MS = 60_000;
 
@@ -17,7 +19,7 @@ function lerCookieDoHandshake(socket) {
   return sessoes.lerCookie({ headers: { cookie: socket.handshake.headers.cookie || '' } });
 }
 
-function configurarTempoReal(ns, { db, supervisor }) {
+function configurarTempoReal(ns, { db, supervisor, atendimento = null }) {
   const C = EVENTOS_SOCKET.cliente;
   const S = EVENTOS_SOCKET.servidor;
 
@@ -27,6 +29,8 @@ function configurarTempoReal(ns, { db, supervisor }) {
     socket.data.sessaoId = s.id;
     socket.data.empresaId = s.empresa_id;
     socket.data.rotinas = rotinasDaSessao(s);
+    // Atendimento (C9): quem é e o que vê (supervisão vê tudo; atendente, os setores dele).
+    socket.data.acesso = Atendimento.acessoDe(sessoes.contextoDaSessao(s), socket.data.rotinas);
     next();
   });
 
@@ -46,6 +50,18 @@ function configurarTempoReal(ns, { db, supervisor }) {
       if (!socket.data.rotinas.includes(ROTINAS.mensagens) && !socket.data.rotinas.includes(ROTINAS.painel)) return;
       socket.join(`painel:${socket.data.empresaId}`);
     });
+    // Central de atendimento: contadores na hora; conversa só se a pessoa pode vê-la.
+    socket.on(C.assinarAtendimento, () => {
+      if (!atendimento || !socket.data.rotinas.includes(ROTINAS.atendimento)) return socket.emit(S.erro, { codigo: 'sem_permissao', mensagem: 'Sem permissão para o atendimento.' });
+      socket.join(`atd:${socket.data.empresaId}`);
+      socket.emit(S.contadoresAtendimento, atendimento.contadores(socket.data.acesso));
+    });
+    socket.on(C.assinarConversa, ({ conversa_id } = {}) => {
+      const cv = atendimento && socket.data.rotinas.includes(ROTINAS.atendimento) ? repoAtd.buscarConversa(db, socket.data.empresaId, conversa_id) : null;
+      if (!cv || !atendimento.podeVer(socket.data.acesso, cv)) return socket.emit(S.erro, { codigo: 'nao_encontrado', mensagem: 'Conversa não encontrada.' });
+      socket.join(`conversa:${cv.id}`);
+    });
+    socket.on(C.sairConversa, ({ conversa_id } = {}) => socket.leave(`conversa:${conversa_id}`));
   });
 
   const t = setInterval(async () => {
@@ -63,4 +79,38 @@ function configurarTempoReal(ns, { db, supervisor }) {
   };
 }
 
-module.exports = { configurarTempoReal };
+// Avisos do atendimento (C9), conferindo a visibilidade de cada socket: quem não vê mais a
+// conversa recebe só conversa:saiu { id } e sai da sala dela (texto nunca vaza para quem não vê).
+function avisosDoAtendimento(ns, { db, atendimento }) {
+  const S = EVENTOS_SOCKET.servidor;
+  const seguro = (fn) => (...a) => { Promise.resolve().then(() => fn(...a)).catch(() => { /* aviso perdido: a tela recarrega pela API */ }); };
+  return {
+    aoMudar: seguro(async (conversaId, { empresaId }) => {
+      const cv = repoAtd.buscarConversa(db, empresaId, conversaId);
+      if (!cv) return;
+      const resumo = repoAtd.paraConversaResumo(db, cv);
+      for (const sk of await ns.in(`atd:${empresaId}`).fetchSockets()) {
+        if (atendimento.podeVer(sk.data.acesso, cv)) sk.emit(S.conversaAtualizada, resumo);
+        else sk.emit(S.conversaSaiu, { id: cv.id });
+        sk.emit(S.contadoresAtendimento, atendimento.contadores(sk.data.acesso));
+      }
+      for (const sk of await ns.in(`conversa:${cv.id}`).fetchSockets()) {
+        if (!atendimento.podeVer(sk.data.acesso, cv)) { sk.leave(`conversa:${cv.id}`); sk.emit(S.conversaSaiu, { id: cv.id }); }
+      }
+    }),
+    // Item (com texto) e estado: confere de novo quem pode ver, porque numa transferência o
+    // item chega antes de a sala ser limpa — a nota interna não pode ir para quem perdeu o acesso.
+    aoItem: seguro((conversaId, item) => paraQuemVe(conversaId, S.itemConversa, { conversa_id: conversaId, item })),
+    aoEstadoItem: seguro((conversaId, dados) => paraQuemVe(conversaId, S.estadoItemConversa, dados)),
+  };
+
+  async function paraQuemVe(conversaId, evento, corpo) {
+    const sockets = await ns.in(`conversa:${conversaId}`).fetchSockets();
+    if (!sockets.length) return;
+    const cv = db.prepare('SELECT empresa_id FROM conversas WHERE id = ?').get(conversaId);
+    const completa = cv && repoAtd.buscarConversa(db, cv.empresa_id, conversaId);
+    for (const sk of sockets) if (completa && atendimento.podeVer(sk.data.acesso, completa)) sk.emit(evento, corpo);
+  }
+}
+
+module.exports = { configurarTempoReal, avisosDoAtendimento };

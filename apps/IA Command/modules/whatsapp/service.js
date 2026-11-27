@@ -18,6 +18,7 @@ const interpretationPipeline = require('../ai/interpretation-pipeline');
 const channelStore        = require('./channel-store');
 const { formatarContatoParaLog } = require('./log-contact');
 const messageTemplates    = require('./message-templates');
+const talkCompartilhado   = require('./talk-compartilhado');
 const dialogResolver      = require('../ai/dialog-resolver');
 const conversationService = require('../ai/conversation-service');
 const conversationalTurnRouter = require('../ai/conversational-turn-router');
@@ -4287,6 +4288,16 @@ class IACWhatsAppService extends EventEmitter {
     this.log(`━━ Mensagem #${this._msgCount} — tipo: ${tipo} | de: ${this._contatoParaLog(sender)}`, 'info');
 
     if (!this._isSenderAuthorized(sender)) {
+      // IA Talk (número compartilhado): com a chave do canal ligada, quem não é autorizado fica
+      // com o atendimento do Talk, sem o aviso abaixo — mas só com o recibo do Talk para esta
+      // mensagem (até 8 s). Chave desligada, Talk sem recibo ou erro: como sempre.
+      if (talkCompartilhado.repassarNaoAutorizado(this._channelId, sender)) {
+        if (await talkCompartilhado.aguardarRecibo(this._channelId, sender, msg.id?._serialized)) {
+          this.log(`Numero nao autorizado deixado para o IA Talk (sem resposta): ${this._contatoParaLog(sender)}`, 'info');
+          return;
+        }
+        this.log(`IA Talk sem recibo desta mensagem: respondendo como sempre (${this._contatoParaLog(sender)}).`, 'warning');
+      }
       this.log(`Numero nao autorizado para empresa #${this._empresaId}: ${sender}`, 'warning');
       try {
         const chat = await msg.getChat();
@@ -4295,6 +4306,30 @@ class IACWhatsAppService extends EventEmitter {
           canal_nome: this._channelName || '',
         }));
       } catch (_) {}
+      return;
+    }
+
+    // IA Talk (número compartilhado): autorizado que escreveu "atendente" ou que já está em
+    // atendimento humano. null = seguir normal (chave desligada, erro ou mensagem comum).
+    let desvioTalk = talkCompartilhado.desvioAutorizado(this._channelId, sender, (tipo === 'chat' || tipo === 'text') ? msg.body : '');
+    // Em atendimento: o silêncio também depende do recibo do Talk; sem ele, o assistente responde.
+    if ((desvioTalk?.aguardarRecibo || desvioTalk?.motivo === 'pediu atendimento') && !(await talkCompartilhado.aguardarRecibo(this._channelId, sender, msg.id?._serialized))) {
+      this.log(`IA Talk sem recibo desta mensagem de quem está em atendimento: o assistente responde (${this._contatoParaLog(sender)}).`, 'warning');
+      if (desvioTalk.desfazer) talkCompartilhado.desfazerPassagem(this._channelId, sender);
+      desvioTalk = desvioTalk.motivo === 'pediu atendimento' ? { resposta: talkCompartilhado.TEXTOS.indisponivel, motivo: 'IA Talk sem recibo' } : null;
+    }
+    if (desvioTalk) {
+      this.log(`IA Talk: ${desvioTalk.motivo} (${this._contatoParaLog(sender)}).`, 'info');
+      if (desvioTalk.resposta) {
+        try {
+          const chat = await msg.getChat();
+          await chat.sendMessage(desvioTalk.resposta);
+        } catch (err) {
+          // Sem o aviso a pessoa não sabe que foi passada: desfaz e ela continua com o assistente.
+          if (desvioTalk.desfazer) talkCompartilhado.desfazerPassagem(this._channelId, sender);
+          this.log(`IA Talk: não foi possível enviar o aviso de atendimento (${err.message})${desvioTalk.desfazer ? '; passagem desfeita' : ''}.`, 'warning');
+        }
+      }
       return;
     }
 

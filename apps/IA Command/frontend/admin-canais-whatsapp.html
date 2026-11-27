@@ -181,6 +181,8 @@
                   <div class="reg-field"><div class="reg-label">Status</div><select id="f-ativo" class="form-control"><option value="1">Ativo</option><option value="0">Inativo</option></select></div>
                   <div class="reg-field"><div class="reg-label">Padrao nesta empresa</div><select id="f-padrao" class="form-control"><option value="0">Nao</option><option value="1">Sim</option></select></div>
                   <div class="reg-field"><div class="reg-label">Aliases nesta empresa</div><textarea id="f-aliases" class="form-control" rows="3"></textarea></div>
+                  <div class="reg-field"><div class="reg-label">Quem não está autorizado</div><select id="f-talk" class="form-control" title="Vale para todas as empresas deste canal"><option value="0">Responder "número não autorizado" (atual)</option><option value="1">Deixar para o IA Talk atender</option></select>
+                    <div style="font-size:11px;color:var(--text-lo);margin-top:4px">Use só quando o número também estiver no IA Talk. Quem é autorizado continua com o assistente e pode escrever "atendente" para falar com uma pessoa.</div></div>
                 </div>
               </section>
             </aside>
@@ -353,6 +355,7 @@
     document.getElementById('f-ativo').value = String(edit?.ativo ?? 1);
     document.getElementById('f-padrao').value = String(edit?.padrao ?? 0);
     document.getElementById('f-aliases').value = edit?.aliases || '';
+    document.getElementById('f-talk').value = String(edit?.repassar_nao_autorizados_talk ?? 0);
     document.getElementById('tab-btn-empresas').disabled = !edit;
     setAba('dados');
     feedback('', true);
@@ -412,6 +415,7 @@
       ativo: parseInt(document.getElementById('f-ativo').value),
       padrao: parseInt(document.getElementById('f-padrao').value),
       aliases: document.getElementById('f-aliases').value.trim() || null,
+      repassar_nao_autorizados_talk: parseInt(document.getElementById('f-talk').value),
     };
     const url = edit ? `/api/ia-command/admin/canais-whatsapp/${encodeURIComponent(edit.id)}` : '/api/ia-command/admin/canais-whatsapp';
     const method = edit ? 'PUT' : 'POST';

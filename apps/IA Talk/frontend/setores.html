@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Setores e respostas rápidas · IA Talk</title>
+  <!-- Etapa G14 (Antigravity) — cadastro de setores (código fixo, membros, horário com
+       múltiplos intervalos por dia, mensagem de fora do horário nascendo desligada e
+       inativação protegida com 409) e respostas rápidas ("/", gerais ou por setor).
+       Contrato: docs/contratos.md §8.3. Compatível com o simulado e com o servidor real (C9). -->
+  <script src="/app/ia-talk/js/talk-ui.js"></script>
+  <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g1.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g14.css">
+</head>
+<body class="tlk-pagina">
+<main class="tlk-conteudo">
+
+  <!-- ── Vista principal com abas (Setores | Respostas rápidas) ──────── -->
+  <section id="vista-principal" aria-labelledby="titulo-pagina">
+    <div class="head-row">
+      <div>
+        <div class="page-kicker">Atendimento</div>
+        <h1 class="head-title" id="titulo-pagina">Setores e respostas rápidas</h1>
+      </div>
+    </div>
+    <p class="head-sub">Organize os setores da Central de atendimento, seus membros, horários de expediente, mensagem automática fora do horário e atalhos <code>/</code> para responder mais rápido.</p>
+
+    <div class="g14-abas-barra" id="abas-principais">
+      <div class="tlk-abas" role="tablist" aria-label="Cadastro de atendimento">
+        <button class="tlk-aba" type="button" role="tab" id="tab-setores" aria-controls="painel-setores" aria-selected="true">Setores <span class="head-count" id="cnt-setores"></span></button>
+        <button class="tlk-aba" type="button" role="tab" id="tab-respostas" aria-controls="painel-respostas" aria-selected="false">Respostas rápidas <span class="head-count" id="cnt-respostas"></span></button>
+      </div>
+    </div>
+
+    <!-- ── Aba 1: Setores ────────────────────────────────────────────── -->
+    <div id="painel-setores" role="tabpanel" aria-labelledby="tab-setores">
+      <div class="filter-bar">
+        <form class="filter-bar-row" id="filtros-setores" role="search">
+          <label class="sr-only" for="fs-busca">Buscar setor</label>
+          <input class="form-control tlk-busca" id="fs-busca" name="busca" type="search" placeholder="Buscar setor por nome ou descrição" autocomplete="off">
+          <label class="sr-only" for="fs-situacao">Situação do setor</label>
+          <select class="form-control" id="fs-situacao" name="situacao">
+            <option value="">Todas as situações</option>
+            <option value="ativo">Ativos</option>
+            <option value="inativo">Inativos</option>
+          </select>
+          <button class="btn btn-ghost" type="button" id="btn-atualizar-setores" title="Atualizar: recarrega a lista de setores" aria-label="Atualizar: recarrega a lista de setores"><span data-ico="atualizar" data-giro="1"></span> Atualizar</button>
+          <button class="btn btn-primary" type="button" id="btn-novo-setor" title="Novo setor: abre o formulário para cadastrar um setor de atendimento" aria-label="Novo setor: abre o formulário para cadastrar um setor de atendimento"><span data-ico="mais"></span> Novo setor</button>
+        </form>
+      </div>
+
+      <div class="tlk-alerta tlk-alerta--erro" id="alerta-lista-setores" role="alert" hidden></div>
+      <div id="estado-setores" hidden></div>
+      <div class="g14-lista" id="lista-setores"></div>
+    </div>
+
+    <!-- ── Aba 2: Respostas rápidas ──────────────────────────────────── -->
+    <div id="painel-respostas" role="tabpanel" aria-labelledby="tab-respostas" hidden>
+      <div class="filter-bar">
+        <form class="filter-bar-row" id="filtros-respostas" role="search">
+          <label class="sr-only" for="fr-busca">Buscar resposta rápida</label>
+          <input class="form-control tlk-busca" id="fr-busca" name="busca" type="search" placeholder="Buscar por atalho (/), título ou texto" autocomplete="off">
+          <label class="sr-only" for="fr-escopo">Escopo da resposta rápida</label>
+          <select class="form-control" id="fr-escopo" name="escopo">
+            <option value="">Todos os escopos</option>
+            <option value="__geral__">Gerais (todos os setores)</option>
+          </select>
+          <label class="sr-only" for="fr-situacao">Situação da resposta rápida</label>
+          <select class="form-control" id="fr-situacao" name="situacao">
+            <option value="">Todas as situações</option>
+            <option value="ativa">Ativas</option>
+            <option value="inativa">Inativas</option>
+          </select>
+          <button class="btn btn-ghost" type="button" id="btn-atualizar-respostas" title="Atualizar: recarrega a lista de respostas rápidas" aria-label="Atualizar: recarrega a lista de respostas rápidas"><span data-ico="atualizar" data-giro="1"></span> Atualizar</button>
+          <button class="btn btn-primary" type="button" id="btn-nova-resposta" title="Nova resposta rápida: cadastra um atalho com / para a Central" aria-label="Nova resposta rápida: cadastra um atalho com / para a Central"><span data-ico="mais"></span> Nova resposta rápida</button>
+        </form>
+      </div>
+
+      <div class="tlk-alerta tlk-alerta--erro" id="alerta-lista-respostas" role="alert" hidden></div>
+      <div id="estado-respostas" hidden></div>
+      <div class="g14-lista" id="lista-respostas"></div>
+    </div>
+  </section>
+
+  <!-- ── Editor de Setor ─────────────────────────────────────────────── -->
+  <section id="vista-setor" hidden aria-labelledby="titulo-setor">
+    <div class="editor-bar">
+      <div class="editor-title"><strong id="titulo-setor">Novo setor</strong><span id="sub-setor"></span></div>
+      <button class="btn btn-ghost" type="button" id="btn-voltar-setor" title="Voltar à lista: fecha o editor de setor sem salvar alterações pendentes" aria-label="Voltar à lista: fecha o editor de setor sem salvar alterações pendentes"><span data-ico="voltar"></span> Voltar à lista</button>
+    </div>
+
+    <div class="tlk-cartao">
+      <div class="tlk-painel-aba">
+        <div class="tlk-alerta tlk-alerta--erro" id="alerta-setor" role="alert" hidden>
+          <span id="alerta-setor-texto"></span>
+          <button class="btn btn-ghost btn-sm" type="button" id="btn-recarregar-setor" hidden style="margin-left:8px;" title="Recarregar setor: busca a versão mais recente do setor no servidor" aria-label="Recarregar setor: busca a versão mais recente do setor no servidor"><span data-ico="atualizar"></span> Recarregar setor</button>
+        </div>
+
+        <form id="form-setor" novalidate>
+          <div class="tlk-form">
+            <div class="tlk-campo">
+              <label for="s-nome">Nome do setor</label>
+              <input class="form-control" id="s-nome" name="nome" type="text" maxlength="60" required placeholder="Ex.: Fiscal e Tributos" autocomplete="off">
+              <span class="form-hint">De 1 a 60 caracteres, único na empresa.</span>
+            </div>
+
+            <div class="tlk-campo">
+              <label for="s-codigo">Código do setor (API v1)</label>
+              <input class="form-control" id="s-codigo" name="codigo" type="text" maxlength="30" placeholder="Gerado automaticamente do nome" autocomplete="off">
+              <span class="form-hint" id="dica-codigo">Opcional na criação (2 a 30 caracteres: a-z, 0-9 e hífen). Depois de criado, não pode ser alterado.</span>
+            </div>
+
+            <div class="tlk-campo tlk-largo">
+              <label for="s-descricao">Descrição</label>
+              <input class="form-control" id="s-descricao" name="descricao" type="text" maxlength="200" placeholder="Para que serve este setor (até 200 caracteres)" autocomplete="off">
+            </div>
+
+            <div class="tlk-campo" id="campo-s-situacao" hidden>
+              <label for="s-situacao">Situação</label>
+              <select class="form-control" id="s-situacao" name="situacao">
+                <option value="ativo">Ativo</option>
+                <option value="inativo">Inativo</option>
+              </select>
+              <span class="form-hint">Setores com conversas abertas ou definidos como setor padrão de um canal não podem ser inativados.</span>
+            </div>
+          </div>
+
+          <!-- Membros -->
+          <div class="g14-secao">
+            <div class="g14-secao-topo">
+              <div>
+                <h2>Membros do setor</h2>
+                <p>Usuários ativos que atendem as conversas deste setor na Central.</p>
+              </div>
+              <span class="head-count" id="cnt-membros-sel"></span>
+            </div>
+            <div class="tlk-campo">
+              <input type="hidden" name="membros">
+              <div class="tlk-alerta tlk-alerta--aviso" id="aviso-membros" hidden></div>
+              <div class="tlk-opcoes-grid" id="lista-membros"></div>
+            </div>
+          </div>
+
+          <!-- Horário de atendimento -->
+          <div class="g14-secao">
+            <div class="g14-secao-topo">
+              <div>
+                <h2>Horário de atendimento</h2>
+                <p>Defina o expediente do setor. O mesmo dia pode ter vários intervalos (por exemplo, manhã e tarde).</p>
+              </div>
+            </div>
+
+            <div class="tlk-campo" id="campo-horario">
+              <input type="hidden" name="horario">
+              <div class="g14-horario-controles">
+                <label class="tlk-check-card">
+                  <input type="checkbox" id="s-hor-ligado">
+                  <div>
+                    <strong>Controlar horário de atendimento</strong>
+                    <span>Quando desligado, o setor é considerado sempre aberto.</span>
+                  </div>
+                </label>
+
+                <div class="tlk-campo">
+                  <label for="s-hor-fuso">Fuso horário</label>
+                  <select class="form-control" id="s-hor-fuso">
+                    <option value="America/Cuiaba">America/Cuiaba (MT)</option>
+                    <option value="America/Sao_Paulo">America/Sao_Paulo (Brasília)</option>
+                    <option value="America/Campo_Grande">America/Campo_Grande (MS)</option>
+                    <option value="America/Manaus">America/Manaus (AM)</option>
+                    <option value="America/Porto_Velho">America/Porto_Velho (RO)</option>
+                    <option value="America/Rio_Branco">America/Rio_Branco (AC)</option>
+                    <option value="America/Fortaleza">America/Fortaleza (NE)</option>
+                    <option value="America/Bahia">America/Bahia (BA)</option>
+                    <option value="America/Belem">America/Belem (PA)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div id="area-dias-horario">
+                <div class="g14-horario-atalhos">
+                  <button class="btn btn-ghost btn-sm" type="button" id="btn-hor-comercial" title="Aplicar seg–sex com almoço: preenche segunda a sexta com 08:00–12:00 e 13:00–18:00" aria-label="Aplicar seg–sex com almoço: preenche segunda a sexta com 08:00–12:00 e 13:00–18:00"><span data-ico="mais"></span> Seg–sex (08–12h e 13–18h)</button>
+                  <button class="btn btn-ghost btn-sm" type="button" id="btn-hor-limpar" title="Limpar horários: remove todos os intervalos configurados nos dias" aria-label="Limpar horários: remove todos os intervalos configurados nos dias"><span data-ico="limpar"></span> Limpar todos</button>
+                </div>
+                <div class="g14-dias-lista" id="grade-dias"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mensagem de fora do horário -->
+          <div class="g14-secao">
+            <div class="g14-secao-topo">
+              <div>
+                <h2>Mensagem automática fora do horário</h2>
+                <p>Nasce desligada em novos setores. Quando ligada, envia no máximo 1 aviso por conversa a cada 12 horas, respeitando o modo de envio do canal.</p>
+              </div>
+            </div>
+
+            <div class="tlk-campo" id="campo-fora-horario">
+              <input type="hidden" name="fora_horario">
+              <label class="tlk-check-card" style="margin-bottom:10px;max-width:680px;">
+                <input type="checkbox" id="s-fh-ligado">
+                <div>
+                  <strong>Enviar aviso automático fora do horário</strong>
+                  <span>Desmarque para apenas registrar a mensagem do contato na fila sem responder sozinho.</span>
+                </div>
+              </label>
+
+              <label for="s-fh-texto">Texto do aviso</label>
+              <textarea class="form-control" id="s-fh-texto" rows="3" maxlength="1000" placeholder="Ex.: Recebemos sua mensagem. Atendemos de segunda a sexta, das 8h às 18h, e retornamos assim que abrirmos."></textarea>
+              <div class="g14-campo-rodape">
+                <span class="form-hint">Obrigatório quando o aviso automático estiver ligado (até 1000 caracteres).</span>
+                <span class="g14-contador" id="cnt-fh-texto">0 / 1000</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="tlk-acoes-form">
+            <button class="btn btn-ghost" type="button" id="btn-cancelar-setor" title="Cancelar: descarta as alterações e volta à lista de setores" aria-label="Cancelar: descarta as alterações e volta à lista de setores"><span data-ico="cancelar"></span> Cancelar</button>
+            <button class="btn btn-primary" type="submit" id="btn-salvar-setor" title="Salvar setor: grava os dados, membros, horário e mensagem fora do horário" aria-label="Salvar setor: grava os dados, membros, horário e mensagem fora do horário"><span data-ico="salvar"></span> Salvar setor</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Editor de Resposta Rápida ───────────────────────────────────── -->
+  <section id="vista-resposta" hidden aria-labelledby="titulo-resposta">
+    <div class="editor-bar">
+      <div class="editor-title"><strong id="titulo-resposta">Nova resposta rápida</strong><span id="sub-resposta"></span></div>
+      <button class="btn btn-ghost" type="button" id="btn-voltar-resposta" title="Voltar à lista: fecha o editor de resposta rápida sem salvar alterações pendentes" aria-label="Voltar à lista: fecha o editor de resposta rápida sem salvar alterações pendentes"><span data-ico="voltar"></span> Voltar à lista</button>
+    </div>
+
+    <div class="tlk-cartao">
+      <div class="tlk-painel-aba">
+        <div class="tlk-alerta tlk-alerta--erro" id="alerta-resposta" role="alert" hidden></div>
+
+        <form id="form-resposta" novalidate>
+          <div class="tlk-form">
+            <div class="tlk-campo">
+              <label for="r-atalho">Atalho (começa com /)</label>
+              <input class="form-control" id="r-atalho" name="atalho" type="text" maxlength="31" required placeholder="/saudacao" autocomplete="off">
+              <span class="form-hint">Comece com <code>/</code> e use de 2 a 30 letras minúsculas, números e hífen (ex.: <code>/boleto</code>).</span>
+            </div>
+
+            <div class="tlk-campo">
+              <label for="r-titulo">Título</label>
+              <input class="form-control" id="r-titulo" name="titulo" type="text" maxlength="60" required placeholder="Ex.: Segunda via de boleto" autocomplete="off">
+            </div>
+
+            <div class="tlk-campo">
+              <label for="r-setor">Disponível para</label>
+              <select class="form-control" id="r-setor" name="setor_id">
+                <option value="">Geral (todos os setores)</option>
+              </select>
+              <span class="form-hint">Gerais aparecem em qualquer conversa; de um setor aparecem só nas conversas dele.</span>
+            </div>
+
+            <div class="tlk-campo" id="campo-r-situacao" hidden>
+              <label for="r-situacao">Situação</label>
+              <select class="form-control" id="r-situacao" name="situacao">
+                <option value="ativa">Ativa</option>
+                <option value="inativa">Inativa (oculta no menu /)</option>
+              </select>
+            </div>
+
+            <div class="tlk-campo tlk-largo">
+              <label for="r-texto">Texto da mensagem</label>
+              <textarea class="form-control" id="r-texto" name="texto" rows="4" maxlength="1000" required placeholder="Ex.: Olá, {nome_contato}! Aqui é {nome_atendente}. Já estou vendo sua mensagem."></textarea>
+              <div class="g14-campo-rodape">
+                <div class="g14-vars-barra">
+                  <button class="btn btn-ghost btn-sm" type="button" data-inserir-var="{nome_contato}" title="Inserir variável {nome_contato}: a Central troca pelo nome do cliente antes de enviar" aria-label="Inserir variável {nome_contato}: a Central troca pelo nome do cliente antes de enviar"><span data-ico="mais"></span> {nome_contato}</button>
+                  <button class="btn btn-ghost btn-sm" type="button" data-inserir-var="{nome_atendente}" title="Inserir variável {nome_atendente}: a Central troca pelo nome do atendente antes de enviar" aria-label="Inserir variável {nome_atendente}: a Central troca pelo nome do atendente antes de enviar"><span data-ico="mais"></span> {nome_atendente}</button>
+                </div>
+                <span class="g14-contador" id="cnt-r-texto">0 / 1000</span>
+              </div>
+
+              <div class="g14-previa-box" id="box-previa-rr" hidden>
+                <div class="g14-previa-rotulo">Prévia na Central (exemplo fictício)</div>
+                <div class="g14-previa-corpo" id="previa-rr-corpo"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tlk-acoes-form">
+            <button class="btn btn-ghost" type="button" id="btn-cancelar-resposta" title="Cancelar: descarta as alterações e volta à lista de respostas rápidas" aria-label="Cancelar: descarta as alterações e volta à lista de respostas rápidas"><span data-ico="cancelar"></span> Cancelar</button>
+            <button class="btn btn-primary" type="submit" id="btn-salvar-resposta" title="Salvar resposta rápida: grava o atalho e o texto para uso na Central" aria-label="Salvar resposta rápida: grava o atalho e o texto para uso na Central"><span data-ico="salvar"></span> Salvar resposta rápida</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="/app/ia-talk/js/talk-api.js"></script>
+<script src="/app/ia-talk/js/talk-icones.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const { esc, pill } = TalkUI;
+
+  const DIAS_SEMANA = [
+    { dia: 1, nome: 'Segunda-feira', curto: 'Seg' },
+    { dia: 2, nome: 'Terça-feira', curto: 'Ter' },
+    { dia: 3, nome: 'Quarta-feira', curto: 'Qua' },
+    { dia: 4, nome: 'Quinta-feira', curto: 'Qui' },
+    { dia: 5, nome: 'Sexta-feira', curto: 'Sex' },
+    { dia: 6, nome: 'Sábado', curto: 'Sáb' },
+    { dia: 0, nome: 'Domingo', curto: 'Dom' },
+  ];
+
+  const CODIGO_RE = /^[a-z0-9-]{2,30}$/;
+  const ATALHO_RE = /^\/[a-z0-9-]{2,30}$/;
+
+  let setores = [];
+  let respostas = [];
+  let usuariosAtivos = [];
+  let usuariosSemPermissao = false;
+  let setorEditando = null;
+  let respostaEditando = null;
+  let confirmandoInativarSetorId = null;
+  // Mapa dia (0..6) -> [{ inicio: '08:00', fim: '12:00' }]
+  let gradeHorario = new Map();
+
+  function slugDoNome(nome) {
+    return String(nome || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 30);
+  }
+
+  function mostrarVista(nome) {
+    $('vista-principal').hidden = nome !== 'principal';
+    $('vista-setor').hidden = nome !== 'setor';
+    $('vista-resposta').hidden = nome !== 'resposta';
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  async function comGiro(botao, fn) {
+    if (botao.classList.contains('tlk-btn-girando')) return;
+    botao.classList.add('tlk-btn-girando');
+    botao.disabled = true;
+    try {
+      await Promise.all([fn(), new Promise((r) => setTimeout(r, 450))]);
+    } finally {
+      botao.classList.remove('tlk-btn-girando');
+      botao.disabled = false;
+    }
+  }
+
+  // ── Carregamento de dados ───────────────────────────────────────────
+  async function carregarUsuariosAtivos() {
+    try {
+      const pag = await TalkApi.get('/usuarios', { situacao: 'ativo', limite: 200 });
+      usuariosAtivos = Array.isArray(pag?.itens) ? pag.itens : [];
+      usuariosSemPermissao = false;
+    } catch (err) {
+      usuariosAtivos = [];
+      usuariosSemPermissao = err?.status === 403;
+    }
+  }
+
+  function preencherSelectsDeSetor() {
+    const selFiltro = $('fr-escopo');
+    const selForm = $('r-setor');
+    const prevFiltro = selFiltro.value;
+    const prevForm = selForm.value;
+    const ativos = setores.filter((s) => s.situacao === 'ativo');
+    const opcoes = ativos.map((s) => `<option value="${esc(s.id)}">${esc(s.nome)}</option>`).join('');
+
+    selFiltro.innerHTML = '<option value="">Todos os escopos</option><option value="__geral__">Gerais (todos os setores)</option>' + opcoes;
+    selFiltro.value = prevFiltro;
+
+    selForm.innerHTML = '<option value="">Geral (todos os setores)</option>' + opcoes;
+    selForm.value = prevForm;
+  }
+
+  function resumoHorarioTexto(h) {
+    if (!h?.ligado) return 'Horário livre (sempre aberto)';
+    const dias = Array.isArray(h.dias) ? h.dias : [];
+    if (!dias.length) return `Ligado (${h.fuso || 'America/Cuiaba'}) · sem dias`;
+    const diasUnicos = new Set(dias.map((d) => d.dia)).size;
+    return `${diasUnicos} dia(s) · ${dias.length} intervalo(s) · ${h.fuso || 'America/Cuiaba'}`;
+  }
+
+  function renderizarListaSetores() {
+    const el = $('lista-setores');
+    const estadoEl = $('estado-setores');
+    $('cnt-setores').textContent = setores.length ? `(${setores.length})` : '';
+
+    if (!setores.length) {
+      el.innerHTML = '';
+      TalkUI.estado(estadoEl, 'vazio', {
+        titulo: 'Nenhum setor encontrado',
+        texto: 'Crie um setor ou ajuste os filtros para continuar.',
+      });
+      return;
+    }
+    estadoEl.hidden = true;
+
+    el.innerHTML = setores.map((s) => {
+      const membros = Array.isArray(s.membros) ? s.membros : [];
+      const chipsMembros = membros.length
+        ? membros.map((m) => `<span class="tlk-chip">${esc(m.nome)}</span>`).join('')
+        : '<span class="form-hint">Sem membros</span>';
+      const inativo = s.situacao === 'inativo';
+      const confirmando = confirmandoInativarSetorId === s.id;
+      const fhTexto = s.fora_horario?.ligado ? 'Aviso fora do horário ligado' : 'Aviso fora do horário desligado';
+
+      return `<article class="g14-card ${inativo ? 'g14-card--inativo' : ''}" data-setor-id="${esc(s.id)}">
+        <div class="g14-card-topo">
+          <div class="g14-card-info">
+            <div class="g14-card-titulo">
+              <span>${esc(s.nome)}</span>
+              <code class="g14-codigo">${esc(s.codigo)}</code>
+              ${pill(s.situacao)}
+            </div>
+            ${s.descricao ? `<p class="g14-card-desc">${esc(s.descricao)}</p>` : ''}
+          </div>
+          <div class="g14-card-acoes">
+            <button class="btn btn-ghost btn-sm" type="button" data-editar-setor="${esc(s.id)}" title="Editar setor ${esc(s.nome)}: altera nome, membros, horário e mensagem fora do horário" aria-label="Editar setor ${esc(s.nome)}: altera nome, membros, horário e mensagem fora do horário">${TalkIcones.svg('editar')} Editar</button>
+            ${inativo
+              ? `<button class="btn btn-ghost btn-sm" type="button" data-reativar-setor="${esc(s.id)}" title="Reativar setor ${esc(s.nome)}: volta a aceitar novas conversas" aria-label="Reativar setor ${esc(s.nome)}: volta a aceitar novas conversas">${TalkIcones.svg('restaurar')} Reativar</button>`
+              : `<button class="btn btn-ghost btn-sm" type="button" data-pedir-inativar-setor="${esc(s.id)}" title="Inativar setor ${esc(s.nome)}: bloqueia se houver conversas abertas ou canal usando como padrão" aria-label="Inativar setor ${esc(s.nome)}: bloqueia se houver conversas abertas ou canal usando como padrão">${TalkIcones.svg('ban')} Inativar</button>`}
+          </div>
+        </div>
+        <div class="tlk-chips">${chipsMembros}</div>
+        <div class="g14-card-meta">
+          <span><strong>${esc(s.conversas_abertas ?? 0)}</strong> aberta(s) · <strong>${esc(s.na_fila ?? 0)}</strong> na fila</span>
+          <span>${esc(resumoHorarioTexto(s.horario))}</span>
+          <span>${esc(fhTexto)}</span>
+        </div>
+        <div class="tlk-confirm-inline" ${confirmando ? '' : 'hidden'}>
+          <span>Inativar o setor <strong>${esc(s.nome)}</strong>? Ele deixará de receber novas conversas.</span>
+          <div class="tlk-confirm-inline-acoes">
+            <button class="btn btn-ghost btn-sm" type="button" data-cancelar-inativar-setor="${esc(s.id)}" title="Cancelar inativação do setor" aria-label="Cancelar inativação do setor">${TalkIcones.svg('cancelar')} Cancelar</button>
+            <button class="btn btn-perigo btn-sm" type="button" data-confirmar-inativar-setor="${esc(s.id)}" title="Confirmar inativação do setor ${esc(s.nome)}" aria-label="Confirmar inativação do setor ${esc(s.nome)}">${TalkIcones.svg('ban')} Confirmar inativação</button>
+          </div>
+        </div>
+      </article>`;
+    }).join('');
+  }
+
+  async function carregarSetores() {
+    $('alerta-lista-setores').hidden = true;
+    TalkUI.estado($('estado-setores'), 'carregando');
+    try {
+      const pag = await TalkApi.get('/setores', {
+        busca: $('fs-busca').value.trim() || undefined,
+        situacao: $('fs-situacao').value || undefined,
+        limite: 200,
+      });
+      setores = Array.isArray(pag?.itens) ? pag.itens : [];
+      confirmandoInativarSetorId = null;
+      renderizarListaSetores();
+      preencherSelectsDeSetor();
+    } catch (err) {
+      $('lista-setores').innerHTML = '';
+      TalkUI.estadoDoErro($('estado-setores'), err, () => carregarSetores());
+    }
+  }
+
+  function formatarPreviaComVariaveis(texto) {
+    return esc(texto).replace(/\{(nome_contato|nome_atendente)\}/g, '<span class="g14-var-destaque">{$1}</span>');
+  }
+
+  function renderizarListaRespostas() {
+    const el = $('lista-respostas');
+    const estadoEl = $('estado-respostas');
+    const filtroEscopo = $('fr-escopo').value;
+
+    const visiveis = respostas.filter((r) => {
+      if (filtroEscopo === '__geral__') return !r.setor;
+      if (filtroEscopo) return r.setor?.id === filtroEscopo;
+      return true;
+    });
+
+    $('cnt-respostas').textContent = visiveis.length ? `(${visiveis.length})` : '';
+
+    if (!visiveis.length) {
+      el.innerHTML = '';
+      TalkUI.estado(estadoEl, 'vazio', {
+        titulo: 'Nenhuma resposta rápida encontrada',
+        texto: 'Crie uma resposta rápida com "/" ou ajuste os filtros.',
+      });
+      return;
+    }
+    estadoEl.hidden = true;
+
+    el.innerHTML = visiveis.map((r) => {
+      const inativa = r.situacao === 'inativa';
+      const escopo = r.setor ? `Setor: ${r.setor.nome}` : 'Geral (todos os setores)';
+      return `<article class="g14-card ${inativa ? 'g14-card--inativo' : ''}" data-resposta-id="${esc(r.id)}">
+        <div class="g14-card-topo">
+          <div class="g14-card-info">
+            <div class="g14-card-titulo">
+              <code class="g14-atalho">${esc(r.atalho)}</code>
+              <span>${esc(r.titulo)}</span>
+              <span class="tlk-chip ${r.setor ? '' : 'tlk-chip--ativo'}">${esc(escopo)}</span>
+              ${pill(r.situacao)}
+            </div>
+          </div>
+          <div class="g14-card-acoes">
+            <button class="btn btn-ghost btn-sm" type="button" data-editar-resposta="${esc(r.id)}" title="Editar resposta rápida ${esc(r.atalho)}" aria-label="Editar resposta rápida ${esc(r.atalho)}">${TalkIcones.svg('editar')} Editar</button>
+            ${inativa
+              ? `<button class="btn btn-ghost btn-sm" type="button" data-alternar-resposta="${esc(r.id)}" data-nova-situacao="ativa" title="Reativar resposta rápida ${esc(r.atalho)}" aria-label="Reativar resposta rápida ${esc(r.atalho)}">${TalkIcones.svg('restaurar')} Reativar</button>`
+              : `<button class="btn btn-ghost btn-sm" type="button" data-alternar-resposta="${esc(r.id)}" data-nova-situacao="inativa" title="Inativar resposta rápida ${esc(r.atalho)}: deixa de aparecer ao digitar / na Central" aria-label="Inativar resposta rápida ${esc(r.atalho)}: deixa de aparecer ao digitar / na Central">${TalkIcones.svg('ban')} Inativar</button>`}
+          </div>
+        </div>
+        <p class="g14-previa-texto">${formatarPreviaComVariaveis(r.texto)}</p>
+      </article>`;
+    }).join('');
+  }
+
+  async function carregarRespostas() {
+    $('alerta-lista-respostas').hidden = true;
+    TalkUI.estado($('estado-respostas'), 'carregando');
+    try {
+      const pag = await TalkApi.get('/respostas-rapidas', {
+        busca: $('fr-busca').value.trim() || undefined,
+        situacao: $('fr-situacao').value || undefined,
+        limite: 200,
+      });
+      respostas = Array.isArray(pag?.itens) ? pag.itens : [];
+      renderizarListaRespostas();
+    } catch (err) {
+      $('lista-respostas').innerHTML = '';
+      TalkUI.estadoDoErro($('estado-respostas'), err, () => carregarRespostas());
+    }
+  }
+
+  // ── Editor de Setor: Membros, Horários e Fora do Horário ────────────
+  function atualizarContadorMembros() {
+    const marcados = $('lista-membros').querySelectorAll('input[type="checkbox"]:checked').length;
+    $('cnt-membros-sel').textContent = `${marcados} selecionado(s)`;
+  }
+
+  function renderizarMembrosEditor(selecionados = []) {
+    const selSet = new Set(selecionados.map((m) => (typeof m === 'string' ? m : m.id)));
+    const aviso = $('aviso-membros');
+    const lista = $('lista-membros');
+
+    if (usuariosSemPermissao) {
+      aviso.textContent = 'Sua sessão não possui acesso à listagem completa de usuários (talk-usuarios). Os membros atuais do setor serão preservados ao salvar.';
+      aviso.hidden = false;
+      lista.innerHTML = selecionados.length
+        ? selecionados.map((m) => `<span class="tlk-chip">${esc(m.nome || m.id)}</span>`).join('')
+        : '<span class="form-hint">Nenhum membro vinculado.</span>';
+      $('cnt-membros-sel').textContent = `${selecionados.length} vinculado(s)`;
+      return;
+    }
+
+    aviso.hidden = true;
+    // Junta usuários ativos da empresa + eventuais membros já salvos
+    const mapa = new Map();
+    for (const u of usuariosAtivos) mapa.set(u.id, { id: u.id, nome: u.nome, detalhe: u.papel || 'ativo' });
+    for (const m of selecionados) {
+      if (m?.id && !mapa.has(m.id)) mapa.set(m.id, { id: m.id, nome: m.nome || m.id, detalhe: 'membro atual' });
+    }
+    const todos = [...mapa.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    if (!todos.length) {
+      lista.innerHTML = '<span class="form-hint">Nenhum usuário ativo disponível nesta empresa.</span>';
+      $('cnt-membros-sel').textContent = '0 selecionado(s)';
+      return;
+    }
+
+    lista.innerHTML = todos.map((u) => `
+      <label class="tlk-check-card">
+        <input type="checkbox" value="${esc(u.id)}" ${selSet.has(u.id) ? 'checked' : ''}>
+        <div>
+          <strong>${esc(u.nome)}</strong>
+          <span>${esc(u.detalhe)}</span>
+        </div>
+      </label>`).join('');
+    atualizarContadorMembros();
+  }
+
+  $('lista-membros').addEventListener('change', atualizarContadorMembros);
+
+  function inicializarGradeHorario(dias = []) {
+    gradeHorario = new Map(DIAS_SEMANA.map((d) => [d.dia, []]));
+    for (const item of Array.isArray(dias) ? dias : []) {
+      if (gradeHorario.has(item.dia)) {
+        gradeHorario.get(item.dia).push({ inicio: item.inicio || '08:00', fim: item.fim || '18:00' });
+      }
+    }
+    renderizarGradeHorario();
+  }
+
+  function renderizarGradeHorario() {
+    const ligado = $('s-hor-ligado').checked;
+    $('area-dias-horario').hidden = !ligado;
+    const container = $('grade-dias');
+
+    container.innerHTML = DIAS_SEMANA.map((d) => {
+      const lista = gradeHorario.get(d.dia) || [];
+      const intervalosHtml = lista.length
+        ? lista.map((it, idx) => `
+            <div class="g14-intervalo" data-dia="${d.dia}" data-idx="${idx}">
+              <label class="sr-only" for="hor-${d.dia}-${idx}-ini">Início ${esc(d.nome)} intervalo ${idx + 1}</label>
+              <input class="form-control" id="hor-${d.dia}-${idx}-ini" type="time" value="${esc(it.inicio)}" data-hor-campo="inicio">
+              <span class="g14-intervalo-sep">até</span>
+              <label class="sr-only" for="hor-${d.dia}-${idx}-fim">Fim ${esc(d.nome)} intervalo ${idx + 1}</label>
+              <input class="form-control" id="hor-${d.dia}-${idx}-fim" type="time" value="${esc(it.fim)}" data-hor-campo="fim">
+              <button class="btn btn-ghost btn-sm" type="button" data-rm-intervalo="${d.dia}:${idx}" title="Remover intervalo de ${esc(d.nome)}" aria-label="Remover intervalo de ${esc(d.nome)}">${TalkIcones.svg('lixeira')}</button>
+            </div>`).join('')
+        : '<div class="g14-dia-fechado">Sem atendimento neste dia</div>';
+
+      return `<div class="g14-dia-row" data-dia-row="${d.dia}">
+        <div class="g14-dia-nome">${esc(d.nome)}</div>
+        <div class="g14-dia-intervalos">${intervalosHtml}</div>
+        <div>
+          <button class="btn btn-ghost btn-sm" type="button" data-add-intervalo="${d.dia}" title="Adicionar intervalo em ${esc(d.nome)}" aria-label="Adicionar intervalo em ${esc(d.nome)}">${TalkIcones.svg('mais')} Intervalo</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  $('s-hor-ligado').addEventListener('change', renderizarGradeHorario);
+
+  $('grade-dias').addEventListener('click', (e) => {
+    const addBtn = e.target.closest('[data-add-intervalo]');
+    if (addBtn) {
+      const dia = Number(addBtn.dataset.addIntervalo);
+      const lista = gradeHorario.get(dia) || [];
+      const padrao = lista.length === 0 ? { inicio: '08:00', fim: '12:00' } : { inicio: '13:00', fim: '18:00' };
+      lista.push(padrao);
+      gradeHorario.set(dia, lista);
+      renderizarGradeHorario();
+      return;
+    }
+    const rmBtn = e.target.closest('[data-rm-intervalo]');
+    if (rmBtn) {
+      const [diaStr, idxStr] = rmBtn.dataset.rmIntervalo.split(':');
+      const dia = Number(diaStr);
+      const idx = Number(idxStr);
+      const lista = gradeHorario.get(dia) || [];
+      lista.splice(idx, 1);
+      gradeHorario.set(dia, lista);
+      renderizarGradeHorario();
+    }
+  });
+
+  $('grade-dias').addEventListener('input', (e) => {
+    const campo = e.target.dataset.horCampo;
+    if (!campo) return;
+    const linha = e.target.closest('.g14-intervalo');
+    if (!linha) return;
+    const dia = Number(linha.dataset.dia);
+    const idx = Number(linha.dataset.idx);
+    const lista = gradeHorario.get(dia);
+    if (lista?.[idx]) lista[idx][campo] = e.target.value;
+  });
+
+  $('btn-hor-comercial').addEventListener('click', () => {
+    $('s-hor-ligado').checked = true;
+    const padrao = [];
+    for (const dia of [1, 2, 3, 4, 5]) {
+      padrao.push({ dia, inicio: '08:00', fim: '12:00' }, { dia, inicio: '13:00', fim: '18:00' });
+    }
+    inicializarGradeHorario(padrao);
+  });
+
+  $('btn-hor-limpar').addEventListener('click', () => {
+    inicializarGradeHorario([]);
+  });
+
+  function coletarHorarioPayload() {
+    const ligado = $('s-hor-ligado').checked;
+    const fuso = $('s-hor-fuso').value || 'America/Cuiaba';
+    const dias = [];
+    if (ligado) {
+      for (const d of DIAS_SEMANA) {
+        for (const it of gradeHorario.get(d.dia) || []) {
+          dias.push({ dia: d.dia, inicio: it.inicio, fim: it.fim });
+        }
+      }
+    }
+    return { ligado, fuso, dias };
+  }
+
+  function validarHorarioLocal(h) {
+    if (!h.ligado) return null;
+    if (!h.dias.length) return 'Marque ao menos um dia ou desligue o horário.';
+    const porDia = new Map();
+    for (const d of h.dias) {
+      if (!d.inicio || !d.fim || d.inicio >= d.fim) {
+        return 'Use HH:MM válido, com início anterior ao fim em todos os intervalos.';
+      }
+      if (!porDia.has(d.dia)) porDia.set(d.dia, []);
+      porDia.get(d.dia).push(d);
+    }
+    for (const lista of porDia.values()) {
+      lista.sort((a, b) => a.inicio.localeCompare(b.inicio));
+      for (let i = 1; i < lista.length; i++) {
+        if (lista[i - 1].fim > lista[i].inicio) {
+          return 'Intervalos do mesmo dia não podem se sobrepor.';
+        }
+      }
+    }
+    return null;
+  }
+
+  function atualizarContadorForaHorario() {
+    $('cnt-fh-texto').textContent = `${$('s-fh-texto').value.length} / 1000`;
+  }
+  $('s-fh-texto').addEventListener('input', atualizarContadorForaHorario);
+
+  function atualizarDicaCodigoCriacao() {
+    if (setorEditando) return;
+    const manual = $('s-codigo').value.trim();
+    const gerado = slugDoNome($('s-nome').value);
+    $('dica-codigo').textContent = manual
+      ? 'Código informado manualmente (2 a 30 caracteres: a-z, 0-9 e hífen). Não poderá ser alterado depois de criado.'
+      : gerado
+        ? `Se deixar vazio, será gerado como "${gerado}". Depois de criado, o código não muda.`
+        : 'Opcional na criação (2 a 30 caracteres: a-z, 0-9 e hífen). Depois de criado, não pode ser alterado.';
+  }
+  $('s-nome').addEventListener('input', atualizarDicaCodigoCriacao);
+  $('s-codigo').addEventListener('input', atualizarDicaCodigoCriacao);
+
+  function garantirFusoNoSelect(fuso) {
+    if (!fuso) return;
+    const sel = $('s-hor-fuso');
+    if (![...sel.options].some((o) => o.value === fuso)) {
+      const opt = document.createElement('option');
+      opt.value = fuso;
+      opt.textContent = fuso;
+      sel.appendChild(opt);
+    }
+    sel.value = fuso;
+  }
+
+  function limparAlertaSetor() {
+    $('alerta-setor').hidden = true;
+    $('alerta-setor-texto').textContent = '';
+    $('btn-recarregar-setor').hidden = true;
+  }
+
+  function mostrarAlertaSetor(mensagem, { mostrarRecarregar = false } = {}) {
+    $('alerta-setor-texto').textContent = mensagem;
+    $('btn-recarregar-setor').hidden = !mostrarRecarregar;
+    $('alerta-setor').hidden = false;
+  }
+
+  function abrirEditorSetor(setor = null) {
+    setorEditando = setor;
+    const form = $('form-setor');
+    TalkUI.limparErros(form);
+    limparAlertaSetor();
+
+    const editando = !!setor;
+    $('titulo-setor').textContent = editando ? `Editar setor: ${setor.nome}` : 'Novo setor';
+    $('sub-setor').textContent = editando ? `Código: ${setor.codigo} · Versão ${setor.versao}` : 'O aviso fora do horário nasce desligado.';
+
+    $('s-nome').value = setor?.nome || '';
+    const inpCod = $('s-codigo');
+    inpCod.value = setor?.codigo || '';
+    inpCod.readOnly = editando;
+    inpCod.classList.toggle('g14-codigo-travado', editando);
+    if (editando) {
+      $('dica-codigo').textContent = 'O código é somente leitura depois de criado porque os sistemas de origem usam ele na API v1.';
+    } else {
+      atualizarDicaCodigoCriacao();
+    }
+
+    $('s-descricao').value = setor?.descricao || '';
+    $('campo-s-situacao').hidden = !editando;
+    $('s-situacao').value = setor?.situacao || 'ativo';
+
+    renderizarMembrosEditor(setor?.membros || []);
+
+    const hor = setor?.horario || { ligado: false, fuso: 'America/Cuiaba', dias: [] };
+    $('s-hor-ligado').checked = !!hor.ligado;
+    garantirFusoNoSelect(hor.fuso || 'America/Cuiaba');
+    inicializarGradeHorario(hor.dias || []);
+
+    // Em novos setores, mensagem de fora do horário nasce SEMPRE desligada (§8.3).
+    const fh = setor?.fora_horario || { ligado: false, texto: '' };
+    $('s-fh-ligado').checked = editando ? !!fh.ligado : false;
+    $('s-fh-texto').value = fh.texto || '';
+    atualizarContadorForaHorario();
+
+    mostrarVista('setor');
+    $('s-nome').focus();
+  }
+
+  $('btn-recarregar-setor').addEventListener('click', async () => {
+    if (!setorEditando?.id) return;
+    try {
+      const fresco = await TalkApi.get(`/setores/${encodeURIComponent(setorEditando.id)}`);
+      abrirEditorSetor(fresco);
+      TalkUI.toast('Setor recarregado com a versão atual.', 'info');
+    } catch (err) {
+      mostrarAlertaSetor(err.message);
+    }
+  });
+
+  $('form-setor').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    TalkUI.limparErros(form);
+    limparAlertaSetor();
+
+    const horario = coletarHorarioPayload();
+    const erroHor = validarHorarioLocal(horario);
+    if (erroHor) {
+      TalkUI.errosNoFormulario(form, { campos: { horario: erroHor } });
+      return;
+    }
+
+    const foraHorario = {
+      ligado: $('s-fh-ligado').checked,
+      texto: $('s-fh-texto').value.trim(),
+    };
+    if (foraHorario.ligado && !foraHorario.texto) {
+      TalkUI.errosNoFormulario(form, { campos: { fora_horario: 'Escreva a mensagem de fora do horário ou desligue o aviso.' } });
+      $('s-fh-texto').focus();
+      return;
+    }
+
+    const corpo = {
+      nome: $('s-nome').value.trim(),
+      descricao: $('s-descricao').value.trim(),
+      horario,
+      fora_horario: foraHorario,
+    };
+
+    if (!usuariosSemPermissao) {
+      corpo.membros = [...$('lista-membros').querySelectorAll('input[type="checkbox"]:checked')].map((el) => el.value);
+    }
+
+    if (setorEditando) {
+      corpo.versao = setorEditando.versao;
+      corpo.situacao = $('s-situacao').value;
+    } else {
+      const codManual = $('s-codigo').value.trim();
+      if (codManual) {
+        if (!CODIGO_RE.test(codManual)) {
+          TalkUI.errosNoFormulario(form, { campos: { codigo: 'Use de 2 a 30 letras minúsculas, números e hífen (ex.: suporte).' } });
+          return;
+        }
+        corpo.codigo = codManual;
+      }
+    }
+
+    const btn = $('btn-salvar-setor');
+    btn.disabled = true;
+    try {
+      if (setorEditando) {
+        await TalkApi.put(`/setores/${encodeURIComponent(setorEditando.id)}`, corpo);
+        TalkUI.toast('Setor atualizado.', 'ok');
+      } else {
+        await TalkApi.post('/setores', corpo);
+        TalkUI.toast('Setor criado.', 'ok');
+      }
+      mostrarVista('principal');
+      await carregarSetores();
+    } catch (err) {
+      if (!TalkUI.errosNoFormulario(form, err)) {
+        const conflitoVersao = err?.status === 409 && /outra sessão|recarregue/i.test(err.message || '');
+        mostrarAlertaSetor(err.message, { mostrarRecarregar: conflitoVersao });
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // Ações na lista de setores (editar, inativar com confirmação inline + 409, reativar)
+  $('lista-setores').addEventListener('click', async (e) => {
+    const btnEdit = e.target.closest('[data-editar-setor]');
+    if (btnEdit) {
+      const id = btnEdit.dataset.editarSetor;
+      try {
+        const detalhe = await TalkApi.get(`/setores/${encodeURIComponent(id)}`);
+        abrirEditorSetor(detalhe);
+      } catch (err) {
+        $('alerta-lista-setores').textContent = err.message;
+        $('alerta-lista-setores').hidden = false;
+      }
+      return;
+    }
+
+    const btnPedir = e.target.closest('[data-pedir-inativar-setor]');
+    if (btnPedir) {
+      $('alerta-lista-setores').hidden = true;
+      confirmandoInativarSetorId = btnPedir.dataset.pedirInativarSetor;
+      renderizarListaSetores();
+      return;
+    }
+
+    const btnCancelar = e.target.closest('[data-cancelar-inativar-setor]');
+    if (btnCancelar) {
+      confirmandoInativarSetorId = null;
+      renderizarListaSetores();
+      return;
+    }
+
+    const btnConfirmar = e.target.closest('[data-confirmar-inativar-setor]');
+    if (btnConfirmar) {
+      const id = btnConfirmar.dataset.confirmarInativarSetor;
+      const s = setores.find((x) => x.id === id);
+      if (!s) return;
+      $('alerta-lista-setores').hidden = true;
+      btnConfirmar.disabled = true;
+      try {
+        await TalkApi.put(`/setores/${encodeURIComponent(s.id)}`, { versao: s.versao, situacao: 'inativo' });
+        confirmandoInativarSetorId = null;
+        TalkUI.toast(`Setor ${s.nome} inativado.`, 'ok');
+        await carregarSetores();
+      } catch (err) {
+        confirmandoInativarSetorId = null;
+        renderizarListaSetores();
+        $('alerta-lista-setores').textContent = err.message;
+        $('alerta-lista-setores').hidden = false;
+      }
+      return;
+    }
+
+    const btnReativar = e.target.closest('[data-reativar-setor]');
+    if (btnReativar) {
+      const id = btnReativar.dataset.reativarSetor;
+      const s = setores.find((x) => x.id === id);
+      if (!s) return;
+      $('alerta-lista-setores').hidden = true;
+      btnReativar.disabled = true;
+      try {
+        await TalkApi.put(`/setores/${encodeURIComponent(s.id)}`, { versao: s.versao, situacao: 'ativo' });
+        TalkUI.toast(`Setor ${s.nome} reativado.`, 'ok');
+        await carregarSetores();
+      } catch (err) {
+        $('alerta-lista-setores').textContent = err.message;
+        $('alerta-lista-setores').hidden = false;
+      } finally {
+        btnReativar.disabled = false;
+      }
+    }
+  });
+
+  // ── Editor de Resposta Rápida ───────────────────────────────────────
+  function atualizarPreviaResposta() {
+    const texto = $('r-texto').value;
+    $('cnt-r-texto').textContent = `${texto.length} / 1000`;
+    const box = $('box-previa-rr');
+    if (!texto.trim()) {
+      box.hidden = true;
+      return;
+    }
+    $('previa-rr-corpo').textContent = texto
+      .replace(/\{nome_contato\}/g, 'Mariana Oliveira')
+      .replace(/\{nome_atendente\}/g, 'Carla Souza');
+    box.hidden = false;
+  }
+  $('r-texto').addEventListener('input', atualizarPreviaResposta);
+
+  document.querySelectorAll('[data-inserir-var]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const ta = $('r-texto');
+      const v = btn.dataset.inserirVar;
+      const ini = ta.selectionStart ?? ta.value.length;
+      const fim = ta.selectionEnd ?? ta.value.length;
+      ta.value = ta.value.slice(0, ini) + v + ta.value.slice(fim);
+      ta.focus();
+      ta.setSelectionRange(ini + v.length, ini + v.length);
+      atualizarPreviaResposta();
+    });
+  });
+
+  function abrirEditorResposta(rr = null) {
+    respostaEditando = rr;
+    const form = $('form-resposta');
+    TalkUI.limparErros(form);
+    $('alerta-resposta').hidden = true;
+    preencherSelectsDeSetor();
+
+    const editando = !!rr;
+    $('titulo-resposta').textContent = editando ? `Editar resposta rápida: ${rr.atalho}` : 'Nova resposta rápida';
+    $('sub-resposta').textContent = editando ? (rr.setor ? `Setor: ${rr.setor.nome}` : 'Geral (todos os setores)') : 'Atalho acionado com "/" no campo de resposta da Central.';
+
+    $('r-atalho').value = rr?.atalho || '/';
+    $('r-titulo').value = rr?.titulo || '';
+    $('r-setor').value = rr?.setor?.id || '';
+    $('r-texto').value = rr?.texto || '';
+    $('campo-r-situacao').hidden = !editando;
+    $('r-situacao').value = rr?.situacao || 'ativa';
+    atualizarPreviaResposta();
+
+    mostrarVista('resposta');
+    $('r-atalho').focus();
+  }
+
+  $('form-resposta').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    TalkUI.limparErros(form);
+    $('alerta-resposta').hidden = true;
+
+    const atalho = $('r-atalho').value.trim().toLowerCase();
+    if (!ATALHO_RE.test(atalho)) {
+      TalkUI.errosNoFormulario(form, { campos: { atalho: 'Comece com / e use de 2 a 30 letras minúsculas, números e hífen (ex.: /boleto).' } });
+      return;
+    }
+
+    const setorVal = $('r-setor').value;
+    const corpo = {
+      atalho,
+      titulo: $('r-titulo').value.trim(),
+      texto: $('r-texto').value.trim(),
+      setor_id: setorVal || null,
+    };
+    if (respostaEditando) {
+      corpo.situacao = $('r-situacao').value;
+    }
+
+    const btn = $('btn-salvar-resposta');
+    btn.disabled = true;
+    try {
+      if (respostaEditando) {
+        await TalkApi.put(`/respostas-rapidas/${encodeURIComponent(respostaEditando.id)}`, corpo);
+        TalkUI.toast('Resposta rápida atualizada.', 'ok');
+      } else {
+        await TalkApi.post('/respostas-rapidas', corpo);
+        TalkUI.toast('Resposta rápida criada.', 'ok');
+      }
+      mostrarVista('principal');
+      await carregarRespostas();
+    } catch (err) {
+      if (!TalkUI.errosNoFormulario(form, err)) {
+        $('alerta-resposta').textContent = err.message;
+        $('alerta-resposta').hidden = false;
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $('lista-respostas').addEventListener('click', async (e) => {
+    const btnEdit = e.target.closest('[data-editar-resposta]');
+    if (btnEdit) {
+      const rr = respostas.find((x) => x.id === btnEdit.dataset.editarResposta);
+      if (rr) abrirEditorResposta(rr);
+      return;
+    }
+    const btnAlt = e.target.closest('[data-alternar-resposta]');
+    if (btnAlt) {
+      const id = btnAlt.dataset.alternarResposta;
+      const novaSituacao = btnAlt.dataset.novaSituacao;
+      $('alerta-lista-respostas').hidden = true;
+      btnAlt.disabled = true;
+      try {
+        await TalkApi.put(`/respostas-rapidas/${encodeURIComponent(id)}`, { situacao: novaSituacao });
+        TalkUI.toast(novaSituacao === 'ativa' ? 'Resposta rápida reativada.' : 'Resposta rápida inativada.', 'ok');
+        await carregarRespostas();
+      } catch (err) {
+        $('alerta-lista-respostas').textContent = err.message;
+        $('alerta-lista-respostas').hidden = false;
+      } finally {
+        btnAlt.disabled = false;
+      }
+    }
+  });
+
+  // ── Navegação e filtros ─────────────────────────────────────────────
+  TalkUI.abas($('abas-principais'));
+
+  let timerBuscaSetor = null;
+  $('fs-busca').addEventListener('input', () => {
+    clearTimeout(timerBuscaSetor);
+    timerBuscaSetor = setTimeout(carregarSetores, 220);
+  });
+  $('fs-situacao').addEventListener('change', carregarSetores);
+  $('filtros-setores').addEventListener('submit', (e) => { e.preventDefault(); carregarSetores(); });
+
+  let timerBuscaResp = null;
+  $('fr-busca').addEventListener('input', () => {
+    clearTimeout(timerBuscaResp);
+    timerBuscaResp = setTimeout(carregarRespostas, 220);
+  });
+  $('fr-escopo').addEventListener('change', renderizarListaRespostas);
+  $('fr-situacao').addEventListener('change', carregarRespostas);
+  $('filtros-respostas').addEventListener('submit', (e) => { e.preventDefault(); carregarRespostas(); });
+
+  $('btn-atualizar-setores').addEventListener('click', (e) => comGiro(e.currentTarget, carregarSetores));
+  $('btn-atualizar-respostas').addEventListener('click', (e) => comGiro(e.currentTarget, carregarRespostas));
+
+  $('btn-novo-setor').addEventListener('click', () => abrirEditorSetor(null));
+  $('btn-voltar-setor').addEventListener('click', () => mostrarVista('principal'));
+  $('btn-cancelar-setor').addEventListener('click', () => mostrarVista('principal'));
+
+  $('btn-nova-resposta').addEventListener('click', () => abrirEditorResposta(null));
+  $('btn-voltar-resposta').addEventListener('click', () => mostrarVista('principal'));
+  $('btn-cancelar-resposta').addEventListener('click', () => mostrarVista('principal'));
+
+  // ── Inicialização ───────────────────────────────────────────────────
+  async function iniciar() {
+    await Promise.all([carregarUsuariosAtivos(), carregarSetores(), carregarRespostas()]);
+  }
+
+  iniciar();
+})();
+</script>
+</body>
+</html>

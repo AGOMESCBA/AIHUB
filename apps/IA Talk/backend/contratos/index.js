@@ -9,7 +9,8 @@ const congelar = (lista) => Object.freeze([...lista]);
 
 const PAPEIS = congelar(['admin_empresa', 'supervisor', 'atendente', 'auditor']);
 
-const ESCOPOS_APLICACAO = congelar(['mensagens:enviar', 'mensagens:ler', 'eventos:ler', 'canais:ler']);
+// conversas:* (C8 §8.9): o sistema de origem abre conversa a partir de um chamado e lê os retornos.
+const ESCOPOS_APLICACAO = congelar(['mensagens:enviar', 'mensagens:ler', 'eventos:ler', 'canais:ler', 'conversas:criar', 'conversas:ler']);
 
 const PROVEDORES = congelar(['wweb', 'meta']);
 
@@ -35,12 +36,27 @@ const TIPOS_EVENTO_WEBHOOK = congelar([
 
 const TIPOS_LOG_CANAL = congelar(['info', 'success', 'warning', 'error', 'received', 'sent', 'system']);
 
+// C8 — Atendimento (Fase 2). Uso do número: só integração (Fase 1), atendimento
+// próprio (opção A) ou compartilhado com o IA Command (opção B).
+const USOS_CANAL = congelar(['integracao', 'atendimento', 'compartilhado']);
+const SITUACOES_CONVERSA = congelar(['aberta', 'encerrada']);
+const VISOES_CONVERSA = congelar(['minhas', 'fila', 'abertas', 'encerradas', 'todas']);
+const CATEGORIAS_ITEM_CONVERSA = congelar(['mensagem', 'nota', 'evento']);
+const AUTORES_ITEM_CONVERSA = congelar(['contato', 'atendente', 'sistema', 'ia']);
+const PRIORIDADES_CONVERSA = congelar(['normal', 'alta']);
+// Retornos que o sistema de origem busca em GET /v1/retornos e confirma (§8.9).
+const TIPOS_RETORNO = congelar(['conversa.criada', 'conversa.vinculada', 'conversa.assumida', 'conversa.transferida',
+  'conversa.devolvida', 'conversa.encerrada', 'conversa.reaberta']);
+
 // Socket.IO: path config.SOCKET_PATH, namespace config.SOCKET_NAMESPACE.
 const EVENTOS_SOCKET = Object.freeze({
   cliente: Object.freeze({
     assinarCanal: 'canal:assinar',   // { canal_id }
     sairCanal: 'canal:sair',         // { canal_id }
     assinarPainel: 'painel:assinar', // {}
+    assinarAtendimento: 'atendimento:assinar', // {} (C8)
+    assinarConversa: 'conversa:assinar',       // { conversa_id } (C8)
+    sairConversa: 'conversa:sair',             // { conversa_id } (C8)
   }),
   servidor: Object.freeze({
     estadoCanal: 'canal:estado',          // { canal_id, estado, em, detalhe? }
@@ -48,6 +64,11 @@ const EVENTOS_SOCKET = Object.freeze({
     logCanal: 'canal:log',                // { canal_id, em, tipo, mensagem }
     estadoMensagem: 'mensagem:estado',    // { id, estado, em }
     painelAtualizado: 'painel:atualizado',// mesmo corpo de GET /painel
+    contadoresAtendimento: 'atendimento:contadores', // mesmo corpo de GET /conversas/contadores (C8)
+    conversaAtualizada: 'conversa:atualizada',       // conversaResumo (C8)
+    conversaSaiu: 'conversa:saiu',                   // { id } — deixou de ser visível para quem recebe (C8)
+    itemConversa: 'conversa:item',                   // { conversa_id, item } (C8)
+    estadoItemConversa: 'conversa:item_estado',      // { conversa_id, item_id, estado, em } (C8)
     erro: 'erro',                         // { codigo, mensagem }
   }),
 });
@@ -76,6 +97,19 @@ const FORMAS = Object.freeze({
   v1MensagemAceita: ['id', 'estado', 'canal', 'criada_em'],
   v1Mensagem: ['id', 'estado', 'canal', 'para_mascarado', 'tipo', 'correlacao_id', 'criada_em', 'atualizada_em', 'historico_estados'],
   v1EstadoCanal: ['id', 'estado', 'estado_desde', 'capacidades'],
+  // C8 — Atendimento (docs/contratos.md §8)
+  setor: ['id', 'codigo', 'nome', 'descricao', 'situacao', 'membros', 'horario', 'fora_horario', 'conversas_abertas', 'na_fila', 'versao', 'criado_em', 'atualizado_em'],
+  contato: ['id', 'nome', 'nome_whatsapp', 'telefone_mascarado', 'conversas_total', 'primeira_conversa_em', 'ultima_conversa_em'],
+  conversaResumo: ['id', 'protocolo', 'canal', 'contato', 'setor', 'responsavel', 'situacao', 'na_fila', 'nao_lidas', 'ultima_mensagem',
+    'aguardando_desde', 'etiquetas', 'prioridade', 'referencias', 'aberta_em', 'atualizada_em', 'encerrada_em'],
+  conversaDetalhe: ['id', 'protocolo', 'canal', 'contato', 'setor', 'responsavel', 'situacao', 'na_fila', 'nao_lidas', 'ultima_mensagem',
+    'aguardando_desde', 'etiquetas', 'prioridade', 'referencias', 'aberta_em', 'atualizada_em', 'encerrada_em', 'motivo_encerramento', 'envio'],
+  itemConversa: ['id', 'categoria', 'direcao', 'autor', 'tipo', 'texto', 'estado', 'mensagem_id', 'em'],
+  contadoresAtendimento: ['minhas', 'fila', 'abertas', 'por_setor', 'atualizado_em'],
+  respostaRapida: ['id', 'atalho', 'titulo', 'texto', 'setor', 'situacao', 'atualizado_em'],
+  v1Conversa: ['id', 'protocolo', 'situacao', 'na_fila', 'canal', 'setor', 'responsavel', 'prioridade', 'referencias', 'aberta_em',
+    'atualizada_em', 'encerrada_em', 'motivo_encerramento', 'link'],
+  v1Retorno: ['id', 'tipo', 'em', 'conversa', 'referencias', 'dados'],
 });
 
 function camposFaltando(forma, objeto) {
@@ -98,6 +132,13 @@ module.exports = {
   SITUACOES_ENTREGA_WEBHOOK,
   TIPOS_EVENTO_WEBHOOK,
   TIPOS_LOG_CANAL,
+  USOS_CANAL,
+  SITUACOES_CONVERSA,
+  VISOES_CONVERSA,
+  CATEGORIAS_ITEM_CONVERSA,
+  AUTORES_ITEM_CONVERSA,
+  PRIORIDADES_CONVERSA,
+  TIPOS_RETORNO,
   EVENTOS_SOCKET,
   FORMAS,
   camposFaltando,

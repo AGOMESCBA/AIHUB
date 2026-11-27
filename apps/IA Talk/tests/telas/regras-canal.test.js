@@ -31,6 +31,13 @@ test('Regras do canal: liberar pede confirmação, lista por posição, nada de 
     assert.equal(await page.isEnabled('#btn-salvar-regras'), true, 'sessão simulada é da plataforma');
     assert.match(await page.textContent('#regras-badge'), /só para teste/);
 
+    // A aba Conexão passa da altura da janela: a página precisa rolar (iahub.css trava o body).
+    await page.mouse.move(700, 500);
+    await page.mouse.wheel(0, 3000);
+    await page.waitForFunction(() => Math.max(document.body.scrollTop, document.documentElement.scrollTop) > 0);
+    const caixa = await page.locator('#btn-salvar-regras').boundingBox();
+    assert.ok(caixa && caixa.y >= 0 && caixa.y + caixa.height <= 900, 'Salvar regras alcançável pela rolagem');
+
     // Liberar envio para qualquer número: confirmação antes de gravar.
     await page.selectOption('#r-envio', 'qualquer');
     assert.match(await page.textContent('#r-envio-dica'), /qualquer número/);

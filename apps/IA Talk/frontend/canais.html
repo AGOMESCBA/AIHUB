@@ -1457,7 +1457,9 @@
       <div class="tlk-log-linha">
         <span class="tlk-log-ts">${esc(formatarHoraLog(l.em))}</span>
         <span class="tlk-log-tag tlk-log--${esc(l.tipo)}">${esc(l.tipo)}</span>
-        <span class="tlk-log-msg tlk-log--${esc(l.tipo)}">${esc(l.mensagem)}</span>
+        <span class="tlk-log-msg tlk-log--${esc(l.tipo)}">${esc(l.mensagem)}${l.texto ? `
+          <a class="tlk-log-texto" href="${TalkApi.BASE}/mensagens.html?id=${encodeURIComponent(l.mensagem_id)}" target="_self"
+            title="Abrir a mensagem: linha do tempo e detalhes" aria-label="Abrir a mensagem no Histórico de mensagens">“${esc(l.texto)}”</a>` : ''}</span>
       </div>`).join('');
 
     if (autoScroll || forcarFim) {
@@ -1470,12 +1472,20 @@
     const chave = `${linha.em}|${linha.tipo}|${linha.mensagem}`;
     if (chavesLog.has(chave)) return;
     chavesLog.add(chave);
-    linhasLog.push({ em: linha.em, tipo: linha.tipo || 'info', mensagem: linha.mensagem });
+    const nova = { em: linha.em, tipo: linha.tipo || 'info', mensagem: linha.mensagem, mensagem_id: linha.mensagem_id || null };
+    linhasLog.push(nova);
     if (linhasLog.length > MAX_LOG_LINHAS) {
       const removida = linhasLog.shift();
       chavesLog.delete(`${removida.em}|${removida.tipo}|${removida.mensagem}`);
     }
     renderizarTerminal();
+    // O aviso ao vivo não traz o texto (vai para todas as empresas do canal): busca na
+    // mensagem, que só responde para a empresa que enviou. Sem acesso, fica sem texto.
+    if (nova.mensagem_id) {
+      TalkApi.get(`/mensagens/${encodeURIComponent(nova.mensagem_id)}`)
+        .then((m) => { if (m?.previa !== undefined) { nova.texto = m.texto || m.previa; renderizarTerminal(); } })
+        .catch(() => {});
+    }
   }
 
   $('terminal').addEventListener('scroll', () => {

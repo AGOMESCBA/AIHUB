@@ -13,17 +13,20 @@ const ROTINAS = Object.freeze({
   usuarios: 'talk-usuarios',
   configuracoes: 'talk-configuracoes',
   auditoria: 'talk-auditoria',
+  // Fase 2 (C8): Central de atendimento e cadastro de setores/respostas rápidas.
+  atendimento: 'talk-atendimento',
+  setores: 'talk-setores',
   empresas: 'talk-empresas', // só administração da plataforma
 });
 
 const R = ROTINAS;
 const PAPEIS = Object.freeze([
   { codigo: 'admin_empresa', nome: 'Administrador da empresa', descricao: 'Configura canais, aplicações, usuários e e-mail de envio da própria empresa.',
-    rotinas: [R.painel, R.canais, R.mensagens, R.eventos, R.aplicacoes, R.usuarios, R.configuracoes, R.auditoria] },
-  { codigo: 'supervisor', nome: 'Supervisor', descricao: 'Acompanha canais, mensagens e eventos. Na Fase 2, gerencia setores e filas.',
-    rotinas: [R.painel, R.canais, R.mensagens, R.eventos] },
-  { codigo: 'atendente', nome: 'Atendente', descricao: 'Atende conversas dos setores em que está (Fase 2). Na Fase 1, vê o painel.',
-    rotinas: [R.painel] },
+    rotinas: [R.painel, R.atendimento, R.setores, R.canais, R.mensagens, R.eventos, R.aplicacoes, R.usuarios, R.configuracoes, R.auditoria] },
+  { codigo: 'supervisor', nome: 'Supervisor', descricao: 'Acompanha canais, mensagens e eventos. Vê todas as conversas e gerencia setores e filas.',
+    rotinas: [R.painel, R.atendimento, R.setores, R.canais, R.mensagens, R.eventos] },
+  { codigo: 'atendente', nome: 'Atendente', descricao: 'Atende as conversas dos setores em que está.',
+    rotinas: [R.painel, R.atendimento] },
   { codigo: 'auditor', nome: 'Auditor', descricao: 'Somente leitura de histórico e auditoria.',
     rotinas: [R.painel, R.mensagens, R.eventos, R.auditoria] },
 ].map(p => Object.freeze({ ...p, rotinas: Object.freeze([...p.rotinas]) })));

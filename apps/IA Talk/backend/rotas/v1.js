@@ -14,15 +14,18 @@ const idempotencia = require('../lib/idempotencia');
 const repo = require('../mensagens/repositorio');
 const { aceitarEnvio } = require('../mensagens/servico');
 const { CAPACIDADES_WWEB } = require('../provedores/wweb');
+const { lerPaginacao, montarPagina } = require('../paginacao');
+const repoAtd = require('../atendimento/repositorio');
 
 const LIMITE_POR_MINUTO = 120;
-const AVISO_ACEITA = 'Aceita para envio. Isto não confirma a entrega: acompanhe pelo estado ou pelo webhook.';
+// Sem "webhook" até a C4 entregar os avisos: hoje o estado se acompanha por GET /mensagens/:id.
+const AVISO_ACEITA = 'Aceita para envio. Isto não confirma a entrega: acompanhe o estado em GET /mensagens/{id}.';
 
 // O que o canal envia HOJE pelo Talk (arquivos chegam na próxima etapa): o integrador
 // consulta isto e não recebe 422 de surpresa.
 const CAPACIDADES_ENVIO = Object.freeze({ ...CAPACIDADES_WWEB, imagem: false, documento: false, audio: false, video: false });
 
-function criarRotasV1({ db, despachante = null, log = console }) {
+function criarRotasV1({ db, despachante = null, atendimento = null, log = console }) {
   const r = express.Router();
 
   r.use((req, _res, next) => {
@@ -55,8 +58,18 @@ function criarRotasV1({ db, despachante = null, log = console }) {
 
   const respostaAceita = (m) => ({ id: m.id, estado: 'aceita', canal: m.canal_id, criada_em: m.criada_em, correlacao_id: m.correlacao_id, aviso: AVISO_ACEITA });
 
+  // A biblioteca (G8) usa o código interno 'validacao'; na API vale a tabela do contrato (requisicao_invalida).
+  const chaveDoPedido = (req) => {
+    try {
+      return idempotencia.validarChave(req.get('idempotency-key'));
+    } catch (e) {
+      if (e.codigo === 'validacao') throw erro('requisicao_invalida', e.message, { campos: e.campos });
+      throw e;
+    }
+  };
+
   r.post('/mensagens', exigirEscopo('mensagens:enviar'), (req, res) => {
-    const chave = idempotencia.validarChave(req.get('idempotency-key'));
+    const chave = chaveDoPedido(req);
     const corpo = req.body || {};
     exigirCanal(req, corpo.canal);
     const impressao = idempotencia.impressaoDoPedido(corpo);
@@ -91,6 +104,71 @@ function criarRotasV1({ db, despachante = null, log = console }) {
     if (!c) throw erro('nao_encontrado', 'Canal não encontrado.');
     res.json({ id: c.id, estado: c.estado, estado_desde: c.estado_desde, envio_habilitado: c.envio_modo !== 'desligado', envio_modo: c.envio_modo, capacidades: CAPACIDADES_ENVIO });
   });
+
+  // ── Sistema de origem (C9, contratos.md §8.9): chamado vira conversa; retornos até confirmar ──
+  if (atendimento) {
+    const conversaDaAplicacao = (req, id) => {
+      const cv = repoAtd.buscarConversa(db, req.aplicacao.empresaId, id);
+      const deles = cv && db.prepare('SELECT 1 FROM conversa_referencias WHERE conversa_id = ? AND aplicacao_id = ?').get(cv.id, req.aplicacao.aplicacaoId);
+      if (!deles) throw erro('nao_encontrado', 'Conversa não encontrada.');
+      return cv;
+    };
+
+    r.post('/conversas', exigirEscopo('conversas:criar'), (req, res) => {
+      const { cv, resultado, mensagem_inicial: inicial } = atendimento.abrirPorChamado(req.aplicacao, req.body || {});
+      const corpo = { ...repoAtd.paraConversaV1(db, cv, req.aplicacao.aplicacaoId), resultado, mensagem_inicial: inicial };
+      if (resultado === 'existente') res.set('Idempotent-Replayed', 'true');
+      res.status(resultado === 'criada' ? 201 : 200).json(corpo);
+    });
+
+    r.get('/conversas', exigirEscopo('conversas:ler'), (req, res) => {
+      const { limite, cursor } = lerPaginacao(req.query);
+      const p = { app: req.aplicacao.aplicacaoId, empresa: req.aplicacao.empresaId };
+      const onde = ['cv.empresa_id = @empresa', 'EXISTS (SELECT 1 FROM conversa_referencias r WHERE r.conversa_id = cv.id AND r.aplicacao_id = @app'
+        + (req.query.referencia ? ' AND r.sistema = @sistema AND r.ref_id = @ref)' : ')')];
+      if (req.query.referencia) {
+        const [sistema, ...resto] = String(req.query.referencia).split(':');
+        p.sistema = sistema; p.ref = resto.join(':');
+      }
+      if (req.query.situacao) { onde.push('cv.situacao = @situacao'); p.situacao = String(req.query.situacao); }
+      if (cursor) { onde.push('(cv.aberta_em < @ca OR (cv.aberta_em = @ca AND cv.id < @ci))'); p.ca = String(cursor.a); p.ci = String(cursor.i); }
+      const linhas = db.prepare(`${repoAtd.SELECT_CONVERSA} WHERE ${onde.join(' AND ')} ORDER BY cv.aberta_em DESC, cv.id DESC LIMIT ${limite + 1}`).all(p);
+      res.json(montarPagina(linhas.map(cv => repoAtd.paraConversaV1(db, cv, req.aplicacao.aplicacaoId)), {
+        limite, cursorDoUltimo: (u) => ({ a: u.aberta_em, i: u.id }),
+      }));
+    });
+
+    r.get('/conversas/:id', exigirEscopo('conversas:ler'), (req, res) => res.json(repoAtd.paraConversaV1(db, conversaDaAplicacao(req, req.params.id), req.aplicacao.aplicacaoId)));
+
+    // Do mais antigo para o mais novo; o mesmo retorno volta até ser confirmado.
+    r.get('/retornos', exigirEscopo('conversas:ler'), (req, res) => {
+      const limite = Math.min(Math.max(Number(req.query.limite) || 50, 1), 200);
+      const p = { app: req.aplicacao.aplicacaoId, desde: new Date(Date.now() - repoAtd.VALIDADE_RETORNO_MS).toISOString() };
+      const tipo = req.query.tipo ? ' AND tipo = @tipo' : '';
+      if (tipo) p.tipo = String(req.query.tipo);
+      const linhas = db.prepare(`SELECT * FROM retornos WHERE aplicacao_id = @app AND confirmado_em IS NULL AND em >= @desde${tipo} ORDER BY em, id LIMIT ${limite + 1}`).all(p);
+      res.json({ itens: linhas.slice(0, limite).map(x => repoAtd.paraRetornoV1(db, x)), tem_mais: linhas.length > limite });
+    });
+
+    r.post('/retornos/confirmar', exigirEscopo('conversas:ler'), (req, res) => {
+      const ids = req.body?.ids;
+      if (!Array.isArray(ids) || !ids.length || ids.length > 200 || ids.some(i => typeof i !== 'string')) {
+        throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos: { ids: 'Envie de 1 a 200 ids de retorno.' } });
+      }
+      const confirmados = [];
+      const desconhecidos = [];
+      const achar = db.prepare('SELECT id FROM retornos WHERE id = ? AND aplicacao_id = ?');
+      const marcar = db.prepare('UPDATE retornos SET confirmado_em = ? WHERE id = ? AND confirmado_em IS NULL');
+      db.transaction(() => {
+        for (const id of new Set(ids)) {
+          if (!achar.get(id, req.aplicacao.aplicacaoId)) { desconhecidos.push(id); continue; }
+          marcar.run(agora(), id); // confirmar de novo não muda nada
+          confirmados.push(id);
+        }
+      })();
+      res.json({ confirmados, desconhecidos });
+    });
+  }
 
   r.use((req, _res, next) => next(erro('nao_encontrado', `Rota não encontrada: ${req.method} ${req.path}`)));
   r.use(middlewareErros(log));

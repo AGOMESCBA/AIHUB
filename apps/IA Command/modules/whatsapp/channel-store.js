@@ -64,7 +64,15 @@ function _channelFromRow(row) {
     is_windows_service: row.is_windows_service || 0,
     worker_port: row.worker_port || null,
     service_slug: row.service_slug || null,
+    // IA Talk (número compartilhado): 1 = quem não é autorizado fica com o atendimento do Talk.
+    repassar_nao_autorizados_talk: row.repassar_nao_autorizados_talk ? 1 : 0,
   };
+}
+
+// Chave do canal para o IA Talk (nasce 0). Separada de atualizarCanal para não mexer no que já existe.
+function definirRepassarTalk(channelId, valor) {
+  getDB().prepare('UPDATE whatsapp_channels SET repassar_nao_autorizados_talk = ?, atualizado_em = ? WHERE id = ?')
+    .run(Number(valor) === 1 ? 1 : 0, agora(), channelId);
 }
 
 function criarCanal({ nome, numero, auth_client_id, ativo = 1 }) {
@@ -430,4 +438,5 @@ module.exports = {
   extrairLid,
   listarTodosCanais,
   atualizarCanalWindowsService,
+  definirRepassarTalk,
 };

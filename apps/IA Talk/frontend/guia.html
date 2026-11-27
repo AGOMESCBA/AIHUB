@@ -14,20 +14,40 @@
     .guia-indice b { display: block; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--text-lo); margin-bottom: 8px; }
     .guia-indice a { display: block; padding: 5px 10px; color: var(--text-md); text-decoration: none; border-left: 2px solid var(--border); }
     .guia-indice a:hover, .guia-indice a:focus-visible { color: var(--accent); border-left-color: var(--accent); outline: none; }
+    .guia-indice a.sub-item { padding-left: 20px; font-size: 12.5px; color: var(--text-lo); }
     .guia-topo { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
     .guia-logo { width: 44px; height: 44px; border-radius: 12px; background: var(--talk-gradiente); display: grid; place-items: center; flex: none; }
     .guia-logo svg { width: 24px; height: 24px; stroke: #fff; }
     .guia h1 { margin: 0; font-size: 26px; color: var(--text-hi); }
     .guia .sub { color: var(--text-md); margin: 2px 0 0; }
-    .guia section { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 22px; margin-top: 16px; box-shadow: var(--shadow-sm); scroll-margin-top: 16px; }
+    .guia main { min-width: 0; }
+    .guia section { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 22px; margin-top: 16px; box-shadow: var(--shadow-sm); scroll-margin-top: 16px; min-width: 0; }
     .guia h2 { margin: 0 0 8px; font-size: 17px; color: var(--text-hi); }
+    .guia h3 { margin: 18px 0 6px; font-size: 14.5px; color: var(--text-hi); scroll-margin-top: 16px; }
     .guia p, .guia li { color: var(--text-md); line-height: 1.6; max-width: 78ch; font-size: 14px; }
     .guia ol, .guia ul { padding-left: 20px; margin: 6px 0; }
     .guia strong { color: var(--text-hi); }
-    .guia code { background: var(--bg-hover); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
-    .guia .dica { border-left: 3px solid var(--accent); background: var(--accent-glow); padding: 10px 14px; border-radius: 6px; margin-top: 10px; color: var(--text-hi); font-size: 13.5px; }
-    .guia .aviso { border-left: 3px solid var(--warning); background: var(--tlk-aviso-bg); padding: 10px 14px; border-radius: 6px; margin-top: 10px; color: var(--tlk-aviso); font-size: 13.5px; }
-    @media (max-width: 860px) { .guia { grid-template-columns: minmax(0, 1fr); } .guia-indice { display: none; } }
+    .guia code { background: var(--bg-hover); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; word-break: break-word; }
+    .guia .dica { border-left: 3px solid var(--accent); background: var(--accent-glow); padding: 10px 14px; border-radius: 6px; margin-top: 10px; color: var(--text-hi); font-size: 13.5px; line-height: 1.55; }
+    .guia .aviso { border-left: 3px solid var(--warning); background: var(--tlk-aviso-bg); padding: 10px 14px; border-radius: 6px; margin-top: 10px; color: var(--tlk-aviso); font-size: 13.5px; line-height: 1.55; }
+    .guia-tabela-wrap { overflow-x: auto; max-width: 100%; margin: 10px 0 4px; border: 1px solid var(--border); border-radius: 8px; }
+    .guia-tabela { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+    .guia-tabela th, .guia-tabela td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--text-md); line-height: 1.5; }
+    .guia-tabela th { background: var(--bg-base); color: var(--text-hi); font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; font-weight: 700; white-space: nowrap; }
+    .guia-tabela td:first-child code { white-space: nowrap; word-break: normal; }
+    .guia-tabela tr:last-child td { border-bottom: none; }
+    .guia-estados { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0; }
+    .guia-seta { color: var(--text-lo); font-size: 13px; font-weight: 700; }
+    .guia-codigo { margin: 10px 0 14px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #0d1117; max-width: 100%; }
+    .guia-codigo-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; background: var(--bg-base); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .guia-codigo-rotulo { font-size: 12px; font-weight: 700; color: var(--text-hi); display: inline-flex; align-items: center; gap: 6px; }
+    .guia-codigo pre { margin: 0; padding: 12px 14px; overflow-x: auto; max-width: 100%; font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; font-size: 12.5px; line-height: 1.55; color: #e6edf3; }
+    .guia-codigo pre code { background: transparent; padding: 0; color: inherit; font-size: inherit; word-break: normal; }
+    .guia-abas-cod { display: inline-flex; gap: 4px; }
+    .guia-aba-cod { border: 1px solid var(--border); background: var(--bg-card); color: var(--text-md); border-radius: 6px; padding: 3px 9px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .guia-aba-cod[aria-selected="true"] { border-color: var(--accent); background: var(--accent-glow); color: var(--accent); }
+    .guia-cod-painel[hidden] { display: none; }
+    @media (max-width: 860px) { .guia { grid-template-columns: minmax(0, 1fr); } .guia-indice { display: none; } .guia section { padding: 14px 14px; } }
   </style>
 </head>
 <body>
@@ -38,8 +58,14 @@
     <a href="#entrar">Como entrar</a>
     <a href="#inicio">Início e menu</a>
     <a href="#canais">Canais de WhatsApp</a>
-    <a href="#teste">Modo de teste</a>
+    <a href="#teste">Regras do canal</a>
     <a href="#aplicacoes">Aplicações e tokens</a>
+    <a href="#api">API para integradores</a>
+    <a class="sub-item" href="#api-auth">Token e escopos</a>
+    <a class="sub-item" href="#api-rotas">Rotas e exemplos</a>
+    <a class="sub-item" href="#api-estados">Estados da mensagem</a>
+    <a class="sub-item" href="#api-limites">Limites (120/min)</a>
+    <a class="sub-item" href="#api-erros">Tabela de erros</a>
     <a href="#usuarios">Usuários e papéis</a>
     <a href="#configuracoes">Configurações</a>
     <a href="#auditoria">Auditoria</a>
@@ -78,7 +104,7 @@
       <h2>Canais de WhatsApp</h2>
       <p>Um canal é um número de WhatsApp. O IA Talk entra no número como <strong>mais um aparelho conectado</strong>, sem desconectar o celular nem outros sistemas que já usam o número.</p>
       <ol>
-        <li>Em <strong>Canais</strong>, clique em <strong>+ Novo canal</strong>, dê um nome, informe o <strong>número do WhatsApp</strong> (com DDD) e escolha <strong>WhatsApp Web</strong>. O mesmo número não pode estar em dois canais: para várias empresas usarem um número, vincule-as na aba <strong>Empresas</strong> do canal.</li>
+        <li>Em <strong>Canais</strong>, clique em <strong>Novo canal</strong>, dê um nome, informe o <strong>número do WhatsApp</strong> (com DDD) e escolha <strong>WhatsApp Web</strong>. O mesmo número não pode estar em dois canais: para várias empresas usarem um número, vincule-as na aba <strong>Empresas</strong> do canal.</li>
         <li>Abra o canal e clique em <strong>Conectar</strong>. Um QR Code aparece em alguns segundos com a contagem regressiva até expirar.</li>
         <li>No celular do número, abra <strong>WhatsApp → Aparelhos conectados → Conectar aparelho</strong> e aponte a câmera para o QR. Se o QR for lido por outro número, o IA Talk desfaz a conexão na hora.</li>
         <li>O estado muda para <strong>Conectado</strong> e o número passa a aparecer mascarado.</li>
@@ -86,7 +112,7 @@
       <div class="dica">O QR Code expira após alguns segundos e <strong>se renova sozinho</strong> automaticamente enquanto o canal aguarda pareamento. Se preferir, clique em <strong>Novo QR</strong> para gerar outro na hora.</div>
       <p><strong>Terminal ao vivo (três colunas):</strong> na aba <strong>Terminal ao vivo</strong> você acompanha e opera os canais em tempo real:</p>
       <ul>
-        <li><strong>Esquerda:</strong> lista de canais com busca rápida, estado colorido e fila pendente para trocar de número sem sair do terminal.</li>
+        <li><strong>Esquerda:</strong> lista de canais com busca rápida, estado colorido e fila pendente para trocar de número sem sair do terminal (pode ser recolhida para uma faixa compacta clicando em <strong>Canais</strong>).</li>
         <li><strong>Centro:</strong> log em fonte monoespaçada colorido por tipo de evento, com filtro e auto-rolagem que pausa automaticamente quando você sobe o histórico.</li>
         <li><strong>Direita:</strong> painel de estado e ações rápidas — mostra o número conectado, <strong>Conectar</strong>, <strong>Parar</strong>, <strong>Reconectar</strong>, <strong>Novo QR</strong>, <strong>Remover sessão</strong> (com confirmação na própria tela), empresas vinculadas, processo, <em>uptime</em> e os botões <strong>Limpar</strong> e <strong>Copiar</strong> do log.</li>
       </ul>
@@ -95,9 +121,25 @@
     </section>
 
     <section id="teste">
-      <h2>Modo de teste</h2>
-      <p>Todo canal novo nasce em <strong>modo de teste</strong>: o IA Talk só registra mensagens dos números de teste cadastrados para o canal e <strong>não responde ninguém</strong>. Das demais mensagens fica só a contagem, sem o conteúdo.</p>
-      <p>A lista de teste é ajustada pela administração da plataforma.</p>
+      <h2>Regras do canal</h2>
+      <p>Na própria tela do canal (aba <strong>Conexão</strong>), a administração da plataforma controla de forma <strong>independente</strong> o que o canal pode enviar e o que ele registra ao receber:</p>
+      <ul>
+        <li><strong>Envio (<code>envio_modo</code>):</strong>
+          <ul>
+            <li><strong>Desligado (<code>desligado</code>):</strong> nenhuma mensagem sai pelo canal (padrão ao subir em produção).</li>
+            <li><strong>Só para números de teste (<code>teste</code>):</strong> permite enviar apenas para os números cadastrados na lista de teste do canal.</li>
+            <li><strong>Qualquer número (<code>qualquer</code>):</strong> libera o envio para qualquer destinatário autorizado.</li>
+          </ul>
+        </li>
+        <li><strong>Recebimento (<code>recebimento_modo</code>):</strong>
+          <ul>
+            <li><strong>Só números de teste (<code>teste</code>):</strong> registra no log e no banco apenas mensagens vindas dos números da lista de teste; das demais fica só a contagem, sem o conteúdo.</li>
+            <li><strong>Todos (<code>todos</code>):</strong> registra as mensagens recebidas de qualquer número.</li>
+          </ul>
+        </li>
+        <li><strong>Lista de números de teste:</strong> gerenciada diretamente na tela do canal (exibida sempre mascarada e sem duplicar com ou sem o nono dígito).</li>
+      </ul>
+      <div class="dica">Como <strong>Envio</strong> e <strong>Recebimento</strong> são independentes, liberar o envio de um canal não faz o IA Talk passar a gravar conversas de outros sistemas que compartilham o mesmo número. Toda alteração nas regras ou na lista gera registro automático na <strong>Auditoria</strong> (<code>canal.regra_envio</code>, <code>canal.regra_recebimento</code> e <code>canal.numeros_teste</code>).</div>
     </section>
 
     <section id="aplicacoes">
@@ -108,6 +150,240 @@
         <li><strong>Trocar o token sem parar o sistema:</strong> gere um novo, atualize o sistema e só então revogue o antigo.</li>
         <li><strong>Webhook:</strong> endereço que recebe os avisos do IA Talk. O segredo também aparece uma única vez.</li>
       </ul>
+    </section>
+
+    <section id="api">
+      <h2>API para integradores</h2>
+      <p>Use a <strong>API v1</strong> (<code>/app/ia-talk/api/v1</code>) para integrar ERPs, robôs, sistemas internos e serviços externos ao IA Talk. A empresa dona da requisição vem sempre do token da aplicação — nunca envie <code>empresa_id</code> na URL nem no corpo.</p>
+
+      <div class="aviso">
+        <strong>O que já está disponível hoje:</strong> envio de <strong>texto</strong> (até <strong>4096 caracteres</strong>), idempotência, consulta de mensagem e consulta de estado do canal. Envio de mídia (imagem, documento e áudio) entra na etapa <strong>C3b</strong> (hoje responde HTTP 422 <code>recurso_nao_suportado</code>); webhooks e <code>GET /app/ia-talk/api/v1/eventos</code> entram na etapa <strong>C4</strong> — por enquanto, acompanhe o andamento via <code>GET /app/ia-talk/api/v1/mensagens/{id}</code>.
+      </div>
+
+      <h3 id="api-auth">1. Como gerar o token e escolher os escopos</h3>
+      <ol>
+        <li>Abra <strong>Aplicações</strong> no menu do IA Talk e crie ou edite a aplicação do seu sistema.</li>
+        <li>Marque apenas os <strong>canais autorizados</strong> que essa aplicação pode usar (a empresa da aplicação também precisa estar vinculada ao canal).</li>
+        <li>Conceda os escopos mínimos necessários:
+          <ul>
+            <li><code>mensagens:enviar</code> — obrigatório para <code>POST /app/ia-talk/api/v1/mensagens</code>.</li>
+            <li><code>mensagens:ler</code> — obrigatório para <code>GET /app/ia-talk/api/v1/mensagens/{id}</code>.</li>
+            <li><code>canais:ler</code> — obrigatório para <code>GET /app/ia-talk/api/v1/canais/{id}/estado</code>.</li>
+          </ul>
+        </li>
+        <li>Na aba <strong>Tokens de API</strong>, clique em <strong>Gerar novo token</strong> e copie o valor (<code>tk_live_…</code>) imediatamente — ele não volta a ser exibido.</li>
+      </ol>
+      <p>Envie o token em todas as chamadas pelo cabeçalho:</p>
+      <div class="guia-codigo">
+        <div class="guia-codigo-topo">
+          <span class="guia-codigo-rotulo">Cabeçalho de autenticação</span>
+          <button class="btn btn-ghost btn-sm" type="button" data-copiar="cod-auth" title="Copiar cabeçalho Authorization de exemplo" aria-label="Copiar cabeçalho Authorization de exemplo"><span data-ico="copiar"></span> Copiar</button>
+        </div>
+        <pre><code id="cod-auth">Authorization: Bearer tk_live_EXEMPLO</code></pre>
+      </div>
+      <div class="dica">Todos os exemplos abaixo usam o token fictício <code>tk_live_EXEMPLO</code> e telefone fictício <code>+5565999990000</code>. Nunca salve tokens reais em código-fonte, repositórios ou logs.</div>
+
+      <h3 id="api-rotas">2. Rotas disponíveis (exemplos em cURL e JavaScript)</h3>
+
+      <p><strong>Enviar mensagem de texto — <code>POST /app/ia-talk/api/v1/mensagens</code></strong></p>
+      <ul>
+        <li>Cabeçalhos: <code>Authorization: Bearer tk_live_EXEMPLO</code>, <code>Content-Type: application/json</code>, <strong><code>Idempotency-Key</code> obrigatório</strong> (de <strong>8 a 128 caracteres</strong>, apenas <code>A-Z</code>, <code>a-z</code>, <code>0-9</code>, <code>-</code> e <code>_</code>; janela de 24 h: mesma chave + mesmo corpo devolve a mesma resposta com <code>Idempotent-Replayed: true</code>; mesma chave + corpo diferente devolve HTTP 409 <code>idempotencia_conflito</code>) e <code>X-Correlation-Id</code> opcional (até 128 caracteres, devolvido como <code>correlacao_id</code>).</li>
+        <li>Corpo JSON: <code>canal</code> (ID <code>cn_…</code>), <code>para</code> (número completo com DDI/DDD), <code>tipo: "texto"</code>, <code>texto</code> (até <strong>4096 caracteres</strong>; aceita marcação do WhatsApp: <code>*negrito*</code>, <code>_itálico_</code>, <code>~riscado~</code>, <code>```mono```</code>) e <code>metadados</code> opcional (objeto JSON de até 4 KB).</li>
+        <li>Resposta imediata: <strong>HTTP 202 Accepted</strong> com <code>{ id, estado: "aceita", canal, criada_em, correlacao_id, aviso }</code>.</li>
+      </ul>
+
+      <div class="guia-codigo" data-grupo-cod="post-msg">
+        <div class="guia-codigo-topo">
+          <div class="guia-abas-cod" role="tablist" aria-label="Linguagem do exemplo de envio">
+            <button class="guia-aba-cod" type="button" role="tab" aria-selected="true" data-aba-cod="curl">cURL</button>
+            <button class="guia-aba-cod" type="button" role="tab" aria-selected="false" data-aba-cod="js">JavaScript</button>
+          </div>
+          <button class="btn btn-ghost btn-sm" type="button" data-copiar-grupo="post-msg" title="Copiar exemplo de POST /app/ia-talk/api/v1/mensagens" aria-label="Copiar exemplo de POST /app/ia-talk/api/v1/mensagens"><span data-ico="copiar"></span> Copiar</button>
+        </div>
+        <div class="guia-cod-painel" data-painel-cod="curl">
+<pre><code>curl -i -X POST "https://SEU-DOMINIO/app/ia-talk/api/v1/mensagens" \
+  -H "Authorization: Bearer tk_live_EXEMPLO" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: pedido-36901-envio-01" \
+  -H "X-Correlation-Id: pedido-36901" \
+  -d '{
+    "canal": "cn_suporte",
+    "para": "+5565999990000",
+    "tipo": "texto",
+    "texto": "*Pedido 36901* aprovado e pronto para faturamento.",
+    "metadados": { "origem": "erp", "pedido": "36901" }
+  }'</code></pre>
+        </div>
+        <div class="guia-cod-painel" data-painel-cod="js" hidden>
+<pre><code>const resp = await fetch('https://SEU-DOMINIO/app/ia-talk/api/v1/mensagens', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer tk_live_EXEMPLO',
+    'Content-Type': 'application/json',
+    'Idempotency-Key': 'pedido-36901-envio-01',
+    'X-Correlation-Id': 'pedido-36901',
+  },
+  body: JSON.stringify({
+    canal: 'cn_suporte',
+    para: '+5565999990000',
+    tipo: 'texto',
+    texto: '*Pedido 36901* aprovado e pronto para faturamento.',
+    metadados: { origem: 'erp', pedido: '36901' },
+  }),
+});
+
+const dados = await resp.json();
+// HTTP 202: { id: "msg_...", estado: "aceita", correlacao_id: "pedido-36901", ... }</code></pre>
+        </div>
+      </div>
+
+      <p><strong>Consultar estado da mensagem — <code>GET /app/ia-talk/api/v1/mensagens/{id}</code></strong></p>
+      <p>Devolve <code>{ id, estado, canal, para_mascarado, tipo, correlacao_id, criada_em, atualizada_em, historico_estados }</code>. O destinatário retorna sempre mascarado.</p>
+      <div class="guia-codigo" data-grupo-cod="get-msg">
+        <div class="guia-codigo-topo">
+          <div class="guia-abas-cod" role="tablist" aria-label="Linguagem do exemplo de consulta de mensagem">
+            <button class="guia-aba-cod" type="button" role="tab" aria-selected="true" data-aba-cod="curl">cURL</button>
+            <button class="guia-aba-cod" type="button" role="tab" aria-selected="false" data-aba-cod="js">JavaScript</button>
+          </div>
+          <button class="btn btn-ghost btn-sm" type="button" data-copiar-grupo="get-msg" title="Copiar exemplo de GET /api/v1/mensagens/{id}" aria-label="Copiar exemplo de GET /api/v1/mensagens/{id}"><span data-ico="copiar"></span> Copiar</button>
+        </div>
+        <div class="guia-cod-painel" data-painel-cod="curl">
+<pre><code>curl -s "https://SEU-DOMINIO/app/ia-talk/api/v1/mensagens/msg_EXEMPLO" \
+  -H "Authorization: Bearer tk_live_EXEMPLO"</code></pre>
+        </div>
+        <div class="guia-cod-painel" data-painel-cod="js" hidden>
+<pre><code>const resp = await fetch('https://SEU-DOMINIO/app/ia-talk/api/v1/mensagens/msg_EXEMPLO', {
+  headers: { 'Authorization': 'Bearer tk_live_EXEMPLO' },
+});
+const msg = await resp.json();
+// { id, estado, para_mascarado, correlacao_id, historico_estados: [...] }</code></pre>
+        </div>
+      </div>
+
+      <p><strong>Consultar estado do canal — <code>GET /app/ia-talk/api/v1/canais/{id}/estado</code></strong></p>
+      <p>Devolve <code>{ id, estado, estado_desde, envio_habilitado, envio_modo, capacidades }</code>. As <code>capacidades</code> refletem os recursos reais de envio disponíveis hoje (imagem, documento e áudio retornam <code>false</code> até a etapa C3b).</p>
+      <div class="guia-codigo" data-grupo-cod="get-canal">
+        <div class="guia-codigo-topo">
+          <div class="guia-abas-cod" role="tablist" aria-label="Linguagem do exemplo de estado do canal">
+            <button class="guia-aba-cod" type="button" role="tab" aria-selected="true" data-aba-cod="curl">cURL</button>
+            <button class="guia-aba-cod" type="button" role="tab" aria-selected="false" data-aba-cod="js">JavaScript</button>
+          </div>
+          <button class="btn btn-ghost btn-sm" type="button" data-copiar-grupo="get-canal" title="Copiar exemplo de GET /app/ia-talk/api/v1/canais/{id}/estado" aria-label="Copiar exemplo de GET /app/ia-talk/api/v1/canais/{id}/estado"><span data-ico="copiar"></span> Copiar</button>
+        </div>
+        <div class="guia-cod-painel" data-painel-cod="curl">
+<pre><code>curl -s "https://SEU-DOMINIO/app/ia-talk/api/v1/canais/cn_suporte/estado" \
+  -H "Authorization: Bearer tk_live_EXEMPLO"</code></pre>
+        </div>
+        <div class="guia-cod-painel" data-painel-cod="js" hidden>
+<pre><code>const resp = await fetch('https://SEU-DOMINIO/app/ia-talk/api/v1/canais/cn_suporte/estado', {
+  headers: { 'Authorization': 'Bearer tk_live_EXEMPLO' },
+});
+const canal = await resp.json();
+// { id: "cn_suporte", estado: "conectado", envio_habilitado: true, envio_modo: "teste", capacidades: { ... } }</code></pre>
+        </div>
+      </div>
+
+      <h3 id="api-estados">3. Estados da mensagem</h3>
+      <div class="guia-estados" aria-label="Progressão dos estados de envio">
+        <span class="tlk-pill tlk-pill--neutro">aceita</span><span class="guia-seta">→</span>
+        <span class="tlk-pill tlk-pill--aviso">aguardando</span><span class="guia-seta">→</span>
+        <span class="tlk-pill tlk-pill--info">encaminhada</span><span class="guia-seta">→</span>
+        <span class="tlk-pill tlk-pill--info">enviada</span><span class="guia-seta">→</span>
+        <span class="tlk-pill tlk-pill--ok">entregue</span><span class="guia-seta">→</span>
+        <span class="tlk-pill tlk-pill--ok">lida</span>
+        <span class="guia-seta">|</span>
+        <span class="tlk-pill tlk-pill--erro">falhou</span>
+        <span class="guia-seta">|</span>
+        <span class="tlk-pill tlk-pill--erro">desconhecida</span>
+      </div>
+      <div class="aviso">
+        <strong><code>aceita</code> não é entrega.</strong> Receber HTTP 202 com <code>estado: "aceita"</code> significa apenas que a mensagem entrou na fila do IA Talk. Acompanhe o estado até <code>entregue</code> ou <code>lida</code>.
+      </div>
+      <ul>
+        <li><strong>Ritmo de saída:</strong> o IA Talk envia <strong>uma mensagem por vez por canal</strong>, com intervalo de <strong>3 a 5 segundos</strong> entre elas para proteger o número no WhatsApp Web.</li>
+        <li><strong>Canal reconectando:</strong> a mensagem é aceita e fica em <code>aguardando</code>; se não conseguir sair em 24 horas, muda para <code>falhou</code>.</li>
+        <li><strong><code>desconhecida</code>:</strong> ocorreu erro ou queda antes da confirmação do provedor. O IA Talk <strong>nunca reenvia sozinho</strong> para não duplicar no WhatsApp do cliente; se um recibo posterior do WhatsApp chegar, o estado é corrigido automaticamente para <code>enviada</code>, <code>entregue</code> ou <code>lida</code>. Caso contrário, a operação decide manualmente na tela <strong>Mensagens</strong> (reenviar ou dar como falha).</li>
+      </ul>
+
+      <h3 id="api-limites">4. Limite de requisições (rate limit)</h3>
+      <p>Cada aplicação pode fazer até <strong>120 pedidos por minuto</strong> na API v1. Toda resposta traz os cabeçalhos de acompanhamento:</p>
+      <ul>
+        <li><code>X-RateLimit-Limit</code> — limite total da janela (<code>120</code>).</li>
+        <li><code>X-RateLimit-Remaining</code> — quantas requisições ainda restam na janela atual.</li>
+        <li><code>X-RateLimit-Reset</code> — instante em que a janela é zerada.</li>
+      </ul>
+      <p>Acima do limite, a API devolve <strong>HTTP 429</strong> (<code>limite_excedido</code>) com o cabeçalho <code>Retry-After</code> em segundos. Aguarde o tempo informado em <code>Retry-After</code> antes de tentar novamente.</p>
+
+      <h3 id="api-erros">5. Tabela de erros</h3>
+      <p>Todo erro segue o formato <code>{ "erro": { "codigo": "...", "mensagem": "...", "campos": { ... } } }</code>. No seu código, compare sempre <code>erro.codigo</code> — nunca o texto de <code>erro.mensagem</code>.</p>
+      <div class="guia-tabela-wrap">
+        <table class="guia-tabela">
+          <thead>
+            <tr>
+              <th>Código (<code>erro.codigo</code>)</th>
+              <th>HTTP</th>
+              <th>Quando acontece</th>
+              <th>O que fazer</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>envio_desligado</code></td>
+              <td>422</td>
+              <td>A regra de envio do canal está em <code>desligado</code>.</td>
+              <td>Não repita em loop. Peça à administração da plataforma para liberar o envio nas <strong>Regras do canal</strong>.</td>
+            </tr>
+            <tr>
+              <td><code>canal_desconectado</code></td>
+              <td>422</td>
+              <td>O canal está <code>parado</code> (ou desconectado sem sessão ativa).</td>
+              <td>Verifique o canal em <strong>Canais</strong> (conectar/ler QR) e consulte <code>GET /app/ia-talk/api/v1/canais/{id}/estado</code> antes de reenviar.</td>
+            </tr>
+            <tr>
+              <td><code>sem_permissao</code></td>
+              <td>403</td>
+              <td>Token sem o escopo necessário <em>ou</em> canal em envio de teste (<code>envio_modo = teste</code>) com destinatário fora da lista (<code>campos.para</code>).</td>
+              <td>Confirme os escopos da aplicação em <strong>Aplicações</strong>; se vier <code>campos.para</code>, cadastre o número na lista de teste do canal ou libere o envio para qualquer número.</td>
+            </tr>
+            <tr>
+              <td><code>canal_nao_autorizado</code></td>
+              <td>403</td>
+              <td>O canal não está marcado em <code>canais_autorizados</code> da aplicação ou a empresa da aplicação não usa esse canal.</td>
+              <td>Autorize o canal no cadastro da aplicação e confira se a empresa está vinculada ao canal na aba <strong>Empresas</strong>.</td>
+            </tr>
+            <tr>
+              <td><code>recurso_nao_suportado</code></td>
+              <td>422</td>
+              <td>Pedido usa recurso que o canal não suporta hoje (ex.: <code>tipo</code> diferente de <code>"texto"</code> antes da etapa C3b).</td>
+              <td>Envie somente <code>tipo: "texto"</code> por enquanto e consulte <code>capacidades</code> em <code>GET /app/ia-talk/api/v1/canais/{id}/estado</code>.</td>
+            </tr>
+            <tr>
+              <td><code>requisicao_invalida</code></td>
+              <td>400</td>
+              <td>Campo obrigatório faltando, texto vazio ou acima de 4096 caracteres, ou <code>Idempotency-Key</code> ausente/inválida (8 a 128 caracteres: <code>A-Z</code>, <code>a-z</code>, <code>0-9</code>, <code>-</code> e <code>_</code>).</td>
+              <td>Corrija os campos indicados em <code>erro.campos</code> antes de enviar novamente.</td>
+            </tr>
+            <tr>
+              <td><code>nao_autenticado</code></td>
+              <td>401</td>
+              <td>Cabeçalho <code>Authorization</code> ausente, token inválido ou token revogado.</td>
+              <td>Confira o formato <code>Bearer tk_live_…</code> ou gere um novo token em <strong>Aplicações</strong>.</td>
+            </tr>
+            <tr>
+              <td><code>idempotencia_conflito</code></td>
+              <td>409</td>
+              <td>A mesma <code>Idempotency-Key</code> foi reutilizada em até 24 h com um corpo JSON diferente.</td>
+              <td>Use uma nova chave de idempotência para uma mensagem diferente, ou mantenha exatamente o mesmo corpo ao reenviar por falha de rede.</td>
+            </tr>
+            <tr>
+              <td><code>limite_excedido</code></td>
+              <td>429</td>
+              <td>A aplicação ultrapassou 120 pedidos por minuto.</td>
+              <td>Aguarde os segundos indicados no cabeçalho <code>Retry-After</code> e reduza o ritmo das chamadas.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section id="usuarios">
@@ -142,5 +418,57 @@
     </section>
   </main>
 </div>
+
+<script src="/app/ia-talk/js/talk-icones.js"></script>
+<script>
+(function () {
+  async function copiarTexto(texto) {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(texto);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = texto;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      TalkUI.toast('Exemplo copiado.', 'ok');
+    } catch (_) {
+      TalkUI.toast('Selecione o trecho para copiar manualmente.', 'info');
+    }
+  }
+
+  document.querySelectorAll('[data-grupo-cod]').forEach((box) => {
+    const abas = box.querySelectorAll('[data-aba-cod]');
+    const paineis = box.querySelectorAll('[data-painel-cod]');
+    abas.forEach((aba) => {
+      aba.addEventListener('click', () => {
+        const alvo = aba.dataset.abaCod;
+        abas.forEach((b) => b.setAttribute('aria-selected', String(b === aba)));
+        paineis.forEach((p) => { p.hidden = p.dataset.painelCod !== alvo; });
+      });
+    });
+  });
+
+  document.querySelectorAll('[data-copiar]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const alvo = document.getElementById(btn.dataset.copiar);
+      if (alvo) copiarTexto(alvo.textContent.trim());
+    });
+  });
+
+  document.querySelectorAll('[data-copiar-grupo]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const box = document.querySelector(`[data-grupo-cod="${CSS.escape(btn.dataset.copiarGrupo)}"]`);
+      const visivel = box?.querySelector('.guia-cod-painel:not([hidden]) code');
+      if (visivel) copiarTexto(visivel.textContent.trim());
+    });
+  });
+})();
+</script>
 </body>
 </html>

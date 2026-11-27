@@ -65,14 +65,16 @@ class SupervisorCanais {
   }
 
   // ── Estado, log, avisos ──────────────────────────────────────────────────
-  _log(canalId, tipo, mensagem) {
+  // mensagemId: linha ligada a uma mensagem enviada — a tela mostra o texto dela para a empresa
+  // dona (rotas/canais.js); o log e o aviso ao vivo nunca levam o texto (AGENTS.md).
+  _log(canalId, tipo, mensagem, { mensagemId = null } = {}) {
     const em = new Date().toISOString();
     const texto = String(mensagem).slice(0, 500);
-    this.db.prepare('INSERT INTO canal_log (canal_id, em, tipo, mensagem) VALUES (?, ?, ?, ?)').run(canalId, em, tipo, texto);
+    this.db.prepare('INSERT INTO canal_log (canal_id, em, tipo, mensagem, mensagem_id) VALUES (?, ?, ?, ?, ?)').run(canalId, em, tipo, texto, mensagemId);
     if (Math.random() < 0.05) {
       this.db.prepare(`DELETE FROM canal_log WHERE canal_id = ? AND id NOT IN (SELECT id FROM canal_log WHERE canal_id = ? ORDER BY id DESC LIMIT ${LOG_MAXIMO_POR_CANAL})`).run(canalId, canalId);
     }
-    this.emitir(canalId, 'canal:log', { canal_id: canalId, em, tipo, mensagem: texto });
+    this.emitir(canalId, 'canal:log', { canal_id: canalId, em, tipo, mensagem: texto, ...(mensagemId ? { mensagem_id: mensagemId } : {}) });
   }
 
   _mudarEstado(canalId, estado, detalhe = null) {
@@ -99,9 +101,13 @@ class SupervisorCanais {
       return;
     }
     this.db.prepare('UPDATE canais SET ultima_mensagem_em = ? WHERE id = ?').run(agora, canalId);
-    const previa = String(m.texto || '').replace(/\s+/g, ' ').slice(0, 80);
-    this._log(canalId, 'received', `Mensagem (${m.tipo}) recebida de ${telefone.mascarar(m.de.valor)}${previa ? `: "${previa}"` : ''}`);
+    // AGENTS.md (segurança): log sem texto de mensagem — só tipo, remetente mascarado e tamanho.
+    // O conteúdo vai para a conversa (Fase 2), nunca para o Terminal.
+    const tamanho = String(m.texto || '').length;
+    this._log(canalId, 'received', `Mensagem (${m.tipo}) recebida de ${telefone.mascarar(m.de.valor)}${tamanho ? ` (${tamanho} caractere${tamanho === 1 ? '' : 's'})` : ''}.`);
     this.emitir(canalId, 'canal:mensagem', { canal_id: canalId, de_mascarado: telefone.mascarar(m.de.valor), tipo: m.tipo, em: m.em });
+    // C9: número em atendimento → a mensagem vira conversa (o atendimento confere o uso do canal).
+    try { this.aoReceber?.(canalId, m); } catch (err) { this._log(canalId, 'error', `Falha ao registrar a conversa: ${err.message}`); }
   }
 
   _resumirDescartadas() {
@@ -251,7 +257,7 @@ class SupervisorCanais {
   qrAtual(canalId) { return this.qrs.get(canalId) || null; }
 
   // Linha no Terminal do canal (usado pelo despachante de mensagens).
-  log(canalId, tipo, mensagem) { this._log(canalId, tipo, mensagem); }
+  log(canalId, tipo, mensagem, extra) { this._log(canalId, tipo, mensagem, extra); }
 
   // Só para testes automáticos (provedor simulado).
   _comandoTeste(canalId, cmd, dados) { this.filhos.get(canalId)?.proc.send({ cmd, dados }); }

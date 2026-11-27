@@ -157,7 +157,7 @@ test('linha de comando: regras do canal (nomes novos e antigos), auditadas', () 
   const { executar } = require('../backend/cli/canal-teste');
   assert.equal(executar(db, { canal: 'Canal A', envio: 'ligado' }).envio_modo, 'teste', 'antigo: ligado em teste = só a lista');
   // O comando de hoje no servidor: --modo desligado --envio ligado = qualquer número e recebe de todos.
-  assert.deepEqual(executar(db, { canal: 'cn_a', modo: 'desligado', envio: 'ligado' }), { id: 'cn_a', nome: 'Canal A', envio_modo: 'qualquer', recebimento_modo: 'todos', numeros_teste: ['+55 65 9••••-0010'] });
+  assert.deepEqual(executar(db, { canal: 'cn_a', modo: 'desligado', envio: 'ligado' }), { id: 'cn_a', nome: 'Canal A', envio_modo: 'qualquer', recebimento_modo: 'todos', uso: 'integracao', numeros_teste: ['+55 65 9••••-0010'] });
   assert.deepEqual((({ envio_modo, recebimento_modo }) => ({ envio_modo, recebimento_modo }))(executar(db, { canal: 'cn_a', recebimento: 'teste' })), { envio_modo: 'qualquer', recebimento_modo: 'teste' }, 'separadas: envio livre, recebimento só da lista');
   assert.equal(executar(db, { canal: 'cn_a', envio: 'desligado' }).envio_modo, 'desligado');
   assert.throws(() => executar(db, { canal: 'cn_a', envio: 'talvez' }), /--envio desligado, teste ou qualquer/);
