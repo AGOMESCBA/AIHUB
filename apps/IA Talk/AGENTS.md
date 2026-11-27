@@ -1,9 +1,17 @@
-# IA Talk — regras para quem desenvolve aqui (Claude Code e Antigravity)
+# IA Talk — regras para quem desenvolve aqui (Claude Code, Antigravity e Codex)
 
 Vale junto com o `AGENTS.md` da raiz. Se houver conflito dentro de `apps/IA Talk/`, este arquivo vence.
 
+**Plano e divisão de trabalho:** `docs/plano-produto.md` (ondas, etapas, dono de cada etapa).
+
 **Para o Antigravity:** configure este arquivo e `docs/guia-antigravity.md` como regras do
 workspace antes de começar. Depois leia `docs/contratos.md`.
+
+**Para o Codex:** você faz **bibliotecas puras** em `backend/lib/<pasta da etapa>/` com testes em
+`tests/x*-*.test.js` — sem banco, sem rede, sem tela, sem mexer em nenhum outro arquivo. Não rode
+git que altere nada, não instale dependência, não faça commit. Siga o estilo de
+`backend/lib/reentrega/index.js` (pt-BR, funções puras, instante por parâmetro). Ao terminar,
+entregue a lista de arquivos com caminho completo; o Claude Code audita antes de ligar no sistema.
 
 ## Produto
 

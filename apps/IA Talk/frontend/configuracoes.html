@@ -17,13 +17,22 @@
 <body class="tlk-pagina">
 <main class="tlk-conteudo">
 
-  <div class="head-row">
+  <div class="head-row tlk-head-sticky">
     <div>
       <div class="page-kicker">Administração da empresa</div>
       <h1 class="head-title" id="titulo-pagina">Configurações</h1>
     </div>
-    <div class="head-actions">
+    <div class="head-actions editor-acoes">
       <button class="btn btn-ghost" type="button" id="btn-atualizar" title="Atualizar: recarrega as configurações da empresa ativa" aria-label="Atualizar: recarrega as configurações da empresa ativa"><span data-ico="atualizar" data-giro="1"></span> Atualizar</button>
+      <span class="editor-acoes-sep" id="sep-acoes-cfg" aria-hidden="true" hidden></span>
+      <div class="editor-acoes-grupo" id="acoes-aba-sites" hidden>
+        <button class="btn btn-ghost tlk-btn-cancelar" type="button" id="btn-recarregar-sites" title="Descartar alterações: restaura a última lista salva de sites autorizados" aria-label="Descartar alterações: restaura a última lista salva de sites autorizados"><span data-ico="restaurar"></span> Descartar alterações</button>
+        <button class="btn btn-primary tlk-btn-salvar" type="button" id="btn-salvar-sites" title="Salvar sites autorizados: grava a lista de origens permitidas para iframe" aria-label="Salvar sites autorizados: grava a lista de origens permitidas para iframe"><span data-ico="salvar"></span> Salvar sites autorizados</button>
+      </div>
+      <div class="editor-acoes-grupo" id="acoes-aba-email" hidden>
+        <button class="btn btn-ghost tlk-btn-enviar" type="button" id="btn-testar-email" title="Testar envio (SMTP): salva e valida DNS, porta, autenticação e envio de teste" aria-label="Testar envio (SMTP): salva e valida DNS, porta, autenticação e envio de teste"><span data-ico="enviar"></span> Testar envio (SMTP)</button>
+        <button class="btn btn-primary tlk-btn-salvar" type="submit" form="form-email" id="btn-salvar-email" title="Salvar configuração: grava os dados do servidor de e-mail de envio" aria-label="Salvar configuração: grava os dados do servidor de e-mail de envio"><span data-ico="salvar"></span> Salvar configuração</button>
+      </div>
     </div>
   </div>
   <p class="head-sub">Ajuste o link de acesso da empresa, os sistemas externos autorizados a incorporar telas do IA Talk e o e-mail de reserva para envio do código de login.</p>
@@ -87,11 +96,6 @@
       </form>
 
       <div class="tlk-lista-bloco" id="lista-sites" style="max-width:680px"></div>
-
-      <div class="tlk-acoes-form" style="max-width:680px">
-        <button class="btn btn-ghost" type="button" id="btn-recarregar-sites" title="Descartar alterações: restaura a última lista salva de sites autorizados" aria-label="Descartar alterações: restaura a última lista salva de sites autorizados"><span data-ico="restaurar"></span> Descartar alterações</button>
-        <button class="btn btn-primary" type="button" id="btn-salvar-sites" title="Salvar sites autorizados: grava a lista de origens permitidas para iframe" aria-label="Salvar sites autorizados: grava a lista de origens permitidas para iframe"><span data-ico="salvar"></span> Salvar sites autorizados</button>
-      </div>
     </div>
 
     <!-- ── Aba 3: E-mail de envio (padrão "E-mail Geral" do IA Recruit) ─ -->
@@ -158,11 +162,6 @@
               <option value="false">STARTTLS (porta 587)</option>
             </select>
           </div>
-        </div>
-
-        <div class="tlk-acoes-form">
-          <button class="btn btn-ghost" type="button" id="btn-testar-email" title="Testar envio (SMTP): salva e valida DNS, porta, autenticação e envio de teste" aria-label="Testar envio (SMTP): salva e valida DNS, porta, autenticação e envio de teste"><span data-ico="enviar"></span> Testar envio (SMTP)</button>
-          <button class="btn btn-primary" type="submit" id="btn-salvar-email" title="Salvar configuração: grava os dados do servidor de e-mail de envio" aria-label="Salvar configuração: grava os dados do servidor de e-mail de envio"><span data-ico="salvar"></span> Salvar configuração</button>
         </div>
       </form>
 
@@ -485,8 +484,21 @@
     }
   }
 
+  function sincronizarAcoesCabecalho() {
+    const abaSites = $('aba-sites').getAttribute('aria-selected') === 'true';
+    const abaEmail = $('aba-email').getAttribute('aria-selected') === 'true';
+    $('acoes-aba-sites').hidden = !abaSites;
+    $('acoes-aba-email').hidden = !abaEmail;
+    $('sep-acoes-cfg').hidden = !abaSites && !abaEmail;
+  }
+
   $('btn-atualizar').addEventListener('click', () => carregarTudo());
   TalkUI.abas(document.querySelector('.tlk-abas'));
+  document.querySelectorAll('.tlk-aba[role="tab"]').forEach((aba) => {
+    aba.addEventListener('click', sincronizarAcoesCabecalho);
+    aba.addEventListener('keydown', () => setTimeout(sincronizarAcoesCabecalho, 0));
+  });
+  sincronizarAcoesCabecalho();
   carregarTudo();
 })();
 </script>

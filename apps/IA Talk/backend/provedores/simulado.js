@@ -65,9 +65,12 @@ class ProvedorSimulado extends ProvedorBase {
     return { id_provedor, aceito_em: new Date().toISOString() };
   }
 
-  simularRecebimento({ de = '5565999990000', texto = 'Olá', tipo = 'texto', arquivo } = {}) {
+  simularRecebimento({ de = '5565999990000', texto = 'Olá', tipo = 'texto', arquivo, nome = null } = {}) {
+    const k = crypto.randomBytes(6).toString('hex').toUpperCase();
     const msg = {
-      id_provedor: `sim_in_${crypto.randomBytes(6).toString('hex')}`,
+      id_provedor: `false_${de}@c.us_${k}`,
+      id_decisao: k,
+      nome,
       de: { tipo: 'telefone', valor: de },
       tipo,
       texto,

@@ -1,0 +1,42 @@
+'use strict';
+
+// Nome do contato vem do perfil do WhatsApp (notifyName); nome editado na Central nunca é trocado.
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const crypto = require('crypto');
+const cifra = require('../backend/seguranca/cifra');
+const { abrirBanco } = require('../backend/database');
+const repo = require('../backend/atendimento/repositorio');
+const { ProvedorWweb } = require('../backend/provedores/wweb');
+const { novoId } = require('../backend/ids');
+cifra.definirChaveParaTeste(crypto.randomBytes(32));
+
+test('provedor: nome de perfil do WhatsApp (notifyName) vai junto com a mensagem', async () => {
+  const p = new ProvedorWweb({ canal: { id: 'cn_t', sessao_id: 's' }, dirSessoes: '.' });
+  const recebidas = [];
+  p.on('mensagem', (m) => recebidas.push(m));
+  await p._receber({ from: '5565999875116@c.us', type: 'chat', body: 'oi', timestamp: Math.floor(Date.now() / 1000),
+    id: { id: 'AB1', _serialized: 'false_5565999875116@c.us_AB1' }, _data: { notifyName: '  Alessandro Gomes ' } });
+  assert.equal(recebidas[0].nome, 'Alessandro Gomes');
+  await p._receber({ from: '5565999875116@c.us', type: 'chat', body: 'oi', timestamp: Math.floor(Date.now() / 1000), id: { id: 'AB2' }, _data: {} });
+  assert.equal(recebidas[1].nome, null);
+});
+
+test('contato sem nome ganha o nome do WhatsApp; nome editado na Central não é trocado', () => {
+  const db = abrirBanco({ arquivo: ':memory:' });
+  const t = new Date().toISOString();
+  const emp = novoId('empresa');
+  db.prepare("INSERT INTO empresas (id, nome, apelido, situacao, criado_em, atualizado_em) VALUES (?, 'J2A', 'j2a', 'ativa', ?, ?)").run(emp, t, t);
+  const a = repo.acharOuCriarContato(db, emp, '5565999875116', {});
+  assert.equal(a.nome, 'Contato sem nome');
+  const b = repo.acharOuCriarContato(db, emp, '556599875116', { nomeWhatsapp: 'Alessandro Gomes' }); // sem o nono dígito: mesmo contato
+  assert.equal(b.id, a.id);
+  assert.equal(db.prepare('SELECT nome FROM contatos WHERE id = ?').get(a.id).nome, 'Alessandro Gomes');
+  db.prepare("UPDATE contatos SET nome = 'Alessandro (J2A)' WHERE id = ?").run(a.id); // editado na Central
+  repo.acharOuCriarContato(db, emp, '5565999875116', { nomeWhatsapp: 'Ale' });
+  const c = db.prepare('SELECT nome, nome_whatsapp FROM contatos WHERE id = ?').get(a.id);
+  assert.deepEqual(c, { nome: 'Alessandro (J2A)', nome_whatsapp: 'Ale' });
+  const novo = repo.acharOuCriarContato(db, emp, '5565911112222', { nomeWhatsapp: 'Maria' });
+  assert.equal(novo.nome, 'Maria');
+});

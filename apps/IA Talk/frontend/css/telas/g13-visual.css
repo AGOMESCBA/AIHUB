@@ -1,0 +1,236 @@
+/* ============================================================================
+   IA Talk · Central de atendimento — acabamento visual
+   Camada sobre a g13.css: não muda estrutura, ids nem classes usados pelas telas
+   e pelos testes. Só cor, forma, ritmo e movimento, com os tokens do iahub.css
+   (claro e escuro). Ideia: uma mesa de conversa — lista que se lê de relance,
+   conversa que parece conversa, compositor que convida a responder.
+   ========================================================================== */
+
+.atd-workspace {
+  --atd-raio: 14px;
+  --atd-raio-sm: 9px;
+  --atd-tela: color-mix(in srgb, var(--bg-base) 88%, var(--accent) 3%);
+  --atd-sombra-balao: 0 1px 1px rgba(15, 23, 42, .04), 0 2px 6px rgba(15, 23, 42, .05);
+  --atd-av-s: 62%;
+  --atd-av-l-fundo: 91%;
+  --atd-av-l-texto: 32%;
+}
+:root[data-theme="dark"] .atd-workspace {
+  --atd-tela: color-mix(in srgb, var(--bg-base) 92%, var(--accent) 4%);
+  --atd-sombra-balao: 0 1px 2px rgba(0, 0, 0, .25);
+  --atd-av-s: 45%;
+  --atd-av-l-fundo: 26%;
+  --atd-av-l-texto: 82%;
+}
+
+/* ── Coluna 1: visões e setores ─────────────────────────────────────────── */
+.atd-nav-grupo-tit {
+  letter-spacing: .08em;
+  font-size: 10.5px;
+}
+.atd-nav-btn {
+  border-radius: var(--atd-raio-sm);
+  position: relative;
+  transition: background var(--transition), color var(--transition), transform var(--transition);
+}
+.atd-nav-btn:hover { transform: translateX(2px); }
+.atd-nav-btn.ativo {
+  background: var(--accent-glow);
+  color: var(--accent);
+  font-weight: 700;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.atd-contador {
+  border-radius: 999px;
+  min-width: 22px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  transition: background var(--transition), color var(--transition);
+}
+.atd-nav-btn.ativo .atd-contador {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ── Coluna 2: lista de conversas ───────────────────────────────────────── */
+.atd-conversas { padding: 6px 0; }
+.atd-conv-item {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 11px;
+  margin: 2px 8px;
+  width: calc(100% - 16px);
+  padding: 10px 10px;
+  border: 1px solid transparent;
+  border-left-width: 1px;
+  border-radius: var(--atd-raio-sm);
+  animation: atd-entra .22s ease-out both;
+}
+.atd-conv-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+.atd-conv-item.ativa {
+  background: var(--bg-card);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  box-shadow: 0 0 0 3px var(--accent-glow), var(--shadow-sm);
+}
+.atd-conv-corpo {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.atd-conv-avatar,
+.atd-avatar {
+  --av-h: 220;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  background: hsl(var(--av-h) var(--atd-av-s) var(--atd-av-l-fundo));
+  color: hsl(var(--av-h) var(--atd-av-s) var(--atd-av-l-texto));
+  box-shadow: inset 0 0 0 1px hsl(var(--av-h) var(--atd-av-s) var(--atd-av-l-texto) / .15);
+}
+.atd-avatar { width: 42px; height: 42px; font-size: 14px; }
+.atd-conv-nome { font-size: 14px; font-weight: 650; }
+.atd-conv-previa { font-size: 12.5px; }
+/* Conversa com mensagem nova: nome e prévia em destaque, até alguém ler. */
+.atd-conv-item--nova .atd-conv-nome { font-weight: 800; }
+.atd-conv-item--nova .atd-conv-previa { color: var(--text-hi); font-weight: 550; }
+.atd-conv-item--nova .atd-conv-hora { color: var(--accent); font-weight: 700; }
+.atd-tag-mini {
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-weight: 650;
+}
+.atd-nao-lidas {
+  min-width: 20px;
+  height: 20px;
+  box-shadow: 0 0 0 3px var(--accent-glow);
+  animation: atd-pulso 2.4s ease-in-out infinite;
+}
+
+/* ── Coluna 3: conversa ─────────────────────────────────────────────────── */
+.atd-chat-head {
+  padding: 12px 18px;
+  background: linear-gradient(180deg, var(--bg-card), color-mix(in srgb, var(--bg-card) 94%, var(--accent) 6%));
+}
+.atd-chat-nome { font-size: 15.5px; font-weight: 750; letter-spacing: -.005em; }
+.atd-chat-sub { font-size: 12px; }
+
+/* Tela da conversa: fundo com trama discreta, para diferenciar do resto do sistema. */
+.atd-mensagens {
+  padding: 18px 22px 22px;
+  gap: 8px;
+  background-color: var(--atd-tela);
+  background-image:
+    radial-gradient(color-mix(in srgb, var(--text-lo) 22%, transparent) 1px, transparent 1.2px),
+    radial-gradient(color-mix(in srgb, var(--accent) 14%, transparent) 1px, transparent 1.2px);
+  background-size: 22px 22px, 22px 22px;
+  background-position: 0 0, 11px 11px;
+}
+.atd-msg {
+  max-width: min(74%, 560px);
+  padding: 9px 13px 7px;
+  border-radius: var(--atd-raio);
+  box-shadow: var(--atd-sombra-balao);
+  animation: atd-balao .2s ease-out both;
+  position: relative;
+}
+.atd-msg--cliente {
+  background: var(--bg-card);
+  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+  border-bottom-left-radius: 4px;
+}
+.atd-msg--atendente {
+  background: color-mix(in srgb, var(--accent) 15%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+  border-bottom-right-radius: 4px;
+}
+.atd-msg-head { margin-bottom: 2px; }
+.atd-msg-head strong { font-size: 11.5px; font-weight: 750; color: var(--text-md); }
+.atd-msg--atendente .atd-msg-head strong { color: var(--accent); }
+.atd-msg-texto { font-size: 14px; line-height: 1.5; color: var(--text-hi); }
+.atd-msg-meta { margin-top: 3px; font-size: 10.5px; }
+.atd-msg--nota {
+  border-radius: var(--atd-raio-sm);
+  box-shadow: none;
+  border-style: dashed;
+}
+.atd-evento {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  padding: 3px 12px;
+  background: color-mix(in srgb, var(--bg-card) 85%, transparent);
+  backdrop-filter: blur(2px);
+  box-shadow: var(--shadow-sm);
+  margin: 6px 0;
+}
+
+/* Compositor: um cartão que flutua sobre a conversa. */
+.atd-compositor {
+  padding: 10px 16px 12px;
+  box-shadow: 0 -6px 18px rgba(15, 23, 42, .04);
+}
+.atd-textarea {
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.atd-textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+#btn-enviar {
+  border-radius: 12px;
+  padding-inline: 18px;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent);
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+#btn-enviar:not(:disabled):hover { transform: translateY(-1px); }
+#btn-enviar:disabled { box-shadow: none; }
+
+/* ── Coluna 4: contato e detalhes ───────────────────────────────────────── */
+.atd-info-bloco {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--atd-raio-sm);
+  padding: 12px 14px;
+  margin: 0 0 10px;
+}
+.atd-info-tit {
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  color: var(--text-lo);
+}
+
+/* ── Movimento (só onde ajuda a perceber o que mudou) ───────────────────── */
+@keyframes atd-entra {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes atd-balao {
+  from { opacity: 0; transform: translateY(6px) scale(.985); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes atd-pulso {
+  0%, 100% { box-shadow: 0 0 0 3px var(--accent-glow); }
+  50%      { box-shadow: 0 0 0 6px var(--accent-glow); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .atd-conv-item, .atd-msg, .atd-nao-lidas { animation: none; }
+  .atd-nav-btn:hover { transform: none; }
+}
+
+/* Data da conversa mais discreta: o nome do contato é o que mais importa na lista. */
+.atd-conv-hora { font-size: 10px; letter-spacing: -.01em; }
+.atd-conv-nome { flex: 1 1 auto; min-width: 0; }

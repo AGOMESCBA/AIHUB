@@ -25,7 +25,7 @@
       </div>
       <div class="head-actions">
         <button class="btn btn-ghost" type="button" id="btn-atualizar" title="Atualizar: recarrega a lista de aplicações e tokens" aria-label="Atualizar: recarrega a lista de aplicações e tokens"><span data-ico="atualizar" data-giro="1"></span> Atualizar</button>
-        <button class="btn btn-primary" type="button" id="btn-nova" title="Nova aplicação: cadastra um novo sistema consumidor da API v1" aria-label="Nova aplicação: cadastra um novo sistema consumidor da API v1"><span data-ico="mais"></span> Nova aplicação</button>
+        <button class="btn btn-primary tlk-btn-novo" type="button" id="btn-nova" title="Nova aplicação: cadastra um novo sistema consumidor da API v1" aria-label="Nova aplicação: cadastra um novo sistema consumidor da API v1"><span data-ico="mais"></span> Nova aplicação</button>
       </div>
     </div>
     <p class="head-sub">Sistemas autorizados a usar a API v1 do IA Talk nesta empresa. Cada aplicação recebe seus próprios tokens, escopos, canais e segredo de webhook.</p>
@@ -60,7 +60,17 @@
   <section id="vista-detalhe" hidden aria-labelledby="titulo-detalhe">
     <div class="editor-bar">
       <div class="editor-title"><strong id="titulo-detalhe">Nova aplicação</strong><span id="sub-detalhe"></span></div>
-      <button class="btn btn-ghost" type="button" id="btn-voltar" title="Voltar à lista: fecha o detalhe e oculta eventuais segredos exibidos" aria-label="Voltar à lista: fecha o detalhe e oculta eventuais segredos exibidos"><span data-ico="voltar"></span> Voltar à lista</button>
+      <div class="editor-acoes">
+        <button class="btn btn-ghost tlk-btn-voltar" type="button" id="btn-voltar" title="Voltar à lista: fecha o detalhe e oculta eventuais segredos exibidos" aria-label="Voltar à lista: fecha o detalhe e oculta eventuais segredos exibidos"><span data-ico="voltar"></span> Voltar à lista</button>
+        <span class="editor-acoes-sep" id="sep-acoes-app" aria-hidden="true"></span>
+        <div class="editor-acoes-grupo" id="acoes-aba-dados">
+          <button class="btn btn-ghost tlk-btn-cancelar" type="button" id="btn-cancelar" title="Cancelar: descarta as alterações e volta à lista" aria-label="Cancelar: descarta as alterações e volta à lista"><span data-ico="cancelar"></span> Cancelar</button>
+          <button class="btn btn-primary tlk-btn-salvar" type="submit" form="form-dados" id="btn-salvar" title="Salvar: grava os dados, escopos e canais autorizados desta aplicação" aria-label="Salvar: grava os dados, escopos e canais autorizados desta aplicação"><span data-ico="salvar"></span> Salvar</button>
+        </div>
+        <div class="editor-acoes-grupo" id="acoes-aba-webhook" hidden>
+          <button class="btn btn-primary tlk-btn-salvar" type="submit" form="form-webhook" id="btn-salvar-webhook" title="Salvar webhook: grava a URL de destino e ativa ou pausa a entrega automática" aria-label="Salvar webhook: grava a URL de destino e ativa ou pausa a entrega automática"><span data-ico="salvar"></span> Salvar webhook</button>
+        </div>
+      </div>
     </div>
 
     <div class="tlk-cartao">
@@ -106,11 +116,6 @@
               <div class="tlk-opcoes-grid" id="lista-canais"></div>
               <span class="form-hint" id="dica-canais">A aplicação só pode enviar mensagens e consultar estados dos canais marcados aqui.</span>
             </div>
-          </div>
-
-          <div class="tlk-acoes-form">
-            <button class="btn btn-ghost" type="button" id="btn-cancelar" title="Cancelar: descarta as alterações e volta à lista" aria-label="Cancelar: descarta as alterações e volta à lista"><span data-ico="cancelar"></span> Cancelar</button>
-            <button class="btn btn-primary" type="submit" id="btn-salvar" title="Salvar: grava os dados, escopos e canais autorizados desta aplicação" aria-label="Salvar: grava os dados, escopos e canais autorizados desta aplicação"><span data-ico="salvar"></span> Salvar</button>
           </div>
         </form>
       </div>
@@ -158,9 +163,6 @@
                 </div>
               </label>
             </div>
-          </div>
-          <div class="tlk-acoes-form">
-            <button class="btn btn-primary" type="submit" id="btn-salvar-webhook" title="Salvar webhook: grava a URL de destino e ativa ou pausa a entrega automática" aria-label="Salvar webhook: grava a URL de destino e ativa ou pausa a entrega automática"><span data-ico="salvar"></span> Salvar webhook</button>
           </div>
         </form>
 
@@ -674,7 +676,20 @@
     $('valor-segredo-novo').textContent = '';
   });
 
+  function sincronizarAcoesCabecalho() {
+    const abaDados = $('aba-dados').getAttribute('aria-selected') === 'true';
+    const abaWebhook = $('aba-webhook').getAttribute('aria-selected') === 'true';
+    $('acoes-aba-dados').hidden = !abaDados;
+    $('acoes-aba-webhook').hidden = !abaWebhook;
+    $('sep-acoes-app').hidden = !abaDados && !abaWebhook;
+  }
+
   TalkUI.abas(document.querySelector('.tlk-abas'));
+  document.querySelectorAll('.tlk-aba[role="tab"]').forEach((aba) => {
+    aba.addEventListener('click', sincronizarAcoesCabecalho);
+    aba.addEventListener('keydown', () => setTimeout(sincronizarAcoesCabecalho, 0));
+  });
+  sincronizarAcoesCabecalho();
   criarTabela();
   carregarCanais().then(() => carregar()).then(async () => {
     const id = new URLSearchParams(location.search).get('id');

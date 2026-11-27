@@ -180,6 +180,8 @@ class ProvedorWweb extends ProvedorBase {
       de: { tipo: tipoRemetente, valor, autor: grupo ? digitos(msg.author) : undefined },
       tipo: TIPO_MENSAGEM[msg.type] || 'outro',
       texto: msg.body || '',
+      // Nome de perfil que a pessoa usa no WhatsApp (o mesmo que o IA Command mostra). Em grupo é de quem escreveu.
+      nome: grupo ? null : (String(msg._data?.notifyName || '').trim().slice(0, 80) || null),
       em: new Date(Number(msg.timestamp || Date.now() / 1000) * 1000).toISOString(),
     });
   }

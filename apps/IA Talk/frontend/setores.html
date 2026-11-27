@@ -47,7 +47,7 @@
             <option value="inativo">Inativos</option>
           </select>
           <button class="btn btn-ghost" type="button" id="btn-atualizar-setores" title="Atualizar: recarrega a lista de setores" aria-label="Atualizar: recarrega a lista de setores"><span data-ico="atualizar" data-giro="1"></span> Atualizar</button>
-          <button class="btn btn-primary" type="button" id="btn-novo-setor" title="Novo setor: abre o formulário para cadastrar um setor de atendimento" aria-label="Novo setor: abre o formulário para cadastrar um setor de atendimento"><span data-ico="mais"></span> Novo setor</button>
+          <button class="btn btn-primary tlk-btn-novo" type="button" id="btn-novo-setor" title="Novo setor: abre o formulário para cadastrar um setor de atendimento" aria-label="Novo setor: abre o formulário para cadastrar um setor de atendimento"><span data-ico="mais"></span> Novo setor</button>
         </form>
       </div>
 
@@ -74,7 +74,7 @@
             <option value="inativa">Inativas</option>
           </select>
           <button class="btn btn-ghost" type="button" id="btn-atualizar-respostas" title="Atualizar: recarrega a lista de respostas rápidas" aria-label="Atualizar: recarrega a lista de respostas rápidas"><span data-ico="atualizar" data-giro="1"></span> Atualizar</button>
-          <button class="btn btn-primary" type="button" id="btn-nova-resposta" title="Nova resposta rápida: cadastra um atalho com / para a Central" aria-label="Nova resposta rápida: cadastra um atalho com / para a Central"><span data-ico="mais"></span> Nova resposta rápida</button>
+          <button class="btn btn-primary tlk-btn-novo" type="button" id="btn-nova-resposta" title="Nova resposta rápida: cadastra um atalho com / para a Central" aria-label="Nova resposta rápida: cadastra um atalho com / para a Central"><span data-ico="mais"></span> Nova resposta rápida</button>
         </form>
       </div>
 
@@ -88,7 +88,12 @@
   <section id="vista-setor" hidden aria-labelledby="titulo-setor">
     <div class="editor-bar">
       <div class="editor-title"><strong id="titulo-setor">Novo setor</strong><span id="sub-setor"></span></div>
-      <button class="btn btn-ghost" type="button" id="btn-voltar-setor" title="Voltar à lista: fecha o editor de setor sem salvar alterações pendentes" aria-label="Voltar à lista: fecha o editor de setor sem salvar alterações pendentes"><span data-ico="voltar"></span> Voltar à lista</button>
+      <div class="editor-acoes">
+        <button class="btn btn-ghost tlk-btn-voltar" type="button" id="btn-voltar-setor" title="Voltar à lista: fecha o editor de setor sem salvar alterações pendentes" aria-label="Voltar à lista: fecha o editor de setor sem salvar alterações pendentes"><span data-ico="voltar"></span> Voltar à lista</button>
+        <span class="editor-acoes-sep" aria-hidden="true"></span>
+        <button class="btn btn-ghost tlk-btn-cancelar" type="button" id="btn-cancelar-setor" title="Cancelar: descarta as alterações e volta à lista de setores" aria-label="Cancelar: descarta as alterações e volta à lista de setores"><span data-ico="cancelar"></span> Cancelar</button>
+        <button class="btn btn-primary tlk-btn-salvar" type="submit" form="form-setor" id="btn-salvar-setor" title="Salvar setor: grava os dados, membros, horário e mensagem fora do horário" aria-label="Salvar setor: grava os dados, membros, horário e mensagem fora do horário"><span data-ico="salvar"></span> Salvar setor</button>
+      </div>
     </div>
 
     <div class="tlk-cartao">
@@ -216,11 +221,6 @@
               </div>
             </div>
           </div>
-
-          <div class="tlk-acoes-form">
-            <button class="btn btn-ghost" type="button" id="btn-cancelar-setor" title="Cancelar: descarta as alterações e volta à lista de setores" aria-label="Cancelar: descarta as alterações e volta à lista de setores"><span data-ico="cancelar"></span> Cancelar</button>
-            <button class="btn btn-primary" type="submit" id="btn-salvar-setor" title="Salvar setor: grava os dados, membros, horário e mensagem fora do horário" aria-label="Salvar setor: grava os dados, membros, horário e mensagem fora do horário"><span data-ico="salvar"></span> Salvar setor</button>
-          </div>
         </form>
       </div>
     </div>
@@ -230,7 +230,12 @@
   <section id="vista-resposta" hidden aria-labelledby="titulo-resposta">
     <div class="editor-bar">
       <div class="editor-title"><strong id="titulo-resposta">Nova resposta rápida</strong><span id="sub-resposta"></span></div>
-      <button class="btn btn-ghost" type="button" id="btn-voltar-resposta" title="Voltar à lista: fecha o editor de resposta rápida sem salvar alterações pendentes" aria-label="Voltar à lista: fecha o editor de resposta rápida sem salvar alterações pendentes"><span data-ico="voltar"></span> Voltar à lista</button>
+      <div class="editor-acoes">
+        <button class="btn btn-ghost tlk-btn-voltar" type="button" id="btn-voltar-resposta" title="Voltar à lista: fecha o editor de resposta rápida sem salvar alterações pendentes" aria-label="Voltar à lista: fecha o editor de resposta rápida sem salvar alterações pendentes"><span data-ico="voltar"></span> Voltar à lista</button>
+        <span class="editor-acoes-sep" aria-hidden="true"></span>
+        <button class="btn btn-ghost tlk-btn-cancelar" type="button" id="btn-cancelar-resposta" title="Cancelar: descarta as alterações e volta à lista de respostas rápidas" aria-label="Cancelar: descarta as alterações e volta à lista de respostas rápidas"><span data-ico="cancelar"></span> Cancelar</button>
+        <button class="btn btn-primary tlk-btn-salvar" type="submit" form="form-resposta" id="btn-salvar-resposta" title="Salvar resposta rápida: grava o atalho e o texto para uso na Central" aria-label="Salvar resposta rápida: grava o atalho e o texto para uso na Central"><span data-ico="salvar"></span> Salvar resposta rápida</button>
+      </div>
     </div>
 
     <div class="tlk-cartao">
@@ -282,11 +287,6 @@
                 <div class="g14-previa-corpo" id="previa-rr-corpo"></div>
               </div>
             </div>
-          </div>
-
-          <div class="tlk-acoes-form">
-            <button class="btn btn-ghost" type="button" id="btn-cancelar-resposta" title="Cancelar: descarta as alterações e volta à lista de respostas rápidas" aria-label="Cancelar: descarta as alterações e volta à lista de respostas rápidas"><span data-ico="cancelar"></span> Cancelar</button>
-            <button class="btn btn-primary" type="submit" id="btn-salvar-resposta" title="Salvar resposta rápida: grava o atalho e o texto para uso na Central" aria-label="Salvar resposta rápida: grava o atalho e o texto para uso na Central"><span data-ico="salvar"></span> Salvar resposta rápida</button>
           </div>
         </form>
       </div>

@@ -26,7 +26,7 @@
       </div>
       <div class="head-actions">
         <button class="btn btn-ghost" type="button" id="btn-atualizar" title="Atualizar: recarrega a lista de usuários da empresa" aria-label="Atualizar: recarrega a lista de usuários da empresa"><span data-ico="atualizar" data-giro="1"></span> Atualizar</button>
-        <button class="btn btn-primary" type="button" id="btn-novo" title="Novo usuário: abre o formulário para cadastrar um usuário na empresa" aria-label="Novo usuário: abre o formulário para cadastrar um usuário na empresa"><span data-ico="mais"></span> Novo usuário</button>
+        <button class="btn btn-primary tlk-btn-novo" type="button" id="btn-novo" title="Novo usuário: abre o formulário para cadastrar um usuário na empresa" aria-label="Novo usuário: abre o formulário para cadastrar um usuário na empresa"><span data-ico="mais"></span> Novo usuário</button>
       </div>
     </div>
     <p class="head-sub">Quem pode acessar o IA Talk nesta empresa. Cada pessoa entra pelo celular com código temporário e vê apenas as rotinas do seu papel.</p>
@@ -65,7 +65,12 @@
   <section id="vista-detalhe" hidden aria-labelledby="titulo-detalhe">
     <div class="editor-bar">
       <div class="editor-title"><strong id="titulo-detalhe">Novo usuário</strong><span id="sub-detalhe"></span></div>
-      <button class="btn btn-ghost" type="button" id="btn-voltar" title="Voltar à lista: fecha o cadastro sem salvar alterações pendentes" aria-label="Voltar à lista: fecha o cadastro sem salvar alterações pendentes"><span data-ico="voltar"></span> Voltar à lista</button>
+      <div class="editor-acoes">
+        <button class="btn btn-ghost tlk-btn-voltar" type="button" id="btn-voltar" title="Voltar à lista: fecha o cadastro sem salvar alterações pendentes" aria-label="Voltar à lista: fecha o cadastro sem salvar alterações pendentes"><span data-ico="voltar"></span> Voltar à lista</button>
+        <span class="editor-acoes-sep" aria-hidden="true"></span>
+        <button class="btn btn-ghost tlk-btn-cancelar" type="button" id="btn-cancelar" title="Cancelar: descarta as alterações e volta à lista" aria-label="Cancelar: descarta as alterações e volta à lista"><span data-ico="cancelar"></span> Cancelar</button>
+        <button class="btn btn-primary tlk-btn-salvar" type="submit" form="form" id="btn-salvar" title="Salvar: grava os dados e o papel deste usuário" aria-label="Salvar: grava os dados e o papel deste usuário"><span data-ico="salvar"></span> Salvar</button>
+      </div>
     </div>
 
     <div class="tlk-cartao">
@@ -109,11 +114,6 @@
               </select>
               <span class="form-hint">Inativar encerra as sessões ativas deste usuário nesta empresa.</span>
             </div>
-          </div>
-
-          <div class="tlk-acoes-form">
-            <button class="btn btn-ghost" type="button" id="btn-cancelar" title="Cancelar: descarta as alterações e volta à lista" aria-label="Cancelar: descarta as alterações e volta à lista"><span data-ico="cancelar"></span> Cancelar</button>
-            <button class="btn btn-primary" type="submit" id="btn-salvar" title="Salvar: grava os dados e o papel deste usuário" aria-label="Salvar: grava os dados e o papel deste usuário"><span data-ico="salvar"></span> Salvar</button>
           </div>
         </form>
       </div>

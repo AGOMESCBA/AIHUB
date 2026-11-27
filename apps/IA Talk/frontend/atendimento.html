@@ -12,6 +12,8 @@
   <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
   <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
   <link rel="stylesheet" href="/app/ia-talk/css/telas/g13.css">
+  <!-- Acabamento visual da Central (camada sobre a g13; não muda estrutura, ids nem classes). -->
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g13-visual.css">
 </head>
 <body class="atd-body">
 <div class="atd-app">
@@ -247,6 +249,13 @@
   let timerFallback = null;
   let timerBusca = null;
 
+  // Cor do avatar pelo nome (a mesma pessoa tem sempre a mesma cor): matiz de 0 a 359.
+  function matiz(nome) {
+    let h = 0;
+    for (const ch of String(nome || '?')) h = (h * 31 + ch.charCodeAt(0)) % 360;
+    return h;
+  }
+
   function iniciais(nome) {
     return String(nome || '?').trim().split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || '?';
   }
@@ -396,7 +405,9 @@
       const etiquetas = (c.etiquetas || []).slice(0, 2).map((e) => `<span class="atd-tag-mini">${esc(e)}</span>`).join('');
       const dica = `${c.contato?.nome || 'Contato'} · Protocolo ${c.protocolo} · ${c.setor?.nome || ''} · ${dono}`;
       return `<li>
-        <button type="button" class="atd-conv-item ${ativa ? 'ativa' : ''}" data-conversa-id="${esc(c.id)}" aria-current="${ativa ? 'true' : 'false'}" title="${esc(dica)}">
+        <button type="button" class="atd-conv-item ${ativa ? 'ativa' : ''} ${c.nao_lidas > 0 ? 'atd-conv-item--nova' : ''}" data-conversa-id="${esc(c.id)}" aria-current="${ativa ? 'true' : 'false'}" title="${esc(dica)}">
+          <span class="atd-conv-avatar" style="--av-h:${matiz(c.contato?.nome)}" aria-hidden="true">${esc(iniciais(c.contato?.nome))}</span>
+          <span class="atd-conv-corpo">
           <div class="atd-conv-linha1">
             <span class="atd-conv-nome">${esc(c.contato?.nome || 'Contato')}</span>
             <span class="atd-conv-hora">${esc(hora)}</span>
@@ -412,6 +423,7 @@
             </div>
             ${c.nao_lidas > 0 ? `<span class="atd-nao-lidas" aria-label="${esc(c.nao_lidas)} não lida(s)">${esc(c.nao_lidas)}</span>` : ''}
           </div>
+          </span>
         </button>
       </li>`;
     }).join('');
@@ -462,6 +474,7 @@
     $('estado-chat-vazio').hidden = true;
     $('chat-ativo').hidden = false;
     $('chat-avatar').textContent = iniciais(cv.contato?.nome);
+    $('chat-avatar').style.setProperty('--av-h', matiz(cv.contato?.nome));
     $('chat-nome').innerHTML = `
       <span>${esc(cv.contato?.nome || 'Contato')}</span>
       ${cv.situacao === 'encerrada' ? '<span class="tlk-pill tlk-pill--neutro">Encerrada</span>' : ''}

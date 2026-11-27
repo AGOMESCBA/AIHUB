@@ -24,7 +24,7 @@
       </div>
       <div class="head-actions">
         <button class="btn btn-ghost" type="button" id="btn-atualizar" title="Atualizar: recarrega a lista de empresas cadastradas" aria-label="Atualizar: recarrega a lista de empresas cadastradas"><span data-ico="atualizar" data-giro="1"></span> Atualizar</button>
-        <button class="btn btn-primary" type="button" id="btn-nova" title="Nova empresa: abre o formulário para cadastrar uma nova empresa" aria-label="Nova empresa: abre o formulário para cadastrar uma nova empresa"><span data-ico="mais"></span> Nova empresa</button>
+        <button class="btn btn-primary tlk-btn-novo" type="button" id="btn-nova" title="Nova empresa: abre o formulário para cadastrar uma nova empresa" aria-label="Nova empresa: abre o formulário para cadastrar uma nova empresa"><span data-ico="mais"></span> Nova empresa</button>
       </div>
     </div>
     <p class="head-sub">Cada empresa tem o próprio link de entrada (<code>/app/ia-talk/apelido</code>), usuários, canais e aplicações. Os dados de uma empresa nunca aparecem para outra.</p>
@@ -61,7 +61,12 @@
   <section id="vista-detalhe" hidden aria-labelledby="titulo-detalhe">
     <div class="editor-bar">
       <div class="editor-title"><strong id="titulo-detalhe">Nova empresa</strong><span id="sub-detalhe"></span></div>
-      <button class="btn btn-ghost" type="button" id="btn-voltar" title="Voltar à lista: fecha o detalhe sem salvar alterações pendentes" aria-label="Voltar à lista: fecha o detalhe sem salvar alterações pendentes"><span data-ico="voltar"></span> Voltar à lista</button>
+      <div class="editor-acoes">
+        <button class="btn btn-ghost tlk-btn-voltar" type="button" id="btn-voltar" title="Voltar à lista: fecha o detalhe sem salvar alterações pendentes" aria-label="Voltar à lista: fecha o detalhe sem salvar alterações pendentes"><span data-ico="voltar"></span> Voltar à lista</button>
+        <span class="editor-acoes-sep" aria-hidden="true"></span>
+        <button class="btn btn-ghost tlk-btn-cancelar" type="button" id="btn-cancelar" title="Cancelar: descarta as alterações e volta à lista" aria-label="Cancelar: descarta as alterações e volta à lista"><span data-ico="cancelar"></span> Cancelar</button>
+        <button class="btn btn-primary tlk-btn-salvar" type="submit" form="form" id="btn-salvar" title="Salvar: grava os dados desta empresa" aria-label="Salvar: grava os dados desta empresa"><span data-ico="salvar"></span> Salvar</button>
+      </div>
     </div>
     <div class="tlk-cartao">
       <div class="tlk-abas" role="tablist" aria-label="Seções da empresa">
@@ -96,10 +101,6 @@
               <input class="form-control" id="c-logo" name="logo_url" type="url" maxlength="500" placeholder="https://…" autocomplete="off">
               <span class="form-hint">Aparece na página de entrada da empresa.</span>
             </div>
-          </div>
-          <div class="tlk-acoes-form">
-            <button class="btn btn-ghost" type="button" id="btn-cancelar" title="Cancelar: descarta as alterações e volta à lista" aria-label="Cancelar: descarta as alterações e volta à lista"><span data-ico="cancelar"></span> Cancelar</button>
-            <button class="btn btn-primary" type="submit" id="btn-salvar" title="Salvar: grava os dados desta empresa" aria-label="Salvar: grava os dados desta empresa"><span data-ico="salvar"></span> Salvar</button>
           </div>
         </form>
       </div>

@@ -27,7 +27,7 @@
       </div>
       <div class="head-actions">
         <button class="btn btn-ghost" type="button" id="btn-atualizar" title="Atualizar: recarrega a lista de canais e seus estados atuais" aria-label="Atualizar: recarrega a lista de canais e seus estados atuais"><span data-ico="atualizar" data-giro="1"></span> Atualizar</button>
-        <button class="btn btn-primary" type="button" id="btn-novo" title="Novo canal: abre o formulário para cadastrar uma nova conexão de WhatsApp" aria-label="Novo canal: abre o formulário para cadastrar uma nova conexão de WhatsApp"><span data-ico="mais"></span> Novo canal</button>
+        <button class="btn btn-primary tlk-btn-novo" type="button" id="btn-novo" title="Novo canal: abre o formulário para cadastrar uma nova conexão de WhatsApp" aria-label="Novo canal: abre o formulário para cadastrar uma nova conexão de WhatsApp"><span data-ico="mais"></span> Novo canal</button>
       </div>
     </div>
     <p class="head-sub">Conexões de WhatsApp cadastradas para envio e recebimento de mensagens. Clique em um canal para gerenciar conexão, QR Code, terminal ao vivo e empresas vinculadas.</p>
@@ -76,7 +76,12 @@
         <strong id="titulo-novo">Novo canal</strong>
         <span>O canal nasce parado. Depois de salvar, conecte para gerar o QR Code.</span>
       </div>
-      <button class="btn btn-ghost" type="button" id="btn-voltar-novo" title="Voltar à lista: fecha o cadastro sem criar o canal" aria-label="Voltar à lista: fecha o cadastro sem criar o canal"><span data-ico="voltar"></span> Voltar à lista</button>
+      <div class="editor-acoes">
+        <button class="btn btn-ghost tlk-btn-voltar" type="button" id="btn-voltar-novo" title="Voltar à lista: fecha o cadastro sem criar o canal" aria-label="Voltar à lista: fecha o cadastro sem criar o canal"><span data-ico="voltar"></span> Voltar à lista</button>
+        <span class="editor-acoes-sep" aria-hidden="true"></span>
+        <button class="btn btn-ghost tlk-btn-cancelar" type="button" id="btn-cancelar-novo" title="Cancelar: descarta os dados preenchidos e volta à lista" aria-label="Cancelar: descarta os dados preenchidos e volta à lista"><span data-ico="cancelar"></span> Cancelar</button>
+        <button class="btn btn-primary tlk-btn-salvar" type="submit" form="form-novo" id="btn-criar-canal" title="Criar canal: salva o novo canal parado para conectar em seguida" aria-label="Criar canal: salva o novo canal parado para conectar em seguida"><span data-ico="salvar"></span> Criar canal</button>
+      </div>
     </div>
 
     <div class="tlk-cartao">
@@ -117,11 +122,6 @@
               </div>
             </div>
           </div>
-
-          <div class="tlk-acoes-form">
-            <button class="btn btn-ghost" type="button" id="btn-cancelar-novo" title="Cancelar: descarta os dados preenchidos e volta à lista" aria-label="Cancelar: descarta os dados preenchidos e volta à lista"><span data-ico="cancelar"></span> Cancelar</button>
-            <button class="btn btn-primary" type="submit" id="btn-criar-canal" title="Criar canal: salva o novo canal parado para conectar em seguida" aria-label="Criar canal: salva o novo canal parado para conectar em seguida"><span data-ico="salvar"></span> Criar canal</button>
-          </div>
         </form>
       </div>
     </div>
@@ -137,12 +137,16 @@
         </div>
         <span id="sub-detalhe"></span>
       </div>
-      <div class="tlk-editor-acoes">
+      <div class="tlk-editor-acoes editor-acoes">
         <span class="tlk-rt-badge" id="rt-badge" aria-live="polite">
           <span class="tlk-rt-dot" aria-hidden="true"></span>
           <span id="rt-texto">Conectando tempo real…</span>
         </span>
-        <button class="btn btn-ghost" type="button" id="btn-voltar" title="Voltar à lista: encerra o monitoramento deste canal e volta à lista" aria-label="Voltar à lista: encerra o monitoramento deste canal e volta à lista"><span data-ico="voltar"></span> Voltar à lista</button>
+        <button class="btn btn-ghost tlk-btn-voltar" type="button" id="btn-voltar" title="Voltar à lista: encerra o monitoramento deste canal e volta à lista" aria-label="Voltar à lista: encerra o monitoramento deste canal e volta à lista"><span data-ico="voltar"></span> Voltar à lista</button>
+        <span class="editor-acoes-sep" id="sep-acoes-canal" aria-hidden="true" hidden></span>
+        <div class="editor-acoes-grupo" id="acoes-aba-empresas" hidden>
+          <button class="btn btn-primary tlk-btn-salvar" type="submit" form="form-empresas" id="btn-salvar-empresas" title="Salvar nome e vínculos: grava o nome do canal e as empresas vinculadas" aria-label="Salvar nome e vínculos: grava o nome do canal e as empresas vinculadas"><span data-ico="salvar"></span> Salvar nome e vínculos</button>
+        </div>
       </div>
     </div>
 
@@ -475,10 +479,6 @@
             <label class="sr-only" for="sel-nova-empresa">Adicionar empresa</label>
             <select class="form-control" id="sel-nova-empresa"></select>
             <button class="btn btn-ghost" type="button" id="btn-add-empresa" title="Vincular empresa: adiciona a empresa selecionada à lista deste número" aria-label="Vincular empresa: adiciona a empresa selecionada à lista deste número"><span data-ico="mais"></span> Vincular empresa</button>
-          </div>
-
-          <div class="tlk-acoes-form">
-            <button class="btn btn-primary" type="submit" id="btn-salvar-empresas" title="Salvar nome e vínculos: grava o nome do canal e as empresas vinculadas" aria-label="Salvar nome e vínculos: grava o nome do canal e as empresas vinculadas"><span data-ico="salvar"></span> Salvar nome e vínculos</button>
           </div>
         </form>
       </div>
@@ -1881,11 +1881,18 @@
   });
 
   // ── Inicialização ───────────────────────────────────────────────────
+  function sincronizarAcoesCabecalhoCanal() {
+    const abaEmp = $('aba-empresas').getAttribute('aria-selected') === 'true';
+    $('acoes-aba-empresas').hidden = !abaEmp;
+    $('sep-acoes-canal').hidden = !abaEmp;
+  }
+
   TalkUI.abas(document.querySelector('.tlk-abas'));
   document.querySelectorAll('.tlk-aba[role="tab"]').forEach((aba) => {
-    aba.addEventListener('click', atualizarModoTerminal);
-    aba.addEventListener('keydown', () => setTimeout(atualizarModoTerminal, 0));
+    aba.addEventListener('click', () => { atualizarModoTerminal(); sincronizarAcoesCabecalhoCanal(); });
+    aba.addEventListener('keydown', () => setTimeout(() => { atualizarModoTerminal(); sincronizarAcoesCabecalhoCanal(); }, 0));
   });
+  sincronizarAcoesCabecalhoCanal();
   criarTabela();
   carregarLista().then(async () => {
     const q = new URLSearchParams(location.search);

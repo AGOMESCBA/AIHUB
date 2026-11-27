@@ -9,6 +9,7 @@ const telefone = require('../seguranca/telefone');
 const config = require('../config');
 
 const json = (texto, padrao) => { try { return JSON.parse(texto); } catch (_) { return padrao; } };
+const SEM_NOME = 'Contato sem nome';
 const previaDe = (texto) => String(texto || '').replace(/\s+/g, ' ').trim().slice(0, 80);
 
 // ── Setores ─────────────────────────────────────────────────────────────────
@@ -59,12 +60,16 @@ function acharOuCriarContato(db, empresaId, numero, { nome = null, nomeWhatsapp 
   const existente = acharContato(db, empresaId, numero);
   if (existente) {
     if (nomeWhatsapp && existente.nome_whatsapp !== nomeWhatsapp) {
-      db.prepare('UPDATE contatos SET nome_whatsapp = ?, atualizado_em = ? WHERE id = ?').run(nomeWhatsapp, agora(), existente.id);
+      // Contato criado sem nome ganha o nome do WhatsApp; nome editado na Central nunca é trocado.
+      const semNome = existente.nome === SEM_NOME;
+      db.prepare(`UPDATE contatos SET nome_whatsapp = ?${semNome ? ', nome = ?' : ''}, atualizado_em = ? WHERE id = ?`)
+        .run(...[nomeWhatsapp, ...(semNome ? [nomeWhatsapp] : []), agora(), existente.id]);
+      return { ...existente, nome: semNome ? nomeWhatsapp : existente.nome, nome_whatsapp: nomeWhatsapp };
     }
     return { ...existente, nome_whatsapp: nomeWhatsapp || existente.nome_whatsapp };
   }
   const c = { id: novoId('contato'), empresa_id: empresaId, telefone: telefone.normalizar(numero),
-    nome: String(nome || nomeWhatsapp || '').trim().slice(0, 80) || 'Contato sem nome', nome_whatsapp: nomeWhatsapp || null, criado_em: agora() };
+    nome: String(nome || nomeWhatsapp || '').trim().slice(0, 80) || SEM_NOME, nome_whatsapp: nomeWhatsapp || null, criado_em: agora() };
   db.prepare('INSERT INTO contatos (id, empresa_id, telefone, nome, nome_whatsapp, criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .run(c.id, c.empresa_id, c.telefone, c.nome, c.nome_whatsapp, c.criado_em, c.criado_em);
   return c;
