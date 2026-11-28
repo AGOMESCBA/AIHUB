@@ -15,6 +15,7 @@ const { EVENTOS_SOCKET, USOS_CANAL, VISOES_CONVERSA } = require('../contratos');
 const { ROTINAS } = require('../acesso/papeis');
 const { mascararTelefone, BASE_SIMULADA } = require('./dados');
 const onda1 = require('./atendimento-onda1');
+const cfg = require('../atendimento/config-onda1');
 const menuSetores = require('../lib/menu-setores'); // X1 (Codex): a mesma leitura do servidor real
 
 const MIN = 60 * 1000;
@@ -63,9 +64,13 @@ function criarDadosAtendimento(usuarios) {
       versao: 1, criado_em: em(15 * DIA), atualizado_em: em(15 * DIA) },
   ];
 
-  // Onda 1 (§9): o Suporte distribui por rodízio. A pesquisa nasce desligada, como no contrato.
-  setores[0].distribuicao = { modo: 'rodizio', limite_por_atendente: 5, tempo_aceite_min: 3 };
-  setores[0].alertas = { whatsapp_ligado: true, espera_min: 5, escalonar_min: 15, escalonar_para: ['usr_ana'] };
+  // Onda 1 (§9): o Suporte personalizou distribuição (rodízio) e alertas; os demais seguem a política
+  // da empresa (§9.10). A pesquisa nasce desligada, como no contrato.
+  setores[0]._personalizado = {
+    distribuicao: { modo: 'rodizio', limite_por_atendente: 5, tempo_aceite_min: 3 },
+    alertas: { whatsapp_ligado: true, espera_min: 5, escalonar_min: 15, escalonar_para: ['usr_ana'] },
+  };
+  for (const x of setores) Object.assign(x, cfg.efetivoDoSetor({ setor: { menu: x.menu, ...(x._personalizado || {}) } }));
 
   // Mariana e João usam os números de teste do canal cn_suporte: só para eles a resposta sai.
   const PESSOAS = [
@@ -268,8 +273,25 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
   const conversaDetalhe = (req, cv) => ({ ...conversaResumo(cv), contato: contatoPublico(contatoDe(cv)), motivo_encerramento: cv.motivo_encerramento, envio: envioDaConversa(req, cv) });
   function setorPublico(s) {
     const abertas = at.conversas.filter(c => c.setor.id === s.id && c.situacao === 'aberta');
-    const { empresa_id, ...resto } = s; // eslint-disable-line no-unused-vars
+    const { empresa_id, _personalizado, ...resto } = s; // eslint-disable-line no-unused-vars
     return { ...resto, conversas_abertas: abertas.length, na_fila: abertas.filter(c => !c.responsavel).length };
+  }
+
+  // Política de atendimento da empresa (§9.10), em memória. O setor guarda só o que personalizou
+  // (_personalizado); os valores efetivos ficam no próprio setor e são refeitos a cada mudança.
+  const politicas = new Map();
+  const politicaDe = (empresaId) => politicas.get(empresaId) || { blocos: {}, versao: 0, atualizado_em: null };
+  function aplicarPolitica(s) {
+    Object.assign(s, cfg.efetivoDoSetor({ politica: politicaDe(s.empresa_id).blocos, setor: { menu: s.menu, ...(s._personalizado || {}) } }));
+  }
+  function guardarOnda1(s, valores) {
+    s._personalizado = s._personalizado || {};
+    for (const [bloco, v] of Object.entries(valores)) {
+      if (bloco === 'menu') s.menu = v;
+      else if (v === null) delete s._personalizado[bloco];
+      else s._personalizado[bloco] = v;
+    }
+    aplicarPolitica(s);
   }
   const respostaPublica = ({ empresa_id, ...resto }) => resto; // eslint-disable-line no-unused-vars
   const o1 = onda1.criarOnda1({ dados, at, sessao, novo, agora, listar, emitir,
@@ -470,6 +492,30 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
     const R = ROTINAS;
     const leitura = (req) => exigirRotina(req, R.atendimento, R.setores);
 
+    // Política de atendimento da empresa (§9.10): padrão para todos os setores que não personalizaram.
+    const politicaPublica = (empresaId) => {
+      const pol = politicaDe(empresaId);
+      const ef = cfg.efetivoDoSetor({ politica: pol.blocos });
+      const ativos = daEmpresa(at.setores).filter(x => x.situacao === 'ativo');
+      const uso = Object.fromEntries(cfg.BLOCOS_HERDAVEIS.map(b => {
+        const n = ativos.filter(x => x._personalizado?.[b]).length;
+        return [b, { seguem: ativos.length - n, personalizados: n }];
+      }));
+      return { ...Object.fromEntries(cfg.BLOCOS_HERDAVEIS.map(b => [b, ef[b]])), uso, versao: pol.versao, atualizado_em: pol.atualizado_em };
+    };
+    admin.get('/atendimento/politica', (req, res) => { leitura(req); res.json(politicaPublica(sessao.empresaId)); });
+    admin.put('/atendimento/politica', (req, res) => {
+      exigirRotina(req, R.setores);
+      const b = req.body || {};
+      const atual = politicaDe(sessao.empresaId);
+      if (b.versao !== atual.versao) throw erro('conflito', 'A política foi alterada em outra sessão. Recarregue antes de salvar.');
+      const novos = cfg.configDaPolitica(b, cfg.efetivoDoSetor({ politica: atual.blocos }));
+      politicas.set(sessao.empresaId, { blocos: { ...atual.blocos, ...novos }, versao: atual.versao + 1, atualizado_em: agora() });
+      for (const x of daEmpresa(at.setores)) aplicarPolitica(x);
+      if (Object.keys(novos).length) auditar('politica.alterada', `Alterou a política de atendimento (${Object.keys(novos).join(', ')})`);
+      res.json(politicaPublica(sessao.empresaId));
+    });
+
     // Setores
     admin.get('/setores', (req, res) => {
       leitura(req);
@@ -494,7 +540,8 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
         membros: membrosDe(b.membros) || [], horario: b.horario || { ligado: false, fuso: 'America/Cuiaba', dias: [] },
         fora_horario: b.fora_horario || { ligado: false, texto: '' }, versao: 1, criado_em: agora(), atualizado_em: agora(),
         ...onda1.padroesDoSetor(daEmpresa(at.setores).length + 1) };
-      Object.assign(s, onda1.configDoSetor(b, s));
+      aplicarPolitica(s);
+      guardarOnda1(s, onda1.configDoSetor(b, s));
       at.setores.push(s);
       auditar('setor.criado', `Criou o setor ${s.nome}`);
       res.status(201).json(setorPublico(s));
@@ -518,7 +565,8 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
       }
       const membros = membrosDe(b.membros);
       const configOnda1 = onda1.configDoSetor(b, s);
-      Object.assign(s, configOnda1, {
+      guardarOnda1(s, configOnda1);
+      Object.assign(s, {
         ...(b.nome !== undefined ? { nome: b.nome.trim() } : {}), ...(b.descricao !== undefined ? { descricao: String(b.descricao).trim().slice(0, 200) } : {}),
         ...(membros ? { membros } : {}), ...(b.horario ? { horario: b.horario } : {}), ...(b.fora_horario ? { fora_horario: b.fora_horario } : {}),
         ...(b.situacao ? { situacao: b.situacao } : {}), versao: s.versao + 1, atualizado_em: agora(),

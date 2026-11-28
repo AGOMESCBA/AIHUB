@@ -7,8 +7,22 @@
 const { novoId, agora } = require('../ids');
 const telefone = require('../seguranca/telefone');
 const config = require('../config');
+const { padroesDoSetor, efetivoDoSetor } = require('./config-onda1');
 
 const json = (texto, padrao) => { try { return JSON.parse(texto); } catch (_) { return padrao; } };
+// Blocos da Onda 1 do setor (§9): coluna vazia = segue a política da empresa (§9.10); gravado = personalizado.
+const BLOCOS_ONDA1 = Object.keys(padroesDoSetor());
+
+function politicaDaEmpresa(db, empresaId) {
+  const p = db.prepare('SELECT blocos, versao, atualizado_em FROM atendimento_politica WHERE empresa_id = ?').get(empresaId);
+  return { blocos: json(p?.blocos, {}), versao: p?.versao || 0, atualizado_em: p?.atualizado_em || null };
+}
+
+// Valores efetivos do setor + blocos personalizados. Sem `politica`, lê a da empresa do setor.
+function onda1DoSetor(s, politica = null, db = null) {
+  const blocos = politica || (db ? politicaDaEmpresa(db, s.empresa_id).blocos : {});
+  return efetivoDoSetor({ politica: blocos, setor: Object.fromEntries(BLOCOS_ONDA1.map(b => [b, json(s[b], null)])) });
+}
 const SEM_NOME = 'Contato sem nome';
 const previaDe = (texto) => String(texto || '').replace(/\s+/g, ' ').trim().slice(0, 80);
 
@@ -33,10 +47,11 @@ function setoresDoUsuario(db, empresaId, usuarioId) {
 
 function paraSetor(db, s) {
   const contagem = db.prepare(`SELECT COUNT(*) AS abertas, SUM(CASE WHEN responsavel_id IS NULL THEN 1 ELSE 0 END) AS na_fila
-      FROM conversas WHERE setor_id = ? AND situacao = 'aberta'`).get(s.id);
+      FROM conversas WHERE setor_id = ? AND situacao = 'aberta' AND triagem_desde IS NULL`).get(s.id);
   return {
     id: s.id, codigo: s.codigo, nome: s.nome, descricao: s.descricao, situacao: s.situacao, membros: membrosDoSetor(db, s.id),
     horario: json(s.horario, { ligado: false, fuso: 'America/Cuiaba', dias: [] }), fora_horario: json(s.fora_horario, { ligado: false, texto: '' }),
+    ...onda1DoSetor(s, null, db),
     conversas_abertas: contagem.abertas || 0, na_fila: contagem.na_fila || 0, versao: s.versao, criado_em: s.criado_em, atualizado_em: s.atualizado_em,
   };
 }
@@ -96,7 +111,8 @@ function buscarConversa(db, empresaId, id) {
 }
 
 function conversaAbertaDoContato(db, canalId, contatoId) {
-  return db.prepare("SELECT id, empresa_id FROM conversas WHERE canal_id = ? AND contato_id = ? AND situacao = 'aberta'").get(canalId, contatoId) || null;
+  return db.prepare(`SELECT id, empresa_id, canal_id, setor_id, triagem_desde, triagem_tentativas FROM conversas
+      WHERE canal_id = ? AND contato_id = ? AND situacao = 'aberta'`).get(canalId, contatoId) || null;
 }
 
 // Protocolo por empresa e ano: 2026-000001, 2026-000002… (só exibição; o id continua aleatório).
@@ -117,7 +133,7 @@ function criarConversa(db, { empresaId, canalId, contatoId, setorId, prioridade 
 }
 
 const CAMPOS_CONVERSA = new Set(['setor_id', 'responsavel_id', 'situacao', 'prioridade', 'nao_lidas', 'etiquetas', 'motivo_encerramento',
-  'encerrada_em', 'ultimo_aviso_fora_horario_em']);
+  'encerrada_em', 'ultimo_aviso_fora_horario_em', 'triagem_desde', 'triagem_tentativas']);
 function atualizarConversa(db, id, campos) {
   const chaves = Object.keys(campos).filter(c => CAMPOS_CONVERSA.has(c));
   db.prepare(`UPDATE conversas SET atualizada_em = @atualizada_em${chaves.map(c => `, ${c} = @${c}`).join('')} WHERE id = @id`)
@@ -211,6 +227,9 @@ const refV1 = (r) => ({ sistema: r.sistema, id: r.ref_id, titulo: r.titulo, link
 const refAdmin = (r) => ({ ...refV1(r), aplicacao: { id: r.aplicacao_id, nome: r.aplicacao_nome } });
 
 // ── Formas de conversa ──────────────────────────────────────────────────────
+// Na fila: aberta, sem responsável e já fora do menu de setores.
+const naFila = (cv) => cv.situacao === 'aberta' && !cv.responsavel_id && !cv.triagem_desde;
+
 function paraConversaResumo(db, cv) {
   const ultima = db.prepare(`SELECT texto, direcao, autor_tipo, em FROM conversa_itens WHERE conversa_id = ? AND categoria = 'mensagem'
       ORDER BY em DESC, rowid DESC LIMIT 1`).get(cv.id);
@@ -218,7 +237,10 @@ function paraConversaResumo(db, cv) {
     id: cv.id, protocolo: cv.protocolo, canal: { id: cv.canal_id, nome: cv.canal_nome },
     contato: { id: cv.contato_id, nome: cv.contato_nome, telefone_mascarado: telefone.mascarar(cv.contato_telefone) },
     setor: { id: cv.setor_id, nome: cv.setor_nome }, responsavel: cv.responsavel_id ? { id: cv.responsavel_id, nome: cv.responsavel_nome } : null,
-    situacao: cv.situacao, na_fila: cv.situacao === 'aberta' && !cv.responsavel_id, nao_lidas: cv.nao_lidas,
+    situacao: cv.situacao, na_fila: naFila(cv), nao_lidas: cv.nao_lidas,
+    // Onda 1 (§9): triagem = no menu de setores. Oferta, SLA e pesquisa chegam nas etapas C13–C15.
+    triagem: cv.triagem_desde && cv.situacao === 'aberta' ? { desde: cv.triagem_desde, tentativas: cv.triagem_tentativas || 0 } : null,
+    oferta: null, sla: null, pesquisa: null,
     ultima_mensagem: ultima ? { previa: previaDe(ultima.texto), direcao: ultima.direcao, autor_tipo: ultima.autor_tipo, em: ultima.em } : null,
     aguardando_desde: aguardandoDesde(db, cv), etiquetas: json(cv.etiquetas, []), prioridade: cv.prioridade,
     referencias: referenciasDaConversa(db, cv.id).map(refAdmin), aberta_em: cv.aberta_em, atualizada_em: cv.atualizada_em, encerrada_em: cv.encerrada_em,
@@ -227,7 +249,7 @@ function paraConversaResumo(db, cv) {
 
 function paraConversaV1(db, cv, aplicacaoId) {
   return {
-    id: cv.id, protocolo: cv.protocolo, situacao: cv.situacao, na_fila: cv.situacao === 'aberta' && !cv.responsavel_id, canal: cv.canal_id,
+    id: cv.id, protocolo: cv.protocolo, situacao: cv.situacao, na_fila: naFila(cv), canal: cv.canal_id,
     setor: { codigo: cv.setor_codigo, nome: cv.setor_nome }, responsavel: cv.responsavel_id ? { id: cv.responsavel_id, nome: cv.responsavel_nome } : null,
     prioridade: cv.prioridade, referencias: referenciasDaConversa(db, cv.id, aplicacaoId).map(refV1),
     aberta_em: cv.aberta_em, atualizada_em: cv.atualizada_em, encerrada_em: cv.encerrada_em, motivo_encerramento: cv.motivo_encerramento,
@@ -242,7 +264,7 @@ function paraResposta(r) {
 }
 
 module.exports = {
-  json, previaDe, VALIDADE_RETORNO_MS,
+  json, previaDe, VALIDADE_RETORNO_MS, BLOCOS_ONDA1, onda1DoSetor, politicaDaEmpresa,
   membrosDoSetor, buscarSetor, setorPorCodigo, setoresDoUsuario, paraSetor, trocarMembros,
   acharContato, acharOuCriarContato, buscarContato, paraContato,
   SELECT_CONVERSA, buscarConversa, conversaAbertaDoContato, criarConversa, atualizarConversa,

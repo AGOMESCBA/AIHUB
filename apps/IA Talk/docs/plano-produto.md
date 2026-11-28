@@ -63,6 +63,11 @@ atendimento → inteligência; para vendas, somam funil (CRM) e campanhas.
 | **C16** Painel ao vivo + relatórios (backend) | Claude | Fila, espera, por atendente, primeira resposta, TMA, satisfação (usa L2) | C13 |
 | **G17** Painel ao vivo + relatórios (tela) | Antigravity | Painel da supervisão e relatórios por período/setor/atendente | C16 |
 | **G18** Uso do número na tela de Canais | Antigravity | Campo "Uso do número" + setor padrão nas Regras do canal (hoje é por comando) | — |
+| **C17** Política de atendimento | Claude | Padrão da empresa para todos os setores + personalização por bloco (§9.10). **Feito** | C12 |
+| **C18** Encerramento por inatividade | Claude | Aguardando cliente, lembrete, encerramento e reabertura configuráveis (§9.9) | C17 |
+| **C19** SLA completo + violações | Claude | Três prazos, horário do setor, pausa, prioridade alta, registro de violações e relatório (§9.6, §9.11). Assume a parte de SLA da X3 | C17 |
+| **G20** Política de atendimento (tela) | Antigravity | Padrão da empresa e personalização por setor, com SLA completo e inatividade (§9.6, §9.9, §9.10) | C17 |
+| **G21** SLA e "aguardando cliente" na Central | Antigravity | Contagem regressiva, cores, ordenação por vencimento, selo "Aguardando cliente" | C19 |
 
 ### Onda 2 — IA no atendimento
 Copiloto (resumo da conversa, sugestão de resposta, tradução de jargão), agente de IA que

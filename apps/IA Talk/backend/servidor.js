@@ -19,7 +19,8 @@ const config = require('./config');
 const { erro, middlewareErros } = require('./erros');
 const { carregarSessao, ipDe } = require('./acesso/middleware');
 const { criarTransporteIaCommand, criarTransporteEmail } = require('./acesso/envio-codigo');
-const { criarRotasPublicas } = require('./rotas/publico');
+const { criarRotasPublicas, paginaDeErro } = require('./rotas/publico');
+const { ROTINAS } = require('./acesso/papeis');
 const { criarRotasAdmin } = require('./rotas/admin');
 const { criarRotasCanais } = require('./rotas/canais');
 const { SupervisorCanais } = require('./canais/supervisor');
@@ -83,7 +84,7 @@ function montarEstaticos(app, { comPrototipos = false } = {}) {
 function frameAncestorsPorEmpresa(db) {
   return (req, res, next) => {
     let empresaId = req.sessao?.empresa_id || null;
-    const m = req.path.match(new RegExp(`^${config.BASE_PATH}/([a-z0-9-]{3,40})/?$`));
+    const m = req.path.match(new RegExp(`^${config.BASE_PATH}/([a-z0-9-]{3,40})(?:/atendimento)?/?$`));
     if (m) empresaId = db.prepare("SELECT id FROM empresas WHERE apelido = ? AND situacao = 'ativa'").get(m[1])?.id || null;
     if (empresaId) {
       const s = db.prepare('SELECT origens FROM sites_autorizados WHERE empresa_id = ?').get(empresaId);
@@ -95,12 +96,27 @@ function frameAncestorsPorEmpresa(db) {
   };
 }
 
-function montarPaginaEntrada(app) {
+function montarPaginaEntrada(app, db) {
   // /app/ia-talk/<apelido> → frontend/entrar.html (G1). A tela lê o apelido do endereço.
   app.get(`${config.BASE_PATH}/:apelido([a-z0-9-]{3,40})`, (req, res) => {
     const arquivo = path.join(config.DIR_FRONTEND, 'entrar.html');
     if (!fs.existsSync(arquivo)) return res.status(404).type('text').send('Página de entrada ainda não entregue (etapa G1).');
     res.set('Cache-Control', 'no-cache, must-revalidate').sendFile(arquivo);
+  });
+
+  // Portal do atendente (§9.1): /app/ia-talk/<apelido>/atendimento → frontend/portal.html (G15).
+  // Sem sessão desta empresa → login com destino de volta ao portal; sem a rotina do atendimento → aviso.
+  if (!db) return;
+  app.get(`${config.BASE_PATH}/:apelido([a-z0-9-]{3,40})/atendimento`, (req, res) => {
+    const empresa = db.prepare("SELECT id, apelido FROM empresas WHERE apelido = ? AND situacao = 'ativa'").get(req.params.apelido);
+    if (!empresa) return paginaDeErro(res, erro('nao_encontrado', 'Link de acesso não encontrado. Confira o endereço com a sua empresa.'));
+    if (!req.sessao || req.sessao.empresa_id !== empresa.id) return res.redirect(`${config.BASE_PATH}/${empresa.apelido}?destino=atendimento`);
+    if (!req.rotinas.includes(ROTINAS.atendimento)) {
+      return paginaDeErro(res, erro('sem_permissao', 'Você ainda não tem acesso ao atendimento. Peça ao administrador da empresa para liberar.'));
+    }
+    const arquivo = path.join(config.DIR_FRONTEND, 'portal.html');
+    if (!fs.existsSync(arquivo)) return res.status(404).type('text').send('Portal do atendente ainda não entregue (etapa G15).');
+    res.set('Cache-Control', 'no-store').sendFile(arquivo);
   });
 }
 
@@ -151,7 +167,7 @@ function criarApp({ db = null, log = console, transportes = null, chavePublicaHu
   app.use(`${config.BASE_PATH}/api`, api);
 
   montarEstaticos(app);
-  montarPaginaEntrada(app);
+  montarPaginaEntrada(app, db);
   return app;
 }
 

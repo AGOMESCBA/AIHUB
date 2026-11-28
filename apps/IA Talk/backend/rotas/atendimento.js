@@ -35,6 +35,14 @@ function criarRotasAtendimento({ db, atendimento, log = console }) {
   const auditar = (req, acao, alvoTipo, alvoId, resumo) => auditoria.registrar(db, req.contexto, { acao, alvoTipo, alvoId, resumo, ip: ipDe(req) });
   const detalhe = (req, cv) => atendimento.detalhe(req.acesso, cv);
 
+  // ── Política de atendimento da empresa (§9.10): padrão para todos os setores ──
+  r.get('/atendimento/politica', leitura, (req, res) => res.json(atendimento.politica(req.acesso)));
+  r.put('/atendimento/politica', cadastro, (req, res) => {
+    const { politica, alterados } = atendimento.atualizarPolitica(req.acesso, req.body || {});
+    if (alterados.length) auditar(req, 'politica.alterada', 'politica', req.acesso.empresaId, `Alterou a política de atendimento (${alterados.join(', ')})`);
+    res.json(politica);
+  });
+
   // ── Setores ───────────────────────────────────────────────────────────────
   r.get('/setores', leitura, (req, res) => {
     const { limite, cursor } = lerPaginacao(req.query);
@@ -100,10 +108,11 @@ function criarRotasAtendimento({ db, atendimento, log = console }) {
     const p = {};
     const onde = [atendimento.filtroVisivel(req.acesso, p)];
     if (visao === 'minhas') { onde.push("cv.situacao = 'aberta' AND cv.responsavel_id = @eu"); p.eu = req.acesso.usuarioId; }
-    if (visao === 'fila') onde.push("cv.situacao = 'aberta' AND cv.responsavel_id IS NULL");
-    if (visao === 'abertas') onde.push("cv.situacao = 'aberta'");
+    if (visao === 'fila') onde.push("cv.situacao = 'aberta' AND cv.responsavel_id IS NULL AND cv.triagem_desde IS NULL");
+    if (visao === 'abertas') onde.push("cv.situacao = 'aberta' AND cv.triagem_desde IS NULL");
     if (visao === 'encerradas') onde.push("cv.situacao = 'encerrada'");
-    if (visao === 'triagem') onde.push('0 = 1'); // menu de setores: C12
+    // Menu de setores (§9.3): só a supervisão vê (filtroVisivel já tira a triagem de quem não vê tudo).
+    if (visao === 'triagem') onde.push("cv.situacao = 'aberta' AND cv.triagem_desde IS NOT NULL");
     if (q.setor_id) { onde.push('cv.setor_id = @setor'); p.setor = String(q.setor_id); }
     if (q.canal_id) { onde.push('cv.canal_id = @canal'); p.canal = String(q.canal_id); }
     if (q.contato_id) { onde.push('cv.contato_id = @contato'); p.contato = String(q.contato_id); }

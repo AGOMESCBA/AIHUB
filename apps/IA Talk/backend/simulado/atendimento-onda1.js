@@ -12,77 +12,8 @@ const { ROTINAS } = require('../acesso/papeis');
 const S = EVENTOS_SOCKET.servidor;
 const MIN = 60 * 1000;
 
-const PERGUNTA_PADRAO = 'Como você avalia este atendimento? Responda de 1 (ruim) a 5 (ótimo).';
-const SAUDACAO_PADRAO = 'Olá! Para agilizar seu atendimento, escolha o setor:';
-
-// Valores padrão de cada bloco novo do setor (§9.3–9.7). Tudo nasce desligado.
-function padroesDoSetor(ordem = 1) {
-  return {
-    menu: { aparece: true, ordem, texto: null },
-    distribuicao: { modo: 'fila_livre', limite_por_atendente: 5, tempo_aceite_min: 3 },
-    alertas: { whatsapp_ligado: false, espera_min: 5, escalonar_min: 15, escalonar_para: [] },
-    sla: { primeira_resposta_min: 10, atencao_pct: 80 },
-    pesquisa: { ligada: false, pergunta: PERGUNTA_PADRAO },
-  };
-}
-
-const inteiro = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
-const bool = (v) => typeof v === 'boolean';
-
-// Confere e junta os blocos novos do setor ao que já existe (campos parciais). Devolve
-// { valores } ou lança 400 com os campos errados, no formato padrão.
-function configDoSetor(b = {}, atual = padroesDoSetor()) {
-  const campos = {};
-  const valores = {};
-  const bloco = (nome, conferir) => {
-    if (b[nome] === undefined) return;
-    if (!b[nome] || typeof b[nome] !== 'object' || Array.isArray(b[nome])) { campos[nome] = 'Informe um objeto.'; return; }
-    const junto = { ...atual[nome], ...b[nome] };
-    const msg = conferir(junto);
-    if (msg) campos[nome] = msg; else valores[nome] = junto;
-  };
-  bloco('menu', (m) => (!bool(m.aparece) ? 'aparece deve ser verdadeiro ou falso.'
-    : !inteiro(m.ordem, 0, 999) ? 'ordem de 0 a 999.'
-      : m.texto !== null && (typeof m.texto !== 'string' || m.texto.trim().length > 60) ? 'texto até 60 caracteres.' : null));
-  bloco('distribuicao', (d) => (!['fila_livre', 'rodizio'].includes(d.modo) ? 'modo: fila_livre ou rodizio.'
-    : !inteiro(d.limite_por_atendente, 1, 50) ? 'limite por atendente de 1 a 50.'
-      : !inteiro(d.tempo_aceite_min, 1, 30) ? 'tempo para aceitar de 1 a 30 minutos.' : null));
-  bloco('alertas', (a) => (!bool(a.whatsapp_ligado) ? 'whatsapp_ligado deve ser verdadeiro ou falso.'
-    : !inteiro(a.espera_min, 1, 120) ? 'espera de 1 a 120 minutos.'
-      : !inteiro(a.escalonar_min, 0, 240) ? 'escalonar de 0 a 240 minutos (0 = não escalona).'
-        : !Array.isArray(a.escalonar_para) || a.escalonar_para.some(x => typeof x !== 'string') ? 'escalonar_para: lista de usuários.' : null));
-  bloco('sla', (s) => (!inteiro(s.primeira_resposta_min, 1, 1440) ? 'primeira resposta de 1 a 1440 minutos.'
-    : !inteiro(s.atencao_pct, 50, 95) ? 'atenção de 50% a 95% do prazo.' : null));
-  bloco('pesquisa', (p) => (!bool(p.ligada) ? 'ligada deve ser verdadeiro ou falso.'
-    : typeof p.pergunta !== 'string' || !p.pergunta.trim() || p.pergunta.trim().length > 300 ? 'pergunta de 1 a 300 caracteres.' : null));
-  if (Object.keys(campos).length) throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos });
-  return valores;
-}
-
-// Menu no canal (§9.3): campos menu_* do PUT /canais/:id.
-function configDoMenuDoCanal(b = {}, atual = { ligado: false, saudacao: SAUDACAO_PADRAO, tempo_min: 10, tentativas: 2 }) {
-  const campos = {};
-  const novo = { ...atual };
-  if (b.menu_ligado !== undefined) { if (!bool(b.menu_ligado)) campos.menu_ligado = 'Verdadeiro ou falso.'; else novo.ligado = b.menu_ligado; }
-  if (b.menu_saudacao !== undefined) {
-    const t = String(b.menu_saudacao || '').trim();
-    if (t.length > 500) campos.menu_saudacao = 'Até 500 caracteres.'; else novo.saudacao = t || SAUDACAO_PADRAO;
-  }
-  if (b.menu_tempo_min !== undefined) { if (!inteiro(b.menu_tempo_min, 1, 60)) campos.menu_tempo_min = 'De 1 a 60 minutos.'; else novo.tempo_min = b.menu_tempo_min; }
-  if (b.menu_tentativas !== undefined) { if (!inteiro(b.menu_tentativas, 1, 5)) campos.menu_tentativas = 'De 1 a 5 tentativas.'; else novo.tentativas = b.menu_tentativas; }
-  if (Object.keys(campos).length) throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos });
-  return novo;
-}
-
-// SLA da primeira resposta (§9.6): null quando já respondida ou fora do atendimento.
-function slaDaConversa(cv, setor, respondida, agoraMs = Date.now()) {
-  if (cv.situacao !== 'aberta' || cv.triagem || respondida || !setor?.sla) return null;
-  const inicio = Date.parse(cv.aberta_em);
-  const prazoMs = setor.sla.primeira_resposta_min * MIN;
-  const passou = agoraMs - inicio;
-  const situacao = passou >= prazoMs ? 'estourado' : passou >= prazoMs * setor.sla.atencao_pct / 100 ? 'atencao' : 'ok';
-  return { prazo: new Date(inicio + prazoMs).toISOString(), situacao, alvo: 'primeira_resposta' };
-}
+// Configuração (padrões e validação) vem do servidor real: uma regra só.
+const { padroesDoSetor, configDoSetor, configDoMenuDoCanal, slaDaConversa, PERGUNTA_PADRAO, SAUDACAO_PADRAO, inteiro, bool } = require('../atendimento/config-onda1');
 
 function criarOnda1({ dados, at, sessao, novo, agora, listar, emitir, h }) {
   // Status dos atendentes (§9.2). Online no simulado: a sessão e quem está marcado.

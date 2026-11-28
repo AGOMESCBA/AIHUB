@@ -1,0 +1,198 @@
+/* IA Talk · Etapa G16 — Configuração do setor (§9.3–9.7) e menu de setores no canal (§9.3).
+   Compartilhado por frontend/setores.html e frontend/canais.html.
+   Usa exclusivamente tokens de iahub.css e talk.css (temas claro e escuro). */
+
+[hidden] {
+  display: none !important;
+}
+
+.g16-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+/* Destaque de erro 400 por seção do setor */
+.g14-secao.g16-secao--erro {
+  border: 1.5px solid var(--tlk-erro);
+  border-radius: var(--radius);
+  padding: 16px;
+  background: color-mix(in srgb, var(--tlk-erro-bg) 32%, var(--bg-card));
+}
+
+.g16-secao-erro {
+  margin-bottom: 12px;
+}
+
+/* Cartões de escolha do modo de distribuição (Fila livre x Rodízio) */
+.g16-modos-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.g16-modo-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-base);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+}
+.g16-modo-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: var(--bg-hover);
+}
+.g16-modo-card:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-card));
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+.g16-modo-card input[type="radio"] {
+  margin-top: 3px;
+  accent-color: var(--accent);
+  flex: none;
+}
+.g16-modo-card strong {
+  display: block;
+  font-size: 13.5px;
+  color: var(--text-hi);
+}
+.g16-modo-card span {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-md);
+  line-height: 1.45;
+}
+
+/* Grades compactas de campos numéricos */
+.g16-campos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.g16-subbloco {
+  margin-top: 12px;
+}
+
+/* Balão de prévia de mensagem automática no WhatsApp (pesquisa e menu) */
+.g16-whats-box {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px dashed var(--border-hi, var(--border));
+  background: var(--bg-base);
+}
+.g16-whats-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.g16-whats-rotulo {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-lo);
+}
+.g16-whats-balao {
+  max-width: 520px;
+  padding: 10px 13px;
+  border-radius: 12px 12px 12px 4px;
+  background: var(--bg-card);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
+  box-shadow: var(--shadow-sm);
+  color: var(--text-hi);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Subseção do menu de setores dentro de Regras do canal (canais.html) */
+.g16-menu-canal {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.g16-menu-canal-cab h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-hi);
+}
+.g16-menu-canal-cab p {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--text-md);
+  line-height: 1.45;
+}
+.g16-menu-canal .tlk-check-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-base);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+.g16-menu-canal .tlk-check-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: var(--bg-hover);
+}
+.g16-menu-canal .tlk-check-card:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-card));
+}
+.g16-menu-canal .tlk-check-card input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+  flex: none;
+}
+.g16-menu-canal .tlk-check-card strong {
+  display: block;
+  font-size: 13.5px;
+  color: var(--text-hi);
+}
+.g16-menu-canal .tlk-check-card span {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-md);
+  line-height: 1.45;
+}
+.g16-avisos-pilha {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .g16-modos-grid,
+  .g16-campos-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .g14-secao.g16-secao--erro {
+    padding: 12px;
+  }
+}

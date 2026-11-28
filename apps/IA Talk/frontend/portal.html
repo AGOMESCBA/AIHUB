@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+  <title>Atendimento · IA Talk</title>
+  <!-- Etapa G15 (Antigravity) — Portal do atendente (/app/ia-talk/<apelido>/atendimento).
+       Reutiliza a lógica da Central (js/central-atendimento.js) em tela cheia, sem menu
+       de administração, com status de presença (§9.2), oferta do rodízio (§9.4) e alertas (§9.5). -->
+  <script src="/app/ia-talk/js/talk-ui.js"></script>
+  <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g13.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g13-visual.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g15.css">
+</head>
+<body class="atd-body ptl-body">
+<div class="atd-app" id="atd-app" data-passo="lista">
+
+  <div class="atd-estado-global" id="estado-global" hidden></div>
+
+  <!-- Cabeçalho dedicado do Portal do atendente (§9.1, §9.2, §9.5) -->
+  <header class="ptl-header" id="portal-header" aria-label="Cabeçalho do portal do atendente">
+    <div class="ptl-brand">
+      <div class="ptl-logo" id="ptl-logo" aria-hidden="true">IA</div>
+      <div class="ptl-ident">
+        <span class="ptl-empresa" id="ptl-empresa-nome">IA Talk</span>
+        <span class="ptl-atendente">Atendente: <strong id="ptl-usuario-nome">—</strong></span>
+      </div>
+    </div>
+
+    <div class="ptl-controles">
+      <!-- Seletor de status (§9.2) -->
+      <div class="ptl-status-box" id="ptl-status-box" title="Disponível recebe rodízio; Ocupado vê a fila mas não recebe rodízio; Ausente não recebe nada.">
+        <span class="ptl-status-dot ptl-status-dot--ausente" id="ptl-status-dot" aria-hidden="true"></span>
+        <label class="sr-only" for="ptl-status-select">Seu status no atendimento</label>
+        <select class="ptl-status-select" id="ptl-status-select" title="Disponível recebe rodízio; Ocupado vê a fila mas não recebe rodízio; Ausente não recebe nada." aria-label="Status do atendente: Disponível recebe rodízio; Ocupado vê a fila mas não recebe rodízio; Ausente não recebe nada">
+          <option value="disponivel">Disponível</option>
+          <option value="ocupado">Ocupado</option>
+          <option value="ausente">Ausente</option>
+        </select>
+        <span class="ptl-status-desde" id="ptl-status-desde" title="Tempo neste status">—</span>
+      </div>
+
+      <!-- Sino de alertas (§9.5) -->
+      <div class="ptl-sino-wrap" id="ptl-sino-wrap">
+        <button class="btn btn-ghost btn-sm ptl-sino-btn" type="button" id="btn-sino" aria-expanded="false" aria-controls="popover-alertas" title="Alertas de atendimento: abra para ver avisos e ir direto à conversa" aria-label="Alertas de atendimento: abra para ver avisos e ir direto à conversa">
+          <span data-ico="sino"></span>
+          <span class="ptl-sino-badge" id="ptl-sino-badge" hidden>0</span>
+        </button>
+
+        <div class="ptl-popover-alertas" id="popover-alertas" role="dialog" aria-label="Alertas de atendimento" hidden>
+          <div class="ptl-alertas-head">
+            <strong>Alertas</strong>
+            <button class="btn btn-ghost btn-sm" type="button" id="btn-marcar-todos-lidos" disabled title="Marcar todos os alertas como lidos" aria-label="Marcar todos os alertas como lidos"><span data-ico="confirmar"></span> Marcar todos como lidos</button>
+          </div>
+          <div class="ptl-alertas-barra">
+            <button class="btn btn-ghost btn-sm" type="button" id="btn-ativar-notif" hidden title="Ativar notificações do navegador quando a aba estiver em segundo plano" aria-label="Ativar notificações do navegador quando a aba estiver em segundo plano"><span data-ico="sino"></span> Ativar notificações</button>
+            <button class="btn btn-ghost btn-sm" type="button" id="btn-som-popover" title="Silenciar ou ativar o som discreto de novos alertas" aria-label="Silenciar ou ativar o som discreto de novos alertas"><span data-ico="som_on"></span> Som ligado</button>
+          </div>
+          <ul class="ptl-alertas-lista" id="lista-alertas"></ul>
+        </div>
+      </div>
+
+      <!-- Botão de menu compacto no celular (<= 760 px) -->
+      <button class="btn btn-ghost btn-sm ptl-so-mobile" type="button" id="btn-menu-portal" aria-expanded="false" aria-controls="ptl-extras" title="Abrir opções do portal, alertas no WhatsApp e sair" aria-label="Abrir opções do portal, alertas no WhatsApp e sair">
+        <span data-ico="menu"></span>
+      </button>
+
+      <!-- Demais ações (inline no computador; menu no celular) -->
+      <div class="ptl-extras" id="ptl-extras">
+        <div class="ptl-extras-ident-mobile">
+          <strong id="ptl-empresa-mobile">IA Talk</strong>
+          <span>Atendente: <span id="ptl-usuario-mobile">—</span> · <span id="ptl-status-desde-mobile">—</span></span>
+        </div>
+        <div class="ptl-status-dica-mobile">Ocupado vê a fila mas não recebe rodízio; Ausente não recebe nada.</div>
+
+        <label class="ptl-switch" for="chk-alertas-whatsapp" title="Receber alertas de fila e escalonamento no seu WhatsApp cadastrado">
+          <input type="checkbox" id="chk-alertas-whatsapp">
+          <span>Alertas no WhatsApp</span>
+        </label>
+
+        <button class="btn btn-ghost btn-sm" type="button" id="btn-som-portal" title="Silenciar ou ativar o som discreto de novos alertas" aria-label="Silenciar ou ativar o som discreto de novos alertas">
+          <span data-ico="som_on"></span>
+        </button>
+
+        <button class="btn btn-ghost btn-sm" type="button" id="btn-tema-portal" title="Alternar entre tema claro e tema escuro" aria-label="Alternar entre tema claro e tema escuro">
+          <span data-ico="tema"></span>
+        </button>
+
+        <a class="btn btn-ghost btn-sm" id="link-admin" href="/app/ia-talk/shell.html" hidden title="Abrir o painel completo de administração do IA Talk" aria-label="Abrir o painel completo de administração do IA Talk">
+          <span data-ico="externo"></span> Abrir a administração
+        </a>
+
+        <button class="btn btn-ghost btn-sm" type="button" id="btn-sair-portal" title="Sair do portal e encerrar a sessão atual" aria-label="Sair do portal e encerrar a sessão atual">
+          <span data-ico="sair"></span> Sair
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Barra superior com cartões numéricos retráteis de Visões e Setores -->
+  <header class="atd-topo" id="painel-resumo-topo" aria-label="Indicadores de atendimento">
+    <div class="atd-topo-barra">
+      <div class="atd-topo-esq">
+        <span class="atd-rt-badge" id="rt-badge" aria-live="polite" title="Estado da atualização em tempo real">
+          <span class="atd-rt-dot" aria-hidden="true"></span>
+          <span id="rt-texto">Conectando…</span>
+        </span>
+        <div class="atd-usuario-ativo" id="usuario-ativo"></div>
+        <button class="atd-topo-resumo-pill" type="button" id="btn-resumo-inline" hidden title="Clique para expandir os cartões de visões e setores" aria-label="Clique para expandir os cartões de visões e setores"></button>
+      </div>
+      <div class="atd-topo-dir">
+        <button class="btn btn-ghost btn-sm atd-topo-toggle" type="button" id="btn-toggle-resumo" aria-expanded="true" aria-controls="atd-cards-corpo" title="Recolher os cartões de visões e setores para ampliar a conversa" aria-label="Recolher os cartões de visões e setores para ampliar a conversa">
+          <span data-ico="chevron_cima"></span>
+          <span class="atd-topo-toggle-txt">Indicadores</span>
+        </button>
+        <button class="btn btn-ghost btn-sm" type="button" id="btn-atualizar" title="Atualizar: recarrega contadores, conversas, status e alertas" aria-label="Atualizar: recarrega contadores, conversas, status e alertas"><span data-ico="atualizar" data-giro="1"></span></button>
+      </div>
+    </div>
+
+    <aside class="atd-col--setores atd-topo-corpo" id="atd-cards-corpo" aria-label="Visões e setores">
+      <div class="atd-cards-grupo">
+        <div class="atd-nav-grupo-tit">Visões</div>
+        <ul class="atd-nav-lista atd-cards-lista" id="lista-visoes">
+          <li><button class="atd-nav-btn atd-kpi-card" type="button" data-visao="minhas" title="Minhas: conversas abertas atribuídas a você" aria-label="Minhas: conversas abertas atribuídas a você"><span class="atd-nav-nome atd-kpi-rotulo">Minhas</span><span class="atd-contador atd-kpi-valor" id="cnt-minhas">0</span></button></li>
+          <li><button class="atd-nav-btn atd-kpi-card atd-kpi-card--fila" type="button" data-visao="fila" title="Fila: conversas abertas aguardando alguém assumir" aria-label="Fila: conversas abertas aguardando alguém assumir"><span class="atd-nav-nome atd-kpi-rotulo">Fila</span><span class="atd-contador atd-kpi-valor" id="cnt-fila">0</span></button></li>
+          <li><button class="atd-nav-btn atd-kpi-card ativo" type="button" data-visao="abertas" title="Abertas: todas as conversas em andamento que você pode ver" aria-label="Abertas: todas as conversas em andamento que você pode ver"><span class="atd-nav-nome atd-kpi-rotulo">Abertas</span><span class="atd-contador atd-kpi-valor" id="cnt-abertas">0</span></button></li>
+          <li><button class="atd-nav-btn atd-kpi-card atd-kpi-card--enc" type="button" data-visao="encerradas" title="Encerradas: histórico de conversas finalizadas" aria-label="Encerradas: histórico de conversas finalizadas"><span class="atd-nav-nome atd-kpi-rotulo">Encerradas</span><span class="atd-kpi-sub">Histórico</span></button></li>
+        </ul>
+      </div>
+
+      <span class="atd-topo-div" aria-hidden="true"></span>
+
+      <div class="atd-cards-grupo atd-cards-grupo--setores">
+        <div class="atd-nav-grupo-tit">Setores</div>
+        <ul class="atd-nav-lista atd-cards-lista" id="lista-setores"></ul>
+      </div>
+    </aside>
+  </header>
+
+  <main class="atd-workspace" id="workspace" data-passo="lista">
+    <!-- 1. Lista de conversas -->
+    <section class="atd-col atd-col--lista" aria-label="Lista de conversas">
+      <div class="atd-lista-topo">
+        <div class="atd-lista-head">
+          <button class="btn btn-ghost btn-sm atd-so-mobile" type="button" id="btn-mobile-setores" title="Mostrar ou recolher os cartões de visões e setores" aria-label="Mostrar ou recolher os cartões de visões e setores"><span data-ico="filtro"></span> Indicadores</button>
+          <h1 class="atd-lista-titulo" id="titulo-lista-conv">Abertas</h1>
+          <button class="btn btn-ghost btn-sm atd-btn-compactar-lista" type="button" id="btn-seta-lista" aria-expanded="true" title="Recolher lista de conversas para avatares compactos" aria-label="Recolher lista de conversas para avatares compactos"><span data-ico="chevron_esq"></span></button>
+        </div>
+        <div class="atd-lista-busca-wrap">
+          <label class="sr-only" for="campo-busca">Buscar conversa</label>
+          <input class="form-control" id="campo-busca" type="search" placeholder="Nome, protocolo ou final do telefone…" autocomplete="off">
+        </div>
+      </div>
+      <div class="atd-conversas-scroll">
+        <div id="estado-lista" hidden></div>
+        <ul class="atd-conversas" id="lista-conversas"></ul>
+        <div class="atd-mais-wrap" id="wrap-mais-conversas" hidden>
+          <button class="btn btn-ghost btn-sm" type="button" id="btn-mais-conversas" title="Carregar mais conversas desta lista" aria-label="Carregar mais conversas desta lista"><span data-ico="seta_baixo"></span> Carregar mais</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Conversa ativa -->
+    <section class="atd-col atd-col--chat" aria-label="Conversa ativa">
+      <button class="atd-seta-magica" type="button" id="btn-seta-lateral" aria-expanded="true" aria-controls="painel-lateral" title="Recolher painel do contato e detalhes para ampliar a conversa" aria-label="Recolher painel do contato e detalhes para ampliar a conversa"><span data-ico="chevron_dir"></span></button>
+      <div class="atd-chat-vazio" id="estado-chat-vazio"></div>
+
+      <div class="atd-chat-ativo" id="chat-ativo" hidden>
+        <header class="atd-chat-head">
+          <div class="atd-chat-ident">
+            <button class="btn btn-ghost btn-sm atd-so-mobile" type="button" id="btn-mobile-lista" title="Voltar para a lista de conversas" aria-label="Voltar para a lista de conversas"><span data-ico="voltar"></span> Conversas</button>
+            <div class="atd-avatar" id="chat-avatar" aria-hidden="true">--</div>
+            <div style="min-width:0;">
+              <div class="atd-chat-nome" id="chat-nome"></div>
+              <div class="atd-chat-sub" id="chat-sub"></div>
+            </div>
+          </div>
+
+          <div class="atd-chat-acoes">
+            <button class="btn btn-primary btn-sm" type="button" id="btn-assumir" hidden title="Assumir: atribui esta conversa da fila para você" aria-label="Assumir: atribui esta conversa da fila para você"><span data-ico="salvar"></span> Assumir</button>
+            <button class="btn btn-ghost btn-sm" type="button" id="btn-devolver" hidden title="Devolver: devolve esta conversa para a fila do setor" aria-label="Devolver: devolve esta conversa para a fila do setor"><span data-ico="restaurar"></span> Devolver</button>
+            <button class="btn btn-ghost btn-sm" type="button" id="btn-transferir" hidden aria-expanded="false" aria-controls="popover-transferir" title="Transferir: move a conversa para outro setor ou atendente" aria-label="Transferir: move a conversa para outro setor ou atendente"><span data-ico="avancar"></span> Transferir</button>
+            <button class="btn btn-primary btn-sm" type="button" id="btn-encerrar" hidden aria-expanded="false" aria-controls="popover-encerrar" title="Encerrar: finaliza esta conversa com motivo opcional" aria-label="Encerrar: finaliza esta conversa com motivo opcional"><span data-ico="cancelar"></span> Encerrar</button>
+            <button class="btn btn-primary btn-sm" type="button" id="btn-reabrir" hidden title="Reabrir: reabre esta conversa encerrada sob sua responsabilidade" aria-label="Reabrir: reabre esta conversa encerrada sob sua responsabilidade"><span data-ico="restaurar"></span> Reabrir</button>
+            <button class="btn btn-ghost btn-sm atd-so-medio" type="button" id="btn-gaveta" aria-expanded="false" aria-controls="painel-lateral" title="Contato: abre ou recolhe o painel lateral de contato e etiquetas" aria-label="Contato: abre ou recolhe o painel lateral de contato e etiquetas"><span data-ico="painel_lateral"></span> Contato</button>
+            <button class="btn btn-ghost btn-sm atd-so-mobile" type="button" id="btn-abrir-sheet" title="Contato: abre os dados do contato e etiquetas" aria-label="Contato: abre os dados do contato e etiquetas"><span data-ico="painel_lateral"></span> Contato</button>
+
+            <!-- Popover Transferir -->
+            <div class="atd-popover" id="popover-transferir" role="dialog" aria-label="Transferir conversa" hidden>
+              <p class="atd-popover-tit">Transferir conversa</p>
+              <div class="tlk-alerta tlk-alerta--erro" id="alerta-transferir" role="alert" hidden></div>
+              <form id="form-transferir" novalidate style="display:flex;flex-direction:column;gap:8px;">
+                <div class="tlk-campo">
+                  <label for="tr-setor">Setor de destino</label>
+                  <select class="form-control" id="tr-setor" name="setor_id"></select>
+                </div>
+                <div class="tlk-campo">
+                  <label for="tr-responsavel">Atendente (opcional)</label>
+                  <select class="form-control" id="tr-responsavel" name="responsavel_id"></select>
+                </div>
+                <div class="tlk-campo">
+                  <label for="tr-nota">Nota interna (opcional)</label>
+                  <textarea class="form-control" id="tr-nota" name="nota" rows="2" placeholder="Contexto para quem vai assumir…"></textarea>
+                </div>
+                <div class="atd-popover-acoes">
+                  <button class="btn btn-ghost btn-sm" type="button" id="btn-cancelar-transferir" title="Cancelar transferência" aria-label="Cancelar transferência"><span data-ico="cancelar"></span> Cancelar</button>
+                  <button class="btn btn-primary btn-sm" type="submit" id="btn-confirmar-transferir" title="Confirmar transferência da conversa" aria-label="Confirmar transferência da conversa"><span data-ico="avancar"></span> Transferir</button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Popover Encerrar -->
+            <div class="atd-popover" id="popover-encerrar" role="dialog" aria-label="Encerrar conversa" hidden>
+              <p class="atd-popover-tit">Encerrar conversa</p>
+              <div class="tlk-alerta tlk-alerta--erro" id="alerta-encerrar" role="alert" hidden></div>
+              <form id="form-encerrar" novalidate style="display:flex;flex-direction:column;gap:8px;">
+                <div class="tlk-campo">
+                  <label for="enc-motivo">Motivo (opcional, até 200 caracteres)</label>
+                  <input class="form-control" id="enc-motivo" name="motivo" type="text" maxlength="200" placeholder="Ex.: Dúvida resolvida">
+                </div>
+                <div class="atd-popover-acoes">
+                  <button class="btn btn-ghost btn-sm" type="button" id="btn-cancelar-encerrar" title="Cancelar encerramento" aria-label="Cancelar encerramento"><span data-ico="cancelar"></span> Cancelar</button>
+                  <button class="btn btn-primary btn-sm" type="submit" id="btn-confirmar-encerrar" title="Confirmar encerramento desta conversa" aria-label="Confirmar encerramento desta conversa"><span data-ico="salvar"></span> Confirmar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </header>
+
+        <!-- Destaque fixo de oferta do rodízio (§9.4) -->
+        <div class="atd-oferta-banner" id="banner-oferta" hidden></div>
+
+        <!-- Alerta de conflito (ex.: 409 ao assumir ou reabrir) -->
+        <div class="atd-banner atd-banner--erro" id="alerta-conversa" role="alert" hidden>
+          <span id="alerta-conversa-texto"></span>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button class="btn btn-ghost btn-sm" type="button" id="btn-abrir-conflito" hidden title="Abrir a conversa já aberta deste contato" aria-label="Abrir a conversa já aberta deste contato"><span data-ico="avancar"></span> Abrir conversa ativa</button>
+            <button class="btn btn-ghost btn-sm" type="button" id="btn-fechar-alerta-conversa" title="Fechar aviso" aria-label="Fechar aviso"><span data-ico="cancelar"></span></button>
+          </div>
+        </div>
+
+        <!-- Banner de motivo do bloqueio de envio (envio.pode_responder === false) -->
+        <div class="atd-banner atd-banner--aviso" id="banner-envio" role="status" hidden>
+          <span id="banner-envio-texto"></span>
+        </div>
+
+        <div class="atd-mensagens" id="lista-mensagens" aria-live="polite"></div>
+
+        <footer class="atd-compositor" id="compositor">
+          <div class="atd-slash-menu" id="slash-menu" role="listbox" aria-label="Respostas rápidas" hidden></div>
+
+          <div class="tlk-alerta tlk-alerta--erro" id="alerta-compositor" role="alert" style="margin-bottom:8px;" hidden></div>
+
+          <div class="atd-modo-barra">
+            <div class="atd-modo-tabs" role="group" aria-label="Tipo de envio">
+              <button class="atd-modo-btn ativo" type="button" id="btn-modo-cliente" aria-pressed="true" title="Mensagem ao cliente: envia pelo WhatsApp do canal" aria-label="Mensagem ao cliente: envia pelo WhatsApp do canal">Mensagem ao cliente</button>
+              <button class="atd-modo-btn atd-modo-btn--nota" type="button" id="btn-modo-nota" aria-pressed="false" title="Nota interna: fica visível só para a equipe e nunca vai ao contato" aria-label="Nota interna: fica visível só para a equipe e nunca vai ao contato">Nota interna</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-ghost btn-sm" type="button" id="btn-atalho-slash" title="Respostas rápidas: insere um atalho com / e troca nome do contato e do atendente" aria-label="Respostas rápidas: insere um atalho com / e troca nome do contato e do atendente"><span data-ico="mais"></span> Respostas rápidas (/)</button>
+              <span class="atd-contador-chars" id="contador-compositor">0 / 4096</span>
+            </div>
+          </div>
+
+          <form class="atd-input-linha" id="form-compositor" novalidate>
+            <label class="sr-only" for="campo-msg">Mensagem ou nota interna</label>
+            <textarea class="form-control atd-textarea" id="campo-msg" name="texto" rows="2" placeholder="Digite uma mensagem ou '/' para respostas rápidas…"></textarea>
+            <button class="btn btn-primary" type="submit" id="btn-enviar" title="Enviar mensagem ao cliente pelo canal" aria-label="Enviar mensagem ao cliente pelo canal"><span data-ico="enviar"></span> Enviar</button>
+          </form>
+
+          <div class="atd-compositor-dica">
+            <span id="dica-compositor">Enter envia · Shift+Enter quebra linha · Digite <code>/</code> para respostas rápidas</span>
+            <span id="dica-variaveis">Troca automática: <code>{nome_contato}</code> e <code>{nome_atendente}</code></span>
+          </div>
+        </footer>
+      </div>
+    </section>
+
+    <!-- 3. Contato, etiquetas e histórico (retrátil pela setinha mágica) -->
+    <div class="atd-sheet-backdrop" id="sheet-backdrop"></div>
+    <aside class="atd-col atd-col--lateral" id="painel-lateral" aria-label="Contato, etiquetas e histórico">
+      <div class="atd-lateral-head">
+        <strong>Contato e detalhes</strong>
+        <button class="btn btn-ghost btn-sm" type="button" id="btn-fechar-lateral" title="Recolher painel do contato e detalhes" aria-label="Recolher painel do contato e detalhes"><span data-ico="cancelar"></span></button>
+      </div>
+      <div class="atd-lateral-corpo" id="painel-contato"></div>
+    </aside>
+  </main>
+
+</div>
+
+<script src="/app/ia-talk/socket.io/socket.io.js"></script>
+<script src="/app/ia-talk/js/talk-api.js"></script>
+<script src="/app/ia-talk/js/talk-icones.js"></script>
+<script src="/app/ia-talk/js/central-atendimento.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const { esc, relativo } = TalkUI;
+  const KEY_SOM_MUDO = 'talk_portal_som_mudo';
+
+  let empresaNome = '';
+  let apelidoEmpresa = descobrirApelidoDaUrl();
+  let meuAtendente = { status: 'ausente', status_desde: null, alertas_whatsapp: false };
+  let alertasLista = [];
+  let somMudo = lerSomMudo();
+  let redirecionando401 = false;
+  let audioCtx = null;
+  let central = null;
+
+  function descobrirApelidoDaUrl() {
+    const m = location.pathname.match(/\/app\/ia-talk\/([a-z0-9-]{3,40})\/atendimento\/?$/i);
+    if (m) return m[1].toLowerCase();
+    const q = (new URLSearchParams(location.search).get('apelido') || '').trim().toLowerCase();
+    return /^[a-z0-9-]{3,40}$/.test(q) ? q : '';
+  }
+
+  function iniciaisEmpresa(nome) {
+    return String(nome || 'IA').trim().split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || 'IA';
+  }
+
+  function lerSomMudo() {
+    try { return localStorage.getItem(KEY_SOM_MUDO) === '1'; } catch (_) { return false; }
+  }
+  function salvarSomMudo(mudo) {
+    try { localStorage.setItem(KEY_SOM_MUDO, mudo ? '1' : '0'); } catch (_) { /* navegador sem storage */ }
+  }
+
+  // ── 401: redireciona para o login da empresa com destino=atendimento ──
+  function redirecionarLogin401() {
+    if (redirecionando401) return;
+    redirecionando401 = true;
+    const ap = apelidoEmpresa || central?.obterSessao()?.empresa?.apelido || '';
+    location.href = ap
+      ? `/app/ia-talk/${encodeURIComponent(ap)}?destino=atendimento`
+      : '/app/ia-talk/entrar.html?destino=atendimento';
+  }
+  window.addEventListener('talk:sessao-expirada', redirecionarLogin401);
+
+  // ── Som discreto via Web Audio API (sem arquivo nem biblioteca) ───────
+  function tocarSomAlerta() {
+    if (somMudo) return;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      if (!audioCtx) audioCtx = new Ctx();
+      if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+      const t0 = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const ganho = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, t0);
+      osc.frequency.setValueAtTime(1174.66, t0 + 0.08);
+      ganho.gain.setValueAtTime(0.0001, t0);
+      ganho.gain.exponentialRampToValueAtTime(0.06, t0 + 0.02);
+      ganho.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+      osc.connect(ganho);
+      ganho.connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.24);
+    } catch (_) {
+      /* ambiente sem suporte a Web Audio ou bloqueado antes de interação */
+    }
+  }
+
+  function atualizarBotoesSom() {
+    const icone = somMudo ? 'som_off' : 'som_on';
+    const dica = somMudo
+      ? 'Ativar o som discreto de novos alertas'
+      : 'Silenciar o som discreto de novos alertas';
+    TalkIcones.definirBotao($('btn-som-portal'), { icone, texto: '', title: dica, ariaLabel: dica });
+    TalkIcones.definirBotao($('btn-som-popover'), { icone, texto: somMudo ? 'Som silenciado' : 'Som ligado', title: dica, ariaLabel: dica });
+  }
+
+  function alternarSom() {
+    somMudo = !somMudo;
+    salvarSomMudo(somMudo);
+    atualizarBotoesSom();
+    if (!somMudo) tocarSomAlerta();
+  }
+
+  // ── Notificações do navegador (só pede permissão ao clicar) ──────────
+  function atualizarBotaoNotif() {
+    const btn = $('btn-ativar-notif');
+    if (!btn) return;
+    const disponivel = typeof window.Notification === 'function';
+    btn.hidden = !disponivel || window.Notification.permission !== 'default';
+  }
+
+  async function pedirPermissaoNotif() {
+    if (typeof window.Notification !== 'function') return;
+    try {
+      const perm = await window.Notification.requestPermission();
+      atualizarBotaoNotif();
+      if (perm === 'granted') TalkUI.toast('Notificações do navegador ativadas.', 'ok');
+      else if (perm === 'denied') TalkUI.toast('Notificações bloqueadas no navegador.', 'info');
+    } catch (_) {}
+  }
+
+  function notificarSeEmSegundoPlano(alerta) {
+    if (!document.hidden) return;
+    if (typeof window.Notification !== 'function' || window.Notification.permission !== 'granted') return;
+    if (!alerta?.mensagem) return;
+    try {
+      // O texto vem exclusivamente de alerta.mensagem (nunca traz texto do cliente).
+      const notif = new window.Notification(empresaNome || 'IA Talk', { body: String(alerta.mensagem) });
+      notif.onclick = () => {
+        window.focus();
+        if (alerta.id) marcarAlertasComoLidos([alerta.id]);
+        if (alerta.conversa_id) central?.abrirConversa(alerta.conversa_id);
+        notif.close();
+      };
+    } catch (_) {}
+  }
+
+  // ── Título da aba: (N) Atendimento · <empresa> ───────────────────────
+  function atualizarTituloAba() {
+    const naoLidos = alertasLista.filter((a) => !a.lido_em).length;
+    const base = empresaNome ? `Atendimento · ${empresaNome}` : 'Atendimento · IA Talk';
+    document.title = naoLidos > 0 ? `(${naoLidos}) ${base}` : base;
+  }
+
+  // ── Status do atendente (§9.2) ───────────────────────────────────────
+  function renderizarStatus() {
+    const st = ['disponivel', 'ocupado', 'ausente'].includes(meuAtendente.status) ? meuAtendente.status : 'ausente';
+    $('ptl-status-select').value = st;
+    $('ptl-status-dot').className = `ptl-status-dot ptl-status-dot--${st}`;
+    const tempo = meuAtendente.status_desde ? relativo(meuAtendente.status_desde) : '—';
+    $('ptl-status-desde').textContent = tempo;
+    $('ptl-status-desde-mobile').textContent = tempo;
+    $('chk-alertas-whatsapp').checked = !!meuAtendente.alertas_whatsapp;
+  }
+
+  async function carregarMeuStatus() {
+    if (!central) return;
+    try {
+      const dados = await central.api.get('/atendentes/eu');
+      if (dados) {
+        meuAtendente = {
+          status: dados.status || 'ausente',
+          status_desde: dados.status_desde || null,
+          alertas_whatsapp: !!dados.alertas_whatsapp,
+        };
+        renderizarStatus();
+      }
+    } catch (err) {
+      if (err?.status !== 401) TalkUI.toast(err.message, 'erro');
+    }
+  }
+
+  // ── Alertas (§9.5) ───────────────────────────────────────────────────
+  function renderizarAlertas() {
+    const naoLidos = alertasLista.filter((a) => !a.lido_em).length;
+    const badge = $('ptl-sino-badge');
+    badge.textContent = naoLidos > 99 ? '99+' : String(naoLidos);
+    badge.hidden = naoLidos === 0;
+    $('btn-marcar-todos-lidos').disabled = naoLidos === 0;
+
+    const ul = $('lista-alertas');
+    if (!alertasLista.length) {
+      ul.innerHTML = '<li class="ptl-alerta-vazio">Nenhum alerta recente.</li>';
+    } else {
+      ul.innerHTML = alertasLista.map((a) => {
+        const naoLido = !a.lido_em;
+        const meta = [a.setor?.nome, a.protocolo, relativo(a.em)].filter(Boolean).join(' · ');
+        return `<li>
+          <button type="button" class="ptl-alerta-item ${naoLido ? 'ptl-alerta-item--nao-lido' : ''}" data-alerta-id="${esc(a.id)}" data-conversa-id="${esc(a.conversa_id || '')}">
+            <span class="ptl-alerta-ponto" aria-hidden="true"></span>
+            <span class="ptl-alerta-corpo">
+              <span class="ptl-alerta-msg">${esc(a.mensagem || 'Novo alerta de atendimento.')}</span>
+              <span class="ptl-alerta-meta">${esc(meta)}</span>
+            </span>
+          </button>
+        </li>`;
+      }).join('');
+    }
+    atualizarTituloAba();
+  }
+
+  async function carregarAlertas() {
+    if (!central) return;
+    try {
+      const pag = await central.api.get('/alertas', { limite: 30 });
+      alertasLista = Array.isArray(pag?.itens) ? pag.itens : [];
+      renderizarAlertas();
+    } catch (_) {}
+  }
+
+  async function marcarAlertasComoLidos(ids) {
+    if (!central || !Array.isArray(ids) || !ids.length) return;
+    const agoraIso = new Date().toISOString();
+    for (const a of alertasLista) {
+      if (ids.includes(a.id) && !a.lido_em) a.lido_em = agoraIso;
+    }
+    renderizarAlertas();
+    try {
+      await central.api.post('/alertas/lidos', { ids });
+    } catch (_) {}
+  }
+
+  async function marcarTodosAlertasComoLidos() {
+    if (!central) return;
+    const agoraIso = new Date().toISOString();
+    for (const a of alertasLista) {
+      if (!a.lido_em) a.lido_em = agoraIso;
+    }
+    renderizarAlertas();
+    try {
+      await central.api.post('/alertas/lidos', { todos: true });
+    } catch (err) {
+      if (err?.status !== 401) TalkUI.toast(err.message, 'erro');
+      await carregarAlertas();
+    }
+  }
+
+  function receberAlertaTempoReal(alerta) {
+    if (!alerta?.id) return;
+    const idx = alertasLista.findIndex((a) => a.id === alerta.id);
+    if (idx >= 0) alertasLista[idx] = { ...alertasLista[idx], ...alerta };
+    else alertasLista.unshift({ ...alerta, lido_em: alerta.lido_em ?? null });
+    if (alertasLista.length > 50) alertasLista = alertasLista.slice(0, 50);
+    renderizarAlertas();
+    tocarSomAlerta();
+    notificarSeEmSegundoPlano(alerta);
+  }
+
+  // ── Sair ─────────────────────────────────────────────────────────────
+  async function sairDoPortal() {
+    try {
+      const res = await (central ? central.api.post('/sair', {}) : TalkApi.post('/sair', {}));
+      location.href = res?.redirecionar || (apelidoEmpresa ? `/app/ia-talk/${encodeURIComponent(apelidoEmpresa)}` : '/app/ia-talk/');
+    } catch (_) {
+      location.href = apelidoEmpresa ? `/app/ia-talk/${encodeURIComponent(apelidoEmpresa)}` : '/app/ia-talk/';
+    }
+  }
+
+  // ── Popovers do cabeçalho ────────────────────────────────────────────
+  function fecharPopoverAlertas() {
+    $('popover-alertas').hidden = true;
+    $('btn-sino').setAttribute('aria-expanded', 'false');
+  }
+  function fecharMenuMobile() {
+    $('ptl-extras').classList.remove('aberto');
+    $('btn-menu-portal').setAttribute('aria-expanded', 'false');
+  }
+
+  $('btn-sino').addEventListener('click', () => {
+    const abrir = $('popover-alertas').hidden;
+    fecharMenuMobile();
+    $('popover-alertas').hidden = !abrir;
+    $('btn-sino').setAttribute('aria-expanded', String(abrir));
+    atualizarBotaoNotif();
+  });
+
+  $('btn-menu-portal').addEventListener('click', () => {
+    fecharPopoverAlertas();
+    const aberto = $('ptl-extras').classList.toggle('aberto');
+    $('btn-menu-portal').setAttribute('aria-expanded', String(aberto));
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#ptl-sino-wrap')) fecharPopoverAlertas();
+    if (!e.target.closest('#ptl-extras') && !e.target.closest('#btn-menu-portal')) fecharMenuMobile();
+  });
+
+  $('btn-marcar-todos-lidos').addEventListener('click', marcarTodosAlertasComoLidos);
+  $('btn-ativar-notif').addEventListener('click', pedirPermissaoNotif);
+  $('btn-som-portal').addEventListener('click', alternarSom);
+  $('btn-som-popover').addEventListener('click', alternarSom);
+  $('btn-sair-portal').addEventListener('click', sairDoPortal);
+
+  $('btn-tema-portal').addEventListener('click', () => {
+    const escuro = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (escuro) document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', 'dark');
+    try { localStorage.setItem('talk_tema', escuro ? 'light' : 'dark'); } catch (_) {}
+  });
+
+  $('lista-alertas').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-alerta-id]');
+    if (!btn) return;
+    const alertaId = btn.dataset.alertaId;
+    const conversaId = btn.dataset.conversaId;
+    fecharPopoverAlertas();
+    if (alertaId) await marcarAlertasComoLidos([alertaId]);
+    if (conversaId) central?.abrirConversa(conversaId);
+  });
+
+  $('ptl-status-select').addEventListener('change', async (e) => {
+    const anterior = meuAtendente.status;
+    const novoStatus = e.target.value;
+    e.target.disabled = true;
+    try {
+      const atualizado = await central.api.put('/atendentes/eu', { status: novoStatus });
+      meuAtendente = {
+        status: atualizado.status || novoStatus,
+        status_desde: atualizado.status_desde || new Date().toISOString(),
+        alertas_whatsapp: !!atualizado.alertas_whatsapp,
+      };
+      renderizarStatus();
+    } catch (err) {
+      meuAtendente.status = anterior;
+      renderizarStatus();
+      if (err?.status !== 401) TalkUI.toast(err.message, 'erro');
+    } finally {
+      e.target.disabled = false;
+    }
+  });
+
+  $('chk-alertas-whatsapp').addEventListener('change', async (e) => {
+    const anterior = meuAtendente.alertas_whatsapp;
+    const novoValor = e.target.checked;
+    e.target.disabled = true;
+    try {
+      const atualizado = await central.api.put('/atendentes/eu', { alertas_whatsapp: novoValor });
+      meuAtendente.alertas_whatsapp = !!atualizado.alertas_whatsapp;
+      renderizarStatus();
+    } catch (err) {
+      meuAtendente.alertas_whatsapp = anterior;
+      renderizarStatus();
+      if (err?.status !== 401) TalkUI.toast(err.message, 'erro');
+    } finally {
+      e.target.disabled = false;
+    }
+  });
+
+  // Atualiza "há X min" no status e nos alertas a cada 30 s.
+  const timerRelativo = setInterval(() => {
+    if (meuAtendente.status_desde) renderizarStatus();
+    if (alertasLista.length) renderizarAlertas();
+  }, 30000);
+  window.addEventListener('beforeunload', () => clearInterval(timerRelativo));
+
+  atualizarBotoesSom();
+  atualizarBotaoNotif();
+
+  // ── Inicialização integrada à Central compartilhada ──────────────────
+  central = CentralAtendimento.iniciar({
+    ao401: redirecionarLogin401,
+    aoSessao: async (sessao) => {
+      if (sessao?.empresa?.apelido && !apelidoEmpresa) apelidoEmpresa = sessao.empresa.apelido;
+      empresaNome = sessao?.empresa?.nome || 'IA Talk';
+      const nomeUsuario = sessao?.usuario?.nome || '—';
+
+      $('ptl-empresa-nome').textContent = empresaNome;
+      $('ptl-empresa-mobile').textContent = empresaNome;
+      $('ptl-usuario-nome').textContent = nomeUsuario;
+      $('ptl-usuario-mobile').textContent = nomeUsuario;
+
+      const logoEl = $('ptl-logo');
+      if (sessao?.empresa?.logo_url) {
+        logoEl.innerHTML = `<img src="${esc(sessao.empresa.logo_url)}" alt="${esc(empresaNome)}">`;
+      } else {
+        logoEl.textContent = iniciaisEmpresa(empresaNome);
+      }
+
+      atualizarTituloAba();
+
+      const rotinas = Array.isArray(sessao?.rotinas) ? sessao.rotinas : [];
+      if (!rotinas.includes('talk-atendimento')) {
+        $('portal-header').hidden = true;
+        $('painel-resumo-topo').hidden = true;
+        $('workspace').hidden = true;
+        TalkUI.estado($('estado-global'), 'sem_permissao', {
+          titulo: 'Sem acesso ao atendimento',
+          texto: 'Peça ao administrador da empresa para liberar o atendimento para você.',
+          acao: { rotulo: 'Sair', aoClicar: sairDoPortal },
+        });
+        return false;
+      }
+
+      // "Abrir a administração": só aparece se rotinas tiver algo além de talk-painel e talk-atendimento.
+      const temAdmin = rotinas.some((r) => r !== 'talk-painel' && r !== 'talk-atendimento');
+      $('link-admin').hidden = !temAdmin;
+
+      await Promise.all([carregarMeuStatus(), carregarAlertas()]);
+      return true;
+    },
+    aoSocket: (sock) => {
+      sock.on('alerta', receberAlertaTempoReal);
+      sock.on('presenca:atualizada', (ev) => {
+        const meuId = central?.obterUsuarioEfetivo()?.id;
+        if (!ev?.usuario_id || ev.usuario_id !== meuId) return;
+        if (ev.status) meuAtendente.status = ev.status;
+        if (ev.em) meuAtendente.status_desde = ev.em;
+        renderizarStatus();
+      });
+    },
+    aoRecarregar: () => Promise.all([carregarMeuStatus(), carregarAlertas()]),
+  });
+})();
+</script>
+</body>
+</html>

@@ -16,6 +16,8 @@ const { ROTINAS } = require('../acesso/papeis');
 const { aceitarEnvio, TEXTO_MAXIMO } = require('../mensagens/servico');
 const repo = require('./repositorio');
 const horario = require('../lib/horario');
+const menuSetores = require('../lib/menu-setores');
+const { configDoSetor, configDaPolitica, configDoMenuDoCanal, efetivoDoSetor, BLOCOS_HERDAVEIS } = require('./config-onda1');
 
 const LIMITE_NOTA = 2000;
 const LIMITE_CONTEXTO = 4000;
@@ -84,7 +86,9 @@ class Atendimento {
 
   podeVer(acesso, cv) {
     if (!cv || cv.empresa_id !== acesso.empresaId) return false;
-    if (acesso.veTudo || cv.responsavel_id === acesso.usuarioId) return true;
+    if (acesso.veTudo) return true;
+    if (cv.triagem_desde && cv.situacao === 'aberta') return false; // no menu de setores: só a supervisão vê
+    if (cv.responsavel_id === acesso.usuarioId) return true;
     return repo.setoresDoUsuario(this.db, acesso.empresaId, acesso.usuarioId).includes(cv.setor_id);
   }
 
@@ -99,22 +103,26 @@ class Atendimento {
     p.empresa = acesso.empresaId;
     if (acesso.veTudo) return 'cv.empresa_id = @empresa';
     p.usuario = acesso.usuarioId;
-    return '(cv.empresa_id = @empresa AND (cv.responsavel_id = @usuario OR cv.setor_id IN (SELECT setor_id FROM setor_membros WHERE usuario_id = @usuario)))';
+    return `(cv.empresa_id = @empresa AND NOT (cv.situacao = 'aberta' AND cv.triagem_desde IS NOT NULL)
+      AND (cv.responsavel_id = @usuario OR cv.setor_id IN (SELECT setor_id FROM setor_membros WHERE usuario_id = @usuario)))`;
   }
 
   contadores(acesso) {
     const p = {};
     const visivel = this.filtroVisivel(acesso, p);
     p.eu = acesso.usuarioId;
-    const r = this.db.prepare(`SELECT COUNT(*) AS abertas, SUM(CASE WHEN cv.responsavel_id IS NULL THEN 1 ELSE 0 END) AS fila,
-        SUM(CASE WHEN cv.responsavel_id = @eu THEN 1 ELSE 0 END) AS minhas FROM conversas cv WHERE ${visivel} AND cv.situacao = 'aberta'`).get(p);
+    // Em triagem (menu de setores) não conta em fila nem abertas: tem contador próprio (§9.3).
+    const r = this.db.prepare(`SELECT SUM(CASE WHEN cv.triagem_desde IS NULL THEN 1 ELSE 0 END) AS abertas,
+        SUM(CASE WHEN cv.responsavel_id IS NULL AND cv.triagem_desde IS NULL THEN 1 ELSE 0 END) AS fila,
+        SUM(CASE WHEN cv.responsavel_id = @eu THEN 1 ELSE 0 END) AS minhas,
+        SUM(CASE WHEN cv.triagem_desde IS NOT NULL THEN 1 ELSE 0 END) AS triagem FROM conversas cv WHERE ${visivel} AND cv.situacao = 'aberta'`).get(p);
     const setores = this.db.prepare(`SELECT s.id, s.nome FROM setores s WHERE s.empresa_id = @empresa AND s.situacao = 'ativo'
         ${acesso.veTudo ? '' : 'AND s.id IN (SELECT setor_id FROM setor_membros WHERE usuario_id = @usuario)'} ORDER BY s.nome`).all(p);
     const porSetor = this.db.prepare(`SELECT cv.setor_id, COUNT(*) AS abertas, SUM(CASE WHEN cv.responsavel_id IS NULL THEN 1 ELSE 0 END) AS na_fila
-        FROM conversas cv WHERE ${visivel} AND cv.situacao = 'aberta' GROUP BY cv.setor_id`).all(p);
+        FROM conversas cv WHERE ${visivel} AND cv.situacao = 'aberta' AND cv.triagem_desde IS NULL GROUP BY cv.setor_id`).all(p);
     const mapa = new Map(porSetor.map(x => [x.setor_id, x]));
     return {
-      minhas: r.minhas || 0, fila: r.fila || 0, abertas: r.abertas || 0,
+      minhas: r.minhas || 0, fila: r.fila || 0, abertas: r.abertas || 0, triagem: r.triagem || 0,
       por_setor: setores.map(s => ({ id: s.id, nome: s.nome, abertas: mapa.get(s.id)?.abertas || 0, na_fila: mapa.get(s.id)?.na_fila || 0 })),
       atualizado_em: agora(),
     };
@@ -252,27 +260,119 @@ class Atendimento {
     if (m.id_provedor && this.db.prepare(`SELECT 1 FROM conversa_itens i JOIN conversas cv ON cv.id = i.conversa_id
         WHERE cv.canal_id = ? AND i.id_provedor = ?`).get(canalId, m.id_provedor)) return null; // repetida
     const empresaId = canal.atendimento_empresa_id;
+    let enviouMenu = false;
     const cv = this.db.transaction(() => {
       const contato = repo.acharOuCriarContato(this.db, empresaId, m.de.valor, { nomeWhatsapp: m.nome || null });
       let aberta = repo.conversaAbertaDoContato(this.db, canalId, contato.id);
       const itens = [];
+      const entrada = () => itens.push(repo.adicionarItem(this.db, aberta.id, { categoria: 'mensagem', direcao: 'entrada',
+        autor: { tipo: 'contato', id: contato.id, nome: contato.nome }, tipo: m.tipo || 'texto', texto: m.texto || null, idProvedor: m.id_provedor || null, em: m.em || agora() }));
+      let triagem = false;
       if (!aberta) {
-        const setor = this.db.prepare("SELECT id, nome FROM setores WHERE id = ? AND situacao = 'ativo'").get(canal.setor_padrao_id);
-        if (!setor) return null;
+        const padrao = this.db.prepare("SELECT id, nome FROM setores WHERE id = ? AND situacao = 'ativo'").get(canal.setor_padrao_id);
+        if (!padrao) return null;
+        // Menu de setores (§9.3): com 2+ opções e o canal podendo responder a este número, a conversa
+        // nasce em triagem; com 1 opção vai direto para ela; sem menu, para o setor padrão.
+        const menu = this._menuDoCanal(canalId, empresaId);
+        let setor = padrao;
+        if (menu?.opcoes.length === 1) setor = this.db.prepare('SELECT id, nome FROM setores WHERE id = ?').get(menu.opcoes[0].setor_id) || padrao;
+        else if (menu?.opcoes.length > 1 && !this.bloqueioDoCanal({ canal_id: canalId, contato_telefone: contato.telefone })) triagem = true;
         aberta = { id: repo.criarConversa(this.db, { empresaId, canalId, contatoId: contato.id, setorId: setor.id }) };
-        itens.push(repo.adicionarItem(this.db, aberta.id, { categoria: 'evento', autor: SISTEMA, texto: `Conversa aberta no setor ${setor.nome}.`, em: m.em || agora() }));
+        if (triagem) repo.atualizarConversa(this.db, aberta.id, { triagem_desde: agora(), triagem_tentativas: 0 });
+        itens.push(repo.adicionarItem(this.db, aberta.id, { categoria: 'evento', autor: SISTEMA, em: m.em || agora(),
+          texto: triagem ? 'Conversa aberta: aguardando a escolha do setor no menu.' : `Conversa aberta no setor ${setor.nome}.` }));
+        entrada();
+        if (triagem) { itens.push(this._enviarSistema(aberta.id, menu.texto)); enviouMenu = true; }
+      } else if (aberta.triagem_desde) {
+        entrada();
+        const r = this._escolherNoMenu(aberta, canal, m.texto);
+        itens.push(...r.itens);
+        triagem = !r.saiu;
+        enviouMenu = r.enviou;
+      } else {
+        entrada();
       }
-      itens.push(repo.adicionarItem(this.db, aberta.id, { categoria: 'mensagem', direcao: 'entrada', autor: { tipo: 'contato', id: contato.id, nome: contato.nome },
-        tipo: m.tipo || 'texto', texto: m.texto || null, idProvedor: m.id_provedor || null, em: m.em || agora() }));
       this.db.prepare('UPDATE conversas SET nao_lidas = nao_lidas + 1 WHERE id = ?').run(aberta.id);
-      return { id: aberta.id, empresa_id: empresaId, itens };
+      return { id: aberta.id, empresa_id: empresaId, itens, triagem };
     })();
     if (!cv) return null;
     // Avisos só depois de gravado (a tela nunca vê o que não está no banco).
     for (const it of cv.itens) this.aoItem(cv.id, repo.paraItem(it));
-    this._avisoForaDoHorario(cv.id, cv.empresa_id, m.em || agora());
+    if (enviouMenu) this.despachante?.acordar();
+    if (!cv.triagem) this._avisoForaDoHorario(cv.id, cv.empresa_id, m.em || agora()); // no menu ainda não há setor
     this._avisar(cv);
     return { id: cv.id, empresa_id: cv.empresa_id };
+  }
+
+  // ── Menu de setores (§9.3; leitura da resposta pela biblioteca X1) ─────────
+  // Configuração do menu no canal + opções (setores ativos da empresa com "aparece no menu").
+  // Devolve null com o menu desligado.
+  _menuDoCanal(canalId, empresaId) {
+    const c = this.db.prepare('SELECT menu FROM canais WHERE id = ?').get(canalId);
+    const cfg = { ...configDoMenuDoCanal({}), ...repo.json(c?.menu, {}) };
+    if (!cfg.ligado) return null;
+    const setores = this.db.prepare("SELECT * FROM setores WHERE empresa_id = ? AND situacao = 'ativo'").all(empresaId)
+      .map(s => ({ s, menu: repo.onda1DoSetor(s).menu })).filter(x => x.menu.aparece)
+      .map(({ s, menu }) => ({ id: s.id, nome: s.nome, opcao_texto: menu.texto || undefined, ordem: menu.ordem }));
+    return { cfg, ...menuSetores.montarMenu({ saudacao: cfg.saudacao, setores }) };
+  }
+
+  // Mensagem automática do Talk ao contato (menu): fila de envio + item na conversa. Dentro da transação de quem chama.
+  _enviarSistema(conversaId, texto) {
+    const cv = this.db.prepare('SELECT c.*, ct.telefone AS contato_telefone FROM conversas c JOIN contatos ct ON ct.id = c.contato_id WHERE c.id = ?').get(conversaId);
+    const m = aceitarEnvio(this.db, { empresaId: cv.empresa_id, canalId: cv.canal_id, para: cv.contato_telefone, texto, origem: 'automatica',
+      correlacaoId: cv.protocolo, metadados: { conversa_id: cv.id } });
+    return repo.adicionarItem(this.db, cv.id, { categoria: 'mensagem', direcao: 'saida', autor: SISTEMA, tipo: 'texto', texto: m.conteudo, mensagemId: m.id });
+  }
+
+  // Sai do menu para o setor padrão do canal (sem escolha ou sem resposta no tempo). Dentro da transação.
+  _triagemParaPadrao(cv, canalId, motivo) {
+    const canal = this.db.prepare('SELECT setor_padrao_id FROM canais WHERE id = ?').get(canalId);
+    const padrao = this.db.prepare("SELECT id, nome FROM setores WHERE id = ? AND situacao = 'ativo'").get(canal?.setor_padrao_id)
+      || this.db.prepare('SELECT id, nome FROM setores WHERE id = ?').get(cv.setor_id);
+    repo.atualizarConversa(this.db, cv.id, { setor_id: padrao.id, triagem_desde: null, triagem_tentativas: 0 });
+    return repo.adicionarItem(this.db, cv.id, { categoria: 'evento', autor: SISTEMA, texto: `${motivo}: setor padrão (${padrao.nome}).` });
+  }
+
+  // Resposta do contato com a conversa em triagem. Nunca escolhe por adivinhação: na dúvida, repete o menu.
+  // Devolve { itens, saiu, enviou } (saiu = foi para um setor; enviou = mandou mensagem ao contato).
+  _escolherNoMenu(cv, canal, texto) {
+    const menu = this._menuDoCanal(canal.id, cv.empresa_id);
+    if (!menu || !menu.opcoes.length) return { itens: [this._triagemParaPadrao(cv, canal.id, 'Menu indisponível')], saiu: true, enviou: false };
+    const r = menuSetores.interpretarResposta(String(texto || ''), menu.opcoes);
+    const escolhido = r.setor_id && this.db.prepare("SELECT id, nome FROM setores WHERE id = ? AND empresa_id = ? AND situacao = 'ativo'").get(r.setor_id, cv.empresa_id);
+    if (escolhido) {
+      repo.atualizarConversa(this.db, cv.id, { setor_id: escolhido.id, triagem_desde: null, triagem_tentativas: 0 });
+      return { itens: [repo.adicionarItem(this.db, cv.id, { categoria: 'evento', autor: SISTEMA, texto: `Escolheu o setor ${escolhido.nome}.` })], saiu: true, enviou: false };
+    }
+    const tentativas = (cv.triagem_tentativas || 0) + (r.ajuda ? 0 : 1); // "menu"/"0" só mostra de novo
+    if (menuSetores.proximaAcao({ tentativas, maxTentativas: menu.cfg.tentativas }) === 'setor_padrao') {
+      return { itens: [this._triagemParaPadrao(cv, canal.id, 'Sem escolha')], saiu: true, enviou: false };
+    }
+    repo.atualizarConversa(this.db, cv.id, { triagem_tentativas: tentativas });
+    return { itens: [this._enviarSistema(cv.id, r.ajuda ? menu.texto : `Não entendi a opção. ${menu.texto}`)], saiu: false, enviou: true };
+  }
+
+  // Menu sem resposta no tempo do canal → setor padrão (roda a cada minuto, junto dos batimentos).
+  vencerTriagens(agoraMs = Date.now()) {
+    const abertas = this.db.prepare(`SELECT cv.id, cv.empresa_id, cv.canal_id, cv.setor_id, cv.triagem_desde, cn.menu FROM conversas cv
+        JOIN canais cn ON cn.id = cv.canal_id WHERE cv.situacao = 'aberta' AND cv.triagem_desde IS NOT NULL`).all();
+    let vencidas = 0;
+    for (const cv of abertas) {
+      const tempoMin = { ...configDoMenuDoCanal({}), ...repo.json(cv.menu, {}) }.tempo_min;
+      if (agoraMs - Date.parse(cv.triagem_desde) < tempoMin * 60_000) continue;
+      const it = this.db.transaction(() => {
+        // Confere de novo dentro da transação: a pessoa pode ter escolhido no mesmo instante.
+        const atual = this.db.prepare('SELECT triagem_desde FROM conversas WHERE id = ?').get(cv.id);
+        return atual?.triagem_desde === cv.triagem_desde ? this._triagemParaPadrao(cv, cv.canal_id, 'Sem resposta ao menu') : null;
+      })();
+      if (!it) continue;
+      vencidas++;
+      this.aoItem(cv.id, repo.paraItem(it));
+      this._avisoForaDoHorario(cv.id, cv.empresa_id, agora());
+      this._avisar(cv);
+    }
+    return vencidas;
   }
 
   // Fora do horário do setor, com a mensagem ligada: UMA resposta automática por conversa a cada
@@ -319,6 +419,7 @@ class Atendimento {
   assumir(acesso, id) {
     const cv = this.conversa(acesso, id);
     this._exigirAberta(cv);
+    if (cv.triagem_desde) throw erro('conflito', 'Esta conversa ainda está no menu de setores. Transfira para um setor para atender.');
     if (cv.responsavel_id === acesso.usuarioId) return cv; // repetir não muda nada
     const quem = this._quem(acesso);
     // Disputa: só um UPDATE vence (responsavel_id ainda nulo).
@@ -372,7 +473,8 @@ class Atendimento {
     if (b.nota !== undefined) exigirCampos(b, { nota: textoEntre('a nota', LIMITE_NOTA) });
     const quem = this._quem(acesso);
     this.db.transaction(() => {
-      repo.atualizarConversa(this.db, cv.id, { setor_id: destino.id, responsavel_id: pessoa?.id || null });
+      // Transferir tira do menu de setores (só a supervisão vê conversas em triagem).
+      repo.atualizarConversa(this.db, cv.id, { setor_id: destino.id, responsavel_id: pessoa?.id || null, triagem_desde: null, triagem_tentativas: 0 });
       repo.registrarRetornos(this.db, cv, 'conversa.transferida', { setor: { codigo: destino.codigo, nome: destino.nome }, responsavel: pessoa });
     })();
     this._evento(cv, pessoa ? `${quem.nome} transferiu para ${pessoa.nome} (${destino.nome}).` : `${quem.nome} transferiu para o setor ${destino.nome}.`);
@@ -564,10 +666,12 @@ class Atendimento {
     const rodar = () => this.enviarBatimentos().catch(() => 0);
     const acertar = () => this.reconciliar().catch(() => null);
     const retomar = () => this.retomarPendentes().catch(() => null);
+    const vencer = () => { try { this.vencerTriagens(); } catch (err) { this.log?.error?.(`[IA Talk] Vencimento do menu de setores: ${err.message}`); } };
     rodar();
     acertar();
     retomar();
-    this._timerBatimento = setInterval(() => { rodar(); retomar(); }, intervaloMs);
+    vencer();
+    this._timerBatimento = setInterval(() => { rodar(); retomar(); vencer(); }, intervaloMs);
     this._timerReconciliar = setInterval(acertar, reconciliarMs);
     this._timerBatimento.unref?.();
     this._timerReconciliar.unref?.();
@@ -642,12 +746,14 @@ class Atendimento {
     if (this.db.prepare('SELECT 1 FROM setores WHERE empresa_id = ? AND nome = ? COLLATE NOCASE').get(acesso.empresaId, nome)) throw erro('conflito', 'Já existe um setor com este nome.');
     if (repo.setorPorCodigo(this.db, acesso.empresaId, codigo)) throw erro('conflito', `Já existe um setor com o código ${codigo}.`);
     const membros = this._membrosValidos(acesso.empresaId, b.membros) || [];
+    const onda1 = configDoSetor(b); // §9: só os blocos informados; os demais ficam no padrão (desligados)
     const id = require('../ids').novoId('setor');
     const t = agora();
     this.db.transaction(() => {
       this.db.prepare(`INSERT INTO setores (id, empresa_id, codigo, nome, descricao, horario, fora_horario, criado_em, atualizado_em)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, acesso.empresaId, codigo, nome, String(b.descricao || '').trim().slice(0, 200),
         JSON.stringify(b.horario || { ligado: false, fuso: 'America/Cuiaba', dias: [] }), JSON.stringify(b.fora_horario || { ligado: false, texto: '' }), t, t);
+      this._gravarOnda1(id, onda1);
       repo.trocarMembros(this.db, id, membros);
     })();
     return repo.buscarSetor(this.db, acesso.empresaId, id);
@@ -670,7 +776,9 @@ class Atendimento {
       if (this.db.prepare('SELECT 1 FROM canais WHERE setor_padrao_id = ? LIMIT 1').get(s.id)) throw erro('conflito', 'Este setor recebe as conversas novas de um canal. Troque o setor padrão do canal antes de inativar.');
     }
     const membros = this._membrosValidos(acesso.empresaId, b.membros);
+    const onda1 = configDoSetor(b, repo.onda1DoSetor(s, null, this.db)); // parciais juntam com o efetivo; null = volta à política
     this.db.transaction(() => {
+      this._gravarOnda1(s.id, onda1);
       // Versão conferida de novo no UPDATE: duas pessoas salvando juntas, só uma passa.
       const r = this.db.prepare(`UPDATE setores SET nome = ?, descricao = ?, horario = ?, fora_horario = ?, situacao = ?, versao = versao + 1, atualizado_em = ?
           WHERE id = ? AND versao = ?`).run(
@@ -681,6 +789,43 @@ class Atendimento {
       if (membros) repo.trocarMembros(this.db, s.id, membros);
     })();
     return repo.buscarSetor(this.db, acesso.empresaId, s.id);
+  }
+
+  // Blocos da Onda 1 já validados (configDoSetor); nomes fixos (BLOCOS_ONDA1), nunca vindos do pedido.
+  // null = o setor volta a seguir a política da empresa (§9.10).
+  _gravarOnda1(setorId, valores) {
+    for (const bloco of repo.BLOCOS_ONDA1) {
+      if (valores[bloco] === undefined) continue;
+      this.db.prepare(`UPDATE setores SET ${bloco} = ? WHERE id = ?`).run(valores[bloco] === null ? null : JSON.stringify(valores[bloco]), setorId);
+    }
+  }
+
+  // ── Política de atendimento da empresa (§9.10) ─────────────────────────────
+  politica(acesso) {
+    const p = repo.politicaDaEmpresa(this.db, acesso.empresaId);
+    const efetivo = efetivoDoSetor({ politica: p.blocos });
+    const setores = this.db.prepare("SELECT * FROM setores WHERE empresa_id = ? AND situacao = 'ativo'").all(acesso.empresaId);
+    const uso = Object.fromEntries(BLOCOS_HERDAVEIS.map(b => {
+      const personalizados = setores.filter(s => s[b] !== null && s[b] !== undefined).length;
+      return [b, { seguem: setores.length - personalizados, personalizados }];
+    }));
+    return { ...Object.fromEntries(BLOCOS_HERDAVEIS.map(b => [b, efetivo[b]])), uso, versao: p.versao, atualizado_em: p.atualizado_em };
+  }
+
+  atualizarPolitica(acesso, b = {}) {
+    const atual = repo.politicaDaEmpresa(this.db, acesso.empresaId);
+    if (b.versao !== atual.versao) throw erro('conflito', 'A política foi alterada em outra sessão. Recarregue antes de salvar.');
+    const efetivo = efetivoDoSetor({ politica: atual.blocos });
+    const novos = configDaPolitica(b, efetivo);
+    const blocos = { ...atual.blocos, ...novos };
+    const t = agora();
+    // Versão conferida no próprio comando: duas pessoas salvando juntas, só uma passa.
+    const r = atual.versao === 0
+      ? this.db.prepare('INSERT OR IGNORE INTO atendimento_politica (empresa_id, blocos, versao, atualizado_em) VALUES (?, ?, 1, ?)').run(acesso.empresaId, JSON.stringify(blocos), t)
+      : this.db.prepare('UPDATE atendimento_politica SET blocos = ?, versao = versao + 1, atualizado_em = ? WHERE empresa_id = ? AND versao = ?')
+        .run(JSON.stringify(blocos), t, acesso.empresaId, atual.versao);
+    if (!r.changes) throw erro('conflito', 'A política foi alterada em outra sessão. Recarregue antes de salvar.');
+    return { politica: this.politica(acesso), alterados: Object.keys(novos) };
   }
 
   // ── Respostas rápidas ─────────────────────────────────────────────────────

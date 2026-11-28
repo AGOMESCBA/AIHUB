@@ -407,7 +407,11 @@
       btn.textContent = 'Verificando…';
 
       try {
-        const res = await TalkApi.post('/login/confirmar', { desafio_id: desafioId, codigo }, { api: 'publico', params: querySimular() });
+        // §9.1: único destino aceito é 'atendimento' (nunca repassa outro valor nem URL livre).
+        const destinoQuery = new URLSearchParams(location.search).get('destino');
+        const corpo = { desafio_id: desafioId, codigo };
+        if (destinoQuery === 'atendimento') corpo.destino = 'atendimento';
+        const res = await TalkApi.post('/login/confirmar', corpo, { api: 'publico', params: querySimular() });
         mostrarAlerta('Acesso confirmado. Abrindo o IA Talk…', 'ok');
         pararContagem();
         location.href = res.redirecionar || '/app/ia-talk/shell.html';

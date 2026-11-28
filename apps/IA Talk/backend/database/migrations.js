@@ -518,4 +518,31 @@ module.exports = [
     );
     CREATE INDEX IF NOT EXISTS idx_atendimento_entradas_pendentes ON atendimento_entradas_pendentes (criada_em);`,
   },
+  {
+    // Onda 1 (contratos.md §9). Só acrescenta: JSON vazio (NULL) = valores padrão de
+    // atendimento/config-onda1.js, que nascem desligados. Conversa em triagem = triagem_desde preenchido.
+    versao: 12,
+    descricao: 'Onda 1: configuração do setor, menu de setores no canal e triagem da conversa',
+    sql: `ALTER TABLE setores ADD COLUMN menu TEXT;
+    ALTER TABLE setores ADD COLUMN distribuicao TEXT;
+    ALTER TABLE setores ADD COLUMN alertas TEXT;
+    ALTER TABLE setores ADD COLUMN sla TEXT;
+    ALTER TABLE setores ADD COLUMN pesquisa TEXT;
+    ALTER TABLE canais ADD COLUMN menu TEXT;
+    ALTER TABLE conversas ADD COLUMN triagem_desde TEXT;
+    ALTER TABLE conversas ADD COLUMN triagem_tentativas INTEGER NOT NULL DEFAULT 0;
+    CREATE INDEX IF NOT EXISTS idx_conversas_triagem ON conversas (triagem_desde) WHERE triagem_desde IS NOT NULL;`,
+  },
+  {
+    // Política de atendimento da empresa (§9.10): padrão que vale para todos os setores que não
+    // personalizaram o bloco. Sem linha = padrões do sistema (desligados).
+    versao: 13,
+    descricao: 'Política de atendimento da empresa (padrão para todos os setores)',
+    sql: `CREATE TABLE IF NOT EXISTS atendimento_politica (
+      empresa_id     TEXT PRIMARY KEY REFERENCES empresas(id) ON DELETE CASCADE,
+      blocos         TEXT NOT NULL DEFAULT '{}',
+      versao         INTEGER NOT NULL DEFAULT 1,
+      atualizado_em  TEXT NOT NULL
+    );`,
+  },
 ];

@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
   <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
   <link rel="stylesheet" href="/app/ia-talk/css/telas/g2.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g16.css">
 </head>
 <body class="tlk-pagina">
 <main class="tlk-conteudo">
@@ -264,6 +265,68 @@
                 <div class="tlk-alerta tlk-alerta--aviso tlk-largo tlk-regras-aviso-uso" id="r-uso-aviso-compartilhado" role="status" hidden>
                   Para funcionar, ligue também 'Deixar para o IA Talk atender' no canal do IA Command.
                 </div>
+
+                <!-- G16 · Menu de setores no WhatsApp (§9.3 — visível quando uso é atendimento ou compartilhado) -->
+                <div class="g16-menu-canal" id="bloco-menu-canal" hidden>
+                  <div class="g16-menu-canal-cab">
+                    <h3>Menu de setores no WhatsApp</h3>
+                    <p>Envia uma lista numerada de setores para a pessoa escolher antes de entrar na fila.</p>
+                  </div>
+
+                  <div class="tlk-campo">
+                    <label class="tlk-check-card" style="max-width:680px;">
+                      <input type="checkbox" id="r-menu-ligado" name="menu_ligado">
+                      <div>
+                        <strong>Mandar menu de setores</strong>
+                        <span>Quando ligado, conversas novas aguardam a resposta da pessoa em triagem antes de ir para a fila.</span>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div class="tlk-campo">
+                    <label for="r-menu-saudacao">Saudação</label>
+                    <textarea class="form-control" id="r-menu-saudacao" name="menu_saudacao" rows="2" maxlength="500" placeholder="Olá! Para agilizar seu atendimento, escolha o setor:"></textarea>
+                    <div class="g14-campo-rodape" style="display:flex;justify-content:space-between;gap:8px;margin-top:4px;">
+                      <span class="form-hint">Até 500 caracteres; vazio volta ao padrão do contrato.</span>
+                      <span class="tlk-contador-chars" id="cnt-r-menu-saudacao">0 / 500</span>
+                    </div>
+                  </div>
+
+                  <div class="g16-campos-grid">
+                    <div class="tlk-campo">
+                      <label for="r-menu-tempo">Sem resposta em (min)</label>
+                      <input class="form-control" id="r-menu-tempo" name="menu_tempo_min" type="number" min="1" max="60" step="1" value="10">
+                      <span class="form-hint">De 1 a 60 min: vai para o setor padrão.</span>
+                    </div>
+
+                    <div class="tlk-campo">
+                      <label for="r-menu-tentativas">Tentativas</label>
+                      <input class="form-control" id="r-menu-tentativas" name="menu_tentativas" type="number" min="1" max="5" step="1" value="2">
+                      <span class="form-hint">De 1 a 5 respostas inválidas antes de ir para o setor padrão.</span>
+                    </div>
+                  </div>
+
+                  <div class="g16-avisos-pilha">
+                    <div class="tlk-alerta tlk-alerta--info" id="r-menu-aviso-compartilhado" role="status" hidden>
+                      O menu só é enviado depois que a pessoa pedir 'atendente' ao assistente.
+                    </div>
+                    <div class="tlk-alerta tlk-alerta--aviso" id="r-menu-aviso-um" role="status" hidden>
+                      Com um setor só, o menu não é enviado: a conversa vai direto para ele.
+                    </div>
+                    <div class="tlk-alerta tlk-alerta--aviso" id="r-menu-aviso-zero" role="status" hidden>
+                      Nenhum setor aparece no menu. As conversas vão para o setor padrão.
+                    </div>
+                  </div>
+
+                  <div class="g16-whats-box" id="box-menu-previa">
+                    <div class="g16-whats-topo">
+                      <span class="g16-whats-rotulo">Prévia do menu no WhatsApp</span>
+                      <span id="badge-menu-canal"></span>
+                    </div>
+                    <div class="g16-whats-balao" id="r-menu-previa"></div>
+                  </div>
+                </div>
+
                 <div class="tlk-campo tlk-largo">
                   <label for="r-novo-numero">Números de teste</label>
                   <ul class="tlk-regras-lista" id="r-lista" aria-live="polite"></ul>
@@ -1043,6 +1106,17 @@
     atendimento: 'Número exclusivo do IA Talk: quem escreve vira conversa na Central.',
     compartilhado: 'Quem está autorizado no IA Command fica com ele; os demais viram conversa no Talk.',
   };
+  const MENU_SAUDACAO_PADRAO = 'Olá! Para agilizar seu atendimento, escolha o setor:';
+
+  function lerMenuPadraoCanal(c) {
+    const m = c?.atendimento?.menu || {};
+    return {
+      ligado: !!m.ligado,
+      saudacao: typeof m.saudacao === 'string' && m.saudacao.trim() ? m.saudacao.trim() : MENU_SAUDACAO_PADRAO,
+      tempo_min: m.tempo_min ?? 10,
+      tentativas: m.tentativas ?? 2,
+    };
+  }
 
   async function carregarPerfil() {
     try {
@@ -1059,7 +1133,14 @@
     erroSetoresAtivos = false;
     try {
       const r = await TalkApi.get('/setores', { situacao: 'ativo', limite: 200 });
-      setoresAtivos = Array.isArray(r?.itens) ? r.itens.map((s) => ({ id: s.id, nome: s.nome })) : [];
+      setoresAtivos = Array.isArray(r?.itens)
+        ? r.itens.map((s) => ({
+            id: s.id,
+            nome: s.nome,
+            situacao: s.situacao || 'ativo',
+            menu: s.menu || { aparece: true, ordem: 1, texto: null },
+          }))
+        : [];
     } catch (_) {
       setoresAtivos = [];
       erroSetoresAtivos = true;
@@ -1101,6 +1182,56 @@
 
   const mascararDigitado = (n) => { const d = String(n).replace(/\D/g, ''); return d.length >= 12 ? `+${d.slice(0, 2)} ${d.slice(2, 4)} ${d.slice(4, 5)}••••-${d.slice(-4)}` : d; };
 
+  function renderizarMenuCanalPrevia(c, uso) {
+    const bloco = $('bloco-menu-canal');
+    if (!bloco) return;
+    const visivel = uso === 'atendimento' || uso === 'compartilhado';
+    bloco.hidden = !visivel;
+    if (!visivel) return;
+
+    const saudBruto = $('r-menu-saudacao').value;
+    $('cnt-r-menu-saudacao').textContent = `${saudBruto.length} / 500`;
+    const abertura = saudBruto.trim() || MENU_SAUDACAO_PADRAO;
+    const ligado = $('r-menu-ligado').checked;
+    $('badge-menu-canal').innerHTML = ligado
+      ? '<span class="tlk-pill tlk-pill--ok">Menu ligado</span>'
+      : '<span class="tlk-pill tlk-pill--neutro">Menu desligado</span>';
+
+    const empresaAtendimento = c?.atendimento?.empresa || c?.empresa_dona || null;
+    const outraEmpresa = !!(sessaoEmpresaId && empresaAtendimento?.id && empresaAtendimento.id !== sessaoEmpresaId);
+
+    $('r-menu-aviso-compartilhado').hidden = uso !== 'compartilhado';
+
+    if (outraEmpresa) {
+      $('r-menu-aviso-um').hidden = true;
+      $('r-menu-aviso-zero').hidden = true;
+      $('r-menu-previa').textContent = `Troque para a empresa ${empresaAtendimento.nome} no topo para visualizar os setores ativos deste menu.`;
+      return;
+    }
+
+    const setoresMenu = setoresAtivos
+      .filter((s) => s.situacao !== 'inativo' && (s.menu ? s.menu.aparece !== false : true))
+      .sort((a, b) => ((a.menu?.ordem ?? 0) - (b.menu?.ordem ?? 0)) || a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    $('r-menu-aviso-um').hidden = setoresMenu.length !== 1;
+    $('r-menu-aviso-zero').hidden = setoresMenu.length !== 0;
+
+    if (!setoresMenu.length) {
+      $('r-menu-previa').textContent = `${abertura}\n(nenhum setor ativo marcado com "Aparece no menu")`;
+      return;
+    }
+
+    const linhas = [
+      abertura,
+      ...setoresMenu.map((s, idx) => {
+        const rotulo = typeof s.menu?.texto === 'string' && s.menu.texto.trim() ? s.menu.texto.trim() : s.nome;
+        return `${idx + 1} – ${rotulo}`;
+      }),
+      'Responda com o número da opção.',
+    ];
+    $('r-menu-previa').textContent = linhas.join('\n');
+  }
+
   function renderizarRegras() {
     const c = canalAtual;
     if (!c || !$('bloco-regras')) return;
@@ -1112,6 +1243,11 @@
       $('r-recebimento').value = c.recebimento_modo || 'teste';
       $('r-uso').value = c.uso || 'integracao';
       popularSelectSetores(c, c.atendimento?.setor_padrao?.id || '');
+      const menuInicial = lerMenuPadraoCanal(c);
+      $('r-menu-ligado').checked = menuInicial.ligado;
+      $('r-menu-saudacao').value = menuInicial.saudacao;
+      $('r-menu-tempo').value = String(menuInicial.tempo_min);
+      $('r-menu-tentativas').value = String(menuInicial.tentativas);
       $('regras-confirmar').hidden = true;
       $('alerta-regras').hidden = true;
       TalkUI.limparErros($('form-regras'));
@@ -1129,6 +1265,7 @@
       $('r-setor').removeAttribute('aria-invalid');
       $('campo-r-setor').querySelectorAll('.tlk-campo-erro').forEach((el) => el.remove());
     }
+    renderizarMenuCanalPrevia(c, uso);
     const existentes = (c.numeros_teste_mascarados || []).map((num, idx) => {
       const removido = regrasRemover.has(idx);
       return `<li class="tlk-regras-item ${removido ? 'tlk-regras-item--removido' : ''}"><span>${esc(num)}</span>
@@ -1159,6 +1296,8 @@
     $('r-setor').removeAttribute('aria-invalid');
     $('campo-r-setor').querySelectorAll('.tlk-campo-erro').forEach((el) => el.remove());
   });
+  $('r-menu-ligado').addEventListener('change', () => renderizarMenuCanalPrevia(canalAtual, $('r-uso').value));
+  $('r-menu-saudacao').addEventListener('input', () => renderizarMenuCanalPrevia(canalAtual, $('r-uso').value));
   $('r-lista').addEventListener('click', (e) => {
     const alt = e.target.closest('[data-r-alternar]');
     const novo = e.target.closest('[data-r-tirar-novo]');
@@ -1214,7 +1353,34 @@
       }
       if (regrasRemover.size) corpo.numeros_teste_remover = [...regrasRemover];
       if (regrasIncluir.length) corpo.numeros_teste_adicionar = [...regrasIncluir];
-      const salvo = await TalkApi.put(`/canais/${encodeURIComponent(c.id)}`, corpo);
+
+      const corpoMenu = {};
+      if (uso === 'atendimento' || uso === 'compartilhado') {
+        const menuAnt = lerMenuPadraoCanal(c);
+        const menuLigado = $('r-menu-ligado').checked;
+        const saudDigitada = $('r-menu-saudacao').value.trim();
+        const saudComparavel = saudDigitada || MENU_SAUDACAO_PADRAO;
+        const tempoBruto = String($('r-menu-tempo').value ?? '').trim();
+        const tentBruto = String($('r-menu-tentativas').value ?? '').trim();
+        const menuTempo = tempoBruto === '' ? NaN : Number(tempoBruto);
+        const menuTentativas = tentBruto === '' ? NaN : Number(tentBruto);
+
+        if (menuLigado !== menuAnt.ligado) corpoMenu.menu_ligado = menuLigado;
+        // Se digitou algo acima do limite (>500) ou diferente da saudação anterior, envia para validar/salvar
+        if (saudComparavel !== menuAnt.saudacao || saudDigitada.length > 500) corpoMenu.menu_saudacao = saudDigitada;
+        if (!Object.is(menuTempo, menuAnt.tempo_min)) corpoMenu.menu_tempo_min = menuTempo;
+        if (!Object.is(menuTentativas, menuAnt.tentativas)) corpoMenu.menu_tentativas = menuTentativas;
+      }
+
+      const mexeNoMenu = Object.keys(corpoMenu).length > 0;
+      let salvo;
+      if (mexeNoMenu && !c.atendimento && setorSelecionado) {
+        // Quando o canal saía de 'integracao' (c.atendimento nulo), grava o atendimento antes do menu
+        salvo = await TalkApi.put(`/canais/${encodeURIComponent(c.id)}`, corpo);
+        salvo = await TalkApi.put(`/canais/${encodeURIComponent(c.id)}`, corpoMenu);
+      } else {
+        salvo = await TalkApi.put(`/canais/${encodeURIComponent(c.id)}`, { ...corpo, ...corpoMenu });
+      }
       canalAtual = salvo;
       regrasCanalId = null; // recarrega o formulário a partir do que foi gravado
       renderizarCabecalhoEConexao();

@@ -139,15 +139,17 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, i
   const admin = express.Router();
   admin.use(middlewareCenarios);
 
-  admin.get('/sessao', (_req, res) => {
-    const u = dados.usuarios.find(x => x.id === sessao.usuarioId);
+  admin.get('/sessao', (req, res) => {
+    // ?simular=atendente: sessão da atendente Carla (papel atendente, sem a administração), como na Central.
+    const atendente = req.cenarios.has('atendente');
+    const u = dados.usuarios.find(x => x.id === (atendente ? 'usr_carla' : sessao.usuarioId));
     const papel = dados.papeis.find(p => p.codigo === u.papel);
     const empresa = empresaAtual();
     res.json({
-      usuario: { id: u.id, nome: u.nome, telefone_mascarado: mascararTelefone(u.telefone), administrador_plataforma: sessao.plataforma },
+      usuario: { id: u.id, nome: u.nome, telefone_mascarado: mascararTelefone(u.telefone), administrador_plataforma: !atendente && sessao.plataforma },
       empresa: { id: empresa.id, nome: empresa.nome, apelido: empresa.apelido, logo_url: empresa.logo_url },
       papel: papel.codigo,
-      rotinas: [...papel.rotinas, ...(sessao.plataforma ? ['talk-empresas'] : [])],
+      rotinas: [...papel.rotinas, ...(!atendente && sessao.plataforma ? ['talk-empresas'] : [])],
       empresas_disponiveis: dados.empresas.filter(e => e.situacao === 'ativa').map(e => ({ id: e.id, nome: e.nome, apelido: e.apelido })),
       origem: 'telefone',
       expira_em: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
@@ -570,7 +572,9 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, i
     if (d.tentativas > 5) { desafios.delete(req.body.desafio_id); throw erro('limite_excedido', 'Muitas tentativas. Peça um novo código.'); }
     if (String(req.body?.codigo) !== '123456') throw erro('requisicao_invalida', 'Código incorreto.', { campos: { codigo: 'Código incorreto.' }, detalhe: { tentativas_restantes: 5 - d.tentativas } });
     desafios.delete(req.body.desafio_id);
-    res.json({ ok: true, redirecionar: `${config.BASE_PATH}/shell.html` });
+    // §9.1: destino 'atendimento' leva ao portal da empresa do login (só esse valor; nada de URL livre).
+    const portal = req.body?.destino === 'atendimento' && /^[a-z0-9-]{3,40}$/.test(String(d.apelido || ''));
+    res.json({ ok: true, redirecionar: portal ? `${config.BASE_PATH}/${d.apelido}/atendimento` : `${config.BASE_PATH}/shell.html` });
   });
   // Entrada pelo card do IAHub (ticket assinado de 60 s, uso único) — C1.
   publico.get('/entrar-hub', (req, res) => {

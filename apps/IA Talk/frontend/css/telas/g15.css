@@ -1,0 +1,421 @@
+/* IA Talk · Etapa G15 — Portal do atendente (frontend/portal.html).
+   Complementa g13.css + g13-visual.css com o cabeçalho dedicado do portal
+   (empresa, atendente, seletor de status, alertas WhatsApp, sino de alertas,
+   som, notificações do navegador, link condicional da administração e Sair).
+   Usa exclusivamente tokens de iahub.css e talk.css (claro e escuro). */
+
+.ptl-body .atd-usuario-ativo {
+  display: none;
+}
+
+/* ── Cabeçalho do portal ─────────────────────────────────────────────── */
+.ptl-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 14px;
+  min-height: 52px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  z-index: 30;
+}
+
+.ptl-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.ptl-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--accent-glow);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 800;
+  flex: none;
+  overflow: hidden;
+}
+.ptl-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--bg-card);
+}
+.ptl-ident {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+.ptl-empresa {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ptl-atendente {
+  font-size: 12px;
+  color: var(--text-md);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ptl-atendente strong {
+  color: var(--text-hi);
+  font-weight: 700;
+}
+
+/* ── Controles principais do cabeçalho ───────────────────────────────── */
+.ptl-controles {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+/* Seletor de status (Disponível / Ocupado / Ausente) */
+.ptl-status-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 10px 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+  flex: none;
+}
+.ptl-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--text-lo);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-lo) 20%, transparent);
+}
+.ptl-status-dot--disponivel {
+  background: var(--success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent);
+}
+.ptl-status-dot--ocupado {
+  background: var(--tlk-aviso);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tlk-aviso) 24%, transparent);
+}
+.ptl-status-dot--ausente {
+  background: var(--text-lo);
+}
+
+.ptl-status-select {
+  border: none;
+  background: transparent;
+  color: var(--text-hi);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 2px 2px 2px 0;
+  cursor: pointer;
+  outline: none;
+}
+.ptl-status-select option {
+  background: var(--bg-card);
+  color: var(--text-hi);
+}
+.ptl-status-desde {
+  font-size: 11px;
+  color: var(--text-lo);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  padding-left: 6px;
+  border-left: 1px solid var(--border);
+}
+
+/* Sino de alertas + popover */
+.ptl-sino-wrap {
+  position: relative;
+  flex: none;
+}
+.ptl-sino-btn {
+  position: relative;
+}
+.ptl-sino-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--tlk-erro);
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 800;
+  display: inline-grid;
+  place-items: center;
+  font-variant-numeric: tabular-nums;
+  border: 2px solid var(--bg-card);
+}
+
+.ptl-popover-alertas {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 45;
+  width: min(380px, calc(100vw - 20px));
+  max-height: min(520px, calc(100vh - 90px));
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border-hi, var(--border));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md, 0 12px 32px rgba(0, 0, 0, .22));
+  overflow: hidden;
+}
+.ptl-alertas-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-base);
+}
+.ptl-alertas-head strong {
+  font-size: 13px;
+  color: var(--text-hi);
+}
+.ptl-alertas-barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+}
+.ptl-alertas-lista {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ptl-alerta-vazio {
+  padding: 24px 14px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-lo);
+}
+.ptl-alerta-item {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-hi);
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  transition: background var(--transition), border-color var(--transition);
+}
+.ptl-alerta-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+.ptl-alerta-item--nao-lido {
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border));
+}
+.ptl-alerta-ponto {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex: none;
+  background: transparent;
+}
+.ptl-alerta-item--nao-lido .ptl-alerta-ponto {
+  background: var(--accent);
+}
+.ptl-alerta-corpo {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ptl-alerta-msg {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-hi);
+}
+.ptl-alerta-item--nao-lido .ptl-alerta-msg {
+  font-weight: 650;
+}
+.ptl-alerta-meta {
+  font-size: 11px;
+  color: var(--text-lo);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Extras no cabeçalho (desktop inline; celular vira menu suspenso) */
+.ptl-extras {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.ptl-extras-ident-mobile {
+  display: none;
+}
+.ptl-so-mobile {
+  display: none;
+}
+
+.ptl-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+  color: var(--text-md);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.ptl-switch:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--text-hi);
+}
+.ptl-switch input {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.ptl-status-dica-mobile {
+  display: none;
+  font-size: 11.5px;
+  color: var(--text-lo);
+  line-height: 1.4;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+}
+
+/* ── Celular (<= 760 px): faixa compacta (status, sino e menu com o resto) */
+@media (max-width: 760px) {
+  .ptl-header {
+    padding: 6px 10px;
+    min-height: 46px;
+    gap: 6px;
+  }
+  .ptl-brand {
+    flex: 0 1 auto;
+    gap: 7px;
+  }
+  .ptl-logo {
+    width: 28px;
+    height: 28px;
+    font-size: 11px;
+  }
+  .ptl-ident {
+    display: none;
+  }
+  .ptl-controles {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    gap: 6px;
+    min-width: 0;
+  }
+  .ptl-status-box {
+    flex: 0 1 auto;
+    min-width: 0;
+    padding: 3px 8px;
+    gap: 5px;
+  }
+  .ptl-status-desde {
+    display: none;
+  }
+  .ptl-so-mobile {
+    display: inline-flex;
+  }
+  .ptl-extras {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 8px;
+    left: 8px;
+    z-index: 50;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-hi, var(--border));
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md, 0 12px 32px rgba(0, 0, 0, .25));
+  }
+  .ptl-extras.aberto {
+    display: flex;
+  }
+  .ptl-extras-ident-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .ptl-extras-ident-mobile strong {
+    font-size: 13.5px;
+    color: var(--text-hi);
+  }
+  .ptl-extras-ident-mobile span {
+    font-size: 12px;
+    color: var(--text-md);
+  }
+  .ptl-status-dica-mobile {
+    display: block;
+  }
+  .ptl-extras .ptl-switch {
+    height: 36px;
+    justify-content: flex-start;
+  }
+  .ptl-extras .btn {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .ptl-popover-alertas {
+    position: fixed;
+    top: 52px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+  }
+}

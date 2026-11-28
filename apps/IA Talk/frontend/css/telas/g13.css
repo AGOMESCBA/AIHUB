@@ -599,6 +599,14 @@ body.atd-body {
   color: var(--tlk-erro);
   background: var(--tlk-erro-bg);
 }
+.atd-tag-mini--oferta {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--accent);
+  background: var(--accent-glow);
+}
+.atd-conv-item--oferta:not(.ativa) {
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
 .atd-nao-lidas {
   font-size: 11px;
   font-weight: 700;
@@ -717,6 +725,76 @@ body.atd-body {
   justify-content: flex-end;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+/* Destaque fixo de oferta do rodízio (§9.4) */
+.atd-oferta-banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.atd-oferta-banner--minha {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-card));
+  border-bottom-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+.atd-oferta-banner--outra {
+  background: var(--bg-card);
+  color: var(--text-md);
+}
+.atd-oferta-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 220px;
+}
+.atd-oferta-selo {
+  flex: none;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #ffffff;
+}
+.atd-oferta-banner--outra .atd-oferta-selo {
+  background: var(--bg-hover);
+  color: var(--text-md);
+  border: 1px solid var(--border);
+}
+.atd-oferta-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.atd-oferta-texto strong {
+  color: var(--text-hi);
+  font-size: 12.5px;
+}
+.atd-oferta-texto span {
+  color: var(--text-md);
+  font-size: 12px;
+}
+.atd-oferta-contagem {
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.atd-oferta-acoes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: none;
 }
 
 /* Banners de alerta e envio bloqueado */

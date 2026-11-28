@@ -119,7 +119,8 @@ const FORMAS = Object.freeze({
   v1Retorno: ['id', 'tipo', 'em', 'conversa', 'referencias', 'dados'],
   // C10 — Onda 1 (docs/contratos.md §9). Campos novos de setor e conversa conferidos à parte
   // (o servidor real ganha cada um na sua etapa, C11–C16).
-  setorOnda1: ['menu', 'distribuicao', 'alertas', 'sla', 'pesquisa'],
+  setorOnda1: ['menu', 'distribuicao', 'alertas', 'sla', 'inatividade', 'pesquisa', 'personalizados'],
+  politicaAtendimento: ['distribuicao', 'alertas', 'sla', 'inatividade', 'pesquisa', 'uso', 'versao', 'atualizado_em'], // §9.10
   conversaOnda1: ['triagem', 'oferta', 'sla', 'pesquisa'],
   atendente: ['usuario', 'status', 'online', 'conversas_abertas', 'limite', 'setores', 'alertas_whatsapp', 'status_desde'],
   alerta: ['id', 'tipo', 'conversa_id', 'protocolo', 'setor', 'mensagem', 'em'],

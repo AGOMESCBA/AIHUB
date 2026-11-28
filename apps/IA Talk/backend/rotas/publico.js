@@ -136,7 +136,9 @@ function criarRotasPublicas({ db, transportes = {}, chavePublicaHub = () => tick
   r.post('/login/confirmar', (req, res) => {
     const { usuario_id, empresa_id } = desafios.confirmarCodigo(db, { desafioId: req.body?.desafio_id, codigo: req.body?.codigo });
     iniciarSessao(db, req, res, { usuarioId: usuario_id, empresaId: empresa_id, origem: 'telefone' });
-    res.json({ ok: true, redirecionar: `${config.BASE_PATH}/shell.html` });
+    // Portal do atendente (§9.1): só o valor 'atendimento' e com o apelido da empresa do login (nunca um endereço vindo do pedido).
+    const apelido = req.body?.destino === 'atendimento' ? db.prepare('SELECT apelido FROM empresas WHERE id = ?').get(empresa_id)?.apelido : null;
+    res.json({ ok: true, redirecionar: apelido ? `${config.BASE_PATH}/${apelido}/atendimento` : `${config.BASE_PATH}/shell.html` });
   });
 
   r.get('/link/:token', (req, res) => {
@@ -162,4 +164,4 @@ function criarRotasPublicas({ db, transportes = {}, chavePublicaHub = () => tick
   return r;
 }
 
-module.exports = { criarRotasPublicas, provisionarDoHub, apelidoLivre, empresaDoHub };
+module.exports = { criarRotasPublicas, provisionarDoHub, apelidoLivre, empresaDoHub, paginaDeErro };

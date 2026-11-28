@@ -595,7 +595,7 @@ Servidor real: C11 a C16. Bibliotecas puras: X1 a X4 (Codex).
 |---|---|
 | URL | `/app/ia-talk/<apelido>/atendimento`, uma por empresa, pelo mesmo apelido da página de entrada. Serve `frontend/portal.html` (G15) |
 | Sem sessão (ou sessão de outra empresa) | Redireciona para `/app/ia-talk/<apelido>?destino=atendimento`. Depois do código, o login devolve `redirecionar` para o portal |
-| Login | O mesmo: celular + código no WhatsApp (`/api/publico`, §3.1). `POST …/verificar` aceita `destino: 'atendimento'` |
+| Login | O mesmo: celular + código no WhatsApp (`/api/publico`, §3.1). `POST /login/confirmar` aceita `destino: 'atendimento'` (único valor aceito; qualquer outro é ignorado) e devolve `redirecionar: /app/ia-talk/<apelido>/atendimento`, com o apelido da empresa do login |
 | Quem entra | Quem tem a rotina `talk-atendimento` naquela empresa. Sem ela → página "Sem acesso ao atendimento" |
 | API | A mesma do §8 (`/api/admin`), com o cookie da sessão |
 
@@ -654,6 +654,9 @@ O canal devolve `atendimento.menu: { ligado, saudacao, tempo_min, tentativas }`.
 - **Resposta inválida:** o menu é repetido, até `menu_tentativas` vezes. Depois disso, ou se passar `menu_tempo_min` sem resposta, a conversa vai para o **setor padrão** do canal, com o evento "Sem escolha: setor padrão".
 - Com **um setor só** no menu, o menu não é mandado e a conversa vai direto para ele.
 - **Pedido de "atendente"** de um usuário do IA Command (número compartilhado): também passa pelo menu.
+- **Canal que não pode responder a este número** (envio desligado ou só números de teste): o menu não seria entregue, então a conversa vai direto para o setor padrão.
+- **Conversa em triagem:** não pode ser assumida (409). A supervisão pode **transferir**, o que tira a conversa do menu.
+- O vencimento do menu é conferido a cada minuto.
 
 **Na conversa:**
 - `triagem`: `{ desde, tentativas } | null`;
@@ -715,13 +718,32 @@ O texto tem protocolo, setor, tempo e link do portal, **sem texto do cliente**.
 
 ### 9.6 SLA
 
-**No setor**, campo novo `sla`:
-- `primeira_resposta_min`: 1 a 1440, padrão 10;
-- `atencao_pct`: 50 a 95, padrão 80.
+**No setor** (ou na política da empresa, §9.10), bloco `sla`. Tudo configurável:
 
-**Na conversa:** `sla: { prazo, situacao: 'ok' | 'atencao' | 'estourado', alvo: 'primeira_resposta' } | null`.
-- Vale enquanto ninguém respondeu; depois da primeira resposta do atendente, fica `null`.
-- Ao chegar em `atencao` e em `estourado`, gera alerta.
+| Campo | Regra |
+|---|---|
+| `primeira_resposta_min` | 1 a 1440, padrão 10. Da abertura (ou da escolha no menu) até a primeira resposta de uma pessoa |
+| `proxima_resposta_min` | 0 a 1440, padrão 0 (= não mede). Toda vez que o cliente manda mensagem e fica esperando |
+| `resolucao_horas` | 0 a 720, padrão 0 (= não mede). Da abertura até encerrar |
+| `atencao_pct` | 50 a 95, padrão 80. Ao passar dessa fração do prazo, a situação vira `atencao` |
+| `so_horario_setor` | Bool, padrão `true`. O relógio só corre no horário de atendimento do setor (§8.6); com o horário desligado, corre sempre |
+| `pausar_aguardando_cliente` | Bool, padrão `true`. Enquanto a última mensagem é da equipe, o relógio para |
+| `prioridade_alta` | `{ primeira_resposta_min, proxima_resposta_min, resolucao_horas }`, cada um `null` (= igual ao normal) ou o valor próprio da prioridade alta |
+
+**Na conversa:**
+- `aguardando_cliente`: `true` quando a última mensagem é da equipe (atendente ou automática do atendimento) e o cliente ainda não respondeu.
+- `sla`: o prazo **mais próximo de vencer** entre os que valem agora, ou `null` (encerrada, em triagem, ou nenhum prazo ativo):
+
+```json
+{ "alvo": "primeira_resposta | proxima_resposta | resolucao",
+  "situacao": "ok | atencao | estourado | pausado",
+  "prazo": "…",            // quando vence; null em "pausado"
+  "restante_min": 12 }     // negativo depois de estourar; null em "pausado"
+```
+
+- `pausado`: aguardando o cliente (com a pausa ligada) ou fora do horário do setor (com `so_horario_setor`).
+- Ao chegar em `atencao` e em `estourado`, gera alerta (§9.5). Cada estouro fica registrado (§9.11).
+- Na Central, a fila pode ser ordenada pelo vencimento: `GET /conversas?visao=fila&ordenar=sla`.
 
 ### 9.7 Pesquisa de satisfação
 
@@ -753,3 +775,55 @@ Socket: `atendimento:painel`, com o mesmo corpo, a cada mudança, só para a sup
 - `{ periodo, total, abertas, na_fila, encerradas, primeira_resposta, espera_atual, duracao, satisfacao, grupos? }`;
 - os campos `primeira_resposta`, `espera_atual` e `duracao` seguem a biblioteca L2;
 - `satisfacao` é `{ media, respostas, distribuicao: { 1..5 } }`.
+
+### 9.9 Encerramento por inatividade do cliente
+
+**No setor** (ou na política da empresa), bloco `inatividade`. Nasce **desligado**:
+
+| Campo | Regra |
+|---|---|
+| `ligada` | Bool, padrão `false` |
+| `lembrete_min` | 0 a 10080, padrão 60 (0 = sem lembrete). Tempo aguardando o cliente até mandar o lembrete |
+| `encerrar_min` | 5 a 10080, padrão 240. Tempo aguardando o cliente até encerrar. Precisa ser maior que o lembrete |
+| `texto_lembrete` | 1 a 500 caracteres. Padrão: "Ainda precisa de ajuda? Se não recebermos sua resposta, este atendimento será encerrado." |
+| `texto_encerramento` | 1 a 500 caracteres. Padrão: "Encerramos este atendimento por falta de retorno. Se precisar, é só mandar uma nova mensagem." |
+| `enviar_pesquisa` | Bool, padrão `false`. Manda a pesquisa (§9.7) também no encerramento por inatividade |
+| `reabrir_horas` | 0 a 168, padrão 24. Resposta do cliente até esse tempo depois do encerramento **reabre a mesma conversa** (volta ao último setor, sem responsável). 0 = sempre abre conversa nova |
+
+**Como funciona:**
+- Só conta enquanto a conversa está **aguardando o cliente** (`aguardando_cliente: true`). O tempo é corrido (o cliente não tem horário).
+- O cliente respondeu → o relógio zera.
+- Lembrete e encerramento são mensagens automáticas (`autor.tipo: 'sistema'`) e respeitam as regras de envio do canal. Se o canal não pode enviar, o encerramento acontece sem a mensagem.
+- Encerramento com `motivo_encerramento: 'Encerrada por inatividade do cliente'` e evento na conversa. No número compartilhado, devolve o contato ao assistente como no encerramento manual.
+
+### 9.10 Política de atendimento da empresa (padrão para todos os setores)
+
+Uma configuração única da empresa vale para **todos os setores**. Cada setor pode **personalizar** bloco a bloco ou voltar a seguir a política.
+
+- Blocos que seguem a política: `distribuicao`, `alertas`, `sla`, `inatividade`, `pesquisa`. O `menu` é sempre do setor.
+- Valor efetivo = padrões do sistema ← política da empresa ← personalização do setor.
+- Personalizar copia o valor efetivo daquele momento; depois disso, mudar a política **não** muda o bloco personalizado.
+
+| Rota | Detalhe |
+|---|---|
+| `GET /atendimento/politica` | Forma `politicaAtendimento` (rotina `talk-atendimento` ou `talk-setores`) |
+| `PUT /atendimento/politica` | `{ versao, distribuicao?, alertas?, sla?, inatividade?, pesquisa? }` (rotina `talk-setores`). Blocos parciais, mesma validação do setor (400 com `campos.<bloco>`). Versão diferente → 409. Auditoria `politica.alterada`. A primeira gravação usa `versao: 0` |
+
+Forma `politicaAtendimento`: os cinco blocos (valores efetivos), `uso` e `versao`, `atualizado_em`.
+`uso` é `{ <bloco>: { seguem, personalizados } }`, com a contagem dos setores ativos (para a tela mostrar "3 setores seguem este padrão").
+
+**No setor:**
+- Os blocos vêm com os valores efetivos e o campo novo `personalizados: ['sla', …]`.
+- `PUT /setores/:id` com `{ sla: { … } }` personaliza (parcial, junta com o efetivo).
+- `PUT /setores/:id` com `{ sla: null }` volta a seguir a política.
+
+### 9.11 Registro de violações de SLA
+
+Cada estouro de prazo (§9.6) grava **uma** linha que não muda depois (é a base para cobrar a equipe):
+conversa, protocolo, setor, responsável naquele momento, `alvo`, `prazo`, `estourou_em` e `excedeu_min` (atualizado até a resposta chegar ou a conversa encerrar).
+
+| Rota | Detalhe |
+|---|---|
+| `GET /atendimento/sla/violacoes?de=&ate=&setor_id=&responsavel_id=&alvo=` | Página de violações, mais recentes primeiro. Só supervisão |
+| `GET /atendimento/relatorio` | Ganha `sla: { dentro_pct, violacoes, por_alvo: { primeira_resposta, proxima_resposta, resolucao } }` por grupo |
+

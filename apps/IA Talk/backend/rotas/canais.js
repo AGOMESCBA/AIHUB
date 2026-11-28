@@ -20,6 +20,11 @@ const mensagensRepo = require('../mensagens/repositorio');
 const regras = require('../canais/regras');
 const { aceitarEnvio } = require('../mensagens/servico');
 const { USOS_CANAL } = require('../contratos');
+const { configDoMenuDoCanal } = require('../atendimento/config-onda1');
+const { json } = require('../atendimento/repositorio');
+
+const CAMPOS_MENU = ['menu_ligado', 'menu_saudacao', 'menu_tempo_min', 'menu_tentativas'];
+const menuDoCanal = (c) => ({ ...configDoMenuDoCanal({}), ...json(c.menu, {}) });
 
 const TEXTO_TESTE_MAXIMO = 1000;
 
@@ -79,7 +84,18 @@ function criarRotasCanais({ db, supervisor, despachante = null, log = console })
     if (c.uso === 'integracao' || !c.atendimento_empresa_id) return null;
     const empresa = db.prepare('SELECT id, nome FROM empresas WHERE id = ?').get(c.atendimento_empresa_id);
     const setor = c.setor_padrao_id ? db.prepare('SELECT id, nome FROM setores WHERE id = ?').get(c.setor_padrao_id) : null;
-    return { empresa: empresa || null, setor_padrao: setor || null };
+    return { empresa: empresa || null, setor_padrao: setor || null, menu: menuDoCanal(c) };
+  }
+
+  // Menu de setores no canal (§9.3): só com o número em atendimento; aplicado depois do uso, na mesma transação.
+  function aplicarMenu(canalId, b) {
+    const c = db.prepare('SELECT uso, menu FROM canais WHERE id = ?').get(canalId);
+    if (c.uso === 'integracao') {
+      throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos: { menu_ligado: 'O menu de setores só vale com o número em atendimento.' } });
+    }
+    const novo = configDoMenuDoCanal(b, menuDoCanal(c));
+    db.prepare('UPDATE canais SET menu = ? WHERE id = ?').run(JSON.stringify(novo), canalId);
+    return novo.ligado ? `ligado (${novo.tentativas} tentativa(s), ${novo.tempo_min} min)` : 'desligado';
   }
 
   // Uso do número (§8.1), aplicado dentro da transação do PUT (depois dos vínculos novos).
@@ -208,7 +224,10 @@ function criarRotasCanais({ db, supervisor, despachante = null, log = console })
     }
     const mexeNoUso = ['uso', 'atendimento_empresa_id', 'setor_padrao_id'].some(k => b[k] !== undefined);
     if (mexeNoUso && !req.contexto.plataforma) throw erro('sem_permissao', 'Só a administração da plataforma muda o uso do número e quem atende.');
+    const mexeNoMenu = CAMPOS_MENU.some(k => b[k] !== undefined);
+    if (mexeNoMenu && !req.contexto.plataforma) throw erro('sem_permissao', 'Só a administração da plataforma muda o menu de setores do canal.');
     let resumoUso = null;
+    let resumoMenu = null;
     db.transaction(() => {
       db.prepare(`UPDATE canais SET nome = ?, numero = ?, numeros_teste = ?, envio_modo = ?, recebimento_modo = ?, atualizado_em = ? WHERE id = ?`).run(
         b.nome !== undefined ? String(b.nome).trim() : c.nome, numeroCanal,
@@ -240,9 +259,11 @@ function criarRotasCanais({ db, supervisor, despachante = null, log = console })
         }
       }
       if (mexeNoUso) resumoUso = aplicarUso(c, b);
+      if (mexeNoMenu) resumoMenu = aplicarMenu(c.id, b);
     })();
     auditar(req, 'canal.alterado', c.id, `Alterou o canal ${c.nome}`);
     if (resumoUso) auditar(req, 'canal.uso', c.id, `Uso do canal ${c.nome}: ${resumoUso}`);
+    if (resumoMenu) auditar(req, 'canal.menu', c.id, `Menu de setores do canal ${c.nome}: ${resumoMenu}`);
     // Cada regra alterada vira uma linha própria na auditoria (de → para).
     if (novas.envio_modo !== c.envio_modo) {
       auditar(req, 'canal.regra_envio', c.id, `Envio do canal ${c.nome}: ${regras.TEXTOS.envio[c.envio_modo]} → ${regras.TEXTOS.envio[novas.envio_modo]}`);
