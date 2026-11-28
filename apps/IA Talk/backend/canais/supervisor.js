@@ -91,6 +91,8 @@ class SupervisorCanais {
   // Regra de recebimento: 'teste' = só os números da lista entram; das demais fica a contagem.
   _receber(canalId, m) {
     if (this.bloqueados.has(canalId)) return;
+    // Ponto de controle (P2): só avança (mensagem recuperada mais antiga não volta o ponto).
+    if (m.em) this.db.prepare('UPDATE canais SET recebido_ate = ? WHERE id = ? AND (recebido_ate IS NULL OR recebido_ate < ?)').run(m.em, canalId, m.em);
     const canal = this.db.prepare('SELECT recebimento_modo, numeros_teste FROM canais WHERE id = ?').get(canalId);
     if (!canal) return;
     const permitido = canal.recebimento_modo === 'todos' || (m.de?.tipo === 'telefone' && regras.naListaDeTeste(canal, m.de.valor));
@@ -126,7 +128,8 @@ class SupervisorCanais {
   iniciar(canalId) {
     if (this.filhos.has(canalId)) return true;
     this.bloqueados.delete(canalId);
-    const canal = this.db.prepare('SELECT id, sessao_id, provedor FROM canais WHERE id = ?').get(canalId);
+    // recebido_ate (P2): o processo do canal recupera o que chegou depois disso enquanto estava fora.
+    const canal = this.db.prepare('SELECT id, sessao_id, provedor, recebido_ate FROM canais WHERE id = ?').get(canalId);
     if (!canal) return false;
     const ficha = this._pegarConcessao(canalId);
     if (ficha === null) {

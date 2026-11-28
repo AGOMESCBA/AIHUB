@@ -111,7 +111,7 @@ const FORMAS = Object.freeze({
     'aguardando_desde', 'etiquetas', 'prioridade', 'referencias', 'aberta_em', 'atualizada_em', 'encerrada_em'],
   conversaDetalhe: ['id', 'protocolo', 'canal', 'contato', 'setor', 'responsavel', 'situacao', 'na_fila', 'nao_lidas', 'ultima_mensagem',
     'aguardando_desde', 'etiquetas', 'prioridade', 'referencias', 'aberta_em', 'atualizada_em', 'encerrada_em', 'motivo_encerramento', 'envio'],
-  itemConversa: ['id', 'categoria', 'direcao', 'autor', 'tipo', 'texto', 'estado', 'mensagem_id', 'em'],
+  itemConversa: ['id', 'categoria', 'direcao', 'autor', 'tipo', 'texto', 'estado', 'mensagem_id', 'midia', 'em'], // midia: §10
   contadoresAtendimento: ['minhas', 'fila', 'abertas', 'por_setor', 'atualizado_em'],
   respostaRapida: ['id', 'atalho', 'titulo', 'texto', 'setor', 'situacao', 'atualizado_em'],
   v1Conversa: ['id', 'protocolo', 'situacao', 'na_fila', 'canal', 'setor', 'responsavel', 'prioridade', 'referencias', 'aberta_em',
@@ -121,6 +121,7 @@ const FORMAS = Object.freeze({
   // (o servidor real ganha cada um na sua etapa, C11–C16).
   setorOnda1: ['menu', 'distribuicao', 'alertas', 'sla', 'inatividade', 'pesquisa', 'personalizados'],
   politicaAtendimento: ['distribuicao', 'alertas', 'sla', 'inatividade', 'pesquisa', 'uso', 'versao', 'atualizado_em'], // §9.10
+  recursosAtendimento: ['menu', 'midia', 'status_atendente', 'rodizio', 'alertas_tela', 'alertas_whatsapp', 'escalonamento', 'pesquisa', 'inatividade', 'sla'], // §9.12
   conversaOnda1: ['triagem', 'oferta', 'sla', 'pesquisa'],
   atendente: ['usuario', 'status', 'online', 'conversas_abertas', 'limite', 'setores', 'alertas_whatsapp', 'status_desde'],
   alerta: ['id', 'tipo', 'conversa_id', 'protocolo', 'setor', 'mensagem', 'em'],

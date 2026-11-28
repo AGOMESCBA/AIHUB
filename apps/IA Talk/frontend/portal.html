@@ -4,15 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
   <title>Atendimento · IA Talk</title>
-  <!-- Etapa G15 (Antigravity) — Portal do atendente (/app/ia-talk/<apelido>/atendimento).
+  <!-- Etapas G15 + G22 (Antigravity) — Portal do atendente (/app/ia-talk/<apelido>/atendimento).
        Reutiliza a lógica da Central (js/central-atendimento.js) em tela cheia, sem menu
-       de administração, com status de presença (§9.2), oferta do rodízio (§9.4) e alertas (§9.5). -->
+       de administração, com status de presença (§9.2), oferta do rodízio (§9.4), alertas (§9.5)
+       e selo "Ainda não ativo" (§9.12) sem chamar rotas ainda desligadas no servidor. -->
   <script src="/app/ia-talk/js/talk-ui.js"></script>
   <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
   <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
   <link rel="stylesheet" href="/app/ia-talk/css/telas/g13.css">
   <link rel="stylesheet" href="/app/ia-talk/css/telas/g13-visual.css">
   <link rel="stylesheet" href="/app/ia-talk/css/telas/g15.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g22.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g23.css">
 </head>
 <body class="atd-body ptl-body">
 <div class="atd-app" id="atd-app" data-passo="lista">
@@ -40,6 +43,7 @@
           <option value="ausente">Ausente</option>
         </select>
         <span class="ptl-status-desde" id="ptl-status-desde" title="Tempo neste status">—</span>
+        <span data-selo-recurso="status_atendente" hidden></span>
       </div>
 
       <!-- Sino de alertas (§9.5) -->
@@ -48,6 +52,7 @@
           <span data-ico="sino"></span>
           <span class="ptl-sino-badge" id="ptl-sino-badge" hidden>0</span>
         </button>
+        <span data-selo-recurso="alertas_tela" hidden></span>
 
         <div class="ptl-popover-alertas" id="popover-alertas" role="dialog" aria-label="Alertas de atendimento" hidden>
           <div class="ptl-alertas-head">
@@ -75,9 +80,10 @@
         </div>
         <div class="ptl-status-dica-mobile">Ocupado vê a fila mas não recebe rodízio; Ausente não recebe nada.</div>
 
-        <label class="ptl-switch" for="chk-alertas-whatsapp" title="Receber alertas de fila e escalonamento no seu WhatsApp cadastrado">
+        <label class="ptl-switch" id="lbl-alertas-whatsapp" for="chk-alertas-whatsapp" title="Receber alertas de fila e escalonamento no seu WhatsApp cadastrado">
           <input type="checkbox" id="chk-alertas-whatsapp">
           <span>Alertas no WhatsApp</span>
+          <span data-selo-recurso="alertas_whatsapp" hidden></span>
         </label>
 
         <button class="btn btn-ghost btn-sm" type="button" id="btn-som-portal" title="Silenciar ou ativar o som discreto de novos alertas" aria-label="Silenciar ou ativar o som discreto de novos alertas">
@@ -163,7 +169,14 @@
     </section>
 
     <!-- 2. Conversa ativa -->
-    <section class="atd-col atd-col--chat" aria-label="Conversa ativa">
+    <section class="atd-col atd-col--chat" id="secao-chat-ativa" aria-label="Conversa ativa">
+      <div class="atd-drop-overlay" id="drop-anexo-overlay" hidden>
+        <div class="atd-drop-overlay-box">
+          <span data-ico="clipe"></span>
+          <strong>Solte o arquivo aqui para anexar</strong>
+          <span>Imagens, PDF, Word, Excel, CSV, TXT, OGG ou MP3 (até 16 MB)</span>
+        </div>
+      </div>
       <button class="atd-seta-magica" type="button" id="btn-seta-lateral" aria-expanded="true" aria-controls="painel-lateral" title="Recolher painel do contato e detalhes para ampliar a conversa" aria-label="Recolher painel do contato e detalhes para ampliar a conversa"><span data-ico="chevron_dir"></span></button>
       <div class="atd-chat-vazio" id="estado-chat-vazio"></div>
 
@@ -253,6 +266,33 @@
 
           <div class="tlk-alerta tlk-alerta--erro" id="alerta-compositor" role="alert" style="margin-bottom:8px;" hidden></div>
 
+          <!-- Prévia de anexos antes de enviar (G23 §10.4) -->
+          <div class="atd-previa-anexos" id="painel-previa-anexos" hidden>
+            <div class="atd-previa-cab">
+              <span class="atd-previa-tit" id="previa-anexos-titulo">Anexo pronto para enviar</span>
+              <span class="atd-previa-dica-fila" id="previa-anexos-dica-fila" hidden>Enviados um por vez, na ordem; a legenda vai só no primeiro.</span>
+            </div>
+            <div class="atd-previa-lista" id="lista-previa-anexos"></div>
+            <div class="tlk-campo">
+              <div class="atd-previa-legenda-topo">
+                <label for="campo-legenda-anexo">Legenda (opcional)</label>
+                <span class="atd-contador-chars" id="contador-legenda-anexo">0 / 1024</span>
+              </div>
+              <input class="form-control" id="campo-legenda-anexo" type="text" maxlength="1024" placeholder="Escreva uma legenda para acompanhar o arquivo…" autocomplete="off">
+            </div>
+            <div class="atd-progresso-wrap" id="wrap-progresso-anexo" hidden>
+              <div class="atd-progresso-barra" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="barra-progresso-anexo">
+                <div class="atd-progresso-fill" id="progresso-anexo-fill"></div>
+              </div>
+              <span class="atd-progresso-txt" id="progresso-anexo-texto">Enviando… 0%</span>
+            </div>
+            <div class="atd-previa-acoes">
+              <button class="btn btn-ghost btn-sm" type="button" id="btn-mais-arquivos" title="Adicionar outro arquivo na fila de envio" aria-label="Adicionar outro arquivo na fila de envio"><span data-ico="mais"></span> Adicionar</button>
+              <button class="btn btn-ghost btn-sm" type="button" id="btn-cancelar-anexo" title="Cancelar envio dos anexos selecionados" aria-label="Cancelar envio dos anexos selecionados"><span data-ico="cancelar"></span> Cancelar</button>
+              <button class="btn btn-primary btn-sm" type="button" id="btn-enviar-anexo" title="Enviar arquivo(s) ao cliente" aria-label="Enviar arquivo(s) ao cliente"><span data-ico="enviar"></span> Enviar</button>
+            </div>
+          </div>
+
           <div class="atd-modo-barra">
             <div class="atd-modo-tabs" role="group" aria-label="Tipo de envio">
               <button class="atd-modo-btn ativo" type="button" id="btn-modo-cliente" aria-pressed="true" title="Mensagem ao cliente: envia pelo WhatsApp do canal" aria-label="Mensagem ao cliente: envia pelo WhatsApp do canal">Mensagem ao cliente</button>
@@ -265,6 +305,11 @@
           </div>
 
           <form class="atd-input-linha" id="form-compositor" novalidate>
+            <div class="atd-anexar-wrap" id="wrap-btn-anexar">
+              <input type="file" id="input-anexo" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.xlsx,.csv,.txt,.ogg,.mp3,image/png,image/jpeg,image/webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain,audio/ogg,audio/mpeg" hidden>
+              <button class="btn btn-ghost atd-btn-clipe" type="button" id="btn-anexar" title="Anexar arquivo: envie imagem, PDF, planilha, documento ou áudio (até 16 MB)" aria-label="Anexar arquivo: envie imagem, PDF, planilha, documento ou áudio (até 16 MB)"><span data-ico="clipe"></span></button>
+              <span data-selo-recurso="midia" hidden></span>
+            </div>
             <label class="sr-only" for="campo-msg">Mensagem ou nota interna</label>
             <textarea class="form-control atd-textarea" id="campo-msg" name="texto" rows="2" placeholder="Digite uma mensagem ou '/' para respostas rápidas…"></textarea>
             <button class="btn btn-primary" type="submit" id="btn-enviar" title="Enviar mensagem ao cliente pelo canal" aria-label="Enviar mensagem ao cliente pelo canal"><span data-ico="enviar"></span> Enviar</button>
@@ -289,26 +334,93 @@
     </aside>
   </main>
 
+  <!-- Lightbox de imagem ampliada (G23 §10.3) -->
+  <div class="atd-lightbox" id="modal-midia-imagem" role="dialog" aria-modal="true" aria-label="Visualização de imagem" hidden>
+    <div class="atd-lightbox-barra">
+      <span class="atd-lightbox-nome" id="modal-midia-nome">Imagem</span>
+      <div class="atd-lightbox-acoes">
+        <button class="btn btn-ghost btn-sm" type="button" id="btn-modal-midia-baixar" title="Baixar esta imagem" aria-label="Baixar esta imagem"><span data-ico="download"></span> Baixar</button>
+        <button class="btn btn-ghost btn-sm" type="button" id="btn-modal-midia-fechar" title="Fechar visualização ampliada (Esc)" aria-label="Fechar visualização ampliada (Esc)"><span data-ico="cancelar"></span> Fechar</button>
+      </div>
+    </div>
+    <img class="atd-lightbox-img" id="modal-midia-img" alt="">
+  </div>
+
 </div>
 
 <script src="/app/ia-talk/socket.io/socket.io.js"></script>
 <script src="/app/ia-talk/js/talk-api.js"></script>
 <script src="/app/ia-talk/js/talk-icones.js"></script>
+<script src="/app/ia-talk/js/telas/recursos-atendimento.js"></script>
+<script src="/app/ia-talk/js/telas/midia-ui.js"></script>
 <script src="/app/ia-talk/js/central-atendimento.js"></script>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
   const { esc, relativo } = TalkUI;
   const KEY_SOM_MUDO = 'talk_portal_som_mudo';
+  const DICA_STATUS_ORIGINAL = 'Disponível recebe rodízio; Ocupado vê a fila mas não recebe rodízio; Ausente não recebe nada.';
+  const DICA_SINO_ORIGINAL = 'Alertas de atendimento: abra para ver avisos e ir direto à conversa';
+  const DICA_WHATS_ORIGINAL = 'Receber alertas de fila e escalonamento no seu WhatsApp cadastrado';
 
   let empresaNome = '';
   let apelidoEmpresa = descobrirApelidoDaUrl();
   let meuAtendente = { status: 'ausente', status_desde: null, alertas_whatsapp: false };
   let alertasLista = [];
+  let recursosAtd = { ok: false, dados: null };
+  let recursosProntos = false;
   let somMudo = lerSomMudo();
   let redirecionando401 = false;
   let audioCtx = null;
   let central = null;
+
+  /**
+   * Indica se a API /atendentes/eu pode ser consultada/atualizada:
+   * quando GET /atendimento/recursos respondeu, exige status_atendente === true;
+   * se a rota de recursos falhou, não bloqueia nem exibe selos/erros.
+   */
+  function podeUsarStatusAtendente() {
+    if (!recursosProntos) return false;
+    return recursosAtd.ok ? recursosAtd.dados?.status_atendente === true : true;
+  }
+
+  /**
+   * Indica se a API /alertas pode ser consultada:
+   * quando GET /atendimento/recursos respondeu, exige alertas_tela === true.
+   */
+  function podeUsarAlertasTela() {
+    if (!recursosProntos) return false;
+    return recursosAtd.ok ? recursosAtd.dados?.alertas_tela === true : true;
+  }
+
+  /**
+   * Aplica selos "Ainda não ativo" e estado habilitado/desabilitado nos controles
+   * de presença e alertas do cabeçalho do portal (§9.12).
+   */
+  function aplicarEstadoRecursosPortal() {
+    TalkRecursos.aplicarSelos(document, recursosAtd);
+
+    const statusInativo = TalkRecursos.inativo(recursosAtd, 'status_atendente');
+    const alertasTelaInativo = TalkRecursos.inativo(recursosAtd, 'alertas_tela');
+    const alertasWhatsInativo = TalkRecursos.inativo(recursosAtd, 'alertas_whatsapp');
+
+    $('ptl-status-select').disabled = statusInativo;
+    $('ptl-status-select').title = statusInativo ? TalkRecursos.DICA : DICA_STATUS_ORIGINAL;
+    $('ptl-status-box').classList.toggle('g22-controle-inativo', statusInativo);
+    $('ptl-status-box').title = statusInativo ? TalkRecursos.DICA : DICA_STATUS_ORIGINAL;
+    $('ptl-status-desde').hidden = statusInativo;
+
+    $('btn-sino').disabled = alertasTelaInativo;
+    $('btn-sino').title = alertasTelaInativo ? TalkRecursos.DICA : DICA_SINO_ORIGINAL;
+    if (alertasTelaInativo) fecharPopoverAlertas();
+
+    $('chk-alertas-whatsapp').disabled = alertasWhatsInativo;
+    const lblWhats = $('lbl-alertas-whatsapp');
+    if (lblWhats) {
+      lblWhats.classList.toggle('g22-controle-inativo', alertasWhatsInativo);
+      lblWhats.title = alertasWhatsInativo ? TalkRecursos.DICA : DICA_WHATS_ORIGINAL;
+    }
+  }
 
   function descobrirApelidoDaUrl() {
     const m = location.pathname.match(/\/app\/ia-talk\/([a-z0-9-]{3,40})\/atendimento\/?$/i);
@@ -434,7 +546,7 @@
   }
 
   async function carregarMeuStatus() {
-    if (!central) return;
+    if (!central || !podeUsarStatusAtendente()) return;
     try {
       const dados = await central.api.get('/atendentes/eu');
       if (dados) {
@@ -446,7 +558,7 @@
         renderizarStatus();
       }
     } catch (err) {
-      if (err?.status !== 401) TalkUI.toast(err.message, 'erro');
+      if (err?.status !== 401 && recursosAtd.ok) TalkUI.toast(err.message, 'erro');
     }
   }
 
@@ -480,7 +592,7 @@
   }
 
   async function carregarAlertas() {
-    if (!central) return;
+    if (!central || !podeUsarAlertasTela()) return;
     try {
       const pag = await central.api.get('/alertas', { limite: 30 });
       alertasLista = Array.isArray(pag?.itens) ? pag.itens : [];
@@ -547,6 +659,7 @@
   }
 
   $('btn-sino').addEventListener('click', () => {
+    if ($('btn-sino').disabled || TalkRecursos.inativo(recursosAtd, 'alertas_tela')) return;
     const abrir = $('popover-alertas').hidden;
     fecharMenuMobile();
     $('popover-alertas').hidden = !abrir;
@@ -589,6 +702,7 @@
   });
 
   $('ptl-status-select').addEventListener('change', async (e) => {
+    if (!podeUsarStatusAtendente()) return;
     const anterior = meuAtendente.status;
     const novoStatus = e.target.value;
     e.target.disabled = true;
@@ -605,11 +719,15 @@
       renderizarStatus();
       if (err?.status !== 401) TalkUI.toast(err.message, 'erro');
     } finally {
-      e.target.disabled = false;
+      e.target.disabled = TalkRecursos.inativo(recursosAtd, 'status_atendente');
     }
   });
 
   $('chk-alertas-whatsapp').addEventListener('change', async (e) => {
+    if (!podeUsarStatusAtendente() || TalkRecursos.inativo(recursosAtd, 'alertas_whatsapp')) {
+      e.target.checked = !!meuAtendente.alertas_whatsapp;
+      return;
+    }
     const anterior = meuAtendente.alertas_whatsapp;
     const novoValor = e.target.checked;
     e.target.disabled = true;
@@ -622,7 +740,7 @@
       renderizarStatus();
       if (err?.status !== 401) TalkUI.toast(err.message, 'erro');
     } finally {
-      e.target.disabled = false;
+      e.target.disabled = TalkRecursos.inativo(recursosAtd, 'alertas_whatsapp');
     }
   });
 
@@ -639,7 +757,7 @@
   // ── Inicialização integrada à Central compartilhada ──────────────────
   central = CentralAtendimento.iniciar({
     ao401: redirecionarLogin401,
-    aoSessao: async (sessao) => {
+    aoSessao: async (sessao, recursosCarregadosCentral) => {
       if (sessao?.empresa?.apelido && !apelidoEmpresa) apelidoEmpresa = sessao.empresa.apelido;
       empresaNome = sessao?.empresa?.nome || 'IA Talk';
       const nomeUsuario = sessao?.usuario?.nome || '—';
@@ -675,12 +793,19 @@
       const temAdmin = rotinas.some((r) => r !== 'talk-painel' && r !== 'talk-atendimento');
       $('link-admin').hidden = !temAdmin;
 
+      recursosAtd = recursosCarregadosCentral || await TalkRecursos.carregar((caminho) => central.api.get(caminho));
+      recursosProntos = true;
+      aplicarEstadoRecursosPortal();
+
       await Promise.all([carregarMeuStatus(), carregarAlertas()]);
       return true;
     },
     aoSocket: (sock) => {
-      sock.on('alerta', receberAlertaTempoReal);
+      sock.on('alerta', (alerta) => {
+        if (podeUsarAlertasTela()) receberAlertaTempoReal(alerta);
+      });
       sock.on('presenca:atualizada', (ev) => {
+        if (!podeUsarStatusAtendente()) return;
         const meuId = central?.obterUsuarioEfetivo()?.id;
         if (!ev?.usuario_id || ev.usuario_id !== meuId) return;
         if (ev.status) meuAtendente.status = ev.status;

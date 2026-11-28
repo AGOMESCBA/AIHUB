@@ -16,6 +16,8 @@ const { ROTINAS } = require('../acesso/papeis');
 const { mascararTelefone, BASE_SIMULADA } = require('./dados');
 const onda1 = require('./atendimento-onda1');
 const cfg = require('../atendimento/config-onda1');
+const { RECURSOS_ATENDIMENTO } = require('../atendimento/recursos');
+const { criarMidiaSimulada } = require('./midia-simulada');
 const menuSetores = require('../lib/menu-setores'); // X1 (Codex): a mesma leitura do servidor real
 
 const MIN = 60 * 1000;
@@ -180,6 +182,28 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
   const at = criarDadosAtendimento(dados.usuarios);
   dados.atendimento = at;
 
+  // P1 (§10): mídia em memória. Semente: na cv_ex01 o contato mandou print do erro, comprovante em PDF e
+  // um áudio de voz; na cv_ex07 há um áudio que já passou do prazo de guarda.
+  const md = criarMidiaSimulada({ novo, agora });
+  for (const cv of at.conversas) for (const it of cv.itens) if (it.midia === undefined) it.midia = null;
+  {
+    const minAtras = (m) => new Date(Date.now() - m * 60_000).toISOString();
+    const entrada = (cv, id, tipo, texto, midia, min) => {
+      const ct = at.contatos.find(c => c.id === cv.contato_id);
+      return { id, categoria: 'mensagem', direcao: 'entrada', autor: { tipo: 'contato', id: ct.id, nome: ct.nome }, tipo, texto,
+        estado: 'recebida', mensagem_id: null, em: minAtras(min), midia };
+    };
+    const cv1 = at.conversas.find(c => c.id === 'cv_ex01');
+    cv1.itens.push(
+      entrada(cv1, 'itm_md_1', 'imagem', 'Olha o erro que aparece na tela', md.amostra('imagem', cv1.empresa_id, cv1.id), 11),
+      entrada(cv1, 'itm_md_2', 'documento', null, md.amostra('pdf', cv1.empresa_id, cv1.id), 10),
+      entrada(cv1, 'itm_md_3', 'audio', null, md.amostra('voz', cv1.empresa_id, cv1.id), 9));
+    cv1.itens.sort((a, b) => (a.em < b.em ? -1 : a.em > b.em ? 1 : 0));
+    cv1.nao_lidas = entradasSemResposta(cv1.itens).length;
+    const cv7 = at.conversas.find(c => c.id === 'cv_ex07');
+    cv7.itens.splice(2, 0, entrada(cv7, 'itm_md_4', 'audio', null, md.amostra('voz', cv7.empresa_id, cv7.id, { expirada: true }), 2 * 24 * 60 + 29));
+  }
+
   // Uso dos números: o Suporte J2A está compartilhado com o IA Command (opção B), os demais só integração.
   for (const c of dados.canais) {
     if (c.id === 'cn_suporte') {
@@ -244,7 +268,7 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
     return {
       id: cv.id, protocolo: cv.protocolo, canal: cv.canal, contato: contatoCurto(contatoDe(cv)), setor: cv.setor, responsavel: cv.responsavel,
       situacao: cv.situacao, na_fila: cv.situacao === 'aberta' && !cv.responsavel && !cv.triagem, nao_lidas: cv.nao_lidas,
-      ultima_mensagem: ultima ? { previa: previa(ultima.texto), direcao: ultima.direcao, autor_tipo: ultima.autor.tipo, em: ultima.em } : null,
+      ultima_mensagem: ultima ? { previa: ultima.texto ? previa(ultima.texto) : md.previaDaMidia(ultima.tipo), direcao: ultima.direcao, autor_tipo: ultima.autor.tipo, em: ultima.em } : null,
       aguardando_desde: aguardandoDesde(cv), etiquetas: cv.etiquetas, prioridade: cv.prioridade, referencias: cv.referencias,
       aberta_em: cv.aberta_em, atualizada_em: cv.atualizada_em, encerrada_em: cv.encerrada_em,
       // Onda 1 (§9.3–9.7)
@@ -332,7 +356,7 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
     emitir(S.contadoresAtendimento, contadores(), 'atendimento');
   }
   function adicionarItem(cv, item) {
-    const it = { id: novo('itm'), mensagem_id: null, tipo: null, estado: null, direcao: null, em: agora(), ...item };
+    const it = { id: novo('itm'), mensagem_id: null, tipo: null, estado: null, direcao: null, midia: null, em: agora(), ...item };
     cv.itens.push(it);
     cv.atualizada_em = it.em;
     emitir(S.itemConversa, { conversa_id: cv.id, item: it }, salaConversa(cv.id));
@@ -341,10 +365,11 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
   const evento = (cv, texto) => adicionarItem(cv, { categoria: 'evento', autor: { tipo: 'sistema', id: null, nome: 'IA Talk' }, texto });
 
   // Chegada de mensagem do contato (regras de entrada da C9, §8.6).
-  function receber(contato, texto) {
+  // arquivo (opcional, já conferido): { nome, mime, tipo, dados, voz } — §10.6.
+  function receber(contato, texto, arquivo = null) {
     const canal = dados.canais.find(c => c.id === 'cn_suporte');
     // Pesquisa: nota (1 a 5) da última conversa encerrada nas últimas 24 h não abre conversa nova.
-    const nota = Number(String(texto).trim());
+    const nota = arquivo ? NaN : Number(String(texto).trim());
     const temAberta = at.conversas.some(c => c.contato_id === contato.id && c.canal.id === canal.id && c.situacao === 'aberta');
     const pesquisada = !temAberta && at.conversas.find(c => c.contato_id === contato.id && c.situacao === 'encerrada' && c.pesquisa && !c.pesquisa.nota
       && Date.now() - Date.parse(c.pesquisa.enviada_em) < 24 * 60 * MIN);
@@ -379,7 +404,9 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
         evento(cv, `Conversa aberta no setor ${setor.nome}.`);
       }
     }
-    adicionarItem(cv, { categoria: 'mensagem', direcao: 'entrada', autor: { tipo: 'contato', id: contato.id, nome: contato.nome }, tipo: 'texto', texto, estado: 'recebida' });
+    const midia = arquivo ? md.guardar({ empresaId: cv.empresa_id, conversaId: cv.id, nome: arquivo.nome, mime: arquivo.mime, dados: arquivo.dados, voz: !!arquivo.voz }) : null;
+    adicionarItem(cv, { categoria: 'mensagem', direcao: 'entrada', autor: { tipo: 'contato', id: contato.id, nome: contato.nome },
+      tipo: arquivo?.tipo || 'texto', texto: arquivo ? (String(texto || '').trim() || null) : texto, estado: 'recebida', midia });
     cv.nao_lidas += 1;
     avisar(cv);
     return cv;
@@ -435,14 +462,15 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
 
   // Saída para o contato pela fila da C3 (estados comprovados, ritmo do canal). Quem chama já
   // conferiu as regras do canal. Texto com a palavra "falha" termina em `falhou` (teste da tela de erro).
-  function enviarNaConversa(cv, texto, autor) {
+  function enviarNaConversa(cv, texto, autor, { tipo = 'texto', midia = null } = {}) {
     const t0 = agora();
     const m = { id: novo('msg'), direcao: 'saida', canal: { ...cv.canal }, aplicacao: null, origem: 'atendimento', contato_mascarado: mascararTelefone(contatoDe(cv).telefone),
-      tipo: 'texto', previa: previa(texto), texto, estado: 'aceita', correlacao_id: cv.protocolo, criada_em: t0, atualizada_em: t0,
-      historico_estados: [{ estado: 'aceita', em: t0, detalhe: `Mensagem da conversa ${cv.protocolo}.` }], metadados: { conversa_id: cv.id }, anexos: [] };
+      tipo, previa: texto ? previa(texto) : md.previaDaMidia(tipo), texto, estado: 'aceita', correlacao_id: cv.protocolo, criada_em: t0, atualizada_em: t0,
+      historico_estados: [{ estado: 'aceita', em: t0, detalhe: `Mensagem da conversa ${cv.protocolo}.` }], metadados: { conversa_id: cv.id },
+      anexos: midia ? [{ id: midia.id, nome: midia.nome, mime: midia.mime, tamanho: midia.tamanho }] : [] };
     dados.mensagens.unshift(m);
-    const it = adicionarItem(cv, { categoria: 'mensagem', direcao: 'saida', autor, tipo: 'texto', texto, estado: 'aceita', mensagem_id: m.id });
-    const passos = /falha/i.test(texto) ? ['aguardando', 'encaminhada', 'falhou'] : ['aguardando', 'encaminhada', 'enviada', 'entregue', 'lida'];
+    const it = adicionarItem(cv, { categoria: 'mensagem', direcao: 'saida', autor, tipo, texto, estado: 'aceita', mensagem_id: m.id, midia });
+    const passos = /falha/i.test(texto || '') ? ['aguardando', 'encaminhada', 'falhou'] : ['aguardando', 'encaminhada', 'enviada', 'entregue', 'lida'];
     passos.forEach((estado, i) => setTimeout(() => {
       it.estado = m.estado = estado;
       m.atualizada_em = agora();
@@ -504,6 +532,8 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
       return { ...Object.fromEntries(cfg.BLOCOS_HERDAVEIS.map(b => [b, ef[b]])), uso, versao: pol.versao, atualizado_em: pol.atualizado_em };
     };
     admin.get('/atendimento/politica', (req, res) => { leitura(req); res.json(politicaPublica(sessao.empresaId)); });
+    // §9.12: a mesma lista do servidor real (a tela de teste mostra o que a produção vai mostrar).
+    admin.get('/atendimento/recursos', (req, res) => { leitura(req); res.json(RECURSOS_ATENDIMENTO); });
     admin.put('/atendimento/politica', (req, res) => {
       exigirRotina(req, R.setores);
       const b = req.body || {};
@@ -657,6 +687,8 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
         filtros: {
           setor_id: (i, v) => i.setor.id === v, canal_id: (i, v) => i.canal.id === v, contato_id: (i, v) => i.contato.id === v,
           responsavel_id: (i, v) => (v === 'nenhum' ? !i.responsavel : i.responsavel?.id === v), etiqueta: (i, v) => i.etiquetas.includes(v),
+          // Período pela última atividade (AAAA-MM-DD), como no servidor real.
+          de: (i, v) => String(i.atualizada_em).slice(0, 10) >= v, ate: (i, v) => String(i.atualizada_em).slice(0, 10) <= v,
         },
         ordenarPadrao: visao === 'fila' ? null : 'atualizada_em',
       }));
@@ -833,6 +865,27 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
       res.status(202).json(it);
     });
 
+    // Mídia (§10.3 e §10.4): ver/baixar e anexar pela Central (mesmas regras do responder).
+    md.rotas(admin, { exigirRotina, R, sessao,
+      podeVerMidia: (req, cvId) => { const cv = at.conversas.find(c => c.id === cvId); return !!cv && (podeVer(req, cv) || rotinas(req).includes(R.mensagens)); },
+      anexar: (req, _id, arq) => {
+        const cv = acharConversa(req);
+        if (cv.situacao === 'encerrada' || (cv.responsavel && cv.responsavel.id !== usuarioId(req))) throw erro('conflito', envioDaConversa(req, cv).motivo);
+        const bloqueio = bloqueioDoCanal(cv);
+        if (bloqueio) throw erro(bloqueio.codigo, bloqueio.motivo);
+        const quem = ref(usuarioId(req));
+        if (!cv.responsavel) {
+          cv.responsavel = quem;
+          evento(cv, `${quem.nome} assumiu a conversa.`);
+          registrarRetorno(cv, 'conversa.assumida', { responsavel: quem });
+        }
+        const midia = md.guardar({ empresaId: cv.empresa_id, conversaId: cv.id, nome: arq.nome, mime: arq.mime, dados: arq.dados });
+        const it = enviarNaConversa(cv, arq.legenda, { tipo: 'atendente', ...quem }, { tipo: arq.tipo, midia });
+        cv.nao_lidas = 0;
+        avisar(cv);
+        return it;
+      } });
+
     // Contatos
     const acharContato = (req) => {
       const ct = acharDaEmpresa(at.contatos, req.params.id, 'Contato');
@@ -853,6 +906,13 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
     // Só do simulado: uma mensagem chegando do WhatsApp.
     admin.post('/simulado/receber', (req, res) => {
       const ct = req.body?.contato_id ? acharDaEmpresa(at.contatos, req.body.contato_id, 'Contato') : at.contatos[1];
+      const m = req.body?.midia;
+      if (m) {
+        const dadosArq = Buffer.from(String(m.base64 || ''), 'base64');
+        const { mime, tipo } = md.conferir(dadosArq);
+        const cv = receber(ct, String(req.body?.texto || '').slice(0, LIMITE_TEXTO), { nome: String(m.nome || 'arquivo').slice(0, 120), mime, tipo, dados: dadosArq, voz: !!m.voz });
+        return res.status(201).json(conversaResumo(cv));
+      }
       const cv = receber(ct, String(req.body?.texto || 'Olá, ainda estou aguardando.').slice(0, LIMITE_TEXTO));
       res.status(201).json(conversaResumo(cv));
     });

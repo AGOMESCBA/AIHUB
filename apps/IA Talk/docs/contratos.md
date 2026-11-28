@@ -220,7 +220,7 @@ atualizar; se o socket cair, consulta a API a cada 30 s (padrão do chat do IA S
 | `GET /painel` | Forma `painel`: `canais { total, conectados, com_problema }`, `mensagens_hoje { enviadas, recebidas, falhas }`, `fila { aguardando, desconhecidas }`, `tempo_medio_envio_ms` (pode ser `null`), `pendencias: [{ tipo, gravidade: alta\|media\|baixa, mensagem, link }]`, `atualizado_em` |
 | `GET /mensagens` | Forma `mensagemResumo`. Filtros: `de`, `ate` (AAAA-MM-DD), `canal_id`, `provedor`, `aplicacao_id` (`nenhuma` = sem aplicação), `direcao` (`entrada`\|`saida`), `tipo`, `estado` (vários com `\|`), `apenas_falhas=1`, `correlacao_id` (contém), `destinatario` (número completo digitado; resposta mascarada), `busca` (prévia, id, correlação) |
 | `GET /mensagens/:id` | Forma `mensagemDetalhe`: + `historico_estados [{ estado, em, detalhe }]`, `metadados`, `anexos [{ id, nome, mime, tamanho }]` |
-| `GET /mensagens/exportar` | Mesmos filtros; CSV (`;`, UTF-8 com BOM), até 200 linhas no simulado. Exige rotina `talk-mensagens` |
+| `GET /mensagens/exportar` | Mesmos filtros; CSV (`;`, UTF-8 com BOM), mais recentes primeiro; até 10.000 linhas no servidor real e 200 no simulado. Telefone mascarado; célula iniciada por = + - @ ganha apóstrofo. Auditoria `mensagens.exportadas`. Exige rotina `talk-mensagens` |
 | `POST /mensagens/:id/reenviar` | Só `desconhecida`/`falhou` (senão 409) |
 | `POST /mensagens/:id/dar-como-falha` | Idem |
 | `GET /eventos` | Forma `evento`: `entrega { situacao, tentativas, proxima_tentativa_em, ultimo_status_http }`. Filtros `tipo`, `aplicacao_id`, `situacao`, `de`, `ate`, `busca` |
@@ -366,7 +366,7 @@ O texto da resposta rápida aceita `{nome_contato}` e `{nome_atendente}`. **A te
 
 | Rota | Detalhe |
 |---|---|
-| `GET /conversas` | Forma `conversaResumo`. `visao`: `minhas` \| `fila` \| `abertas` (padrão) \| `encerradas` \| `todas`. Filtros: `setor_id`, `canal_id`, `contato_id`, `responsavel_id` (`nenhum` = sem responsável), `etiqueta` e `busca` (nome do contato, protocolo, prévia; com 4 ou mais dígitos, procura no final do telefone). Ordem padrão: na `fila`, prioridade `alta` primeiro e, dentro de cada prioridade, por `aguardando_desde` (quem espera há mais tempo vem primeiro); nas demais, por `atualizada_em`, da mais recente para a mais antiga |
+| `GET /conversas` | Forma `conversaResumo`. `visao`: `minhas` \| `fila` \| `abertas` (padrão) \| `encerradas` \| `todas`. Filtros: `setor_id`, `canal_id`, `contato_id`, `responsavel_id` (`nenhum` = sem responsável), `etiqueta`, `de`/`ate` (AAAA-MM-DD, pela última atividade `atualizada_em`) e `busca` (nome do contato, protocolo, prévia; com 4 ou mais dígitos, procura no final do telefone). Ordem padrão: na `fila`, prioridade `alta` primeiro e, dentro de cada prioridade, por `aguardando_desde` (quem espera há mais tempo vem primeiro); nas demais, por `atualizada_em`, da mais recente para a mais antiga |
 | `GET /conversas/contadores` | Forma `contadoresAtendimento`: `minhas`, `fila`, `abertas` e `por_setor: [{ id, nome, abertas, na_fila }]`, só com os setores que a pessoa vê |
 | `GET /conversas/:id` | Forma `conversaDetalhe`. Além do resumo: `contato` completo (forma `contato`), `motivo_encerramento` e `envio: { pode_responder, motivo, limite_caracteres }`. Quando não é possível responder, `motivo` explica em pt-BR (encerrada, com outra pessoa, envio desligado, canal desconectado, só números de teste); a tela desabilita o campo e mostra o motivo |
 | `GET /conversas/:id/itens` | Página de `itemConversa`, **da mais recente para a mais antiga** (a tela inverte). Filtro `categoria` (vários valores com `\|`) |
@@ -827,3 +827,100 @@ conversa, protocolo, setor, responsável naquele momento, `alvo`, `prazo`, `esto
 | `GET /atendimento/sla/violacoes?de=&ate=&setor_id=&responsavel_id=&alvo=` | Página de violações, mais recentes primeiro. Só supervisão |
 | `GET /atendimento/relatorio` | Ganha `sla: { dentro_pct, violacoes, por_alvo: { primeira_resposta, proxima_resposta, resolucao } }` por grupo |
 
+
+### 9.12 O que o servidor já executa
+
+`GET /atendimento/recursos` (rotina `talk-atendimento` ou `talk-setores`) devolve booleanos: `menu`, `midia` (§10), `status_atendente`, `rodizio`, `alertas_tela`, `alertas_whatsapp`, `escalonamento`, `pesquisa`, `inatividade`, `sla`.
+
+- As telas **não escondem** a configuração do que está `false`: mostram o selo "Ainda não ativo" e um texto curto ("Já pode configurar; passa a valer numa próxima atualização.").
+- Cada etapa liga o seu item quando fica pronta. O simulado devolve a mesma lista do servidor real.
+
+
+## 10. P1 — Mídia no atendimento e na API (áudio, imagem, documento)
+
+Primeira etapa do piloto (replanejamento de 28/11/2026). Recurso `midia` em `GET /atendimento/recursos`
+(§9.12): enquanto estiver `false`, a tela mostra os anexos recebidos que existirem, mas o botão de anexar
+fica desabilitado com o selo "Ainda não ativo".
+
+### 10.1 Guarda dos arquivos
+
+| Regra | Detalhe |
+|---|---|
+| Onde | Pasta de dados do IA Talk, por empresa. **Cifrado no disco** com a chave mestra (a mesma dos segredos); quem copia a pasta sem a chave não abre nada |
+| Tipo real | Conferido pelo **conteúdo** (biblioteca G4, `lib/midia`), nunca pelo nome ou pelo que o remetente declarou |
+| Tamanho | Até 16 MB por arquivo (limite do canal, `max_midia_bytes`) |
+| Tipos aceitos | Os de `mimes_aceitos` do canal: imagem (PNG, JPEG, WEBP), PDF, Word, Excel, CSV, texto, áudio (OGG, MP3). Vídeo fica para depois |
+| Prazo | **180 dias** por padrão, configurável por empresa nos Parâmetros da IA Gestão (lido a partir do P4). Depois do prazo, o arquivo é apagado e a mensagem continua na conversa com "Arquivo expirado". O **texto** da conversa não tem prazo |
+
+### 10.2 Na conversa
+
+Item de mensagem com `tipo` ∈ `texto` | `imagem` | `documento` | `audio` | `video` e o campo novo `midia`:
+
+```json
+"midia": { "id": "md_…", "nome": "comprovante.pdf", "mime": "application/pdf", "tamanho": 183422,
+           "voz": false, "disponivel": true, "motivo": null, "expira_em": "…" }
+```
+
+- `texto` do item é a **legenda** (pode ser `null`).
+- `voz: true` = áudio gravado no WhatsApp (mensagem de voz).
+- `disponivel: false` com `motivo`:
+  - `expirado`: passou do prazo de guarda;
+  - `grande`: acima de 16 MB, não foi baixado;
+  - `recusado`: tipo não aceito por segurança (ex.: executável), não foi guardado;
+  - `falhou`: o WhatsApp não entregou o arquivo.
+
+  Nesses casos a mensagem aparece assim mesmo, com a explicação.
+- `midia: null` em itens de texto.
+- `ultima_mensagem.previa` da conversa: com legenda, a legenda; sem legenda, "📎 Imagem", "📎 Documento" ou "🎤 Áudio".
+
+### 10.3 Ver e baixar
+
+| Rota | Detalhe |
+|---|---|
+| `GET /midias/:id` | O arquivo, para quem pode ver a conversa (mesma regra da Central) ou tem `talk-mensagens`. Imagem, áudio e PDF abrem no navegador; os demais baixam. `?baixar=1` força o download. Expirado → 410 `midia_expirada`. Outra empresa → 404 |
+
+O arquivo sai com o tipo real conferido, `X-Content-Type-Options: nosniff` e `Content-Security-Policy: sandbox`
+(um arquivo nunca roda código no IA Talk).
+
+### 10.4 Enviar pela Central
+
+| Rota | Detalhe |
+|---|---|
+| `POST /conversas/:id/anexos?nome=<nome>&legenda=<opcional>` | Corpo = o arquivo em binário (`Content-Type: application/octet-stream`), até 16 MB. Mesmas regras de `responder` (quem pode, conversa aberta, regras do canal). 202 com o `itemConversa` (estado `aceita`). Erros: 413 `arquivo_grande`, 422 `tipo_nao_suportado`, 400 em `campos.legenda` (até 1024 caracteres) |
+
+- O tipo da mensagem (`imagem`, `documento` ou `audio`) é deduzido do tipo real do arquivo.
+- Uma mensagem por arquivo. Para vários arquivos, a tela envia um de cada vez, na ordem escolhida.
+
+### 10.5 API v1 (C3b)
+
+`POST /v1/mensagens` com `tipo` ≠ `texto` passa a aceitar `arquivo` com **exatamente um** entre:
+- `base64` (até 16 MB depois de decodificar);
+- `url`: só HTTPS público, baixada pelo IA Talk com a proteção contra acesso à rede interna da G4.
+
+O `nome` é opcional. `legenda` é opcional em `imagem` e `documento`. `midia_id` fica para depois (422).
+Erros: 413 `arquivo_grande`, 422 `tipo_nao_suportado`, 422 `url_invalida` / `destino_bloqueado` / `falha_download`.
+
+### 10.6 Recebimento
+
+- Mensagem com mídia num número em atendimento: o IA Talk **baixa e guarda** o arquivo antes de gravar a mensagem.
+- Se baixar falhar ou demorar mais de 60 s, a mensagem é gravada assim mesmo, com `disponivel: false` e o `motivo`.
+- Figurinhas viram `imagem`. Localização, contato compartilhado e enquete viram texto descritivo (ex.: "📍 Localização: -15.60, -56.09").
+- Número em `integracao` continua sem gravar a entrada (C4).
+
+### 10.7 Simulado
+
+- A semente tem uma imagem, um PDF e um áudio de voz na conversa `cv_ex01`, e um áudio expirado na `cv_ex07`.
+- `POST /conversas/:id/anexos` guarda em memória e valida com a mesma biblioteca.
+- `POST /simulado/receber` aceita `midia: { nome, base64 }` para simular o cliente mandando arquivo.
+
+## 11. P2 — Mensagens recebidas com o canal fora do ar
+
+- Cada canal guarda até quando já recebeu (`recebido_ate`, só avança).
+- Na conexão, o canal procura as **conversas individuais com mensagens não lidas** e recupera as que chegaram depois desse ponto. Limites: 24 h, 200 conversas, 50 mensagens por conversa.
+- Elas passam pelo mesmo caminho de uma mensagem nova (regras do canal, atendimento, mídia). O que já foi gravado é ignorado pelo identificador da mensagem, então nada aparece em dobro.
+- **Número novo** (sem ponto de controle): nada antigo é importado; vale o que chegar dali em diante.
+- **Fora do escopo:**
+  - mensagens que alguém já **leu no celular** com o canal fora (deixam de ser "não lidas");
+  - mensagens enviadas pelo próprio aparelho;
+  - edições e exclusões.
+- O Terminal do canal mostra quantas mensagens foram recuperadas.

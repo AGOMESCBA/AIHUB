@@ -13,6 +13,10 @@ const { ipDe } = require('../acesso/middleware');
 const { VISOES_CONVERSA } = require('../contratos');
 const { Atendimento } = require('../atendimento/servico');
 const repo = require('../atendimento/repositorio');
+const { RECURSOS_ATENDIMENTO } = require('../atendimento/recursos');
+const armazem = require('../midias/armazem');
+
+const ABRE_NO_NAVEGADOR = /^(image\/|audio\/|application\/pdf$)/;
 
 const escaparLike = (v) => `%${String(v).replace(/[%_\\]/g, '\\$&')}%`;
 
@@ -34,6 +38,9 @@ function criarRotasAtendimento({ db, atendimento, log = console }) {
   const leitura = exigirAlguma(ROTINAS.atendimento, ROTINAS.setores);
   const auditar = (req, acao, alvoTipo, alvoId, resumo) => auditoria.registrar(db, req.contexto, { acao, alvoTipo, alvoId, resumo, ip: ipDe(req) });
   const detalhe = (req, cv) => atendimento.detalhe(req.acesso, cv);
+
+  // ── O que o servidor já executa (§9.12): as telas marcam "Ainda não ativo" no resto ──
+  r.get('/atendimento/recursos', leitura, (_req, res) => res.json(RECURSOS_ATENDIMENTO));
 
   // ── Política de atendimento da empresa (§9.10): padrão para todos os setores ──
   r.get('/atendimento/politica', leitura, (req, res) => res.json(atendimento.politica(req.acesso)));
@@ -113,6 +120,13 @@ function criarRotasAtendimento({ db, atendimento, log = console }) {
     if (visao === 'encerradas') onde.push("cv.situacao = 'encerrada'");
     // Menu de setores (§9.3): só a supervisão vê (filtroVisivel já tira a triagem de quem não vê tudo).
     if (visao === 'triagem') onde.push("cv.situacao = 'aberta' AND cv.triagem_desde IS NOT NULL");
+    // Período pela última atividade da conversa (AAAA-MM-DD, dias inteiros), como a tela de Histórico mostra.
+    for (const [campo, op] of [['de', '>='], ['ate', '<=']]) {
+      if (!q[campo]) continue;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(q[campo]))) throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos: { [campo]: 'Use AAAA-MM-DD.' } });
+      onde.push(`substr(cv.atualizada_em, 1, 10) ${op} @${campo}`);
+      p[campo] = String(q[campo]);
+    }
     if (q.setor_id) { onde.push('cv.setor_id = @setor'); p.setor = String(q.setor_id); }
     if (q.canal_id) { onde.push('cv.canal_id = @canal'); p.canal = String(q.canal_id); }
     if (q.contato_id) { onde.push('cv.contato_id = @contato'); p.contato = String(q.contato_id); }
@@ -147,18 +161,52 @@ function criarRotasAtendimento({ db, atendimento, log = console }) {
     res.json({ ...pagina, itens: pagina.itens.map(repo.paraItem) });
   });
 
-  r.post('/conversas/:id/assumir', central, (req, res) => res.json(detalhe(req, atendimento.assumir(req.acesso, req.params.id))));
-  r.post('/conversas/:id/devolver', central, (req, res) => res.json(detalhe(req, atendimento.devolver(req.acesso, req.params.id))));
+  // Ações da conversa também vão para a auditoria da empresa (além do evento na própria conversa).
+  const acao = (nome, fazer, resumo) => (req, res) => {
+    const cv = fazer(req);
+    auditar(req, nome, 'conversa', cv.id, resumo(cv));
+    res.json(detalhe(req, cv));
+  };
+  r.post('/conversas/:id/assumir', central, acao('conversa.assumida', (req) => atendimento.assumir(req.acesso, req.params.id),
+    (cv) => `Assumiu a conversa ${cv.protocolo}`));
+  r.post('/conversas/:id/devolver', central, acao('conversa.devolvida', (req) => atendimento.devolver(req.acesso, req.params.id),
+    (cv) => `Devolveu a conversa ${cv.protocolo} para a fila do setor ${cv.setor_nome}`));
   r.post('/conversas/:id/transferir', central, (req, res) => {
     const cv = atendimento.transferir(req.acesso, req.params.id, req.body || {});
     auditar(req, 'conversa.transferida', 'conversa', cv.id, `Transferiu a conversa ${cv.protocolo} para ${cv.responsavel_nome || `o setor ${cv.setor_nome}`}`);
     res.json(detalhe(req, cv));
   });
-  r.post('/conversas/:id/encerrar', central, (req, res) => res.json(detalhe(req, atendimento.encerrar(req.acesso, req.params.id, req.body || {}))));
-  r.post('/conversas/:id/reabrir', central, (req, res) => res.json(detalhe(req, atendimento.reabrir(req.acesso, req.params.id))));
+  r.post('/conversas/:id/encerrar', central, acao('conversa.encerrada', (req) => atendimento.encerrar(req.acesso, req.params.id, req.body || {}),
+    (cv) => `Encerrou a conversa ${cv.protocolo}`));
+  r.post('/conversas/:id/reabrir', central, acao('conversa.reaberta', (req) => atendimento.reabrir(req.acesso, req.params.id),
+    (cv) => `Reabriu a conversa ${cv.protocolo}`));
   r.post('/conversas/:id/marcar-lida', central, (req, res) => res.json(detalhe(req, atendimento.marcarLida(req.acesso, req.params.id))));
   r.put('/conversas/:id/etiquetas', central, (req, res) => res.json(detalhe(req, atendimento.etiquetas(req.acesso, req.params.id, req.body?.etiquetas))));
   r.post('/conversas/:id/notas', central, (req, res) => res.status(201).json(atendimento.nota(req.acesso, req.params.id, req.body?.texto)));
+  // Arquivo pela Central (§10.4): corpo binário até 16 MB (+1 byte para responder 413 no formato do contrato).
+  const binario = express.raw({ type: 'application/octet-stream', limit: armazem.MAX_BYTES + 1 });
+  const lerBinario = (req, res, next) => binario(req, res, (err) => next(err?.type === 'entity.too.large' ? erro('arquivo_grande', 'O arquivo passa de 16 MB.', { status: 413 }) : err));
+  r.post('/conversas/:id/anexos', central, lerBinario, (req, res) => {
+    const it = atendimento.anexar(req.acesso, req.params.id, { nome: armazem.nomeSeguro(req.query.nome), dados: req.body, legenda: req.query.legenda });
+    res.status(202).json(it);
+  });
+
+  // Ver e baixar (§10.3): quem vê a conversa ou tem o Histórico de mensagens. O arquivo nunca roda código aqui.
+  r.get('/midias/:id', exigirAlguma(ROTINAS.atendimento, ROTINAS.mensagens), (req, res) => {
+    const md = armazem.buscar(db, req.acesso.empresaId, req.params.id);
+    let pode = !!md && req.rotinas.includes(ROTINAS.mensagens);
+    if (md && !pode && md.conversa_id) pode = atendimento.podeVer(req.acesso, repo.buscarConversa(db, req.acesso.empresaId, md.conversa_id));
+    if (!pode) throw erro('nao_encontrado', 'Arquivo não encontrado.');
+    const dados = armazem.ler(md);
+    if (!dados) throw erro('midia_expirada', md.motivo ? 'Este arquivo não foi guardado.' : 'Este arquivo passou do prazo de guarda e foi apagado.', { status: 410 });
+    const inline = ABRE_NO_NAVEGADOR.test(md.mime) && req.query.baixar !== '1';
+    res.set({
+      'Content-Type': md.mime, 'Content-Length': String(dados.length), 'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': 'sandbox', 'Cache-Control': 'private, max-age=300',
+      'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(md.nome)}`,
+    }).send(dados);
+  });
+
   r.post('/conversas/:id/responder', central, (req, res) => res.status(202).json(atendimento.responder(req.acesso, req.params.id, req.body?.texto)));
 
   // ── Contatos ──────────────────────────────────────────────────────────────

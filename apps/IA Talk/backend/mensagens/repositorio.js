@@ -9,6 +9,7 @@
 
 const { novoId, agora } = require('../ids');
 const telefone = require('../seguranca/telefone');
+const { previaDaMidia } = require('../midias/armazem');
 
 const ORDEM = Object.freeze({ aceita: 0, aguardando: 1, encaminhada: 2, enviada: 3, entregue: 4, lida: 5 });
 const PROVA_DE_ENVIO = new Set(['enviada', 'entregue', 'lida']);
@@ -25,12 +26,13 @@ function podeIr(atual, novo, { nova_tentativa = false } = {}) {
 
 const previaDe = (texto) => String(texto || '').replace(/\s+/g, ' ').trim().slice(0, 80);
 
-function criar(db, { empresaId, canalId, aplicacaoId = null, usuarioId = null, origem, destino, tipo = 'texto', conteudo, correlacaoId = null, metadados = {}, detalhe = null }) {
+function criar(db, { empresaId, canalId, aplicacaoId = null, usuarioId = null, origem, destino, tipo = 'texto', conteudo, correlacaoId = null, metadados = {}, detalhe = null, midiaId = null }) {
   const id = novoId('mensagem');
   const t = agora();
+  const previa = conteudo ? previaDe(conteudo) : tipo !== 'texto' ? previaDaMidia(tipo) : previaDe(conteudo);
   db.prepare(`INSERT INTO mensagens (id, empresa_id, canal_id, aplicacao_id, usuario_id, origem, destino, tipo, conteudo, previa, estado,
-      correlacao_id, metadados, criada_em, atualizada_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'aceita', ?, ?, ?, ?)`)
-    .run(id, empresaId, canalId, aplicacaoId, usuarioId, origem, destino, tipo, conteudo, previaDe(conteudo), correlacaoId, JSON.stringify(metadados || {}), t, t);
+      correlacao_id, metadados, midia_id, criada_em, atualizada_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'aceita', ?, ?, ?, ?, ?)`)
+    .run(id, empresaId, canalId, aplicacaoId, usuarioId, origem, destino, tipo, conteudo, previa, correlacaoId, JSON.stringify(metadados || {}), midiaId, t, t);
   db.prepare('INSERT INTO mensagem_estados (mensagem_id, estado, em, detalhe) VALUES (?, ?, ?, ?)').run(id, 'aceita', t, detalhe);
   return buscar(db, id);
 }
@@ -84,6 +86,11 @@ function contarFila(db, canalId) {
 }
 
 // ── Formas de resposta (contratos.md FORMAS) ────────────────────────────────
+// Arquivo da mensagem (§10): só a descrição; o conteúdo sai por GET /midias/:id.
+const anexosDe = (db, m) => {
+  const md = m.midia_id ? db.prepare('SELECT id, nome, mime, tamanho FROM midias WHERE id = ?').get(m.midia_id) : null;
+  return md ? [{ id: md.id, nome: md.nome, mime: md.mime, tamanho: md.tamanho }] : [];
+};
 const aplicacaoDe = (m) => (m.aplicacao_id ? { id: m.aplicacao_id, nome: m.aplicacao_nome } : null);
 
 function paraResumo(m) {
@@ -96,7 +103,7 @@ function paraResumo(m) {
 
 function paraDetalhe(db, m) {
   // texto completo só no detalhe (rota restrita à empresa dona); a lista leva só a prévia.
-  return { ...paraResumo(m), texto: m.conteudo, historico_estados: historico(db, m.id), metadados: JSON.parse(m.metadados || '{}'), anexos: [], ultimo_erro: m.ultimo_erro };
+  return { ...paraResumo(m), texto: m.conteudo, historico_estados: historico(db, m.id), metadados: JSON.parse(m.metadados || '{}'), anexos: anexosDe(db, m), ultimo_erro: m.ultimo_erro };
 }
 
 function paraV1(db, m) {

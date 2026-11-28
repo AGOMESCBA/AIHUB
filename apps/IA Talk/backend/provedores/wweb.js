@@ -36,7 +36,37 @@ const PUPPETEER_ARGS = [
 
 const QR_VALIDADE_MS = 60_000;
 const TIPOS_IGNORADOS = new Set(['e2e_notification', 'notification_template', 'protocol', 'gp2', 'call_log', 'revoked', 'ciphertext']);
-const TIPO_MENSAGEM = { chat: 'texto', text: 'texto', image: 'imagem', document: 'documento', audio: 'audio', ptt: 'audio', video: 'video' };
+const TIPO_MENSAGEM = { chat: 'texto', text: 'texto', image: 'imagem', document: 'documento', audio: 'audio', ptt: 'audio', video: 'video', sticker: 'imagem' };
+const ESPERA_DOWNLOAD_MS = 60_000;
+const RECUPERAR_MAX_SEG = 24 * 60 * 60;     // P2: recupera no máximo as últimas 24 h
+const RECUPERAR_MAX_CONVERSAS = 200;
+const RECUPERAR_MAX_POR_CONVERSA = 50;
+const MAX_MIDIA_BYTES = 16 * 1024 * 1024;
+
+// Localização, contato e enquete viram texto descritivo (§10.6).
+function textoDescritivo(msg) {
+  if (msg.type === 'location' && msg.location) return `📍 Localização: ${Number(msg.location.latitude).toFixed(5)}, ${Number(msg.location.longitude).toFixed(5)}${msg.location.description ? ` (${msg.location.description})` : ''}`;
+  if (msg.type === 'vcard' || msg.type === 'multi_vcard') return `👤 Contato compartilhado: ${String(msg.body || '').match(/FN:(.*)/)?.[1]?.trim() || 'sem nome'}`;
+  if (msg.type === 'poll_creation') return `📊 Enquete: ${msg.pollName || ''}`.trim();
+  return null;
+}
+
+// Baixa a mídia de uma mensagem (§10.6). Nunca derruba a mensagem: falha/limite vira `arquivo_falha`.
+async function midiaDaMensagem(msg) {
+  const voz = msg.type === 'ptt';
+  const nomePadrao = { image: 'imagem', sticker: 'figurinha', audio: 'audio', ptt: 'audio', document: 'documento', video: 'video' }[msg.type] || 'arquivo';
+  const declarado = Number(msg._data?.size || 0);
+  if (declarado > MAX_MIDIA_BYTES) return { arquivo_falha: { motivo: 'grande', nome: msg._data?.filename || nomePadrao, mime: msg._data?.mimetype || null, tamanho: declarado, voz } };
+  try {
+    let prazo;
+    const m = await Promise.race([msg.downloadMedia(), new Promise((_, rej) => { prazo = setTimeout(() => rej(new Error('tempo esgotado')), ESPERA_DOWNLOAD_MS); })]).finally(() => clearTimeout(prazo));
+    if (!m?.data) return { arquivo_falha: { motivo: 'falhou', nome: nomePadrao, mime: null, tamanho: 0, voz } };
+    if (Math.floor(m.data.length * 3 / 4) > MAX_MIDIA_BYTES) return { arquivo_falha: { motivo: 'grande', nome: m.filename || nomePadrao, mime: m.mimetype || null, tamanho: Math.floor(m.data.length * 3 / 4), voz } };
+    return { arquivo: { nome: m.filename || nomePadrao, base64: m.data, voz } };
+  } catch (_) {
+    return { arquivo_falha: { motivo: 'falhou', nome: nomePadrao, mime: null, tamanho: 0, voz } };
+  }
+}
 const ACK_ESTADO = { 1: 'enviada', 2: 'entregue', 3: 'lida', 4: 'lida' };
 
 const CAPACIDADES = Object.freeze({
@@ -152,8 +182,12 @@ class ProvedorWweb extends ProvedorBase {
     c.on('loading_screen', (pct) => this.log('info', `Carregando o WhatsApp (${pct}%)…`));
     c.on('authenticated', () => this.log('success', 'WhatsApp autenticado; aguardando ficar pronto…'));
     c.on('ready', () => {
-      // Mensagens antigas que o WhatsApp reenvia ao sincronizar não contam.
-      this._aceitarApos = Math.floor(Date.now() / 1000) - 30;
+      // P2: com ponto de controle, aceita o que chegou depois dele (no máximo 24 h) e recupera as não
+      // lidas; sem ponto (número novo), só o que chegar daqui em diante (não importa o histórico).
+      const agoraSeg = Math.floor(Date.now() / 1000);
+      const desde = Date.parse(this.canal.recebido_ate || '');
+      this._aceitarApos = Number.isFinite(desde) ? Math.max(Math.floor(desde / 1000) - 5, agoraSeg - RECUPERAR_MAX_SEG) : agoraSeg - 30;
+      if (Number.isFinite(desde)) setTimeout(() => this._recuperarNaoLidas().catch(err => this.log('warning', `Recuperação de mensagens não concluída: ${err.message}`)), 3000);
       this.emit('identidade', { numero: digitos(c.info?.wid?.user) });
       this._mudarEstado('conectado');
     });
@@ -168,9 +202,36 @@ class ProvedorWweb extends ProvedorBase {
     c.initialize().catch((err) => this._mudarEstado('erro', `Falha ao iniciar o WhatsApp: ${err.message}`));
   }
 
+  // P2: conversas individuais com não lidas → busca as mensagens depois do ponto de controle e passa
+  // pelo mesmo caminho do recebimento. O servidor ignora o que já gravou (id da mensagem).
+  async _recuperarNaoLidas() {
+    const c = this.client;
+    if (!c) return 0;
+    const chats = (await c.getChats()).filter(ch => !ch.isGroup && ch.unreadCount > 0).slice(0, RECUPERAR_MAX_CONVERSAS);
+    let n = 0;
+    for (const ch of chats) {
+      const msgs = await ch.fetchMessages({ limit: Math.min(ch.unreadCount, RECUPERAR_MAX_POR_CONVERSA) }).catch(() => []);
+      for (const msg of msgs) {
+        if (msg.fromMe || Number(msg.timestamp || 0) < this._aceitarApos) continue;
+        await this._receber(msg);
+        n++;
+      }
+    }
+    if (n) this.log('info', `${n} mensagem(ns) recebida(s) enquanto o canal estava fora foram recuperadas.`);
+    return n;
+  }
+
   async _receber(msg) {
     if (msg.fromMe || msg.isStatus || TIPOS_IGNORADOS.has(msg.type)) return;
     if (this._aceitarApos && Number(msg.timestamp || 0) < this._aceitarApos) return;
+    // A mesma mensagem pode vir pelo evento e pela recuperação (P2): só a primeira segue.
+    const idVisto = msg.id?._serialized || msg.id?.id;
+    if (idVisto) {
+      this._vistas = this._vistas || new Set();
+      if (this._vistas.has(idVisto)) return;
+      this._vistas.add(idVisto);
+      if (this._vistas.size > 5000) this._vistas.delete(this._vistas.values().next().value);
+    }
     const grupo = String(msg.from || '').endsWith('@g.us');
     let valor = digitos(msg.from);
     let tipoRemetente = grupo ? 'grupo' : 'telefone';
@@ -185,13 +246,17 @@ class ProvedorWweb extends ProvedorBase {
         this.log('warning', `Remetente sem telefone identificável (código interno do WhatsApp ••••${valor.slice(-4)}).`);
       }
     }
+    // Mídia só em conversa individual (grupo não vira conversa): baixada aqui, conferida e guardada no servidor.
+    const midia = !grupo && msg.hasMedia && TIPO_MENSAGEM[msg.type] && TIPO_MENSAGEM[msg.type] !== 'texto' ? await midiaDaMensagem(msg) : {};
+    const descritivo = textoDescritivo(msg);
     this.emit('mensagem', {
+      ...midia,
       id_provedor: msg.id?._serialized,
       // Só o ID final (igual nas duas cópias): o _serialized traz o remetente, que pode vir @c.us num lado e @lid no outro.
       id_decisao: msg.id?.id ? String(msg.id.id) : null,
       de: { tipo: tipoRemetente, valor, autor: grupo ? digitos(msg.author) : undefined },
-      tipo: TIPO_MENSAGEM[msg.type] || 'outro',
-      texto: msg.body || '',
+      tipo: descritivo ? 'texto' : (TIPO_MENSAGEM[msg.type] || 'outro'),
+      texto: descritivo || (msg.hasMedia && msg.type !== 'document' && msg.type !== 'image' && msg.type !== 'video' ? '' : msg.body || ''),
       nome: grupo ? null : await nomeDoPerfil(msg),
       em: new Date(Number(msg.timestamp || Date.now() / 1000) * 1000).toISOString(),
     });
@@ -243,4 +308,4 @@ class ProvedorWweb extends ProvedorBase {
   }
 }
 
-module.exports = { nomeDoPerfil, ProvedorWweb, CAPACIDADES_WWEB: CAPACIDADES, resolverChrome, resolverTelefoneLid };
+module.exports = { nomeDoPerfil, ProvedorWweb, RECUPERAR_MAX_SEG, CAPACIDADES_WWEB: CAPACIDADES, resolverChrome, resolverTelefoneLid };

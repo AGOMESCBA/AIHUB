@@ -13,7 +13,8 @@ const { agora } = require('../ids');
 const telefone = require('../seguranca/telefone');
 const regras = require('../canais/regras');
 const { ROTINAS } = require('../acesso/papeis');
-const { aceitarEnvio, TEXTO_MAXIMO } = require('../mensagens/servico');
+const { aceitarEnvio, TEXTO_MAXIMO, LEGENDA_MAXIMA } = require('../mensagens/servico');
+const armazem = require('../midias/armazem');
 const repo = require('./repositorio');
 const horario = require('../lib/horario');
 const menuSetores = require('../lib/menu-setores');
@@ -261,12 +262,18 @@ class Atendimento {
         WHERE cv.canal_id = ? AND i.id_provedor = ?`).get(canalId, m.id_provedor)) return null; // repetida
     const empresaId = canal.atendimento_empresa_id;
     let enviouMenu = false;
-    const cv = this.db.transaction(() => {
+    const guardadas = []; // arquivos gravados nesta entrada: saem do disco se a transação voltar
+    const gravar = this.db.transaction(() => {
       const contato = repo.acharOuCriarContato(this.db, empresaId, m.de.valor, { nomeWhatsapp: m.nome || null });
       let aberta = repo.conversaAbertaDoContato(this.db, canalId, contato.id);
       const itens = [];
-      const entrada = () => itens.push(repo.adicionarItem(this.db, aberta.id, { categoria: 'mensagem', direcao: 'entrada',
-        autor: { tipo: 'contato', id: contato.id, nome: contato.nome }, tipo: m.tipo || 'texto', texto: m.texto || null, idProvedor: m.id_provedor || null, em: m.em || agora() }));
+      const entrada = () => {
+        const md = this._midiaDaEntrada(empresaId, canalId, aberta.id, m);
+        if (md?.caminho) guardadas.push(md);
+        itens.push(repo.adicionarItem(this.db, aberta.id, { categoria: 'mensagem', direcao: 'entrada', autor: { tipo: 'contato', id: contato.id, nome: contato.nome },
+          tipo: md?.caminho ? armazem.tipoDoMime(md.mime) : (m.tipo || 'texto'), texto: m.texto || null, idProvedor: m.id_provedor || null,
+          midiaId: md?.id || null, em: m.em || agora() }));
+      };
       let triagem = false;
       if (!aberta) {
         const padrao = this.db.prepare("SELECT id, nome FROM setores WHERE id = ? AND situacao = 'ativo'").get(canal.setor_padrao_id);
@@ -294,7 +301,9 @@ class Atendimento {
       }
       this.db.prepare('UPDATE conversas SET nao_lidas = nao_lidas + 1 WHERE id = ?').run(aberta.id);
       return { id: aberta.id, empresa_id: empresaId, itens, triagem };
-    })();
+    });
+    let cv;
+    try { cv = gravar(); } catch (err) { guardadas.forEach(armazem.descartar); throw err; }
     if (!cv) return null;
     // Avisos só depois de gravado (a tela nunca vê o que não está no banco).
     for (const it of cv.itens) this.aoItem(cv.id, repo.paraItem(it));
@@ -302,6 +311,28 @@ class Atendimento {
     if (!cv.triagem) this._avisoForaDoHorario(cv.id, cv.empresa_id, m.em || agora()); // no menu ainda não há setor
     this._avisar(cv);
     return { id: cv.id, empresa_id: cv.empresa_id };
+  }
+
+  // Arquivo de uma mensagem recebida (§10.6): guarda (tipo pelo conteúdo) ou registra por que não guardou.
+  // Nunca derruba a mensagem: ela aparece com a explicação. Dentro da transação de quem chama.
+  _midiaDaEntrada(empresaId, canalId, conversaId, m) {
+    const base = { empresaId, canalId, conversaId, direcao: 'entrada' };
+    if (m.arquivo?.base64) {
+      const dados = Buffer.from(String(m.arquivo.base64), 'base64');
+      try {
+        return armazem.guardar(this.db, { ...base, nome: m.arquivo.nome, dados, voz: !!m.arquivo.voz });
+      } catch (err) {
+        if (!['tipo_nao_suportado', 'arquivo_grande', 'requisicao_invalida'].includes(err.codigo)) throw err;
+        return armazem.registrarIndisponivel(this.db, { ...base, nome: m.arquivo.nome, tamanho: dados.length, voz: !!m.arquivo.voz,
+          motivo: err.codigo === 'arquivo_grande' ? 'grande' : 'recusado' });
+      }
+    }
+    if (m.arquivo_falha) {
+      const f = m.arquivo_falha;
+      return armazem.registrarIndisponivel(this.db, { ...base, nome: f.nome, mime: f.mime, tamanho: Number(f.tamanho) || 0, voz: !!f.voz,
+        motivo: ['grande', 'falhou'].includes(f.motivo) ? f.motivo : 'falhou' });
+    }
+    return null;
   }
 
   // ── Menu de setores (§9.3; leitura da resposta pela biblioteca X1) ─────────
@@ -551,10 +582,10 @@ class Atendimento {
   }
 
   // Envio para o contato pela fila da C3 (mesmos estados, ritmo e regras do canal).
-  _enviar(cv, texto, { autor, origem, usuarioId = null, aplicacaoId = null, marcar = true }) {
+  _enviar(cv, texto, { autor, origem, usuarioId = null, aplicacaoId = null, marcar = true, tipo = 'texto', midiaId = null }) {
     const m = aceitarEnvio(this.db, { empresaId: cv.empresa_id, canalId: cv.canal_id, para: cv.contato_telefone, texto, origem,
-      usuarioId, aplicacaoId, correlacaoId: cv.protocolo, metadados: { conversa_id: cv.id } });
-    const it = this._item(cv, { categoria: 'mensagem', direcao: 'saida', autor, tipo: 'texto', texto: m.conteudo, mensagemId: m.id });
+      usuarioId, aplicacaoId, correlacaoId: cv.protocolo, metadados: { conversa_id: cv.id }, tipo, midiaId });
+    const it = this._item(cv, { categoria: 'mensagem', direcao: 'saida', autor, tipo, texto: m.conteudo, mensagemId: m.id, midiaId });
     if (marcar) this.sincronizacao = this._marcarNoIaCommand(cv);
     this.despachante?.acordar();
     return it;
@@ -693,6 +724,25 @@ class Atendimento {
     const quem = this._quem(acesso);
     if (!cv.responsavel_id) this.assumir(acesso, id); // responder da fila já assume (ou 409 se alguém levou antes)
     const it = this._enviar(cv, String(texto).trim(), { autor: { tipo: 'atendente', ...quem }, origem: 'atendimento', usuarioId: quem.id });
+    repo.atualizarConversa(this.db, cv.id, { nao_lidas: 0, atualizada_em: it.em });
+    this._avisar(this._recarregar(cv));
+    return repo.paraItem(it);
+  }
+
+  // Arquivo pela Central (§10.4): mesmas regras do responder. O tipo vem do conteúdo (413/422 antes de
+  // gravar qualquer coisa); a legenda vai no texto da mensagem.
+  anexar(acesso, id, { nome, dados, legenda = null }) {
+    const cv = this.conversa(acesso, id);
+    const texto = legenda === null || legenda === undefined ? '' : String(legenda).trim();
+    if (texto.length > LEGENDA_MAXIMA) throw invalido({ legenda: `Use no máximo ${LEGENDA_MAXIMA} caracteres.` });
+    if (cv.situacao === 'encerrada' || (cv.responsavel_id && cv.responsavel_id !== acesso.usuarioId)) throw erro('conflito', this.envio(acesso, cv).motivo);
+    const bloqueio = this.bloqueioDoCanal(cv);
+    if (bloqueio) throw erro(bloqueio.codigo, bloqueio.motivo);
+    const { tipo } = armazem.conferirArquivo(dados);
+    const quem = this._quem(acesso);
+    if (!cv.responsavel_id) this.assumir(acesso, id);
+    const md = armazem.guardar(this.db, { empresaId: cv.empresa_id, canalId: cv.canal_id, conversaId: cv.id, direcao: 'saida', nome, dados });
+    const it = this._enviar(cv, texto || null, { autor: { tipo: 'atendente', ...quem }, origem: 'atendimento', usuarioId: quem.id, tipo, midiaId: md.id });
     repo.atualizarConversa(this.db, cv.id, { nao_lidas: 0, atualizada_em: it.em });
     this._avisar(this._recarregar(cv));
     return repo.paraItem(it);

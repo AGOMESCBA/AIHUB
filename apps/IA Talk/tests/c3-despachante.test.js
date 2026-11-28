@@ -145,7 +145,9 @@ test('aceitar envio: regras (desligado, parado, modo de teste, só texto, limite
   db.prepare('UPDATE canais SET ligado = 1').run();
   assert.equal(tentar({ para: '5565988887777' }), 'sem_permissao', 'fora da lista de teste');
   assert.equal(tentar({ para: '556599990010' }), 'ok', 'lista aceita o número sem o nono dígito');
-  assert.equal(tentar({ tipo: 'imagem' }), 'recurso_nao_suportado');
+  // P1 (§10): imagem precisa do arquivo guardado; vídeo ainda não sai.
+  assert.equal(tentar({ tipo: 'imagem' }), 'requisicao_invalida');
+  assert.equal(tentar({ tipo: 'video' }), 'recurso_nao_suportado');
   assert.equal(tentar({ texto: ' ' }), 'requisicao_invalida');
   assert.equal(tentar({ texto: 'x'.repeat(4097) }), 'requisicao_invalida');
   assert.equal(tentar({ empresaId: 'emp_outra' }), 'canal_nao_autorizado');

@@ -18,6 +18,7 @@ const { SQL_VISIVEIS } = require('./canais');
 const repoAtd = require('../atendimento/repositorio');
 
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_EXPORTAR = 10_000;
 
 function criarRotasMensagens({ db, despachante = null, log = console }) {
   const r = express.Router();
@@ -27,8 +28,8 @@ function criarRotasMensagens({ db, despachante = null, log = console }) {
   const SELECT = `SELECT m.*, c.nome AS canal_nome, a.nome AS aplicacao_nome
     FROM mensagens m JOIN canais c ON c.id = m.canal_id LEFT JOIN aplicacoes a ON a.id = m.aplicacao_id`;
 
-  r.get('/mensagens', exigir, (req, res) => {
-    const { limite, cursor } = lerPaginacao(req.query);
+  // Filtros da lista (§5), os mesmos na tela e na exportação.
+  function filtrosDaLista(req) {
     const q = req.query;
     const onde = ['m.empresa_id = @empresa'];
     const p = { empresa: req.contexto.exigirEmpresa() };
@@ -51,10 +52,32 @@ function criarRotasMensagens({ db, despachante = null, log = console }) {
       onde.push("(m.previa LIKE @busca ESCAPE '\\' OR m.id = @buscaExata OR m.correlacao_id LIKE @busca ESCAPE '\\')");
       p.busca = `%${String(q.busca).replace(/[%_\\]/g, '\\$&')}%`; p.buscaExata = String(q.busca);
     }
+    return { onde, p };
+  }
+
+  r.get('/mensagens', exigir, (req, res) => {
+    const { limite, cursor } = lerPaginacao(req.query);
+    const { onde, p } = filtrosDaLista(req);
     const total = db.prepare(`SELECT COUNT(*) AS n FROM mensagens m WHERE ${onde.join(' AND ')}`).get(p).n;
     if (cursor) { onde.push('(m.criada_em < @cc OR (m.criada_em = @cc AND m.id < @ci))'); p.cc = String(cursor.c); p.ci = String(cursor.i); }
     const itens = db.prepare(`${SELECT} WHERE ${onde.join(' AND ')} ORDER BY m.criada_em DESC, m.id DESC LIMIT ${limite + 1}`).all(p).map(repo.paraResumo);
     res.json(montarPagina(itens, { limite, total, cursorDoUltimo: (u) => ({ c: u.criada_em, i: u.id }) }));
+  });
+
+  // Exportação (§5): CSV com ";" e BOM (abre direto no Excel), mais recentes primeiro, até MAX_EXPORTAR
+  // linhas. Telefone sempre mascarado; célula que começa com = + - @ ganha apóstrofo (não vira fórmula).
+  r.get('/mensagens/exportar', exigir, (req, res) => {
+    const { onde, p } = filtrosDaLista(req);
+    const linhas = db.prepare(`${SELECT} WHERE ${onde.join(' AND ')} ORDER BY m.criada_em DESC, m.id DESC LIMIT ${MAX_EXPORTAR}`).all(p).map(repo.paraResumo);
+    const celula = (v) => {
+      const t = String(v ?? '').replace(/[\r\n;]+/g, ' ');
+      return /^[=+\-@]/.test(t) ? `'${t}` : t;
+    };
+    const csv = ['id;direcao;canal;aplicacao;contato;tipo;estado;correlacao;criada_em']
+      .concat(linhas.map(m => [m.id, m.direcao, m.canal.nome, m.aplicacao?.nome || '', m.contato_mascarado, m.tipo, m.estado, m.correlacao_id || '', m.criada_em].map(celula).join(';')))
+      .join('\r\n');
+    auditar(req, 'mensagens.exportadas', null, `Exportou ${linhas.length} mensagem(ns) em CSV`);
+    res.set('Content-Type', 'text/csv; charset=utf-8').set('Content-Disposition', 'attachment; filename="mensagens.csv"').send(`﻿${csv}`);
   });
 
   const acharDaEmpresa = (req) => {

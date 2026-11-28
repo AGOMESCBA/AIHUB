@@ -1,0 +1,88 @@
+/* IA Talk · Etapa G22 — estilo único e reaproveitável do selo "Ainda não ativo" (§9.12).
+   Usado em frontend/setores.html e frontend/portal.html (e demais telas de atendimento).
+   Usa exclusivamente tokens de iahub.css e talk.css, com suporte aos temas claro e escuro. */
+
+.tlk-selo-futuro {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+  background: var(--tlk-aviso-bg);
+  color: var(--tlk-aviso);
+  border: 1px solid color-mix(in srgb, var(--tlk-aviso) 28%, var(--border));
+  cursor: help;
+  flex: none;
+}
+
+.tlk-selo-futuro[hidden] {
+  display: none !important;
+}
+
+/* Agrupa rótulo/título + selo sem quebrar blocos de cartão ou formulário */
+.g22-rotulo-linha {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.g16-modo-card .g22-rotulo-linha strong,
+.tlk-check-card .g22-rotulo-linha strong,
+.g14-secao-topo .g22-rotulo-linha h2 {
+  display: inline;
+  margin: 0;
+}
+
+/* Ajustes para controles desabilitados com selo no Portal do atendente (portal.html) */
+.ptl-sino-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ptl-status-box.g22-controle-inativo,
+.ptl-switch.g22-controle-inativo {
+  cursor: not-allowed;
+  background: var(--bg-hover);
+}
+
+.ptl-status-select:disabled {
+  cursor: not-allowed;
+  opacity: .72;
+}
+
+.ptl-switch.g22-controle-inativo input:disabled {
+  cursor: not-allowed;
+}
+
+.ptl-sino-btn:disabled {
+  cursor: not-allowed;
+  opacity: .58;
+}
+
+@media (max-width: 760px) {
+  .ptl-header {
+    flex-wrap: wrap;
+  }
+  .ptl-controles {
+    flex-wrap: wrap;
+  }
+  .ptl-header .tlk-selo-futuro {
+    font-size: 10px;
+    padding: 1px 6px;
+  }
+  .ptl-switch {
+    height: auto;
+    min-height: 32px;
+    padding: 5px 9px;
+    flex-wrap: wrap;
+  }
+}

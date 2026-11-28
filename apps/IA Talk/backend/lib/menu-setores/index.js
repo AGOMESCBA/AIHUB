@@ -3,10 +3,12 @@
 // Monta o menu de setores, interpreta respostas e decide quando usar o setor padrão.
 // Biblioteca pura, sem acesso a banco de dados ou rede.
 
+// Normaliza acentos, caixa e espaços para comparar respostas e rótulos.
 function normalizar(texto) {
   return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim().replace(/\s+/g, ' ');
 }
 
+// Ordena os setores e devolve o texto do menu e as opções numeradas correspondentes.
 function montarMenu({ saudacao, setores }) {
   const ordenados = [...setores].sort((a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome, 'pt-BR'));
   const opcoes = ordenados.map((setor, indice) => ({
@@ -19,6 +21,7 @@ function montarMenu({ saudacao, setores }) {
   return { texto, opcoes };
 }
 
+// Identifica uma opção sem aceitar correspondências ambíguas; sinaliza ajuda ou resposta inválida.
 function interpretarResposta(texto, opcoes) {
   if (typeof texto !== 'string' || !texto.trim()) return { invalida: true };
   const resposta = normalizar(texto);
@@ -54,6 +57,7 @@ function interpretarResposta(texto, opcoes) {
   return parecidas.length === 1 ? { setor_id: parecidas[0].setor_id } : { invalida: true };
 }
 
+// Decide entre repetir o menu e encaminhar ao setor padrão conforme o limite de tentativas.
 function proximaAcao({ tentativas, maxTentativas = 2 }) {
   return tentativas >= maxTentativas ? 'setor_padrao' : 'repetir';
 }

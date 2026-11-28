@@ -44,3 +44,18 @@ tudo sob `/app/ia-talk/`. Fase 1: só WhatsApp Web; Meta preparada pela interfac
 10. **Sem commit, push, pacote ou deploy** sem pedido explícito do usuário na mensagem atual.
 11. **Pronto significa** testes passando + capturas (1440/390, claro/escuro, vazio, carregando,
     erro) + `docs/andamento.md` atualizado + lista de arquivos com caminho completo.
+
+## Documentação dos fontes — todos os agentes
+
+- Em arquivos de código próprios, mantenha no início um comentário em pt-BR que explique sua
+  finalidade e responsabilidades principais. Preserve shebangs e diretivas que precisem vir primeiro.
+- Quando houver identificação de autoria em comentários, use sempre **J2A Consultoria**; não cite
+  IA, modelos ou agentes como autores. Referências técnicas a recursos de IA não são autoria.
+- Documente cada função ou método com um comentário conciso sobre sua finalidade; registre também
+  parâmetros, retorno, efeitos colaterais, erros ou restrições quando necessários para entendê-los.
+  Atualize o comentário junto com o comportamento e não repita mecanicamente o nome da função.
+- Remova código comentado apenas após verificar que não é necessário; preserve exemplos, instruções,
+  decisões técnicas e avisos úteis. Não altere código de terceiros em `vendor/` para cumprir esta regra.
+- Aplique o padrão a fontes novos e aos trechos alterados; a documentação do legado deve ser revisada
+  progressivamente, sem declarar conformidade de arquivos ainda não auditados. Comentários não substituem
+  testes, revisão de segurança ou atualização dos contratos.

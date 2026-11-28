@@ -1,0 +1,522 @@
+/* IA Talk · Etapa G23 — Mídia na Central, no Portal do atendente e no Histórico (§10).
+   Usa exclusivamente tokens de iahub.css e talk.css, com suporte completo aos temas claro e escuro
+   e responsividade sem rolagem horizontal em 1440 px e 390 px. */
+
+/* ── Anexo dentro do balão de mensagem (Central, Portal e Histórico) ───── */
+.atd-midia-bloco {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.atd-msg-legenda {
+  margin-top: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Imagem: miniatura até 240 px + botão Baixar */
+.atd-midia-img-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  max-width: min(240px, 100%);
+}
+
+.atd-midia-thumb-btn {
+  position: relative;
+  display: block;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg-base);
+  cursor: zoom-in;
+  max-width: min(240px, 100%);
+  line-height: 0;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.atd-midia-thumb-btn:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.atd-midia-thumb {
+  display: block;
+  max-width: min(240px, 100%);
+  max-height: 240px;
+  width: auto;
+  height: auto;
+  object-fit: cover;
+}
+
+.atd-midia-img-acoes {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+.atd-midia-img-meta {
+  font-size: 11px;
+  color: var(--text-lo);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 145px;
+}
+
+/* Áudio e Mensagem de voz */
+.atd-midia-audio-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: min(250px, 100%);
+  max-width: min(320px, 100%);
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-base) 78%, var(--bg-card));
+  border: 1px solid var(--border);
+}
+
+.atd-midia-voz-cab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.atd-midia-voz-rotulo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.atd-midia-audio-tam {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-lo);
+}
+
+.atd-midia-audio {
+  width: 100%;
+  max-width: 100%;
+  height: 36px;
+}
+
+/* Documento (PDF, Word, Excel, texto) */
+.atd-midia-doc {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-base) 82%, var(--bg-card));
+  border: 1px solid var(--border);
+  max-width: min(380px, 100%);
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.atd-midia-doc-ico {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  font-size: 10px;
+  font-weight: 800;
+  background: var(--accent-glow);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+}
+.atd-midia-doc-ico--pdf {
+  background: var(--tlk-erro-bg);
+  color: var(--tlk-erro);
+  border-color: color-mix(in srgb, var(--tlk-erro) 25%, var(--border));
+}
+.atd-midia-doc-ico--excel {
+  background: var(--tlk-ok-bg);
+  color: var(--tlk-ok);
+  border-color: color-mix(in srgb, var(--tlk-ok) 25%, var(--border));
+}
+.atd-midia-doc-ico--word {
+  background: var(--tlk-info-bg);
+  color: var(--tlk-info);
+  border-color: color-mix(in srgb, var(--tlk-info) 25%, var(--border));
+}
+
+.atd-midia-doc-info {
+  flex: 1 1 130px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.atd-midia-doc-nome {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.atd-midia-doc-sub {
+  font-size: 11px;
+  color: var(--text-lo);
+}
+
+.atd-midia-doc-acoes {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+/* Cartão esmaecido quando disponivel === false */
+.atd-midia-indisponivel {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px dashed var(--border-hi, var(--border));
+  background: color-mix(in srgb, var(--bg-hover) 72%, var(--bg-card));
+  color: var(--text-md);
+  opacity: .76;
+  max-width: min(360px, 100%);
+  min-width: 0;
+}
+.atd-midia-indisponivel-ico {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--bg-base);
+  color: var(--text-lo);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.atd-midia-indisponivel-corpo {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.atd-midia-indisponivel-motivo {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-md);
+}
+.atd-midia-indisponivel-meta {
+  font-size: 11px;
+  color: var(--text-lo);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Compositor: clipe, prévia em fila, legenda e barra de progresso ─── */
+.atd-anexar-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  align-self: flex-end;
+}
+.atd-btn-clipe {
+  height: 40px;
+  padding: 0 11px;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+}
+.atd-btn-clipe:disabled {
+  cursor: not-allowed;
+  opacity: .58;
+}
+
+.atd-previa-anexos {
+  margin-bottom: 10px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
+  background: var(--bg-base);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.atd-previa-cab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.atd-previa-tit {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-hi);
+}
+.atd-previa-dica-fila {
+  font-size: 11.5px;
+  color: var(--text-md);
+}
+
+.atd-previa-lista {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+.atd-previa-item {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  max-width: 240px;
+  min-width: 0;
+}
+.atd-previa-item-thumb {
+  width: 42px;
+  height: 42px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  flex: none;
+}
+.atd-previa-item-info {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.atd-previa-item-nome {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.atd-previa-item-tam {
+  font-size: 11px;
+  color: var(--text-lo);
+}
+.atd-previa-rm {
+  border: none;
+  background: transparent;
+  color: var(--text-lo);
+  padding: 3px;
+  border-radius: 6px;
+  cursor: pointer;
+  flex: none;
+  display: inline-flex;
+}
+.atd-previa-rm:hover {
+  background: var(--tlk-erro-bg);
+  color: var(--tlk-erro);
+}
+
+.atd-previa-legenda-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-md);
+}
+.atd-previa-legenda-topo label {
+  font-weight: 700;
+}
+
+.atd-progresso-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.atd-progresso-barra {
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.atd-progresso-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width .12s ease;
+}
+.atd-progresso-txt {
+  font-size: 11.5px;
+  color: var(--text-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.atd-previa-acoes {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Arrastar e soltar sobre a conversa ──────────────────────────────── */
+.atd-col--chat {
+  position: relative;
+}
+.atd-drop-overlay {
+  position: absolute;
+  inset: 10px;
+  z-index: 35;
+  border-radius: 14px;
+  border: 2px dashed var(--accent);
+  background: color-mix(in srgb, var(--bg-card) 88%, var(--accent) 12%);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 20px;
+  pointer-events: none;
+}
+.atd-drop-overlay-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 14px;
+}
+.atd-drop-overlay-box span {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-md);
+}
+
+/* ── Lightbox (imagem ampliada ao clicar) ────────────────────────────── */
+.atd-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  background: rgba(15, 23, 42, .82);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  gap: 12px;
+}
+.atd-lightbox-barra {
+  width: min(920px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-hi);
+  flex-wrap: wrap;
+}
+.atd-lightbox-nome {
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60vw;
+}
+.atd-lightbox-acoes {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.atd-lightbox-img {
+  max-width: min(920px, 94vw);
+  max-height: calc(100vh - 120px);
+  border-radius: 10px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-md);
+  object-fit: contain;
+}
+
+/* ── Anexos no Histórico de mensagens (mensagens.html) ───────────────── */
+.tlk-anexo-rico {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+  flex-wrap: wrap;
+}
+.tlk-anexo-esq {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  flex: 1 1 180px;
+}
+.tlk-anexo-acoes {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 760px) {
+  .atd-midia-audio-wrap {
+    min-width: 0;
+    width: 100%;
+  }
+  .atd-midia-doc {
+    max-width: 100%;
+  }
+  .atd-input-linha {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 8px;
+  }
+  .atd-anexar-wrap {
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+  }
+  .atd-input-linha .atd-anexar-wrap .btn {
+    width: auto;
+  }
+  .atd-input-linha .atd-textarea {
+    flex: 1 1 180px;
+    min-width: 0;
+  }
+  .atd-input-linha > #btn-enviar {
+    flex: 1 0 100%;
+    width: 100%;
+    justify-content: center;
+  }
+  .atd-btn-clipe {
+    height: 38px;
+    padding: 0 10px;
+  }
+}

@@ -111,7 +111,8 @@ test('C3: envio pela API v1 e pela tela até "lida", idempotência, falhas e aç
   r = await api('/mensagens', { metodo: 'POST', corpo: { ...corpo, para: '5565988887777' }, chave: 'pedido-0003' });
   assert.equal(r.status, 403, 'modo de teste: fora da lista');
   r = await api('/mensagens', { metodo: 'POST', corpo: { ...corpo, tipo: 'imagem' }, chave: 'pedido-0004' });
-  assert.equal(r.corpo.erro.codigo, 'recurso_nao_suportado');
+  assert.equal(r.status, 400, 'P1: imagem sem arquivo');
+  assert.ok(r.corpo.erro.campos.arquivo);
 
   // Aceita (202) com limites nos cabeçalhos; repetição devolve o mesmo id; outro corpo = 409.
   r = await api('/mensagens', { metodo: 'POST', corpo, chave: 'pedido-0001', cabecalhos: { 'X-Correlation-Id': 'chamado-1' } });
@@ -135,7 +136,8 @@ test('C3: envio pela API v1 e pela tela até "lida", idempotência, falhas e aç
   assert.equal(db.prepare('SELECT COUNT(*) n FROM mensagens').get().n, 1, 'repetição não criou outra mensagem');
   const estadoCanal = (await api(`/canais/${c.id}/estado`)).corpo;
   forma('v1EstadoCanal', estadoCanal);
-  assert.equal(estadoCanal.capacidades.imagem, false, 'só texto por enquanto');
+  assert.equal(estadoCanal.capacidades.imagem, true, 'P1: imagem, documento e áudio');
+  assert.equal(estadoCanal.capacidades.video, false, 'vídeo fica para depois');
 
   // Tela: envio de teste pela posição na lista; o estado vai ao painel da empresa pelo socket.
   assert.equal((await nav.ir(`/api/admin/canais/${c.id}/enviar-teste`, { metodo: 'POST', corpo: { para_indice: 3, texto: 'x' } })).status, 403);

@@ -153,3 +153,129 @@ test('Histórico de mensagens: grade de conversas, leitor lateral completo, agru
     await ctx.close();
   }
 });
+
+test('G22 Histórico de mensagens: período enviado ao servidor encontra conversas fora dos 100 primeiros e Exportar CSV envia filtro de canal mostrando Exportando…', async () => {
+  // Instância isolada do simulado para semear >100 conversas recentes sem afetar outros testes
+  const simIsolado = criarServidorSimulado({ intervaloLogMs: 60_000, intervaloQrMs: 60_000, intervaloConversaMs: 0 });
+  const addr = await simIsolado.iniciar(0, '127.0.0.1');
+  const urlIsolada = `http://127.0.0.1:${addr.port}/app/ia-talk`;
+  const { ctx, page, erros } = await novaPagina({ width: 1440, height: 900 });
+
+  try {
+    // Semeia 102 conversas novas (atualizada_em = hoje, 2026-11-28), empurrando as da semente
+    // (ex.: cv_ex08 em 2026-11-20 e cv_ex09 em 2026-11-15) para além das 100 primeiras posições.
+    await Promise.all(Array.from({ length: 102 }, (_, i) => {
+      const n = String(i + 1).padStart(4, '0');
+      return fetch(`${urlIsolada}/api/v1/conversas`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer tk_teste_g22',
+        },
+        body: JSON.stringify({
+          canal: 'cn_suporte',
+          contato: { telefone: `556598888${n}`, nome: `Cliente Recente ${n}` },
+          referencia: { sistema: 'softexpert', id: `G22-${n}`, titulo: `Chamado recente ${n}` },
+          setor: 'suporte',
+        }),
+      });
+    }));
+
+    const queriesConversas = [];
+    page.on('request', (req) => {
+      const u = new URL(req.url());
+      if (u.pathname.endsWith('/api/admin/conversas')) {
+        queriesConversas.push(Object.fromEntries(u.searchParams.entries()));
+      }
+    });
+
+    await page.goto(`${urlIsolada}/mensagens.html`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('#tabela-conversas .tabulator-row');
+
+    // Sem filtro de período: total = 111 (9 da semente + 102 recentes), página mostra 100 e "Carregar mais" visível;
+    // Marcos Teixeira (2026-11-20, pos. 110) e 2026-000109 (2026-11-15, pos. 111) estão fora dos 100 primeiros.
+    assert.equal((await page.textContent('#qtd-aba-conversas')).trim(), '111');
+    assert.equal(await page.isVisible('#mais-conv'), true);
+    const txtSemPeriodo = await page.textContent('#tabela-conversas');
+    assert.equal(txtSemPeriodo.includes('2026-000109'), false, 'conversa antiga está fora dos 100 primeiros');
+
+    // Abre "Mais filtros" e informa o período 2026-11-15 a 2026-11-20 -> servidor filtra na base inteira
+    await page.click('#btn-conv-mais-filtros');
+    await page.waitForSelector('#filtros-conv-extra:not([hidden])');
+    queriesConversas.length = 0;
+
+    await page.fill('#fc-de', '2026-11-15');
+    await page.fill('#fc-ate', '2026-11-20');
+    await page.waitForFunction(() => document.getElementById('qtd-aba-conversas')?.textContent?.trim() === '2');
+
+    const ultimaQuery = queriesConversas[queriesConversas.length - 1];
+    assert.equal(ultimaQuery.de, '2026-11-15');
+    assert.equal(ultimaQuery.ate, '2026-11-20');
+    assert.equal((await page.textContent('#contador')).trim(), '(2)');
+    assert.equal(await page.isHidden('#mais-conv'), true, 'apenas 2 registros no período: sem próxima página');
+
+    const txtFiltrado = await page.textContent('#tabela-conversas');
+    assert.match(txtFiltrado, /Marcos Teixeira/);
+    assert.match(txtFiltrado, /2026-000108/);
+    assert.match(txtFiltrado, /2026-000109/);
+
+    // Com período amplo (2026-11-20 a 2026-11-28 -> 110 conversas), total e paginação vêm do servidor
+    await page.fill('#fc-de', '2026-11-20');
+    await page.fill('#fc-ate', '2026-11-28');
+    await page.waitForFunction(() => document.getElementById('qtd-aba-conversas')?.textContent?.trim() === '110');
+    assert.equal(await page.isVisible('#mais-conv'), true, 'com 110 no período, paginação do servidor habilita Carregar mais');
+
+    // Aba Envios e entregas: filtra por canal Financeiro (cn_financeiro) e exporta CSV
+    await page.click('#aba-envios');
+    await page.waitForSelector('#tabela .tabulator-row');
+    await page.selectOption('#f-canal', 'cn_financeiro');
+    await page.waitForFunction(() => {
+      const n = Number(document.getElementById('qtd-aba-envios')?.textContent?.trim());
+      return Number.isFinite(n) && n > 0 && n < 64;
+    });
+
+    let urlExportada = '';
+    let textoDuranteDownload = '';
+    let desabilitadoDuranteDownload = false;
+    let liberarResposta;
+    const aguardarClique = new Promise((r) => { liberarResposta = r; });
+
+    await page.route('**/api/admin/mensagens/exportar*', async (route) => {
+      urlExportada = route.request().url();
+      liberarResposta();
+      await new Promise((r) => setTimeout(r, 220));
+      await route.continue();
+    });
+
+    const promessaDownload = page.waitForEvent('download');
+    await page.click('#btn-exportar');
+    await aguardarClique;
+
+    textoDuranteDownload = (await page.textContent('#btn-exportar')).trim();
+    desabilitadoDuranteDownload = await page.isDisabled('#btn-exportar');
+    assert.equal(textoDuranteDownload, 'Exportando…');
+    assert.equal(desabilitadoDuranteDownload, true);
+
+    const download = await promessaDownload;
+    await page.waitForFunction(() => !document.getElementById('btn-exportar')?.disabled);
+    assert.equal((await page.textContent('#btn-exportar')).trim(), 'Exportar CSV');
+
+    const paramsExport = new URL(urlExportada).searchParams;
+    assert.equal(paramsExport.get('canal_id'), 'cn_financeiro');
+
+    const caminhoCsv = await download.path();
+    const csvConteudo = require('fs').readFileSync(caminhoCsv, 'utf8').replace(/^\uFEFF/, '').trim();
+    const linhasCsv = csvConteudo.split(/\r?\n/);
+    assert.equal(linhasCsv[0], 'id;direcao;canal;aplicacao;contato;tipo;estado;correlacao;criada_em');
+    assert.ok(linhasCsv.length >= 2, 'deve exportar as mensagens do canal Financeiro');
+    for (const linha of linhasCsv.slice(1)) {
+      const cols = linha.split(';');
+      assert.equal(cols[2], 'Financeiro', `linha fora do canal filtrado: ${linha}`);
+    }
+
+    assert.deepEqual(erros, []);
+  } finally {
+    await ctx.close();
+    await simIsolado.fechar();
+  }
+});

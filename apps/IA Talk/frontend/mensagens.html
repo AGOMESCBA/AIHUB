@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
   <link rel="stylesheet" href="/app/ia-talk/css/talk.css">
   <link rel="stylesheet" href="/app/ia-talk/css/telas/g3.css">
+  <link rel="stylesheet" href="/app/ia-talk/css/telas/g23.css">
 </head>
 <body class="tlk-pagina">
 <main class="tlk-conteudo">
@@ -343,6 +344,7 @@
 <script src="/app/ia-talk/socket.io/socket.io.js"></script>
 <script src="/app/ia-talk/js/talk-api.js"></script>
 <script src="/app/ia-talk/js/talk-icones.js"></script>
+<script src="/app/ia-talk/js/telas/midia-ui.js"></script>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -598,6 +600,10 @@
     tabelaConv.on('rowClick', (_e, row) => abrirDetalheConversa(row.getData().id));
   }
 
+  /**
+   * Coleta os filtros atuais da aba Conversas para envio direto em GET /conversas,
+   * incluindo o período de/ate (AAAA-MM-DD, filtrado no servidor por atualizada_em).
+   */
   function filtrosConversasAtuais() {
     return {
       visao: $('fc-visao').value || 'todas',
@@ -606,20 +612,10 @@
       responsavel_id: $('fc-responsavel').value,
       canal_id: $('fc-canal').value,
       etiqueta: $('fc-etiqueta').value.trim(),
+      de: $('fc-de').value,
+      ate: $('fc-ate').value,
       limite: 100,
     };
-  }
-
-  function aplicarFiltroPeriodoLocal(lista) {
-    const de = $('fc-de').value;
-    const ate = $('fc-ate').value;
-    if (!de && !ate) return lista;
-    return lista.filter((cv) => {
-      const refDia = String(cv.atualizada_em || cv.aberta_em || '').slice(0, 10);
-      if (de && refDia < de) return false;
-      if (ate && refDia > ate) return false;
-      return true;
-    });
   }
 
   function completarOpcoesAtendentesComConversas(lista) {
@@ -654,14 +650,13 @@
       const recebidas = (pagina.itens || []).map(achatarConversa);
       completarOpcoesAtendentesComConversas(recebidas);
       convDadosBrutos = continuar ? [...convDadosBrutos, ...recebidas] : recebidas;
-      const visiveis = aplicarFiltroPeriodoLocal(convDadosBrutos);
       convCursor = pagina.proximo_cursor || null;
-      convTotal = ($('fc-de').value || $('fc-ate').value) ? visiveis.length : (pagina.total ?? visiveis.length);
+      convTotal = pagina.total ?? convDadosBrutos.length;
       $('qtd-aba-conversas').textContent = String(convTotal);
       atualizarContadorTopo();
       $('mais-conv').hidden = !convCursor;
 
-      if (!visiveis.length) {
+      if (!convDadosBrutos.length) {
         $('tabela-conversas').hidden = true;
         TalkUI.estado(estado, 'vazio', {
           titulo: 'Nenhuma conversa encontrada',
@@ -671,7 +666,7 @@
       }
       estado.hidden = true;
       $('tabela-conversas').hidden = false;
-      await tabelaConv.setData(visiveis);
+      await tabelaConv.setData(convDadosBrutos);
       marcarLinhaAtiva(tabelaConv, convAtual?.id);
     } catch (err) {
       $('tabela-conversas').hidden = true;
@@ -781,13 +776,16 @@
       } else {
         const saida = it.direcao === 'saida';
         const autor = it.autor?.nome || (saida ? 'Atendente' : (convAtual?.contato?.nome || 'Contato'));
+        const corpoMsg = window.TalkMidia
+          ? window.TalkMidia.renderizarConteudoMensagemComMidia(it)
+          : `<div class="tlk-chat-balao-texto">${esc(it.texto || '')}</div>`;
         blocos.push(`
           <article class="tlk-chat-balao ${saida ? 'tlk-chat-balao--saida' : 'tlk-chat-balao--entrada'}">
             <div class="tlk-chat-balao-cab">
               <strong>${esc(autor)}</strong>
               <span>${saida ? 'Saída' : 'Entrada'}</span>
             </div>
-            <div class="tlk-chat-balao-texto">${esc(it.texto || '')}</div>
+            ${corpoMsg}
             <div class="tlk-chat-balao-rodape">
               <span>${esc(dataHora(it.em))}</span>
               ${saida && it.estado ? pill(it.estado) : ''}
@@ -857,7 +855,18 @@
   }
 
   $('conv-fio').addEventListener('click', (e) => {
-    if (e.target.closest('#btn-conv-itens-mais')) carregarMaisItensConversa();
+    if (e.target.closest('#btn-conv-itens-mais')) { carregarMaisItensConversa(); return; }
+    const btnAmp = e.target.closest('[data-ampliar-midia]');
+    if (btnAmp && window.TalkMidia) {
+      window.TalkMidia.abrirOuBaixar(btnAmp.dataset.ampliarMidia, btnAmp.dataset.midiaNome, { baixar: false });
+      return;
+    }
+    const btnAcao = e.target.closest('[data-acao-midia]');
+    if (btnAcao && window.TalkMidia) {
+      window.TalkMidia.abrirOuBaixar(btnAcao.dataset.midiaId, btnAcao.dataset.midiaNome, {
+        baixar: btnAcao.dataset.acaoMidia === 'baixar',
+      });
+    }
   });
 
   $('conv-chat-filtros').addEventListener('click', (e) => {
@@ -915,11 +924,10 @@
   });
 
   function exportarCsvConversas() {
-    const visiveis = aplicarFiltroPeriodoLocal(convDadosBrutos);
-    if (!visiveis.length) return TalkUI.toast('Nenhuma conversa para exportar.', 'info');
+    if (!convDadosBrutos.length) return TalkUI.toast('Nenhuma conversa para exportar.', 'info');
     const escCsv = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const linhas = ['protocolo;contato;whatsapp;situacao;setor;atendente;canal;aberta_em;atualizada_em;ultima_mensagem']
-      .concat(visiveis.map((c) => [
+      .concat(convDadosBrutos.map((c) => [
         c.protocolo, c.contato_nome, c.contato_fone, c.situacao_rotulo, c.setor_nome,
         c.responsavel_nome, c.canal_nome, c.aberta_em, c.atualizada_em, c.ultima_previa,
       ].map(escCsv).join(';')))
@@ -935,25 +943,11 @@
     TalkUI.toast('CSV de conversas exportado com os filtros atuais.', 'ok');
   }
 
-  // Eventos dos filtros da aba Conversas
+  // Eventos dos filtros da aba Conversas (incluindo período de/ate enviado ao servidor)
   let timerBuscaConv = null;
   const agendarBuscaConv = () => { clearTimeout(timerBuscaConv); timerBuscaConv = setTimeout(() => carregarConversas(), 240); };
   ['fc-busca', 'fc-etiqueta'].forEach((id) => $(id).addEventListener('input', agendarBuscaConv));
-  ['fc-visao', 'fc-setor', 'fc-responsavel', 'fc-canal'].forEach((id) => $(id).addEventListener('change', () => carregarConversas()));
-  ['fc-de', 'fc-ate'].forEach((id) => $(id).addEventListener('change', () => {
-    const visiveis = aplicarFiltroPeriodoLocal(convDadosBrutos);
-    convTotal = visiveis.length;
-    $('qtd-aba-conversas').textContent = String(convTotal);
-    atualizarContadorTopo();
-    if (!visiveis.length) {
-      $('tabela-conversas').hidden = true;
-      TalkUI.estado($('estado-conversas'), 'vazio', { titulo: 'Nenhuma conversa neste período', texto: 'Amplie as datas De/Até ou limpe os filtros.' });
-    } else {
-      $('estado-conversas').hidden = true;
-      $('tabela-conversas').hidden = false;
-      tabelaConv?.setData(visiveis);
-    }
-  }));
+  ['fc-visao', 'fc-setor', 'fc-responsavel', 'fc-canal', 'fc-de', 'fc-ate'].forEach((id) => $(id).addEventListener('change', () => carregarConversas()));
   $('filtros-conv').addEventListener('submit', (e) => { e.preventDefault(); carregarConversas(); });
   $('btn-conv-mais-filtros').addEventListener('click', () => {
     const aberto = !$('filtros-conv-extra').hidden;
@@ -1194,10 +1188,24 @@
     }
   }
 
-  // ── Exportação CSV usando exatamente os filtros atuais ────────────────
+  // ── Exportação CSV usando exatamente os filtros atuais (§5) ───────────
+  /**
+   * Baixa GET /mensagens/exportar enviando todos os filtros atuais da aba Envios e entregas,
+   * exibindo "Exportando…" no botão durante o download.
+   */
   async function exportarCsvEnvios() {
     const btn = $('btn-exportar');
+    if (btn.disabled) return;
+    const dicaOriginal = 'Exportar CSV: baixa os registros da aba atual conforme os filtros aplicados';
     btn.disabled = true;
+    btn.classList.add('tlk-btn-girando');
+    TalkIcones.definirBotao(btn, {
+      icone: 'atualizar',
+      girar: true,
+      texto: 'Exportando…',
+      title: 'Exportando CSV com os filtros atuais…',
+      ariaLabel: 'Exportando CSV com os filtros atuais…',
+    });
     try {
       const url = `${TalkApi.BASE}/api/admin/mensagens/exportar${TalkApi.montarQuery(filtrosAtuais({ comLimite: false }))}`;
       const headers = { Accept: 'text/csv' };
@@ -1209,7 +1217,11 @@
       const resp = await fetch(url, { method: 'GET', headers, credentials: 'same-origin', cache: 'no-store' });
       if (!resp.ok) {
         const corpo = await resp.json().catch(() => null);
-        throw new TalkApi.ErroApi(resp.status, corpo?.erro);
+        const err = new TalkApi.ErroApi(resp.status, corpo?.erro);
+        if (resp.status === 401) {
+          window.top.dispatchEvent(new CustomEvent('talk:sessao-expirada', { detail: { mensagem: err.message } }));
+        }
+        throw err;
       }
       const blob = await resp.blob();
       const link = document.createElement('a');
@@ -1223,6 +1235,13 @@
     } catch (err) {
       TalkUI.toast(err?.message || 'Não foi possível exportar o CSV.', 'erro');
     } finally {
+      btn.classList.remove('tlk-btn-girando');
+      TalkIcones.definirBotao(btn, {
+        icone: 'download',
+        texto: 'Exportar CSV',
+        title: dicaOriginal,
+        ariaLabel: dicaOriginal,
+      });
       btn.disabled = false;
     }
   }
@@ -1268,14 +1287,16 @@
     // Exibe o texto completo quando disponível no detalhe (antes mostrava só m.previa truncada)
     $('detalhe-previa').textContent = m.texto || m.previa || 'Sem prévia de texto.';
 
-    // Anexos
+    // Anexos (§10.3: nome, tipo, tamanho e Abrir / Baixar por GET /midias/:id)
     const anexos = Array.isArray(m.anexos) ? m.anexos : [];
     $('bloco-anexos').hidden = anexos.length === 0;
-    $('lista-anexos').innerHTML = anexos.map((a) => `
-      <li class="tlk-anexo">
-        <strong>${esc(a.nome || a.id)}</strong>
-        <span class="tlk-anexo-meta">${esc(a.mime || 'arquivo')} · ${esc(formatarBytes(a.tamanho))}</span>
-      </li>`).join('');
+    $('lista-anexos').innerHTML = window.TalkMidia
+      ? window.TalkMidia.renderizarListaAnexosHistorico(anexos)
+      : anexos.map((a) => `
+          <li class="tlk-anexo">
+            <strong>${esc(a.nome || a.id)}</strong>
+            <span class="tlk-anexo-meta">${esc(a.mime || 'arquivo')} · ${esc(formatarBytes(a.tamanho))}</span>
+          </li>`).join('');
 
     // Linha do tempo de estados
     const historico = Array.isArray(m.historico_estados) ? m.historico_estados : [];
@@ -1322,6 +1343,14 @@
       TalkUI.estadoDoErro($('estado-detalhe'), err, () => abrirDetalhe(id));
     }
   }
+
+  $('lista-anexos').addEventListener('click', (e) => {
+    const btnAcao = e.target.closest('[data-acao-midia]');
+    if (!btnAcao || !window.TalkMidia) return;
+    window.TalkMidia.abrirOuBaixar(btnAcao.dataset.midiaId, btnAcao.dataset.midiaNome, {
+      baixar: btnAcao.dataset.acaoMidia === 'baixar',
+    });
+  });
 
   $('btn-ver-conversa-msg').addEventListener('click', () => {
     const cvId = $('btn-ver-conversa-msg').dataset.conversaId;

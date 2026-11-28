@@ -53,13 +53,26 @@ test('G16 setores.html: salvar cada bloco isoladamente, Tempo para aceitar só n
     await page.goto(`${baseUrl}/setores.html`, { waitUntil: 'networkidle' });
     await page.waitForSelector('#lista-setores .g14-card');
 
-    // Novo setor: pesquisa nasce desligada + prévia padrão
+    // Novo setor: pesquisa nasce desligada + prévia padrão + selos G22 ("Ainda não ativo") nos recursos false
     await page.click('#btn-novo-setor');
     await page.waitForSelector('#vista-setor:not([hidden])');
     assert.equal(await page.isChecked('#s-pesq-ligada'), false, 'Pesquisa deve nascer desligada');
     assert.match(await page.textContent('#previa-pesquisa-whatsapp'), /Como você avalia este atendimento/);
     assert.match(await page.textContent('#secao-alertas'), /0 = não escalona/);
     assert.match(await page.textContent('#secao-alertas'), /supervisão do setor/);
+
+    // G22: menu é true (sem selo); rodizio, alertas_tela, alertas_whatsapp, escalonamento, sla e pesquisa são false (com selo)
+    assert.equal(await page.locator('[data-selo-recurso="menu"]').isHidden(), true, 'menu está ativo, não mostra selo');
+    for (const chave of ['rodizio', 'alertas_tela', 'alertas_whatsapp', 'escalonamento', 'sla', 'pesquisa']) {
+      const selo = page.locator(`[data-selo-recurso="${chave}"]`).first();
+      assert.equal(await selo.isVisible(), true, `selo de ${chave} deve estar visível quando false`);
+      assert.equal((await selo.textContent()).trim(), 'Ainda não ativo');
+      assert.equal(await selo.getAttribute('title'), 'Já pode configurar; passa a valer numa próxima atualização.');
+    }
+
+    // G22: "Escalonar para" populado por GET /atendentes (ids sempre usuario_id)
+    const valoresAtendentes = await page.locator('#lista-escalonar-para input[type="checkbox"]').evaluateAll((els) => els.map((e) => e.value));
+    assert.deepEqual(valoresAtendentes.sort(), ['usr_ana', 'usr_bruno', 'usr_carla']);
     await page.click('#btn-voltar-setor');
 
     // 1. Bloco menu: abre Financeiro (fila_livre), confere placeholder do texto da opção e salva só { versao, menu }
@@ -320,6 +333,89 @@ test('G16 canais.html: menu de setores, prévia ordenada, avisos (compartilhado,
       const med = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth }));
       assert.ok(med.sw <= med.iw + 1, `rolagem horizontal em canais.html (menu) em ${w}px: ${med.sw} > ${med.iw}`);
     }
+
+    assert.deepEqual(erros, []);
+  } finally {
+    await ctx.close();
+    await sim.fechar();
+  }
+});
+
+test('G22 setores.html: estado ativo oculta selos; rota de recursos falhando oculta selos sem erro; fallback Escalonar para (/atendentes 404 + /usuarios 403 -> membros dos setores)', async () => {
+  const { sim, baseUrl } = await criarAmbiente();
+  const { ctx, page, erros } = await novaPagina({ width: 1440, height: 900 });
+  try {
+    // 1. Com GET /atendimento/recursos devolvendo tudo true, nenhum selo aparece
+    let modoRecursos = 'ativos';
+    await page.route('**/api/admin/atendimento/recursos*', async (route) => {
+      if (modoRecursos === 'ativos') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            menu: true,
+            midia: true,
+            status_atendente: true,
+            rodizio: true,
+            alertas_tela: true,
+            alertas_whatsapp: true,
+            escalonamento: true,
+            pesquisa: true,
+            inatividade: true,
+            sla: true,
+          }),
+        });
+      }
+      return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ erro: { codigo: 'erro_interno', mensagem: 'Falha simulada.' } }) });
+    });
+
+    await page.goto(`${baseUrl}/setores.html`, { waitUntil: 'networkidle' });
+    await page.click('[data-editar-setor="set_financeiro"]');
+    await page.waitForSelector('#vista-setor:not([hidden])');
+    assert.equal(await page.locator('[data-selo-recurso]:visible').count(), 0, 'com recursos ativos não há selo');
+
+    // 2. Se /atendimento/recursos falhar (500) + /atendentes 404 + /usuarios 403 -> sem selo, sem erro, e "Escalonar para" vem dos membros dos setores
+    modoRecursos = 'falha';
+    await page.route('**/api/admin/atendentes*', (route) => route.fulfill({
+      status: 404,
+      contentType: 'application/json',
+      body: JSON.stringify({ erro: { codigo: 'nao_encontrado', mensagem: 'Rota não encontrada.' } }),
+    }));
+    await page.route('**/api/admin/usuarios*', (route) => route.fulfill({
+      status: 403,
+      contentType: 'application/json',
+      body: JSON.stringify({ erro: { codigo: 'sem_permissao', mensagem: 'Sem permissão para listar usuários.' } }),
+    }));
+
+    let putCorpo = null;
+    await page.route('**/api/admin/setores/set_comercial*', async (route) => {
+      if (route.request().method() === 'PUT') putCorpo = route.request().postDataJSON();
+      await route.continue();
+    });
+
+    await page.goto(`${baseUrl}/setores.html`, { waitUntil: 'networkidle' });
+    await page.click('[data-editar-setor="set_comercial"]');
+    await page.waitForSelector('#vista-setor:not([hidden])');
+
+    assert.equal(await page.locator('[data-selo-recurso]:visible').count(), 0, 'se a rota de recursos falhar, não mostra selo');
+    assert.equal(await page.isHidden('#alerta-setor'), true, 'sem aviso de erro ao falhar recursos');
+
+    // Membros dos 3 setores da J2A na semente: Ana Ribeiro (Financeiro), Bruno Lima (Suporte, Comercial) e Carla Souza (Suporte)
+    const opcoesFallback = await page.locator('#lista-escalonar-para label.tlk-check-card').evaluateAll((els) => els.map((lbl) => ({
+      id: lbl.querySelector('input')?.value,
+      disabled: lbl.querySelector('input')?.disabled,
+      texto: lbl.textContent.replace(/\s+/g, ' ').trim(),
+    })));
+    assert.deepEqual(opcoesFallback.map((o) => o.id), ['usr_ana', 'usr_bruno', 'usr_carla']);
+    assert.ok(opcoesFallback.every((o) => o.disabled === false));
+    assert.match(opcoesFallback.find((o) => o.id === 'usr_carla').texto, /Carla Souza/);
+    assert.match(opcoesFallback.find((o) => o.id === 'usr_carla').texto, /Suporte/);
+
+    // Marca Carla Souza e salva -> escalonar_para grava usuario_id ['usr_carla']
+    await page.locator('#lista-escalonar-para input[value="usr_carla"]').check();
+    await page.click('#btn-salvar-setor');
+    await page.waitForSelector('#vista-principal:not([hidden])');
+    assert.deepEqual(putCorpo?.alertas?.escalonar_para, ['usr_carla']);
 
     assert.deepEqual(erros, []);
   } finally {

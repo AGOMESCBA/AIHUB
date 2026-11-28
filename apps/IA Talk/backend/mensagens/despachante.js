@@ -18,6 +18,7 @@
 
 const repo = require('./repositorio');
 const telefone = require('../seguranca/telefone');
+const armazem = require('../midias/armazem');
 const regras = require('../canais/regras');
 const { agora } = require('../ids');
 
@@ -120,7 +121,19 @@ class Despachante {
     }
     const encaminhada = this._mudar(m, 'encaminhada', { campos: { tentativas: m.tentativas + 1 }, detalhe: m.tentativas ? `Tentativa ${m.tentativas + 1}.` : null });
     if (!encaminhada) return;
-    const r = await this.supervisor.enviar(canalId, { id: m.id, destinatario: { tipo: 'telefone', valor: m.destino }, tipo: m.tipo, texto: m.conteudo });
+    // Mídia (§10): o arquivo sai decifrado só neste envelope, para o processo do canal; texto = legenda.
+    const envelope = { id: m.id, destinatario: { tipo: 'telefone', valor: m.destino }, tipo: m.tipo, texto: m.tipo === 'texto' ? m.conteudo : undefined };
+    if (m.midia_id) {
+      const md = this.db.prepare('SELECT * FROM midias WHERE id = ?').get(m.midia_id);
+      const dados = md && armazem.ler(md);
+      if (!dados) {
+        this._mudar(m, 'falhou', { detalhe: 'O arquivo desta mensagem não está mais disponível.' });
+        return;
+      }
+      envelope.arquivo = { nome: md.nome, mime: md.mime, dados }; // o supervisor converte para o processo do canal
+      if (m.conteudo) envelope.legenda = m.conteudo;
+    }
+    const r = await this.supervisor.enviar(canalId, envelope);
     const origem = m.origem === 'teste_tela' ? ' (teste pela tela)' : '';
     if (r.ok) {
       this.db.prepare('UPDATE mensagens SET id_provedor = ?, ultimo_erro = NULL WHERE id = ?').run(r.id_provedor || null, m.id);

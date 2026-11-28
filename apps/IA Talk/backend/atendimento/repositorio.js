@@ -8,6 +8,7 @@ const { novoId, agora } = require('../ids');
 const telefone = require('../seguranca/telefone');
 const config = require('../config');
 const { padroesDoSetor, efetivoDoSetor } = require('./config-onda1');
+const armazem = require('../midias/armazem');
 
 const json = (texto, padrao) => { try { return JSON.parse(texto); } catch (_) { return padrao; } };
 // Blocos da Onda 1 do setor (§9): coluna vazia = segue a política da empresa (§9.10); gravado = personalizado.
@@ -144,14 +145,18 @@ function atualizarConversa(db, id, campos) {
 // Estado da saída vem da própria mensagem da fila (uma fonte só da verdade).
 // Desempate pela ordem de gravação (rowid): o WhatsApp manda a hora em segundos e o id é aleatório.
 // Mensagem do contato mostra o nome atual dele (o nome gravado no item é o da chegada, às vezes "Contato sem nome").
-const SELECT_ITEM = `SELECT i.*, i.rowid AS ordem, m.estado AS mensagem_estado, ct.nome AS contato_nome FROM conversa_itens i
-  LEFT JOIN mensagens m ON m.id = i.mensagem_id LEFT JOIN contatos ct ON i.autor_tipo = 'contato' AND ct.id = i.autor_id`;
+// Mídia do item (§10): colunas md_* da tabela midias, montadas por paraMidia.
+const SELECT_ITEM = `SELECT i.*, i.rowid AS ordem, m.estado AS mensagem_estado, ct.nome AS contato_nome,
+    md.nome AS md_nome, md.mime AS md_mime, md.tamanho AS md_tamanho, md.voz AS md_voz, md.caminho AS md_caminho,
+    md.motivo AS md_motivo, md.expira_em AS md_expira_em, md.apagada_em AS md_apagada_em FROM conversa_itens i
+  LEFT JOIN mensagens m ON m.id = i.mensagem_id LEFT JOIN contatos ct ON i.autor_tipo = 'contato' AND ct.id = i.autor_id
+  LEFT JOIN midias md ON md.id = i.midia_id`;
 
-function adicionarItem(db, conversaId, { categoria, direcao = null, autor, tipo = null, texto = null, mensagemId = null, idProvedor = null, em = agora() }) {
+function adicionarItem(db, conversaId, { categoria, direcao = null, autor, tipo = null, texto = null, mensagemId = null, idProvedor = null, midiaId = null, em = agora() }) {
   const id = novoId('item');
-  db.prepare(`INSERT INTO conversa_itens (id, conversa_id, categoria, direcao, autor_tipo, autor_id, autor_nome, tipo, texto, mensagem_id, id_provedor, em)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(id, conversaId, categoria, direcao, autor.tipo, autor.id || null, autor.nome, tipo, texto, mensagemId, idProvedor, em);
+  db.prepare(`INSERT INTO conversa_itens (id, conversa_id, categoria, direcao, autor_tipo, autor_id, autor_nome, tipo, texto, mensagem_id, id_provedor, midia_id, em)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(id, conversaId, categoria, direcao, autor.tipo, autor.id || null, autor.nome, tipo, texto, mensagemId, idProvedor, midiaId, em);
   db.prepare('UPDATE conversas SET atualizada_em = ? WHERE id = ?').run(em, conversaId);
   return db.prepare(`${SELECT_ITEM} WHERE i.id = ?`).get(id);
 }
@@ -159,7 +164,9 @@ function adicionarItem(db, conversaId, { categoria, direcao = null, autor, tipo 
 function paraItem(i) {
   const estado = i.categoria !== 'mensagem' ? null : i.direcao === 'entrada' ? 'recebida' : (i.mensagem_estado || 'aceita');
   return { id: i.id, categoria: i.categoria, direcao: i.direcao, autor: { tipo: i.autor_tipo, id: i.autor_id, nome: i.contato_nome || i.autor_nome },
-    tipo: i.tipo, texto: i.texto, estado, mensagem_id: i.mensagem_id, em: i.em };
+    tipo: i.tipo, texto: i.texto, estado, mensagem_id: i.mensagem_id, em: i.em,
+    midia: i.midia_id ? armazem.paraMidia({ id: i.midia_id, nome: i.md_nome, mime: i.md_mime, tamanho: i.md_tamanho, voz: i.md_voz,
+      caminho: i.md_caminho, motivo: i.md_motivo, expira_em: i.md_expira_em, apagada_em: i.md_apagada_em }) : null };
 }
 
 function itemDaMensagem(db, mensagemId) {
@@ -231,7 +238,7 @@ const refAdmin = (r) => ({ ...refV1(r), aplicacao: { id: r.aplicacao_id, nome: r
 const naFila = (cv) => cv.situacao === 'aberta' && !cv.responsavel_id && !cv.triagem_desde;
 
 function paraConversaResumo(db, cv) {
-  const ultima = db.prepare(`SELECT texto, direcao, autor_tipo, em FROM conversa_itens WHERE conversa_id = ? AND categoria = 'mensagem'
+  const ultima = db.prepare(`SELECT texto, tipo, direcao, autor_tipo, em FROM conversa_itens WHERE conversa_id = ? AND categoria = 'mensagem'
       ORDER BY em DESC, rowid DESC LIMIT 1`).get(cv.id);
   return {
     id: cv.id, protocolo: cv.protocolo, canal: { id: cv.canal_id, nome: cv.canal_nome },
@@ -241,7 +248,7 @@ function paraConversaResumo(db, cv) {
     // Onda 1 (§9): triagem = no menu de setores. Oferta, SLA e pesquisa chegam nas etapas C13–C15.
     triagem: cv.triagem_desde && cv.situacao === 'aberta' ? { desde: cv.triagem_desde, tentativas: cv.triagem_tentativas || 0 } : null,
     oferta: null, sla: null, pesquisa: null,
-    ultima_mensagem: ultima ? { previa: previaDe(ultima.texto), direcao: ultima.direcao, autor_tipo: ultima.autor_tipo, em: ultima.em } : null,
+    ultima_mensagem: ultima ? { previa: ultima.texto || ultima.tipo === 'texto' ? previaDe(ultima.texto) : armazem.previaDaMidia(ultima.tipo), direcao: ultima.direcao, autor_tipo: ultima.autor_tipo, em: ultima.em } : null,
     aguardando_desde: aguardandoDesde(db, cv), etiquetas: json(cv.etiquetas, []), prioridade: cv.prioridade,
     referencias: referenciasDaConversa(db, cv.id).map(refAdmin), aberta_em: cv.aberta_em, atualizada_em: cv.atualizada_em, encerrada_em: cv.encerrada_em,
   };

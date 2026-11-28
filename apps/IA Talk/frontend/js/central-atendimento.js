@@ -45,6 +45,7 @@
     }
 
     let sessao = null;
+    let recursosAtd = { ok: false, dados: null };
     let usuarioEfetivo = { id: null, nome: '' };
     let setoresAtivos = [];
     let contadores = { minhas: 0, fila: 0, abertas: 0, por_setor: [] };
@@ -65,6 +66,11 @@
 
     const rascunhos = new Map();
     let envioEmAndamento = false;
+    let enviandoAnexos = false;
+    let filaAnexos = []; // [{ uid, arquivo, nome, tamanho, ext, ehImagem, previewUrl }]
+    let seqAnexo = 0;
+    let dragProfundidade = 0;
+    let midiaAbertaModal = null; // { id, nome, blobUrl }
     let modoCompositor = 'cliente'; // 'cliente' | 'nota'
     let slashIndice = 0;
     let slashLista = [];
@@ -471,8 +477,27 @@
 
       const bloqueado = !ehNota && !podeResponder;
       $('campo-msg').disabled = bloqueado;
-      $('btn-enviar').disabled = bloqueado || envioEmAndamento;
+      $('btn-enviar').disabled = bloqueado || envioEmAndamento || enviandoAnexos;
       $('btn-atalho-slash').disabled = bloqueado;
+
+      const btnAnexar = $('btn-anexar');
+      if (btnAnexar) {
+        const midiaInativa = window.TalkRecursos ? window.TalkRecursos.inativo(recursosAtd, 'midia') : false;
+        const wrapAnexar = $('wrap-btn-anexar');
+        if (wrapAnexar) wrapAnexar.hidden = ehNota;
+        btnAnexar.disabled = midiaInativa || bloqueado || envioEmAndamento || enviandoAnexos;
+        if (midiaInativa) {
+          btnAnexar.title = window.TalkRecursos.DICA;
+          btnAnexar.setAttribute('aria-label', `Anexar arquivo: ${window.TalkRecursos.ROTULO} — ${window.TalkRecursos.DICA}`);
+        } else if (bloqueado) {
+          btnAnexar.title = motivo || 'Envio indisponível nesta conversa';
+          btnAnexar.setAttribute('aria-label', motivo || 'Envio indisponível nesta conversa');
+        } else {
+          const dicaClipe = 'Anexar arquivo: envie imagem, PDF, planilha, documento ou áudio (até 16 MB)';
+          btnAnexar.title = dicaClipe;
+          btnAnexar.setAttribute('aria-label', dicaClipe);
+        }
+      }
 
       if (ehNota) {
         $('campo-msg').placeholder = 'Escreva uma nota interna (visível só para a equipe)…';
@@ -517,11 +542,14 @@
         </article>`;
       }
       const saida = it.direcao === 'saida';
+      const corpoHtml = window.TalkMidia
+        ? window.TalkMidia.renderizarConteudoMensagemComMidia(it, { simular: simularUrl })
+        : `<div class="atd-msg-texto">${esc(it.texto)}</div>`;
       return `<article class="atd-msg ${saida ? 'atd-msg--atendente' : 'atd-msg--cliente'}" data-item-id="${esc(it.id)}">
         <div class="atd-msg-head">
           <strong>${esc(it.autor?.nome || (saida ? 'Atendente' : 'Contato'))}</strong>
         </div>
-        <div class="atd-msg-texto">${esc(it.texto)}</div>
+        ${corpoHtml}
         <div class="atd-msg-meta">
           <span>${esc(dataHora(it.em))}</span>
           ${saida && it.estado ? `<span data-item-estado="${esc(it.id)}">${pill(it.estado)}</span>` : ''}
@@ -758,6 +786,7 @@
         ]);
         if (seq !== conversaSeq) return;
         guardarRascunho();
+        if (conversaAtual?.id !== detalhe.id) limparFilaAnexos();
         conversaAtual = detalhe;
         itensConversa = [...(pagItens?.itens || [])].reverse();
         proximoCursorItens = pagItens?.proximo_cursor || null;
@@ -1033,6 +1062,7 @@
         historicoContato = [];
         assinarConversaSocket(null);
         fecharSlashMenu();
+        limparFilaAnexos();
         limparAlertaConversa();
         rascunhos.delete(chaveRascunho(idEncerrando, 'cliente'));
         rascunhos.delete(chaveRascunho(idEncerrando, 'nota'));
@@ -1106,9 +1136,391 @@
       restaurarRascunho();
       $('alerta-compositor').hidden = true;
       fecharSlashMenu();
+      limparFilaAnexos();
       atualizarEstadoCompositor();
       $('campo-msg').focus();
     });
+
+    // ── Mídia: prévia em fila, validação local, envio via XMLHttpRequest e lightbox (G23 §10) ─
+    function podeAnexarAgora() {
+      if (!conversaAtual || modoCompositor === 'nota' || envioEmAndamento || enviandoAnexos) return false;
+      if (window.TalkRecursos && window.TalkRecursos.inativo(recursosAtd, 'midia')) return false;
+      return !!conversaAtual.envio?.pode_responder;
+    }
+
+    function atualizarContadorLegendaAnexo() {
+      const inp = $('campo-legenda-anexo');
+      const cnt = $('contador-legenda-anexo');
+      if (!inp || !cnt) return;
+      const len = inp.value.length;
+      cnt.textContent = `${len} / 1024`;
+      cnt.classList.toggle('atd-contador-chars--excedido', len > 1024);
+    }
+
+    function renderizarPreviaAnexos() {
+      const painel = $('painel-previa-anexos');
+      if (!painel) return;
+      if (!filaAnexos.length) {
+        painel.hidden = true;
+        $('lista-previa-anexos').innerHTML = '';
+        $('wrap-progresso-anexo').hidden = true;
+        return;
+      }
+      painel.hidden = false;
+      const n = filaAnexos.length;
+      $('previa-anexos-titulo').textContent = n === 1 ? '1 arquivo pronto para enviar' : `${n} arquivos na fila de envio`;
+      $('previa-anexos-dica-fila').hidden = n <= 1;
+
+      $('lista-previa-anexos').innerHTML = filaAnexos.map((it) => {
+        const info = window.TalkMidia.classificarArquivo({ mime: it.arquivo.type, nome: it.nome });
+        const visual = it.ehImagem && it.previewUrl
+          ? `<img class="atd-previa-item-thumb" src="${esc(it.previewUrl)}" alt="${esc(it.nome)}">`
+          : `<div class="atd-midia-doc-ico ${esc(info.classeIco)}" aria-hidden="true">${TalkIcones.svg(info.icone)}</div>`;
+        return `<div class="atd-previa-item" data-previa-uid="${esc(it.uid)}">
+          ${visual}
+          <div class="atd-previa-item-info">
+            <span class="atd-previa-item-nome" title="${esc(it.nome)}">${esc(it.nome)}</span>
+            <span class="atd-previa-item-tam">${esc(info.rotulo)} · ${esc(window.TalkMidia.formatarTamanho(it.tamanho))}</span>
+          </div>
+          ${enviandoAnexos ? '' : `<button type="button" class="atd-previa-rm" data-rm-anexo="${esc(it.uid)}" title="Remover ${esc(it.nome)}" aria-label="Remover ${esc(it.nome)}">${TalkIcones.svg('cancelar')}</button>`}
+        </div>`;
+      }).join('');
+
+      $('campo-legenda-anexo').disabled = enviandoAnexos;
+      $('btn-mais-arquivos').disabled = enviandoAnexos;
+      $('btn-cancelar-anexo').disabled = enviandoAnexos;
+      $('btn-enviar-anexo').disabled = enviandoAnexos;
+      atualizarContadorLegendaAnexo();
+    }
+
+    function limparFilaAnexos() {
+      for (const it of filaAnexos) {
+        if (it.previewUrl) {
+          try { URL.revokeObjectURL(it.previewUrl); } catch (_) {}
+        }
+      }
+      filaAnexos = [];
+      if ($('campo-legenda-anexo')) $('campo-legenda-anexo').value = '';
+      if ($('input-anexo')) $('input-anexo').value = '';
+      renderizarPreviaAnexos();
+    }
+
+    function mostrarErroAnexo(mensagem) {
+      const alerta = $('alerta-compositor');
+      if (!alerta) return;
+      alerta.textContent = mensagem;
+      alerta.hidden = false;
+    }
+
+    function adicionarArquivosNaFila(arquivos) {
+      if (!window.TalkMidia || !arquivos?.length) return;
+      if (!podeAnexarAgora()) return;
+      $('alerta-compositor').hidden = true;
+
+      let erroMsg = null;
+      for (const arq of [...arquivos]) {
+        const val = window.TalkMidia.validarArquivoCliente(arq);
+        if (!val.ok) {
+          erroMsg ||= val.mensagem;
+          continue;
+        }
+        const uid = `anx_${++seqAnexo}`;
+        const previewUrl = val.ehImagem ? URL.createObjectURL(arq) : null;
+        filaAnexos.push({
+          uid,
+          arquivo: arq,
+          nome: val.nome,
+          tamanho: arq.size,
+          ext: val.ext,
+          ehImagem: val.ehImagem,
+          previewUrl,
+        });
+      }
+      renderizarPreviaAnexos();
+      if (erroMsg) mostrarErroAnexo(erroMsg);
+      else if (filaAnexos.length && $('campo-legenda-anexo')) $('campo-legenda-anexo').focus();
+    }
+
+    /**
+     * Envia um único arquivo via XMLHttpRequest para acompanhar upload.onprogress (§10.4).
+     */
+    function enviarUmAnexoXhr(idConv, itemFila, legenda, aoProgresso) {
+      return new Promise((resolve, reject) => {
+        const params = { nome: itemFila.nome };
+        if (legenda) params.legenda = legenda;
+        if (simularUrl) params.simular = simularUrl;
+        const url = `${TalkApi.BASE}/api/admin/conversas/${encodeURIComponent(idConv)}/anexos${TalkApi.montarQuery(params)}`;
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url, true);
+        xhr.withCredentials = true;
+        xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+        xhr.setRequestHeader('Accept', 'application/json');
+        try {
+          const sim = sessionStorage.getItem('talk_simular');
+          if (sim) xhr.setRequestHeader('X-Talk-Simular', sim);
+        } catch (_) {}
+
+        if (xhr.upload && typeof aoProgresso === 'function') {
+          xhr.upload.onprogress = (ev) => {
+            if (ev.lengthComputable && ev.total > 0) {
+              aoProgresso(Math.min(100, Math.round((ev.loaded / ev.total) * 100)));
+            }
+          };
+        }
+
+        xhr.onerror = () => reject({ status: 0, codigo: 'sem_conexao', message: 'Não foi possível enviar o arquivo. Confira a conexão.' });
+        xhr.onload = () => {
+          let dados = null;
+          try { dados = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch (_) {}
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(dados);
+            return;
+          }
+          const e = dados?.erro || {};
+          if (xhr.status === 401) {
+            const err401 = new TalkApi.ErroApi(401, e);
+            if (ao401) ao401(err401);
+            window.top.dispatchEvent(new CustomEvent('talk:sessao-expirada', { detail: { mensagem: err401.message } }));
+            reject(err401);
+            return;
+          }
+          if (xhr.status === 413) {
+            reject({ status: 413, codigo: 'arquivo_grande', message: 'O arquivo passa de 16 MB.' });
+            return;
+          }
+          if (xhr.status === 422 && (e.codigo === 'tipo_nao_suportado' || !e.mensagem)) {
+            reject({ status: 422, codigo: 'tipo_nao_suportado', message: 'Este tipo de arquivo não pode ser enviado.' });
+            return;
+          }
+          const msgCampo = e.campos?.legenda || e.campos?.arquivo;
+          reject({
+            status: xhr.status,
+            codigo: e.codigo || 'erro',
+            message: msgCampo || e.mensagem || 'Não foi possível enviar o arquivo.',
+          });
+        };
+        xhr.send(itemFila.arquivo);
+      });
+    }
+
+    async function enviarFilaAnexos() {
+      if (!conversaAtual || !filaAnexos.length || enviandoAnexos || envioEmAndamento) return;
+      $('alerta-compositor').hidden = true;
+      const legendaBruta = ($('campo-legenda-anexo')?.value || '').trim();
+      if (legendaBruta.length > 1024) {
+        mostrarErroAnexo('Use no máximo 1024 caracteres na legenda.');
+        return;
+      }
+      const legendaPrimeiro = legendaBruta ? expandirVariaveis(legendaBruta) : '';
+
+      enviandoAnexos = true;
+      const seq = conversaSeq;
+      const idConv = conversaAtual.id;
+      const estavaNaFila = !!conversaAtual.na_fila;
+      const totalEnvio = filaAnexos.length;
+      let enviados = 0;
+
+      renderizarPreviaAnexos();
+      atualizarEstadoCompositor();
+      const wrapProg = $('wrap-progresso-anexo');
+      const fillProg = $('progresso-anexo-fill');
+      const barraProg = $('barra-progresso-anexo');
+      const txtProg = $('progresso-anexo-texto');
+      wrapProg.hidden = false;
+
+      const atualizarProgressoUI = (indiceAtual, pctArquivo) => {
+        const globalPct = Math.min(100, Math.round(((indiceAtual + pctArquivo / 100) / totalEnvio) * 100));
+        fillProg.style.width = `${globalPct}%`;
+        barraProg.setAttribute('aria-valuenow', String(globalPct));
+        txtProg.textContent = totalEnvio > 1
+          ? `Enviando ${indiceAtual + 1} de ${totalEnvio} · ${pctArquivo}%`
+          : `Enviando… ${pctArquivo}%`;
+      };
+
+      try {
+        while (filaAnexos.length) {
+          const itemAtual = filaAnexos[0];
+          const legendaItem = enviados === 0 ? legendaPrimeiro : '';
+          atualizarProgressoUI(enviados, 0);
+          const novoItem = await enviarUmAnexoXhr(idConv, itemAtual, legendaItem, (pct) => atualizarProgressoUI(enviados, pct));
+          atualizarProgressoUI(enviados, 100);
+
+          if (itemAtual.previewUrl) {
+            try { URL.revokeObjectURL(itemAtual.previewUrl); } catch (_) {}
+          }
+          filaAnexos.shift();
+          enviados += 1;
+
+          if (seq === conversaSeq && conversaAtual?.id === idConv && novoItem?.id && !itensConversa.some((i) => i.id === novoItem.id)) {
+            itensConversa.push(novoItem);
+            renderizarItensConversa({ rolarFim: true });
+          }
+        }
+
+        if ($('campo-legenda-anexo')) $('campo-legenda-anexo').value = '';
+        if (estavaNaFila && seq === conversaSeq && conversaAtual?.id === idConv) {
+          await Promise.all([recarregarConversaAtual({ rolarFim: true }), carregarContadores()]);
+        }
+      } catch (err) {
+        if (err?.status !== 401) mostrarErroAnexo(err?.message || 'Não foi possível enviar o arquivo.');
+      } finally {
+        enviandoAnexos = false;
+        renderizarPreviaAnexos();
+        atualizarEstadoCompositor();
+      }
+    }
+
+    async function abrirImagemAmpliada(id, nome) {
+      if (!id || !window.TalkMidia) return;
+      const url = window.TalkMidia.urlMidia(id, { baixar: false, simular: simularUrl });
+      const headers = {};
+      try {
+        const sim = sessionStorage.getItem('talk_simular');
+        if (sim) headers['X-Talk-Simular'] = sim;
+      } catch (_) {}
+
+      try {
+        const resp = await fetch(url, { method: 'GET', headers, credentials: 'same-origin', cache: 'no-store' });
+        if (resp.status === 410) { TalkUI.toast('Este arquivo não está mais disponível.', 'erro'); return; }
+        if (resp.status === 404) { TalkUI.toast('Arquivo não encontrado.', 'erro'); return; }
+        if (!resp.ok) { TalkUI.toast('Não foi possível abrir a imagem.', 'erro'); return; }
+        const blob = await resp.blob();
+        fecharModalImagem();
+        const blobUrl = URL.createObjectURL(blob);
+        midiaAbertaModal = { id, nome: nome || 'imagem', blobUrl };
+        $('modal-midia-nome').textContent = nome || 'Imagem';
+        $('modal-midia-img').src = blobUrl;
+        $('modal-midia-img').alt = nome || 'Imagem ampliada';
+        $('modal-midia-imagem').hidden = false;
+        $('btn-modal-midia-fechar').focus();
+      } catch (_) {
+        TalkUI.toast('Não foi possível abrir a imagem.', 'erro');
+      }
+    }
+
+    function fecharModalImagem() {
+      const modal = $('modal-midia-imagem');
+      if (!modal || modal.hidden) return;
+      modal.hidden = true;
+      $('modal-midia-img').removeAttribute('src');
+      if (midiaAbertaModal?.blobUrl) {
+        try { URL.revokeObjectURL(midiaAbertaModal.blobUrl); } catch (_) {}
+      }
+      midiaAbertaModal = null;
+    }
+
+    if ($('btn-anexar')) {
+      $('btn-anexar').addEventListener('click', () => {
+        if (!podeAnexarAgora()) return;
+        $('input-anexo')?.click();
+      });
+    }
+    if ($('btn-mais-arquivos')) {
+      $('btn-mais-arquivos').addEventListener('click', () => {
+        if (!podeAnexarAgora()) return;
+        $('input-anexo')?.click();
+      });
+    }
+    if ($('input-anexo')) {
+      $('input-anexo').addEventListener('change', (e) => {
+        if (e.target.files?.length) adicionarArquivosNaFila(e.target.files);
+        e.target.value = '';
+      });
+    }
+    if ($('campo-legenda-anexo')) {
+      $('campo-legenda-anexo').addEventListener('input', atualizarContadorLegendaAnexo);
+      $('campo-legenda-anexo').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          enviarFilaAnexos();
+        }
+      });
+    }
+    if ($('btn-cancelar-anexo')) $('btn-cancelar-anexo').addEventListener('click', limparFilaAnexos);
+    if ($('btn-enviar-anexo')) $('btn-enviar-anexo').addEventListener('click', enviarFilaAnexos);
+    if ($('lista-previa-anexos')) {
+      $('lista-previa-anexos').addEventListener('click', (e) => {
+        const rm = e.target.closest('[data-rm-anexo]');
+        if (!rm || enviandoAnexos) return;
+        const uid = rm.dataset.rmAnexo;
+        const idx = filaAnexos.findIndex((x) => x.uid === uid);
+        if (idx >= 0) {
+          if (filaAnexos[idx].previewUrl) {
+            try { URL.revokeObjectURL(filaAnexos[idx].previewUrl); } catch (_) {}
+          }
+          filaAnexos.splice(idx, 1);
+          renderizarPreviaAnexos();
+        }
+      });
+    }
+
+    // Arrastar e soltar na área da conversa
+    const areaChatDrop = $('secao-chat-ativa') || document.querySelector('.atd-col--chat');
+    if (areaChatDrop && $('drop-anexo-overlay')) {
+      const temArquivosDrag = (e) => Array.from(e.dataTransfer?.types || []).includes('Files');
+      areaChatDrop.addEventListener('dragenter', (e) => {
+        if (!temArquivosDrag(e) || !podeAnexarAgora()) return;
+        e.preventDefault();
+        dragProfundidade += 1;
+        $('drop-anexo-overlay').hidden = false;
+      });
+      areaChatDrop.addEventListener('dragover', (e) => {
+        if (!temArquivosDrag(e) || !podeAnexarAgora()) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      });
+      areaChatDrop.addEventListener('dragleave', (e) => {
+        if (!temArquivosDrag(e)) return;
+        dragProfundidade = Math.max(0, dragProfundidade - 1);
+        if (dragProfundidade === 0) $('drop-anexo-overlay').hidden = true;
+      });
+      areaChatDrop.addEventListener('drop', (e) => {
+        dragProfundidade = 0;
+        $('drop-anexo-overlay').hidden = true;
+        if (!temArquivosDrag(e)) return;
+        e.preventDefault();
+        if (podeAnexarAgora() && e.dataTransfer?.files?.length) {
+          adicionarArquivosNaFila(e.dataTransfer.files);
+        }
+      });
+    }
+
+    // Colar imagem (Ctrl+V) na conversa
+    document.addEventListener('paste', (e) => {
+      if (!podeAnexarAgora()) return;
+      const itensClip = Array.from(e.clipboardData?.items || []);
+      const arquivosColados = [];
+      for (const item of itensClip) {
+        if (item.kind === 'file') {
+          const arq = item.getAsFile();
+          if (arq) arquivosColados.push(arq);
+        }
+      }
+      if (!arquivosColados.length && e.clipboardData?.files?.length) {
+        arquivosColados.push(...e.clipboardData.files);
+      }
+      if (arquivosColados.length) {
+        e.preventDefault();
+        adicionarArquivosNaFila(arquivosColados);
+      }
+    });
+
+    // Lightbox de imagem ampliada
+    if ($('modal-midia-imagem')) {
+      $('btn-modal-midia-fechar').addEventListener('click', fecharModalImagem);
+      $('btn-modal-midia-baixar').addEventListener('click', () => {
+        if (midiaAbertaModal) {
+          window.TalkMidia.abrirOuBaixar(midiaAbertaModal.id, midiaAbertaModal.nome, { baixar: true, simular: simularUrl });
+        }
+      });
+      $('modal-midia-imagem').addEventListener('click', (e) => {
+        if (e.target.id === 'modal-midia-imagem') fecharModalImagem();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !$('modal-midia-imagem').hidden) fecharModalImagem();
+      });
+    }
 
     $('btn-atalho-slash').addEventListener('click', () => {
       if ($('campo-msg').disabled) return;
@@ -1323,7 +1735,19 @@
     });
 
     $('lista-mensagens').addEventListener('click', (e) => {
-      if (e.target.closest('#btn-mais-itens')) carregarMaisItens();
+      if (e.target.closest('#btn-mais-itens')) { carregarMaisItens(); return; }
+      const btnAmp = e.target.closest('[data-ampliar-midia]');
+      if (btnAmp) {
+        abrirImagemAmpliada(btnAmp.dataset.ampliarMidia, btnAmp.dataset.midiaNome);
+        return;
+      }
+      const btnAcao = e.target.closest('[data-acao-midia]');
+      if (btnAcao && window.TalkMidia) {
+        window.TalkMidia.abrirOuBaixar(btnAcao.dataset.midiaId, btnAcao.dataset.midiaNome, {
+          baixar: btnAcao.dataset.acaoMidia === 'baixar',
+          simular: simularUrl,
+        });
+      }
     });
 
     $('campo-busca').addEventListener('input', () => {
@@ -1600,8 +2024,13 @@
       try {
         sessao = await api.get('/sessao');
         resolverUsuarioEfetivo();
+        const rotinasSessao = Array.isArray(sessao?.rotinas) ? sessao.rotinas : [];
+        if (window.TalkRecursos && rotinasSessao.includes('talk-atendimento')) {
+          recursosAtd = await window.TalkRecursos.carregar((caminho) => api.get(caminho));
+          window.TalkRecursos.aplicarSelos(document, recursosAtd);
+        }
         if (aoSessao) {
-          const continuar = await aoSessao(sessao);
+          const continuar = await aoSessao(sessao, recursosAtd);
           if (continuar === false) return;
         }
         await Promise.all([carregarSetores(), carregarContadores()]);
@@ -1627,6 +2056,7 @@
       abrirConversa,
       recarregarTudo,
       obterSessao: () => sessao,
+      obterRecursos: () => recursosAtd,
       obterUsuarioEfetivo: () => usuarioEfetivo,
     };
   }

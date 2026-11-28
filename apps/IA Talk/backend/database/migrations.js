@@ -545,4 +545,37 @@ module.exports = [
       atualizado_em  TEXT NOT NULL
     );`,
   },
+  {
+    // P1 (§10): mídia no atendimento e na API. Arquivo cifrado em disco (caminho relativo à pasta de
+    // dados); no banco só a descrição. Sem caminho = não guardado (motivo) ou já apagado pelo prazo.
+    versao: 14,
+    descricao: 'Mídia: arquivos recebidos e enviados (áudio, imagem, documento)',
+    sql: `CREATE TABLE IF NOT EXISTS midias (
+      id           TEXT PRIMARY KEY,
+      empresa_id   TEXT NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+      canal_id     TEXT REFERENCES canais(id) ON DELETE SET NULL,
+      conversa_id  TEXT REFERENCES conversas(id) ON DELETE SET NULL,
+      direcao      TEXT NOT NULL CHECK (direcao IN ('entrada', 'saida')),
+      nome         TEXT NOT NULL,
+      mime         TEXT,
+      tamanho      INTEGER NOT NULL DEFAULT 0,
+      voz          INTEGER NOT NULL DEFAULT 0 CHECK (voz IN (0, 1)),
+      sha256       TEXT,
+      caminho      TEXT,
+      motivo       TEXT CHECK (motivo IS NULL OR motivo IN ('grande', 'recusado', 'falhou')),
+      criada_em    TEXT NOT NULL,
+      expira_em    TEXT NOT NULL,
+      apagada_em   TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_midias_expira ON midias (expira_em) WHERE caminho IS NOT NULL AND apagada_em IS NULL;
+    ALTER TABLE conversa_itens ADD COLUMN midia_id TEXT REFERENCES midias(id) ON DELETE SET NULL;
+    ALTER TABLE mensagens ADD COLUMN midia_id TEXT REFERENCES midias(id) ON DELETE SET NULL;`,
+  },
+  {
+    // P2: ponto de controle do recebimento. Na reconexão o canal recupera o que chegou depois dele
+    // (no máximo 24 h); sem ponto (número novo) nada antigo é importado.
+    versao: 15,
+    descricao: 'Recebimento: até quando o canal já recebeu (recuperar o que chegou com o canal fora)',
+    sql: 'ALTER TABLE canais ADD COLUMN recebido_ate TEXT;',
+  },
 ];

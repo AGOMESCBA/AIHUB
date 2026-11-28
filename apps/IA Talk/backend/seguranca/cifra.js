@@ -67,6 +67,23 @@ function decifrar(envelope) {
   return Buffer.concat([d.update(Buffer.from(dados, 'base64')), d.final()]).toString('utf8');
 }
 
+// Arquivos (mídia, contratos.md §10): mesma chave e algoritmo, formato binário
+// [versão 1 | iv 12 | tag 16 | dados]. Quem copia a pasta sem a chave não abre nada.
+const VERSAO_BYTES = 1;
+function cifrarBytes(buf) {
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv('aes-256-gcm', chave(), iv);
+  const dados = Buffer.concat([c.update(buf), c.final()]);
+  return Buffer.concat([Buffer.from([VERSAO_BYTES]), iv, c.getAuthTag(), dados]);
+}
+
+function decifrarBytes(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 29 || buf[0] !== VERSAO_BYTES) throw new Error('Arquivo cifrado em formato desconhecido.');
+  const d = crypto.createDecipheriv('aes-256-gcm', chave(), buf.subarray(1, 13));
+  d.setAuthTag(buf.subarray(13, 29));
+  return Buffer.concat([d.update(buf.subarray(29)), d.final()]);
+}
+
 // Hash conferível de token/código: HMAC-SHA256 com subchave derivada da mestra.
 function hashSecreto(texto, finalidade = 'token') {
   const sub = crypto.createHmac('sha256', chave()).update(`ia-talk:${finalidade}`).digest();
@@ -79,4 +96,4 @@ function iguaisTempoConstante(a, b) {
   return x.length > 0 && x.length === y.length && crypto.timingSafeEqual(x, y);
 }
 
-module.exports = { cifrar, decifrar, hashSecreto, iguaisTempoConstante, carregarChave, definirChaveParaTeste };
+module.exports = { cifrar, decifrar, cifrarBytes, decifrarBytes, hashSecreto, iguaisTempoConstante, carregarChave, definirChaveParaTeste };

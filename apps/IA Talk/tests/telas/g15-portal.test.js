@@ -44,11 +44,19 @@ async function novaPagina(viewport = { width: 1440, height: 900 }) {
   return { ctx, page, erros };
 }
 
-test('G15 portal: atendente (?simular=atendente) vê Carla sem link admin; admin vê link admin; zero overflow em 1440 e 390 px', async () => {
+test('G15 + G22 portal (padrão recursos false): exibe selos Ainda não ativo, desabilita controles, não chama /atendentes/eu nem /alertas e zero overflow 1440/390', async () => {
   const { sim, baseUrl } = await criarAmbiente();
   const { ctx, page, erros } = await novaPagina({ width: 1440, height: 900 });
   try {
-    // 1. Atendente Carla (?simular=atendente)
+    let chamadasAtendenteEu = 0;
+    let chamadasAlertas = 0;
+    page.on('request', (req) => {
+      const u = req.url();
+      if (u.includes('/api/admin/atendentes/eu')) chamadasAtendenteEu += 1;
+      if (/\/api\/admin\/alertas(\?|$|\/)/.test(u)) chamadasAlertas += 1;
+    });
+
+    // 1. Atendente Carla (?simular=atendente) com recursos padrão (status_atendente, alertas_tela e alertas_whatsapp = false)
     await page.goto(`${baseUrl}/j2a/atendimento?simular=atendente`, { waitUntil: 'networkidle' });
     await page.waitForSelector('#lista-conversas .atd-conv-item');
     await page.waitForFunction(() => document.getElementById('rt-texto')?.textContent?.includes('Tempo real ativo'));
@@ -58,6 +66,24 @@ test('G15 portal: atendente (?simular=atendente) vê Carla sem link admin; admin
     assert.equal(await page.isVisible('#link-admin'), false, 'Atendente não deve ver "Abrir a administração"');
     assert.equal(await page.title(), 'Atendimento · J2A Consultoria');
 
+    // G22: selos "Ainda não ativo" visíveis, dica correta e controles desabilitados em 1440 px
+    for (const chave of ['status_atendente', 'alertas_tela', 'alertas_whatsapp']) {
+      const selo = page.locator(`[data-selo-recurso="${chave}"]`);
+      assert.equal(await selo.isVisible(), true, `selo de ${chave} deve aparecer quando false`);
+      assert.equal((await selo.textContent()).trim(), 'Ainda não ativo');
+      assert.equal(await selo.getAttribute('title'), 'Já pode configurar; passa a valer numa próxima atualização.');
+    }
+    assert.equal(await page.isDisabled('#ptl-status-select'), true);
+    assert.equal(await page.isDisabled('#btn-sino'), true);
+    assert.equal(await page.isDisabled('#chk-alertas-whatsapp'), true);
+
+    // Mesmo clicando em Atualizar, não chama /atendentes/eu nem /alertas e não mostra erro
+    await page.click('#btn-atualizar');
+    await page.waitForTimeout(200);
+    assert.equal(chamadasAtendenteEu, 0, 'não pode chamar /atendentes/eu quando status_atendente=false');
+    assert.equal(chamadasAlertas, 0, 'não pode chamar /alertas quando alertas_tela=false');
+    assert.equal(await page.locator('.tlk-toast--erro').count(), 0);
+
     // Sem rolagem horizontal em 1440 e 390 px (lista, chat e menu mobile)
     for (const w of [1440, 390]) {
       await page.setViewportSize({ width: w, height: 844 });
@@ -66,6 +92,7 @@ test('G15 portal: atendente (?simular=atendente) vê Carla sem link admin; admin
     }
     await page.click('#btn-menu-portal');
     assert.equal(await page.isVisible('#ptl-extras'), true);
+    assert.equal(await page.locator('[data-selo-recurso="alertas_whatsapp"]').isVisible(), true);
     const medMenu = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth }));
     assert.ok(medMenu.sw <= medMenu.iw + 1, `rolagem horizontal com menu mobile aberto: ${medMenu.sw} > ${medMenu.iw}`);
 
@@ -76,6 +103,8 @@ test('G15 portal: atendente (?simular=atendente) vê Carla sem link admin; admin
     assert.match(await page.textContent('#ptl-usuario-nome'), /Ana Ribeiro/);
     assert.equal(await page.isVisible('#link-admin'), true, 'Administrador deve ver "Abrir a administração"');
     assert.equal(await page.getAttribute('#link-admin', 'href'), '/app/ia-talk/shell.html');
+    assert.equal(chamadasAtendenteEu, 0);
+    assert.equal(chamadasAlertas, 0);
 
     assert.deepEqual(erros, []);
   } finally {
@@ -84,10 +113,29 @@ test('G15 portal: atendente (?simular=atendente) vê Carla sem link admin; admin
   }
 });
 
-test('G15 portal: troca de status (Disponível -> Ausente) chama PUT /atendentes/eu e alertas via POST /simulado/alerta atualizam sino e título', async () => {
+test('G15 + G22 portal (recursos ativos via page.route): troca de status chama PUT /atendentes/eu e alertas via POST /simulado/alerta atualizam sino e título', async () => {
   const { sim, baseUrl } = await criarAmbiente();
   const { ctx, page, erros } = await novaPagina({ width: 1440, height: 900 });
   try {
+    await page.route('**/api/admin/atendimento/recursos*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          menu: true,
+          midia: true,
+          status_atendente: true,
+          rodizio: true,
+          alertas_tela: true,
+          alertas_whatsapp: true,
+          escalonamento: true,
+          pesquisa: true,
+          inatividade: true,
+          sla: true,
+        }),
+      });
+    });
+
     let putStatusPayload = null;
     await page.route('**/api/admin/atendentes/eu*', async (route) => {
       if (route.request().method() === 'PUT') {
@@ -99,6 +147,12 @@ test('G15 portal: troca de status (Disponível -> Ausente) chama PUT /atendentes
     await page.goto(`${baseUrl}/j2a/atendimento`, { waitUntil: 'networkidle' });
     await page.waitForSelector('#lista-conversas .atd-conv-item');
     await page.waitForFunction(() => document.getElementById('rt-texto')?.textContent?.includes('Tempo real ativo'));
+
+    // Com tudo true, nenhum selo "Ainda não ativo" aparece e os controles ficam habilitados
+    assert.equal(await page.locator('[data-selo-recurso]:visible').count(), 0);
+    assert.equal(await page.isDisabled('#ptl-status-select'), false);
+    assert.equal(await page.isDisabled('#btn-sino'), false);
+    assert.equal(await page.isDisabled('#chk-alertas-whatsapp'), false);
 
     // Status inicial da Ana é 'disponivel' -> troca para 'ausente'
     assert.equal(await page.inputValue('#ptl-status-select'), 'disponivel');

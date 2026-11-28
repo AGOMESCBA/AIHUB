@@ -14,6 +14,8 @@ const idempotencia = require('../lib/idempotencia');
 const repo = require('../mensagens/repositorio');
 const { aceitarEnvio } = require('../mensagens/servico');
 const { CAPACIDADES_WWEB } = require('../provedores/wweb');
+const midia = require('../lib/midia');
+const armazem = require('../midias/armazem');
 const { lerPaginacao, montarPagina } = require('../paginacao');
 const repoAtd = require('../atendimento/repositorio');
 
@@ -23,7 +25,38 @@ const AVISO_ACEITA = 'Aceita para envio. Isto não confirma a entrega: acompanhe
 
 // O que o canal envia HOJE pelo Talk (arquivos chegam na próxima etapa): o integrador
 // consulta isto e não recebe 422 de surpresa.
-const CAPACIDADES_ENVIO = Object.freeze({ ...CAPACIDADES_WWEB, imagem: false, documento: false, audio: false, video: false });
+// Envio real (§10): imagem, documento e áudio; vídeo fica para depois.
+const CAPACIDADES_ENVIO = Object.freeze({ ...CAPACIDADES_WWEB, video: false });
+const STATUS_MIDIA = { arquivo_grande: 413, tipo_nao_suportado: 422 };
+
+// Erro da biblioteca de mídia (G4) no formato do contrato.
+function erroDaMidia(e) {
+  if (e?.name !== 'ErroMidia') return e;
+  if (e.codigo === 'arquivo_invalido') return erro('requisicao_invalida', 'Confira os campos destacados.', { campos: { arquivo: e.message } });
+  return erro(e.codigo, e.message, { status: STATUS_MIDIA[e.codigo] || 422 });
+}
+
+// Arquivo do pedido (§10.5): exatamente um entre base64 e url; baixado e conferido ANTES da transação.
+// O tipo declarado tem de ser o tipo real do conteúdo.
+async function arquivoDoPedido(corpo) {
+  const tipo = corpo.tipo || 'texto';
+  if (tipo === 'texto') return null;
+  const a = corpo.arquivo;
+  const invalido = (msg) => erro('requisicao_invalida', 'Confira os campos destacados.', { campos: { arquivo: msg } });
+  if (!a || typeof a !== 'object' || Array.isArray(a)) throw invalido('Envie o arquivo (base64 ou url).');
+  if (a.midia_id !== undefined) throw erro('recurso_nao_suportado', 'midia_id ainda não é aceito: envie base64 ou url.');
+  const fontes = ['base64', 'url'].filter(k => a[k] !== undefined && a[k] !== null && a[k] !== '');
+  if (fontes.length !== 1) throw invalido('Informe exatamente um entre base64 e url.');
+  let r;
+  try {
+    r = fontes[0] === 'base64'
+      ? { dados: midia.decodificarBase64Estrito(a.base64, armazem.MAX_BYTES), nome: null }
+      : await midia.baixarUrlSegura(String(a.url), { limiteBytes: armazem.MAX_BYTES });
+  } catch (e) { throw erroDaMidia(e); }
+  const real = armazem.conferirArquivo(r.dados);
+  if (real.tipo !== tipo) throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos: { tipo: `O arquivo enviado é ${real.tipo}.` } });
+  return { dados: r.dados, nome: armazem.nomeSeguro(a.nome || r.nome) };
+}
 
 function criarRotasV1({ db, despachante = null, atendimento = null, log = console }) {
   const r = express.Router();
@@ -68,29 +101,38 @@ function criarRotasV1({ db, despachante = null, atendimento = null, log = consol
     }
   };
 
-  r.post('/mensagens', exigirEscopo('mensagens:enviar'), (req, res) => {
+  r.post('/mensagens', exigirEscopo('mensagens:enviar'), (req, res, next) => enviarMensagem(req, res).catch(next));
+  async function enviarMensagem(req, res) {
     const chave = chaveDoPedido(req);
     const corpo = req.body || {};
     exigirCanal(req, corpo.canal);
     const impressao = idempotencia.impressaoDoPedido(corpo);
     const appId = req.aplicacao.aplicacaoId;
+    // Repetição idêntica não baixa o arquivo de novo (a transação confere outra vez).
+    const anterior = db.prepare('SELECT impressao, mensagem_id, criado_em FROM idempotencia WHERE aplicacao_id = ? AND chave = ?').get(appId, chave);
+    const arquivo = idempotencia.avaliar({ registro: anterior, impressao }) === 'repetido' ? null : await arquivoDoPedido(corpo);
+    let guardada = null;
     const resultado = db.transaction(() => {
       const registro = db.prepare('SELECT impressao, mensagem_id, criado_em FROM idempotencia WHERE aplicacao_id = ? AND chave = ?').get(appId, chave);
       const veredito = idempotencia.avaliar({ registro, impressao });
       if (veredito === 'conflito') throw erro('idempotencia_conflito', 'Esta Idempotency-Key já foi usada com outro conteúdo.');
       if (veredito === 'repetido') return { repetido: true, m: repo.buscar(db, registro.mensagem_id) };
       if (registro) db.prepare('DELETE FROM idempotencia WHERE aplicacao_id = ? AND chave = ?').run(appId, chave); // venceu (24 h)
+      if (arquivo) guardada = armazem.guardar(db, { empresaId: req.aplicacao.empresaId, canalId: corpo.canal, direcao: 'saida', nome: arquivo.nome, dados: arquivo.dados });
       const m = aceitarEnvio(db, {
-        empresaId: req.aplicacao.empresaId, canalId: corpo.canal, para: corpo.para, tipo: corpo.tipo || 'texto', texto: corpo.texto,
+        empresaId: req.aplicacao.empresaId, canalId: corpo.canal, para: corpo.para, tipo: corpo.tipo || 'texto',
+        texto: arquivo ? corpo.legenda : corpo.texto, midiaId: guardada?.id || null,
         origem: 'api', aplicacaoId: appId, correlacaoId: req.get('x-correlation-id') || null, metadados: corpo.metadados ?? {},
       });
       db.prepare('INSERT INTO idempotencia (aplicacao_id, chave, impressao, mensagem_id, criado_em) VALUES (?, ?, ?, ?, ?)').run(appId, chave, impressao, m.id, agora());
       return { repetido: false, m };
-    })();
-    if (resultado.repetido) res.set('Idempotent-Replayed', 'true');
+    });
+    let saida;
+    try { saida = resultado(); } catch (err) { if (guardada) armazem.descartar(guardada); throw err; } // a transação voltou: o arquivo também
+    if (saida.repetido) res.set('Idempotent-Replayed', 'true');
     else setImmediate(() => despachante?.acordar());
-    res.status(202).json(respostaAceita(resultado.m));
-  });
+    res.status(202).json(respostaAceita(saida.m));
+  }
 
   r.get('/mensagens/:id', exigirEscopo('mensagens:ler'), (req, res) => {
     const m = repo.buscar(db, req.params.id);

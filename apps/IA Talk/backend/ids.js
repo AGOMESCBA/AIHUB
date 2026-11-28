@@ -20,6 +20,7 @@ const PREFIXOS = Object.freeze({
   retorno: 'rt',
   mensagem: 'msg',
   anexo: 'anx',
+  midia: 'md',
   evento: 'evt',
   auditoria: 'aud',
   desafio: 'dsf',

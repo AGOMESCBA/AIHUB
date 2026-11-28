@@ -107,3 +107,10 @@ test('simulado: mesma política por HTTP, com herança e volta ao padrão', asyn
   assert.equal(volta.corpo.distribuicao.modo, 'fila_livre');
   assert.equal((await api('/atendimento/politica', 'PUT', { versao: 0, sla: { primeira_resposta_min: 20 } })).status, 409);
 });
+
+test('recursos (§9.12): mesma lista no servidor real e no simulado; só o menu está ativo por enquanto', () => {
+  const { RECURSOS_ATENDIMENTO } = require('../backend/atendimento/recursos');
+  forma('recursosAtendimento', RECURSOS_ATENDIMENTO);
+  assert.equal(RECURSOS_ATENDIMENTO.menu, true);
+  assert.equal(RECURSOS_ATENDIMENTO.sla, false);
+});
