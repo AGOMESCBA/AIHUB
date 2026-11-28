@@ -274,3 +274,188 @@ test('G13 atendimento.html: encerrar com pesquisa de satisfação ligada não re
     await ctx.close();
   }
 });
+
+
+test('G13: rascunhos isolados, envio único e ação atrasada', async () => {
+  const localSim = criarServidorSimulado({ intervaloLogMs: 5000, intervaloQrMs: 30000, intervaloConversaMs: 0 });
+  const endereco = await localSim.iniciar(0, '127.0.0.1');
+  const baseLocal = 'http://127.0.0.1:' + endereco.port + '/app/ia-talk';
+  const { ctx, page } = await novaPagina();
+  try {
+    await page.goto(baseLocal + '/atendimento.html?conversa=cv_ex02', { waitUntil: 'networkidle' });
+    await page.waitForSelector('#chat-ativo:not([hidden])');
+    await page.fill('#campo-msg', 'Mensagem para João');
+    await page.click('[data-conversa-id="cv_ex01"]');
+    await page.waitForFunction(() => document.querySelector('#chat-nome').textContent.includes('Mariana'));
+    assert.equal(await page.inputValue('#campo-msg'), '');
+    await page.click('[data-conversa-id="cv_ex02"]');
+    await page.waitForFunction(() => document.querySelector('#chat-nome').textContent.includes('João'));
+    assert.equal(await page.inputValue('#campo-msg'), 'Mensagem para João');
+    await page.click('#btn-modo-nota');
+    assert.equal(await page.inputValue('#campo-msg'), '');
+    await page.fill('#campo-msg', 'Nota privada');
+    await page.click('#btn-modo-cliente');
+    assert.equal(await page.inputValue('#campo-msg'), 'Mensagem para João');
+    let envios = 0;
+    await page.route('**/api/admin/conversas/cv_ex02/responder*', async route => {
+      envios++; await new Promise(resolve => setTimeout(resolve, 500));
+      await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' });
+    });
+    await page.press('#campo-msg', 'Enter');
+    await page.press('#campo-msg', 'Enter');
+    await page.waitForTimeout(150);
+    assert.equal(envios, 1);
+    await page.waitForSelector('#alerta-compositor:not([hidden])');
+    let liberar; const pausa = new Promise(resolve => { liberar = resolve; });
+    let iniciada; const inicio = new Promise(resolve => { iniciada = resolve; });
+    await page.route('**/api/admin/conversas/cv_ex02/assumir*', async route => {
+      const response = await route.fetch(); iniciada(); await pausa; await route.fulfill({ response });
+    });
+    await page.click('#btn-assumir');
+    await inicio;
+    await page.click('[data-conversa-id="cv_ex01"]');
+    await page.waitForFunction(() => document.querySelector('#chat-nome').textContent.includes('Mariana'));
+    liberar();
+    await page.waitForTimeout(500);
+    assert.match(await page.textContent('#chat-nome'), /Mariana/);
+  } finally { await ctx.close(); await localSim.fechar(); }
+});
+
+
+test('G13: resposta antiga da lista não substitui o filtro atual', async () => {
+  const localSim = criarServidorSimulado({ intervaloLogMs: 5000, intervaloQrMs: 30000, intervaloConversaMs: 0 });
+  const endereco = await localSim.iniciar(0, '127.0.0.1');
+  const baseLocal = 'http://127.0.0.1:' + endereco.port + '/app/ia-talk';
+  const { ctx, page } = await novaPagina();
+  try {
+    await page.goto(baseLocal + '/atendimento.html', { waitUntil: 'networkidle' });
+    let liberar, iniciada;
+    const pausa = new Promise(resolve => { liberar = resolve; });
+    const inicio = new Promise(resolve => { iniciada = resolve; });
+    await page.route('**/api/admin/conversas?*', async route => {
+      if (new URL(route.request().url()).searchParams.get('visao') === 'fila') {
+        const response = await route.fetch(); iniciada(); await pausa; await route.fulfill({ response });
+      } else await route.continue();
+    });
+    await page.click('[data-visao="fila"]'); await inicio;
+    await page.click('[data-visao="abertas"]');
+    await page.waitForFunction(() => document.querySelectorAll('#lista-conversas .atd-conv-item').length === 6);
+    liberar(); await page.waitForTimeout(300);
+    assert.equal(await page.locator('#lista-conversas .atd-conv-item').count(), 6);
+  } finally { await ctx.close(); await localSim.fechar(); }
+});
+
+test('G13: cartões numéricos retráteis no topo, setinha mágica do contato e lista compacta com persistência', async () => {
+  const { ctx, page, erros } = await novaPagina({ width: 1440, height: 900 });
+  try {
+    await page.goto(`${baseUrl}/atendimento.html?conversa=cv_ex04`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('#chat-ativo:not([hidden])');
+
+    // Estado inicial: cartões visíveis, resumo inline oculto, contato expandido e lista completa
+    assert.equal(await page.isVisible('#atd-cards-corpo'), true);
+    assert.equal(await page.isHidden('#btn-resumo-inline'), true);
+    const dimInicial = await page.evaluate(() => {
+      const chat = document.querySelector('.atd-col--chat').getBoundingClientRect();
+      return { w: chat.width, h: chat.height };
+    });
+
+    // 1. Recolher cartões numéricos do topo -> ganha altura e mostra resumo inline clicável
+    const qtdAbertas = (await page.textContent('#cnt-abertas')).trim();
+    await page.click('#btn-toggle-resumo');
+    await page.waitForSelector('#btn-resumo-inline:not([hidden])');
+    assert.equal(await page.isHidden('#atd-cards-corpo'), true);
+    assert.match(await page.textContent('#btn-resumo-inline'), new RegExp(`Abertas ${qtdAbertas} · Fila \\d+ · Minhas \\d+`));
+    const hAposTopo = await page.evaluate(() => document.querySelector('.atd-col--chat').getBoundingClientRect().height);
+    assert.ok(hAposTopo > dimInicial.h + 25, `esperava ganhar altura ao recolher cartões: ${hAposTopo} <= ${dimInicial.h}`);
+
+    // 2. Recolher painel do contato pela setinha mágica -> ganha largura para o chat
+    await page.click('#btn-seta-lateral');
+    await page.waitForTimeout(250);
+    assert.equal(await page.locator('#workspace').evaluate((el) => el.classList.contains('lateral-recolhida')), true);
+    const wAposLateral = await page.evaluate(() => document.querySelector('.atd-col--chat').getBoundingClientRect().width);
+    assert.ok(wAposLateral > dimInicial.w + 250, `esperava ganhar largura ao recolher contato: ${wAposLateral} <= ${dimInicial.w}`);
+
+    // 3. Compactar lista de conversas para trilho de avatares -> ganha mais largura ainda
+    await page.click('#btn-seta-lista');
+    await page.waitForTimeout(250);
+    assert.equal(await page.locator('#workspace').evaluate((el) => el.classList.contains('lista-compacta')), true);
+    const wAposLista = await page.evaluate(() => document.querySelector('.atd-col--chat').getBoundingClientRect().width);
+    assert.ok(wAposLista > wAposLateral + 180, `esperava ganhar largura ao compactar lista: ${wAposLista} <= ${wAposLateral}`);
+
+    // 4. Recarregar preserva todas as escolhas via localStorage
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('#chat-ativo:not([hidden])');
+    assert.equal(await page.isHidden('#atd-cards-corpo'), true);
+    assert.equal(await page.locator('#workspace').evaluate((el) => el.classList.contains('lateral-recolhida')), true);
+    assert.equal(await page.locator('#workspace').evaluate((el) => el.classList.contains('lista-compacta')), true);
+
+    // 5. Sem rolagem horizontal em nenhuma largura com os painéis recolhidos
+    for (const w of [1440, 1280, 1024, 390, 360]) {
+      await page.setViewportSize({ width: w, height: 844 });
+      const med = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth }));
+      assert.ok(med.sw <= med.iw + 1, `rolagem horizontal (recolhido) em ${w}px: ${med.sw} > ${med.iw}`);
+    }
+
+    // 6. Expandir de volta: clicar resumo inline, setinha mágica e lista
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.click('#btn-resumo-inline');
+    assert.equal(await page.isVisible('#atd-cards-corpo'), true);
+    await page.click('#btn-seta-lateral');
+    assert.equal(await page.locator('#workspace').evaluate((el) => el.classList.contains('lateral-recolhida')), false);
+    await page.click('#btn-seta-lista');
+    assert.equal(await page.locator('#workspace').evaluate((el) => el.classList.contains('lista-compacta')), false);
+
+    assert.deepEqual(erros, []);
+  } finally {
+    await ctx.close();
+  }
+});
+
+
+test('G13: reconexão atualiza lista, contadores e conversa aberta', async () => {
+  const localSim = criarServidorSimulado({ intervaloLogMs: 5000, intervaloQrMs: 30000, intervaloConversaMs: 0 });
+  const endereco = await localSim.iniciar(0, '127.0.0.1');
+  const baseLocal = 'http://127.0.0.1:' + endereco.port + '/app/ia-talk';
+  const { ctx, page } = await novaPagina();
+  try {
+    await page.goto(baseLocal + '/atendimento.html?conversa=cv_ex02', { waitUntil: 'networkidle' });
+    await page.waitForFunction(() => document.querySelector('#rt-texto').textContent.includes('Tempo real ativo'));
+    await ctx.setOffline(true);
+    await page.waitForFunction(() => document.querySelector('#rt-texto').textContent.includes('Sem socket'));
+    const chamadas = [];
+    page.on('request', req => { if (req.url().includes('/api/admin/conversas')) chamadas.push(new URL(req.url()).pathname); });
+    await ctx.setOffline(false);
+    await page.waitForFunction(() => document.querySelector('#rt-texto').textContent.includes('Tempo real ativo'), null, { timeout: 20000 });
+    await page.waitForFunction(() => document.querySelector('#chat-ativo') && !document.querySelector('#chat-ativo').hidden);
+    await page.waitForTimeout(500);
+    assert.ok(chamadas.some(x => x.endsWith('/conversas')));
+    assert.ok(chamadas.some(x => x.endsWith('/conversas/contadores')));
+    assert.ok(chamadas.some(x => x.endsWith('/conversas/cv_ex02')));
+  } finally { await ctx.setOffline(false); await ctx.close(); await localSim.fechar(); }
+});
+
+
+test('G13: respostas rápidas atrasadas não trocam o setor atual', async () => {
+  const localSim = criarServidorSimulado({ intervaloLogMs: 5000, intervaloQrMs: 30000, intervaloConversaMs: 0 });
+  const endereco = await localSim.iniciar(0, '127.0.0.1');
+  const baseLocal = 'http://127.0.0.1:' + endereco.port + '/app/ia-talk';
+  const { ctx, page } = await novaPagina();
+  try {
+    await page.goto(baseLocal + '/atendimento.html', { waitUntil: 'networkidle' });
+    let liberar, iniciada;
+    const pausa = new Promise(resolve => { liberar = resolve; });
+    const inicio = new Promise(resolve => { iniciada = resolve; });
+    await page.route('**/api/admin/respostas-rapidas?*', async route => {
+      if (new URL(route.request().url()).searchParams.get('setor_id') === 'set_suporte') {
+        const response = await route.fetch(); iniciada(); await pausa; await route.fulfill({ response });
+      } else await route.continue();
+    });
+    await page.click('[data-conversa-id="cv_ex02"]'); await inicio;
+    await page.click('[data-conversa-id="cv_ex03"]');
+    await page.waitForFunction(() => document.querySelector('#chat-nome').textContent.includes('Fernanda'));
+    await page.waitForTimeout(300); liberar(); await page.waitForTimeout(300);
+    await page.evaluate(() => { const el = document.querySelector('#campo-msg'); el.value = '/'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    assert.match(await page.textContent('#slash-menu'), /boleto/i);
+    assert.doesNotMatch(await page.textContent('#slash-menu'), /acesso/i);
+  } finally { await ctx.close(); await localSim.fechar(); }
+});

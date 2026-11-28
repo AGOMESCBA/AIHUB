@@ -23,33 +23,30 @@
   --atd-av-l-texto: 82%;
 }
 
-/* ── Coluna 1: visões e setores ─────────────────────────────────────────── */
+/* ── Topo retrátil: cartões numéricos de visões e setores ──────────────── */
 .atd-nav-grupo-tit {
   letter-spacing: .08em;
-  font-size: 10.5px;
+  font-size: 10px;
 }
 .atd-nav-btn {
   border-radius: var(--atd-raio-sm);
   position: relative;
-  transition: background var(--transition), color var(--transition), transform var(--transition);
+  transition: background var(--transition), color var(--transition), border-color var(--transition), box-shadow var(--transition), transform var(--transition);
 }
-.atd-nav-btn:hover { transform: translateX(2px); }
+.atd-nav-btn:hover { transform: translateY(-1px); }
 .atd-nav-btn.ativo {
-  background: var(--accent-glow);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-card));
+  border-color: var(--accent);
   color: var(--accent);
-  font-weight: 700;
-  box-shadow: inset 3px 0 0 var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow), var(--shadow-sm);
 }
 .atd-contador {
-  border-radius: 999px;
-  min-width: 22px;
-  text-align: center;
   font-variant-numeric: tabular-nums;
-  transition: background var(--transition), color var(--transition);
+  transition: color var(--transition);
 }
 .atd-nav-btn.ativo .atd-contador {
-  background: var(--accent);
-  color: #fff;
+  background: transparent;
+  color: var(--accent);
 }
 
 /* ── Coluna 2: lista de conversas ───────────────────────────────────────── */
@@ -117,13 +114,13 @@
   animation: atd-pulso 2.4s ease-in-out infinite;
 }
 
-/* ── Coluna 3: conversa ─────────────────────────────────────────────────── */
+/* ── Coluna 2: conversa ─────────────────────────────────────────────────── */
 .atd-chat-head {
-  padding: 12px 18px;
+  padding: 9px 14px;
   background: linear-gradient(180deg, var(--bg-card), color-mix(in srgb, var(--bg-card) 94%, var(--accent) 6%));
 }
-.atd-chat-nome { font-size: 15.5px; font-weight: 750; letter-spacing: -.005em; }
-.atd-chat-sub { font-size: 12px; }
+.atd-chat-nome { font-size: 15px; font-weight: 750; letter-spacing: -.005em; }
+.atd-chat-sub { font-size: 11.5px; }
 
 /* Tela da conversa: fundo com trama discreta, para diferenciar do resto do sistema. */
 .atd-mensagens {
@@ -175,10 +172,14 @@
   margin: 6px 0;
 }
 
-/* Compositor: um cartão que flutua sobre a conversa. */
+/* Compositor: compacto para deixar mais espaço vertical às mensagens. */
 .atd-compositor {
-  padding: 10px 16px 12px;
+  padding: 8px 14px 10px;
   box-shadow: 0 -6px 18px rgba(15, 23, 42, .04);
+}
+.atd-compositor-dica {
+  margin-top: 4px;
+  font-size: 11px;
 }
 .atd-textarea {
   border-radius: 12px;

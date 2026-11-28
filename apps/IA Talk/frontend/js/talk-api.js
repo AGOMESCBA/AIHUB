@@ -74,7 +74,9 @@
   // Socket.IO do Talk: <script src="/app/ia-talk/socket.io/socket.io.js"> antes deste uso.
   function socket() {
     if (typeof window.io !== 'function') throw new Error('Cliente Socket.IO não carregado nesta tela.');
-    return window.io('/talk', { path: `${BASE}/socket.io`, transports: ['websocket', 'polling'] });
+    // tryAllTransports: se o proxy recusar o WebSocket (visto no IIS da produção), cai para HTTP
+    // em vez de ficar sem tempo real. Precisa do cliente Socket.IO 4.8+ (servido pelo próprio Talk).
+    return window.io('/talk', { path: `${BASE}/socket.io`, transports: ['websocket', 'polling'], tryAllTransports: true });
   }
 
   window.TalkApi = {

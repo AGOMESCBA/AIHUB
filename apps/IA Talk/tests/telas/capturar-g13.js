@@ -37,9 +37,36 @@ async function capturar(browser, { url, arquivo, largura = 1440, altura = 900, t
   const browser = await chromium.launch({ headless: true });
 
   try {
-    // 1. 1440 claro e escuro (4 colunas fixas, conversa cv_ex04 com nota interna + etiquetas)
+    // 1. 1440 claro e escuro (cards numéricos no topo + lista + conversa ampla + contato)
     await capturar(browser, { url: `${base}/atendimento.html?conversa=cv_ex04`, arquivo: 'g13-atendimento-1440-claro.png', largura: 1440, altura: 900, tema: 'light' });
     await capturar(browser, { url: `${base}/atendimento.html?conversa=cv_ex04`, arquivo: 'g13-atendimento-1440-escuro.png', largura: 1440, altura: 900, tema: 'dark' });
+
+    // 1b. 1440 modo foco: cards retráteis recolhidos + contato recolhido pela setinha mágica (claro e escuro)
+    await capturar(browser, {
+      url: `${base}/atendimento.html?conversa=cv_ex04`,
+      arquivo: 'g13-atendimento-1440-recolhido-claro.png',
+      largura: 1440,
+      altura: 900,
+      tema: 'light',
+      acao: async (page) => {
+        await page.click('#btn-toggle-resumo');
+        await page.click('#btn-seta-lateral');
+        await page.waitForTimeout(260);
+      },
+    });
+    await capturar(browser, {
+      url: `${base}/atendimento.html?conversa=cv_ex04`,
+      arquivo: 'g13-atendimento-1440-recolhido-escuro.png',
+      largura: 1440,
+      altura: 900,
+      tema: 'dark',
+      acao: async (page) => {
+        await page.click('#btn-toggle-resumo');
+        await page.click('#btn-seta-lateral');
+        await page.click('#btn-seta-lista');
+        await page.waitForTimeout(260);
+      },
+    });
 
     // 2. 1024 px (gaveta fechada e gaveta aberta sem cobrir a conversa)
     await capturar(browser, { url: `${base}/atendimento.html?conversa=cv_ex01`, arquivo: 'g13-atendimento-1024-claro.png', largura: 1024, altura: 768, tema: 'light' });

@@ -1,8 +1,9 @@
 /* IA Talk · Etapa G13 — Central de Atendimento (frontend/atendimento.html).
-   Layout híbrido aprovado no A0 (26/11/2026):
-     >= 1280 px: quatro áreas fixas (Visões/Setores · Conversas · Conversa · Contato)
-     761–1279 px: setores + conversas + conversa ampla + gaveta retrátil Contato (sem cobrir conversa)
-     <= 760 px: telas em sequência (Setores -> Conversas -> Conversa) + folha deslizante Contato
+   Layout otimizado para amplitude de conversa:
+     - Topo: barra compacta com cartões numéricos retráteis de Visões e Setores (padrão IA Service).
+     - >= 1280 px: 3 colunas (Conversas [compactável] · Conversa ampla · Contato [retrátil pela setinha mágica]).
+     - 761–1279 px: Conversas [compactável] · Conversa ampla · Contato retrátil (.gaveta-aberta).
+     - <= 760 px: telas em sequência (Lista -> Conversa) + indicadores retráteis + folha deslizante Contato.
    Usa exclusivamente tokens de iahub.css e talk.css (suporte completo a temas claro e escuro). */
 
 * { box-sizing: border-box; }
@@ -40,8 +41,10 @@ body.atd-body {
   flex-direction: column;
   height: 100vh;
   height: 100dvh;
+  width: 100%;
   max-width: 100vw;
   overflow: hidden;
+  overflow-x: clip;
 }
 
 .atd-estado-global {
@@ -52,14 +55,125 @@ body.atd-body {
   background: var(--bg-base);
 }
 
-/* ── Grid híbrido principal ──────────────────────────────────────────── */
+/* ── Barra superior com cartões numéricos retráteis (Visões e Setores) ─ */
+.atd-topo {
+  flex: none;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  z-index: 10;
+}
+.atd-topo-barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 12px;
+  min-height: 40px;
+}
+.atd-topo-esq {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+.atd-topo-dir {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.atd-topo-resumo-pill {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-base);
+  color: var(--text-md);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  font-variant-numeric: tabular-nums;
+  transition: border-color var(--transition), color var(--transition), background var(--transition);
+}
+.atd-topo-resumo-pill:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-glow);
+}
+.atd-topo-toggle svg {
+  transition: transform .18s ease;
+}
+.atd-topo.recolhido .atd-topo-toggle svg {
+  transform: rotate(180deg);
+}
+.atd-topo-toggle[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  color: var(--accent);
+  background: var(--accent-glow);
+}
+
+.atd-topo-corpo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 12px 9px;
+  background: var(--bg-base);
+  border-top: 1px dashed var(--border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.atd-topo-div {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 0;
+  background: var(--border);
+  flex: none;
+}
+.atd-cards-grupo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.atd-cards-grupo--setores {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ── Grid principal (3 colunas: Lista · Chat · Contato retrátil) ─────── */
 .atd-workspace {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: 208px 286px minmax(0, 1fr) 292px;
+  grid-template-columns: 290px minmax(0, 1fr) 292px;
   overflow: hidden;
   transition: grid-template-columns .2s ease;
+}
+.atd-workspace.lateral-recolhida {
+  grid-template-columns: 290px minmax(0, 1fr) 0px;
+}
+.atd-workspace.lista-compacta {
+  grid-template-columns: 68px minmax(0, 1fr) 292px;
+}
+.atd-workspace.lista-compacta.lateral-recolhida {
+  grid-template-columns: 68px minmax(0, 1fr) 0px;
+}
+.atd-workspace.lateral-recolhida .atd-col--lateral {
+  width: 0;
+  max-width: 0;
+  padding: 0;
+  border-left: none;
+  visibility: hidden;
+  pointer-events: none;
+  overflow: hidden;
+}
+.atd-workspace.lateral-recolhida .atd-col--lateral > * {
+  display: none;
 }
 
 .atd-so-medio,
@@ -71,18 +185,43 @@ body.atd-body {
   .atd-so-medio,
   .atd-so-mobile-ou-medio { display: inline-flex; }
 
-  .atd-workspace {
-    grid-template-columns: 184px 244px minmax(0, 1fr) 0px;
+  .atd-workspace,
+  .atd-workspace.lateral-recolhida {
+    grid-template-columns: 256px minmax(0, 1fr) 0px;
   }
-  .atd-workspace.gaveta-aberta {
-    grid-template-columns: 184px 244px minmax(0, 1fr) 264px;
+  .atd-workspace.gaveta-aberta,
+  .atd-workspace.lateral-recolhida.gaveta-aberta {
+    grid-template-columns: 256px minmax(0, 1fr) 272px;
   }
-  .atd-workspace .atd-col--setores { padding: 10px 6px; }
-  .atd-workspace .atd-nav-btn { padding: 7px 7px; font-size: 12px; }
+  .atd-workspace.lista-compacta,
+  .atd-workspace.lista-compacta.lateral-recolhida {
+    grid-template-columns: 68px minmax(0, 1fr) 0px;
+  }
+  .atd-workspace.lista-compacta.gaveta-aberta,
+  .atd-workspace.lista-compacta.lateral-recolhida.gaveta-aberta {
+    grid-template-columns: 68px minmax(0, 1fr) 272px;
+  }
   .atd-workspace:not(.gaveta-aberta) .atd-col--lateral {
+    width: 0;
+    max-width: 0;
+    padding: 0;
     border-left: none;
     visibility: hidden;
     pointer-events: none;
+    overflow: hidden;
+  }
+  .atd-workspace:not(.gaveta-aberta) .atd-col--lateral > * {
+    display: none;
+  }
+  .atd-workspace.gaveta-aberta .atd-col--lateral {
+    width: auto;
+    max-width: none;
+    border-left: 1px solid var(--border);
+    visibility: visible;
+    pointer-events: auto;
+  }
+  .atd-workspace.gaveta-aberta .atd-col--lateral > * {
+    display: flex;
   }
 }
 
@@ -97,36 +236,23 @@ body.atd-body {
 }
 .atd-col:last-child { border-right: none; }
 
-/* ── Coluna 1: Visões e setores ──────────────────────────────────────── */
-.atd-col--setores {
-  background: var(--bg-base);
-  padding: 10px;
-  gap: 12px;
-  overflow-y: auto;
-}
-.atd-status-topo {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
-}
+/* ── Cartões numéricos de Visões e Setores ───────────────────────────── */
 .atd-rt-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 11px;
   font-weight: 700;
-  padding: 3px 8px;
+  padding: 3px 9px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: var(--bg-card);
+  background: var(--bg-base);
   color: var(--text-md);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: none;
 }
 .atd-rt-dot {
   width: 7px;
@@ -139,76 +265,221 @@ body.atd-body {
 .atd-rt-badge--fallback .atd-rt-dot { background: var(--warning); }
 
 .atd-usuario-ativo {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-lo);
-  padding: 0 8px;
+  padding: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: none;
 }
 .atd-usuario-ativo strong { color: var(--text-hi); }
 
 .atd-nav-grupo-tit {
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .05em;
+  letter-spacing: .07em;
   color: var(--text-lo);
-  padding: 0 8px 6px;
+  padding: 0;
+  white-space: nowrap;
+  flex: none;
 }
 .atd-nav-lista {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 1px;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 6px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.atd-nav-lista > li {
+  flex: none;
+  display: flex;
 }
 .atd-nav-btn {
-  width: 100%;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 8px 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  min-width: 86px;
+  padding: 5px 10px;
   border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  background: transparent;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
   color: var(--text-hi);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: background var(--transition), border-color var(--transition);
+  transition: background var(--transition), border-color var(--transition), box-shadow var(--transition), transform var(--transition);
 }
-.atd-nav-btn:hover { background: var(--bg-hover); }
+.atd-nav-btn:hover {
+  background: var(--bg-hover);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
 .atd-nav-btn.ativo {
-  background: var(--bg-active, color-mix(in srgb, var(--accent) 12%, transparent));
-  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-card));
+  border-color: var(--accent);
   color: var(--accent);
-  font-weight: 700;
+  box-shadow: 0 0 0 2px var(--accent-glow);
 }
 .atd-nav-nome {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-md);
   min-width: 0;
+  max-width: 126px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.atd-nav-btn.ativo .atd-nav-nome {
+  color: var(--accent);
+}
+.atd-kpi-valor-wrap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
 .atd-contador {
-  font-size: 11px;
-  font-weight: 700;
-  min-width: 20px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  text-align: center;
-  background: var(--bg-hover);
-  color: var(--text-md);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--text-hi);
   font-variant-numeric: tabular-nums;
   flex: none;
 }
 .atd-nav-btn.ativo .atd-contador {
+  color: var(--accent);
+}
+.atd-kpi-card--fila.tem-alerta:not(.ativo) {
+  border-color: color-mix(in srgb, var(--tlk-aviso) 45%, var(--border));
+}
+.atd-kpi-card--fila.tem-alerta:not(.ativo) .atd-contador {
+  color: var(--tlk-aviso);
+}
+.atd-kpi-sub {
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--text-lo);
+}
+.atd-nav-btn.ativo .atd-kpi-sub {
+  color: var(--accent);
+}
+.atd-kpi-fila-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--tlk-aviso-bg);
+  color: var(--tlk-aviso);
+  white-space: nowrap;
+}
+
+/* ── Coluna 1: Lista de conversas (compactável para trilho de avatares) ─ */
+.atd-btn-compactar-lista {
+  flex: none;
+  padding: 0 6px;
+}
+.atd-btn-compactar-lista svg {
+  transition: transform .18s ease;
+}
+.atd-btn-compactar-lista.recolhida svg {
+  transform: rotate(180deg);
+}
+.atd-workspace.lista-compacta .atd-lista-topo {
+  padding: 8px 6px;
+  align-items: center;
+}
+.atd-workspace.lista-compacta .atd-lista-head {
+  justify-content: center;
+}
+.atd-workspace.lista-compacta .atd-lista-titulo,
+.atd-workspace.lista-compacta .atd-lista-busca-wrap,
+.atd-workspace.lista-compacta .atd-conv-corpo,
+.atd-workspace.lista-compacta .atd-mais-wrap {
+  display: none;
+}
+.atd-workspace.lista-compacta .atd-conv-item {
+  margin: 4px auto;
+  width: 52px;
+  padding: 6px;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+.atd-conv-avatar-wrap {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+}
+.atd-conv-badge-mini {
+  display: none;
+}
+.atd-workspace.lista-compacta .atd-conv-badge-mini {
+  display: inline-grid;
+  place-items: center;
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
   background: var(--accent);
   color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  border: 2px solid var(--bg-card);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Setinha mágica (recolhe/expande painel do contato no desktop) ───── */
+.atd-seta-magica {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  z-index: 20;
+  width: 20px;
+  height: 52px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: 10px 0 0 10px;
+  background: var(--bg-card);
+  color: var(--text-md);
+  box-shadow: -2px 0 10px rgba(15, 23, 42, .08);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), border-color var(--transition), width var(--transition), box-shadow var(--transition);
+}
+.atd-seta-magica svg {
+  transition: transform .2s ease;
+}
+.atd-seta-magica.recolhida svg {
+  transform: rotate(180deg);
+}
+.atd-seta-magica:hover {
+  width: 26px;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+  box-shadow: -3px 0 14px var(--accent-glow);
+}
+:root[data-theme="dark"] .atd-seta-magica {
+  box-shadow: -2px 0 12px rgba(0, 0, 0, .35);
 }
 
 /* ── Coluna 2: Lista de conversas ────────────────────────────────────── */
@@ -346,8 +617,11 @@ body.atd-body {
   text-align: center;
 }
 
-/* ── Coluna 3: Conversa ativa ────────────────────────────────────────── */
-.atd-col--chat { background: var(--bg-base); }
+/* ── Coluna 2: Conversa ativa ────────────────────────────────────────── */
+.atd-col--chat {
+  background: var(--bg-base);
+  position: relative;
+}
 .atd-chat-vazio {
   flex: 1 1 auto;
   display: grid;
@@ -798,21 +1072,70 @@ body.atd-body {
 @media (max-width: 760px) {
   .atd-so-mobile,
   .atd-so-mobile-ou-medio { display: inline-flex; }
-  .atd-so-medio { display: none !important; }
+  .atd-so-medio,
+  .atd-seta-magica,
+  .atd-btn-compactar-lista { display: none !important; }
+
+  .atd-app[data-passo="chat"] .atd-topo {
+    display: none;
+  }
+  .atd-topo-barra {
+    padding: 6px 10px;
+    gap: 6px;
+  }
+  .atd-usuario-ativo { display: none; }
+  .atd-topo-toggle-txt { display: none; }
+  .atd-topo-corpo {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+  .atd-topo-div { display: none; }
+  .atd-cards-grupo {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .atd-nav-lista {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-x: visible;
+  }
+  .atd-nav-btn {
+    width: 100%;
+    min-width: 0;
+  }
 
   .atd-workspace,
-  .atd-workspace.gaveta-aberta {
+  .atd-workspace.gaveta-aberta,
+  .atd-workspace.lateral-recolhida,
+  .atd-workspace.lista-compacta,
+  .atd-workspace.lista-compacta.lateral-recolhida,
+  .atd-workspace.lista-compacta.gaveta-aberta {
     grid-template-columns: 1fr;
   }
-  .atd-col--setores,
+  .atd-workspace.lista-compacta .atd-lista-titulo,
+  .atd-workspace.lista-compacta .atd-lista-busca-wrap,
+  .atd-workspace.lista-compacta .atd-conv-corpo {
+    display: flex;
+  }
+  .atd-workspace.lista-compacta .atd-lista-busca-wrap { display: block; }
+  .atd-workspace.lista-compacta .atd-conv-item {
+    width: calc(100% - 16px);
+    padding: 10px;
+    justify-content: flex-start;
+  }
+  .atd-workspace.lista-compacta .atd-conv-badge-mini { display: none; }
+
   .atd-col--lista,
   .atd-col--chat {
     display: none;
     border-right: none;
   }
-  .atd-workspace[data-passo="setores"] .atd-col--setores { display: flex; }
-  .atd-workspace[data-passo="lista"]   .atd-col--lista   { display: flex; }
-  .atd-workspace[data-passo="chat"]    .atd-col--chat    { display: flex; }
+  .atd-workspace[data-passo="lista"] .atd-col--lista,
+  .atd-workspace[data-passo="setores"] .atd-col--lista { display: flex; }
+  .atd-workspace[data-passo="chat"] .atd-col--chat { display: flex; }
 
   .atd-sheet-backdrop.aberto {
     display: block;
@@ -822,11 +1145,14 @@ body.atd-body {
     background: rgba(15, 23, 42, 0.52);
   }
   .atd-col--lateral,
-  .atd-workspace:not(.gaveta-aberta) .atd-col--lateral {
+  .atd-workspace:not(.gaveta-aberta) .atd-col--lateral,
+  .atd-workspace.lateral-recolhida .atd-col--lateral {
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
+    width: auto;
+    max-width: none;
     height: 78vh;
     z-index: 50;
     background: var(--bg-card);
@@ -843,6 +1169,9 @@ body.atd-body {
     transform: translateY(0);
     visibility: visible;
     pointer-events: auto;
+  }
+  .atd-col--lateral.sheet-aberta > * {
+    display: flex;
   }
   .atd-chat-head { padding: 8px 10px; }
   .atd-mensagens { padding: 12px 10px; }

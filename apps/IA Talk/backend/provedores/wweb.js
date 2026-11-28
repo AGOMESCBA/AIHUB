@@ -93,6 +93,18 @@ async function resolverTelefoneLid(msg, client) {
   return null;
 }
 
+// Nome de perfil do WhatsApp: o notifyName quase nunca vem na mensagem; o nome fica no contato
+// (pushname = o que a pessoa escolheu; verifiedName = conta comercial; name = como está na agenda do aparelho do canal).
+async function nomeDoPerfil(msg) {
+  const doAviso = String(msg._data?.notifyName || '').trim();
+  if (doAviso) return doAviso.slice(0, 80);
+  try {
+    const c = await msg.getContact();
+    const nome = [c?.pushname, c?.verifiedName, c?.name].map(v => String(v || '').trim()).find(Boolean);
+    return nome ? nome.slice(0, 80) : null;
+  } catch (_) { return null; }
+}
+
 class ProvedorWweb extends ProvedorBase {
   // canal: { id, sessao_id }; dirSessoes: data/sessoes
   constructor({ canal, dirSessoes, log = () => {} }) {
@@ -180,8 +192,7 @@ class ProvedorWweb extends ProvedorBase {
       de: { tipo: tipoRemetente, valor, autor: grupo ? digitos(msg.author) : undefined },
       tipo: TIPO_MENSAGEM[msg.type] || 'outro',
       texto: msg.body || '',
-      // Nome de perfil que a pessoa usa no WhatsApp (o mesmo que o IA Command mostra). Em grupo é de quem escreveu.
-      nome: grupo ? null : (String(msg._data?.notifyName || '').trim().slice(0, 80) || null),
+      nome: grupo ? null : await nomeDoPerfil(msg),
       em: new Date(Number(msg.timestamp || Date.now() / 1000) * 1000).toISOString(),
     });
   }
@@ -232,4 +243,4 @@ class ProvedorWweb extends ProvedorBase {
   }
 }
 
-module.exports = { ProvedorWweb, CAPACIDADES_WWEB: CAPACIDADES, resolverChrome, resolverTelefoneLid };
+module.exports = { nomeDoPerfil, ProvedorWweb, CAPACIDADES_WWEB: CAPACIDADES, resolverChrome, resolverTelefoneLid };

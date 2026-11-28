@@ -16,48 +16,63 @@
   <link rel="stylesheet" href="/app/ia-talk/css/telas/g13-visual.css">
 </head>
 <body class="atd-body">
-<div class="atd-app">
+<div class="atd-app" id="atd-app" data-passo="lista">
 
   <div class="atd-estado-global" id="estado-global" hidden></div>
 
-  <main class="atd-workspace" id="workspace" data-passo="lista">
-    <!-- 1. Visões e setores com contadores -->
-    <aside class="atd-col atd-col--setores" aria-label="Visões e setores">
-      <div class="atd-status-topo">
+  <!-- Barra superior com cartões numéricos retráteis de Visões e Setores (padrão IA Service) -->
+  <header class="atd-topo" id="painel-resumo-topo" aria-label="Indicadores de atendimento">
+    <div class="atd-topo-barra">
+      <div class="atd-topo-esq">
         <span class="atd-rt-badge" id="rt-badge" aria-live="polite" title="Estado da atualização em tempo real">
           <span class="atd-rt-dot" aria-hidden="true"></span>
           <span id="rt-texto">Conectando…</span>
         </span>
+        <div class="atd-usuario-ativo" id="usuario-ativo"></div>
+        <button class="atd-topo-resumo-pill" type="button" id="btn-resumo-inline" hidden title="Clique para expandir os cartões de visões e setores" aria-label="Clique para expandir os cartões de visões e setores"></button>
+      </div>
+      <div class="atd-topo-dir">
+        <button class="btn btn-ghost btn-sm atd-topo-toggle" type="button" id="btn-toggle-resumo" aria-expanded="true" aria-controls="atd-cards-corpo" title="Recolher os cartões de visões e setores para ampliar a conversa" aria-label="Recolher os cartões de visões e setores para ampliar a conversa">
+          <span data-ico="chevron_cima"></span>
+          <span class="atd-topo-toggle-txt">Indicadores</span>
+        </button>
         <button class="btn btn-ghost btn-sm" type="button" id="btn-atualizar" title="Atualizar: recarrega contadores, conversas e a conversa aberta" aria-label="Atualizar: recarrega contadores, conversas e a conversa aberta"><span data-ico="atualizar" data-giro="1"></span></button>
       </div>
+    </div>
 
-      <div class="atd-usuario-ativo" id="usuario-ativo"></div>
-
-      <div>
+    <aside class="atd-col--setores atd-topo-corpo" id="atd-cards-corpo" aria-label="Visões e setores">
+      <div class="atd-cards-grupo">
         <div class="atd-nav-grupo-tit">Visões</div>
-        <ul class="atd-nav-lista" id="lista-visoes">
-          <li><button class="atd-nav-btn" type="button" data-visao="minhas" title="Minhas: conversas abertas atribuídas a você" aria-label="Minhas: conversas abertas atribuídas a você"><span class="atd-nav-nome">Minhas</span><span class="atd-contador" id="cnt-minhas">0</span></button></li>
-          <li><button class="atd-nav-btn" type="button" data-visao="fila" title="Fila: conversas abertas aguardando alguém assumir" aria-label="Fila: conversas abertas aguardando alguém assumir"><span class="atd-nav-nome">Fila</span><span class="atd-contador" id="cnt-fila">0</span></button></li>
-          <li><button class="atd-nav-btn ativo" type="button" data-visao="abertas" title="Abertas: todas as conversas em andamento que você pode ver" aria-label="Abertas: todas as conversas em andamento que você pode ver"><span class="atd-nav-nome">Abertas</span><span class="atd-contador" id="cnt-abertas">0</span></button></li>
-          <li><button class="atd-nav-btn" type="button" data-visao="encerradas" title="Encerradas: histórico de conversas finalizadas" aria-label="Encerradas: histórico de conversas finalizadas"><span class="atd-nav-nome">Encerradas</span></button></li>
+        <ul class="atd-nav-lista atd-cards-lista" id="lista-visoes">
+          <li><button class="atd-nav-btn atd-kpi-card" type="button" data-visao="minhas" title="Minhas: conversas abertas atribuídas a você" aria-label="Minhas: conversas abertas atribuídas a você"><span class="atd-nav-nome atd-kpi-rotulo">Minhas</span><span class="atd-contador atd-kpi-valor" id="cnt-minhas">0</span></button></li>
+          <li><button class="atd-nav-btn atd-kpi-card atd-kpi-card--fila" type="button" data-visao="fila" title="Fila: conversas abertas aguardando alguém assumir" aria-label="Fila: conversas abertas aguardando alguém assumir"><span class="atd-nav-nome atd-kpi-rotulo">Fila</span><span class="atd-contador atd-kpi-valor" id="cnt-fila">0</span></button></li>
+          <li><button class="atd-nav-btn atd-kpi-card ativo" type="button" data-visao="abertas" title="Abertas: todas as conversas em andamento que você pode ver" aria-label="Abertas: todas as conversas em andamento que você pode ver"><span class="atd-nav-nome atd-kpi-rotulo">Abertas</span><span class="atd-contador atd-kpi-valor" id="cnt-abertas">0</span></button></li>
+          <li><button class="atd-nav-btn atd-kpi-card atd-kpi-card--enc" type="button" data-visao="encerradas" title="Encerradas: histórico de conversas finalizadas" aria-label="Encerradas: histórico de conversas finalizadas"><span class="atd-nav-nome atd-kpi-rotulo">Encerradas</span><span class="atd-kpi-sub">Histórico</span></button></li>
         </ul>
       </div>
 
-      <div>
+      <span class="atd-topo-div" aria-hidden="true"></span>
+
+      <div class="atd-cards-grupo atd-cards-grupo--setores">
         <div class="atd-nav-grupo-tit">Setores</div>
-        <ul class="atd-nav-lista" id="lista-setores"></ul>
+        <ul class="atd-nav-lista atd-cards-lista" id="lista-setores"></ul>
       </div>
     </aside>
+  </header>
 
-    <!-- 2. Lista de conversas -->
+  <main class="atd-workspace" id="workspace" data-passo="lista">
+    <!-- 1. Lista de conversas -->
     <section class="atd-col atd-col--lista" aria-label="Lista de conversas">
       <div class="atd-lista-topo">
         <div class="atd-lista-head">
-          <button class="btn btn-ghost btn-sm atd-so-mobile" type="button" id="btn-mobile-setores" title="Voltar para visões e setores" aria-label="Voltar para visões e setores"><span data-ico="voltar"></span> Setores</button>
+          <button class="btn btn-ghost btn-sm atd-so-mobile" type="button" id="btn-mobile-setores" title="Mostrar ou recolher os cartões de visões e setores" aria-label="Mostrar ou recolher os cartões de visões e setores"><span data-ico="filtro"></span> Indicadores</button>
           <h1 class="atd-lista-titulo" id="titulo-lista-conv">Abertas</h1>
+          <button class="btn btn-ghost btn-sm atd-btn-compactar-lista" type="button" id="btn-seta-lista" aria-expanded="true" title="Recolher lista de conversas para avatares compactos" aria-label="Recolher lista de conversas para avatares compactos"><span data-ico="chevron_esq"></span></button>
         </div>
-        <label class="sr-only" for="campo-busca">Buscar conversa</label>
-        <input class="form-control" id="campo-busca" type="search" placeholder="Nome, protocolo ou final do telefone…" autocomplete="off">
+        <div class="atd-lista-busca-wrap">
+          <label class="sr-only" for="campo-busca">Buscar conversa</label>
+          <input class="form-control" id="campo-busca" type="search" placeholder="Nome, protocolo ou final do telefone…" autocomplete="off">
+        </div>
       </div>
       <div class="atd-conversas-scroll">
         <div id="estado-lista" hidden></div>
@@ -68,8 +83,9 @@
       </div>
     </section>
 
-    <!-- 3. Conversa ativa -->
+    <!-- 2. Conversa ativa -->
     <section class="atd-col atd-col--chat" aria-label="Conversa ativa">
+      <button class="atd-seta-magica" type="button" id="btn-seta-lateral" aria-expanded="true" aria-controls="painel-lateral" title="Recolher painel do contato e detalhes para ampliar a conversa" aria-label="Recolher painel do contato e detalhes para ampliar a conversa"><span data-ico="chevron_dir"></span></button>
       <div class="atd-chat-vazio" id="estado-chat-vazio"></div>
 
       <div class="atd-chat-ativo" id="chat-ativo" hidden>
@@ -180,12 +196,12 @@
       </div>
     </section>
 
-    <!-- 4. Contato, etiquetas e histórico -->
+    <!-- 3. Contato, etiquetas e histórico (retrátil pela setinha mágica) -->
     <div class="atd-sheet-backdrop" id="sheet-backdrop"></div>
     <aside class="atd-col atd-col--lateral" id="painel-lateral" aria-label="Contato, etiquetas e histórico">
       <div class="atd-lateral-head">
         <strong>Contato e detalhes</strong>
-        <button class="btn btn-ghost btn-sm atd-so-mobile-ou-medio" type="button" id="btn-fechar-lateral" title="Fechar painel do contato" aria-label="Fechar painel do contato"><span data-ico="cancelar"></span></button>
+        <button class="btn btn-ghost btn-sm" type="button" id="btn-fechar-lateral" title="Recolher painel do contato e detalhes" aria-label="Recolher painel do contato e detalhes"><span data-ico="cancelar"></span></button>
       </div>
       <div class="atd-lateral-corpo" id="painel-contato"></div>
     </aside>
@@ -204,6 +220,10 @@
   const POLL_FALLBACK_MS = 5000;
   const LIMITE_NOTA = 2000;
   const ROTULO_VISAO = { minhas: 'Minhas', fila: 'Fila', abertas: 'Abertas', encerradas: 'Encerradas' };
+  const KEY_RESUMO_RECOLHIDO = 'talk_atd_resumo_recolhido';
+  const KEY_LATERAL_RECOLHIDA = 'talk_atd_lateral_recolhida';
+  const KEY_LISTA_COMPACTA = 'talk_atd_lista_compacta';
+  const mqDesktopGrande = window.matchMedia('(min-width: 1280px)');
 
   const qs = new URLSearchParams(location.search);
   const simularUrl = qs.get('simular') || '';
@@ -232,6 +252,8 @@
   let buscaAtual = '';
   let conversas = [];
   let proximoCursorConversas = null;
+  let listaSeq = 0;
+  let respostasSeq = 0;
 
   let conversaAtual = null;
   let itensConversa = [];
@@ -239,6 +261,8 @@
   let historicoContato = [];
   let respostasRapidas = [];
 
+  const rascunhos = new Map();
+  let envioEmAndamento = false;
   let modoCompositor = 'cliente'; // 'cliente' | 'nota'
   let slashIndice = 0;
   let slashLista = [];
@@ -285,6 +309,7 @@
 
   function definirPassoMobile(passo) {
     $('workspace').dataset.passo = passo;
+    $('atd-app').dataset.passo = passo;
   }
 
   function fecharPopovers() {
@@ -308,31 +333,41 @@
     $('btn-abrir-conflito').hidden = true;
   }
 
-  // ── Contadores e navegação esquerda ─────────────────────────────────
+  // ── Contadores e cartões numéricos retráteis no cabeçalho ──────────
   function renderizarContadores() {
     $('cnt-minhas').textContent = String(contadores.minhas ?? 0);
     $('cnt-fila').textContent = String(contadores.fila ?? 0);
     $('cnt-abertas').textContent = String(contadores.abertas ?? 0);
 
     document.querySelectorAll('#lista-visoes [data-visao]').forEach((btn) => {
-      btn.classList.toggle('ativo', btn.dataset.visao === visaoAtual);
+      const ativo = btn.dataset.visao === visaoAtual;
+      btn.classList.toggle('ativo', ativo);
+      btn.setAttribute('aria-pressed', String(ativo));
     });
+    const btnFila = document.querySelector('#lista-visoes [data-visao="fila"]');
+    if (btnFila) btnFila.classList.toggle('tem-alerta', (contadores.fila ?? 0) > 0);
 
     const ul = $('lista-setores');
     const porSetor = Array.isArray(contadores.por_setor) ? contadores.por_setor : [];
     const totalTodos = visaoAtual === 'fila' ? (contadores.fila ?? 0) : (contadores.abertas ?? 0);
 
     const itensHtml = [
-      `<li><button class="atd-nav-btn ${setorAtualId === '' ? 'ativo' : ''}" type="button" data-setor="" title="Todos os setores visíveis" aria-label="Todos os setores visíveis">
-        <span class="atd-nav-nome">Todos os setores</span>
-        <span class="atd-contador">${esc(totalTodos)}</span>
+      `<li><button class="atd-nav-btn atd-kpi-card atd-kpi-card--setor ${setorAtualId === '' ? 'ativo' : ''}" type="button" data-setor="" aria-pressed="${setorAtualId === ''}" title="Todos os setores visíveis" aria-label="Todos os setores visíveis">
+        <span class="atd-nav-nome atd-kpi-rotulo">Todos</span>
+        <span class="atd-contador atd-kpi-valor">${esc(totalTodos)}</span>
       </button></li>`,
       ...porSetor.map((s) => {
         const valor = visaoAtual === 'fila' ? (s.na_fila ?? 0) : (s.abertas ?? 0);
+        const filaTag = visaoAtual !== 'fila' && (s.na_fila ?? 0) > 0
+          ? `<span class="atd-kpi-fila-tag">${esc(s.na_fila)} fila</span>`
+          : '';
         const dica = `${s.nome}: ${s.abertas ?? 0} aberta(s), ${s.na_fila ?? 0} na fila`;
-        return `<li><button class="atd-nav-btn ${setorAtualId === s.id ? 'ativo' : ''}" type="button" data-setor="${esc(s.id)}" title="${esc(dica)}" aria-label="${esc(dica)}">
-          <span class="atd-nav-nome">${esc(s.nome)}</span>
-          <span class="atd-contador">${esc(valor)}</span>
+        return `<li><button class="atd-nav-btn atd-kpi-card atd-kpi-card--setor ${setorAtualId === s.id ? 'ativo' : ''}" type="button" data-setor="${esc(s.id)}" aria-pressed="${setorAtualId === s.id}" title="${esc(dica)}" aria-label="${esc(dica)}">
+          <span class="atd-nav-nome atd-kpi-rotulo">${esc(s.nome)}</span>
+          <span class="atd-kpi-valor-wrap">
+            <span class="atd-contador atd-kpi-valor">${esc(valor)}</span>
+            ${filaTag}
+          </span>
         </button></li>`;
       }),
     ];
@@ -341,6 +376,19 @@
     const setorObj = porSetor.find((s) => s.id === setorAtualId);
     const rotuloVisao = ROTULO_VISAO[visaoAtual] || 'Conversas';
     $('titulo-lista-conv').textContent = setorObj ? `${rotuloVisao} · ${setorObj.nome}` : rotuloVisao;
+
+    const pillResumo = $('btn-resumo-inline');
+    if (pillResumo) {
+      const partes = [];
+      if (visaoAtual === 'encerradas') partes.push('Encerradas');
+      partes.push(
+        `Abertas ${contadores.abertas ?? 0}`,
+        `Fila ${contadores.fila ?? 0}`,
+        `Minhas ${contadores.minhas ?? 0}`,
+        setorObj ? setorObj.nome : 'Todos os setores'
+      );
+      pillResumo.textContent = partes.join(' · ');
+    }
   }
 
   async function carregarContadores() {
@@ -406,7 +454,10 @@
       const dica = `${c.contato?.nome || 'Contato'} · Protocolo ${c.protocolo} · ${c.setor?.nome || ''} · ${dono}`;
       return `<li>
         <button type="button" class="atd-conv-item ${ativa ? 'ativa' : ''} ${c.nao_lidas > 0 ? 'atd-conv-item--nova' : ''}" data-conversa-id="${esc(c.id)}" aria-current="${ativa ? 'true' : 'false'}" title="${esc(dica)}">
-          <span class="atd-conv-avatar" style="--av-h:${matiz(c.contato?.nome)}" aria-hidden="true">${esc(iniciais(c.contato?.nome))}</span>
+          <span class="atd-conv-avatar-wrap" aria-hidden="true">
+            <span class="atd-conv-avatar" style="--av-h:${matiz(c.contato?.nome)}">${esc(iniciais(c.contato?.nome))}</span>
+            ${c.nao_lidas > 0 ? `<span class="atd-conv-badge-mini">${esc(c.nao_lidas)}</span>` : ''}
+          </span>
           <span class="atd-conv-corpo">
           <div class="atd-conv-linha1">
             <span class="atd-conv-nome">${esc(c.contato?.nome || 'Contato')}</span>
@@ -430,6 +481,7 @@
   }
 
   async function carregarConversas({ continuar = false, silencioso = false } = {}) {
+    const seqLista = ++listaSeq;
     const boxEstado = $('estado-lista');
     if (!continuar && !silencioso) {
       $('lista-conversas').innerHTML = '';
@@ -444,12 +496,13 @@
         limite: 50,
         cursor: continuar ? proximoCursorConversas : undefined,
       });
+      if (seqLista !== listaSeq) return;
       const itens = Array.isArray(pag?.itens) ? pag.itens : [];
       proximoCursorConversas = pag?.proximo_cursor || null;
       conversas = continuar ? [...conversas, ...itens] : itens;
       renderizarListaConversas();
     } catch (err) {
-      if (silencioso) return;
+      if (seqLista !== listaSeq || silencioso) return;
       if (err?.status === 403) {
         mostrarErroGlobal(err);
       } else {
@@ -525,7 +578,7 @@
 
     const bloqueado = !ehNota && !podeResponder;
     $('campo-msg').disabled = bloqueado;
-    $('btn-enviar').disabled = bloqueado;
+    $('btn-enviar').disabled = bloqueado || envioEmAndamento;
     $('btn-atalho-slash').disabled = bloqueado;
 
     if (ehNota) {
@@ -732,11 +785,13 @@
 
   // ── Respostas rápidas com "/" ───────────────────────────────────────
   async function carregarRespostasRapidas(setorId) {
+    const seqResposta = ++respostasSeq;
+    respostasRapidas = [];
     try {
       const pag = await api.get('/respostas-rapidas', { situacao: 'ativa', setor_id: setorId || undefined, limite: 100 });
-      respostasRapidas = Array.isArray(pag?.itens) ? pag.itens : [];
+      if (seqResposta === respostasSeq) respostasRapidas = Array.isArray(pag?.itens) ? pag.itens : [];
     } catch (_) {
-      respostasRapidas = [];
+      if (seqResposta === respostasSeq) respostasRapidas = [];
     }
   }
 
@@ -795,8 +850,13 @@
     }
   }
 
+  function chaveRascunho(id, modo) { return id + ':' + modo; }
+  function guardarRascunho() { if (conversaAtual) rascunhos.set(chaveRascunho(conversaAtual.id, modoCompositor), $('campo-msg').value); }
+  function restaurarRascunho() { $('campo-msg').value = conversaAtual ? (rascunhos.get(chaveRascunho(conversaAtual.id, modoCompositor)) || '') : ''; }
   async function abrirConversa(id, { irParaChatMobile = true } = {}) {
     const seq = ++conversaSeq;
+    respostasSeq += 1;
+    respostasRapidas = [];
     fecharPopovers();
     fecharSlashMenu();
     limparAlertaConversa();
@@ -808,11 +868,13 @@
         api.get(`/conversas/${encodeURIComponent(id)}/itens`, { limite: 100 }),
       ]);
       if (seq !== conversaSeq) return;
+      guardarRascunho();
       conversaAtual = detalhe;
       itensConversa = [...(pagItens?.itens || [])].reverse();
       proximoCursorItens = pagItens?.proximo_cursor || null;
       historicoContato = null; // exibe "Carregando histórico…" até a lista complementar chegar
       modoCompositor = 'cliente';
+      restaurarRascunho();
 
       assinarConversaSocket(detalhe.id);
       renderizarListaConversas();
@@ -850,6 +912,7 @@
 
   function sincronizarConversaNaLista(resumo) {
     if (!resumo?.id) return;
+    if (buscaAtual) { carregarConversas({ silencioso: true }); return; }
     const idx = conversas.findIndex((c) => c.id === resumo.id);
     const entra = conversaPertenceAFiltroAtual(resumo);
     if (entra) {
@@ -896,13 +959,17 @@
     limparAlertaConversa();
     const btn = $('btn-assumir');
     btn.disabled = true;
+    const seqAcao = conversaSeq;
+    const idAcao = conversaAtual.id;
     try {
       const atualizada = await api.post(`/conversas/${encodeURIComponent(conversaAtual.id)}/assumir`, {});
+      if (seqAcao !== conversaSeq || conversaAtual?.id !== idAcao) { await carregarContadores(); return; }
       conversaAtual = atualizada;
       sincronizarConversaNaLista(atualizada);
       await Promise.all([recarregarConversaAtual({ rolarFim: true }), carregarContadores()]);
       TalkUI.toast('Conversa assumida.', 'ok');
     } catch (err) {
+      if (seqAcao !== conversaSeq || conversaAtual?.id !== idAcao) { TalkUI.toast('Não foi possível concluir a ação na conversa anterior.', 'erro'); return; }
       if (err?.status === 409) {
         mostrarAlertaConversa(err.message);
         await Promise.all([recarregarConversaAtual(), carregarContadores(), carregarConversas({ silencioso: true })]);
@@ -919,13 +986,17 @@
     limparAlertaConversa();
     const btn = $('btn-devolver');
     btn.disabled = true;
+    const seqAcao = conversaSeq;
+    const idAcao = conversaAtual.id;
     try {
       const atualizada = await api.post(`/conversas/${encodeURIComponent(conversaAtual.id)}/devolver`, {});
+      if (seqAcao !== conversaSeq || conversaAtual?.id !== idAcao) { await carregarContadores(); return; }
       conversaAtual = atualizada;
       sincronizarConversaNaLista(atualizada);
       await Promise.all([recarregarConversaAtual({ rolarFim: true }), carregarContadores()]);
       TalkUI.toast('Conversa devolvida para a fila.', 'ok');
     } catch (err) {
+      if (seqAcao !== conversaSeq || conversaAtual?.id !== idAcao) { TalkUI.toast('Não foi possível concluir a ação na conversa anterior.', 'erro'); return; }
       mostrarAlertaConversa(err.message);
     } finally {
       btn.disabled = false;
@@ -975,14 +1046,18 @@
 
     const btn = $('btn-confirmar-transferir');
     btn.disabled = true;
+    const seqAcao = conversaSeq;
+    const idAcao = conversaAtual.id;
     try {
       const atualizada = await api.post(`/conversas/${encodeURIComponent(conversaAtual.id)}/transferir`, corpo);
+      if (seqAcao !== conversaSeq || conversaAtual?.id !== idAcao) { await carregarContadores(); return; }
       fecharPopovers();
       conversaAtual = atualizada;
       sincronizarConversaNaLista(atualizada);
       await Promise.all([recarregarConversaAtual({ rolarFim: true }), carregarContadores(), carregarRespostasRapidas(atualizada.setor?.id)]);
       TalkUI.toast('Conversa transferida.', 'ok');
     } catch (err) {
+      if (seqAcao !== conversaSeq || conversaAtual?.id !== idAcao) { TalkUI.toast('Não foi possível concluir a ação na conversa anterior.', 'erro'); return; }
       if (!TalkUI.errosNoFormulario(form, err)) {
         $('alerta-transferir').textContent = err.message;
         $('alerta-transferir').hidden = false;
@@ -1014,11 +1089,17 @@
     $('alerta-encerrar').hidden = true;
     const motivo = $('enc-motivo').value.trim();
     const idEncerrando = conversaAtual.id;
+    const seqEncerrando = conversaSeq;
     const btn = $('btn-confirmar-encerrar');
     btn.disabled = true;
     encerrandoConversaId = idEncerrando;
     try {
       const atualizada = await api.post(`/conversas/${encodeURIComponent(idEncerrando)}/encerrar`, motivo ? { motivo } : {});
+      if (seqEncerrando !== conversaSeq || conversaAtual?.id !== idEncerrando) {
+        sincronizarConversaNaLista(atualizada);
+        await carregarContadores();
+        return;
+      }
       conversaSeq += 1;
       fecharPopovers();
       sincronizarConversaNaLista(atualizada);
@@ -1029,6 +1110,8 @@
       assinarConversaSocket(null);
       fecharSlashMenu();
       limparAlertaConversa();
+      rascunhos.delete(chaveRascunho(idEncerrando, 'cliente'));
+      rascunhos.delete(chaveRascunho(idEncerrando, 'nota'));
       $('campo-msg').value = '';
       renderizarCabecalhoConversa();
       renderizarPainelContato();
@@ -1041,6 +1124,7 @@
       TalkUI.toast('Conversa encerrada. Consulte o histórico em Encerradas.', 'ok');
       await carregarContadores();
     } catch (err) {
+      if (seqEncerrando !== conversaSeq || conversaAtual?.id !== idEncerrando) { TalkUI.toast('Não foi possível encerrar a conversa anterior.', 'erro'); return; }
       if (!TalkUI.errosNoFormulario(form, err)) {
         $('alerta-encerrar').textContent = err.message;
         $('alerta-encerrar').hidden = false;
@@ -1056,13 +1140,17 @@
     limparAlertaConversa();
     const btn = $('btn-reabrir');
     btn.disabled = true;
+    const seqAcao = conversaSeq;
+    const idAcao = conversaAtual.id;
     try {
       const atualizada = await api.post(`/conversas/${encodeURIComponent(conversaAtual.id)}/reabrir`, {});
+      if (seqAcao !== conversaSeq || conversaAtual?.id !== idAcao) { await carregarContadores(); return; }
       conversaAtual = atualizada;
       sincronizarConversaNaLista(atualizada);
       await Promise.all([recarregarConversaAtual({ rolarFim: true }), carregarContadores()]);
       TalkUI.toast('Conversa reaberta.', 'ok');
     } catch (err) {
+      if (seqAcao !== conversaSeq || conversaAtual?.id !== idAcao) { TalkUI.toast('Não foi possível concluir a ação na conversa anterior.', 'erro'); return; }
       if (err?.status === 409 && err.detalhe?.conversa_id) {
         mostrarAlertaConversa(err.message, { conversaId: err.detalhe.conversa_id });
       } else {
@@ -1080,12 +1168,16 @@
 
   // ── Envio de mensagem e nota interna ────────────────────────────────
   $('btn-modo-cliente').addEventListener('click', () => {
+    guardarRascunho();
     modoCompositor = 'cliente';
+    restaurarRascunho();
     $('alerta-compositor').hidden = true;
     atualizarEstadoCompositor();
   });
   $('btn-modo-nota').addEventListener('click', () => {
+    guardarRascunho();
     modoCompositor = 'nota';
+    restaurarRascunho();
     $('alerta-compositor').hidden = true;
     fecharSlashMenu();
     atualizarEstadoCompositor();
@@ -1156,7 +1248,7 @@
 
   $('form-compositor').addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!conversaAtual) return;
+    if (!conversaAtual || envioEmAndamento) return;
     const form = e.currentTarget;
     TalkUI.limparErros(form);
     $('alerta-compositor').hidden = true;
@@ -1165,8 +1257,10 @@
     const bruto = $('campo-msg').value;
     const texto = modoCompositor === 'cliente' ? expandirVariaveis(bruto).trim() : bruto.trim();
     const btn = $('btn-enviar');
+    envioEmAndamento = true;
     btn.disabled = true;
 
+    const modoEnviado = modoCompositor;
     const seq = conversaSeq;
     const idConv = conversaAtual.id;
     try {
@@ -1174,8 +1268,13 @@
         ? `/conversas/${encodeURIComponent(idConv)}/notas`
         : `/conversas/${encodeURIComponent(idConv)}/responder`;
       const novoItem = await api.post(rota, { texto });
-      if (seq !== conversaSeq || conversaAtual?.id !== idConv) return;
-      $('campo-msg').value = '';
+      const chave = chaveRascunho(idConv, modoEnviado);
+      if (seq !== conversaSeq || conversaAtual?.id !== idConv || modoCompositor !== modoEnviado) {
+        if (rascunhos.get(chave) === bruto) rascunhos.delete(chave);
+        return;
+      }
+      if ($('campo-msg').value === bruto) $('campo-msg').value = '';
+      rascunhos.delete(chave);
       atualizarContadorCompositor();
       if (novoItem?.id && !itensConversa.some((i) => i.id === novoItem.id)) {
         itensConversa.push(novoItem);
@@ -1185,11 +1284,13 @@
         await Promise.all([recarregarConversaAtual({ rolarFim: true }), carregarContadores()]);
       }
     } catch (err) {
+      if (seq !== conversaSeq || conversaAtual?.id !== idConv || modoCompositor !== modoEnviado) { TalkUI.toast('Não foi possível enviar a mensagem anterior.', 'erro'); return; }
       if (!TalkUI.errosNoFormulario(form, err)) {
         $('alerta-compositor').textContent = err.message;
         $('alerta-compositor').hidden = false;
       }
     } finally {
+      envioEmAndamento = false;
       atualizarEstadoCompositor();
     }
   });
@@ -1305,21 +1406,111 @@
   });
 
   $('btn-mais-conversas').addEventListener('click', () => carregarConversas({ continuar: true }));
-  $('btn-mobile-setores').addEventListener('click', () => definirPassoMobile('setores'));
+  $('btn-mobile-setores').addEventListener('click', () => aplicarResumoRecolhido(!$('painel-resumo-topo').classList.contains('recolhido'), { salvar: false }));
   $('btn-mobile-lista').addEventListener('click', () => definirPassoMobile('lista'));
 
-  function alternarGaveta(forcar) {
-    const aberta = $('workspace').classList.toggle('gaveta-aberta', forcar);
+  // ── Controles retráteis (cartões de topo, lista compacta e setinha mágica do contato)
+  function lerPref(chave) {
+    try { return localStorage.getItem(chave) === '1'; } catch (_) { return false; }
+  }
+  function salvarPref(chave, ativo) {
+    try { localStorage.setItem(chave, ativo ? '1' : '0'); } catch (_) { /* navegador sem storage */ }
+  }
+
+  function aplicarResumoRecolhido(recolhido, { salvar = true } = {}) {
+    const topo = $('painel-resumo-topo');
+    const corpo = $('atd-cards-corpo');
+    const btn = $('btn-toggle-resumo');
+    const resumoInline = $('btn-resumo-inline');
+    topo.classList.toggle('recolhido', recolhido);
+    corpo.hidden = recolhido;
+    resumoInline.hidden = !recolhido;
+    btn.setAttribute('aria-expanded', String(!recolhido));
+    const dica = recolhido
+      ? 'Expandir os cartões numéricos de visões e setores'
+      : 'Recolher os cartões de visões e setores para ampliar a conversa';
+    btn.title = dica;
+    btn.setAttribute('aria-label', dica);
+    if (salvar) salvarPref(KEY_RESUMO_RECOLHIDO, recolhido);
+  }
+
+  function aplicarListaCompacta(compacta, { salvar = true } = {}) {
+    $('workspace').classList.toggle('lista-compacta', compacta);
+    const btn = $('btn-seta-lista');
+    if (btn) {
+      btn.setAttribute('aria-expanded', String(!compacta));
+      btn.classList.toggle('recolhida', compacta);
+      const dica = compacta
+        ? 'Expandir a lista de conversas para ver prévia e busca'
+        : 'Recolher lista de conversas para avatares compactos';
+      btn.title = dica;
+      btn.setAttribute('aria-label', dica);
+    }
+    if (salvar) salvarPref(KEY_LISTA_COMPACTA, compacta);
+  }
+
+  function atualizarBotoesLateral() {
+    const ws = $('workspace');
+    const aberta = mqDesktopGrande.matches
+      ? !ws.classList.contains('lateral-recolhida')
+      : ws.classList.contains('gaveta-aberta');
     $('btn-gaveta').setAttribute('aria-expanded', String(aberta));
+    const seta = $('btn-seta-lateral');
+    if (seta) {
+      seta.setAttribute('aria-expanded', String(aberta));
+      seta.classList.toggle('recolhida', !aberta);
+      const dica = aberta
+        ? 'Recolher painel do contato e detalhes para ampliar a conversa'
+        : 'Expandir painel do contato e detalhes';
+      seta.title = dica;
+      seta.setAttribute('aria-label', dica);
+    }
+  }
+
+  function alternarLateralDesktop(recolher, { salvar = true } = {}) {
+    if (mqDesktopGrande.matches) {
+      const ws = $('workspace');
+      const prox = typeof recolher === 'boolean' ? recolher : !ws.classList.contains('lateral-recolhida');
+      ws.classList.toggle('lateral-recolhida', prox);
+      if (salvar) salvarPref(KEY_LATERAL_RECOLHIDA, prox);
+      atualizarBotoesLateral();
+    } else {
+      alternarGaveta(typeof recolher === 'boolean' ? !recolher : undefined);
+    }
+  }
+
+  function alternarGaveta(forcar) {
+    $('workspace').classList.toggle('gaveta-aberta', forcar);
+    atualizarBotoesLateral();
   }
   function alternarSheet(abrir) {
     $('painel-lateral').classList.toggle('sheet-aberta', abrir);
     $('sheet-backdrop').classList.toggle('aberto', abrir);
   }
+
+  $('btn-toggle-resumo').addEventListener('click', () => {
+    aplicarResumoRecolhido(!$('painel-resumo-topo').classList.contains('recolhido'));
+  });
+  $('btn-resumo-inline').addEventListener('click', () => aplicarResumoRecolhido(false));
+  $('btn-seta-lista').addEventListener('click', () => {
+    aplicarListaCompacta(!$('workspace').classList.contains('lista-compacta'));
+  });
+  $('btn-seta-lateral').addEventListener('click', () => alternarLateralDesktop());
   $('btn-gaveta').addEventListener('click', () => alternarGaveta());
   $('btn-abrir-sheet').addEventListener('click', () => alternarSheet(true));
-  $('btn-fechar-lateral').addEventListener('click', () => { alternarGaveta(false); alternarSheet(false); });
+  $('btn-fechar-lateral').addEventListener('click', () => {
+    if (mqDesktopGrande.matches) alternarLateralDesktop(true);
+    alternarGaveta(false);
+    alternarSheet(false);
+  });
   $('sheet-backdrop').addEventListener('click', () => alternarSheet(false));
+  mqDesktopGrande.addEventListener('change', atualizarBotoesLateral);
+
+  // Restaura preferências de recolhimento salvas no navegador (padrão: tudo expandido).
+  aplicarResumoRecolhido(lerPref(KEY_RESUMO_RECOLHIDO), { salvar: false });
+  aplicarListaCompacta(lerPref(KEY_LISTA_COMPACTA), { salvar: false });
+  if (lerPref(KEY_LATERAL_RECOLHIDA)) $('workspace').classList.add('lateral-recolhida');
+  atualizarBotoesLateral();
 
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.atd-chat-acoes')) fecharPopovers();
@@ -1384,6 +1575,7 @@
       atualizarBadgeTempoReal('socket');
       socket.emit('atendimento:assinar', {});
       if (conversaAssinadaId) socket.emit('conversa:assinar', { conversa_id: conversaAssinadaId });
+      Promise.all([carregarContadores(), carregarConversas({ silencioso: true }), recarregarConversaAtual()]).catch(() => {});
     });
 
     socket.on('disconnect', () => iniciarFallback());
@@ -1446,6 +1638,7 @@
   }
 
   function mostrarErroGlobal(err) {
+    $('painel-resumo-topo').hidden = true;
     $('workspace').hidden = true;
     TalkUI.estadoDoErro($('estado-global'), err, () => iniciar());
   }
@@ -1464,6 +1657,7 @@
   // ── Inicialização ───────────────────────────────────────────────────
   async function iniciar() {
     $('estado-global').hidden = true;
+    $('painel-resumo-topo').hidden = false;
     $('workspace').hidden = false;
     renderizarCabecalhoConversa();
     renderizarPainelContato();

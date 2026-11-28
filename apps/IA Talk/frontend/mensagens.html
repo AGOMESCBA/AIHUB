@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Histórico de mensagens · IA Talk</title>
-  <!-- Etapa G3 — Histórico de mensagens (docs/contratos.md §5).
-       Tela modelo: frontend/empresas.html e Histórico de Interpretações (IA Command).
-       Ações "Reenviar" e "Dar como falha" só aparecem para desconhecida e falhou,
-       com confirmação na própria tela. Exportação CSV respeita os filtros atuais. -->
+  <!-- Histórico de mensagens e auditoria de conversas (contratos.md §5 e §8.4).
+       Duas visões em grade Tabulator com colunas móveis (persistidas em localStorage),
+       filtros por coluna, painel de agrupamento funcional e leitor lateral (split-view):
+         1. Conversas (auditoria completa: cliente, atendente, setor, datas e fio cronológico).
+         2. Envios e entregas (fila individual, API v1, testes, linha do tempo e ações manuais). -->
   <script src="/app/ia-talk/js/talk-ui.js"></script>
   <link rel="stylesheet" href="/app/ia-talk/ui/css/iahub.css">
   <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
@@ -17,7 +18,6 @@
 <body class="tlk-pagina">
 <main class="tlk-conteudo">
 
-  <!-- ── Lista ──────────────────────────────────────────────────────── -->
   <section id="vista-lista" aria-labelledby="titulo-lista">
     <div class="head-row">
       <div>
@@ -25,162 +25,313 @@
         <h1 class="head-title" id="titulo-lista">Histórico de mensagens <span class="head-count" id="contador" aria-live="polite"></span></h1>
       </div>
       <div class="head-actions">
-        <button class="btn btn-ghost" type="button" id="btn-exportar" title="Exportar CSV: baixa as mensagens conforme os filtros aplicados agora" aria-label="Exportar CSV: baixa as mensagens conforme os filtros aplicados agora"><span data-ico="download"></span> Exportar CSV</button>
-        <button class="btn btn-ghost" type="button" id="btn-atualizar" title="Atualizar: recarrega a lista de mensagens com os filtros atuais" aria-label="Atualizar: recarrega a lista de mensagens com os filtros atuais"><span data-ico="atualizar" data-giro="1"></span> Atualizar</button>
+        <button class="btn btn-ghost" type="button" id="btn-ampliar" aria-pressed="false" title="Ampliar grade: reduz o cabeçalho para dar mais espaço à grade e ao leitor lateral (Esc volta)" aria-label="Ampliar grade: reduz o cabeçalho para dar mais espaço à grade e ao leitor lateral"><span data-ico="painel_lateral"></span> Ampliar grade</button>
+        <button class="btn btn-ghost" type="button" id="btn-exportar" title="Exportar CSV: baixa os registros da aba atual conforme os filtros aplicados" aria-label="Exportar CSV: baixa os registros da aba atual conforme os filtros aplicados"><span data-ico="download"></span> Exportar CSV</button>
+        <button class="btn btn-ghost" type="button" id="btn-atualizar" title="Atualizar: recarrega a lista e o detalhe aberto com os filtros atuais" aria-label="Atualizar: recarrega a lista e o detalhe aberto com os filtros atuais"><span data-ico="atualizar" data-giro="1"></span> Atualizar</button>
       </div>
     </div>
-    <p class="head-sub">Consulte mensagens enviadas e recebidas, acompanhe a linha do tempo de entrega e trate manualmente casos com falha ou resultado desconhecido. Números de contato aparecem sempre mascarados.</p>
+    <p class="head-sub">Audite conversas completas (cliente, atendente, setor, data e hora) abrindo o histórico na lateral ou acompanhe envios individuais, linha do tempo de entrega e reenvios manuais. Arraste os cabeçalhos das colunas para organizar a grade do seu modo.</p>
 
-    <div class="filter-bar">
-      <form class="filter-bar-row" id="filtros" role="search">
-        <label class="sr-only" for="f-busca">Buscar</label>
-        <input class="form-control tlk-busca" id="f-busca" name="busca" type="search" placeholder="Buscar por prévia, correlação ou ID" autocomplete="off">
-
-        <label class="sr-only" for="f-estado">Estado</label>
-        <select class="form-control" id="f-estado" name="estado">
-          <option value="">Todos os estados</option>
-          <option value="desconhecida|falhou">Falhas e desconhecidas</option>
-          <option value="desconhecida">Resultado desconhecido</option>
-          <option value="falhou">Falhou</option>
-          <option value="aguardando">Aguardando canal</option>
-          <option value="aceita">Aceita</option>
-          <option value="encaminhada">Encaminhada</option>
-          <option value="enviada">Enviada</option>
-          <option value="entregue">Entregue</option>
-          <option value="lida">Lida</option>
-          <option value="recebida">Recebida</option>
-        </select>
-
-        <label class="sr-only" for="f-direcao">Direção</label>
-        <select class="form-control" id="f-direcao" name="direcao">
-          <option value="">Entrada e saída</option>
-          <option value="saida">Saída</option>
-          <option value="entrada">Entrada</option>
-        </select>
-
-        <label class="sr-only" for="f-canal">Canal</label>
-        <select class="form-control" id="f-canal" name="canal_id">
-          <option value="">Todos os canais</option>
-        </select>
-
-        <label class="tlk-check-inline" for="f-apenas-falhas">
-          <input type="checkbox" id="f-apenas-falhas" name="apenas_falhas" value="1">
-          <span>Apenas falhas</span>
-        </label>
-
-        <button class="btn btn-ghost" type="button" id="btn-mais-filtros" aria-expanded="false" aria-controls="filtros-extra" title="Mais filtros: exibe filtros por provedor, aplicação, tipo, período e correlação" aria-label="Mais filtros: exibe filtros por provedor, aplicação, tipo, período e correlação"><span data-ico="filtro"></span> Mais filtros</button>
-        <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area" title="Mostrar agrupamento: abre o painel para agrupar mensagens por coluna" aria-label="Mostrar agrupamento: abre o painel para agrupar mensagens por coluna"><span data-ico="agrupar"></span> Mostrar agrupamento</button>
-        <span class="grupo-status" id="grupo-status">Sem agrupamento ativo</span>
-      </form>
-
-      <div class="tlk-filtros-extra" id="filtros-extra" hidden>
-        <label class="sr-only" for="f-provedor">Provedor</label>
-        <select class="form-control" id="f-provedor" name="provedor" form="filtros">
-          <option value="">Todos os provedores</option>
-          <option value="wweb">WhatsApp Web</option>
-          <option value="meta">WhatsApp Meta</option>
-        </select>
-
-        <label class="sr-only" for="f-aplicacao">Aplicação</label>
-        <select class="form-control" id="f-aplicacao" name="aplicacao_id" form="filtros">
-          <option value="">Todas as aplicações</option>
-          <option value="nenhuma">Sem aplicação</option>
-        </select>
-
-        <label class="sr-only" for="f-tipo">Tipo</label>
-        <select class="form-control" id="f-tipo" name="tipo" form="filtros">
-          <option value="">Todos os tipos</option>
-          <option value="texto">Texto</option>
-          <option value="imagem">Imagem</option>
-          <option value="documento">Documento</option>
-          <option value="audio">Áudio</option>
-          <option value="video">Vídeo</option>
-        </select>
-
-        <div class="tlk-filtro-par">
-          <label for="f-de">De</label>
-          <input class="form-control" id="f-de" name="de" type="date" form="filtros">
-        </div>
-        <div class="tlk-filtro-par">
-          <label for="f-ate">Até</label>
-          <input class="form-control" id="f-ate" name="ate" type="date" form="filtros">
-        </div>
-
-        <label class="sr-only" for="f-correlacao">Correlação</label>
-        <input class="form-control" id="f-correlacao" name="correlacao_id" type="search" placeholder="Correlação (ex.: chamado-…)" autocomplete="off" form="filtros">
-
-        <label class="sr-only" for="f-destinatario">Destinatário</label>
-        <input class="form-control" id="f-destinatario" name="destinatario" type="search" inputmode="numeric" placeholder="Destinatário (número completo)" autocomplete="off" form="filtros">
-
-        <button class="btn btn-ghost btn-sm" type="button" id="btn-limpar-filtros" title="Limpar filtros: zera todos os filtros e recarrega o histórico completo" aria-label="Limpar filtros: zera todos os filtros e recarrega o histórico completo"><span data-ico="limpar"></span> Limpar filtros</button>
-      </div>
-
-      <div class="grupo-area" id="grupo-area">
-        <div class="gp-chips-row" id="gp-chips"><span class="gp-label">Agrupar por:</span></div>
-        <div id="dz"></div>
-      </div>
+    <div class="tlk-hist-abas" role="tablist" aria-label="Visões do histórico">
+      <button class="tlk-hist-aba" type="button" role="tab" id="aba-conversas" aria-controls="painel-conversas" aria-selected="true">
+        <span>Conversas (auditoria)</span>
+        <span class="tlk-hist-aba-qtd" id="qtd-aba-conversas"></span>
+      </button>
+      <button class="tlk-hist-aba" type="button" role="tab" id="aba-envios" aria-controls="painel-envios" aria-selected="false">
+        <span>Envios e entregas</span>
+        <span class="tlk-hist-aba-qtd" id="qtd-aba-envios"></span>
+      </button>
+      <span class="tlk-hist-dica-col">Clique em uma linha para abrir o conteúdo na lateral · Arraste colunas para reordenar</span>
     </div>
 
-    <div class="grade">
-      <div id="estado-lista" hidden></div>
-      <div id="tabela"></div>
-      <div class="tlk-mais" id="mais" hidden><button class="btn btn-ghost" type="button" id="btn-mais" title="Carregar mais: busca a próxima página de mensagens" aria-label="Carregar mais: busca a próxima página de mensagens"><span data-ico="seta_baixo"></span> Carregar mais</button></div>
-    </div>
-  </section>
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- ABA 1: CONVERSAS (AUDITORIA)                                   -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div id="painel-conversas" role="tabpanel" aria-labelledby="aba-conversas">
+      <div class="filter-bar">
+        <form class="filter-bar-row" id="filtros-conv" role="search">
+          <label class="sr-only" for="fc-busca">Buscar conversa</label>
+          <input class="form-control tlk-busca" id="fc-busca" name="busca" type="search" placeholder="Buscar por contato, protocolo, final do número ou texto" autocomplete="off">
 
-  <!-- ── Detalhe em página ──────────────────────────────────────────── -->
-  <section id="vista-detalhe" hidden aria-labelledby="titulo-detalhe">
-    <div class="editor-bar">
-      <div class="editor-title">
-        <div class="tlk-titulo-linha">
-          <strong id="titulo-detalhe">Mensagem</strong>
-          <span id="detalhe-pill"></span>
+          <label class="sr-only" for="fc-visao">Situação</label>
+          <select class="form-control" id="fc-visao" name="visao">
+            <option value="todas">Todas as situações</option>
+            <option value="abertas">Abertas</option>
+            <option value="fila">Na fila</option>
+            <option value="encerradas">Encerradas</option>
+          </select>
+
+          <label class="sr-only" for="fc-setor">Setor</label>
+          <select class="form-control" id="fc-setor" name="setor_id">
+            <option value="">Todos os setores</option>
+          </select>
+
+          <label class="sr-only" for="fc-responsavel">Atendente</label>
+          <select class="form-control" id="fc-responsavel" name="responsavel_id">
+            <option value="">Todos os atendentes</option>
+            <option value="nenhum">Na fila (sem atendente)</option>
+          </select>
+
+          <label class="sr-only" for="fc-canal">Canal</label>
+          <select class="form-control" id="fc-canal" name="canal_id">
+            <option value="">Todos os canais</option>
+          </select>
+
+          <button class="btn btn-ghost" type="button" id="btn-conv-mais-filtros" aria-expanded="false" aria-controls="filtros-conv-extra" title="Mais filtros: exibe filtros por período de datas e etiqueta da conversa" aria-label="Mais filtros: exibe filtros por período de datas e etiqueta da conversa"><span data-ico="filtro"></span> Mais filtros</button>
+          <button class="btn btn-ghost" type="button" id="btn-conv-agrupar" aria-expanded="false" aria-controls="grupo-area-conv" title="Mostrar agrupamento: abre o painel para agrupar conversas por coluna" aria-label="Mostrar agrupamento: abre o painel para agrupar conversas por coluna"><span data-ico="agrupar"></span> Mostrar agrupamento</button>
+          <span class="grupo-status" id="grupo-status-conv">Sem agrupamento ativo</span>
+        </form>
+
+        <div class="tlk-filtros-extra" id="filtros-conv-extra" hidden>
+          <div class="tlk-filtro-par">
+            <label for="fc-de">De</label>
+            <input class="form-control" id="fc-de" name="de" type="date" form="filtros-conv">
+          </div>
+          <div class="tlk-filtro-par">
+            <label for="fc-ate">Até</label>
+            <input class="form-control" id="fc-ate" name="ate" type="date" form="filtros-conv">
+          </div>
+          <label class="sr-only" for="fc-etiqueta">Etiqueta</label>
+          <input class="form-control" id="fc-etiqueta" name="etiqueta" type="search" placeholder="Etiqueta exata…" autocomplete="off" form="filtros-conv">
+          <button class="btn btn-ghost btn-sm" type="button" id="btn-conv-limpar" title="Limpar filtros: zera todos os filtros e recarrega todas as conversas" aria-label="Limpar filtros: zera todos os filtros e recarrega todas as conversas"><span data-ico="limpar"></span> Limpar filtros</button>
         </div>
-        <span id="sub-detalhe"></span>
+
+        <div class="grupo-area" id="grupo-area-conv">
+          <div class="gp-chips-row" id="gp-chips-conv"><span class="gp-label">Agrupar por:</span></div>
+          <div id="dz-conv" style="margin-top:8px;"></div>
+          <div class="tlk-grupo-rodape">
+            <span class="tlk-grupo-dica">Clique ou arraste os campos acima para agrupar. Arraste os cabeçalhos da tabela para trocar a ordem das colunas.</span>
+            <button class="btn btn-ghost btn-sm" type="button" id="btn-conv-reset-colunas" title="Restaurar colunas: volta a ordem padrão das colunas da grade de conversas" aria-label="Restaurar colunas: volta a ordem padrão das colunas da grade de conversas"><span data-ico="restaurar"></span> Restaurar colunas</button>
+          </div>
+        </div>
       </div>
-      <button class="btn btn-ghost" type="button" id="btn-voltar" title="Voltar à lista: fecha os detalhes e retorna ao histórico de mensagens" aria-label="Voltar à lista: fecha os detalhes e retorna ao histórico de mensagens"><span data-ico="voltar"></span> Voltar à lista</button>
-    </div>
 
-    <div class="tlk-cartao">
-      <div id="estado-detalhe" hidden></div>
-      <div class="tlk-detalhe-corpo" id="corpo-detalhe" hidden>
-        <div class="meta-grid" id="meta-mensagem"></div>
-
-        <div>
-          <h2 class="tlk-detalhe-secao-titulo">Conteúdo / Prévia</h2>
-          <div class="tlk-previa-box" id="detalhe-previa"></div>
-        </div>
-
-        <div id="bloco-anexos" hidden>
-          <h2 class="tlk-detalhe-secao-titulo">Anexos</h2>
-          <ul class="tlk-anexos" id="lista-anexos"></ul>
-        </div>
-
-        <div>
-          <h2 class="tlk-detalhe-secao-titulo">Linha do tempo de estados</h2>
-          <ol class="tlk-timeline" id="lista-timeline"></ol>
-        </div>
-
-        <!-- Ações manuais: SÓ aparecem para estado 'desconhecida' ou 'falhou' -->
-        <div class="tlk-acoes-barra" id="acoes-manuais" hidden>
-          <button class="btn btn-primary" type="button" id="btn-reenviar" title="Reenviar mensagem: coloca uma nova tentativa na fila de envio após confirmação" aria-label="Reenviar mensagem: coloca uma nova tentativa na fila de envio após confirmação"><span data-ico="enviar"></span> Reenviar mensagem</button>
-          <button class="btn btn-danger" type="button" id="btn-dar-falha" title="Dar como falha: encerra esta mensagem como falha sem tentar reenviar novamente" aria-label="Dar como falha: encerra esta mensagem como falha sem tentar reenviar novamente"><span data-ico="alerta"></span> Dar como falha</button>
-        </div>
-
-        <!-- Confirmação inline dentro da tela (sem window.confirm) -->
-        <div class="tlk-confirm-inline" id="confirm-acao" role="region" aria-live="polite" hidden>
-          <div class="tlk-confirm-titulo" id="confirm-titulo"></div>
-          <p class="tlk-confirm-texto" id="confirm-texto"></p>
-          <div class="tlk-confirm-acoes">
-            <button class="btn btn-ghost" type="button" id="btn-confirm-cancelar" title="Cancelar: fecha a confirmação sem alterar o estado da mensagem" aria-label="Cancelar: fecha a confirmação sem alterar o estado da mensagem"><span data-ico="cancelar"></span> Cancelar</button>
-            <button class="btn btn-primary" type="button" id="btn-confirm-executar" title="Confirmar: executa a ação manual escolhida" aria-label="Confirmar: executa a ação manual escolhida"><span data-ico="salvar"></span> Confirmar</button>
+      <div class="tlk-audit-split" id="split-conversas">
+        <div class="tlk-audit-grid-col">
+          <div class="grade">
+            <div id="estado-conversas" hidden></div>
+            <div id="tabela-conversas"></div>
+            <div class="tlk-mais" id="mais-conv" hidden>
+              <button class="btn btn-ghost" type="button" id="btn-mais-conv" title="Carregar mais: busca a próxima página de conversas" aria-label="Carregar mais: busca a próxima página de conversas"><span data-ico="seta_baixo"></span> Carregar mais</button>
+            </div>
           </div>
         </div>
 
-        <div id="bloco-metadados" hidden>
-          <h2 class="tlk-detalhe-secao-titulo">Metadados</h2>
-          <pre class="tlk-pre" id="detalhe-metadados"></pre>
+        <!-- Painel lateral: histórico completo da conversa selecionada -->
+        <aside class="tlk-audit-drawer" id="painel-detalhe-conversa" aria-label="Histórico completo da conversa" hidden>
+          <div class="tlk-drawer-head">
+            <div class="tlk-drawer-ident">
+              <div class="tlk-drawer-titulo">
+                <span id="conv-det-nome">Conversa</span>
+                <span id="conv-det-pill"></span>
+              </div>
+              <div class="tlk-drawer-sub" id="conv-det-sub"></div>
+            </div>
+            <div class="tlk-drawer-acoes">
+              <button class="btn btn-ghost btn-sm" type="button" id="btn-copiar-conversa" title="Copiar transcrição: copia todo o histórico desta conversa formatado para auditoria" aria-label="Copiar transcrição: copia todo o histórico desta conversa formatado para auditoria"><span data-ico="copiar"></span> Copiar</button>
+              <a class="btn btn-ghost btn-sm" id="btn-abrir-central" href="/app/ia-talk/atendimento.html" title="Abrir na Central: abre esta conversa na Central de Atendimento" aria-label="Abrir na Central: abre esta conversa na Central de Atendimento"><span data-ico="externo"></span> Central</a>
+              <button class="btn btn-ghost btn-sm" type="button" id="btn-fechar-conversa" title="Fechar painel: fecha o leitor lateral e volta à grade em largura total" aria-label="Fechar painel: fecha o leitor lateral e volta à grade em largura total"><span data-ico="cancelar"></span> Fechar</button>
+            </div>
+          </div>
+
+          <div id="estado-detalhe-conv" hidden></div>
+
+          <details class="tlk-conv-meta-det" id="conv-meta-det" hidden>
+            <summary>
+              <span>▸ Dados da conversa e auditoria</span>
+              <span id="conv-meta-resumo" style="font-weight:500;color:var(--text-lo);"></span>
+            </summary>
+            <div class="tlk-conv-meta-corpo">
+              <div class="meta-grid" id="conv-meta-grid"></div>
+              <div class="tlk-conv-etiquetas" id="conv-meta-etiquetas" hidden></div>
+            </div>
+          </details>
+
+          <div class="tlk-chat-filtros" id="conv-chat-filtros" hidden>
+            <div class="tlk-chat-chips" role="group" aria-label="Filtrar itens da conversa">
+              <button type="button" class="tlk-chat-chip ativo" data-cat-filtro="">Tudo</button>
+              <button type="button" class="tlk-chat-chip" data-cat-filtro="mensagem">Mensagens</button>
+              <button type="button" class="tlk-chat-chip" data-cat-filtro="nota">Notas</button>
+              <button type="button" class="tlk-chat-chip" data-cat-filtro="evento">Eventos</button>
+            </div>
+            <label class="sr-only" for="f-chat-busca">Buscar dentro da conversa</label>
+            <input class="form-control tlk-chat-busca" id="f-chat-busca" type="search" placeholder="Filtrar texto na conversa…" autocomplete="off">
+            <span class="tlk-chat-contagem" id="conv-itens-contagem"></span>
+          </div>
+
+          <div class="tlk-chat-fio" id="conv-fio" hidden aria-live="polite"></div>
+        </aside>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- ABA 2: ENVIOS E ENTREGAS (MENSAGENS INDIVIDUAIS / API / TESTE) -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div id="painel-envios" role="tabpanel" aria-labelledby="aba-envios" hidden>
+      <div class="filter-bar">
+        <form class="filter-bar-row" id="filtros" role="search">
+          <label class="sr-only" for="f-busca">Buscar</label>
+          <input class="form-control tlk-busca" id="f-busca" name="busca" type="search" placeholder="Buscar por prévia, correlação ou ID" autocomplete="off">
+
+          <label class="sr-only" for="f-estado">Estado</label>
+          <select class="form-control" id="f-estado" name="estado">
+            <option value="">Todos os estados</option>
+            <option value="desconhecida|falhou">Falhas e desconhecidas</option>
+            <option value="desconhecida">Resultado desconhecido</option>
+            <option value="falhou">Falhou</option>
+            <option value="aguardando">Aguardando canal</option>
+            <option value="aceita">Aceita</option>
+            <option value="encaminhada">Encaminhada</option>
+            <option value="enviada">Enviada</option>
+            <option value="entregue">Entregue</option>
+            <option value="lida">Lida</option>
+            <option value="recebida">Recebida</option>
+          </select>
+
+          <label class="sr-only" for="f-direcao">Direção</label>
+          <select class="form-control" id="f-direcao" name="direcao">
+            <option value="">Entrada e saída</option>
+            <option value="saida">Saída</option>
+            <option value="entrada">Entrada</option>
+          </select>
+
+          <label class="sr-only" for="f-canal">Canal</label>
+          <select class="form-control" id="f-canal" name="canal_id">
+            <option value="">Todos os canais</option>
+          </select>
+
+          <label class="tlk-check-inline" for="f-apenas-falhas">
+            <input type="checkbox" id="f-apenas-falhas" name="apenas_falhas" value="1">
+            <span>Apenas falhas</span>
+          </label>
+
+          <button class="btn btn-ghost" type="button" id="btn-mais-filtros" aria-expanded="false" aria-controls="filtros-extra" title="Mais filtros: exibe filtros por provedor, aplicação, tipo, período e correlação" aria-label="Mais filtros: exibe filtros por provedor, aplicação, tipo, período e correlação"><span data-ico="filtro"></span> Mais filtros</button>
+          <button class="btn btn-ghost" type="button" id="btn-agrupar" aria-expanded="false" aria-controls="grupo-area" title="Mostrar agrupamento: abre o painel para agrupar mensagens por coluna" aria-label="Mostrar agrupamento: abre o painel para agrupar mensagens por coluna"><span data-ico="agrupar"></span> Mostrar agrupamento</button>
+          <span class="grupo-status" id="grupo-status">Sem agrupamento ativo</span>
+        </form>
+
+        <div class="tlk-filtros-extra" id="filtros-extra" hidden>
+          <label class="sr-only" for="f-provedor">Provedor</label>
+          <select class="form-control" id="f-provedor" name="provedor" form="filtros">
+            <option value="">Todos os provedores</option>
+            <option value="wweb">WhatsApp Web</option>
+            <option value="meta">WhatsApp Meta</option>
+          </select>
+
+          <label class="sr-only" for="f-aplicacao">Aplicação</label>
+          <select class="form-control" id="f-aplicacao" name="aplicacao_id" form="filtros">
+            <option value="">Todas as aplicações</option>
+            <option value="nenhuma">Sem aplicação</option>
+          </select>
+
+          <label class="sr-only" for="f-tipo">Tipo</label>
+          <select class="form-control" id="f-tipo" name="tipo" form="filtros">
+            <option value="">Todos os tipos</option>
+            <option value="texto">Texto</option>
+            <option value="imagem">Imagem</option>
+            <option value="documento">Documento</option>
+            <option value="audio">Áudio</option>
+            <option value="video">Vídeo</option>
+          </select>
+
+          <div class="tlk-filtro-par">
+            <label for="f-de">De</label>
+            <input class="form-control" id="f-de" name="de" type="date" form="filtros">
+          </div>
+          <div class="tlk-filtro-par">
+            <label for="f-ate">Até</label>
+            <input class="form-control" id="f-ate" name="ate" type="date" form="filtros">
+          </div>
+
+          <label class="sr-only" for="f-correlacao">Correlação</label>
+          <input class="form-control" id="f-correlacao" name="correlacao_id" type="search" placeholder="Correlação (ex.: chamado-…)" autocomplete="off" form="filtros">
+
+          <label class="sr-only" for="f-destinatario">Destinatário</label>
+          <input class="form-control" id="f-destinatario" name="destinatario" type="search" inputmode="numeric" placeholder="Destinatário (número completo)" autocomplete="off" form="filtros">
+
+          <button class="btn btn-ghost btn-sm" type="button" id="btn-limpar-filtros" title="Limpar filtros: zera todos os filtros e recarrega o histórico completo" aria-label="Limpar filtros: zera todos os filtros e recarrega o histórico completo"><span data-ico="limpar"></span> Limpar filtros</button>
         </div>
+
+        <div class="grupo-area" id="grupo-area">
+          <div class="gp-chips-row" id="gp-chips"><span class="gp-label">Agrupar por:</span></div>
+          <div id="dz" style="margin-top:8px;"></div>
+          <div class="tlk-grupo-rodape">
+            <span class="tlk-grupo-dica">Clique ou arraste os campos acima para agrupar. Arraste os cabeçalhos da tabela para trocar a ordem das colunas.</span>
+            <button class="btn btn-ghost btn-sm" type="button" id="btn-msg-reset-colunas" title="Restaurar colunas: volta a ordem padrão das colunas da grade de envios" aria-label="Restaurar colunas: volta a ordem padrão das colunas da grade de envios"><span data-ico="restaurar"></span> Restaurar colunas</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tlk-audit-split" id="split-envios">
+        <div class="tlk-audit-grid-col">
+          <div class="grade">
+            <div id="estado-lista" hidden></div>
+            <div id="tabela"></div>
+            <div class="tlk-mais" id="mais" hidden>
+              <button class="btn btn-ghost" type="button" id="btn-mais" title="Carregar mais: busca a próxima página de mensagens" aria-label="Carregar mais: busca a próxima página de mensagens"><span data-ico="seta_baixo"></span> Carregar mais</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Painel lateral de detalhe da mensagem (preserva todos os IDs da G3/G11) -->
+        <aside class="tlk-audit-drawer" id="vista-detalhe" hidden aria-labelledby="titulo-detalhe">
+          <div class="tlk-drawer-head">
+            <div class="tlk-drawer-ident">
+              <div class="tlk-drawer-titulo">
+                <strong id="titulo-detalhe">Mensagem</strong>
+                <span id="detalhe-pill"></span>
+              </div>
+              <div class="tlk-drawer-sub" id="sub-detalhe"></div>
+            </div>
+            <div class="tlk-drawer-acoes">
+              <button class="btn btn-ghost btn-sm" type="button" id="btn-ver-conversa-msg" hidden title="Ver conversa completa: abre todo o diálogo desta conversa na aba Conversas" aria-label="Ver conversa completa: abre todo o diálogo desta conversa na aba Conversas"><span data-ico="olho"></span> Ver conversa</button>
+              <button class="btn btn-ghost btn-sm" type="button" id="btn-voltar" title="Voltar à lista: fecha o detalhe lateral e volta à grade em largura total" aria-label="Voltar à lista: fecha o detalhe lateral e volta à grade em largura total"><span data-ico="voltar"></span> Fechar</button>
+            </div>
+          </div>
+
+          <div class="tlk-drawer-scroll">
+            <div id="estado-detalhe" hidden></div>
+            <div class="tlk-detalhe-corpo" id="corpo-detalhe" hidden>
+              <div class="meta-grid" id="meta-mensagem"></div>
+
+              <div>
+                <h2 class="tlk-detalhe-secao-titulo">Conteúdo completo</h2>
+                <div class="tlk-previa-box" id="detalhe-previa"></div>
+              </div>
+
+              <div id="bloco-anexos" hidden>
+                <h2 class="tlk-detalhe-secao-titulo">Anexos</h2>
+                <ul class="tlk-anexos" id="lista-anexos"></ul>
+              </div>
+
+              <div>
+                <h2 class="tlk-detalhe-secao-titulo">Linha do tempo de estados</h2>
+                <ol class="tlk-timeline" id="lista-timeline"></ol>
+              </div>
+
+              <!-- Ações manuais: SÓ aparecem para estado 'desconhecida' ou 'falhou' -->
+              <div class="tlk-acoes-barra" id="acoes-manuais" hidden>
+                <button class="btn btn-primary" type="button" id="btn-reenviar" title="Reenviar mensagem: coloca uma nova tentativa na fila de envio após confirmação" aria-label="Reenviar mensagem: coloca uma nova tentativa na fila de envio após confirmação"><span data-ico="enviar"></span> Reenviar mensagem</button>
+                <button class="btn btn-danger" type="button" id="btn-dar-falha" title="Dar como falha: encerra esta mensagem como falha sem tentar reenviar novamente" aria-label="Dar como falha: encerra esta mensagem como falha sem tentar reenviar novamente"><span data-ico="alerta"></span> Dar como falha</button>
+              </div>
+
+              <!-- Confirmação inline dentro da tela (sem window.confirm) -->
+              <div class="tlk-confirm-inline" id="confirm-acao" role="region" aria-live="polite" hidden>
+                <div class="tlk-confirm-titulo" id="confirm-titulo"></div>
+                <p class="tlk-confirm-texto" id="confirm-texto"></p>
+                <div class="tlk-confirm-acoes">
+                  <button class="btn btn-ghost" type="button" id="btn-confirm-cancelar" title="Cancelar: fecha a confirmação sem alterar o estado da mensagem" aria-label="Cancelar: fecha a confirmação sem alterar o estado da mensagem"><span data-ico="cancelar"></span> Cancelar</button>
+                  <button class="btn btn-primary" type="button" id="btn-confirm-executar" title="Confirmar: executa a ação manual escolhida" aria-label="Confirmar: executa a ação manual escolhida"><span data-ico="salvar"></span> Confirmar</button>
+                </div>
+              </div>
+
+              <div id="bloco-metadados" hidden>
+                <h2 class="tlk-detalhe-secao-titulo">Metadados</h2>
+                <pre class="tlk-pre" id="detalhe-metadados"></pre>
+              </div>
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   </section>
@@ -197,6 +348,8 @@
   const $ = (id) => document.getElementById(id);
   const { esc, pill, dataHora } = TalkUI;
 
+  const CHAVE_COL_CONV = 'talk_hist_conv_colunas_v1';
+  const CHAVE_COL_MSG = 'talk_hist_msg_colunas_v1';
   const ESTADOS_ACAO_MANUAL = new Set(['desconhecida', 'falhou']);
   const ESTADOS_FINAIS_MSG = new Set(['lida', 'falhou', 'desconhecida']);
   const TIPO_LABEL = { texto: 'Texto', imagem: 'Imagem', documento: 'Documento', audio: 'Áudio', video: 'Vídeo' };
@@ -206,14 +359,33 @@
     aguardando: 'aviso', falhou: 'erro', desconhecida: 'erro', aceita: 'neutro',
   };
 
+  let abaAtiva = 'conversas'; // 'conversas' | 'envios'
+  let conversasCarregadas = false;
+  let enviosCarregados = false;
+  let semPermissaoConversas = false;
+
+  // Estado da aba Conversas
+  let tabelaConv = null;
+  let painelGrupoConv = null;
+  let convCursor = null;
+  let convTotal = 0;
+  let convDadosBrutos = [];
+  let convAtual = null;
+  let convItens = [];
+  let convItensCursor = null;
+  let convCatFiltro = '';
+  let convSeqDetalhe = 0;
+
+  // Estado da aba Envios e entregas
   let tabela = null;
   let painelGrupo = null;
   let proximoCursor = null;
   let total = 0;
   let atual = null;
-  let acaoPendente = null; // 'reenviar' | 'dar-como-falha'
+  let acaoPendente = null;
   let socket = null;
 
+  // ── Utilitários comuns ────────────────────────────────────────────────
   function formatarBytes(bytes) {
     const n = Number(bytes);
     if (!Number.isFinite(n) || n <= 0) return '—';
@@ -222,9 +394,605 @@
     return `${(n / (1024 * 1024)).toFixed(2).replace('.', ',')} MB`;
   }
 
+  function dataDia(iso) {
+    if (!iso) return '';
+    try {
+      return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(iso));
+    } catch (_) {
+      return String(iso).slice(0, 10);
+    }
+  }
+
+  function horaCurta(iso) {
+    if (!iso) return '';
+    try {
+      return new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function ordenarColunasSalvas(colunas, storageKey) {
+    try {
+      const ordem = JSON.parse(localStorage.getItem(storageKey) || 'null');
+      if (!Array.isArray(ordem) || !ordem.length) return colunas;
+      const fixas = colunas.filter((c) => !c.field);
+      const mapa = new Map(colunas.filter((c) => c.field).map((c) => [c.field, c]));
+      const res = [];
+      for (const f of ordem) {
+        if (mapa.has(f)) { res.push(mapa.get(f)); mapa.delete(f); }
+      }
+      for (const resto of mapa.values()) res.push(resto);
+      return [...fixas, ...res];
+    } catch (_) {
+      return colunas;
+    }
+  }
+
+  function salvarOrdemColunas(tab, storageKey) {
+    try {
+      const ordem = tab.getColumns().map((c) => c.getField()).filter(Boolean);
+      if (ordem.length) localStorage.setItem(storageKey, JSON.stringify(ordem));
+    } catch (_) { /* sem localStorage */ }
+  }
+
+  function marcarLinhaAtiva(tab, idAtivo) {
+    if (!tab) return;
+    tab.getRows().forEach((r) => {
+      const el = r.getElement();
+      if (el) el.classList.toggle('tlk-row-ativa', !!idAtivo && r.getData()?.id === idAtivo);
+    });
+  }
+
+  function atualizarContadorTopo() {
+    const n = abaAtiva === 'conversas' ? convTotal : total;
+    $('contador').textContent = n ? `(${n})` : '';
+  }
+
+  function ajustarAlturasGrades() {
+    const ampliada = document.body.classList.contains('grade-ampliada');
+    const h = ampliada ? 'calc(100vh - 190px)' : 'calc(100vh - 285px)';
+    if (tabelaConv) { tabelaConv.setHeight(h); tabelaConv.redraw(); }
+    if (tabela) { tabela.setHeight(h); tabela.redraw(); }
+  }
+
+  // ── Abas: Conversas × Envios e entregas ──────────────────────────────
+  function trocarAba(novaAba, { carregarSePreciso = true } = {}) {
+    abaAtiva = novaAba === 'envios' ? 'envios' : 'conversas';
+    const ehConv = abaAtiva === 'conversas';
+    $('aba-conversas').setAttribute('aria-selected', String(ehConv));
+    $('aba-envios').setAttribute('aria-selected', String(!ehConv));
+    $('painel-conversas').hidden = !ehConv;
+    $('painel-envios').hidden = ehConv;
+    atualizarContadorTopo();
+
+    if (ehConv) {
+      if (!tabelaConv) criarTabelaConversas();
+      if (carregarSePreciso && !conversasCarregadas) carregarConversas();
+      else setTimeout(() => { tabelaConv?.redraw(); painelGrupoConv?.refresh(); }, 30);
+    } else {
+      if (!tabela) criarTabelaEnvios();
+      if (carregarSePreciso && !enviosCarregados) carregarEnvios();
+      else setTimeout(() => { tabela?.redraw(); painelGrupo?.refresh(); }, 30);
+    }
+  }
+
+  $('aba-conversas').addEventListener('click', () => trocarAba('conversas'));
+  $('aba-envios').addEventListener('click', () => trocarAba('envios'));
+
+  // ── Modo Ampliar grade (Esc volta) ───────────────────────────────────
+  function alternarAmpliar(forcar) {
+    const ativo = typeof forcar === 'boolean' ? forcar : !document.body.classList.contains('grade-ampliada');
+    document.body.classList.toggle('grade-ampliada', ativo);
+    const btn = $('btn-ampliar');
+    btn.setAttribute('aria-pressed', String(ativo));
+    const dica = ativo
+      ? 'Voltar tamanho normal: restaura a exibição completa do cabeçalho (Esc)'
+      : 'Ampliar grade: reduz o cabeçalho para dar mais espaço à grade e ao leitor lateral (Esc volta)';
+    TalkIcones.definirBotao(btn, { icone: 'painel_lateral', texto: ativo ? 'Tamanho normal' : 'Ampliar grade', title: dica, ariaLabel: dica });
+    setTimeout(ajustarAlturasGrades, 20);
+  }
+  $('btn-ampliar').addEventListener('click', () => alternarAmpliar());
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.body.classList.contains('grade-ampliada')) alternarAmpliar(false);
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // ABA 1 — CONVERSAS (AUDITORIA)
+  // ══════════════════════════════════════════════════════════════════════
+  function situacaoConversa(cv) {
+    if (cv.situacao === 'encerrada') return { rotulo: 'Encerrada', cor: 'neutro' };
+    if (cv.na_fila) return { rotulo: 'Na fila', cor: 'aviso' };
+    return { rotulo: 'Aberta', cor: 'ok' };
+  }
+
+  function achatarConversa(cv) {
+    const sit = situacaoConversa(cv);
+    const dir = cv.ultima_mensagem?.direcao === 'entrada' ? '↓ ' : cv.ultima_mensagem?.direcao === 'saida' ? '↑ ' : '';
+    return {
+      ...cv,
+      contato_nome: cv.contato?.nome || 'Contato sem nome',
+      contato_fone: cv.contato?.telefone_mascarado || '—',
+      contato_busca: `${cv.contato?.nome || ''} ${cv.contato?.telefone_mascarado || ''}`.trim(),
+      situacao_rotulo: sit.rotulo,
+      situacao_cor: sit.cor,
+      setor_nome: cv.setor?.nome || '—',
+      responsavel_nome: cv.responsavel?.nome || 'Na fila',
+      canal_nome: cv.canal?.nome || '—',
+      ultima_previa: cv.ultima_mensagem?.previa ? `${dir}${cv.ultima_mensagem.previa}` : 'Sem mensagens',
+      aberta_dia: dataDia(cv.aberta_em),
+    };
+  }
+
+  function colunasPadraoConversas() {
+    return [
+      { formatter: 'responsiveCollapse', width: 34, minWidth: 34, hozAlign: 'center', headerSort: false, resizable: false, groupable: false, responsive: 0 },
+      {
+        title: 'Protocolo', field: 'protocolo', width: 145, headerFilter: 'input', headerFilterPlaceholder: 'Protocolo…', responsive: 0,
+        formatter: (c) => {
+          const d = c.getRow().getData();
+          const alta = d.prioridade === 'alta' ? '<span class="tlk-pill tlk-pill--erro tlk-selo-teste">Alta</span>' : '';
+          const refs = Array.isArray(d.referencias) && d.referencias.length
+            ? `<div class="tlk-cel-sub">#${esc(d.referencias[0].id)}</div>` : '';
+          return `<div class="tlk-cel-proto"><code>${esc(d.protocolo || '—')}</code>${alta}</div>${refs}`;
+        },
+      },
+      {
+        title: 'Contato', field: 'contato_busca', minWidth: 190, cssClass: 'tlk-forte', headerFilter: 'input', headerFilterPlaceholder: 'Nome ou número…', responsive: 0,
+        formatter: (c) => {
+          const d = c.getRow().getData();
+          return `<div>${esc(d.contato_nome)}</div><div class="tlk-cel-sub">${esc(d.contato_fone)}</div>`;
+        },
+      },
+      {
+        title: 'Situação', field: 'situacao_rotulo', width: 120, responsive: 1,
+        headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true },
+        formatter: (c) => {
+          const d = c.getRow().getData();
+          return `<span class="tlk-pill tlk-pill--${esc(d.situacao_cor)}">${esc(d.situacao_rotulo)}</span>`;
+        },
+      },
+      { title: 'Setor', field: 'setor_nome', width: 130, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true }, responsive: 1 },
+      { title: 'Atendente', field: 'responsavel_nome', width: 145, headerFilter: 'input', headerFilterPlaceholder: 'Atendente…', responsive: 1 },
+      { title: 'Canal', field: 'canal_nome', width: 135, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true }, responsive: 2 },
+      { title: 'Abertura', field: 'aberta_em', width: 140, formatter: (c) => esc(dataHora(c.getValue())), sorter: 'string', groupable: false, responsive: 2 },
+      { title: 'Última atividade', field: 'atualizada_em', width: 145, formatter: (c) => esc(dataHora(c.getValue())), sorter: 'string', groupable: false, responsive: 1 },
+      {
+        title: 'Última mensagem', field: 'ultima_previa', minWidth: 200, headerFilter: 'input', headerFilterPlaceholder: 'Trecho…', groupable: false, responsive: 3,
+        formatter: (c) => `<div class="tlk-cel-previa" title="${esc(c.getValue())}">${esc(c.getValue())}</div>`,
+      },
+    ];
+  }
+
+  function criarTabelaConversas() {
+    if (tabelaConv) return;
+    painelGrupoConv = createGroupPanel({
+      chipsRowId: 'gp-chips-conv',
+      dropZoneId: 'dz-conv',
+      storageKey: 'talk_hist_conversas_grupo',
+      getTable: () => tabelaConv,
+      onChange: (campos) => {
+        $('grupo-status-conv').textContent = campos.length ? `${campos.length} campo(s) agrupado(s)` : 'Sem agrupamento ativo';
+      },
+    });
+    tabelaConv = new Tabulator('#tabela-conversas', {
+      layout: 'fitDataFill',
+      movableColumns: true,
+      index: 'id',
+      height: 'calc(100vh - 285px)',
+      responsiveLayout: 'collapse',
+      responsiveLayoutCollapseStartOpen: false,
+      placeholder: 'Nenhuma conversa com estes filtros.',
+      groupBy: painelGrupoConv.getActiveFields(),
+      groupStartOpen: true,
+      groupHeader: (value, count) => `${esc(value || 'Sem valor')} <span style="font-weight:500;margin-left:6px;">(${count} conversa${count === 1 ? '' : 's'})</span>`,
+      rowFormatter: (row) => {
+        const el = row.getElement();
+        el.classList.add('clicavel');
+        el.classList.toggle('tlk-row-ativa', !!convAtual && row.getData()?.id === convAtual.id);
+      },
+      columns: ordenarColunasSalvas(colunasPadraoConversas(), CHAVE_COL_CONV),
+    });
+    tabelaConv.on('tableBuilt', () => { painelGrupoConv.refresh(); painelGrupoConv.applyToTable(); });
+    tabelaConv.on('columnMoved', () => { salvarOrdemColunas(tabelaConv, CHAVE_COL_CONV); painelGrupoConv.refresh(); });
+    tabelaConv.on('rowClick', (_e, row) => abrirDetalheConversa(row.getData().id));
+  }
+
+  function filtrosConversasAtuais() {
+    return {
+      visao: $('fc-visao').value || 'todas',
+      busca: $('fc-busca').value.trim(),
+      setor_id: $('fc-setor').value,
+      responsavel_id: $('fc-responsavel').value,
+      canal_id: $('fc-canal').value,
+      etiqueta: $('fc-etiqueta').value.trim(),
+      limite: 100,
+    };
+  }
+
+  function aplicarFiltroPeriodoLocal(lista) {
+    const de = $('fc-de').value;
+    const ate = $('fc-ate').value;
+    if (!de && !ate) return lista;
+    return lista.filter((cv) => {
+      const refDia = String(cv.atualizada_em || cv.aberta_em || '').slice(0, 10);
+      if (de && refDia < de) return false;
+      if (ate && refDia > ate) return false;
+      return true;
+    });
+  }
+
+  function completarOpcoesAtendentesComConversas(lista) {
+    const sel = $('fc-responsavel');
+    const existentes = new Set([...sel.options].map((o) => o.value));
+    for (const cv of lista) {
+      if (cv.responsavel?.id && !existentes.has(cv.responsavel.id)) {
+        const opt = document.createElement('option');
+        opt.value = cv.responsavel.id;
+        opt.textContent = cv.responsavel.nome;
+        sel.appendChild(opt);
+        existentes.add(cv.responsavel.id);
+      }
+    }
+  }
+
+  async function carregarConversas({ continuar = false } = {}) {
+    if (!tabelaConv) criarTabelaConversas();
+    const estado = $('estado-conversas');
+    if (!continuar) {
+      convCursor = null;
+      $('tabela-conversas').hidden = true;
+      $('mais-conv').hidden = true;
+      TalkUI.estado(estado, 'carregando', { titulo: 'Carregando conversas…' });
+    }
+    try {
+      const params = filtrosConversasAtuais();
+      if (continuar && convCursor) params.cursor = convCursor;
+      const pagina = await TalkApi.get('/conversas', params);
+      conversasCarregadas = true;
+      semPermissaoConversas = false;
+      const recebidas = (pagina.itens || []).map(achatarConversa);
+      completarOpcoesAtendentesComConversas(recebidas);
+      convDadosBrutos = continuar ? [...convDadosBrutos, ...recebidas] : recebidas;
+      const visiveis = aplicarFiltroPeriodoLocal(convDadosBrutos);
+      convCursor = pagina.proximo_cursor || null;
+      convTotal = ($('fc-de').value || $('fc-ate').value) ? visiveis.length : (pagina.total ?? visiveis.length);
+      $('qtd-aba-conversas').textContent = String(convTotal);
+      atualizarContadorTopo();
+      $('mais-conv').hidden = !convCursor;
+
+      if (!visiveis.length) {
+        $('tabela-conversas').hidden = true;
+        TalkUI.estado(estado, 'vazio', {
+          titulo: 'Nenhuma conversa encontrada',
+          texto: 'Ajuste os filtros ou o período para consultar outras conversas.',
+        });
+        return;
+      }
+      estado.hidden = true;
+      $('tabela-conversas').hidden = false;
+      await tabelaConv.setData(visiveis);
+      marcarLinhaAtiva(tabelaConv, convAtual?.id);
+    } catch (err) {
+      $('tabela-conversas').hidden = true;
+      $('mais-conv').hidden = true;
+      if (err?.status === 403) {
+        semPermissaoConversas = true;
+        TalkUI.estado(estado, 'sem_permissao', {
+          titulo: 'Sem acesso às conversas de atendimento',
+          texto: 'Seu perfil tem acesso à aba Envios e entregas. Para auditar conversas completas, peça a rotina de Atendimento.',
+          acao: { rotulo: 'Ir para Envios e entregas', aoClicar: () => trocarAba('envios') },
+        });
+      } else {
+        TalkUI.estadoDoErro(estado, err, () => carregarConversas({ continuar }));
+      }
+    }
+  }
+
+  // ── Leitor lateral da conversa (auditoria completa) ──────────────────
+  function fecharDetalheConversa() {
+    convSeqDetalhe += 1;
+    convAtual = null;
+    convItens = [];
+    convItensCursor = null;
+    $('painel-detalhe-conversa').hidden = true;
+    $('split-conversas').classList.remove('com-detalhe');
+    marcarLinhaAtiva(tabelaConv, null);
+    setTimeout(() => tabelaConv?.redraw(), 30);
+  }
+
+  function renderizarCabecalhoEMetaConversa(cv) {
+    const sit = situacaoConversa(cv);
+    $('conv-det-nome').textContent = cv.contato?.nome || 'Contato sem nome';
+    $('conv-det-pill').innerHTML = `<span class="tlk-pill tlk-pill--${esc(sit.cor)}">${esc(sit.rotulo)}</span>`;
+    const resp = cv.responsavel?.nome || 'Na fila';
+    $('conv-det-sub').textContent = `${cv.protocolo} · ${cv.contato?.telefone_mascarado || '—'} · ${cv.setor?.nome || '—'} · ${resp}`;
+    $('btn-abrir-central').href = `${TalkApi.BASE}/atendimento.html?conversa=${encodeURIComponent(cv.id)}`;
+
+    $('conv-meta-resumo').textContent = `${cv.canal?.nome || '—'} · Aberta ${dataHora(cv.aberta_em)}`;
+    const metas = [
+      ['Protocolo', `<code>${esc(cv.protocolo || '—')}</code>`],
+      ['Contato', esc(cv.contato?.nome || '—')],
+      ['WhatsApp', `<code class="tlk-mono">${esc(cv.contato?.telefone_mascarado || '—')}</code>`],
+      ['Canal', esc(cv.canal?.nome || '—')],
+      ['Setor', esc(cv.setor?.nome || '—')],
+      ['Atendente', esc(resp)],
+      ['Aberta em', esc(dataHora(cv.aberta_em))],
+      ['Encerrada em', cv.encerrada_em ? esc(dataHora(cv.encerrada_em)) : 'Em aberto'],
+    ];
+    if (cv.motivo_encerramento) metas.push(['Motivo encerramento', esc(cv.motivo_encerramento)]);
+    if (Array.isArray(cv.referencias) && cv.referencias.length) {
+      const refsHtml = cv.referencias.map((r) => (
+        r.link && /^https:\/\//i.test(r.link)
+          ? `<a href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.sistema)} #${esc(r.id)}</a>`
+          : `${esc(r.sistema)} #${esc(r.id)}`
+      )).join(', ');
+      metas.push(['Chamados', refsHtml]);
+    }
+    $('conv-meta-grid').innerHTML = metas.map(([rot, val]) => `<div class="meta-item"><span>${esc(rot)}</span><strong>${val}</strong></div>`).join('');
+
+    const tags = Array.isArray(cv.etiquetas) ? cv.etiquetas : [];
+    $('conv-meta-etiquetas').hidden = !tags.length;
+    $('conv-meta-etiquetas').innerHTML = tags.map((t) => `<span class="tlk-conv-tag">${esc(t)}</span>`).join('');
+  }
+
+  function renderizarFioConversa() {
+    const fio = $('conv-fio');
+    const termo = $('f-chat-busca').value.trim().toLowerCase();
+    const filtrados = convItens.filter((it) => {
+      if (convCatFiltro && it.categoria !== convCatFiltro) return false;
+      if (termo) {
+        const alvo = `${it.texto || ''} ${it.autor?.nome || ''}`.toLowerCase();
+        if (!alvo.includes(termo)) return false;
+      }
+      return true;
+    });
+    $('conv-itens-contagem').textContent = `${filtrados.length} de ${convItens.length}`;
+
+    if (!filtrados.length) {
+      fio.innerHTML = '<div class="tlk-chat-vazio">Nenhum item nesta conversa com o filtro atual.</div>';
+      return;
+    }
+
+    const blocos = [];
+    if (convItensCursor) {
+      blocos.push(`<div style="text-align:center;"><button type="button" class="btn btn-ghost btn-sm" id="btn-conv-itens-mais" title="Carregar mensagens anteriores desta conversa" aria-label="Carregar mensagens anteriores desta conversa">${TalkIcones.svg('atualizar')} Carregar anteriores</button></div>`);
+    }
+
+    let ultimoDia = '';
+    for (const it of filtrados) {
+      const dia = dataDia(it.em);
+      if (dia && dia !== ultimoDia) {
+        ultimoDia = dia;
+        blocos.push(`<div class="tlk-chat-dia">${esc(dia)}</div>`);
+      }
+      if (it.categoria === 'evento') {
+        blocos.push(`<div class="tlk-chat-evento">${esc(it.texto)} · <span>${esc(horaCurta(it.em))}</span></div>`);
+      } else if (it.categoria === 'nota') {
+        blocos.push(`
+          <article class="tlk-chat-balao tlk-chat-balao--nota">
+            <div class="tlk-chat-balao-cab">
+              <span class="tlk-chat-nota-selo">Nota interna · só equipe</span>
+              <strong>${esc(it.autor?.nome || 'Equipe')}</strong>
+            </div>
+            <div class="tlk-chat-balao-texto">${esc(it.texto || '')}</div>
+            <div class="tlk-chat-balao-rodape"><span>${esc(dataHora(it.em))}</span></div>
+          </article>`);
+      } else {
+        const saida = it.direcao === 'saida';
+        const autor = it.autor?.nome || (saida ? 'Atendente' : (convAtual?.contato?.nome || 'Contato'));
+        blocos.push(`
+          <article class="tlk-chat-balao ${saida ? 'tlk-chat-balao--saida' : 'tlk-chat-balao--entrada'}">
+            <div class="tlk-chat-balao-cab">
+              <strong>${esc(autor)}</strong>
+              <span>${saida ? 'Saída' : 'Entrada'}</span>
+            </div>
+            <div class="tlk-chat-balao-texto">${esc(it.texto || '')}</div>
+            <div class="tlk-chat-balao-rodape">
+              <span>${esc(dataHora(it.em))}</span>
+              ${saida && it.estado ? pill(it.estado) : ''}
+            </div>
+          </article>`);
+      }
+    }
+    fio.innerHTML = blocos.join('');
+  }
+
+  async function abrirDetalheConversa(id) {
+    if (!id) return;
+    const seq = ++convSeqDetalhe;
+    $('split-conversas').classList.add('com-detalhe');
+    $('painel-detalhe-conversa').hidden = false;
+    $('conv-meta-det').hidden = true;
+    $('conv-chat-filtros').hidden = true;
+    $('conv-fio').hidden = true;
+    $('conv-det-nome').textContent = 'Carregando conversa…';
+    $('conv-det-pill').innerHTML = '';
+    $('conv-det-sub').textContent = '';
+    TalkUI.estado($('estado-detalhe-conv'), 'carregando', { titulo: 'Carregando histórico completo…' });
+    marcarLinhaAtiva(tabelaConv, id);
+    setTimeout(() => tabelaConv?.redraw(), 30);
+
+    try {
+      const [detalhe, pagItens] = await Promise.all([
+        TalkApi.get(`/conversas/${encodeURIComponent(id)}`),
+        TalkApi.get(`/conversas/${encodeURIComponent(id)}/itens`, { limite: 200 }),
+      ]);
+      if (seq !== convSeqDetalhe) return;
+      convAtual = detalhe;
+      convItens = [...(pagItens?.itens || [])].reverse();
+      convItensCursor = pagItens?.proximo_cursor || null;
+      convCatFiltro = '';
+      $('f-chat-busca').value = '';
+      document.querySelectorAll('.tlk-chat-chip').forEach((b) => b.classList.toggle('ativo', b.dataset.catFiltro === ''));
+
+      $('estado-detalhe-conv').hidden = true;
+      $('conv-meta-det').hidden = false;
+      $('conv-chat-filtros').hidden = false;
+      $('conv-fio').hidden = false;
+      renderizarCabecalhoEMetaConversa(detalhe);
+      renderizarFioConversa();
+      $('conv-fio').scrollTop = $('conv-fio').scrollHeight;
+    } catch (err) {
+      if (seq !== convSeqDetalhe) return;
+      TalkUI.estadoDoErro($('estado-detalhe-conv'), err, () => abrirDetalheConversa(id));
+    }
+  }
+
+  async function carregarMaisItensConversa() {
+    if (!convAtual || !convItensCursor) return;
+    const seq = convSeqDetalhe;
+    const id = convAtual.id;
+    try {
+      const pag = await TalkApi.get(`/conversas/${encodeURIComponent(id)}/itens`, { limite: 200, cursor: convItensCursor });
+      if (seq !== convSeqDetalhe || convAtual?.id !== id) return;
+      convItensCursor = pag?.proximo_cursor || null;
+      const antigos = [...(pag?.itens || [])].reverse();
+      const vistos = new Set(convItens.map((i) => i.id));
+      convItens = [...antigos.filter((i) => !vistos.has(i.id)), ...convItens];
+      renderizarFioConversa();
+    } catch (err) {
+      TalkUI.toast(err?.message || 'Não foi possível carregar mensagens anteriores.', 'erro');
+    }
+  }
+
+  $('conv-fio').addEventListener('click', (e) => {
+    if (e.target.closest('#btn-conv-itens-mais')) carregarMaisItensConversa();
+  });
+
+  $('conv-chat-filtros').addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-cat-filtro]');
+    if (!chip) return;
+    convCatFiltro = chip.dataset.catFiltro || '';
+    document.querySelectorAll('.tlk-chat-chip').forEach((b) => b.classList.toggle('ativo', b === chip));
+    renderizarFioConversa();
+  });
+  $('f-chat-busca').addEventListener('input', renderizarFioConversa);
+  $('btn-fechar-conversa').addEventListener('click', fecharDetalheConversa);
+
+  $('btn-abrir-central').addEventListener('click', (e) => {
+    const url = $('btn-abrir-central').getAttribute('href');
+    if (!url) return;
+    try {
+      if (window.top && window.top !== window && window.top.TalkAbas?.abrir) {
+        e.preventDefault();
+        window.top.TalkAbas.abrir(url, 'Atendimento', '🎧');
+      }
+    } catch (_) { /* segue link normal */ }
+  });
+
+  $('btn-copiar-conversa').addEventListener('click', async () => {
+    if (!convAtual) return;
+    const cab = [
+      `Protocolo: ${convAtual.protocolo}`,
+      `Contato: ${convAtual.contato?.nome || '—'} (${convAtual.contato?.telefone_mascarado || '—'})`,
+      `Canal: ${convAtual.canal?.nome || '—'} | Setor: ${convAtual.setor?.nome || '—'} | Atendente: ${convAtual.responsavel?.nome || 'Na fila'}`,
+      `Situação: ${convAtual.situacao} | Abertura: ${dataHora(convAtual.aberta_em)}${convAtual.encerrada_em ? ` | Encerramento: ${dataHora(convAtual.encerrada_em)}` : ''}`,
+      '---',
+    ];
+    const linhas = convItens.map((it) => {
+      const tipo = it.categoria === 'evento' ? 'EVENTO' : it.categoria === 'nota' ? 'NOTA INTERNA' : (it.direcao === 'saida' ? 'SAÍDA' : 'ENTRADA');
+      const autor = it.autor?.nome || 'Sistema';
+      return `[${dataHora(it.em)}] [${tipo}] ${autor}: ${it.texto || ''}`;
+    });
+    const texto = [...cab, ...linhas].join('\n');
+    try {
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(texto);
+      else {
+        const ta = document.createElement('textarea');
+        ta.value = texto;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      TalkUI.toast('Transcrição da conversa copiada.', 'ok');
+    } catch (_) {
+      TalkUI.toast('Não foi possível copiar a transcrição automaticamente.', 'erro');
+    }
+  });
+
+  function exportarCsvConversas() {
+    const visiveis = aplicarFiltroPeriodoLocal(convDadosBrutos);
+    if (!visiveis.length) return TalkUI.toast('Nenhuma conversa para exportar.', 'info');
+    const escCsv = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const linhas = ['protocolo;contato;whatsapp;situacao;setor;atendente;canal;aberta_em;atualizada_em;ultima_mensagem']
+      .concat(visiveis.map((c) => [
+        c.protocolo, c.contato_nome, c.contato_fone, c.situacao_rotulo, c.setor_nome,
+        c.responsavel_nome, c.canal_nome, c.aberta_em, c.atualizada_em, c.ultima_previa,
+      ].map(escCsv).join(';')))
+      .join('\r\n');
+    const blob = new Blob([`\uFEFF${linhas}`], { type: 'text/csv;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'conversas-auditoria.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1500);
+    TalkUI.toast('CSV de conversas exportado com os filtros atuais.', 'ok');
+  }
+
+  // Eventos dos filtros da aba Conversas
+  let timerBuscaConv = null;
+  const agendarBuscaConv = () => { clearTimeout(timerBuscaConv); timerBuscaConv = setTimeout(() => carregarConversas(), 240); };
+  ['fc-busca', 'fc-etiqueta'].forEach((id) => $(id).addEventListener('input', agendarBuscaConv));
+  ['fc-visao', 'fc-setor', 'fc-responsavel', 'fc-canal'].forEach((id) => $(id).addEventListener('change', () => carregarConversas()));
+  ['fc-de', 'fc-ate'].forEach((id) => $(id).addEventListener('change', () => {
+    const visiveis = aplicarFiltroPeriodoLocal(convDadosBrutos);
+    convTotal = visiveis.length;
+    $('qtd-aba-conversas').textContent = String(convTotal);
+    atualizarContadorTopo();
+    if (!visiveis.length) {
+      $('tabela-conversas').hidden = true;
+      TalkUI.estado($('estado-conversas'), 'vazio', { titulo: 'Nenhuma conversa neste período', texto: 'Amplie as datas De/Até ou limpe os filtros.' });
+    } else {
+      $('estado-conversas').hidden = true;
+      $('tabela-conversas').hidden = false;
+      tabelaConv?.setData(visiveis);
+    }
+  }));
+  $('filtros-conv').addEventListener('submit', (e) => { e.preventDefault(); carregarConversas(); });
+  $('btn-conv-mais-filtros').addEventListener('click', () => {
+    const aberto = !$('filtros-conv-extra').hidden;
+    $('filtros-conv-extra').hidden = aberto;
+    $('btn-conv-mais-filtros').setAttribute('aria-expanded', String(!aberto));
+  });
+  $('btn-conv-limpar').addEventListener('click', () => {
+    $('filtros-conv').reset();
+    ['fc-de', 'fc-ate', 'fc-etiqueta'].forEach((id) => { $(id).value = ''; });
+    tabelaConv?.clearHeaderFilter?.();
+    carregarConversas();
+  });
+  $('btn-conv-agrupar').addEventListener('click', () => {
+    const aberto = $('grupo-area-conv').classList.toggle('aberta');
+    const btn = $('btn-conv-agrupar');
+    btn.setAttribute('aria-expanded', String(aberto));
+    const dica = aberto
+      ? 'Ocultar agrupamento: recolhe o painel de agrupamento de colunas'
+      : 'Mostrar agrupamento: abre o painel para agrupar conversas por coluna';
+    TalkIcones.definirBotao(btn, { icone: aberto ? 'menos' : 'agrupar', texto: aberto ? 'Ocultar agrupamento' : 'Mostrar agrupamento', title: dica, ariaLabel: dica });
+    if (aberto) setTimeout(() => painelGrupoConv?.refresh(), 40);
+  });
+  $('btn-conv-reset-colunas').addEventListener('click', () => {
+    try { localStorage.removeItem(CHAVE_COL_CONV); } catch (_) {}
+    if (tabelaConv) {
+      tabelaConv.setColumns(colunasPadraoConversas());
+      painelGrupoConv?.refresh();
+      TalkUI.toast('Ordem padrão das colunas restaurada.', 'ok');
+    }
+  });
+  $('btn-mais-conv').addEventListener('click', () => carregarConversas({ continuar: true }));
+
+  // ══════════════════════════════════════════════════════════════════════
+  // ABA 2 — ENVIOS E ENTREGAS (MENSAGENS INDIVIDUAIS / API / TESTE)
+  // ══════════════════════════════════════════════════════════════════════
   function rotuloAplicacao(m) {
     if (m.aplicacao?.nome) return m.aplicacao.nome;
     if (m.origem === 'teste_tela') return 'Envio de teste';
+    if (m.origem === 'atendimento') return 'Atendimento';
     return 'Sem aplicação';
   }
 
@@ -233,6 +1001,7 @@
       ...m,
       canal_nome: m.canal?.nome || '—',
       aplicacao_nome: rotuloAplicacao(m),
+      msg_busca: `${m.previa || ''} ${m.contato_mascarado || ''}`.trim(),
     };
   }
 
@@ -284,71 +1053,108 @@
       $('filtros-extra').hidden = false;
       $('btn-mais-filtros').setAttribute('aria-expanded', 'true');
     }
-    return { canalId: q.get('canal_id') || '', aplicacaoId: q.get('aplicacao_id') || '', abrirId: q.get('id') || '' };
+    const temFiltroEnvios = ['id', 'estado', 'direcao', 'provedor', 'aplicacao_id', 'tipo', 'correlacao_id', 'destinatario', 'apenas_falhas'].some((k) => q.get(k))
+      || q.get('aba') === 'envios';
+    return {
+      canalId: q.get('canal_id') || '',
+      aplicacaoId: q.get('aplicacao_id') || '',
+      abrirId: q.get('id') || '',
+      abrirConversaId: q.get('conversa') || '',
+      abaInicial: temFiltroEnvios ? 'envios' : 'conversas',
+    };
   }
 
   async function carregarOpcoesFiltro(canalInicial, appInicial) {
-    const [canais, apps] = await Promise.all([
+    const [canais, apps, setores, usuarios] = await Promise.all([
       TalkApi.get('/canais', { limite: 100 }).catch(() => ({ itens: [] })),
       TalkApi.get('/aplicacoes', { limite: 100 }).catch(() => ({ itens: [] })),
+      TalkApi.get('/setores', { limite: 100 }).catch(() => ({ itens: [] })),
+      TalkApi.get('/usuarios', { limite: 100 }).catch(() => ({ itens: [] })),
     ]);
-    const selCanal = $('f-canal');
-    for (const c of canais?.itens || []) {
-      const opt = document.createElement('option');
-      opt.value = c.id;
-      opt.textContent = c.nome;
-      selCanal.appendChild(opt);
-    }
-    if (canalInicial) selCanal.value = canalInicial;
 
-    const selApp = $('f-aplicacao');
+    for (const c of canais?.itens || []) {
+      for (const selId of ['f-canal', 'fc-canal']) {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.nome;
+        $(selId).appendChild(opt);
+      }
+    }
+    if (canalInicial) { $('f-canal').value = canalInicial; $('fc-canal').value = canalInicial; }
+
     for (const a of apps?.itens || []) {
       const opt = document.createElement('option');
       opt.value = a.id;
       opt.textContent = a.nome;
-      selApp.appendChild(opt);
+      $('f-aplicacao').appendChild(opt);
     }
-    if (appInicial) selApp.value = appInicial;
+    if (appInicial) $('f-aplicacao').value = appInicial;
+
+    for (const s of setores?.itens || []) {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.nome;
+      $('fc-setor').appendChild(opt);
+    }
+
+    for (const u of usuarios?.itens || []) {
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = u.nome;
+      $('fc-responsavel').appendChild(opt);
+    }
   }
 
-  function criarTabela() {
+  function colunasPadraoEnvios() {
+    return [
+      { formatter: 'responsiveCollapse', width: 34, minWidth: 34, hozAlign: 'center', headerSort: false, resizable: false, groupable: false, responsive: 0 },
+      {
+        title: 'Mensagem', field: 'previa', minWidth: 190, cssClass: 'tlk-forte', headerFilter: 'input', headerFilterPlaceholder: 'Prévia…', responsive: 0,
+        formatter: (c) => {
+          const d = c.getRow().getData();
+          const seloTeste = d.origem === 'teste_tela' ? '<span class="tlk-pill tlk-pill--info tlk-selo-teste">Teste</span>' : '';
+          return `<div class="tlk-msg-previa-linha"><span>${esc(d.previa || '—')}</span>${seloTeste}</div><div class="tlk-cel-sub">${esc(d.contato_mascarado || '—')}</div>`;
+        },
+      },
+      { title: 'Estado', field: 'estado', width: 185, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true }, formatter: (c) => pill(c.getValue()), responsive: 1 },
+      {
+        title: 'Direção', field: 'direcao', width: 105, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true }, responsive: 1,
+        formatter: (c) => `<span class="tlk-dir tlk-dir--${esc(c.getValue())}">${esc(DIR_LABEL[c.getValue()] || c.getValue())}</span>`,
+      },
+      { title: 'Canal', field: 'canal_nome', minWidth: 130, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true }, responsive: 1 },
+      { title: 'Aplicação', field: 'aplicacao_nome', minWidth: 125, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true }, responsive: 2 },
+      { title: 'Tipo', field: 'tipo', width: 105, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true }, formatter: (c) => esc(TIPO_LABEL[c.getValue()] || c.getValue()), responsive: 2 },
+      { title: 'Correlação', field: 'correlacao_id', minWidth: 125, headerFilter: 'input', headerFilterPlaceholder: 'Protocolo…', formatter: (c) => (c.getValue() ? `<code>${esc(c.getValue())}</code>` : '<span class="text-muted">—</span>'), responsive: 3 },
+      { title: 'Criada em', field: 'criada_em', width: 145, formatter: (c) => dataHora(c.getValue()), sorter: 'string', groupable: false, responsive: 1 },
+    ];
+  }
+
+  function criarTabelaEnvios() {
+    if (tabela) return;
     painelGrupo = createGroupPanel({
       chipsRowId: 'gp-chips', dropZoneId: 'dz', storageKey: 'talk_mensagens_grupo', getTable: () => tabela,
       onChange: (campos) => { $('grupo-status').textContent = campos.length ? `${campos.length} campo(s) agrupado(s)` : 'Sem agrupamento ativo'; },
     });
     tabela = new Tabulator('#tabela', {
-      layout: 'fitDataFill', movableColumns: true, index: 'id', height: 'calc(100vh - 300px)',
+      layout: 'fitDataFill', movableColumns: true, index: 'id', height: 'calc(100vh - 285px)',
       responsiveLayout: 'collapse', responsiveLayoutCollapseStartOpen: false,
       placeholder: 'Nenhuma mensagem com estes filtros.',
       groupBy: painelGrupo.getActiveFields(), groupStartOpen: true,
-      rowFormatter: (row) => row.getElement().classList.add('clicavel'),
-      columns: [
-        { formatter: 'responsiveCollapse', width: 34, minWidth: 34, hozAlign: 'center', headerSort: false, resizable: false, groupable: false, responsive: 0 },
-        {
-          title: 'Mensagem', field: 'previa', minWidth: 180, cssClass: 'tlk-forte', responsive: 0,
-          formatter: (c) => {
-            const d = c.getRow().getData();
-            const seloTeste = d.origem === 'teste_tela' ? '<span class="tlk-pill tlk-pill--info tlk-selo-teste">Teste</span>' : '';
-            return `<div class="tlk-msg-previa-linha"><span>${esc(d.previa || '—')}</span>${seloTeste}</div><div style="font-size:11.5px;font-weight:500;color:var(--text-lo);font-family:var(--font-mono)">${esc(d.contato_mascarado || '—')}</div>`;
-          },
-        },
-        { title: 'Estado', field: 'estado', width: 190, formatter: (c) => pill(c.getValue()), responsive: 1 },
-        {
-          title: 'Direção', field: 'direcao', width: 105, responsive: 1,
-          formatter: (c) => `<span class="tlk-dir tlk-dir--${esc(c.getValue())}">${esc(DIR_LABEL[c.getValue()] || c.getValue())}</span>`,
-        },
-        { title: 'Canal', field: 'canal_nome', minWidth: 130, responsive: 1 },
-        { title: 'Aplicação', field: 'aplicacao_nome', minWidth: 125, responsive: 2 },
-        { title: 'Tipo', field: 'tipo', width: 105, formatter: (c) => esc(TIPO_LABEL[c.getValue()] || c.getValue()), responsive: 2 },
-        { title: 'Correlação', field: 'correlacao_id', minWidth: 120, formatter: (c) => (c.getValue() ? `<code>${esc(c.getValue())}</code>` : '<span class="text-muted">—</span>'), responsive: 3 },
-        { title: 'Criada em', field: 'criada_em', width: 145, formatter: (c) => dataHora(c.getValue()), sorter: 'string', responsive: 1 },
-      ],
+      groupHeader: (value, count) => `${esc(value || 'Sem valor')} <span style="font-weight:500;margin-left:6px;">(${count})</span>`,
+      rowFormatter: (row) => {
+        const el = row.getElement();
+        el.classList.add('clicavel');
+        el.classList.toggle('tlk-row-ativa', !!atual && row.getData()?.id === atual.id);
+      },
+      columns: ordenarColunasSalvas(colunasPadraoEnvios(), CHAVE_COL_MSG),
     });
     tabela.on('tableBuilt', () => { painelGrupo.refresh(); painelGrupo.applyToTable(); });
+    tabela.on('columnMoved', () => { salvarOrdemColunas(tabela, CHAVE_COL_MSG); painelGrupo.refresh(); });
     tabela.on('rowClick', (_e, row) => abrirDetalhe(row.getData().id));
   }
 
-  async function carregar({ continuar = false } = {}) {
+  async function carregarEnvios({ continuar = false } = {}) {
+    if (!tabela) criarTabelaEnvios();
     const estado = $('estado-lista');
     if (!continuar) {
       proximoCursor = null;
@@ -360,10 +1166,12 @@
       const params = filtrosAtuais({ comLimite: true });
       if (continuar && proximoCursor) params.cursor = proximoCursor;
       const pagina = await TalkApi.get('/mensagens', params);
+      enviosCarregados = true;
       const linhas = (pagina.itens || []).map(achatar);
       total = pagina.total ?? linhas.length;
       proximoCursor = pagina.proximo_cursor || null;
-      $('contador').textContent = total ? `(${total})` : '';
+      $('qtd-aba-envios').textContent = String(total);
+      atualizarContadorTopo();
       $('mais').hidden = !proximoCursor;
 
       if (!continuar && !linhas.length) {
@@ -378,15 +1186,16 @@
       $('tabela').hidden = false;
       if (continuar) await tabela.addData(linhas);
       else await tabela.setData(linhas);
+      marcarLinhaAtiva(tabela, atual?.id);
     } catch (err) {
       $('tabela').hidden = true;
       $('mais').hidden = true;
-      TalkUI.estadoDoErro(estado, err, () => carregar({ continuar }));
+      TalkUI.estadoDoErro(estado, err, () => carregarEnvios({ continuar }));
     }
   }
 
   // ── Exportação CSV usando exatamente os filtros atuais ────────────────
-  async function exportarCsv() {
+  async function exportarCsvEnvios() {
     const btn = $('btn-exportar');
     btn.disabled = true;
     try {
@@ -418,12 +1227,14 @@
     }
   }
 
-  // ── Detalhe ───────────────────────────────────────────────────────────
+  // ── Detalhe lateral de mensagem individual ────────────────────────────
   function mostrarLista() {
     $('vista-detalhe').hidden = true;
-    $('vista-lista').hidden = false;
+    $('split-envios').classList.remove('com-detalhe');
     fecharConfirmacao();
     atual = null;
+    marcarLinhaAtiva(tabela, null);
+    setTimeout(() => tabela?.redraw(), 30);
   }
 
   function fecharConfirmacao() {
@@ -439,6 +1250,10 @@
     $('detalhe-pill').innerHTML = `${pill(m.estado)}${seloTeste}`;
     $('sub-detalhe').textContent = `${DIR_LABEL[m.direcao] || m.direcao} · ${m.canal?.nome || '—'} · ${dataHora(m.criada_em)}`;
 
+    const conversaVinculadaId = m.metadados?.conversa_id || null;
+    $('btn-ver-conversa-msg').hidden = !conversaVinculadaId || semPermissaoConversas;
+    $('btn-ver-conversa-msg').dataset.conversaId = conversaVinculadaId || '';
+
     $('meta-mensagem').innerHTML = [
       ['Contato', `<code class="tlk-mono">${esc(m.contato_mascarado || '—')}</code>`],
       ['Canal', esc(m.canal?.nome || '—')],
@@ -450,7 +1265,8 @@
       ['Atualizada em', esc(dataHora(m.atualizada_em))],
     ].map(([rot, val]) => `<div class="meta-item"><span>${esc(rot)}</span><strong>${val}</strong></div>`).join('');
 
-    $('detalhe-previa').textContent = m.previa || 'Sem prévia de texto.';
+    // Exibe o texto completo quando disponível no detalhe (antes mostrava só m.previa truncada)
+    $('detalhe-previa').textContent = m.texto || m.previa || 'Sem prévia de texto.';
 
     // Anexos
     const anexos = Array.isArray(m.anexos) ? m.anexos : [];
@@ -487,13 +1303,16 @@
   }
 
   async function abrirDetalhe(id) {
-    $('vista-lista').hidden = true;
+    $('split-envios').classList.add('com-detalhe');
     $('vista-detalhe').hidden = false;
     $('corpo-detalhe').hidden = true;
+    $('btn-ver-conversa-msg').hidden = true;
     $('titulo-detalhe').textContent = id;
     $('detalhe-pill').innerHTML = '';
     $('sub-detalhe').textContent = '';
     TalkUI.estado($('estado-detalhe'), 'carregando', { titulo: 'Carregando detalhes da mensagem…' });
+    marcarLinhaAtiva(tabela, id);
+    setTimeout(() => tabela?.redraw(), 30);
     try {
       const m = await TalkApi.get(`/mensagens/${encodeURIComponent(id)}`);
       $('estado-detalhe').hidden = true;
@@ -503,6 +1322,13 @@
       TalkUI.estadoDoErro($('estado-detalhe'), err, () => abrirDetalhe(id));
     }
   }
+
+  $('btn-ver-conversa-msg').addEventListener('click', () => {
+    const cvId = $('btn-ver-conversa-msg').dataset.conversaId;
+    if (!cvId) return;
+    trocarAba('conversas');
+    abrirDetalheConversa(cvId);
+  });
 
   function abrirConfirmacao(tipo) {
     if (!atual || !ESTADOS_ACAO_MANUAL.has(atual.estado)) return;
@@ -550,14 +1376,14 @@
     }
   }
 
-  // ── Eventos de UI ─────────────────────────────────────────────────────
+  // ── Eventos de UI (aba Envios e entregas) ─────────────────────────────
   let timerBusca = null;
-  const agendarBusca = () => { clearTimeout(timerBusca); timerBusca = setTimeout(() => carregar(), 240); };
+  const agendarBusca = () => { clearTimeout(timerBusca); timerBusca = setTimeout(() => carregarEnvios(), 240); };
 
   ['f-busca', 'f-correlacao', 'f-destinatario'].forEach((id) => $(id).addEventListener('input', agendarBusca));
   ['f-estado', 'f-direcao', 'f-canal', 'f-provedor', 'f-aplicacao', 'f-tipo', 'f-de', 'f-ate', 'f-apenas-falhas']
-    .forEach((id) => $(id).addEventListener('change', () => carregar()));
-  $('filtros').addEventListener('submit', (e) => { e.preventDefault(); carregar(); });
+    .forEach((id) => $(id).addEventListener('change', () => carregarEnvios()));
+  $('filtros').addEventListener('submit', (e) => { e.preventDefault(); carregarEnvios(); });
 
   $('btn-mais-filtros').addEventListener('click', () => {
     const aberto = !$('filtros-extra').hidden;
@@ -569,22 +1395,45 @@
     $('filtros').reset();
     ['f-provedor', 'f-aplicacao', 'f-tipo', 'f-de', 'f-ate', 'f-correlacao', 'f-destinatario'].forEach((id) => { $(id).value = ''; });
     $('f-apenas-falhas').checked = false;
-    carregar();
+    tabela?.clearHeaderFilter?.();
+    carregarEnvios();
   });
 
+  // Correção: talk.css usa .grupo-area.aberta (antes alternava .open e não abria o painel)
   $('btn-agrupar').addEventListener('click', () => {
-    const aberto = $('grupo-area').classList.toggle('open');
+    const aberto = $('grupo-area').classList.toggle('aberta');
     const btn = $('btn-agrupar');
     btn.setAttribute('aria-expanded', String(aberto));
     const dica = aberto
       ? 'Ocultar agrupamento: recolhe o painel de agrupamento de colunas'
       : 'Mostrar agrupamento: abre o painel para agrupar mensagens por coluna';
     TalkIcones.definirBotao(btn, { icone: aberto ? 'menos' : 'agrupar', texto: aberto ? 'Ocultar agrupamento' : 'Mostrar agrupamento', title: dica, ariaLabel: dica });
+    if (aberto) setTimeout(() => painelGrupo?.refresh(), 40);
   });
 
-  $('btn-atualizar').addEventListener('click', () => carregar());
-  $('btn-exportar').addEventListener('click', exportarCsv);
-  $('btn-mais').addEventListener('click', () => carregar({ continuar: true }));
+  $('btn-msg-reset-colunas').addEventListener('click', () => {
+    try { localStorage.removeItem(CHAVE_COL_MSG); } catch (_) {}
+    if (tabela) {
+      tabela.setColumns(colunasPadraoEnvios());
+      painelGrupo?.refresh();
+      TalkUI.toast('Ordem padrão das colunas restaurada.', 'ok');
+    }
+  });
+
+  $('btn-atualizar').addEventListener('click', () => {
+    if (abaAtiva === 'conversas') {
+      carregarConversas();
+      if (convAtual?.id) abrirDetalheConversa(convAtual.id);
+    } else {
+      carregarEnvios();
+      if (atual?.id) abrirDetalhe(atual.id);
+    }
+  });
+  $('btn-exportar').addEventListener('click', () => {
+    if (abaAtiva === 'conversas') exportarCsvConversas();
+    else exportarCsvEnvios();
+  });
+  $('btn-mais').addEventListener('click', () => carregarEnvios({ continuar: true }));
   $('btn-voltar').addEventListener('click', mostrarLista);
   $('btn-reenviar').addEventListener('click', () => abrirConfirmacao('reenviar'));
   $('btn-dar-falha').addEventListener('click', () => abrirConfirmacao('dar-como-falha'));
@@ -642,14 +1491,12 @@
   });
 
   (async function iniciar() {
-    const { canalId, aplicacaoId, abrirId } = lerFiltrosDaUrl();
-    $('tabela').hidden = true;
-    TalkUI.estado($('estado-lista'), 'carregando', { titulo: 'Carregando mensagens…' });
-    criarTabela();
+    const { canalId, aplicacaoId, abrirId, abrirConversaId, abaInicial } = lerFiltrosDaUrl();
     await carregarOpcoesFiltro(canalId, aplicacaoId);
-    await carregar();
+    trocarAba(abaInicial, { carregarSePreciso: true });
     iniciarTempoReal();
     if (abrirId) abrirDetalhe(abrirId);
+    else if (abrirConversaId) abrirDetalheConversa(abrirConversaId);
   })();
 })();
 </script>

@@ -127,7 +127,9 @@ function atualizarConversa(db, id, campos) {
 // ── Itens ───────────────────────────────────────────────────────────────────
 // Estado da saída vem da própria mensagem da fila (uma fonte só da verdade).
 // Desempate pela ordem de gravação (rowid): o WhatsApp manda a hora em segundos e o id é aleatório.
-const SELECT_ITEM = `SELECT i.*, i.rowid AS ordem, m.estado AS mensagem_estado FROM conversa_itens i LEFT JOIN mensagens m ON m.id = i.mensagem_id`;
+// Mensagem do contato mostra o nome atual dele (o nome gravado no item é o da chegada, às vezes "Contato sem nome").
+const SELECT_ITEM = `SELECT i.*, i.rowid AS ordem, m.estado AS mensagem_estado, ct.nome AS contato_nome FROM conversa_itens i
+  LEFT JOIN mensagens m ON m.id = i.mensagem_id LEFT JOIN contatos ct ON i.autor_tipo = 'contato' AND ct.id = i.autor_id`;
 
 function adicionarItem(db, conversaId, { categoria, direcao = null, autor, tipo = null, texto = null, mensagemId = null, idProvedor = null, em = agora() }) {
   const id = novoId('item');
@@ -140,7 +142,7 @@ function adicionarItem(db, conversaId, { categoria, direcao = null, autor, tipo 
 
 function paraItem(i) {
   const estado = i.categoria !== 'mensagem' ? null : i.direcao === 'entrada' ? 'recebida' : (i.mensagem_estado || 'aceita');
-  return { id: i.id, categoria: i.categoria, direcao: i.direcao, autor: { tipo: i.autor_tipo, id: i.autor_id, nome: i.autor_nome },
+  return { id: i.id, categoria: i.categoria, direcao: i.direcao, autor: { tipo: i.autor_tipo, id: i.autor_id, nome: i.contato_nome || i.autor_nome },
     tipo: i.tipo, texto: i.texto, estado, mensagem_id: i.mensagem_id, em: i.em };
 }
 
