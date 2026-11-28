@@ -597,8 +597,11 @@
 
   async function carregarMaisItens() {
     if (!conversaAtual || !proximoCursorItens) return;
+    const seq = conversaSeq;
+    const idSolicitado = conversaAtual.id;
     try {
-      const pag = await api.get(`/conversas/${encodeURIComponent(conversaAtual.id)}/itens`, { limite: 100, cursor: proximoCursorItens });
+      const pag = await api.get(`/conversas/${encodeURIComponent(idSolicitado)}/itens`, { limite: 100, cursor: proximoCursorItens });
+      if (seq !== conversaSeq || conversaAtual?.id !== idSolicitado) return;
       proximoCursorItens = pag?.proximo_cursor || null;
       const antigos = [...(pag?.itens || [])].reverse();
       const existentes = new Set(itensConversa.map((i) => i.id));
@@ -649,13 +652,15 @@
       ? etiquetas.map((tag, idx) => `<span class="atd-etiqueta-chip">${esc(tag)}<button type="button" class="atd-etiqueta-rm" data-rm-etiqueta="${idx}" title="Remover etiqueta ${esc(tag)}" aria-label="Remover etiqueta ${esc(tag)}">${TalkIcones.svg('cancelar')}</button></span>`).join('')
       : '<span class="form-hint">Sem etiquetas.</span>';
 
-    const histHtml = historicoContato.length
-      ? historicoContato.map((h) => `
-          <button type="button" class="atd-hist-btn" data-hist-conversa="${esc(h.id)}" title="Abrir conversa ${esc(h.protocolo)}" aria-label="Abrir conversa ${esc(h.protocolo)}">
-            <strong>${esc(h.protocolo)} · ${esc(h.setor?.nome || '—')} ${h.id === cv.id ? '(atual)' : ''}</strong>
-            <span>${esc(h.situacao === 'encerrada' ? 'Encerrada' : 'Aberta')} · ${esc(dataHora(h.aberta_em))}</span>
-          </button>`).join('')
-      : '<span class="form-hint">Sem outras conversas registradas.</span>';
+    const histHtml = historicoContato === null
+      ? '<span class="form-hint">Carregando histórico…</span>'
+      : historicoContato.length
+        ? historicoContato.map((h) => `
+            <button type="button" class="atd-hist-btn" data-hist-conversa="${esc(h.id)}" title="Abrir conversa ${esc(h.protocolo)}" aria-label="Abrir conversa ${esc(h.protocolo)}">
+              <strong>${esc(h.protocolo)} · ${esc(h.setor?.nome || '—')} ${h.id === cv.id ? '(atual)' : ''}</strong>
+              <span>${esc(h.situacao === 'encerrada' ? 'Encerrada' : 'Aberta')} · ${esc(dataHora(h.aberta_em))}</span>
+            </button>`).join('')
+        : '<span class="form-hint">Sem outras conversas registradas.</span>';
 
     const mesmaConversa = el.dataset.conversaId === cv.id && !!el.querySelector('#form-etiqueta');
     if (!mesmaConversa) {
@@ -775,6 +780,11 @@
   }
 
   // ── Abrir conversa ──────────────────────────────────────────────────
+  // conversaSeq invalida respostas atrasadas quando o usuário troca ou encerra a conversa;
+  // encerrandoConversaId impede que avisos do socket emitidos durante POST /encerrar reabram o chat.
+  let conversaSeq = 0;
+  let encerrandoConversaId = null;
+
   function assinarConversaSocket(id) {
     if (socket?.connected && conversaAssinadaId && conversaAssinadaId !== id) {
       try { socket.emit('conversa:sair', { conversa_id: conversaAssinadaId }); } catch (_) {}
@@ -786,6 +796,7 @@
   }
 
   async function abrirConversa(id, { irParaChatMobile = true } = {}) {
+    const seq = ++conversaSeq;
     fecharPopovers();
     fecharSlashMenu();
     limparAlertaConversa();
@@ -796,38 +807,44 @@
         api.get(`/conversas/${encodeURIComponent(id)}`),
         api.get(`/conversas/${encodeURIComponent(id)}/itens`, { limite: 100 }),
       ]);
+      if (seq !== conversaSeq) return;
       conversaAtual = detalhe;
       itensConversa = [...(pagItens?.itens || [])].reverse();
       proximoCursorItens = pagItens?.proximo_cursor || null;
+      historicoContato = null; // exibe "Carregando histórico…" até a lista complementar chegar
       modoCompositor = 'cliente';
 
       assinarConversaSocket(detalhe.id);
       renderizarListaConversas();
       renderizarCabecalhoConversa();
       renderizarItensConversa({ rolarFim: true });
+      renderizarPainelContato();
       if (irParaChatMobile) definirPassoMobile('chat');
 
       // Carrega respostas rápidas do setor + histórico do contato + marca como lida em paralelo
       const tarefas = [
         carregarRespostasRapidas(detalhe.setor?.id),
         api.get('/conversas', { contato_id: detalhe.contato?.id, visao: 'todas', limite: 20 })
-          .then((p) => { historicoContato = p?.itens || []; })
-          .catch(() => { historicoContato = []; }),
+          .then((p) => { if (seq === conversaSeq && conversaAtual?.id === detalhe.id) historicoContato = p?.itens || []; })
+          .catch(() => { if (seq === conversaSeq && conversaAtual?.id === detalhe.id) historicoContato = []; }),
       ];
       if (detalhe.nao_lidas > 0) {
         tarefas.push(
           api.post(`/conversas/${encodeURIComponent(detalhe.id)}/marcar-lida`, {})
             .then((atualizada) => {
-              conversaAtual = atualizada;
               sincronizarConversaNaLista(atualizada);
+              if (seq === conversaSeq && conversaAtual?.id === detalhe.id && encerrandoConversaId !== detalhe.id) {
+                conversaAtual = atualizada;
+              }
             })
             .catch(() => {})
         );
       }
       await Promise.all(tarefas);
+      if (seq !== conversaSeq || conversaAtual?.id !== detalhe.id) return;
       renderizarPainelContato();
     } catch (err) {
-      TalkUI.toast(err.message, 'erro');
+      if (seq === conversaSeq) TalkUI.toast(err.message, 'erro');
     }
   }
 
@@ -846,12 +863,15 @@
   }
 
   async function recarregarConversaAtual({ rolarFim = false } = {}) {
-    if (!conversaAtual) return;
+    if (!conversaAtual || conversaAtual.id === encerrandoConversaId) return;
+    const seq = conversaSeq;
+    const idSolicitado = conversaAtual.id;
     try {
       const [detalhe, pagItens] = await Promise.all([
-        api.get(`/conversas/${encodeURIComponent(conversaAtual.id)}`),
-        api.get(`/conversas/${encodeURIComponent(conversaAtual.id)}/itens`, { limite: 100 }),
+        api.get(`/conversas/${encodeURIComponent(idSolicitado)}`),
+        api.get(`/conversas/${encodeURIComponent(idSolicitado)}/itens`, { limite: 100 }),
       ]);
+      if (seq !== conversaSeq || conversaAtual?.id !== idSolicitado || idSolicitado === encerrandoConversaId) return;
       conversaAtual = detalhe;
       itensConversa = [...(pagItens?.itens || [])].reverse();
       proximoCursorItens = pagItens?.proximo_cursor || null;
@@ -859,9 +879,11 @@
       renderizarItensConversa({ rolarFim });
       renderizarPainelContato();
     } catch (err) {
-      if (err?.status === 404) {
+      if (err?.status === 404 && seq === conversaSeq && conversaAtual?.id === idSolicitado) {
+        conversaSeq += 1;
         conversaAtual = null;
         itensConversa = [];
+        assinarConversaSocket(null);
         renderizarCabecalhoConversa();
         renderizarPainelContato();
       }
@@ -991,21 +1013,40 @@
     TalkUI.limparErros(form);
     $('alerta-encerrar').hidden = true;
     const motivo = $('enc-motivo').value.trim();
+    const idEncerrando = conversaAtual.id;
     const btn = $('btn-confirmar-encerrar');
     btn.disabled = true;
+    encerrandoConversaId = idEncerrando;
     try {
-      const atualizada = await api.post(`/conversas/${encodeURIComponent(conversaAtual.id)}/encerrar`, motivo ? { motivo } : {});
+      const atualizada = await api.post(`/conversas/${encodeURIComponent(idEncerrando)}/encerrar`, motivo ? { motivo } : {});
+      conversaSeq += 1;
       fecharPopovers();
-      conversaAtual = atualizada;
       sincronizarConversaNaLista(atualizada);
-      await Promise.all([recarregarConversaAtual({ rolarFim: true }), carregarContadores()]);
-      TalkUI.toast('Conversa encerrada.', 'ok');
+      conversaAtual = null;
+      itensConversa = [];
+      proximoCursorItens = null;
+      historicoContato = [];
+      assinarConversaSocket(null);
+      fecharSlashMenu();
+      limparAlertaConversa();
+      $('campo-msg').value = '';
+      renderizarCabecalhoConversa();
+      renderizarPainelContato();
+      TalkUI.estado($('estado-chat-vazio'), 'vazio', {
+        titulo: 'Conversa encerrada',
+        texto: 'Selecione outra conversa para continuar ou consulte o histórico em Encerradas.',
+        acao: { rotulo: 'Ver encerradas', aoClicar: () => $('lista-visoes').querySelector('[data-visao="encerradas"]').click() },
+      });
+      definirPassoMobile('lista');
+      TalkUI.toast('Conversa encerrada. Consulte o histórico em Encerradas.', 'ok');
+      await carregarContadores();
     } catch (err) {
       if (!TalkUI.errosNoFormulario(form, err)) {
         $('alerta-encerrar').textContent = err.message;
         $('alerta-encerrar').hidden = false;
       }
     } finally {
+      if (encerrandoConversaId === idEncerrando) encerrandoConversaId = null;
       btn.disabled = false;
     }
   });
@@ -1126,11 +1167,14 @@
     const btn = $('btn-enviar');
     btn.disabled = true;
 
+    const seq = conversaSeq;
+    const idConv = conversaAtual.id;
     try {
       const rota = modoCompositor === 'nota'
-        ? `/conversas/${encodeURIComponent(conversaAtual.id)}/notas`
-        : `/conversas/${encodeURIComponent(conversaAtual.id)}/responder`;
+        ? `/conversas/${encodeURIComponent(idConv)}/notas`
+        : `/conversas/${encodeURIComponent(idConv)}/responder`;
       const novoItem = await api.post(rota, { texto });
+      if (seq !== conversaSeq || conversaAtual?.id !== idConv) return;
       $('campo-msg').value = '';
       atualizarContadorCompositor();
       if (novoItem?.id && !itensConversa.some((i) => i.id === novoItem.id)) {
@@ -1364,9 +1408,9 @@
       } else {
         sincronizarConversaNaLista(resumo);
       }
-      if (conversaAtual?.id === resumo.id) {
-        recarregarConversaAtual({ rolarFim: false });
-      }
+      // Só recarrega o chat se for a conversa aberta agora e ela não estiver em encerramento.
+      if (!conversaAtual || conversaAtual.id !== resumo.id || resumo.id === encerrandoConversaId) return;
+      recarregarConversaAtual({ rolarFim: false });
     });
 
     socket.on('conversa:saiu', ({ id } = {}) => {
@@ -1374,8 +1418,10 @@
       conversas = conversas.filter((c) => c.id !== id);
       renderizarListaConversas();
       if (conversaAtual?.id === id) {
+        conversaSeq += 1;
         conversaAtual = null;
         itensConversa = [];
+        assinarConversaSocket(null);
         renderizarCabecalhoConversa();
         renderizarPainelContato();
         TalkUI.toast('Esta conversa não está mais visível para você.', 'info');
@@ -1383,7 +1429,7 @@
     });
 
     socket.on('conversa:item', ({ conversa_id, item } = {}) => {
-      if (!conversaAtual || conversa_id !== conversaAtual.id || !item?.id) return;
+      if (!conversaAtual || conversa_id !== conversaAtual.id || conversa_id === encerrandoConversaId || !item?.id) return;
       if (!itensConversa.some((i) => i.id === item.id)) {
         itensConversa.push(item);
         renderizarItensConversa({ rolarFim: true });
@@ -1391,7 +1437,7 @@
     });
 
     socket.on('conversa:item_estado', ({ conversa_id, item_id, estado } = {}) => {
-      if (!conversaAtual || conversa_id !== conversaAtual.id || !item_id) return;
+      if (!conversaAtual || conversa_id !== conversaAtual.id || conversa_id === encerrandoConversaId || !item_id) return;
       const alvo = itensConversa.find((i) => i.id === item_id);
       if (alvo) alvo.estado = estado;
       const badge = document.querySelector(`[data-item-estado="${CSS.escape(item_id)}"]`);

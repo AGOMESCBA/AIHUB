@@ -103,6 +103,7 @@ function criarRotasAtendimento({ db, atendimento, log = console }) {
     if (visao === 'fila') onde.push("cv.situacao = 'aberta' AND cv.responsavel_id IS NULL");
     if (visao === 'abertas') onde.push("cv.situacao = 'aberta'");
     if (visao === 'encerradas') onde.push("cv.situacao = 'encerrada'");
+    if (visao === 'triagem') onde.push('0 = 1'); // menu de setores: C12
     if (q.setor_id) { onde.push('cv.setor_id = @setor'); p.setor = String(q.setor_id); }
     if (q.canal_id) { onde.push('cv.canal_id = @canal'); p.canal = String(q.canal_id); }
     if (q.contato_id) { onde.push('cv.contato_id = @contato'); p.contato = String(q.contato_id); }

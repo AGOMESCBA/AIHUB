@@ -580,3 +580,176 @@ O telefone nunca volta, nem mascarado.
 - Use o `id` do retorno para não gravar duas vezes.
 - Retorno sem confirmação por 30 dias vence e aparece como pendência no Painel (C9).
 - Webhook (C4) poderá avisar que há retorno novo, mas a confirmação continua sendo pelo `POST /v1/retornos/confirmar`.
+
+---
+
+## 9. C10 — Onda 1: atendimento profissional
+
+Plano: `docs/plano-produto.md`. Tudo **nasce desligado** e liga por configuração do setor ou do canal.
+Simulado: `backend/simulado/atendimento.js` + `backend/simulado/atendimento-onda1.js`.
+Servidor real: C11 a C16. Bibliotecas puras: X1 a X4 (Codex).
+
+### 9.1 Portal do atendente
+
+| Item | Regra |
+|---|---|
+| URL | `/app/ia-talk/<apelido>/atendimento`, uma por empresa, pelo mesmo apelido da página de entrada. Serve `frontend/portal.html` (G15) |
+| Sem sessão (ou sessão de outra empresa) | Redireciona para `/app/ia-talk/<apelido>?destino=atendimento`. Depois do código, o login devolve `redirecionar` para o portal |
+| Login | O mesmo: celular + código no WhatsApp (`/api/publico`, §3.1). `POST …/verificar` aceita `destino: 'atendimento'` |
+| Quem entra | Quem tem a rotina `talk-atendimento` naquela empresa. Sem ela → página "Sem acesso ao atendimento" |
+| API | A mesma do §8 (`/api/admin`), com o cookie da sessão |
+
+O portal é a Central em tela cheia, sem o menu de administração. Funciona no celular, com som,
+notificação do navegador e contador no título da aba. O link "Abrir a administração" só aparece
+para quem tem outras rotinas.
+
+### 9.2 Status do atendente (presença)
+
+| Rota | Detalhe |
+|---|---|
+| `GET /atendentes/eu` | Forma `atendente` da pessoa da sessão |
+| `PUT /atendentes/eu` | `{ status?, alertas_whatsapp? }`. `status` ∈ `disponivel` \| `ocupado` \| `ausente` |
+| `GET /atendentes?setor_id=` | Página de `atendente` (supervisão e quem cadastra setores; atendente → 403) |
+
+Forma `atendente`:
+
+| Campo | Conteúdo |
+|---|---|
+| `usuario` | `{ id, nome }` |
+| `status` | `disponivel`, `ocupado` ou `ausente` |
+| `online` | Tem a Central aberta agora (socket conectado) |
+| `conversas_abertas` | Conversas abertas com ele |
+| `limite` | Maior limite entre os setores dele (rodízio) |
+| `setores` | `[{ id, nome }]` |
+| `alertas_whatsapp` | Recebe alerta no WhatsApp (escolha da pessoa) |
+| `status_desde` | Desde quando está no status atual |
+
+- Só recebe conversa no rodízio quem está **disponível e online**.
+- **Ocupado:** vê a fila, mas não recebe rodízio nem alerta de "nova na fila".
+- **Ausente:** não recebe nada.
+- Fechar a Central não muda o status; só muda `online`.
+- Socket: `presenca:atualizada` `{ usuario_id, status, online, em }`, vai para a sala do atendimento da empresa.
+
+### 9.3 Menu de setores no WhatsApp (triagem)
+
+**No setor**, campo novo `menu`:
+- `aparece` (bool, padrão `true`);
+- `ordem` (inteiro);
+- `texto` (opcional; até 60 caracteres; sem ele, usa o nome do setor).
+
+**No canal**, campos novos no `PUT /canais/:id`, com a mesma permissão do uso do número:
+
+| Campo | Regra |
+|---|---|
+| `menu_ligado` | Bool, padrão `false` |
+| `menu_saudacao` | Até 500 caracteres; padrão: "Olá! Para agilizar seu atendimento, escolha o setor:" |
+| `menu_tempo_min` | 1 a 60, padrão 10 |
+| `menu_tentativas` | 1 a 5, padrão 2 |
+
+O canal devolve `atendimento.menu: { ligado, saudacao, tempo_min, tentativas }`.
+
+**Como funciona:**
+- Com o menu ligado, a **conversa nova** nasce em **triagem**, fora da fila de qualquer setor. O Talk manda o menu, que é um item de saída com `autor.tipo: 'sistema'`.
+- **Resposta válida** (número ou nome da opção): a conversa vai para a fila do setor escolhido, com o evento "Escolheu o setor X".
+- **Resposta inválida:** o menu é repetido, até `menu_tentativas` vezes. Depois disso, ou se passar `menu_tempo_min` sem resposta, a conversa vai para o **setor padrão** do canal, com o evento "Sem escolha: setor padrão".
+- Com **um setor só** no menu, o menu não é mandado e a conversa vai direto para ele.
+- **Pedido de "atendente"** de um usuário do IA Command (número compartilhado): também passa pelo menu.
+
+**Na conversa:**
+- `triagem`: `{ desde, tentativas } | null`;
+- visão nova `triagem` em `GET /conversas` (supervisão);
+- contador `triagem` em `GET /conversas/contadores`.
+
+A leitura da resposta vem da biblioteca X1 (`backend/lib/menu-setores`). A regra principal: **nunca escolher o setor por adivinhação**.
+
+### 9.4 Distribuição no setor
+
+**No setor**, campo novo `distribuicao`:
+- `modo`: `fila_livre` (padrão) ou `rodizio`;
+- `limite_por_atendente`: 1 a 50, padrão 5;
+- `tempo_aceite_min`: 1 a 30, padrão 3.
+
+**Fila livre (como hoje):** todos os disponíveis do setor são avisados, e o primeiro que **assumir** fica com a conversa.
+
+**Rodízio:**
+- O sistema **oferece** a conversa a um atendente: disponível, online, membro do setor e abaixo do limite.
+- O critério é **menos conversas abertas**; no empate, quem recebeu há mais tempo (biblioteca X2).
+- A conversa ganha `oferta: { para: { id, nome }, ate }`.
+- Só essa pessoa (ou a supervisão) pode assumir. Assumir **aceita** a oferta.
+- `POST /conversas/:id/recusar` (só quem recebeu a oferta) passa para o próximo.
+- Se o tempo de aceite acabar, ou ninguém estiver apto, a conversa fica na fila do setor sem oferta, e o setor inteiro é avisado.
+
+**Eventos na conversa:** "Oferecida a Fulana", "Fulana recusou" e "Sem aceite: voltou para a fila".
+
+### 9.5 Alertas
+
+**Na tela:** evento de socket `alerta`, só para a pessoa certa (sala por usuário). O alerta **nunca** traz texto do cliente.
+
+```json
+{ "id": "alr_…", "tipo": "nova_na_fila | oferta | espera_longa | sla_estourado | escalonamento",
+  "conversa_id": "cv_…", "protocolo": "2026-000123", "setor": { "id": "set_…", "nome": "Suporte" },
+  "mensagem": "Nova conversa na fila do Suporte (protocolo 2026-000123).", "em": "…" }
+```
+
+**Rotas:**
+- `GET /alertas?limite=` devolve os da pessoa, mais recentes primeiro, com `lido_em`.
+- `POST /alertas/lidos` com `{ ids: [...] }` ou `{ todos: true }`.
+
+**No setor**, campo novo `alertas`:
+
+| Campo | Regra |
+|---|---|
+| `whatsapp_ligado` | Bool, padrão `false` |
+| `espera_min` | 1 a 120, padrão 5 |
+| `escalonar_min` | 0 a 240, padrão 15 (0 = não escalona) |
+| `escalonar_para` | `[usuario_id]`, padrão a supervisão do setor |
+
+**No WhatsApp do atendente** (só com `whatsapp_ligado` e `alertas_whatsapp` da pessoa), quando:
+- ninguém do setor está online;
+- a conversa espera mais de `espera_min`;
+- há escalonamento, depois de `escalonar_min`, para quem está em `escalonar_para`.
+
+O texto tem protocolo, setor, tempo e link do portal, **sem texto do cliente**.
+
+**Nunca repete:** um alerta por conversa, por tipo e por pessoa. Ninguém recebe alerta estando ausente ou fora do horário do setor. Quem alertar e quando vem da biblioteca X3.
+
+### 9.6 SLA
+
+**No setor**, campo novo `sla`:
+- `primeira_resposta_min`: 1 a 1440, padrão 10;
+- `atencao_pct`: 50 a 95, padrão 80.
+
+**Na conversa:** `sla: { prazo, situacao: 'ok' | 'atencao' | 'estourado', alvo: 'primeira_resposta' } | null`.
+- Vale enquanto ninguém respondeu; depois da primeira resposta do atendente, fica `null`.
+- Ao chegar em `atencao` e em `estourado`, gera alerta.
+
+### 9.7 Pesquisa de satisfação
+
+**No setor**, campo novo `pesquisa`:
+- `ligada` (padrão `false`);
+- `pergunta` (até 300 caracteres); padrão: "Como você avalia este atendimento? Responda de 1 (ruim) a 5 (ótimo)."
+
+**Como funciona:**
+- **Ao encerrar,** a pergunta é enviada.
+- A resposta do contato em até 24 h, quando é uma nota, é **registrada e não abre conversa nova**. Uma mensagem que não é nota abre conversa nova normalmente.
+- A leitura da nota vem da biblioteca X4.
+
+**Na conversa:** `pesquisa: { enviada_em, nota: 1–5 | null, comentario | null, respondida_em } | null`.
+
+### 9.8 Painel ao vivo e relatórios
+
+**`GET /atendimento/painel`** (supervisão) devolve:
+
+| Campo | Conteúdo |
+|---|---|
+| `por_setor` | `[{ id, nome, na_fila, em_triagem, em_atendimento, maior_espera_ms, atendentes_online, sla_estourados }]` |
+| `atendentes` | `[atendente]` |
+| `hoje` | `{ conversas, encerradas, primeira_resposta_mediana_ms, satisfacao_media, respostas_pesquisa }` |
+| `atualizado_em` | data e hora |
+
+Socket: `atendimento:painel`, com o mesmo corpo, a cada mudança, só para a supervisão.
+
+**`GET /atendimento/relatorio?de&ate&agrupar=setor|responsavel`** devolve:
+- `{ periodo, total, abertas, na_fila, encerradas, primeira_resposta, espera_atual, duracao, satisfacao, grupos? }`;
+- os campos `primeira_resposta`, `espera_atual` e `duracao` seguem a biblioteca L2;
+- `satisfacao` é `{ media, respostas, distribuicao: { 1..5 } }`.

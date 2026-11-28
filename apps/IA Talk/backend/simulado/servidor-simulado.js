@@ -651,6 +651,13 @@ function criarServidorSimulado({ intervaloLogMs = 2000, intervaloQrMs = 20000, i
     res.set('Cache-Control', 'no-cache, must-revalidate').sendFile(arquivo);
   });
 
+  // Portal do atendente (§9.1): /app/ia-talk/<apelido>/atendimento → frontend/portal.html (G15).
+  app.get(`${config.BASE_PATH}/:apelido([a-z0-9-]{3,40})/atendimento`, (req, res) => {
+    const arquivo = path.join(config.DIR_FRONTEND, 'portal.html');
+    if (!fs.existsSync(arquivo)) return res.status(404).send('Portal do atendente ainda não entregue (etapa G15).');
+    res.set('Cache-Control', 'no-cache, must-revalidate').sendFile(arquivo);
+  });
+
   // ── Socket.IO (QR, estado e terminal do canal; painel) ──────────────────────
   const servidor = http.createServer(app);
   const io = new Server(servidor, { path: config.SOCKET_PATH, serveClient: true });

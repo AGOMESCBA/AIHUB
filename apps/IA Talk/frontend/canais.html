@@ -212,12 +212,12 @@
           </div>
         </div>
 
-        <!-- Regras do canal (C3): envio e recebimento separados; só a plataforma altera (contrato §4) -->
+        <!-- Regras do canal (C3 + G18): envio, recebimento, uso do número e setor padrão; só a plataforma altera (contratos §4 e §8.1) -->
         <section class="tlk-envio-teste tlk-regras" id="bloco-regras" aria-labelledby="titulo-regras">
           <div class="tlk-envio-teste-cab">
             <div>
               <h2 id="titulo-regras">Regras do canal</h2>
-              <p>Para quem este canal envia mensagens e de quem ele registra as mensagens recebidas. O IA Talk nunca responde sozinho: só envia o que for pedido.</p>
+              <p>Para quem este canal envia mensagens, de quem registra as recebidas e como o número é usado no atendimento. O IA Talk nunca responde sozinho: só envia o que for pedido.</p>
             </div>
             <div id="regras-badge"></div>
           </div>
@@ -245,6 +245,25 @@
                   </select>
                   <span class="form-hint" id="r-recebimento-dica"></span>
                 </div>
+                <div class="tlk-campo">
+                  <label for="r-uso">Uso do número</label>
+                  <select class="form-control" id="r-uso" name="uso">
+                    <option value="integracao">Só integração</option>
+                    <option value="atendimento">Atendimento (número só do Talk)</option>
+                    <option value="compartilhado">Compartilhado com o IA Command</option>
+                  </select>
+                  <span class="form-hint" id="r-uso-dica"></span>
+                </div>
+                <div class="tlk-campo" id="campo-r-setor" hidden>
+                  <label for="r-setor">Setor que recebe as conversas novas</label>
+                  <select class="form-control" id="r-setor" name="setor_padrao_id">
+                    <option value="">Escolha um setor…</option>
+                  </select>
+                  <span class="form-hint" id="r-setor-dica">Conversas novas deste número entram na fila deste setor ativo.</span>
+                </div>
+                <div class="tlk-alerta tlk-alerta--aviso tlk-largo tlk-regras-aviso-uso" id="r-uso-aviso-compartilhado" role="status" hidden>
+                  Para funcionar, ligue também 'Deixar para o IA Talk atender' no canal do IA Command.
+                </div>
                 <div class="tlk-campo tlk-largo">
                   <label for="r-novo-numero">Números de teste</label>
                   <ul class="tlk-regras-lista" id="r-lista" aria-live="polite"></ul>
@@ -265,7 +284,7 @@
               </div>
 
               <div class="tlk-acoes-form">
-                <button class="btn btn-primary" type="submit" id="btn-salvar-regras" title="Salvar regras: grava envio, recebimento e lista de teste (fica na auditoria)" aria-label="Salvar regras: grava envio, recebimento e lista de teste (fica na auditoria)"><span data-ico="salvar"></span> Salvar regras</button>
+                <button class="btn btn-primary" type="submit" id="btn-salvar-regras" title="Salvar regras: grava envio, recebimento, uso do número, setor padrão e lista de teste (fica na auditoria)" aria-label="Salvar regras: grava envio, recebimento, uso do número, setor padrão e lista de teste (fica na auditoria)"><span data-ico="salvar"></span> Salvar regras</button>
               </div>
             </fieldset>
           </form>
@@ -1001,9 +1020,12 @@
     renderizarPainelTerminal();
   }
 
-  // ── Regras do canal (C3, contrato §4) ───────────────────────────────
+  // ── Regras do canal (C3 + G18, contratos §4 e §8.1) ─────────────────
   // A lista vem mascarada: a tela remove pela POSIÇÃO e inclui o número digitado.
   let ehPlataforma = false;
+  let sessaoEmpresaId = null;
+  let setoresAtivos = [];
+  let erroSetoresAtivos = false;
   let regrasRemover = new Set();
   let regrasIncluir = [];
   let regrasCanalId = null;
@@ -1016,9 +1038,65 @@
     teste: 'Só as mensagens dos números da lista aparecem no Terminal; das demais fica só a contagem.',
     todos: 'Todas as mensagens que chegam no número aparecem no Terminal, inclusive as de outros sistemas que usam o mesmo número.',
   };
+  const DICAS_USO = {
+    integracao: 'Só API: mensagens recebidas não viram conversa na Central.',
+    atendimento: 'Número exclusivo do IA Talk: quem escreve vira conversa na Central.',
+    compartilhado: 'Quem está autorizado no IA Command fica com ele; os demais viram conversa no Talk.',
+  };
 
   async function carregarPerfil() {
-    try { ehPlataforma = !!(await TalkApi.get('/sessao'))?.usuario?.administrador_plataforma; } catch (_) { ehPlataforma = false; }
+    try {
+      const s = await TalkApi.get('/sessao');
+      ehPlataforma = !!s?.usuario?.administrador_plataforma;
+      sessaoEmpresaId = s?.empresa?.id || null;
+    } catch (_) {
+      ehPlataforma = false;
+      sessaoEmpresaId = null;
+    }
+  }
+
+  async function carregarSetoresAtivos() {
+    erroSetoresAtivos = false;
+    try {
+      const r = await TalkApi.get('/setores', { situacao: 'ativo', limite: 200 });
+      setoresAtivos = Array.isArray(r?.itens) ? r.itens.map((s) => ({ id: s.id, nome: s.nome })) : [];
+    } catch (_) {
+      setoresAtivos = [];
+      erroSetoresAtivos = true;
+    }
+  }
+
+  function popularSelectSetores(canal, valorDesejado) {
+    const sel = $('r-setor');
+    if (!sel) return;
+    const setorAtual = canal?.atendimento?.setor_padrao || null;
+    const empresaAtendimento = canal?.atendimento?.empresa || canal?.empresa_dona || null;
+    // GET /setores?situacao=ativo sempre lista os setores da empresa da sessão (§1.1 e §8.3).
+    // Se o canal atender por outra empresa (ex.: administrador da plataforma em outra empresa ativa),
+    // não mistura os setores da empresa logada para evitar escolher setor de outra empresa.
+    const outraEmpresa = !!(sessaoEmpresaId && empresaAtendimento?.id && empresaAtendimento.id !== sessaoEmpresaId);
+    const lista = outraEmpresa ? [] : [...setoresAtivos];
+    if (setorAtual?.id && !lista.some((s) => s.id === setorAtual.id)) {
+      lista.push({ id: setorAtual.id, nome: setorAtual.nome || setorAtual.id });
+    }
+    const placeholder = lista.length
+      ? 'Escolha um setor…'
+      : outraEmpresa
+        ? `Troque para ${empresaAtendimento.nome} para listar os setores`
+        : erroSetoresAtivos ? 'Não foi possível carregar os setores' : 'Nenhum setor ativo cadastrado';
+    sel.innerHTML = `<option value="">${esc(placeholder)}</option>`
+      + lista.map((s) => `<option value="${esc(s.id)}">${esc(s.nome)}</option>`).join('');
+    sel.value = valorDesejado && lista.some((s) => s.id === valorDesejado) ? valorDesejado : '';
+    const dica = $('r-setor-dica');
+    if (dica) {
+      dica.textContent = outraEmpresa
+        ? `O atendimento deste canal pertence à empresa ${empresaAtendimento.nome}. Troque para essa empresa no topo para listar os setores ativos dela.`
+        : erroSetoresAtivos && !lista.length
+          ? 'Não foi possível carregar os setores ativos. Recarregue a página para tentar de novo.'
+          : !lista.length
+            ? 'Nenhum setor ativo cadastrado. Cadastre ou ative um setor na tela Setores.'
+            : 'Conversas novas deste número entram na fila deste setor ativo.';
+    }
   }
 
   const mascararDigitado = (n) => { const d = String(n).replace(/\D/g, ''); return d.length >= 12 ? `+${d.slice(0, 2)} ${d.slice(2, 4)} ${d.slice(4, 5)}••••-${d.slice(-4)}` : d; };
@@ -1032,11 +1110,25 @@
       regrasIncluir = [];
       $('r-envio').value = c.envio_modo || 'desligado';
       $('r-recebimento').value = c.recebimento_modo || 'teste';
+      $('r-uso').value = c.uso || 'integracao';
+      popularSelectSetores(c, c.atendimento?.setor_padrao?.id || '');
       $('regras-confirmar').hidden = true;
       $('alerta-regras').hidden = true;
+      TalkUI.limparErros($('form-regras'));
+    } else {
+      popularSelectSetores(c, $('r-setor').value);
     }
+    const uso = $('r-uso').value || 'integracao';
     $('r-envio-dica').textContent = DICAS_ENVIO[$('r-envio').value] || '';
     $('r-recebimento-dica').textContent = DICAS_RECEBIMENTO[$('r-recebimento').value] || '';
+    $('r-uso-dica').textContent = DICAS_USO[uso] || '';
+    $('campo-r-setor').hidden = uso === 'integracao';
+    $('r-uso-aviso-compartilhado').hidden = uso !== 'compartilhado';
+    if (uso === 'integracao') {
+      $('campo-r-setor').classList.remove('com-erro');
+      $('r-setor').removeAttribute('aria-invalid');
+      $('campo-r-setor').querySelectorAll('.tlk-campo-erro').forEach((el) => el.remove());
+    }
     const existentes = (c.numeros_teste_mascarados || []).map((num, idx) => {
       const removido = regrasRemover.has(idx);
       return `<li class="tlk-regras-item ${removido ? 'tlk-regras-item--removido' : ''}"><span>${esc(num)}</span>
@@ -1055,6 +1147,18 @@
 
   $('r-envio').addEventListener('change', renderizarRegras);
   $('r-recebimento').addEventListener('change', renderizarRegras);
+  $('r-uso').addEventListener('change', () => {
+    const campoUso = $('r-uso').closest('.tlk-campo');
+    campoUso?.classList.remove('com-erro');
+    $('r-uso').removeAttribute('aria-invalid');
+    campoUso?.querySelectorAll('.tlk-campo-erro').forEach((el) => el.remove());
+    renderizarRegras();
+  });
+  $('r-setor').addEventListener('change', () => {
+    $('campo-r-setor').classList.remove('com-erro');
+    $('r-setor').removeAttribute('aria-invalid');
+    $('campo-r-setor').querySelectorAll('.tlk-campo-erro').forEach((el) => el.remove());
+  });
   $('r-lista').addEventListener('click', (e) => {
     const alt = e.target.closest('[data-r-alternar]');
     const novo = e.target.closest('[data-r-tirar-novo]');
@@ -1088,11 +1192,26 @@
 
   async function salvarRegras() {
     const c = canalAtual;
+    const form = $('form-regras');
     const btn = $('btn-salvar-regras');
     btn.disabled = true;
+    TalkUI.limparErros(form);
     $('alerta-regras').hidden = true;
     try {
-      const corpo = { envio_modo: $('r-envio').value, recebimento_modo: $('r-recebimento').value };
+      const uso = $('r-uso').value;
+      const setorSelecionado = $('r-setor').value;
+      const usoAnterior = c.uso || 'integracao';
+      const setorAnterior = c.atendimento?.setor_padrao?.id || '';
+      const corpo = {
+        envio_modo: $('r-envio').value,
+        recebimento_modo: $('r-recebimento').value,
+      };
+      // Só envia uso/setor_padrao_id quando houve mudança (ou falta setor em uso de atendimento),
+      // evitando linha redundante de auditoria `canal.uso` ao alterar só envio/recebimento/lista.
+      if (uso !== usoAnterior || (uso !== 'integracao' && setorSelecionado !== setorAnterior) || (uso !== 'integracao' && !setorSelecionado)) {
+        corpo.uso = uso;
+        corpo.setor_padrao_id = uso === 'integracao' ? null : setorSelecionado;
+      }
       if (regrasRemover.size) corpo.numeros_teste_remover = [...regrasRemover];
       if (regrasIncluir.length) corpo.numeros_teste_adicionar = [...regrasIncluir];
       const salvo = await TalkApi.put(`/canais/${encodeURIComponent(c.id)}`, corpo);
@@ -1102,8 +1221,19 @@
       tabela?.updateRow?.(salvo.id, salvo).catch?.(() => {});
       TalkUI.toast('Regras do canal salvas.', 'ok');
     } catch (err) {
-      $('alerta-regras').textContent = err.campos ? Object.values(err.campos).join(' ') : err.message;
-      $('alerta-regras').hidden = false;
+      const marcou = TalkUI.errosNoFormulario(form, err);
+      const camposFora = err?.campos
+        ? Object.entries(err.campos)
+            .filter(([k]) => {
+              const campo = form.querySelector(`[name="${CSS.escape(k)}"]`);
+              return !campo || !!campo.closest('[hidden]');
+            })
+            .map(([, m]) => m)
+        : [];
+      if (!marcou || camposFora.length) {
+        $('alerta-regras').textContent = camposFora.length ? camposFora.join(' ') : err.message;
+        $('alerta-regras').hidden = false;
+      }
     } finally {
       btn.disabled = false;
       $('regras-confirmar').hidden = true;
@@ -1730,6 +1860,7 @@
     $('form-numero').hidden = true;
     $('alerta-envio-teste').hidden = true;
     TalkUI.limparErros($('form-envio-teste'));
+    regrasCanalId = null;
     envioTesteAtual = null;
     $('card-envio-teste').hidden = true;
     autoScroll = true;
@@ -1741,6 +1872,7 @@
         TalkApi.get('/canais', { limite: 100 }).catch(() => null),
         carregarEmpresasDisponiveis(),
         carregarPerfil(),
+        carregarSetoresAtivos(),
       ]);
       if (pagCanais?.itens) canaisCatalogo = pagCanais.itens;
       canalAtual = c;

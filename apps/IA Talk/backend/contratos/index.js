@@ -40,7 +40,11 @@ const TIPOS_LOG_CANAL = congelar(['info', 'success', 'warning', 'error', 'receiv
 // próprio (opção A) ou compartilhado com o IA Command (opção B).
 const USOS_CANAL = congelar(['integracao', 'atendimento', 'compartilhado']);
 const SITUACOES_CONVERSA = congelar(['aberta', 'encerrada']);
-const VISOES_CONVERSA = congelar(['minhas', 'fila', 'abertas', 'encerradas', 'todas']);
+const VISOES_CONVERSA = congelar(['minhas', 'fila', 'abertas', 'encerradas', 'todas', 'triagem']);
+// C10 — Onda 1 (§9)
+const STATUS_ATENDENTE = congelar(['disponivel', 'ocupado', 'ausente']);
+const MODOS_DISTRIBUICAO = congelar(['fila_livre', 'rodizio']);
+const TIPOS_ALERTA = congelar(['nova_na_fila', 'oferta', 'espera_longa', 'sla_estourado', 'escalonamento']);
 const CATEGORIAS_ITEM_CONVERSA = congelar(['mensagem', 'nota', 'evento']);
 const AUTORES_ITEM_CONVERSA = congelar(['contato', 'atendente', 'sistema', 'ia']);
 const PRIORIDADES_CONVERSA = congelar(['normal', 'alta']);
@@ -69,6 +73,9 @@ const EVENTOS_SOCKET = Object.freeze({
     conversaSaiu: 'conversa:saiu',                   // { id } — deixou de ser visível para quem recebe (C8)
     itemConversa: 'conversa:item',                   // { conversa_id, item } (C8)
     estadoItemConversa: 'conversa:item_estado',      // { conversa_id, item_id, estado, em } (C8)
+    presencaAtualizada: 'presenca:atualizada',       // { usuario_id, status, online, em } (C10)
+    alerta: 'alerta',                                // forma alerta, só para a pessoa (C10)
+    painelAtendimento: 'atendimento:painel',         // mesmo corpo de GET /atendimento/painel (C10)
     erro: 'erro',                         // { codigo, mensagem }
   }),
 });
@@ -110,6 +117,13 @@ const FORMAS = Object.freeze({
   v1Conversa: ['id', 'protocolo', 'situacao', 'na_fila', 'canal', 'setor', 'responsavel', 'prioridade', 'referencias', 'aberta_em',
     'atualizada_em', 'encerrada_em', 'motivo_encerramento', 'link'],
   v1Retorno: ['id', 'tipo', 'em', 'conversa', 'referencias', 'dados'],
+  // C10 — Onda 1 (docs/contratos.md §9). Campos novos de setor e conversa conferidos à parte
+  // (o servidor real ganha cada um na sua etapa, C11–C16).
+  setorOnda1: ['menu', 'distribuicao', 'alertas', 'sla', 'pesquisa'],
+  conversaOnda1: ['triagem', 'oferta', 'sla', 'pesquisa'],
+  atendente: ['usuario', 'status', 'online', 'conversas_abertas', 'limite', 'setores', 'alertas_whatsapp', 'status_desde'],
+  alerta: ['id', 'tipo', 'conversa_id', 'protocolo', 'setor', 'mensagem', 'em'],
+  painelAtendimento: ['por_setor', 'atendentes', 'hoje', 'atualizado_em'],
 });
 
 function camposFaltando(forma, objeto) {
@@ -138,6 +152,9 @@ module.exports = {
   CATEGORIAS_ITEM_CONVERSA,
   AUTORES_ITEM_CONVERSA,
   PRIORIDADES_CONVERSA,
+  STATUS_ATENDENTE,
+  MODOS_DISTRIBUICAO,
+  TIPOS_ALERTA,
   TIPOS_RETORNO,
   EVENTOS_SOCKET,
   FORMAS,

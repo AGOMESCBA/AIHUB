@@ -216,14 +216,60 @@ test('G13 atendimento.html: assumir (+ 409 conflito), "/" com variáveis, nota, 
     await page.waitForSelector('#popover-encerrar:not([hidden])');
     await page.fill('#enc-motivo', 'Atendimento concluído no teste G13');
     await page.click('#btn-confirmar-encerrar');
+    await page.waitForSelector('#estado-chat-vazio:not([hidden])');
+    assert.match(await page.textContent('#estado-chat-vazio'), /Conversa encerrada/);
+    assert.equal(await page.isVisible('#chat-ativo'), false);
+    await page.getByRole('button', { name: 'Ver encerradas' }).click();
+    await page.waitForSelector('[data-conversa-id="cv_ex02"]');
+    await page.click('[data-conversa-id="cv_ex02"]');
     await page.waitForSelector('#btn-reabrir:not([hidden])');
-    assert.match(await page.textContent('#painel-contato'), /Atendimento concluído no teste G13/);
+    // O painel do contato é preenchido depois do cabeçalho (histórico e respostas rápidas em paralelo).
+    await page.waitForFunction(() => document.getElementById('painel-contato')?.textContent?.includes('Atendimento concluído no teste G13'));
 
     await page.click('#btn-reabrir');
     await page.waitForSelector('#btn-encerrar:not([hidden])');
 
     // Ignora apenas o erro 409 de console intencionalmente simulado no passo 1
     assert.equal(erros.filter((e) => !/409|status of/.test(e)).length, 0, `erros inesperados: ${erros.join('; ')}`);
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('G13 atendimento.html: encerrar com pesquisa de satisfação ligada não reabre o chat por aviso atrasado', async () => {
+  const { ctx, page, erros } = await novaPagina({ width: 1440, height: 900 });
+  try {
+    await page.goto(`${baseUrl}/atendimento.html?conversa=cv_ex02`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('#btn-encerrar:not([hidden])');
+    await page.waitForFunction(() => document.getElementById('rt-texto')?.textContent?.includes('Tempo real ativo'));
+
+    // Liga a pesquisa de satisfação no setor Suporte (envia item extra ao encerrar)
+    const statusPesq = await page.evaluate(async () => {
+      const s = await fetch('/app/ia-talk/api/admin/setores/set_suporte').then((r) => r.json());
+      const r = await fetch('/app/ia-talk/api/admin/setores/set_suporte', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ versao: s.versao, pesquisa: { ligada: true } }),
+      });
+      return r.status;
+    });
+    assert.equal(statusPesq, 200);
+
+    await page.click('#btn-encerrar');
+    await page.waitForSelector('#popover-encerrar:not([hidden])');
+    await page.fill('#enc-motivo', 'Encerrada com pesquisa ligada');
+    await page.click('#btn-confirmar-encerrar');
+
+    await page.waitForSelector('#estado-chat-vazio:not([hidden])');
+    assert.match(await page.textContent('#estado-chat-vazio'), /Conversa encerrada/);
+    assert.equal(await page.isVisible('#chat-ativo'), false);
+
+    // Aguarda eventual aviso atrasado de socket (conversa:atualizada / conversa:item) e garante que o chat não volta
+    await page.waitForTimeout(500);
+    assert.match(await page.textContent('#estado-chat-vazio'), /Conversa encerrada/);
+    assert.equal(await page.isVisible('#chat-ativo'), false);
+
+    assert.deepEqual(erros, []);
   } finally {
     await ctx.close();
   }

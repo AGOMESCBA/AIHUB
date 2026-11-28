@@ -224,7 +224,9 @@ test('uso do número: setor padrão obrigatório, empresa vinculada e volta para
   assert.equal((await api('/canais/cn_financeiro', { metodo: 'PUT', corpo: { uso: 'atendimento', setor_padrao_id: 'set_financeiro', atendimento_empresa_id: 'emp_plantivo' } })).status, 400, 'empresa não vinculada');
   const ok = await api('/canais/cn_financeiro', { metodo: 'PUT', corpo: { uso: 'atendimento', setor_padrao_id: 'set_financeiro' } });
   assert.equal(ok.status, 200);
-  assert.deepEqual(ok.corpo.atendimento, { empresa: { id: 'emp_j2a', nome: 'J2A Consultoria' }, setor_padrao: { id: 'set_financeiro', nome: 'Financeiro' } });
+  const { menu, ...atendimento } = ok.corpo.atendimento;
+  assert.deepEqual(atendimento, { empresa: { id: 'emp_j2a', nome: 'J2A Consultoria' }, setor_padrao: { id: 'set_financeiro', nome: 'Financeiro' } });
+  assert.equal(menu.ligado, false, 'menu de setores nasce desligado (§9.3)');
   const volta = await api('/canais/cn_financeiro', { metodo: 'PUT', corpo: { uso: 'integracao' } });
   assert.equal(volta.corpo.atendimento, null);
 });

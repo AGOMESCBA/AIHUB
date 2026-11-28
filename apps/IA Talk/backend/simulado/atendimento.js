@@ -14,6 +14,8 @@ const { erro } = require('../erros');
 const { EVENTOS_SOCKET, USOS_CANAL, VISOES_CONVERSA } = require('../contratos');
 const { ROTINAS } = require('../acesso/papeis');
 const { mascararTelefone, BASE_SIMULADA } = require('./dados');
+const onda1 = require('./atendimento-onda1');
+const menuSetores = require('../lib/menu-setores'); // X1 (Codex): a mesma leitura do servidor real
 
 const MIN = 60 * 1000;
 const DIA = 24 * 60 * MIN;
@@ -48,18 +50,22 @@ function criarDadosAtendimento(usuarios) {
   const u = (id) => { const x = usuarios.find(y => y.id === id); return { id: x.id, nome: x.nome }; };
   const comercial = { ligado: true, fuso: 'America/Cuiaba', dias: [1, 2, 3, 4, 5].map(dia => ({ dia, inicio: '08:00', fim: '18:00' })) };
   const setores = [
-    { id: 'set_suporte', empresa_id: 'emp_j2a', codigo: 'suporte', nome: 'Suporte', descricao: 'Dúvidas e problemas no ERP e nos sistemas.', situacao: 'ativo',
+    { ...onda1.padroesDoSetor(1), id: 'set_suporte', empresa_id: 'emp_j2a', codigo: 'suporte', nome: 'Suporte', descricao: 'Dúvidas e problemas no ERP e nos sistemas.', situacao: 'ativo',
       membros: [u('usr_carla'), u('usr_bruno')], horario: comercial,
       fora_horario: { ligado: false, texto: 'Recebemos sua mensagem. Atendemos de segunda a sexta, das 8h às 18h, e respondemos assim que abrirmos.' },
       versao: 2, criado_em: em(20 * DIA), atualizado_em: em(2 * DIA) },
-    { id: 'set_financeiro', empresa_id: 'emp_j2a', codigo: 'financeiro', nome: 'Financeiro', descricao: 'Boletos, notas e pagamentos.', situacao: 'ativo',
+    { ...onda1.padroesDoSetor(2), id: 'set_financeiro', empresa_id: 'emp_j2a', codigo: 'financeiro', nome: 'Financeiro', descricao: 'Boletos, notas e pagamentos.', situacao: 'ativo',
       membros: [u('usr_ana')], horario: comercial,
       fora_horario: { ligado: true, texto: 'O Financeiro atende de segunda a sexta, das 8h às 18h. Sua mensagem ficou registrada.' },
       versao: 1, criado_em: em(20 * DIA), atualizado_em: em(20 * DIA) },
-    { id: 'set_comercial', empresa_id: 'emp_j2a', codigo: 'comercial', nome: 'Comercial', descricao: 'Orçamentos e novos módulos.', situacao: 'ativo',
+    { ...onda1.padroesDoSetor(3), id: 'set_comercial', empresa_id: 'emp_j2a', codigo: 'comercial', nome: 'Comercial', descricao: 'Orçamentos e novos módulos.', situacao: 'ativo',
       membros: [u('usr_bruno')], horario: { ligado: false, fuso: 'America/Cuiaba', dias: [] }, fora_horario: { ligado: false, texto: '' },
       versao: 1, criado_em: em(15 * DIA), atualizado_em: em(15 * DIA) },
   ];
+
+  // Onda 1 (§9): o Suporte distribui por rodízio. A pesquisa nasce desligada, como no contrato.
+  setores[0].distribuicao = { modo: 'rodizio', limite_por_atendente: 5, tempo_aceite_min: 3 };
+  setores[0].alertas = { whatsapp_ligado: true, espera_min: 5, escalonar_min: 15, escalonar_para: ['usr_ana'] };
 
   // Mariana e João usam os números de teste do canal cn_suporte: só para eles a resposta sai.
   const PESSOAS = [
@@ -125,6 +131,7 @@ function criarDadosAtendimento(usuarios) {
     return {
       id, empresa_id: 'emp_j2a', protocolo: `2026-${String(101 + n).padStart(6, '0')}`, canal, contato_id: contato.id, setor: setor(setorId),
       responsavel: respId ? u(respId) : null, situacao, nao_lidas: naoLidas, etiquetas, itens, prioridade: 'normal', referencias: [],
+      triagem: null, oferta: null, pesquisa: null,
       aberta_em: itens[0].em, atualizada_em: ultimo.em, encerrada_em: situacao === 'encerrada' ? ultimo.em : null,
       motivo_encerramento: situacao === 'encerrada' ? motivo : null,
     };
@@ -135,6 +142,9 @@ function criarDadosAtendimento(usuarios) {
   conversas[0].referencias = [referencia('036988', 'Relatório de faturamento lento')];
   conversas[1].referencias = [referencia('036990', 'Código de acesso não chega')];
   conversas[1].prioridade = 'alta';
+  // Onda 1: a conversa do João está oferecida à Carla (rodízio do Suporte); a da Juliana teve nota 5.
+  conversas[1].oferta = { para: u('usr_carla'), ate: new Date(Date.now() + 3 * MIN).toISOString() };
+  conversas[6].pesquisa = { enviada_em: em(2 * 24 * 60 * MIN - 5 * MIN), nota: 5, comentario: null, respondida_em: em(2 * 24 * 60 * MIN - 8 * MIN) };
   const foto = (cv, situacao = 'aberta') => ({ id: cv.id, protocolo: cv.protocolo, situacao });
   const retornos = [
     { id: 'rt_ex1', aplicacao_id: APLICACAO_ORIGEM.id, tipo: 'conversa.criada', em: em(47 * MIN), conversa: foto(conversas[0]),
@@ -169,7 +179,8 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
   for (const c of dados.canais) {
     if (c.id === 'cn_suporte') {
       c.uso = 'compartilhado';
-      c.atendimento = { empresa: { id: 'emp_j2a', nome: 'J2A Consultoria' }, setor_padrao: { id: 'set_suporte', nome: 'Suporte' } };
+      c.atendimento = { empresa: { id: 'emp_j2a', nome: 'J2A Consultoria' }, setor_padrao: { id: 'set_suporte', nome: 'Suporte' },
+        menu: { ligado: false, saudacao: onda1.SAUDACAO_PADRAO, tempo_min: 10, tentativas: 2 } };
     } else {
       c.uso = 'integracao';
       c.atendimento = null;
@@ -227,12 +238,16 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
     const ultima = [...cv.itens].reverse().find(i => i.categoria === 'mensagem');
     return {
       id: cv.id, protocolo: cv.protocolo, canal: cv.canal, contato: contatoCurto(contatoDe(cv)), setor: cv.setor, responsavel: cv.responsavel,
-      situacao: cv.situacao, na_fila: cv.situacao === 'aberta' && !cv.responsavel, nao_lidas: cv.nao_lidas,
+      situacao: cv.situacao, na_fila: cv.situacao === 'aberta' && !cv.responsavel && !cv.triagem, nao_lidas: cv.nao_lidas,
       ultima_mensagem: ultima ? { previa: previa(ultima.texto), direcao: ultima.direcao, autor_tipo: ultima.autor.tipo, em: ultima.em } : null,
       aguardando_desde: aguardandoDesde(cv), etiquetas: cv.etiquetas, prioridade: cv.prioridade, referencias: cv.referencias,
       aberta_em: cv.aberta_em, atualizada_em: cv.atualizada_em, encerrada_em: cv.encerrada_em,
+      // Onda 1 (§9.3–9.7)
+      triagem: cv.triagem || null, oferta: cv.oferta || null, sla: slaDe(cv), pesquisa: cv.pesquisa || null,
     };
   }
+  const slaDe = (cv) => onda1.slaDaConversa(cv, at.setores.find(x => x.id === cv.setor.id),
+    cv.itens.some(i => i.categoria === 'mensagem' && i.direcao === 'saida' && i.autor.tipo === 'atendente'));
   // Regras do canal para mandar algo ao contato (mesmas do servidor real, C3): { codigo, motivo } ou null.
   function bloqueioDoCanal(cv) {
     const canal = dados.canais.find(c => c.id === cv.canal.id);
@@ -257,6 +272,8 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
     return { ...resto, conversas_abertas: abertas.length, na_fila: abertas.filter(c => !c.responsavel).length };
   }
   const respostaPublica = ({ empresa_id, ...resto }) => resto; // eslint-disable-line no-unused-vars
+  const o1 = onda1.criarOnda1({ dados, at, sessao, novo, agora, listar, emitir,
+    h: { usuarioId, veTudo, exigirRotina, aguardandoDesde, sla: (cv) => slaDe(cv) } });
 
   // ── Retornos para o sistema de origem (§8.9): ficam até ele confirmar ───────
   const setorComCodigo = (cv) => { const s = at.setores.find(x => x.id === cv.setor.id); return { codigo: s.codigo, nome: s.nome }; };
@@ -274,8 +291,9 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
     const setores = daEmpresa(at.setores).filter(s => s.situacao === 'ativo' && (veTudo(req) || s.membros.some(m => m.id === uid)));
     return {
       minhas: visiveis.filter(c => c.responsavel?.id === uid).length,
-      fila: visiveis.filter(c => !c.responsavel).length,
-      abertas: visiveis.length,
+      fila: visiveis.filter(c => !c.responsavel && !c.triagem).length,
+      abertas: visiveis.filter(c => !c.triagem).length,
+      triagem: visiveis.filter(c => c.triagem).length,
       por_setor: setores.map(s => {
         const doSetor = visiveis.filter(c => c.setor.id === s.id);
         return { id: s.id, nome: s.nome, abertas: doSetor.length, na_fila: doSetor.filter(c => !c.responsavel).length };
@@ -303,20 +321,94 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
   // Chegada de mensagem do contato (regras de entrada da C9, §8.6).
   function receber(contato, texto) {
     const canal = dados.canais.find(c => c.id === 'cn_suporte');
+    // Pesquisa: nota (1 a 5) da última conversa encerrada nas últimas 24 h não abre conversa nova.
+    const nota = Number(String(texto).trim());
+    const temAberta = at.conversas.some(c => c.contato_id === contato.id && c.canal.id === canal.id && c.situacao === 'aberta');
+    const pesquisada = !temAberta && at.conversas.find(c => c.contato_id === contato.id && c.situacao === 'encerrada' && c.pesquisa && !c.pesquisa.nota
+      && Date.now() - Date.parse(c.pesquisa.enviada_em) < 24 * 60 * MIN);
+    if (pesquisada && Number.isInteger(nota) && nota >= 1 && nota <= 5) {
+      Object.assign(pesquisada.pesquisa, { nota, respondida_em: agora() });
+      evento(pesquisada, `Pesquisa de satisfação respondida: nota ${nota}.`);
+      avisar(pesquisada);
+      return pesquisada;
+    }
     let cv = at.conversas.find(c => c.contato_id === contato.id && c.canal.id === canal.id && c.situacao === 'aberta');
+    if (cv?.triagem) {
+      adicionarItem(cv, { categoria: 'mensagem', direcao: 'entrada', autor: { tipo: 'contato', id: contato.id, nome: contato.nome }, tipo: 'texto', texto, estado: 'recebida' });
+      escolherNoMenu(cv, canal, texto);
+      cv.nao_lidas += 1;
+      avisar(cv);
+      return cv;
+    }
+    const noMenu = at.setores.filter(x => x.empresa_id === contato.empresa_id && x.situacao === 'ativo' && x.menu?.aparece);
     if (!cv) {
       const setor = canal.atendimento.setor_padrao;
       const n = at.conversas.length;
       cv = { id: novo('cv'), empresa_id: contato.empresa_id, protocolo: `2026-${String(101 + n).padStart(6, '0')}`, canal: { id: canal.id, nome: canal.nome },
         contato_id: contato.id, setor: { ...setor }, responsavel: null, situacao: 'aberta', nao_lidas: 0, etiquetas: [], itens: [],
         prioridade: 'normal', referencias: [], aberta_em: agora(), atualizada_em: agora(), encerrada_em: null, motivo_encerramento: null };
+      cv.triagem = null; cv.oferta = null; cv.pesquisa = null;
       at.conversas.unshift(cv);
-      evento(cv, `Conversa aberta no setor ${setor.nome}.`);
+      if (canal.atendimento.menu?.ligado && noMenu.length > 1) {
+        cv.triagem = { desde: agora(), tentativas: 0 };
+        evento(cv, 'Conversa aberta: aguardando a escolha do setor.');
+        adicionarItem(cv, { categoria: 'mensagem', direcao: 'saida', autor: { tipo: 'sistema', id: null, nome: 'IA Talk' }, tipo: 'texto', texto: textoDoMenu(canal), estado: 'enviada' });
+      } else {
+        evento(cv, `Conversa aberta no setor ${setor.nome}.`);
+      }
     }
     adicionarItem(cv, { categoria: 'mensagem', direcao: 'entrada', autor: { tipo: 'contato', id: contato.id, nome: contato.nome }, tipo: 'texto', texto, estado: 'recebida' });
     cv.nao_lidas += 1;
     avisar(cv);
     return cv;
+  }
+
+  // Menu de setores (§9.3). No servidor real a leitura da resposta vem da biblioteca X1.
+  const menuDoCanal = (canal) => menuSetores.montarMenu({ saudacao: canal.atendimento.menu.saudacao,
+    setores: at.setores.filter(x => x.empresa_id === sessao.empresaId && x.situacao === 'ativo' && x.menu?.aparece)
+      .map(x => ({ id: x.id, nome: x.nome, opcao_texto: x.menu.texto || undefined, ordem: x.menu.ordem })) });
+  const textoDoMenu = (canal) => menuDoCanal(canal).texto;
+  function irParaPadrao(cv, canal, motivo) {
+    cv.triagem = null;
+    cv.setor = { ...canal.atendimento.setor_padrao };
+    evento(cv, `${motivo}: setor padrão (${cv.setor.nome}).`);
+  }
+  function escolherNoMenu(cv, canal, texto) {
+    const menu = menuDoCanal(canal);
+    const r = menuSetores.interpretarResposta(texto, menu.opcoes);
+    const escolhida = r.setor_id && at.setores.find(x => x.id === r.setor_id);
+    if (escolhida) {
+      cv.triagem = null;
+      cv.setor = { id: escolhida.id, nome: escolhida.nome };
+      evento(cv, `Escolheu o setor ${escolhida.nome}.`);
+      return;
+    }
+    if (!r.ajuda) cv.triagem.tentativas += 1;
+    if (menuSetores.proximaAcao({ tentativas: cv.triagem.tentativas, maxTentativas: canal.atendimento.menu.tentativas }) === 'setor_padrao') {
+      irParaPadrao(cv, canal, 'Sem escolha');
+      return;
+    }
+    adicionarItem(cv, { categoria: 'mensagem', direcao: 'saida', autor: { tipo: 'sistema', id: null, nome: 'IA Talk' }, tipo: 'texto',
+      texto: r.ajuda ? menu.texto : `Não entendi a opção. ${menu.texto}`, estado: 'enviada' });
+  }
+
+  // C) Vencimentos (o servidor real faz por agenda; o simulado confere ao ler): menu sem resposta no
+  // tempo do canal → setor padrão; oferta do rodízio sem aceite → volta para a fila do setor.
+  function vencerPrazos() {
+    const agoraMs = Date.now();
+    for (const cv of at.conversas) {
+      if (cv.situacao !== 'aberta') continue;
+      const canal = dados.canais.find(c => c.id === cv.canal.id);
+      if (cv.triagem && canal?.atendimento?.menu && agoraMs - Date.parse(cv.triagem.desde) >= canal.atendimento.menu.tempo_min * 60 * 1000) {
+        irParaPadrao(cv, canal, 'Sem resposta ao menu');
+        avisar(cv);
+      }
+      if (cv.oferta && Date.parse(cv.oferta.ate) <= agoraMs) {
+        evento(cv, `Sem aceite de ${cv.oferta.para.nome}: voltou para a fila.`);
+        cv.oferta = null;
+        avisar(cv);
+      }
+    }
   }
 
   // Saída para o contato pela fila da C3 (estados comprovados, ritmo do canal). Quem chama já
@@ -400,7 +492,9 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
       if (daEmpresa(at.setores).some(x => x.codigo === codigo)) throw erro('conflito', `Já existe um setor com o código ${codigo}.`);
       const s = { id: novo('set'), empresa_id: sessao.empresaId, codigo, nome: b.nome.trim(), descricao: String(b.descricao || '').trim().slice(0, 200), situacao: 'ativo',
         membros: membrosDe(b.membros) || [], horario: b.horario || { ligado: false, fuso: 'America/Cuiaba', dias: [] },
-        fora_horario: b.fora_horario || { ligado: false, texto: '' }, versao: 1, criado_em: agora(), atualizado_em: agora() };
+        fora_horario: b.fora_horario || { ligado: false, texto: '' }, versao: 1, criado_em: agora(), atualizado_em: agora(),
+        ...onda1.padroesDoSetor(daEmpresa(at.setores).length + 1) };
+      Object.assign(s, onda1.configDoSetor(b, s));
       at.setores.push(s);
       auditar('setor.criado', `Criou o setor ${s.nome}`);
       res.status(201).json(setorPublico(s));
@@ -423,7 +517,8 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
         if (dados.canais.some(c => c.atendimento?.setor_padrao?.id === s.id)) throw erro('conflito', 'Este setor recebe as conversas novas de um canal. Troque o setor padrão do canal antes de inativar.');
       }
       const membros = membrosDe(b.membros);
-      Object.assign(s, {
+      const configOnda1 = onda1.configDoSetor(b, s);
+      Object.assign(s, configOnda1, {
         ...(b.nome !== undefined ? { nome: b.nome.trim() } : {}), ...(b.descricao !== undefined ? { descricao: String(b.descricao).trim().slice(0, 200) } : {}),
         ...(membros ? { membros } : {}), ...(b.horario ? { horario: b.horario } : {}), ...(b.fora_horario ? { fora_horario: b.fora_horario } : {}),
         ...(b.situacao ? { situacao: b.situacao } : {}), versao: s.versao + 1, atualizado_em: agora(),
@@ -486,14 +581,16 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
     // Conversas
     const visoes = {
       minhas: (req, c) => c.situacao === 'aberta' && c.responsavel?.id === usuarioId(req),
-      fila: (_req, c) => c.situacao === 'aberta' && !c.responsavel,
-      abertas: (_req, c) => c.situacao === 'aberta',
+      fila: (_req, c) => c.situacao === 'aberta' && !c.responsavel && !c.triagem,
+      abertas: (_req, c) => c.situacao === 'aberta' && !c.triagem,
+      triagem: (req, c) => c.situacao === 'aberta' && !!c.triagem && veTudo(req),
       encerradas: (_req, c) => c.situacao === 'encerrada',
       todas: () => true,
     };
-    admin.get('/conversas/contadores', (req, res) => { exigirRotina(req, R.atendimento); res.json(contadores(req)); });
+    admin.get('/conversas/contadores', (req, res) => { exigirRotina(req, R.atendimento); vencerPrazos(); res.json(contadores(req)); });
     admin.get('/conversas', (req, res) => {
       exigirRotina(req, R.atendimento);
+      vencerPrazos();
       const visao = req.query.visao || 'abertas';
       if (!VISOES_CONVERSA.includes(visao)) throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos: { visao: `Use ${VISOES_CONVERSA.join(', ')}.` } });
       const lista = at.conversas.filter(c => podeVer(req, c) && visoes[visao](req, c)).map(conversaResumo);
@@ -538,9 +635,32 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
       const uid = usuarioId(req);
       if (cv.responsavel?.id === uid) return res.json(conversaDetalhe(req, cv)); // já é sua: repetir não muda nada
       if (cv.responsavel) throw erro('conflito', `${cv.responsavel.nome} já assumiu esta conversa.`);
+      if (cv.triagem) throw erro('conflito', 'O contato ainda está escolhendo o setor.');
+      if (cv.oferta && cv.oferta.para.id !== uid && !veTudo(req)) throw erro('conflito', `Esta conversa está oferecida a ${cv.oferta.para.nome} (rodízio).`);
+      cv.oferta = null;
       cv.responsavel = ref(uid);
       evento(cv, `${cv.responsavel.nome} assumiu a conversa.`);
       registrarRetorno(cv, 'conversa.assumida', { responsavel: cv.responsavel });
+      responder(req, res, cv);
+    });
+    // Rodízio (§9.4): só quem recebeu a oferta recusa; ela passa ao próximo apto do setor ou volta à fila.
+    admin.post('/conversas/:id/recusar', (req, res) => {
+      exigirRotina(req, R.atendimento);
+      const cv = acharConversa(req);
+      exigirAberta(cv);
+      const uid = usuarioId(req);
+      if (!cv.oferta) throw erro('conflito', 'Esta conversa não está oferecida a ninguém.');
+      if (cv.oferta.para.id !== uid) throw erro('sem_permissao', `Só ${cv.oferta.para.nome} pode recusar esta oferta.`);
+      evento(cv, `${cv.oferta.para.nome} recusou.`);
+      const setor = at.setores.find(x => x.id === cv.setor.id);
+      const proximo = setor?.membros.find(m => m.id !== uid && o1.estadoDe(m.id).status === 'disponivel' && o1.estadoDe(m.id).online);
+      if (proximo) {
+        cv.oferta = { para: { ...proximo }, ate: new Date(Date.now() + (setor.distribuicao?.tempo_aceite_min || 3) * 60 * 1000).toISOString() };
+        evento(cv, `Oferecida a ${proximo.nome}.`);
+      } else {
+        cv.oferta = null;
+        evento(cv, 'Ninguém disponível no rodízio: voltou para a fila.');
+      }
       responder(req, res, cv);
     });
     admin.post('/conversas/:id/devolver', (req, res) => {
@@ -596,6 +716,11 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
       cv.nao_lidas = 0;
       evento(cv, `${quem.nome} encerrou a conversa${motivo ? `: ${motivo}` : ''}.`);
       cv.encerrada_em = cv.atualizada_em;
+      const setorDaConversa = at.setores.find(x => x.id === cv.setor.id);
+      if (setorDaConversa?.pesquisa?.ligada) {
+        adicionarItem(cv, { categoria: 'mensagem', direcao: 'saida', autor: { tipo: 'sistema', id: null, nome: 'IA Talk' }, tipo: 'texto', texto: setorDaConversa.pesquisa.pergunta, estado: 'enviada' });
+        cv.pesquisa = { enviada_em: agora(), nota: null, comentario: null, respondida_em: null };
+      }
       registrarRetorno(cv, 'conversa.encerrada', { motivo: cv.motivo_encerramento, responsavel: cv.responsavel, encerrada_em: cv.encerrada_em });
       responder(req, res, cv);
     });
@@ -817,6 +942,12 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
   // Uso do número no PUT /canais/:id (§8.1). Chamado pelo simulado antes de responder.
   function aplicarNoCanal(req, c) {
     const b = req.body || {};
+    const mexeNoMenu = ['menu_ligado', 'menu_saudacao', 'menu_tempo_min', 'menu_tentativas'].some(k => b[k] !== undefined);
+    if (mexeNoMenu) {
+      if (!plataforma(req)) throw erro('sem_permissao', 'Só a administração da plataforma configura o menu do número.');
+      if (!c.atendimento) throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos: { menu_ligado: 'Ligue o atendimento no número antes do menu.' } });
+      c.atendimento.menu = onda1.configDoMenuDoCanal(b, c.atendimento.menu);
+    }
     if (b.uso === undefined && b.atendimento_empresa_id === undefined && b.setor_padrao_id === undefined) return;
     if ((b.uso !== undefined || b.atendimento_empresa_id !== undefined) && !plataforma(req)) {
       throw erro('sem_permissao', 'Só a administração da plataforma muda o uso do número e a empresa que atende.');
@@ -833,11 +964,13 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
     const setorId = b.setor_padrao_id ?? (c.atendimento?.empresa?.id === empresaId ? c.atendimento?.setor_padrao?.id : undefined);
     const setor = at.setores.find(s => s.id === setorId && s.empresa_id === empresaId && s.situacao === 'ativo');
     if (!setor) throw erro('requisicao_invalida', 'Confira os campos destacados.', { campos: { setor_padrao_id: 'Escolha o setor ativo que recebe as conversas novas.' } });
-    Object.assign(c, { uso, atendimento: { empresa: { id: vinculada.id, nome: vinculada.nome }, setor_padrao: { id: setor.id, nome: setor.nome } } });
+    Object.assign(c, { uso, atendimento: { empresa: { id: vinculada.id, nome: vinculada.nome }, setor_padrao: { id: setor.id, nome: setor.nome },
+      menu: c.atendimento?.menu || onda1.configDoMenuDoCanal({}) } });
     auditar('canal.uso', `Canal ${c.nome}: uso ${uso}, conversas novas no setor ${setor.nome}`);
   }
 
   function socket(sock) {
+    o1.socket(sock);
     sock.on(C.assinarAtendimento, () => {
       sock.join('atendimento');
       sock.emit(S.contadoresAtendimento, contadores());
@@ -861,7 +994,7 @@ function criarAtendimentoSimulado({ dados, sessao, novo, agora, auditar, listar,
     timers.forEach(t => t.unref());
   }
 
-  return { rotas, rotasV1, aplicarNoCanal, socket, receber, parar: () => timers.forEach(clearInterval) };
+  return { rotas: (admin) => { rotas(admin); o1.rotas(admin); }, rotasV1, aplicarNoCanal, socket, receber, onda1: o1, parar: () => timers.forEach(clearInterval) };
 }
 
 module.exports = { criarAtendimentoSimulado };
